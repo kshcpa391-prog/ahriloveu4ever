@@ -24,8 +24,8 @@ import {
   ArrowRight,
   Database,
   Upload,
-  FileText,
-  Image as ImageIcon
+  KeyRound,
+  ExternalLink
 } from "lucide-react";
 import { initializeApp, getApps, getApp } from "firebase/app";
 import {
@@ -72,7 +72,6 @@ try {
 }
 
 const APP_ID = "kim-family-meal-app";
-const DEFAULT_USER_API_KEY = "AQ.Ab8RN6Ke8u6xRzPlDhMcI7cRjgrktqqiA9v76BVl4x-gaqacsA";
 
 const getColRef = (colName) => collection(db, "artifacts", APP_ID, "public", "data", colName);
 const getDocRef = (colName, docId) =>
@@ -86,7 +85,7 @@ const toSafeArray = (val) => {
   return [];
 };
 
-// 이미지 파일을 Gemini Vision API 전송용 Base64로 변환 (용량 최적화 리사이징 포함)
+// 이미지 파일을 Gemini Vision API 전송용 Base64로 변환
 const fileToBase64 = (file) =>
   new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -252,54 +251,6 @@ const shiftYearMonth = (yearMonth, deltaMonths) => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 };
 
-// 자유 양식 텍스트를 날짜별 식단 배열로 자동 파싱하는 보조 엔진
-const parseFreeformMenuText = (rawText, targetYearMonth, schoolName) => {
-  const lines = String(rawText || "")
-    .split(/\n+/)
-    .map((l) => l.trim())
-    .filter(Boolean);
-
-  const results = [];
-  lines.forEach((line) => {
-    // 패턴 예: "12/1 오전간식: 사과우유 / 점심: 잡곡밥, 미역국 / 오후간식: 찐감자" 또는 "1일: 배죽 | 쌀밥, 소고기국 | 카스테라"
-    const dayMatch = line.match(/(?:(\d{1,2})\s*[월/-]\s*)?(\d{1,2})\s*일?/);
-    if (!dayMatch) return;
-
-    const dayNum = String(dayMatch[2]).padStart(2, "0");
-    const dateStr = `${targetYearMonth}-${dayNum}`;
-    const body = line.replace(dayMatch[0], "").replace(/^[:\-\s|]+/, "");
-
-    let mSnack = "";
-    let lunch = "";
-    let aSnack = "";
-
-    if (body.includes("|")) {
-      const parts = body.split("|").map((p) => p.trim());
-      mSnack = parts[0] || "";
-      lunch = parts[1] || "";
-      aSnack = parts[2] || "";
-    } else if (body.includes("/")) {
-      const parts = body.split("/").map((p) => p.trim());
-      mSnack = (parts[0] || "").replace(/^(오전간식|아침)\s*[:：]?\s*/, "");
-      lunch = (parts[1] || "").replace(/^(점심|중식)\s*[:：]?\s*/, "");
-      aSnack = (parts[2] || "").replace(/^(오후간식|석식)\s*[:：]?\s*/, "");
-    } else {
-      lunch = body;
-    }
-
-    if (mSnack || lunch || aSnack) {
-      results.push({
-        date: dateStr,
-        mSnack,
-        lunch,
-        aSnack,
-        note: `${schoolName || "어린이집"} 식단표 스캔`
-      });
-    }
-  });
-  return results;
-};
-
 // ==========================================
 // 4. 에러 방어막 컴포넌트
 // ==========================================
@@ -356,7 +307,7 @@ function MainApp() {
     }
   });
 
-  // 월간 캘린더 & 식비 가계부 상태 (모든 연월 자유 이동 가능!)
+  // 월간 캘린더 & 식비 가계부 상태
   const [monthlySubTab, setMonthlySubTab] = useState("calendar");
   const [currentMonth, setCurrentMonth] = useState("2026-11");
   const [monthlyMember, setMonthlyMember] = useState("시목");
@@ -417,27 +368,32 @@ function MainApp() {
     pinned: true
   });
 
-  // AI 추천 상태
+  // ==========================================
+  // [100% 실제 Gemini AI 연동] 상태
+  // ==========================================
+  const [geminiApiKey, setGeminiApiKey] = useState(() => {
+    const saved = localStorage.getItem("kim_family_gemini_key") || "";
+    return saved.startsWith("AIzaSy") ? saved : "";
+  });
+  const [tempKeyInput, setTempKeyInput] = useState("");
   const [selectedAiIngredients, setSelectedAiIngredients] = useState([]);
   const [aiTargetGroup, setAiTargetGroup] = useState("온가족 한끼");
   const [aiPromptExtra, setAiPromptExtra] = useState("");
   const [aiRecipes, setAiRecipes] = useState([]);
   const [isAiLoading, setIsAiLoading] = useState(false);
+  const [aiErrorMsg, setAiErrorMsg] = useState("");
   const [quickLogRecipe, setQuickLogRecipe] = useState(null);
   const [quickLogDate, setQuickLogDate] = useState("2026-11-14");
   const [quickLogSlot, setQuickLogSlot] = useState("저녁");
 
-  // ==========================================
-  // [신규 업그레이드] 양식·월 무제한 식단표 AI 이미지 스캐너 상태
-  // ==========================================
+  // 식단표 이미지 AI 스캐너 상태
   const [isDaycareModalOpen, setIsDaycareModalOpen] = useState(false);
-  const [scanTargetMonth, setScanTargetMonth] = useState("2026-12"); // 몇 월이든 선택 가능
+  const [scanTargetMonth, setScanTargetMonth] = useState("2026-12");
   const [scanTargetMember, setScanTargetMember] = useState("시목");
   const [scanSchoolName, setScanSchoolName] = useState("신당동어린이집");
   const [scanPreviewUrl, setScanPreviewUrl] = useState("");
   const [isMenuScanning, setIsMenuScanning] = useState(false);
   const [scannedMenuDays, setScannedMenuDays] = useState([]);
-  const [manualPasteText, setManualPasteText] = useState("");
   const [scanErrorMsg, setScanErrorMsg] = useState("");
   const menuFileInputRef = useRef(null);
 
@@ -446,13 +402,11 @@ function MainApp() {
   const [receiptPreviewUrl, setReceiptPreviewUrl] = useState("");
   const [isReceiptScanning, setIsReceiptScanning] = useState(false);
   const [scannedReceiptItems, setScannedReceiptItems] = useState([]);
+  const [receiptErrorMsg, setReceiptErrorMsg] = useState("");
   const receiptFileInputRef = useRef(null);
 
   // 설정 모달
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [geminiApiKey, setGeminiApiKey] = useState(
-    () => localStorage.getItem("kim_family_gemini_key") || DEFAULT_USER_API_KEY
-  );
   const [toastMsg, setToastMsg] = useState("");
 
   const showToast = (msg) => {
@@ -461,7 +415,7 @@ function MainApp() {
   };
 
   // ==========================================
-  // 6. 파이어베이스 다중 경로 실시간 동기화 (v3 + v4 완벽 호환)
+  // 6. 파이어베이스 다중 경로 실시간 동기화 (API 키 부부 폰 자동 공유 포함!)
   // ==========================================
   useEffect(() => {
     if (!auth) return;
@@ -486,6 +440,7 @@ function MainApp() {
 
     const unsubscribers = [];
 
+    // 1) 삭제 추적기 및 부부 공유 Gemini API 키 동기화
     unsubscribers.push(
       onSnapshot(
         getColRef("family_meta_v4"),
@@ -496,12 +451,21 @@ function MainApp() {
               setDeletedIds(list);
               localStorage.setItem("kim_family_deleted_ids", JSON.stringify(list));
             }
+            if (d.id === "api_config" && d.data().geminiKey) {
+              const sharedKey = String(d.data().geminiKey).trim();
+              if (sharedKey.startsWith("AIzaSy")) {
+                setGeminiApiKey(sharedKey);
+                setTempKeyInput(sharedKey);
+                localStorage.setItem("kim_family_gemini_key", sharedKey);
+              }
+            }
           });
         },
         () => {}
       )
     );
 
+    // 2) 기존 v3 + 신규 v4 식단 컬렉션 통합 감시
     const mealCollections = [
       getColRef("family_meals_v3"),
       getColRef("family_meals_v4"),
@@ -545,6 +509,7 @@ function MainApp() {
       unsubscribers.push(unsub);
     });
 
+    // 3) 기존 v3 + 신규 v4 냉장고 컬렉션 통합 감시
     const fridgeCollections = [
       getColRef("family_fridge_v3"),
       getColRef("family_meals_v3"),
@@ -582,6 +547,7 @@ function MainApp() {
       unsubscribers.push(unsub);
     });
 
+    // 4) 식비 원장 동기화
     unsubscribers.push(
       onSnapshot(
         getColRef("family_expenses_v4"),
@@ -592,6 +558,7 @@ function MainApp() {
       )
     );
 
+    // 5) 장보기 메모 동기화
     unsubscribers.push(
       onSnapshot(
         getColRef("family_shopping_v4"),
@@ -613,6 +580,7 @@ function MainApp() {
       )
     );
 
+    // 6) 가족 공지사항 동기화
     unsubscribers.push(
       onSnapshot(
         getColRef("family_notices_v4"),
@@ -677,14 +645,171 @@ function MainApp() {
     }
   };
 
+  // API 키 저장 (파이어베이스에 동기화하여 부부 폰 모두 자동 적용!)
+  const handleSaveApiKey = async (keyToSave) => {
+    const cleaned = String(keyToSave || "").trim();
+    if (!cleaned.startsWith("AIzaSy")) {
+      alert("Google AI Studio에서 발급받은 'AIzaSy...'로 시작하는 키를 입력해 주세요.");
+      return;
+    }
+    setGeminiApiKey(cleaned);
+    setTempKeyInput(cleaned);
+    localStorage.setItem("kim_family_gemini_key", cleaned);
+    setAiErrorMsg("");
+    setScanErrorMsg("");
+    setReceiptErrorMsg("");
+
+    if (user && db) {
+      try {
+        await setDoc(getDocRef("family_meta_v4", "api_config"), {
+          geminiKey: cleaned,
+          updatedAt: new Date().toISOString()
+        });
+      } catch (e) {
+        console.error(e);
+      }
+    }
+    showToast("Gemini API 키가 저장되어 부부 스마트폰에 모두 적용되었습니다!");
+  };
+
   // ==========================================
-  // 7. [핵심 업그레이드] 양식 무제한 식단표 이미지 AI Vision 스캔 핸들러
+  // 7. [100% 실제 Gemini AI 호출] 식단 추천 엔진 (가짜 템플릿 완전 제거!)
+  // ==========================================
+  const handleRunAiRecommend = async () => {
+    setAiErrorMsg("");
+    const activeKey = geminiApiKey.trim();
+
+    if (!activeKey || !activeKey.startsWith("AIzaSy")) {
+      setAiErrorMsg(
+        "실제 AI 추천을 위해 아래 입력창(또는 우측 상단 ⚙️설정)에 Google AI Studio에서 발급받은 무료 API 키(AIzaSy...로 시작)를 먼저 등록해 주세요."
+      );
+      return;
+    }
+
+    const picked =
+      selectedAiIngredients.length > 0
+        ? selectedAiIngredients
+        : fridge.slice(0, 5).map((f) => f.name);
+
+    if (picked.length === 0) {
+      setAiErrorMsg("활용할 냉장고 재료를 최소 1개 이상 선택하거나 냉장고에 재료를 먼저 등록해 주세요.");
+      return;
+    }
+
+    setIsAiLoading(true);
+
+    try {
+      const allFridgeContext = fridge
+        .map((f) => `${f.name}(${f.quantity}${f.unit}, 소비기한:${f.expiryDate})`)
+        .join(", ");
+
+      const prompt = `당신은 가정식 및 영유아 영양 전문 셰프입니다.
+우리 가족 구성원 정보:
+- 아빠(김수혁), 엄마(최아리나)
+- 첫째 아들(김시목, 유아식 진행 중)
+- 둘째 딸(김시율, 영아/이유식 진행 중)
+
+[현재 냉장고 전체 보유 식재료]
+${allFridgeContext || picked.join(", ")}
+
+[오늘 반드시 메인으로 활용하고 싶은 선택 재료]
+${picked.join(", ")}
+
+[이번 식사 대상]
+${aiTargetGroup}
+
+[사용자 추가 요청사항]
+${aiPromptExtra || "특별한 추가 요청 없음. 재료들의 실제 맛과 영양 궁합을 고려해 창의적이고 현실적인 가정식 요리를 제안할 것."}
+
+위 정보를 바탕으로, 단순한 재료 이름 끼워맞추기가 아니라 실제 요리법과 식재료 간 조화, 아이들/어른 입맛에 맞춘 구체적인 조리 과정을 담은 맞춤형 요리 레시피 3가지를 작성해주세요.
+만약 '온가족 한끼'라면 한 냄비로 조리하다가 양념 전에 아이들 것을 먼저 덜어내고 어른 양념을 추가하는 구체적인 방법이나 온가족이 함께 먹기 좋은 구성으로 제안해주세요.
+
+반드시 순수 JSON 배열 형식으로만 응답하세요 (스키마 엄수):
+[
+  {
+    "title": "창의적이고 구체적인 실제 요리 이름",
+    "target": "${aiTargetGroup}",
+    "time": "예: 20분",
+    "usedIngredients": ["실제 사용되는 재료1", "재료2", "기본 양념 등"],
+    "steps": [
+      "1. 재료 손질 및 밑간 과정 구체적 설명",
+      "2. 가열 및 조리 과정 구체적 설명",
+      "3. 마무리 및 플레이팅/아이 분리 조리 설명"
+    ],
+    "tip": "이 요리의 맛을 살리는 셰프의 핵심 꿀팁 또는 영양 포인트"
+  }
+]`;
+
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${activeKey}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: {
+              temperature: 0.75,
+              responseMimeType: "application/json"
+            }
+          })
+        }
+      );
+
+      const data = await res.json();
+
+      if (!res.ok || data.error) {
+        throw new Error(data.error?.message || `API 호출 오류 (코드: ${res.status})`);
+      }
+
+      const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+      const jsonMatch = rawText.match(/\[[\s\S]*\]/);
+      if (!jsonMatch) {
+        throw new Error("AI 응답에서 JSON 레시피 데이터를 추출하지 못했습니다. 다시 시도해 주세요.");
+      }
+
+      const parsed = JSON.parse(jsonMatch[0]).map((r, idx) => ({
+        ...r,
+        id: `ai-${Date.now()}-${idx}`,
+        usedIngredients: toSafeArray(r.usedIngredients),
+        steps: toSafeArray(r.steps),
+        members:
+          aiTargetGroup === "시목이 유아식"
+            ? ["시목"]
+            : aiTargetGroup === "시율이 이유식/유아식"
+            ? ["시율"]
+            : aiTargetGroup === "부부 (수혁 & 아리나)"
+            ? ["수혁", "아리나"]
+            : ["수혁", "아리나", "시목", "시율"]
+      }));
+
+      setAiRecipes(parsed);
+      showToast("Gemini AI가 실제 식재료 궁합을 분석해 새 레시피 3가지를 생성했습니다!");
+    } catch (err) {
+      console.error("Real AI Recommendation Error:", err);
+      setAiErrorMsg(`AI 호출 실패: ${err.message}`);
+    } finally {
+      setIsAiLoading(false);
+    }
+  };
+
+  // ==========================================
+  // 8. [100% 실제 Gemini Vision AI] 식단표 이미지 스캔
   // ==========================================
   const handleMenuImageUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     setScanErrorMsg("");
+    const activeKey = geminiApiKey.trim();
+
+    if (!activeKey || !activeKey.startsWith("AIzaSy")) {
+      setScanErrorMsg(
+        "식단표 이미지를 실제로 읽으려면 먼저 우측 상단 ⚙️설정(또는 AI추천 탭)에 Google AI Studio 무료 키(AIzaSy...)를 등록해 주세요."
+      );
+      if (menuFileInputRef.current) menuFileInputRef.current.value = "";
+      return;
+    }
+
     setIsMenuScanning(true);
 
     try {
@@ -692,10 +817,10 @@ function MainApp() {
       setScanPreviewUrl(previewUrl);
 
       const promptText = `이 이미지는 어린이집/유치원/학교 식단표(월간 또는 주간)입니다.
-양식에 구애받지 말고 표 안의 모든 날짜와 메뉴를 빠짐없이 읽어서 JSON 배열로만 응답해주세요.
-기준 연월(Year-Month)은 "${scanTargetMonth}" 입니다. (예: 표에 '3' 또는 '3일'이라고 적혀 있으면 date는 "${scanTargetMonth}-03"으로 변환하세요. 만약 이미지 내에 다른 연월이 명시되어 있더라도 사용자가 지정한 "${scanTargetMonth}" 연월을 우선 적용하세요.)
+양식에 구애받지 말고 이미지 안의 모든 날짜와 메뉴를 실제로 정밀하게 읽어서 JSON 배열로만 응답해주세요.
+기준 연월(Year-Month)은 "${scanTargetMonth}" 입니다. (예: 표에 '3' 또는 '3일'이라고 적혀 있으면 date는 "${scanTargetMonth}-03"으로 변환하세요.)
 
-반드시 아래 JSON 배열 형식으로만 출력하세요 (마크다운 백틱 없이 순수 JSON 배열만):
+반드시 아래 JSON 배열 형식으로만 출력하세요:
 [
   {
     "date": "${scanTargetMonth}-01",
@@ -706,91 +831,62 @@ function MainApp() {
   }
 ]`;
 
-      // Gemini Vision API 호출
-      const apiKeyToUse = geminiApiKey?.trim();
-      if (apiKeyToUse && apiKeyToUse.startsWith("AIzaSy")) {
-        const res = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKeyToUse}`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              contents: [
-                {
-                  parts: [
-                    { text: promptText },
-                    { inline_data: { mime_type: mimeType, data: base64 } }
-                  ]
-                }
-              ]
-            })
-          }
-        );
-
-        const data = await res.json();
-        const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
-        const jsonMatch = rawText.match(/\[[\s\S]*\]/);
-
-        if (jsonMatch) {
-          const parsed = JSON.parse(jsonMatch[0]);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            setScannedMenuDays(
-              parsed.map((item) => ({
-                date: String(item.date || `${scanTargetMonth}-01`).slice(0, 10),
-                mSnack: item.mSnack || "",
-                lunch: item.lunch || "",
-                aSnack: item.aSnack || "",
-                note: item.note
-                  ? `${scanSchoolName} (${item.note})`
-                  : `${scanSchoolName} 식단표 스캔`
-              }))
-            );
-            setIsMenuScanning(false);
-            showToast(`이미지에서 총 ${parsed.length}일 치 식단을 성공적으로 읽어왔습니다!`);
-            return;
-          }
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${activeKey}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [
+              {
+                parts: [
+                  { text: promptText },
+                  { inline_data: { mime_type: mimeType, data: base64 } }
+                ]
+              }
+            ],
+            generationConfig: {
+              temperature: 0.2,
+              responseMimeType: "application/json"
+            }
+          })
         }
+      );
+
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        throw new Error(data.error?.message || "이미지 분석 API 호출 실패");
       }
 
-      // 만약 표준 AIzaSy 키가 아니거나 API 응답에 실패한 경우:
-      // 사용자가 선택한 해당 연월(scanTargetMonth)의 평일 날짜에 맞춘 편집 가능한 템플릿을 자동 구성하고 안내 제공
-      const fallbackDays = [
-        {
-          date: `${scanTargetMonth}-01`,
-          mSnack: "사과, 유기농 우유",
-          lunch: "잡곡밥, 소고기미역국, 두부조림, 나물무침, 김치",
-          aSnack: "찐고구마, 보리차",
-          note: `${scanSchoolName} (${scanTargetMonth}월 식단)`
-        },
-        {
-          date: `${scanTargetMonth}-02`,
-          mSnack: "야채죽",
-          lunch: "쌀밥, 감자맑은국, 닭안심장조림, 브로콜리숙회, 김치",
-          aSnack: "유기농식빵, 우유",
-          note: `${scanSchoolName} (${scanTargetMonth}월 식단)`
-        },
-        {
-          date: `${scanTargetMonth}-03`,
-          mSnack: "바나나, 치즈",
-          lunch: "한우채소덮밥, 유부장국, 백김치, 배",
-          aSnack: "감자전, 요구르트",
-          note: `${scanSchoolName} (${scanTargetMonth}월 식단)`
-        }
-      ];
-      setScannedMenuDays(fallbackDays);
-      setScanErrorMsg(
-        "현재 설정된 API 키가 표준 Gemini 키(AIzaSy...) 형식이 아니어서 기본 스캔 행이 생성되었습니다. 우측 상단 ⚙️설정에서 Google AI Studio 무료 키(AIzaSy...)를 입력하시면 어떤 식단표 사진이든 100% 실제 글자를 자동 추출합니다! (아래에서 바로 수정·추가하거나 텍스트 붙여넣기도 가능합니다.)"
+      const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+      const jsonMatch = rawText.match(/\[[\s\S]*\]/);
+
+      if (!jsonMatch) {
+        throw new Error("식단표 이미지에서 날짜별 메뉴를 인식하지 못했습니다. 선명한 사진으로 다시 시도해 주세요.");
+      }
+
+      const parsed = JSON.parse(jsonMatch[0]);
+      setScannedMenuDays(
+        parsed.map((item) => ({
+          date: String(item.date || `${scanTargetMonth}-01`).slice(0, 10),
+          mSnack: item.mSnack || "",
+          lunch: item.lunch || "",
+          aSnack: item.aSnack || "",
+          note: item.note
+            ? `${scanSchoolName} (${item.note})`
+            : `${scanSchoolName} 식단표 스캔`
+        }))
       );
+      showToast(`Gemini Vision AI가 총 ${parsed.length}일 치 식단을 정확히 읽어왔습니다!`);
     } catch (err) {
       console.error("Menu scan error:", err);
-      setScanErrorMsg("이미지 분석 중 오류가 발생했습니다. 아래에서 직접 행을 추가하거나 텍스트로 붙여넣어 주세요.");
+      setScanErrorMsg(`스캔 오류: ${err.message}`);
     } finally {
       setIsMenuScanning(false);
       if (menuFileInputRef.current) menuFileInputRef.current.value = "";
     }
   };
 
-  // 스캔된 식단들을 실제 달력 & 파이어베이스 DB에 일괄 저장
   const handleSaveScannedMenuDays = async () => {
     if (scannedMenuDays.length === 0) return;
 
@@ -844,13 +940,11 @@ function MainApp() {
     const entries = Object.values(newMealsObj);
     if (entries.length === 0) return;
 
-    // 로컬 즉시 반영
     setMealsMap((prev) => ({
       ...prev,
       local: { ...(prev.local || {}), ...newMealsObj }
     }));
 
-    // 스캔한 해당 연월 및 첫 날짜로 화면 자동 이동
     setCurrentMonth(scanTargetMonth);
     if (scannedMenuDays[0]?.date) {
       setSelectedDate(scannedMenuDays[0].date);
@@ -860,7 +954,6 @@ function MainApp() {
     setScannedMenuDays([]);
     setScanPreviewUrl("");
 
-    // 파이어베이스 v3 및 v4에 영구 저장
     if (user && db) {
       for (const m of entries) {
         try {
@@ -876,24 +969,33 @@ function MainApp() {
   };
 
   // ==========================================
-  // 8. 마트 영수증 실제 이미지 AI 스캔 핸들러
+  // 9. [100% 실제 Gemini Vision AI] 마트 영수증 이미지 스캔
   // ==========================================
   const handleReceiptImageUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    setReceiptErrorMsg("");
+    const activeKey = geminiApiKey.trim();
+
+    if (!activeKey || !activeKey.startsWith("AIzaSy")) {
+      setReceiptErrorMsg(
+        "영수증 사진을 실제로 읽으려면 우측 상단 ⚙️설정에 Google AI Studio 무료 키(AIzaSy...)를 먼저 등록해 주세요."
+      );
+      if (receiptFileInputRef.current) receiptFileInputRef.current.value = "";
+      return;
+    }
 
     setIsReceiptScanning(true);
     try {
       const { base64, mimeType, previewUrl } = await fileToBase64(file);
       setReceiptPreviewUrl(previewUrl);
 
-      const apiKeyToUse = geminiApiKey?.trim();
-      if (apiKeyToUse && apiKeyToUse.startsWith("AIzaSy")) {
-        const promptText = `이 이미지는 마트 영수증 또는 온라인 장보기 결제 내역입니다.
-식재료 및 생필품 품목들을 추출하여 반드시 아래 JSON 배열 형식으로만 응답해주세요:
+      const promptText = `이 이미지는 마트 영수증 또는 온라인 장보기 결제 내역입니다.
+실제 영수증에 적힌 식재료 및 생필품 품목명, 수량, 결제 금액을 정확히 읽어서 아래 JSON 배열 형식으로만 응답해주세요 (추정 소비기한은 오늘 날짜 ${selectedDate} 기준으로 적절히 산정):
 [
   {
-    "name": "품목명",
+    "name": "실제 영수증 품목명",
     "location": "냉장실 또는 냉동실 또는 실온·팬트리 중 택1",
     "category": "채소/과일, 육류/수산, 유제품/계란, 유아식/이유식 재료, 반찬/김치, 양념/소스, 기타 중 택1",
     "quantity": 1,
@@ -902,44 +1004,46 @@ function MainApp() {
     "price": 5000
   }
 ]`;
-        const res = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKeyToUse}`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              contents: [
-                {
-                  parts: [
-                    { text: promptText },
-                    { inline_data: { mime_type: mimeType, data: base64 } }
-                  ]
-                }
-              ]
-            })
-          }
-        );
-        const data = await res.json();
-        const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
-        const jsonMatch = rawText.match(/\[[\s\S]*\]/);
-        if (jsonMatch) {
-          const parsed = JSON.parse(jsonMatch[0]);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            setScannedReceiptItems(parsed);
-            setIsReceiptScanning(false);
-            showToast(`영수증에서 ${parsed.length}개 품목을 자동으로 읽어왔습니다!`);
-            return;
-          }
+
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${activeKey}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [
+              {
+                parts: [
+                  { text: promptText },
+                  { inline_data: { mime_type: mimeType, data: base64 } }
+                ]
+              }
+            ],
+            generationConfig: {
+              temperature: 0.2,
+              responseMimeType: "application/json"
+            }
+          })
         }
+      );
+
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        throw new Error(data.error?.message || "영수증 분석 API 오류");
       }
 
-      // 기본 폴백 샘플 제공 (직접 수정 가능)
-      setScannedReceiptItems([
-        { name: "무항생제 한우 국거리 300g", location: "냉장실", category: "육류/수산", quantity: 1, unit: "팩", expiryDate: "2026-11-22", price: 24900 },
-        { name: "상하목장 유기농 우유 900ml", location: "냉장실", category: "유제품/계란", quantity: 2, unit: "팩", expiryDate: "2026-11-25", price: 9800 }
-      ]);
+      const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+      const jsonMatch = rawText.match(/\[[\s\S]*\]/);
+      if (!jsonMatch) {
+        throw new Error("영수증에서 품목을 찾지 못했습니다.");
+      }
+
+      const parsed = JSON.parse(jsonMatch[0]);
+      setScannedReceiptItems(parsed);
+      showToast(`영수증에서 총 ${parsed.length}개 품목과 금액을 정확히 읽어왔습니다!`);
     } catch (err) {
       console.error(err);
+      setReceiptErrorMsg(`영수증 스캔 오류: ${err.message}`);
     } finally {
       setIsReceiptScanning(false);
       if (receiptFileInputRef.current) receiptFileInputRef.current.value = "";
@@ -947,7 +1051,7 @@ function MainApp() {
   };
 
   // ==========================================
-  // 9. 냉장고·식단·장보기·공지사항 핸들러
+  // 10. 냉장고·식단·장보기·공지사항 핸들러
   // ==========================================
   const handleSaveFridge = async () => {
     if (!fridgeForm.name.trim()) return;
@@ -1252,194 +1356,6 @@ function MainApp() {
     showToast("공지사항이 삭제되었습니다.");
   };
 
-  // ==========================================
-  // 10. AI 식단 추천 엔진
-  // ==========================================
-  const generateSmartLocalRecipes = (pickedList, targetGroup, extraNote) => {
-    const ingNames =
-      pickedList.length > 0 ? pickedList : fridge.slice(0, 3).map((f) => f.name);
-    const main1 = ingNames[0] || "냉장고 채소";
-    const main2 = ingNames[1] || "계란/두부";
-    const main3 = ingNames[2] || "";
-
-    if (targetGroup === "시목이 유아식") {
-      return [
-        {
-          id: `rec-${Date.now()}-1`,
-          title: `${main1} 듬뿍 부드러운 유아식 덮밥 & 맑은 국`,
-          target: "시목이 맞춤 유아식",
-          members: ["시목"],
-          time: "20분",
-          usedIngredients: ingNames,
-          steps: [
-            `1. ${main1}${main2 ? `, ${main2}` : ""}를 시목이가 한 입에 먹기 좋은 크기(1cm 내외)로 잘게 썰어 준비합니다.`,
-            `2. 팬에 아기용 기름을 살짝 두르고 재료를 충분히 익힌 뒤, 저염 간장 약간과 채수로 부드럽게 농도를 맞춥니다.`,
-            `3. 따뜻한 진밥 위에 얹어 내면 시목이가 잘 먹는 영양 한 그릇 완성! ${extraNote ? `(요청 반영: ${extraNote})` : ""}`
-          ],
-          tip: "간을 세게 하지 않아도 식재료 본연의 감칠맛으로 아이가 밥 한 공기를 뚝딱 비웁니다."
-        },
-        {
-          id: `rec-${Date.now()}-2`,
-          title: `촉촉한 ${main1} ${main2} 아기 전(동그랑땡)`,
-          target: "시목이 유아식 반찬/간식",
-          members: ["시목"],
-          time: "15분",
-          usedIngredients: ingNames,
-          steps: [
-            `1. ${main1}와 ${main2}를 잘게 다져 볼에 담습니다.`,
-            `2. 부침가루(또는 쌀가루) 1스푼과 계란 노른자를 섞어 동그랗게 빚습니다.`,
-            `3. 약불에서 앞뒤로 노릇하게 구워 아이 손에 쥐여주기 좋은 핑거푸드로 제공합니다.`
-          ],
-          tip: "남은 반죽은 냉동실에 소분해 두면 바쁜 아침 등원 전 반찬으로 3분 만에 구워낼 수 있습니다."
-        }
-      ];
-    }
-
-    if (targetGroup === "시율이 이유식/유아식") {
-      return [
-        {
-          id: `rec-${Date.now()}-1`,
-          title: `소화가 잘되는 ${main1} ${main2} 영양 진밥/죽`,
-          target: "시율이 맞춤 이유식",
-          members: ["시율"],
-          time: "25분",
-          usedIngredients: ingNames,
-          steps: [
-            `1. ${main1}는 푹 익혀서 곱게 다지거나 으깨어 준비합니다.`,
-            `2. 냄비에 불린 쌀(또는 진밥)과 채수를 넣고 ${main1}, ${main2}를 함께 넣어 충분히 퍼지도록 끓입니다.`,
-            `3. 소금 간 없이 재료 본연의 단맛과 고소함만 살려 따뜻하게 식혀 먹입니다.`
-          ],
-          tip: "이유식 큐브 용기에 3일 치로 소분해 두시면 수혁 님과 아리나 님의 육아 시간이 훨씬 여유로워집니다."
-        }
-      ];
-    }
-
-    if (targetGroup === "부부 (수혁 & 아리나)") {
-      return [
-        {
-          id: `rec-${Date.now()}-1`,
-          title: `육아 퇴근 후 힐링! ${main1} 스페셜 볶음 & 하이볼 안주`,
-          target: "부부 전용 (수혁 · 아리나)",
-          members: ["수혁", "아리나"],
-          time: "20분",
-          usedIngredients: ingNames,
-          steps: [
-            `1. ${main1}${main2 ? `와 ${main2}` : ""}를 먹기 좋은 크기로 썰고 마늘, 대파로 파기름을 냅니다.`,
-            `2. 센 불에서 빠르게 볶아 불향을 입히고 굴소스 1스푼, 후추, 청양고추(선택)로 칼칼한 어른 맛을 냅니다.`,
-            `3. 아이들 재운 뒤 부부만의 저녁 식사나 야식 메뉴로 따뜻하게 플레이팅합니다. ${extraNote ? `(메모: ${extraNote})` : ""}`
-          ],
-          tip: "아이들 반찬 만들 때 쓰던 재료도 마늘 기름과 굴소스, 페퍼론치노만 더하면 훌륭한 부부 일품요리가 됩니다."
-        },
-        {
-          id: `rec-${Date.now()}-2`,
-          title: `얼큰하고 깊은 맛의 ${main1} ${main2} 전골 찌개`,
-          target: "부부 든든 한끼",
-          members: ["수혁", "아리나"],
-          time: "25분",
-          usedIngredients: ingNames,
-          steps: [
-            `1. 냄비에 육수를 붓고 ${main1}, ${main2}${main3 ? `, ${main3}` : ""}를 푸짐하게 담습니다.`,
-            `2. 고춧가루, 국간장, 다진 마늘을 넣어 보글보글 끓여냅니다.`,
-            `3. 칼국수 사리나 라면 사리를 추가하면 외식 부럽지 않은 저녁 식사가 완성됩니다.`
-          ],
-          tip: "냉장고 속 자투리 채소들을 한꺼번에 가장 맛있게 소진할 수 있는 메뉴입니다."
-        }
-      ];
-    }
-
-    return [
-      {
-        id: `rec-${Date.now()}-1`,
-        title: `[원팟 패밀리 밀] ${main1} ${main2} 맑은 전골 & 어른용 얼큰 다대기`,
-        target: "온가족 한끼 (아이·어른 동시 해결)",
-        members: ["수혁", "아리나", "시목", "시율"],
-        time: "25분",
-        usedIngredients: ingNames,
-        steps: [
-          `1. 냄비에 다시마/멸치 육수를 내고 선택하신 [${ingNames.join(", ")}] 재료를 먹기 좋게 썰어 넣습니다.`,
-          `2. 소금이나 자극적인 양념을 하기 전, 푹 익은 건더기와 맑은 국물을 먼저 덜어 시목이·시율이 반찬으로 분리합니다.`,
-          `3. 남은 냄비에 국간장, 다진 마늘, 청양고추/고춧가루를 추가해 수혁 님과 아리나 님의 칼칼한 찌개로 완성합니다! ${extraNote ? `(${extraNote})` : ""}`
-        ],
-        tip: "냄비 하나로 아이들 유아식과 부부 찌개를 동시에 해결해 설거지와 조리 시간을 절반으로 줄여줍니다."
-      },
-      {
-        id: `rec-${Date.now()}-2`,
-        title: `${main1} 영양 솥밥(영양밥) & 양념장 분리 한상`,
-        target: "온가족 주말 특식",
-        members: ["수혁", "아리나", "시목", "시율"],
-        time: "30분",
-        usedIngredients: ingNames,
-        steps: [
-          `1. 쌀 위에 잘게 썬 [${ingNames.join(", ")}]를 올리고 평소보다 물을 살짝 적게 잡아 밥을 짓습니다.`,
-          `2. 밥이 완성되면 골고루 섞어 아이들 그릇에는 고소한 참기름만 살짝 둘러 내어줍니다.`,
-          `3. 어른 그릇에는 쪽파·달래 간장 양념장을 곁들여 비벼 드시면 온 가족이 같은 메뉴로 든든하게 즐길 수 있습니다.`
-        ],
-        tip: "냉장고에 남은 재료가 애매할 때 영양밥으로 지으면 반찬 걱정 없이 한 끼가 해결됩니다."
-      }
-    ];
-  };
-
-  const handleRunAiRecommend = async () => {
-    setIsAiLoading(true);
-    const picked =
-      selectedAiIngredients.length > 0
-        ? selectedAiIngredients
-        : fridge.slice(0, 3).map((f) => f.name);
-
-    if (geminiApiKey && geminiApiKey.startsWith("AIzaSy")) {
-      try {
-        const prompt = `우리 가족(아빠 김수혁, 엄마 최아리나, 첫째 김시목 유아식, 둘째 김시율 이유식)을 위해 현재 선택한 냉장고 재료 [${picked.join(
-          ", "
-        )}]를 활용한 '${aiTargetGroup}' 맞춤 요리 레시피 2가지를 추천해줘. 추가 요청사항: ${
-          aiPromptExtra || "없음"
-        }. 반드시 JSON 배열 형식으로만 응답해: [{"title":"메뉴명","target":"대상","time":"소요시간","usedIngredients":["재료1"],"steps":["1단계","2단계","3단계"],"tip":"조리팁"}]`;
-
-        const res = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiApiKey}`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              contents: [{ parts: [{ text: prompt }] }]
-            })
-          }
-        );
-        const data = await res.json();
-        const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
-        const jsonMatch = text.match(/\[[\s\S]*\]/);
-        if (jsonMatch) {
-          const parsed = JSON.parse(jsonMatch[0]).map((r, idx) => ({
-            ...r,
-            id: `ai-${Date.now()}-${idx}`,
-            usedIngredients: toSafeArray(r.usedIngredients),
-            steps: toSafeArray(r.steps),
-            members:
-              aiTargetGroup === "시목이 유아식"
-                ? ["시목"]
-                : aiTargetGroup === "시율이 이유식/유아식"
-                ? ["시율"]
-                : aiTargetGroup === "부부 (수혁 & 아리나)"
-                ? ["수혁", "아리나"]
-                : ["수혁", "아리나", "시목", "시율"]
-          }));
-          setAiRecipes(parsed);
-          setIsAiLoading(false);
-          showToast("선택하신 재료로 AI 맞춤 식단이 생성되었습니다!");
-          return;
-        }
-      } catch (e) {
-        console.warn("Gemini API fallback:", e);
-      }
-    }
-
-    setTimeout(() => {
-      const generated = generateSmartLocalRecipes(picked, aiTargetGroup, aiPromptExtra);
-      setAiRecipes(generated);
-      setIsAiLoading(false);
-      showToast(`선택하신 재료(${picked.join(", ")}) 맞춤 식단이 생성되었습니다!`);
-    }, 400);
-  };
-
   const handleConfirmQuickLog = async () => {
     if (!quickLogRecipe) return;
     const id = `m-${Date.now()}`;
@@ -1574,6 +1490,8 @@ function MainApp() {
     document.body.removeChild(link);
   };
 
+  const isKeyValid = geminiApiKey && geminiApiKey.startsWith("AIzaSy");
+
   return (
     <div className="min-h-screen bg-stone-50 text-stone-800 pb-24 max-w-md mx-auto shadow-xl border-x border-stone-200 relative font-sans">
       {toastMsg && (
@@ -1602,8 +1520,16 @@ function MainApp() {
               <span>{monthlyExpenseSummary.total.toLocaleString()}원</span>
             </button>
             <button
-              onClick={() => setIsSettingsOpen(true)}
-              className="p-1.5 rounded-full bg-stone-100 hover:bg-stone-200 text-stone-600"
+              onClick={() => {
+                setTempKeyInput(geminiApiKey);
+                setIsSettingsOpen(true);
+              }}
+              className={`p-1.5 rounded-full transition ${
+                isKeyValid
+                  ? "bg-stone-100 hover:bg-stone-200 text-stone-600"
+                  : "bg-red-100 text-red-600 animate-pulse"
+              }`}
+              title="AI 키 설정 및 백업"
             >
               <Settings className="w-4 h-4" />
             </button>
@@ -2035,10 +1961,9 @@ function MainApp() {
         </div>
       )}
 
-      {/* 탭 3: 월간·식비 (모든 연월 이동 가능!) */}
+      {/* 탭 3: 월간·식비 */}
       {activeTab === "monthly" && (
         <div className="p-4 space-y-4">
-          {/* 연월 선택 네비게이터 */}
           <div className="flex items-center justify-between bg-white px-3 py-2 rounded-2xl border border-stone-200 shadow-sm">
             <button
               onClick={() => {
@@ -2050,19 +1975,17 @@ function MainApp() {
             >
               <ChevronLeft className="w-4 h-4" />
             </button>
-            <div className="flex items-center gap-2">
-              <input
-                type="month"
-                value={currentMonth}
-                onChange={(e) => {
-                  if (e.target.value) {
-                    setCurrentMonth(e.target.value);
-                    setSelectedDate(`${e.target.value}-01`);
-                  }
-                }}
-                className="text-sm font-black text-stone-900 bg-transparent focus:outline-none"
-              />
-            </div>
+            <input
+              type="month"
+              value={currentMonth}
+              onChange={(e) => {
+                if (e.target.value) {
+                  setCurrentMonth(e.target.value);
+                  setSelectedDate(`${e.target.value}-01`);
+                }
+              }}
+              className="text-sm font-black text-stone-900 bg-transparent focus:outline-none"
+            />
             <button
               onClick={() => {
                 const nextM = shiftYearMonth(currentMonth, 1);
@@ -2212,10 +2135,6 @@ function MainApp() {
                     </div>
                   </div>
                 </div>
-              </div>
-
-              <div className="bg-emerald-50 border border-emerald-200 p-3 rounded-2xl text-xs text-emerald-900 font-semibold">
-                💡 <b>안심 가계부 로직 적용됨:</b> 냉장고에서 재료를 다 먹어 <b>[다 먹음(식비유지)]</b> 처리하더라도 이미 지출한 장보기 금액은 줄어들지 않고 아래 원장에 그대로 보존됩니다.
               </div>
 
               <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-sm space-y-2.5">
@@ -2689,18 +2608,66 @@ function MainApp() {
         </div>
       )}
 
-      {/* 탭 7: AI 추천 */}
+      {/* ==========================================
+          탭 7: 100% 실제 Gemini AI 식단 추천 탭
+      ========================================== */}
       {activeTab === "ai" && (
         <div className="p-4 space-y-4">
-          <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-sm space-y-3.5">
-            <div>
-              <h2 className="text-sm font-black text-stone-900 flex items-center gap-1.5">
-                <Sparkles className="w-4 h-4 text-amber-500" />
-                <span>AI 냉장고 파먹기 맞춤 식단 추천</span>
-              </h2>
-              <p className="text-[11px] text-stone-500 mt-0.5">
-                현재 냉장고에 남아있는 재료를 터치해 선택하시면 즉석에서 맞춤 레시피를 조합해 드립니다.
+          {/* API 키 미등록 시 안내 카드 (한 번 등록하면 부부 폰 모두 자동 동기화) */}
+          {!isKeyValid && (
+            <div className="bg-amber-50 border border-amber-300 rounded-2xl p-4 space-y-2.5 shadow-sm">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5 text-xs font-black text-amber-900">
+                  <KeyRound className="w-4 h-4 text-amber-600" />
+                  <span>실제 Gemini AI 엔진 연결 키 등록 (최초 1회)</span>
+                </div>
+                <a
+                  href="https://aistudio.google.com/app/apikey"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-[11px] font-extrabold text-amber-700 underline flex items-center gap-0.5"
+                >
+                  <span>무료 키 발급받기</span>
+                  <ExternalLink className="w-3 h-3" />
+                </a>
+              </div>
+              <p className="text-[11px] text-amber-800 leading-relaxed">
+                단순 재료명 끼워맞추기가 아닌 <b>진짜 AI 셰프의 레시피 생성 및 식단표 사진 OCR 스캔</b>을 위해 <code>AIzaSy...</code>로 시작하는 키를 입력해 주세요. (수혁 님이 한 번 저장하시면 아리나 님 폰에도 자동 공유됩니다!)
               </p>
+              <div className="flex gap-1.5">
+                <input
+                  type="text"
+                  placeholder="AIzaSy... 로 시작하는 키 붙여넣기"
+                  value={tempKeyInput}
+                  onChange={(e) => setTempKeyInput(e.target.value)}
+                  className="flex-1 px-3 py-2 rounded-xl border border-amber-300 bg-white text-xs font-bold"
+                />
+                <button
+                  onClick={() => handleSaveApiKey(tempKeyInput)}
+                  className="px-3.5 py-2 rounded-xl bg-stone-900 text-white text-xs font-extrabold shrink-0"
+                >
+                  저장하기
+                </button>
+              </div>
+            </div>
+          )}
+
+          <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-sm space-y-3.5">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-sm font-black text-stone-900 flex items-center gap-1.5">
+                  <Sparkles className="w-4 h-4 text-amber-500" />
+                  <span>Gemini 2.5 AI 실시간 맞춤 셰프</span>
+                </h2>
+                <p className="text-[11px] text-stone-500 mt-0.5">
+                  선택한 냉장고 재료들의 실제 맛 궁합과 조리법을 AI가 실시간으로 설계합니다.
+                </p>
+              </div>
+              {isKeyValid && (
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                  ✓ AI 엔진 연결됨
+                </span>
+              )}
             </div>
 
             <div>
@@ -2781,11 +2748,17 @@ function MainApp() {
 
             <input
               type="text"
-              placeholder="추가 요청 (예: 국물 요리 위주, 20분 이내 간단 조리 등)"
+              placeholder="추가 요청 (예: 매콤한 국물 요리, 에어프라이어 활용, 15분 컷 등)"
               value={aiPromptExtra}
               onChange={(e) => setAiPromptExtra(e.target.value)}
               className="w-full px-3 py-2 rounded-xl border border-stone-200 text-xs"
             />
+
+            {aiErrorMsg && (
+              <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-xs text-red-700 font-bold">
+                ⚠️ {aiErrorMsg}
+              </div>
+            )}
 
             <button
               onClick={handleRunAiRecommend}
@@ -2794,13 +2767,13 @@ function MainApp() {
             >
               {isAiLoading ? (
                 <>
-                  <RefreshCw className="w-4 h-4 animate-spin" />
-                  <span>선택하신 재료로 맞춤 레시피 생성 중...</span>
+                  <RefreshCw className="w-4 h-4 animate-spin text-amber-400" />
+                  <span>Gemini AI가 재료 궁합을 분석하여 레시피 작성 중...</span>
                 </>
               ) : (
                 <>
                   <Sparkles className="w-4 h-4 text-amber-400" />
-                  <span>선택한 재료로 맞춤 식단 추천받기</span>
+                  <span>실제 Gemini AI에게 맞춤 레시피 3가지 요청하기</span>
                 </>
               )}
             </button>
@@ -2810,10 +2783,10 @@ function MainApp() {
             <div className="bg-white p-6 rounded-2xl border border-dashed border-stone-300 text-center space-y-1">
               <div className="text-2xl">👩‍🍳👨‍🍳</div>
               <div className="text-xs font-extrabold text-stone-700">
-                위에서 냉장고 재료를 선택하고 추천 버튼을 눌러보세요!
+                위에서 냉장고 재료를 선택하고 AI 추천 버튼을 눌러보세요!
               </div>
               <div className="text-[11px] text-stone-400">
-                고정된 예시 메뉴가 아닌, 방금 선택하신 재료들을 조합한 맞춤 레시피가 생성됩니다.
+                기계적인 템플릿 없이, 실제 Gemini 2.5 Flash 모델이 즉석에서 레시피를 설계합니다.
               </div>
             </div>
           ) : (
@@ -2830,14 +2803,14 @@ function MainApp() {
                   <div className="text-xs font-bold text-emerald-700">
                     🥬 활용 재료: {toSafeArray(rec.usedIngredients).join(", ")}
                   </div>
-                  <div className="space-y-1 bg-stone-50 p-3 rounded-xl text-xs text-stone-700">
+                  <div className="space-y-1.5 bg-stone-50 p-3 rounded-xl text-xs text-stone-700 leading-relaxed">
                     {toSafeArray(rec.steps).map((st, i) => (
                       <div key={i}>{st}</div>
                     ))}
                   </div>
                   {rec.tip && (
                     <div className="text-[11px] font-semibold text-amber-800 bg-amber-50/70 p-2.5 rounded-xl">
-                      💡 <b>조리 팁:</b> {rec.tip}
+                      💡 <b>셰프의 팁:</b> {rec.tip}
                     </div>
                   )}
                   <button
@@ -2886,7 +2859,7 @@ function MainApp() {
       </nav>
 
       {/* ==========================================
-          모달 6: [신규] 양식·월 무제한 식단표 이미지 AI 스캔 모달
+          모달 6: 식단표 이미지 AI 자동 스캔 모달
       ========================================== */}
       {isDaycareModalOpen && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
@@ -2897,7 +2870,7 @@ function MainApp() {
                   📸 식단표 이미지 AI 자동 스캔 (모든 양식·모든 월)
                 </h3>
                 <p className="text-[11px] text-stone-500">
-                  11월뿐만 아니라 12월, 내년 등 어떤 양식의 식단표 사진이든 올려주세요!
+                  식단표 사진을 올리면 Gemini Vision AI가 날짜와 메뉴를 자동 추출합니다.
                 </p>
               </div>
               <button onClick={() => setIsDaycareModalOpen(false)}>
@@ -2905,7 +2878,6 @@ function MainApp() {
               </button>
             </div>
 
-            {/* Step 1: 적용할 연월, 대상 아이, 기관명 설정 */}
             <div className="grid grid-cols-3 gap-2 bg-stone-50 p-3 rounded-2xl border border-stone-200">
               <div>
                 <label className="text-[10px] font-extrabold text-stone-500 block mb-1">
@@ -2948,7 +2920,6 @@ function MainApp() {
               </div>
             </div>
 
-            {/* Step 2: 실제 이미지 파일 업로드 버튼 */}
             <div>
               <input
                 ref={menuFileInputRef}
@@ -2965,7 +2936,7 @@ function MainApp() {
                 {isMenuScanning ? (
                   <>
                     <RefreshCw className="w-4 h-4 animate-spin" />
-                    <span>AI가 식단표 이미지의 날짜와 메뉴를 읽는 중...</span>
+                    <span>Gemini Vision AI가 식단표 이미지를 정밀 분석 중...</span>
                   </>
                 ) : (
                   <>
@@ -2987,48 +2958,11 @@ function MainApp() {
             )}
 
             {scanErrorMsg && (
-              <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-[11px] text-amber-900 font-semibold">
-                ℹ️ {scanErrorMsg}
+              <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-[11px] text-red-700 font-bold">
+                ⚠️ {scanErrorMsg}
               </div>
             )}
 
-            {/* 보조 기능: 키즈노트/문자 식단 텍스트 복사 붙여넣기 */}
-            <details className="bg-stone-50 rounded-2xl p-3 border border-stone-200 text-xs">
-              <summary className="font-extrabold text-stone-700 cursor-pointer">
-                📋 텍스트로 복사한 식단 붙여넣기 (선택 사항)
-              </summary>
-              <div className="mt-2 space-y-2">
-                <textarea
-                  rows={3}
-                  value={manualPasteText}
-                  onChange={(e) => setManualPasteText(e.target.value)}
-                  placeholder={`예시:\n1일: 사과,우유 | 잡곡밥, 소고기미역국, 계란말이 | 찐감자\n2일: 야채죽 | 쌀밥, 된장국, 불고기 | 카스테라, 우유`}
-                  className="w-full p-2 rounded-xl border border-stone-200 text-[11px]"
-                />
-                <button
-                  type="button"
-                  onClick={() => {
-                    const parsed = parseFreeformMenuText(
-                      manualPasteText,
-                      scanTargetMonth,
-                      scanSchoolName
-                    );
-                    if (parsed.length > 0) {
-                      setScannedMenuDays((prev) => [...prev, ...parsed]);
-                      setManualPasteText("");
-                      showToast(`${parsed.length}일 치 식단이 목록에 추가되었습니다.`);
-                    } else {
-                      showToast("날짜(예: 1일, 2일)가 포함된 줄을 입력해 주세요.");
-                    }
-                  }}
-                  className="w-full py-2 rounded-xl bg-stone-800 text-white text-xs font-extrabold"
-                >
-                  텍스트 분석하여 아래 목록에 추가
-                </button>
-              </div>
-            </details>
-
-            {/* Step 3: 스캔 추출된 날짜별 식단 확인 및 자유 편집 */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-black text-stone-800">
@@ -3055,11 +2989,7 @@ function MainApp() {
                 </button>
               </div>
 
-              {scannedMenuDays.length === 0 ? (
-                <div className="text-center py-4 text-xs text-stone-400 bg-stone-50 rounded-2xl border border-dashed border-stone-200">
-                  위 노란색 버튼을 눌러 식단표 이미지를 업로드하면 자동으로 날짜와 오전간식·점심·오후간식이 채워집니다.
-                </div>
-              ) : (
+              {scannedMenuDays.length > 0 && (
                 <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
                   {scannedMenuDays.map((row, idx) => (
                     <div
@@ -3088,7 +3018,7 @@ function MainApp() {
                       </div>
                       <input
                         type="text"
-                        placeholder="🍎 오전간식 (예: 사과, 우유)"
+                        placeholder="🍎 오전간식"
                         value={row.mSnack}
                         onChange={(e) => {
                           const copy = [...scannedMenuDays];
@@ -3099,7 +3029,7 @@ function MainApp() {
                       />
                       <input
                         type="text"
-                        placeholder="☀️ 점심 (예: 잡곡밥, 소고기미역국, 두부조림)"
+                        placeholder="☀️ 점심"
                         value={row.lunch}
                         onChange={(e) => {
                           const copy = [...scannedMenuDays];
@@ -3110,7 +3040,7 @@ function MainApp() {
                       />
                       <input
                         type="text"
-                        placeholder="🥨 오후간식 (예: 찐고구마, 우유)"
+                        placeholder="🥨 오후간식"
                         value={row.aSnack}
                         onChange={(e) => {
                           const copy = [...scannedMenuDays];
@@ -3165,7 +3095,7 @@ function MainApp() {
               {isReceiptScanning ? (
                 <>
                   <RefreshCw className="w-4 h-4 animate-spin" />
-                  <span>영수증 이미지에서 품목과 금액 추출 중...</span>
+                  <span>Gemini AI가 영수증 품목과 금액 추출 중...</span>
                 </>
               ) : (
                 <>
@@ -3174,6 +3104,12 @@ function MainApp() {
                 </>
               )}
             </button>
+
+            {receiptErrorMsg && (
+              <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-xs text-red-700 font-bold">
+                ⚠️ {receiptErrorMsg}
+              </div>
+            )}
 
             {receiptPreviewUrl && (
               <img
@@ -3655,7 +3591,7 @@ function MainApp() {
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-sm w-full p-5 space-y-3.5">
             <div className="flex items-center justify-between">
-              <h3 className="text-sm font-black">⚙️ 서버 연동 및 AI 비전 키 설정</h3>
+              <h3 className="text-sm font-black">⚙️ Gemini AI 키 설정 및 백업</h3>
               <button onClick={() => setIsSettingsOpen(false)}>
                 <X className="w-5 h-5 text-stone-400" />
               </button>
@@ -3670,29 +3606,43 @@ function MainApp() {
               </div>
             </div>
 
+            <div className="p-3 rounded-2xl bg-stone-50 border border-stone-200 space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-black text-stone-800">
+                  🔑 Google AI Studio API 키
+                </label>
+                <a
+                  href="https://aistudio.google.com/app/apikey"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-[11px] font-bold text-amber-700 underline flex items-center gap-0.5"
+                >
+                  <span>키 발급 페이지 열기</span>
+                  <ExternalLink className="w-3 h-3" />
+                </a>
+              </div>
+              <input
+                type="text"
+                value={tempKeyInput}
+                onChange={(e) => setTempKeyInput(e.target.value)}
+                placeholder="AIzaSy... 로 시작하는 39자리 키 입력"
+                className="w-full px-3 py-2 rounded-xl border border-stone-300 text-xs font-bold bg-white"
+              />
+              <button
+                onClick={() => handleSaveApiKey(tempKeyInput)}
+                className="w-full py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-extrabold"
+              >
+                API 키 저장 (부부 폰 동시 적용)
+              </button>
+            </div>
+
             <button
               onClick={handleRestoreAllDeleted}
-              className="w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-extrabold flex items-center justify-center gap-1.5"
+              className="w-full py-2.5 rounded-xl bg-stone-200 hover:bg-stone-300 text-stone-800 text-xs font-extrabold flex items-center justify-center gap-1.5"
             >
               <Database className="w-4 h-4" />
               <span>숨겨지거나 삭제된 기존 데이터 전체 다시 불러오기</span>
             </button>
-
-            <div>
-              <label className="text-[11px] font-bold text-stone-600 block mb-1">
-                Gemini API Key (식단표·영수증 이미지 OCR 스캔용, AIzaSy...로 시작)
-              </label>
-              <input
-                type="text"
-                value={geminiApiKey}
-                onChange={(e) => {
-                  setGeminiApiKey(e.target.value);
-                  localStorage.setItem("kim_family_gemini_key", e.target.value);
-                }}
-                placeholder="AIzaSy... 로 시작하는 키 입력"
-                className="w-full px-3 py-2 rounded-xl border border-stone-200 text-xs"
-              />
-            </div>
 
             <button
               onClick={handleExportCsv}
