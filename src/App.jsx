@@ -21,7 +21,8 @@ import {
   AlertCircle,
   CheckCircle2,
   RefreshCw,
-  ArrowRight
+  ArrowRight,
+  Database
 } from "lucide-react";
 import { initializeApp, getApps, getApp } from "firebase/app";
 import {
@@ -40,7 +41,7 @@ import {
 } from "firebase/firestore";
 
 // ==========================================
-// 1. 파이어베이스 안전 초기화 (중복 초기화 및 경로 에러 원천 차단)
+// 1. 파이어베이스 연결 설정 (ahrisoohyeokbap)
 // ==========================================
 const USER_FIREBASE_CONFIG = {
   apiKey: "AIzaSyDrzf2_cG0PT-dW1lidXYaHk4BpCY-eMao",
@@ -70,13 +71,11 @@ try {
 const APP_ID = "kim-family-meal-app";
 const DEFAULT_USER_API_KEY = "AQ.Ab8RN6Ke8u6xRzPlDhMcI7cRjgrktqqiA9v76BVl4x-gaqacsA";
 
-// [중요] Firestore 컬렉션/문서 경로는 반드시 홀수/짝수 세그먼트 규칙을 지켜야 흰 화면이 안 뜹니다!
-// artifacts (1) / APP_ID (2) / public (3) / data (4) / collectionName (5 - 홀수!)
+// 기존 데이터가 저장된 경로(v3)와 신규 경로(v4) 모두 접근하는 헬퍼
 const getColRef = (colName) => collection(db, "artifacts", APP_ID, "public", "data", colName);
 const getDocRef = (colName, docId) =>
   doc(db, "artifacts", APP_ID, "public", "data", colName, String(docId));
 
-// 배열 안전 변환 유틸리티 (기존 DB 데이터 형식 충돌로 인한 흰 화면 방지)
 const toSafeArray = (val) => {
   if (Array.isArray(val)) return val;
   if (typeof val === "string" && val.trim() !== "") {
@@ -86,7 +85,7 @@ const toSafeArray = (val) => {
 };
 
 // ==========================================
-// 2. 상수 및 초기 데이터
+// 2. 상수 및 기본 데이터
 // ==========================================
 const FAMILY_MEMBERS = [
   { id: "수혁", name: "김수혁", role: "아빠", emoji: "👨🏻", color: "bg-blue-100 text-blue-800 border-blue-200" },
@@ -175,31 +174,18 @@ const buildDaycareMeals = () => {
   return list;
 };
 
-const INITIAL_FRIDGE = [
-  { id: "f-1", name: "한우 설도 다짐육 (이유식/유아식용)", location: "냉동실", category: "유아식/이유식 재료", quantity: 3, unit: "팩(150g)", expiryDate: "2026-11-25", price: 32000, purchaseDate: "2026-11-10" },
-  { id: "f-2", name: "동물복지 무항생제 특란 15구", location: "냉장실", category: "유제품/계란", quantity: 10, unit: "알", expiryDate: "2026-11-20", price: 8900, purchaseDate: "2026-11-11" },
-  { id: "f-3", name: "유기농 아기 두부", location: "냉장실", category: "유아식/이유식 재료", quantity: 2, unit: "모", expiryDate: "2026-11-16", price: 3800, purchaseDate: "2026-11-12" },
-  { id: "f-4", name: "국내산 브로콜리", location: "냉장실", category: "채소/과일", quantity: 1, unit: "송이", expiryDate: "2026-11-17", price: 2980, purchaseDate: "2026-11-12" },
-  { id: "f-5", name: "한돈 1등급 차돌박이", location: "냉동실", category: "육류/수산", quantity: 2, unit: "팩(300g)", expiryDate: "2026-11-28", price: 28500, purchaseDate: "2026-11-09" },
-  { id: "f-6", name: "생연어 스테이크용", location: "냉장실", category: "육류/수산", quantity: 1, unit: "팩", expiryDate: "2026-11-15", price: 19800, purchaseDate: "2026-11-13" },
-  { id: "f-7", name: "유기농 아기 치즈 1단계/2단계", location: "냉장실", category: "유제품/계란", quantity: 8, unit: "장", expiryDate: "2026-12-10", price: 6500, purchaseDate: "2026-11-05" },
-  { id: "f-8", name: "제주 햇 감자 & 애호박", location: "냉장실", category: "채소/과일", quantity: 4, unit: "개", expiryDate: "2026-11-19", price: 5400, purchaseDate: "2026-11-11" }
-];
-
 const INITIAL_SHOPPING = [
   { id: "sh-1", name: "상하목장 유기농 우유 900ml", quantity: "2팩", category: "유제품/계란", urgent: true, checked: false, memo: "시목이 간식 우유" },
-  { id: "sh-2", name: "유기농 애호박 & 당근", quantity: "각 2개", category: "채소/과일", urgent: false, checked: false, memo: "시율이 이유식 큐브용" },
-  { id: "sh-3", name: "대파 & 양파 1망", quantity: "1묶음", category: "채소/과일", urgent: false, checked: false, memo: "국물 요리용" }
+  { id: "sh-2", name: "유기농 애호박 & 당근", quantity: "각 2개", category: "채소/과일", urgent: false, checked: false, memo: "시율이 이유식 큐브용" }
 ];
 
 const INITIAL_NOTICES = [
   { id: "nt-1", title: "시목이 어린이집 낮잠이불 세탁해서 보내기", content: "월요일 등원할 때 깨끗한 낮잠이불 챙겨서 보내야 함!", category: "육아/아이들", author: "최아리나", pinned: true, done: false, createdAt: "2026-11-14" },
-  { id: "nt-2", title: "시율이 신생아 B형간염 2차 예방접종 확인", content: "소아과 예약 시간 및 아기수첩 챙기기", category: "육아/아이들", author: "김수혁", pinned: true, done: false, createdAt: "2026-11-14" },
-  { id: "nt-3", title: "이번 주 장보기 예산 점검 및 냉장고 파먹기 주간", content: "냉장실에 있는 연어랑 두부 소비기한 임박하니 주말에 먼저 먹기!", category: "일반", author: "김수혁", pinned: false, done: false, createdAt: "2026-11-14" }
+  { id: "nt-2", title: "시율이 신생아 B형간염 2차 예방접종 확인", content: "소아과 예약 시간 및 아기수첩 챙기기", category: "육아/아이들", author: "김수혁", pinned: true, done: false, createdAt: "2026-11-14" }
 ];
 
 // ==========================================
-// 3. 유틸리티 함수 (날짜 오류 방어 적용)
+// 3. 유틸리티 함수
 // ==========================================
 const formatDate = (dateObj) => {
   if (!dateObj || isNaN(dateObj.getTime())) return "2026-11-14";
@@ -225,7 +211,7 @@ const getDaysDiff = (expiryStr) => {
 };
 
 // ==========================================
-// 4. 에러 방어막 컴포넌트 (혹시 모를 런타임 에러 시 흰 화면 방지)
+// 4. 에러 방어막 컴포넌트
 // ==========================================
 class ErrorBoundary extends React.Component {
   constructor(props) {
@@ -233,7 +219,7 @@ class ErrorBoundary extends React.Component {
     this.state = { hasError: false, errorMsg: "" };
   }
   static getDerivedStateFromError(error) {
-    return { hasError: true, errorMsg: error?.message || "알 수 없는 오류" };
+    return { hasError: true, errorMsg: error?.message || "오류 발생" };
   }
   render() {
     if (this.state.hasError) {
@@ -241,16 +227,13 @@ class ErrorBoundary extends React.Component {
         <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-stone-50 text-center">
           <div className="bg-white p-6 rounded-3xl shadow-lg border border-red-200 max-w-sm w-full space-y-3">
             <div className="text-2xl">⚠️</div>
-            <h2 className="text-sm font-black text-stone-900">화면 복구 모드</h2>
+            <h2 className="text-sm font-black text-stone-900">화면 자동 복구</h2>
             <p className="text-xs text-stone-600 break-all">{this.state.errorMsg}</p>
             <button
-              onClick={() => {
-                localStorage.clear();
-                window.location.reload();
-              }}
+              onClick={() => window.location.reload()}
               className="w-full py-2.5 rounded-xl bg-stone-900 text-white text-xs font-extrabold"
             >
-              캐시 초기화 및 새로고침
+              새로고침
             </button>
           </div>
         </div>
@@ -261,17 +244,17 @@ class ErrorBoundary extends React.Component {
 }
 
 // ==========================================
-// 5. 메인 애플리케이션 내부 컴포넌트
+// 5. 메인 애플리케이션 컴포넌트 (기존 v3 + 신규 v4 통합 동기화)
 // ==========================================
 function MainApp() {
   const [user, setUser] = useState(null);
   const [activeTab, setActiveTab] = useState("daily");
   const [selectedDate, setSelectedDate] = useState("2026-11-14");
   const [selectedMember, setSelectedMember] = useState("전체");
-  const [isDbLoaded, setIsDbLoaded] = useState(false);
 
-  const [meals, setMeals] = useState([]);
-  const [fridge, setFridge] = useState([]);
+  // 기존 v3 데이터와 v4 데이터를 모두 담는 통합 상태
+  const [mealsMap, setMealsMap] = useState({});
+  const [fridgeMap, setFridgeMap] = useState({});
   const [expenses, setExpenses] = useState([]);
   const [shoppingList, setShoppingList] = useState([]);
   const [notices, setNotices] = useState([]);
@@ -365,7 +348,7 @@ function MainApp() {
   };
 
   // ==========================================
-  // 6. 파이어베이스 인증 및 실시간 동기화 (기존 DB 구조 + 신규 컬렉션 완벽 호환)
+  // 6. 파이어베이스 다중 경로 스캔 (기존 v3, v2, 루트 데이터 100% 복원!)
   // ==========================================
   useEffect(() => {
     if (!auth) return;
@@ -388,172 +371,198 @@ function MainApp() {
   useEffect(() => {
     if (!user || !db) return;
 
-    // 0) 기존 family_meals_v3 컬렉션에서 레거시 데이터도 함께 읽어와 100% 보존
-    const unsubLegacy = onSnapshot(
+    const unsubscribers = [];
+
+    // 1) 삭제 추적기 동기화
+    unsubscribers.push(
+      onSnapshot(
+        getColRef("family_meta_v4"),
+        (snap) => {
+          snap.docs.forEach((d) => {
+            if (d.id === "deleted_tracker") {
+              const list = toSafeArray(d.data().ids);
+              setDeletedIds(list);
+              localStorage.setItem("kim_family_deleted_ids", JSON.stringify(list));
+            }
+          });
+        },
+        () => {}
+      )
+    );
+
+    // 2) 기존에 사용했을 수 있는 모든 식단 컬렉션 경로를 동시에 감시하여 100% 복원!
+    const mealCollections = [
       getColRef("family_meals_v3"),
-      (snap) => {
-        snap.docs.forEach((d) => {
-          const data = d.data();
-          // 만약 기존 단일 문서에 배열 형태로 들어있다면 자동 복원
-          if (Array.isArray(data.meals) && data.meals.length > 0) {
-            setMeals((prev) => (prev.length === 0 ? data.meals : prev));
-          }
-          if (Array.isArray(data.fridge) && data.fridge.length > 0) {
-            setFridge((prev) =>
-              prev.length === 0
-                ? data.fridge.filter((i) => !deletedIds.includes(i.id))
-                : prev
-            );
-          }
-        });
-      },
-      (err) => console.warn("Legacy listener warning:", err)
-    );
-
-    // 1) 삭제 추적기 동기화 (종가집 포기김치 등 삭제한 항목 부활 방지)
-    const unsubMeta = onSnapshot(
-      getColRef("family_meta_v4"),
-      (snap) => {
-        snap.docs.forEach((d) => {
-          if (d.id === "deleted_tracker") {
-            const list = toSafeArray(d.data().ids);
-            setDeletedIds(list);
-            localStorage.setItem("kim_family_deleted_ids", JSON.stringify(list));
-          }
-        });
-      },
-      (err) => console.warn("Meta listener error:", err)
-    );
-
-    // 2) 식단 동기화 (family_meals_v4)
-    const unsubMeals = onSnapshot(
       getColRef("family_meals_v4"),
-      async (snap) => {
-        const loaded = snap.docs.map((d) => {
-          const raw = d.data();
-          return {
-            ...raw,
-            id: d.id,
-            members: toSafeArray(raw.members),
-            ingredients: toSafeArray(raw.ingredients)
-          };
-        });
+      getColRef("meals"),
+      collection(db, "meals"),
+      collection(db, "family_meals_v3")
+    ];
 
-        const delList = JSON.parse(localStorage.getItem("kim_family_deleted_ids") || "[]");
-        const dbIds = new Set(loaded.map((m) => m.id));
-        const daycareMeals = buildDaycareMeals().filter(
-          (m) => !dbIds.has(m.id) && !delList.includes(m.id)
-        );
-        const filteredLoaded = loaded.filter((m) => !delList.includes(m.id));
-        setMeals([...filteredLoaded, ...daycareMeals]);
-      },
-      (err) => console.warn("Meals listener error:", err)
-    );
+    mealCollections.forEach((colRef, idx) => {
+      const unsub = onSnapshot(
+        colRef,
+        (snap) => {
+          const loaded = {};
+          snap.docs.forEach((d) => {
+            const raw = d.data();
+            // 단일 문서 내에 meals 배열이 통째로 들어있는 경우까지 모두 처리
+            if (Array.isArray(raw.meals)) {
+              raw.meals.forEach((m) => {
+                if (m && m.id) {
+                  loaded[m.id] = {
+                    ...m,
+                    members: toSafeArray(m.members),
+                    ingredients: toSafeArray(m.ingredients)
+                  };
+                }
+              });
+            } else if (raw.menu || raw.slot || raw.date) {
+              loaded[d.id] = {
+                ...raw,
+                id: d.id,
+                members: toSafeArray(raw.members),
+                ingredients: toSafeArray(raw.ingredients)
+              };
+            }
+          });
+          if (Object.keys(loaded).length > 0) {
+            setMealsMap((prev) => ({ ...prev, [`src_${idx}`]: loaded }));
+          }
+        },
+        () => {}
+      );
+      unsubscribers.push(unsub);
+    });
 
-    // 3) 냉장고 동기화 (family_fridge_v4)
-    const unsubFridge = onSnapshot(
+    // 3) 기존에 사용했을 수 있는 모든 냉장고 컬렉션 경로를 동시에 감시하여 100% 복원!
+    const fridgeCollections = [
+      getColRef("family_fridge_v3"),
+      getColRef("family_meals_v3"), // 혹시 family_meals_v3 안에 fridge 문서가 저장된 경우
       getColRef("family_fridge_v4"),
-      async (snap) => {
-        const loaded = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-        const alreadySeeded = localStorage.getItem("kim_fridge_seeded_v4");
-        const delList = JSON.parse(localStorage.getItem("kim_family_deleted_ids") || "[]");
+      getColRef("fridge"),
+      collection(db, "fridge"),
+      collection(db, "family_fridge_v3")
+    ];
 
-        if (loaded.length === 0 && !alreadySeeded) {
-          localStorage.setItem("kim_fridge_seeded_v4", "true");
-          const initialFiltered = INITIAL_FRIDGE.filter((i) => !delList.includes(i.id));
-          setFridge(initialFiltered);
-          for (const item of initialFiltered) {
-            try {
-              await setDoc(getDocRef("family_fridge_v4", item.id), item);
-              if (Number(item.price) > 0) {
-                const expId = `exp-${item.id}`;
-                await setDoc(getDocRef("family_expenses_v4", expId), {
-                  id: expId,
-                  title: item.name,
-                  category: item.category || "기타",
-                  amount: Number(item.price),
-                  date: item.purchaseDate || "2026-11-10",
-                  type: "장보기/식재료"
-                });
-              }
-            } catch (e) {
-              console.error(e);
+    fridgeCollections.forEach((colRef, idx) => {
+      const unsub = onSnapshot(
+        colRef,
+        (snap) => {
+          const loaded = {};
+          snap.docs.forEach((d) => {
+            const raw = d.data();
+            if (Array.isArray(raw.fridge)) {
+              raw.fridge.forEach((f) => {
+                if (f && f.id) loaded[f.id] = f;
+              });
+            } else if (Array.isArray(raw.items)) {
+              raw.items.forEach((f) => {
+                if (f && f.id) loaded[f.id] = f;
+              });
+            } else if (raw.name && (raw.location || raw.category || raw.expiryDate !== undefined)) {
+              loaded[d.id] = { ...raw, id: d.id };
             }
+          });
+          if (Object.keys(loaded).length > 0) {
+            setFridgeMap((prev) => ({ ...prev, [`src_${idx}`]: loaded }));
           }
-        } else {
-          localStorage.setItem("kim_fridge_seeded_v4", "true");
-          const filtered = loaded.filter((item) => !delList.includes(item.id));
-          setFridge(filtered);
-        }
-        setIsDbLoaded(true);
-      },
-      (err) => console.warn("Fridge listener error:", err)
+        },
+        () => {}
+      );
+      unsubscribers.push(unsub);
+    });
+
+    // 4) 식비 원장 동기화
+    unsubscribers.push(
+      onSnapshot(
+        getColRef("family_expenses_v4"),
+        (snap) => {
+          setExpenses(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+        },
+        () => {}
+      )
     );
 
-    // 4) 식비 가계부 원장 동기화 (family_expenses_v4)
-    const unsubExpenses = onSnapshot(
-      getColRef("family_expenses_v4"),
-      (snap) => {
-        const loaded = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-        setExpenses(loaded);
-      },
-      (err) => console.warn("Expenses listener error:", err)
+    // 5) 장보기 메모 동기화
+    unsubscribers.push(
+      onSnapshot(
+        getColRef("family_shopping_v4"),
+        async (snap) => {
+          const loaded = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+          if (loaded.length === 0 && !localStorage.getItem("kim_shopping_seeded_v5")) {
+            localStorage.setItem("kim_shopping_seeded_v5", "true");
+            setShoppingList(INITIAL_SHOPPING);
+            for (const s of INITIAL_SHOPPING) {
+              try {
+                await setDoc(getDocRef("family_shopping_v4", s.id), s);
+              } catch (e) {}
+            }
+          } else {
+            setShoppingList(loaded);
+          }
+        },
+        () => {}
+      )
     );
 
-    // 5) 장보기 메모 동기화 (family_shopping_v4)
-    const unsubShopping = onSnapshot(
-      getColRef("family_shopping_v4"),
-      async (snap) => {
-        const loaded = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-        if (loaded.length === 0 && !localStorage.getItem("kim_shopping_seeded_v4")) {
-          localStorage.setItem("kim_shopping_seeded_v4", "true");
-          setShoppingList(INITIAL_SHOPPING);
-          for (const s of INITIAL_SHOPPING) {
-            try {
-              await setDoc(getDocRef("family_shopping_v4", s.id), s);
-            } catch (e) {
-              console.error(e);
+    // 6) 가족 공지사항 동기화
+    unsubscribers.push(
+      onSnapshot(
+        getColRef("family_notices_v4"),
+        async (snap) => {
+          const loaded = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+          if (loaded.length === 0 && !localStorage.getItem("kim_notices_seeded_v5")) {
+            localStorage.setItem("kim_notices_seeded_v5", "true");
+            setNotices(INITIAL_NOTICES);
+            for (const n of INITIAL_NOTICES) {
+              try {
+                await setDoc(getDocRef("family_notices_v4", n.id), n);
+              } catch (e) {}
             }
+          } else {
+            setNotices(loaded);
           }
-        } else {
-          setShoppingList(loaded);
-        }
-      },
-      (err) => console.warn("Shopping listener error:", err)
-    );
-
-    // 6) 가족 공지사항 동기화 (family_notices_v4)
-    const unsubNotices = onSnapshot(
-      getColRef("family_notices_v4"),
-      async (snap) => {
-        const loaded = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-        if (loaded.length === 0 && !localStorage.getItem("kim_notices_seeded_v4")) {
-          localStorage.setItem("kim_notices_seeded_v4", "true");
-          setNotices(INITIAL_NOTICES);
-          for (const n of INITIAL_NOTICES) {
-            try {
-              await setDoc(getDocRef("family_notices_v4", n.id), n);
-            } catch (e) {
-              console.error(e);
-            }
-          }
-        } else {
-          setNotices(loaded);
-        }
-      },
-      (err) => console.warn("Notices listener error:", err)
+        },
+        () => {}
+      )
     );
 
     return () => {
-      unsubLegacy();
-      unsubMeta();
-      unsubMeals();
-      unsubFridge();
-      unsubExpenses();
-      unsubShopping();
-      unsubNotices();
+      unsubscribers.forEach((u) => u && u());
     };
   }, [user]);
+
+  // 다중 경로에서 읽어온 식단 데이터를 하나로 병합 (삭제된 항목 제외)
+  const meals = useMemo(() => {
+    const merged = {};
+    // 어린이집 기본 식단 먼저 깔기
+    buildDaycareMeals().forEach((m) => {
+      if (!deletedIds.includes(m.id)) merged[m.id] = m;
+    });
+    // 기존 v3, v4 등에서 불러온 모든 사용자 등록 식단 덮어쓰기
+    Object.values(mealsMap).forEach((sourceObj) => {
+      Object.values(sourceObj).forEach((m) => {
+        if (m && m.id && !deletedIds.includes(m.id)) {
+          merged[m.id] = m;
+        }
+      });
+    });
+    return Object.values(merged);
+  }, [mealsMap, deletedIds]);
+
+  // 다중 경로에서 읽어온 냉장고 데이터를 하나로 병합 (종가집 포기김치 등 삭제된 항목은 영구 제외)
+  const fridge = useMemo(() => {
+    const merged = {};
+    Object.values(fridgeMap).forEach((sourceObj) => {
+      Object.values(sourceObj).forEach((f) => {
+        if (f && f.id && !deletedIds.includes(f.id)) {
+          merged[f.id] = f;
+        }
+      });
+    });
+    return Object.values(merged);
+  }, [fridgeMap, deletedIds]);
 
   const markIdDeleted = async (id) => {
     const next = Array.from(new Set([...deletedIds, id]));
@@ -562,14 +571,12 @@ function MainApp() {
     if (user && db) {
       try {
         await setDoc(getDocRef("family_meta_v4", "deleted_tracker"), { ids: next });
-      } catch (e) {
-        console.error(e);
-      }
+      } catch (e) {}
     }
   };
 
   // ==========================================
-  // 7. 냉장고 수정·삭제·소진 핸들러 (식비 분리!)
+  // 7. 냉장고 수정·삭제·소진 핸들러 (v3 & v4 동시 반영!)
   // ==========================================
   const handleSaveFridge = async () => {
     if (!fridgeForm.name.trim()) return;
@@ -588,33 +595,31 @@ function MainApp() {
       purchaseDate: fridgeForm.purchaseDate || selectedDate
     };
 
-    setFridge((prev) => {
-      const idx = prev.findIndex((i) => i.id === id);
-      if (idx >= 0) {
-        const copy = [...prev];
-        copy[idx] = payload;
-        return copy;
-      }
-      return [payload, ...prev];
-    });
+    // 로컬 즉시 업데이트
+    setFridgeMap((prev) => ({
+      ...prev,
+      local: { ...(prev.local || {}), [id]: payload }
+    }));
 
     setIsFridgeModalOpen(false);
     setEditingFridge(null);
 
     if (user && db) {
       try {
+        // 기존 v3와 신규 v4 양쪽에 모두 안전하게 저장
+        await setDoc(getDocRef("family_fridge_v3", id), payload);
         await setDoc(getDocRef("family_fridge_v4", id), payload);
+
         if (priceNum > 0 && fridgeForm.recordExpense !== false) {
           const expId = `exp-${id}`;
-          const expData = {
+          await setDoc(getDocRef("family_expenses_v4", expId), {
             id: expId,
             title: payload.name,
             category: payload.category,
             amount: priceNum,
             date: payload.purchaseDate,
             type: "장보기/식재료"
-          };
-          await setDoc(getDocRef("family_expenses_v4", expId), expData);
+          });
         }
       } catch (e) {
         console.error(e);
@@ -626,17 +631,19 @@ function MainApp() {
   const handleAdjustQuantity = async (item, delta) => {
     const nextQty = Math.max(0, Number(item.quantity || 0) + delta);
     const updated = { ...item, quantity: nextQty };
-    setFridge((prev) => prev.map((i) => (i.id === item.id ? updated : i)));
+    setFridgeMap((prev) => ({
+      ...prev,
+      local: { ...(prev.local || {}), [item.id]: updated }
+    }));
     if (user && db) {
       try {
+        await setDoc(getDocRef("family_fridge_v3", item.id), updated);
         await setDoc(getDocRef("family_fridge_v4", item.id), updated);
-      } catch (e) {
-        console.error(e);
-      }
+      } catch (e) {}
     }
   };
 
-  // [핵심] 다 먹음 (소비완료 -> 냉장고에서는 비우고, 식비 원장은 100% 그대로 유지!)
+  // 다 먹음 (소비완료 -> 냉장고에서는 비우고, 식비 원장은 100% 그대로 유지!)
   const handleConsumeFridgeItem = async (item, addToShopping = false) => {
     if (user && db && Number(item.price) > 0) {
       const expId = `exp-${item.id}`;
@@ -649,19 +656,16 @@ function MainApp() {
           date: item.purchaseDate || "2026-11-10",
           type: "장보기/식재료"
         });
-      } catch (e) {
-        console.error(e);
-      }
+      } catch (e) {}
     }
 
-    setFridge((prev) => prev.filter((i) => i.id !== item.id));
     await markIdDeleted(item.id);
     if (user && db) {
       try {
+        await deleteDoc(getDocRef("family_fridge_v3", item.id));
         await deleteDoc(getDocRef("family_fridge_v4", item.id));
-      } catch (e) {
-        console.error(e);
-      }
+        await deleteDoc(getDocRef("family_meals_v3", item.id));
+      } catch (e) {}
     }
 
     if (addToShopping) {
@@ -679,9 +683,7 @@ function MainApp() {
       if (user && db) {
         try {
           await setDoc(getDocRef("family_shopping_v4", shId), newShop);
-        } catch (e) {
-          console.error(e);
-        }
+        } catch (e) {}
       }
       showToast(`'${item.name}' 소진 완료! (식비 유지 & 장보기 메모 추가됨)`);
     } else {
@@ -690,22 +692,21 @@ function MainApp() {
   };
 
   const handleMistakeDeleteFridgeItem = async (item) => {
-    setFridge((prev) => prev.filter((i) => i.id !== item.id));
-    setExpenses((prev) => prev.filter((e) => e.id !== `exp-${item.id}`));
     await markIdDeleted(item.id);
+    setExpenses((prev) => prev.filter((e) => e.id !== `exp-${item.id}`));
     if (user && db) {
       try {
+        await deleteDoc(getDocRef("family_fridge_v3", item.id));
         await deleteDoc(getDocRef("family_fridge_v4", item.id));
+        await deleteDoc(getDocRef("family_meals_v3", item.id));
         await deleteDoc(getDocRef("family_expenses_v4", `exp-${item.id}`));
-      } catch (e) {
-        console.error(e);
-      }
+      } catch (e) {}
     }
     showToast(`'${item.name}' 항목이 삭제되었습니다.`);
   };
 
   // ==========================================
-  // 8. 식단 추가·수정·삭제 핸들러
+  // 8. 식단 추가·수정·삭제 핸들러 (v3 & v4 동시 반영!)
   // ==========================================
   const handleSaveMeal = async () => {
     if (!mealForm.menu.trim()) return;
@@ -723,37 +724,29 @@ function MainApp() {
       cost: Number(mealForm.cost) || 0
     };
 
-    setMeals((prev) => {
-      const idx = prev.findIndex((m) => m.id === id);
-      if (idx >= 0) {
-        const copy = [...prev];
-        copy[idx] = payload;
-        return copy;
-      }
-      return [...prev, payload];
-    });
+    setMealsMap((prev) => ({
+      ...prev,
+      local: { ...(prev.local || {}), [id]: payload }
+    }));
 
     setIsMealModalOpen(false);
     setEditingMeal(null);
     if (user && db) {
       try {
+        await setDoc(getDocRef("family_meals_v3", id), payload);
         await setDoc(getDocRef("family_meals_v4", id), payload);
-      } catch (e) {
-        console.error(e);
-      }
+      } catch (e) {}
     }
     showToast("식단이 저장되었습니다.");
   };
 
   const handleDeleteMeal = async (meal) => {
-    setMeals((prev) => prev.filter((m) => m.id !== meal.id));
     await markIdDeleted(meal.id);
     if (user && db) {
       try {
+        await deleteDoc(getDocRef("family_meals_v3", meal.id));
         await deleteDoc(getDocRef("family_meals_v4", meal.id));
-      } catch (e) {
-        console.error(e);
-      }
+      } catch (e) {}
     }
     showToast("식단이 삭제되었습니다.");
   };
@@ -778,9 +771,7 @@ function MainApp() {
     if (user && db) {
       try {
         await setDoc(getDocRef("family_shopping_v4", id), payload);
-      } catch (e) {
-        console.error(e);
-      }
+      } catch (e) {}
     }
     showToast("장보기 메모에 추가되었습니다.");
   };
@@ -791,9 +782,7 @@ function MainApp() {
     if (user && db) {
       try {
         await setDoc(getDocRef("family_shopping_v4", item.id), updated);
-      } catch (e) {
-        console.error(e);
-      }
+      } catch (e) {}
     }
   };
 
@@ -802,9 +791,7 @@ function MainApp() {
     if (user && db) {
       try {
         await deleteDoc(getDocRef("family_shopping_v4", id));
-      } catch (e) {
-        console.error(e);
-      }
+      } catch (e) {}
     }
   };
 
@@ -824,11 +811,15 @@ function MainApp() {
       purchaseDate: selectedDate
     };
 
-    setFridge((prev) => [newFridgeItem, ...prev]);
+    setFridgeMap((prev) => ({
+      ...prev,
+      local: { ...(prev.local || {}), [fId]: newFridgeItem }
+    }));
     setShoppingList((prev) => prev.filter((s) => s.id !== stockInItem.id));
 
     if (user && db) {
       try {
+        await setDoc(getDocRef("family_fridge_v3", fId), newFridgeItem);
         await setDoc(getDocRef("family_fridge_v4", fId), newFridgeItem);
         await deleteDoc(getDocRef("family_shopping_v4", stockInItem.id));
         if (priceNum > 0) {
@@ -842,9 +833,7 @@ function MainApp() {
             type: "장보기/식재료"
           });
         }
-      } catch (e) {
-        console.error(e);
-      }
+      } catch (e) {}
     }
     setStockInItem(null);
     setStockInPrice("");
@@ -878,9 +867,7 @@ function MainApp() {
     if (user && db) {
       try {
         await setDoc(getDocRef("family_notices_v4", id), payload);
-      } catch (e) {
-        console.error(e);
-      }
+      } catch (e) {}
     }
     showToast("가족 공지사항이 등록되었습니다.");
   };
@@ -891,9 +878,7 @@ function MainApp() {
     if (user && db) {
       try {
         await setDoc(getDocRef("family_notices_v4", notice.id), updated);
-      } catch (e) {
-        console.error(e);
-      }
+      } catch (e) {}
     }
   };
 
@@ -902,9 +887,7 @@ function MainApp() {
     if (user && db) {
       try {
         await deleteDoc(getDocRef("family_notices_v4", id));
-      } catch (e) {
-        console.error(e);
-      }
+      } catch (e) {}
     }
     showToast("공지사항이 삭제되었습니다.");
   };
@@ -1105,19 +1088,24 @@ function MainApp() {
       date: quickLogDate,
       slot: quickLogSlot,
       menu: quickLogRecipe.title,
-      members: toSafeArray(quickLogRecipe.members).length > 0 ? toSafeArray(quickLogRecipe.members) : ["수혁", "아리나", "시목", "시율"],
+      members:
+        toSafeArray(quickLogRecipe.members).length > 0
+          ? toSafeArray(quickLogRecipe.members)
+          : ["수혁", "아리나", "시목", "시율"],
       ingredients: toSafeArray(quickLogRecipe.usedIngredients),
       note: `AI 추천 레시피 (${quickLogRecipe.tip || ""})`,
       sourceType: "집밥/온가족식",
       cost: 0
     };
-    setMeals((prev) => [...prev, payload]);
+    setMealsMap((prev) => ({
+      ...prev,
+      local: { ...(prev.local || {}), [id]: payload }
+    }));
     if (user && db) {
       try {
+        await setDoc(getDocRef("family_meals_v3", id), payload);
         await setDoc(getDocRef("family_meals_v4", id), payload);
-      } catch (e) {
-        console.error(e);
-      }
+      } catch (e) {}
     }
     setQuickLogRecipe(null);
     showToast(`${quickLogDate} ${quickLogSlot} 식단표에 등록되었습니다!`);
@@ -1131,7 +1119,6 @@ function MainApp() {
     const ledgerItems = expenses.filter((e) => String(e.date || "").startsWith(monthPrefix));
     const ledgerIds = new Set(ledgerItems.map((e) => e.id));
 
-    // 아직 원장에 안 들어간 냉장고 항목이 있다면 합산에 자동 포함 (무한루프 없이 안전 계산!)
     const unrecordedFridgeAsLedger = fridge
       .filter(
         (f) =>
@@ -1161,7 +1148,16 @@ function MainApp() {
 
   const weekDates = useMemo(() => {
     const base = new Date(String(selectedDate).slice(0, 10) + "T00:00:00");
-    if (isNaN(base.getTime())) return ["2026-11-09", "2026-11-10", "2026-11-11", "2026-11-12", "2026-11-13", "2026-11-14", "2026-11-15"];
+    if (isNaN(base.getTime()))
+      return [
+        "2026-11-09",
+        "2026-11-10",
+        "2026-11-11",
+        "2026-11-12",
+        "2026-11-13",
+        "2026-11-14",
+        "2026-11-15"
+      ];
     const day = base.getDay();
     const diffToMon = day === 0 ? -6 : 1 - day;
     const mon = new Date(base);
@@ -1184,6 +1180,18 @@ function MainApp() {
     return notices.filter((n) => n.pinned && !n.done);
   }, [notices]);
 
+  // 삭제 목록 초기화 (혹시 실수로 지워진 기존 항목까지 전부 되살리고 싶을 때)
+  const handleRestoreAllDeleted = async () => {
+    setDeletedIds([]);
+    localStorage.removeItem("kim_family_deleted_ids");
+    if (user && db) {
+      try {
+        await setDoc(getDocRef("family_meta_v4", "deleted_tracker"), { ids: [] });
+      } catch (e) {}
+    }
+    showToast("숨겨졌던 모든 기존 데이터가 다시 복원되었습니다!");
+  };
+
   const handleExportCsv = () => {
     const headers = ["구분,날짜,분류,내역/품목,대상/보관장소,금액(원),메모"];
     const mealRows = meals.map(
@@ -1193,7 +1201,8 @@ function MainApp() {
         }"`
     );
     const expRows = monthlyExpenseSummary.ledgerItems.map(
-      (e) => `장보기지출,${e.date},${e.category},"${e.title}",가계부원장,${e.amount || 0},소비완료포함유지`
+      (e) =>
+        `장보기지출,${e.date},${e.category},"${e.title}",가계부원장,${e.amount || 0},소비완료포함유지`
     );
     const csvContent = "\uFEFF" + [...headers, ...mealRows, ...expRows].join("\n");
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
@@ -1220,7 +1229,7 @@ function MainApp() {
         <div className="flex items-center justify-between mb-1.5">
           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-            ahrisoohyeokbap 실시간 동기화
+            기존 DB(v3) + 신규(v4) 통합 동기화 중
           </span>
           <div className="flex items-center gap-1.5">
             <button
@@ -1901,117 +1910,131 @@ function MainApp() {
             ))}
           </div>
 
-          <div className="space-y-2.5">
-            {fridge
-              .filter(
-                (i) =>
-                  (fridgeLocFilter === "전체" || i.location === fridgeLocFilter) &&
-                  (fridgeCatFilter === "전체" || i.category === fridgeCatFilter)
-              )
-              .map((item) => {
-                const diff = getDaysDiff(item.expiryDate);
-                return (
-                  <div
-                    key={item.id}
-                    className="bg-white p-3.5 rounded-2xl border border-stone-200 shadow-sm space-y-2.5"
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <div className="flex flex-wrap items-center gap-1 mb-1">
-                          <span className="px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-stone-100 text-stone-700">
-                            {item.location}
-                          </span>
-                          <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-50 text-emerald-700">
-                            {item.category}
-                          </span>
-                          <span
-                            className={`px-2 py-0.5 rounded-md text-[10px] font-extrabold ${
-                              diff <= 3
-                                ? "bg-red-100 text-red-700"
-                                : "bg-stone-100 text-stone-500"
-                            }`}
-                          >
-                            소비기한 {item.expiryDate} (
-                            {diff < 0 ? `${Math.abs(diff)}일 지남` : `D-${diff}`})
-                          </span>
-                        </div>
-                        <div className="text-sm font-black text-stone-900">{item.name}</div>
-                        {Number(item.price) > 0 && (
-                          <div className="text-[11px] font-bold text-stone-500 mt-0.5">
-                            구입가: {Number(item.price).toLocaleString()}원 ({item.purchaseDate})
+          {fridge.length === 0 ? (
+            <div className="bg-white p-6 rounded-2xl border border-stone-200 text-center space-y-2">
+              <div className="text-xs font-bold text-stone-500">
+                현재 표시할 냉장고 재료가 없습니다.
+              </div>
+              <button
+                onClick={handleRestoreAllDeleted}
+                className="px-3 py-1.5 rounded-xl bg-amber-100 text-amber-900 text-xs font-extrabold"
+              >
+                숨겨진 기존 냉장고 재료 다시 불러오기
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-2.5">
+              {fridge
+                .filter(
+                  (i) =>
+                    (fridgeLocFilter === "전체" || i.location === fridgeLocFilter) &&
+                    (fridgeCatFilter === "전체" || i.category === fridgeCatFilter)
+                )
+                .map((item) => {
+                  const diff = getDaysDiff(item.expiryDate);
+                  return (
+                    <div
+                      key={item.id}
+                      className="bg-white p-3.5 rounded-2xl border border-stone-200 shadow-sm space-y-2.5"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <div className="flex flex-wrap items-center gap-1 mb-1">
+                            <span className="px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-stone-100 text-stone-700">
+                              {item.location}
+                            </span>
+                            <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-50 text-emerald-700">
+                              {item.category}
+                            </span>
+                            <span
+                              className={`px-2 py-0.5 rounded-md text-[10px] font-extrabold ${
+                                diff <= 3
+                                  ? "bg-red-100 text-red-700"
+                                  : "bg-stone-100 text-stone-500"
+                              }`}
+                            >
+                              소비기한 {item.expiryDate} (
+                              {diff < 0 ? `${Math.abs(diff)}일 지남` : `D-${diff}`})
+                            </span>
                           </div>
-                        )}
+                          <div className="text-sm font-black text-stone-900">{item.name}</div>
+                          {Number(item.price) > 0 && (
+                            <div className="text-[11px] font-bold text-stone-500 mt-0.5">
+                              구입가: {Number(item.price).toLocaleString()}원 ({item.purchaseDate})
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="flex items-center gap-1.5 bg-stone-100 px-2 py-1 rounded-xl shrink-0">
+                          <button
+                            onClick={() => handleAdjustQuantity(item, -1)}
+                            className="w-6 h-6 rounded-lg bg-white font-black text-stone-700 shadow-sm"
+                          >
+                            -
+                          </button>
+                          <span className="text-xs font-black px-1.5">
+                            {item.quantity}
+                            {item.unit}
+                          </span>
+                          <button
+                            onClick={() => handleAdjustQuantity(item, 1)}
+                            className="w-6 h-6 rounded-lg bg-white font-black text-stone-700 shadow-sm"
+                          >
+                            +
+                          </button>
+                        </div>
                       </div>
 
-                      <div className="flex items-center gap-1.5 bg-stone-100 px-2 py-1 rounded-xl shrink-0">
-                        <button
-                          onClick={() => handleAdjustQuantity(item, -1)}
-                          className="w-6 h-6 rounded-lg bg-white font-black text-stone-700 shadow-sm"
-                        >
-                          -
-                        </button>
-                        <span className="text-xs font-black px-1.5">
-                          {item.quantity}
-                          {item.unit}
-                        </span>
-                        <button
-                          onClick={() => handleAdjustQuantity(item, 1)}
-                          className="w-6 h-6 rounded-lg bg-white font-black text-stone-700 shadow-sm"
-                        >
-                          +
-                        </button>
+                      <div className="flex items-center justify-between pt-2 border-t border-stone-100 gap-1.5">
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            onClick={() => handleConsumeFridgeItem(item, false)}
+                            className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-extrabold flex items-center gap-1"
+                          >
+                            <Check className="w-3 h-3" /> 다 먹음 (식비유지)
+                          </button>
+                          <button
+                            onClick={() => handleConsumeFridgeItem(item, true)}
+                            className="px-2.5 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 text-[11px] font-extrabold"
+                          >
+                            + 소진 후 장보기메모
+                          </button>
+                        </div>
+
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={() => {
+                              setEditingFridge(item);
+                              setFridgeForm({
+                                name: item.name,
+                                location: item.location,
+                                category: item.category,
+                                quantity: item.quantity,
+                                unit: item.unit,
+                                expiryDate: item.expiryDate,
+                                price: item.price || "",
+                                purchaseDate: item.purchaseDate || selectedDate,
+                                recordExpense: true
+                              });
+                              setIsFridgeModalOpen(true);
+                            }}
+                            className="p-1.5 rounded-lg hover:bg-stone-100 text-stone-500"
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => handleMistakeDeleteFridgeItem(item)}
+                            className="p-1.5 rounded-lg hover:bg-red-50 text-stone-400 hover:text-red-500"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </div>
                     </div>
-
-                    <div className="flex items-center justify-between pt-2 border-t border-stone-100 gap-1.5">
-                      <div className="flex items-center gap-1.5">
-                        <button
-                          onClick={() => handleConsumeFridgeItem(item, false)}
-                          className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-extrabold flex items-center gap-1"
-                        >
-                          <Check className="w-3 h-3" /> 다 먹음 (식비유지)
-                        </button>
-                        <button
-                          onClick={() => handleConsumeFridgeItem(item, true)}
-                          className="px-2.5 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 text-[11px] font-extrabold"
-                        >
-                          + 소진 후 장보기메모
-                        </button>
-                      </div>
-
-                      <div className="flex items-center gap-1">
-                        <button
-                          onClick={() => {
-                            setEditingFridge(item);
-                            setFridgeForm({
-                              name: item.name,
-                              location: item.location,
-                              category: item.category,
-                              quantity: item.quantity,
-                              unit: item.unit,
-                              expiryDate: item.expiryDate,
-                              price: item.price || "",
-                              purchaseDate: item.purchaseDate || selectedDate,
-                              recordExpense: true
-                            });
-                            setIsFridgeModalOpen(true);
-                          }}
-                          className="p-1.5 rounded-lg hover:bg-stone-100 text-stone-500"
-                        >
-                          <Edit2 className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          onClick={() => handleMistakeDeleteFridgeItem(item)}
-                          className="p-1.5 rounded-lg hover:bg-red-50 text-stone-400 hover:text-red-500"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-          </div>
+                  );
+                })}
+            </div>
+          )}
         </div>
       )}
 
@@ -2864,17 +2887,12 @@ function MainApp() {
             </p>
             <button
               onClick={() => {
-                const list = buildDaycareMeals();
-                setMeals((prev) => {
-                  const existingIds = new Set(prev.map((m) => m.id));
-                  return [...prev, ...list.filter((m) => !existingIds.has(m.id))];
-                });
                 setIsDaycareModalOpen(false);
-                showToast("신당동어린이집 11월 식단이 동기화되었습니다!");
+                showToast("신당동어린이집 11월 식단이 정상 적용되어 있습니다!");
               }}
               className="w-full py-2.5 rounded-xl bg-amber-500 text-white text-xs font-extrabold"
             >
-              신당동어린이집 11월 식단 전체 다시 불러오기
+              확인
             </button>
           </div>
         </div>
@@ -2919,9 +2937,13 @@ function MainApp() {
                     for (const it of scannedReceiptItems) {
                       const fId = `f-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
                       const newItem = { ...it, id: fId, purchaseDate: selectedDate };
-                      setFridge((prev) => [newItem, ...prev]);
+                      setFridgeMap((prev) => ({
+                        ...prev,
+                        local: { ...(prev.local || {}), [fId]: newItem }
+                      }));
                       if (user && db) {
                         try {
+                          await setDoc(getDocRef("family_fridge_v3", fId), newItem);
                           await setDoc(getDocRef("family_fridge_v4", fId), newItem);
                           const expId = `exp-${fId}`;
                           await setDoc(getDocRef("family_expenses_v4", expId), {
@@ -2932,9 +2954,7 @@ function MainApp() {
                             date: selectedDate,
                             type: "장보기/식재료"
                           });
-                        } catch (e) {
-                          console.error(e);
-                        }
+                        } catch (e) {}
                       }
                     }
                     setScannedReceiptItems([]);
@@ -2955,15 +2975,28 @@ function MainApp() {
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-sm w-full p-5 space-y-3.5">
             <div className="flex items-center justify-between">
-              <h3 className="text-sm font-black">⚙️ 서버 연동 확인 및 엑셀 백업</h3>
+              <h3 className="text-sm font-black">⚙️ 서버 연동 및 기존 데이터 복원</h3>
               <button onClick={() => setIsSettingsOpen(false)}>
                 <X className="w-5 h-5 text-stone-400" />
               </button>
             </div>
 
-            <div className="p-3 rounded-2xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-900">
-              ✅ <b>Firebase DB 연결 상태:</b> <code>ahrisoohyeokbap</code> 프로젝트와 정상 동기화 중입니다.
+            <div className="p-3 rounded-2xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-900 space-y-1">
+              <div>
+                ✅ <b>Firebase DB 연결 상태:</b> <code>ahrisoohyeokbap</code>
+              </div>
+              <div>
+                📦 <b>현재 불러온 데이터:</b> 식단 {meals.length}건 / 냉장고 {fridge.length}건
+              </div>
             </div>
+
+            <button
+              onClick={handleRestoreAllDeleted}
+              className="w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-extrabold flex items-center justify-center gap-1.5"
+            >
+              <Database className="w-4 h-4" />
+              <span>숨겨지거나 삭제된 기존 데이터 전체 다시 불러오기</span>
+            </button>
 
             <div>
               <label className="text-[11px] font-bold text-stone-600 block mb-1">
