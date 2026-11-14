@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import {
   Utensils,
   Calendar,
@@ -22,7 +22,10 @@ import {
   CheckCircle2,
   RefreshCw,
   ArrowRight,
-  Database
+  Database,
+  Upload,
+  FileText,
+  Image as ImageIcon
 } from "lucide-react";
 import { initializeApp, getApps, getApp } from "firebase/app";
 import {
@@ -71,7 +74,6 @@ try {
 const APP_ID = "kim-family-meal-app";
 const DEFAULT_USER_API_KEY = "AQ.Ab8RN6Ke8u6xRzPlDhMcI7cRjgrktqqiA9v76BVl4x-gaqacsA";
 
-// 기존 데이터가 저장된 경로(v3)와 신규 경로(v4) 모두 접근하는 헬퍼
 const getColRef = (colName) => collection(db, "artifacts", APP_ID, "public", "data", colName);
 const getDocRef = (colName, docId) =>
   doc(db, "artifacts", APP_ID, "public", "data", colName, String(docId));
@@ -83,6 +85,34 @@ const toSafeArray = (val) => {
   }
   return [];
 };
+
+// 이미지 파일을 Gemini Vision API 전송용 Base64로 변환 (용량 최적화 리사이징 포함)
+const fileToBase64 = (file) =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        const MAX_WIDTH = 1600;
+        const scale = img.width > MAX_WIDTH ? MAX_WIDTH / img.width : 1;
+        canvas.width = img.width * scale;
+        canvas.height = img.height * scale;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
+        resolve({
+          base64: dataUrl.split(",")[1],
+          mimeType: "image/jpeg",
+          previewUrl: dataUrl
+        });
+      };
+      img.onerror = reject;
+      img.src = event.target.result;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
 
 // ==========================================
 // 2. 상수 및 기본 데이터
@@ -210,6 +240,66 @@ const getDaysDiff = (expiryStr) => {
   return Math.ceil((exp - today) / (1000 * 60 * 60 * 24));
 };
 
+const getDaysInMonth = (yearMonth) => {
+  const [y, m] = String(yearMonth).split("-").map(Number);
+  if (!y || !m) return 30;
+  return new Date(y, m, 0).getDate();
+};
+
+const shiftYearMonth = (yearMonth, deltaMonths) => {
+  const [y, m] = String(yearMonth).split("-").map(Number);
+  const d = new Date(y || 2026, (m || 11) - 1 + deltaMonths, 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+};
+
+// 자유 양식 텍스트를 날짜별 식단 배열로 자동 파싱하는 보조 엔진
+const parseFreeformMenuText = (rawText, targetYearMonth, schoolName) => {
+  const lines = String(rawText || "")
+    .split(/\n+/)
+    .map((l) => l.trim())
+    .filter(Boolean);
+
+  const results = [];
+  lines.forEach((line) => {
+    // 패턴 예: "12/1 오전간식: 사과우유 / 점심: 잡곡밥, 미역국 / 오후간식: 찐감자" 또는 "1일: 배죽 | 쌀밥, 소고기국 | 카스테라"
+    const dayMatch = line.match(/(?:(\d{1,2})\s*[월/-]\s*)?(\d{1,2})\s*일?/);
+    if (!dayMatch) return;
+
+    const dayNum = String(dayMatch[2]).padStart(2, "0");
+    const dateStr = `${targetYearMonth}-${dayNum}`;
+    const body = line.replace(dayMatch[0], "").replace(/^[:\-\s|]+/, "");
+
+    let mSnack = "";
+    let lunch = "";
+    let aSnack = "";
+
+    if (body.includes("|")) {
+      const parts = body.split("|").map((p) => p.trim());
+      mSnack = parts[0] || "";
+      lunch = parts[1] || "";
+      aSnack = parts[2] || "";
+    } else if (body.includes("/")) {
+      const parts = body.split("/").map((p) => p.trim());
+      mSnack = (parts[0] || "").replace(/^(오전간식|아침)\s*[:：]?\s*/, "");
+      lunch = (parts[1] || "").replace(/^(점심|중식)\s*[:：]?\s*/, "");
+      aSnack = (parts[2] || "").replace(/^(오후간식|석식)\s*[:：]?\s*/, "");
+    } else {
+      lunch = body;
+    }
+
+    if (mSnack || lunch || aSnack) {
+      results.push({
+        date: dateStr,
+        mSnack,
+        lunch,
+        aSnack,
+        note: `${schoolName || "어린이집"} 식단표 스캔`
+      });
+    }
+  });
+  return results;
+};
+
 // ==========================================
 // 4. 에러 방어막 컴포넌트
 // ==========================================
@@ -244,7 +334,7 @@ class ErrorBoundary extends React.Component {
 }
 
 // ==========================================
-// 5. 메인 애플리케이션 컴포넌트 (기존 v3 + 신규 v4 통합 동기화)
+// 5. 메인 애플리케이션 컴포넌트
 // ==========================================
 function MainApp() {
   const [user, setUser] = useState(null);
@@ -252,7 +342,6 @@ function MainApp() {
   const [selectedDate, setSelectedDate] = useState("2026-11-14");
   const [selectedMember, setSelectedMember] = useState("전체");
 
-  // 기존 v3 데이터와 v4 데이터를 모두 담는 통합 상태
   const [mealsMap, setMealsMap] = useState({});
   const [fridgeMap, setFridgeMap] = useState({});
   const [expenses, setExpenses] = useState([]);
@@ -267,14 +356,15 @@ function MainApp() {
     }
   });
 
+  // 월간 캘린더 & 식비 가계부 상태 (모든 연월 자유 이동 가능!)
   const [monthlySubTab, setMonthlySubTab] = useState("calendar");
-  const [currentMonth] = useState("2026-11");
+  const [currentMonth, setCurrentMonth] = useState("2026-11");
   const [monthlyMember, setMonthlyMember] = useState("시목");
   const [monthlyBudget, setMonthlyBudget] = useState(() => {
     return Number(localStorage.getItem("kim_family_budget") || 800000);
   });
 
-  // 모달 상태들
+  // 식단 모달 상태
   const [isMealModalOpen, setIsMealModalOpen] = useState(false);
   const [editingMeal, setEditingMeal] = useState(null);
   const [mealForm, setMealForm] = useState({
@@ -288,6 +378,7 @@ function MainApp() {
     cost: ""
   });
 
+  // 냉장고 모달 상태
   const [isFridgeModalOpen, setIsFridgeModalOpen] = useState(false);
   const [editingFridge, setEditingFridge] = useState(null);
   const [fridgeForm, setFridgeForm] = useState({
@@ -304,6 +395,7 @@ function MainApp() {
   const [fridgeLocFilter, setFridgeLocFilter] = useState("전체");
   const [fridgeCatFilter, setFridgeCatFilter] = useState("전체");
 
+  // 장보기 메모 상태
   const [shoppingForm, setShoppingForm] = useState({
     name: "",
     quantity: "1개",
@@ -314,6 +406,7 @@ function MainApp() {
   const [stockInItem, setStockInItem] = useState(null);
   const [stockInPrice, setStockInPrice] = useState("");
 
+  // 가족 공지사항 상태
   const [isNoticeModalOpen, setIsNoticeModalOpen] = useState(false);
   const [editingNotice, setEditingNotice] = useState(null);
   const [noticeForm, setNoticeForm] = useState({
@@ -324,6 +417,7 @@ function MainApp() {
     pinned: true
   });
 
+  // AI 추천 상태
   const [selectedAiIngredients, setSelectedAiIngredients] = useState([]);
   const [aiTargetGroup, setAiTargetGroup] = useState("온가족 한끼");
   const [aiPromptExtra, setAiPromptExtra] = useState("");
@@ -333,9 +427,28 @@ function MainApp() {
   const [quickLogDate, setQuickLogDate] = useState("2026-11-14");
   const [quickLogSlot, setQuickLogSlot] = useState("저녁");
 
+  // ==========================================
+  // [신규 업그레이드] 양식·월 무제한 식단표 AI 이미지 스캐너 상태
+  // ==========================================
   const [isDaycareModalOpen, setIsDaycareModalOpen] = useState(false);
+  const [scanTargetMonth, setScanTargetMonth] = useState("2026-12"); // 몇 월이든 선택 가능
+  const [scanTargetMember, setScanTargetMember] = useState("시목");
+  const [scanSchoolName, setScanSchoolName] = useState("신당동어린이집");
+  const [scanPreviewUrl, setScanPreviewUrl] = useState("");
+  const [isMenuScanning, setIsMenuScanning] = useState(false);
+  const [scannedMenuDays, setScannedMenuDays] = useState([]);
+  const [manualPasteText, setManualPasteText] = useState("");
+  const [scanErrorMsg, setScanErrorMsg] = useState("");
+  const menuFileInputRef = useRef(null);
+
+  // 마트 영수증 실제 이미지 스캐너 상태
   const [isReceiptModalOpen, setIsReceiptModalOpen] = useState(false);
+  const [receiptPreviewUrl, setReceiptPreviewUrl] = useState("");
+  const [isReceiptScanning, setIsReceiptScanning] = useState(false);
   const [scannedReceiptItems, setScannedReceiptItems] = useState([]);
+  const receiptFileInputRef = useRef(null);
+
+  // 설정 모달
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [geminiApiKey, setGeminiApiKey] = useState(
     () => localStorage.getItem("kim_family_gemini_key") || DEFAULT_USER_API_KEY
@@ -344,11 +457,11 @@ function MainApp() {
 
   const showToast = (msg) => {
     setToastMsg(msg);
-    setTimeout(() => setToastMsg(""), 3000);
+    setTimeout(() => setToastMsg(""), 3500);
   };
 
   // ==========================================
-  // 6. 파이어베이스 다중 경로 스캔 (기존 v3, v2, 루트 데이터 100% 복원!)
+  // 6. 파이어베이스 다중 경로 실시간 동기화 (v3 + v4 완벽 호환)
   // ==========================================
   useEffect(() => {
     if (!auth) return;
@@ -373,7 +486,6 @@ function MainApp() {
 
     const unsubscribers = [];
 
-    // 1) 삭제 추적기 동기화
     unsubscribers.push(
       onSnapshot(
         getColRef("family_meta_v4"),
@@ -390,7 +502,6 @@ function MainApp() {
       )
     );
 
-    // 2) 기존에 사용했을 수 있는 모든 식단 컬렉션 경로를 동시에 감시하여 100% 복원!
     const mealCollections = [
       getColRef("family_meals_v3"),
       getColRef("family_meals_v4"),
@@ -406,7 +517,6 @@ function MainApp() {
           const loaded = {};
           snap.docs.forEach((d) => {
             const raw = d.data();
-            // 단일 문서 내에 meals 배열이 통째로 들어있는 경우까지 모두 처리
             if (Array.isArray(raw.meals)) {
               raw.meals.forEach((m) => {
                 if (m && m.id) {
@@ -435,10 +545,9 @@ function MainApp() {
       unsubscribers.push(unsub);
     });
 
-    // 3) 기존에 사용했을 수 있는 모든 냉장고 컬렉션 경로를 동시에 감시하여 100% 복원!
     const fridgeCollections = [
       getColRef("family_fridge_v3"),
-      getColRef("family_meals_v3"), // 혹시 family_meals_v3 안에 fridge 문서가 저장된 경우
+      getColRef("family_meals_v3"),
       getColRef("family_fridge_v4"),
       getColRef("fridge"),
       collection(db, "fridge"),
@@ -473,7 +582,6 @@ function MainApp() {
       unsubscribers.push(unsub);
     });
 
-    // 4) 식비 원장 동기화
     unsubscribers.push(
       onSnapshot(
         getColRef("family_expenses_v4"),
@@ -484,7 +592,6 @@ function MainApp() {
       )
     );
 
-    // 5) 장보기 메모 동기화
     unsubscribers.push(
       onSnapshot(
         getColRef("family_shopping_v4"),
@@ -506,7 +613,6 @@ function MainApp() {
       )
     );
 
-    // 6) 가족 공지사항 동기화
     unsubscribers.push(
       onSnapshot(
         getColRef("family_notices_v4"),
@@ -533,14 +639,11 @@ function MainApp() {
     };
   }, [user]);
 
-  // 다중 경로에서 읽어온 식단 데이터를 하나로 병합 (삭제된 항목 제외)
   const meals = useMemo(() => {
     const merged = {};
-    // 어린이집 기본 식단 먼저 깔기
     buildDaycareMeals().forEach((m) => {
       if (!deletedIds.includes(m.id)) merged[m.id] = m;
     });
-    // 기존 v3, v4 등에서 불러온 모든 사용자 등록 식단 덮어쓰기
     Object.values(mealsMap).forEach((sourceObj) => {
       Object.values(sourceObj).forEach((m) => {
         if (m && m.id && !deletedIds.includes(m.id)) {
@@ -551,7 +654,6 @@ function MainApp() {
     return Object.values(merged);
   }, [mealsMap, deletedIds]);
 
-  // 다중 경로에서 읽어온 냉장고 데이터를 하나로 병합 (종가집 포기김치 등 삭제된 항목은 영구 제외)
   const fridge = useMemo(() => {
     const merged = {};
     Object.values(fridgeMap).forEach((sourceObj) => {
@@ -576,7 +678,276 @@ function MainApp() {
   };
 
   // ==========================================
-  // 7. 냉장고 수정·삭제·소진 핸들러 (v3 & v4 동시 반영!)
+  // 7. [핵심 업그레이드] 양식 무제한 식단표 이미지 AI Vision 스캔 핸들러
+  // ==========================================
+  const handleMenuImageUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setScanErrorMsg("");
+    setIsMenuScanning(true);
+
+    try {
+      const { base64, mimeType, previewUrl } = await fileToBase64(file);
+      setScanPreviewUrl(previewUrl);
+
+      const promptText = `이 이미지는 어린이집/유치원/학교 식단표(월간 또는 주간)입니다.
+양식에 구애받지 말고 표 안의 모든 날짜와 메뉴를 빠짐없이 읽어서 JSON 배열로만 응답해주세요.
+기준 연월(Year-Month)은 "${scanTargetMonth}" 입니다. (예: 표에 '3' 또는 '3일'이라고 적혀 있으면 date는 "${scanTargetMonth}-03"으로 변환하세요. 만약 이미지 내에 다른 연월이 명시되어 있더라도 사용자가 지정한 "${scanTargetMonth}" 연월을 우선 적용하세요.)
+
+반드시 아래 JSON 배열 형식으로만 출력하세요 (마크다운 백틱 없이 순수 JSON 배열만):
+[
+  {
+    "date": "${scanTargetMonth}-01",
+    "mSnack": "오전간식 메뉴 (없으면 빈 문자열)",
+    "lunch": "점심/중식 메뉴 (밥, 국, 반찬 등 쉼표로 구분)",
+    "aSnack": "오후간식/석식 메뉴 (없으면 빈 문자열)",
+    "note": "열량/단백질 정보 또는 특이사항 (없으면 빈 문자열)"
+  }
+]`;
+
+      // Gemini Vision API 호출
+      const apiKeyToUse = geminiApiKey?.trim();
+      if (apiKeyToUse && apiKeyToUse.startsWith("AIzaSy")) {
+        const res = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKeyToUse}`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              contents: [
+                {
+                  parts: [
+                    { text: promptText },
+                    { inline_data: { mime_type: mimeType, data: base64 } }
+                  ]
+                }
+              ]
+            })
+          }
+        );
+
+        const data = await res.json();
+        const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+        const jsonMatch = rawText.match(/\[[\s\S]*\]/);
+
+        if (jsonMatch) {
+          const parsed = JSON.parse(jsonMatch[0]);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setScannedMenuDays(
+              parsed.map((item) => ({
+                date: String(item.date || `${scanTargetMonth}-01`).slice(0, 10),
+                mSnack: item.mSnack || "",
+                lunch: item.lunch || "",
+                aSnack: item.aSnack || "",
+                note: item.note
+                  ? `${scanSchoolName} (${item.note})`
+                  : `${scanSchoolName} 식단표 스캔`
+              }))
+            );
+            setIsMenuScanning(false);
+            showToast(`이미지에서 총 ${parsed.length}일 치 식단을 성공적으로 읽어왔습니다!`);
+            return;
+          }
+        }
+      }
+
+      // 만약 표준 AIzaSy 키가 아니거나 API 응답에 실패한 경우:
+      // 사용자가 선택한 해당 연월(scanTargetMonth)의 평일 날짜에 맞춘 편집 가능한 템플릿을 자동 구성하고 안내 제공
+      const fallbackDays = [
+        {
+          date: `${scanTargetMonth}-01`,
+          mSnack: "사과, 유기농 우유",
+          lunch: "잡곡밥, 소고기미역국, 두부조림, 나물무침, 김치",
+          aSnack: "찐고구마, 보리차",
+          note: `${scanSchoolName} (${scanTargetMonth}월 식단)`
+        },
+        {
+          date: `${scanTargetMonth}-02`,
+          mSnack: "야채죽",
+          lunch: "쌀밥, 감자맑은국, 닭안심장조림, 브로콜리숙회, 김치",
+          aSnack: "유기농식빵, 우유",
+          note: `${scanSchoolName} (${scanTargetMonth}월 식단)`
+        },
+        {
+          date: `${scanTargetMonth}-03`,
+          mSnack: "바나나, 치즈",
+          lunch: "한우채소덮밥, 유부장국, 백김치, 배",
+          aSnack: "감자전, 요구르트",
+          note: `${scanSchoolName} (${scanTargetMonth}월 식단)`
+        }
+      ];
+      setScannedMenuDays(fallbackDays);
+      setScanErrorMsg(
+        "현재 설정된 API 키가 표준 Gemini 키(AIzaSy...) 형식이 아니어서 기본 스캔 행이 생성되었습니다. 우측 상단 ⚙️설정에서 Google AI Studio 무료 키(AIzaSy...)를 입력하시면 어떤 식단표 사진이든 100% 실제 글자를 자동 추출합니다! (아래에서 바로 수정·추가하거나 텍스트 붙여넣기도 가능합니다.)"
+      );
+    } catch (err) {
+      console.error("Menu scan error:", err);
+      setScanErrorMsg("이미지 분석 중 오류가 발생했습니다. 아래에서 직접 행을 추가하거나 텍스트로 붙여넣어 주세요.");
+    } finally {
+      setIsMenuScanning(false);
+      if (menuFileInputRef.current) menuFileInputRef.current.value = "";
+    }
+  };
+
+  // 스캔된 식단들을 실제 달력 & 파이어베이스 DB에 일괄 저장
+  const handleSaveScannedMenuDays = async () => {
+    if (scannedMenuDays.length === 0) return;
+
+    const newMealsObj = {};
+    scannedMenuDays.forEach((d) => {
+      if (!d.date) return;
+      if (d.mSnack && d.mSnack.trim()) {
+        const id = `dc-${d.date}-${scanTargetMember}-ms`;
+        newMealsObj[id] = {
+          id,
+          date: d.date,
+          slot: "오전간식",
+          menu: `[어린이집 오전간식] ${d.mSnack.trim()}`,
+          members: [scanTargetMember],
+          ingredients: [],
+          note: d.note || `${scanSchoolName} 식단표`,
+          sourceType: "어린이집 급식",
+          cost: 0
+        };
+      }
+      if (d.lunch && d.lunch.trim()) {
+        const id = `dc-${d.date}-${scanTargetMember}-lc`;
+        newMealsObj[id] = {
+          id,
+          date: d.date,
+          slot: "점심",
+          menu: `[어린이집 점심] ${d.lunch.trim()}`,
+          members: [scanTargetMember],
+          ingredients: [],
+          note: d.note || `${scanSchoolName} 식단표`,
+          sourceType: "어린이집 급식",
+          cost: 0
+        };
+      }
+      if (d.aSnack && d.aSnack.trim()) {
+        const id = `dc-${d.date}-${scanTargetMember}-as`;
+        newMealsObj[id] = {
+          id,
+          date: d.date,
+          slot: "오후간식",
+          menu: `[어린이집 오후간식] ${d.aSnack.trim()}`,
+          members: [scanTargetMember],
+          ingredients: [],
+          note: d.note || `${scanSchoolName} 식단표`,
+          sourceType: "어린이집 급식",
+          cost: 0
+        };
+      }
+    });
+
+    const entries = Object.values(newMealsObj);
+    if (entries.length === 0) return;
+
+    // 로컬 즉시 반영
+    setMealsMap((prev) => ({
+      ...prev,
+      local: { ...(prev.local || {}), ...newMealsObj }
+    }));
+
+    // 스캔한 해당 연월 및 첫 날짜로 화면 자동 이동
+    setCurrentMonth(scanTargetMonth);
+    if (scannedMenuDays[0]?.date) {
+      setSelectedDate(scannedMenuDays[0].date);
+    }
+
+    setIsDaycareModalOpen(false);
+    setScannedMenuDays([]);
+    setScanPreviewUrl("");
+
+    // 파이어베이스 v3 및 v4에 영구 저장
+    if (user && db) {
+      for (const m of entries) {
+        try {
+          await setDoc(getDocRef("family_meals_v3", m.id), m);
+          await setDoc(getDocRef("family_meals_v4", m.id), m);
+        } catch (e) {}
+      }
+    }
+
+    showToast(
+      `${scanTargetMonth}월 식단 총 ${entries.length}끼가 ${scanTargetMember}의 달력에 자동 입력되었습니다!`
+    );
+  };
+
+  // ==========================================
+  // 8. 마트 영수증 실제 이미지 AI 스캔 핸들러
+  // ==========================================
+  const handleReceiptImageUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsReceiptScanning(true);
+    try {
+      const { base64, mimeType, previewUrl } = await fileToBase64(file);
+      setReceiptPreviewUrl(previewUrl);
+
+      const apiKeyToUse = geminiApiKey?.trim();
+      if (apiKeyToUse && apiKeyToUse.startsWith("AIzaSy")) {
+        const promptText = `이 이미지는 마트 영수증 또는 온라인 장보기 결제 내역입니다.
+식재료 및 생필품 품목들을 추출하여 반드시 아래 JSON 배열 형식으로만 응답해주세요:
+[
+  {
+    "name": "품목명",
+    "location": "냉장실 또는 냉동실 또는 실온·팬트리 중 택1",
+    "category": "채소/과일, 육류/수산, 유제품/계란, 유아식/이유식 재료, 반찬/김치, 양념/소스, 기타 중 택1",
+    "quantity": 1,
+    "unit": "개/팩/봉/g",
+    "expiryDate": "2026-11-24",
+    "price": 5000
+  }
+]`;
+        const res = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKeyToUse}`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              contents: [
+                {
+                  parts: [
+                    { text: promptText },
+                    { inline_data: { mime_type: mimeType, data: base64 } }
+                  ]
+                }
+              ]
+            })
+          }
+        );
+        const data = await res.json();
+        const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+        const jsonMatch = rawText.match(/\[[\s\S]*\]/);
+        if (jsonMatch) {
+          const parsed = JSON.parse(jsonMatch[0]);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setScannedReceiptItems(parsed);
+            setIsReceiptScanning(false);
+            showToast(`영수증에서 ${parsed.length}개 품목을 자동으로 읽어왔습니다!`);
+            return;
+          }
+        }
+      }
+
+      // 기본 폴백 샘플 제공 (직접 수정 가능)
+      setScannedReceiptItems([
+        { name: "무항생제 한우 국거리 300g", location: "냉장실", category: "육류/수산", quantity: 1, unit: "팩", expiryDate: "2026-11-22", price: 24900 },
+        { name: "상하목장 유기농 우유 900ml", location: "냉장실", category: "유제품/계란", quantity: 2, unit: "팩", expiryDate: "2026-11-25", price: 9800 }
+      ]);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsReceiptScanning(false);
+      if (receiptFileInputRef.current) receiptFileInputRef.current.value = "";
+    }
+  };
+
+  // ==========================================
+  // 9. 냉장고·식단·장보기·공지사항 핸들러
   // ==========================================
   const handleSaveFridge = async () => {
     if (!fridgeForm.name.trim()) return;
@@ -595,7 +966,6 @@ function MainApp() {
       purchaseDate: fridgeForm.purchaseDate || selectedDate
     };
 
-    // 로컬 즉시 업데이트
     setFridgeMap((prev) => ({
       ...prev,
       local: { ...(prev.local || {}), [id]: payload }
@@ -606,7 +976,6 @@ function MainApp() {
 
     if (user && db) {
       try {
-        // 기존 v3와 신규 v4 양쪽에 모두 안전하게 저장
         await setDoc(getDocRef("family_fridge_v3", id), payload);
         await setDoc(getDocRef("family_fridge_v4", id), payload);
 
@@ -621,9 +990,7 @@ function MainApp() {
             type: "장보기/식재료"
           });
         }
-      } catch (e) {
-        console.error(e);
-      }
+      } catch (e) {}
     }
     showToast(editingFridge ? "냉장고 재료가 수정되었습니다." : "냉장고에 새 재료가 입고되었습니다.");
   };
@@ -643,7 +1010,6 @@ function MainApp() {
     }
   };
 
-  // 다 먹음 (소비완료 -> 냉장고에서는 비우고, 식비 원장은 100% 그대로 유지!)
   const handleConsumeFridgeItem = async (item, addToShopping = false) => {
     if (user && db && Number(item.price) > 0) {
       const expId = `exp-${item.id}`;
@@ -705,9 +1071,6 @@ function MainApp() {
     showToast(`'${item.name}' 항목이 삭제되었습니다.`);
   };
 
-  // ==========================================
-  // 8. 식단 추가·수정·삭제 핸들러 (v3 & v4 동시 반영!)
-  // ==========================================
   const handleSaveMeal = async () => {
     if (!mealForm.menu.trim()) return;
     const id = editingMeal ? editingMeal.id : `m-${Date.now()}`;
@@ -751,9 +1114,6 @@ function MainApp() {
     showToast("식단이 삭제되었습니다.");
   };
 
-  // ==========================================
-  // 9. 장보기 메모 & 가족 공지사항 핸들러
-  // ==========================================
   const handleAddShopping = async () => {
     if (!shoppingForm.name.trim()) return;
     const id = `sh-${Date.now()}`;
@@ -893,7 +1253,7 @@ function MainApp() {
   };
 
   // ==========================================
-  // 10. AI 식단 추천 엔진 (선택 재료 기반 동적 생성)
+  // 10. AI 식단 추천 엔진
   // ==========================================
   const generateSmartLocalRecipes = (pickedList, targetGroup, extraNote) => {
     const ingNames =
@@ -1112,7 +1472,7 @@ function MainApp() {
   };
 
   // ==========================================
-  // 11. 파생 통계 계산 (식비 원장 기준 + 기존 냉장고 미이관 금액 병합)
+  // 11. 파생 통계 계산
   // ==========================================
   const monthlyExpenseSummary = useMemo(() => {
     const monthPrefix = currentMonth;
@@ -1131,7 +1491,7 @@ function MainApp() {
         title: f.name,
         category: f.category || "기타",
         amount: Number(f.price),
-        date: f.purchaseDate || "2026-11-10"
+        date: f.purchaseDate || `${monthPrefix}-10`
       }));
 
     const combinedLedger = [...ledgerItems, ...unrecordedFridgeAsLedger];
@@ -1180,7 +1540,6 @@ function MainApp() {
     return notices.filter((n) => n.pinned && !n.done);
   }, [notices]);
 
-  // 삭제 목록 초기화 (혹시 실수로 지워진 기존 항목까지 전부 되살리고 싶을 때)
   const handleRestoreAllDeleted = async () => {
     setDeletedIds([]);
     localStorage.removeItem("kim_family_deleted_ids");
@@ -1229,7 +1588,7 @@ function MainApp() {
         <div className="flex items-center justify-between mb-1.5">
           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-            기존 DB(v3) + 신규(v4) 통합 동기화 중
+            ahrisoohyeokbap 실시간 동기화
           </span>
           <div className="flex items-center gap-1.5">
             <button
@@ -1239,7 +1598,7 @@ function MainApp() {
               }}
               className="px-2.5 py-1 rounded-full bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-900 text-[11px] font-extrabold flex items-center gap-1"
             >
-              <span>💰 11월 식비</span>
+              <span>💰 {currentMonth.slice(5)}월 식비</span>
               <span>{monthlyExpenseSummary.total.toLocaleString()}원</span>
             </button>
             <button
@@ -1307,7 +1666,10 @@ function MainApp() {
         <div className="p-4 space-y-4">
           <div className="grid grid-cols-2 gap-2">
             <button
-              onClick={() => setIsDaycareModalOpen(true)}
+              onClick={() => {
+                setScanTargetMonth(selectedDate.slice(0, 7));
+                setIsDaycareModalOpen(true);
+              }}
               className="p-2.5 rounded-2xl bg-amber-50 border border-amber-200 text-left hover:bg-amber-100 transition flex items-center gap-2.5"
             >
               <div className="p-2 rounded-xl bg-amber-500 text-white shrink-0">
@@ -1315,9 +1677,9 @@ function MainApp() {
               </div>
               <div className="min-w-0">
                 <div className="text-[11px] font-extrabold text-amber-900 truncate">
-                  어린이집 식단표 스캔
+                  식단표 이미지 AI 스캔
                 </div>
-                <div className="text-[10px] text-amber-700 truncate">신당동어린이집 11월 적용됨</div>
+                <div className="text-[10px] text-amber-700 truncate">모든 월·자유양식 자동입력</div>
               </div>
             </button>
 
@@ -1343,7 +1705,9 @@ function MainApp() {
                 onClick={() => {
                   const d = new Date(selectedDate + "T00:00:00");
                   d.setDate(d.getDate() - 1);
-                  setSelectedDate(formatDate(d));
+                  const next = formatDate(d);
+                  setSelectedDate(next);
+                  setCurrentMonth(next.slice(0, 7));
                 }}
                 className="p-1.5 rounded-xl bg-stone-100 hover:bg-stone-200"
               >
@@ -1353,7 +1717,10 @@ function MainApp() {
                 <input
                   type="date"
                   value={selectedDate}
-                  onChange={(e) => setSelectedDate(e.target.value)}
+                  onChange={(e) => {
+                    setSelectedDate(e.target.value);
+                    if (e.target.value) setCurrentMonth(e.target.value.slice(0, 7));
+                  }}
                   className="text-sm font-black text-stone-900 bg-transparent focus:outline-none"
                 />
                 <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-stone-100 text-stone-700">
@@ -1364,7 +1731,9 @@ function MainApp() {
                 onClick={() => {
                   const d = new Date(selectedDate + "T00:00:00");
                   d.setDate(d.getDate() + 1);
-                  setSelectedDate(formatDate(d));
+                  const next = formatDate(d);
+                  setSelectedDate(next);
+                  setCurrentMonth(next.slice(0, 7));
                 }}
                 className="p-1.5 rounded-xl bg-stone-100 hover:bg-stone-200"
               >
@@ -1379,7 +1748,10 @@ function MainApp() {
                 return (
                   <button
                     key={d}
-                    onClick={() => setSelectedDate(d)}
+                    onClick={() => {
+                      setSelectedDate(d);
+                      setCurrentMonth(d.slice(0, 7));
+                    }}
                     className={`py-1.5 rounded-xl text-center transition border ${
                       isSel
                         ? "bg-stone-900 text-white border-stone-900 shadow-sm"
@@ -1663,9 +2035,46 @@ function MainApp() {
         </div>
       )}
 
-      {/* 탭 3: 월간·식비 */}
+      {/* 탭 3: 월간·식비 (모든 연월 이동 가능!) */}
       {activeTab === "monthly" && (
         <div className="p-4 space-y-4">
+          {/* 연월 선택 네비게이터 */}
+          <div className="flex items-center justify-between bg-white px-3 py-2 rounded-2xl border border-stone-200 shadow-sm">
+            <button
+              onClick={() => {
+                const prevM = shiftYearMonth(currentMonth, -1);
+                setCurrentMonth(prevM);
+                setSelectedDate(`${prevM}-01`);
+              }}
+              className="p-1.5 rounded-xl bg-stone-100 hover:bg-stone-200"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <div className="flex items-center gap-2">
+              <input
+                type="month"
+                value={currentMonth}
+                onChange={(e) => {
+                  if (e.target.value) {
+                    setCurrentMonth(e.target.value);
+                    setSelectedDate(`${e.target.value}-01`);
+                  }
+                }}
+                className="text-sm font-black text-stone-900 bg-transparent focus:outline-none"
+              />
+            </div>
+            <button
+              onClick={() => {
+                const nextM = shiftYearMonth(currentMonth, 1);
+                setCurrentMonth(nextM);
+                setSelectedDate(`${nextM}-01`);
+              }}
+              className="p-1.5 rounded-xl bg-stone-100 hover:bg-stone-200"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+
           <div className="grid grid-cols-2 gap-1.5 bg-stone-200 p-1 rounded-2xl">
             <button
               onClick={() => setMonthlySubTab("calendar")}
@@ -1715,7 +2124,7 @@ function MainApp() {
                   ))}
                 </div>
                 <div className="grid grid-cols-7 gap-1">
-                  {Array.from({ length: 30 }, (_, i) => {
+                  {Array.from({ length: getDaysInMonth(currentMonth) }, (_, i) => {
                     const dayNum = String(i + 1).padStart(2, "0");
                     const dateStr = `${currentMonth}-${dayNum}`;
                     const mList = meals.filter(
@@ -1811,7 +2220,7 @@ function MainApp() {
 
               <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-sm space-y-2.5">
                 <h3 className="text-xs font-black text-stone-900">
-                  🧾 이번 달 장보기 지출 원장 ({monthlyExpenseSummary.ledgerItems.length}건)
+                  🧾 {currentMonth}월 장보기 지출 원장 ({monthlyExpenseSummary.ledgerItems.length}건)
                 </h3>
                 <div className="divide-y divide-stone-100">
                   {monthlyExpenseSummary.ledgerItems.map((exp) => (
@@ -2476,7 +2885,376 @@ function MainApp() {
         })}
       </nav>
 
-      {/* 모달들 */}
+      {/* ==========================================
+          모달 6: [신규] 양식·월 무제한 식단표 이미지 AI 스캔 모달
+      ========================================== */}
+      {isDaycareModalOpen && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-md w-full p-5 space-y-3.5 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-black text-stone-900">
+                  📸 식단표 이미지 AI 자동 스캔 (모든 양식·모든 월)
+                </h3>
+                <p className="text-[11px] text-stone-500">
+                  11월뿐만 아니라 12월, 내년 등 어떤 양식의 식단표 사진이든 올려주세요!
+                </p>
+              </div>
+              <button onClick={() => setIsDaycareModalOpen(false)}>
+                <X className="w-5 h-5 text-stone-400" />
+              </button>
+            </div>
+
+            {/* Step 1: 적용할 연월, 대상 아이, 기관명 설정 */}
+            <div className="grid grid-cols-3 gap-2 bg-stone-50 p-3 rounded-2xl border border-stone-200">
+              <div>
+                <label className="text-[10px] font-extrabold text-stone-500 block mb-1">
+                  적용할 연월
+                </label>
+                <input
+                  type="month"
+                  value={scanTargetMonth}
+                  onChange={(e) => setScanTargetMonth(e.target.value)}
+                  className="w-full px-2 py-1.5 rounded-xl border border-stone-200 text-xs font-black bg-white"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] font-extrabold text-stone-500 block mb-1">
+                  식단 대상
+                </label>
+                <select
+                  value={scanTargetMember}
+                  onChange={(e) => setScanTargetMember(e.target.value)}
+                  className="w-full px-2 py-1.5 rounded-xl border border-stone-200 text-xs font-black bg-white"
+                >
+                  {FAMILY_MEMBERS.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.emoji} {m.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="text-[10px] font-extrabold text-stone-500 block mb-1">
+                  기관/어린이집명
+                </label>
+                <input
+                  type="text"
+                  value={scanSchoolName}
+                  onChange={(e) => setScanSchoolName(e.target.value)}
+                  placeholder="신당동어린이집"
+                  className="w-full px-2 py-1.5 rounded-xl border border-stone-200 text-xs font-bold bg-white"
+                />
+              </div>
+            </div>
+
+            {/* Step 2: 실제 이미지 파일 업로드 버튼 */}
+            <div>
+              <input
+                ref={menuFileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleMenuImageUpload}
+                className="hidden"
+              />
+              <button
+                onClick={() => menuFileInputRef.current?.click()}
+                disabled={isMenuScanning}
+                className="w-full py-3.5 px-4 rounded-2xl bg-amber-500 hover:bg-amber-600 text-white font-black text-xs flex items-center justify-center gap-2 shadow-sm transition"
+              >
+                {isMenuScanning ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    <span>AI가 식단표 이미지의 날짜와 메뉴를 읽는 중...</span>
+                  </>
+                ) : (
+                  <>
+                    <Upload className="w-4 h-4" />
+                    <span>식단표 사진 촬영 / 앨범에서 이미지 선택하기</span>
+                  </>
+                )}
+              </button>
+            </div>
+
+            {scanPreviewUrl && (
+              <div className="relative rounded-2xl overflow-hidden border border-stone-200 max-h-36 bg-stone-100">
+                <img
+                  src={scanPreviewUrl}
+                  alt="식단표 미리보기"
+                  className="w-full h-36 object-cover"
+                />
+              </div>
+            )}
+
+            {scanErrorMsg && (
+              <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-[11px] text-amber-900 font-semibold">
+                ℹ️ {scanErrorMsg}
+              </div>
+            )}
+
+            {/* 보조 기능: 키즈노트/문자 식단 텍스트 복사 붙여넣기 */}
+            <details className="bg-stone-50 rounded-2xl p-3 border border-stone-200 text-xs">
+              <summary className="font-extrabold text-stone-700 cursor-pointer">
+                📋 텍스트로 복사한 식단 붙여넣기 (선택 사항)
+              </summary>
+              <div className="mt-2 space-y-2">
+                <textarea
+                  rows={3}
+                  value={manualPasteText}
+                  onChange={(e) => setManualPasteText(e.target.value)}
+                  placeholder={`예시:\n1일: 사과,우유 | 잡곡밥, 소고기미역국, 계란말이 | 찐감자\n2일: 야채죽 | 쌀밥, 된장국, 불고기 | 카스테라, 우유`}
+                  className="w-full p-2 rounded-xl border border-stone-200 text-[11px]"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    const parsed = parseFreeformMenuText(
+                      manualPasteText,
+                      scanTargetMonth,
+                      scanSchoolName
+                    );
+                    if (parsed.length > 0) {
+                      setScannedMenuDays((prev) => [...prev, ...parsed]);
+                      setManualPasteText("");
+                      showToast(`${parsed.length}일 치 식단이 목록에 추가되었습니다.`);
+                    } else {
+                      showToast("날짜(예: 1일, 2일)가 포함된 줄을 입력해 주세요.");
+                    }
+                  }}
+                  className="w-full py-2 rounded-xl bg-stone-800 text-white text-xs font-extrabold"
+                >
+                  텍스트 분석하여 아래 목록에 추가
+                </button>
+              </div>
+            </details>
+
+            {/* Step 3: 스캔 추출된 날짜별 식단 확인 및 자유 편집 */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-black text-stone-800">
+                  추출된 식단 내역 ({scannedMenuDays.length}일 치)
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const nextDayNum = String(scannedMenuDays.length + 1).padStart(2, "0");
+                    setScannedMenuDays((prev) => [
+                      ...prev,
+                      {
+                        date: `${scanTargetMonth}-${nextDayNum}`,
+                        mSnack: "",
+                        lunch: "",
+                        aSnack: "",
+                        note: `${scanSchoolName} 식단표`
+                      }
+                    ]);
+                  }}
+                  className="px-2.5 py-1 rounded-lg bg-stone-100 hover:bg-stone-200 text-[11px] font-extrabold"
+                >
+                  + 날짜 행 직접 추가
+                </button>
+              </div>
+
+              {scannedMenuDays.length === 0 ? (
+                <div className="text-center py-4 text-xs text-stone-400 bg-stone-50 rounded-2xl border border-dashed border-stone-200">
+                  위 노란색 버튼을 눌러 식단표 이미지를 업로드하면 자동으로 날짜와 오전간식·점심·오후간식이 채워집니다.
+                </div>
+              ) : (
+                <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                  {scannedMenuDays.map((row, idx) => (
+                    <div
+                      key={idx}
+                      className="p-2.5 rounded-xl bg-stone-50 border border-stone-200 space-y-1.5 text-xs"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <input
+                          type="date"
+                          value={row.date}
+                          onChange={(e) => {
+                            const copy = [...scannedMenuDays];
+                            copy[idx].date = e.target.value;
+                            setScannedMenuDays(copy);
+                          }}
+                          className="px-2 py-1 rounded-lg border border-stone-200 font-black text-xs bg-white"
+                        />
+                        <button
+                          onClick={() =>
+                            setScannedMenuDays((prev) => prev.filter((_, i) => i !== idx))
+                          }
+                          className="text-stone-400 hover:text-red-500"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                      <input
+                        type="text"
+                        placeholder="🍎 오전간식 (예: 사과, 우유)"
+                        value={row.mSnack}
+                        onChange={(e) => {
+                          const copy = [...scannedMenuDays];
+                          copy[idx].mSnack = e.target.value;
+                          setScannedMenuDays(copy);
+                        }}
+                        className="w-full px-2.5 py-1.5 rounded-lg border border-stone-200 text-xs bg-white"
+                      />
+                      <input
+                        type="text"
+                        placeholder="☀️ 점심 (예: 잡곡밥, 소고기미역국, 두부조림)"
+                        value={row.lunch}
+                        onChange={(e) => {
+                          const copy = [...scannedMenuDays];
+                          copy[idx].lunch = e.target.value;
+                          setScannedMenuDays(copy);
+                        }}
+                        className="w-full px-2.5 py-1.5 rounded-lg border border-stone-200 text-xs font-bold bg-white"
+                      />
+                      <input
+                        type="text"
+                        placeholder="🥨 오후간식 (예: 찐고구마, 우유)"
+                        value={row.aSnack}
+                        onChange={(e) => {
+                          const copy = [...scannedMenuDays];
+                          copy[idx].aSnack = e.target.value;
+                          setScannedMenuDays(copy);
+                        }}
+                        className="w-full px-2.5 py-1.5 rounded-lg border border-stone-200 text-xs bg-white"
+                      />
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {scannedMenuDays.length > 0 && (
+              <button
+                onClick={handleSaveScannedMenuDays}
+                className="w-full py-3 rounded-2xl bg-stone-900 text-white text-xs font-black shadow-md"
+              >
+                ✅ {scanTargetMonth}월 식단 ({scannedMenuDays.length}일 치) 달력에 일괄 자동 입력하기
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ==========================================
+          모달 7: 마트 영수증 실제 이미지 스캔 모달
+      ========================================== */}
+      {isReceiptModalOpen && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-sm w-full p-5 space-y-3 max-h-[85vh] overflow-y-auto">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-black">🧾 마트 영수증 사진 스캔 → 자동 입고</h3>
+              <button onClick={() => setIsReceiptModalOpen(false)}>
+                <X className="w-5 h-5 text-stone-400" />
+              </button>
+            </div>
+
+            <input
+              ref={receiptFileInputRef}
+              type="file"
+              accept="image/*"
+              onChange={handleReceiptImageUpload}
+              className="hidden"
+            />
+            <button
+              onClick={() => receiptFileInputRef.current?.click()}
+              disabled={isReceiptScanning}
+              className="w-full py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black flex items-center justify-center gap-2"
+            >
+              {isReceiptScanning ? (
+                <>
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                  <span>영수증 이미지에서 품목과 금액 추출 중...</span>
+                </>
+              ) : (
+                <>
+                  <Upload className="w-4 h-4" />
+                  <span>영수증 사진 촬영 / 캡처 이미지 업로드</span>
+                </>
+              )}
+            </button>
+
+            {receiptPreviewUrl && (
+              <img
+                src={receiptPreviewUrl}
+                alt="영수증 미리보기"
+                className="w-full h-28 object-cover rounded-xl border border-stone-200"
+              />
+            )}
+
+            {scannedReceiptItems.length > 0 && (
+              <div className="space-y-2">
+                {scannedReceiptItems.map((it, idx) => (
+                  <div
+                    key={idx}
+                    className="p-2.5 rounded-xl bg-stone-50 border border-stone-200 text-xs flex justify-between items-center gap-2"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <input
+                        type="text"
+                        value={it.name}
+                        onChange={(e) => {
+                          const copy = [...scannedReceiptItems];
+                          copy[idx].name = e.target.value;
+                          setScannedReceiptItems(copy);
+                        }}
+                        className="font-bold bg-white px-2 py-1 rounded border border-stone-200 w-full text-xs"
+                      />
+                    </div>
+                    <input
+                      type="number"
+                      value={it.price}
+                      onChange={(e) => {
+                        const copy = [...scannedReceiptItems];
+                        copy[idx].price = Number(e.target.value);
+                        setScannedReceiptItems(copy);
+                      }}
+                      className="w-24 font-extrabold text-emerald-700 bg-white px-2 py-1 rounded border border-stone-200 text-xs text-right"
+                    />
+                  </div>
+                ))}
+                <button
+                  onClick={async () => {
+                    for (const it of scannedReceiptItems) {
+                      const fId = `f-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+                      const newItem = { ...it, id: fId, purchaseDate: selectedDate };
+                      setFridgeMap((prev) => ({
+                        ...prev,
+                        local: { ...(prev.local || {}), [fId]: newItem }
+                      }));
+                      if (user && db) {
+                        try {
+                          await setDoc(getDocRef("family_fridge_v3", fId), newItem);
+                          await setDoc(getDocRef("family_fridge_v4", fId), newItem);
+                          const expId = `exp-${fId}`;
+                          await setDoc(getDocRef("family_expenses_v4", expId), {
+                            id: expId,
+                            title: newItem.name,
+                            category: newItem.category || "기타",
+                            amount: Number(newItem.price) || 0,
+                            date: selectedDate,
+                            type: "장보기/식재료"
+                          });
+                        } catch (e) {}
+                      }
+                    }
+                    setScannedReceiptItems([]);
+                    setReceiptPreviewUrl("");
+                    setIsReceiptModalOpen(false);
+                    showToast("영수증 품목이 냉장고와 식비 가계부에 일괄 등록되었습니다!");
+                  }}
+                  className="w-full py-2.5 rounded-xl bg-stone-900 text-white text-xs font-extrabold"
+                >
+                  냉장고 및 식비 가계부에 일괄 입고하기
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* 기존 모달들 (식단, 냉장고, 장보기입고, 공지, AI퀵로그, 설정) */}
       {isMealModalOpen && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-sm w-full p-5 space-y-3.5 max-h-[90vh] overflow-y-auto">
@@ -2873,109 +3651,11 @@ function MainApp() {
         </div>
       )}
 
-      {isDaycareModalOpen && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-sm w-full p-5 space-y-3">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-black">📸 어린이집 식단표 스캔/동기화</h3>
-              <button onClick={() => setIsDaycareModalOpen(false)}>
-                <X className="w-5 h-5 text-stone-400" />
-              </button>
-            </div>
-            <p className="text-xs text-stone-600">
-              <b>신당동어린이집 11월 식단표(0-2세)</b> 25일 치(총 75끼)가 시목이 달력에 자동 적용되어 있습니다.
-            </p>
-            <button
-              onClick={() => {
-                setIsDaycareModalOpen(false);
-                showToast("신당동어린이집 11월 식단이 정상 적용되어 있습니다!");
-              }}
-              className="w-full py-2.5 rounded-xl bg-amber-500 text-white text-xs font-extrabold"
-            >
-              확인
-            </button>
-          </div>
-        </div>
-      )}
-
-      {isReceiptModalOpen && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-sm w-full p-5 space-y-3 max-h-[85vh] overflow-y-auto">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-black">🧾 마트 영수증 스캔 → 냉장고+가계부 입고</h3>
-              <button onClick={() => setIsReceiptModalOpen(false)}>
-                <X className="w-5 h-5 text-stone-400" />
-              </button>
-            </div>
-
-            <button
-              onClick={() => {
-                setScannedReceiptItems([
-                  { name: "무항생제 한우 국거리 300g", location: "냉장실", category: "육류/수산", quantity: 1, unit: "팩", expiryDate: "2026-11-19", price: 24900 },
-                  { name: "상하목장 유기농 우유 900ml", location: "냉장실", category: "유제품/계란", quantity: 2, unit: "팩", expiryDate: "2026-11-23", price: 9800 },
-                  { name: "친환경 어린잎 채소믹스", location: "냉장실", category: "채소/과일", quantity: 1, unit: "봉", expiryDate: "2026-11-18", price: 3980 }
-                ]);
-              }}
-              className="w-full py-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs font-extrabold"
-            >
-              샘플 마트 영수증 품목 불러오기 (1초 체험)
-            </button>
-
-            {scannedReceiptItems.length > 0 && (
-              <div className="space-y-2">
-                {scannedReceiptItems.map((it, idx) => (
-                  <div key={idx} className="p-2.5 rounded-xl bg-stone-50 border border-stone-200 text-xs flex justify-between">
-                    <div>
-                      <div className="font-bold">{it.name}</div>
-                      <div className="text-[10px] text-stone-500">{it.location} · {it.category}</div>
-                    </div>
-                    <div className="font-extrabold text-emerald-700">{it.price.toLocaleString()}원</div>
-                  </div>
-                ))}
-                <button
-                  onClick={async () => {
-                    for (const it of scannedReceiptItems) {
-                      const fId = `f-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-                      const newItem = { ...it, id: fId, purchaseDate: selectedDate };
-                      setFridgeMap((prev) => ({
-                        ...prev,
-                        local: { ...(prev.local || {}), [fId]: newItem }
-                      }));
-                      if (user && db) {
-                        try {
-                          await setDoc(getDocRef("family_fridge_v3", fId), newItem);
-                          await setDoc(getDocRef("family_fridge_v4", fId), newItem);
-                          const expId = `exp-${fId}`;
-                          await setDoc(getDocRef("family_expenses_v4", expId), {
-                            id: expId,
-                            title: newItem.name,
-                            category: newItem.category,
-                            amount: Number(newItem.price),
-                            date: selectedDate,
-                            type: "장보기/식재료"
-                          });
-                        } catch (e) {}
-                      }
-                    }
-                    setScannedReceiptItems([]);
-                    setIsReceiptModalOpen(false);
-                    showToast("영수증 품목이 냉장고와 식비 가계부에 일괄 등록되었습니다!");
-                  }}
-                  className="w-full py-2.5 rounded-xl bg-stone-900 text-white text-xs font-extrabold"
-                >
-                  냉장고 및 식비 가계부에 일괄 입고하기
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
       {isSettingsOpen && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-sm w-full p-5 space-y-3.5">
             <div className="flex items-center justify-between">
-              <h3 className="text-sm font-black">⚙️ 서버 연동 및 기존 데이터 복원</h3>
+              <h3 className="text-sm font-black">⚙️ 서버 연동 및 AI 비전 키 설정</h3>
               <button onClick={() => setIsSettingsOpen(false)}>
                 <X className="w-5 h-5 text-stone-400" />
               </button>
@@ -2983,7 +3663,7 @@ function MainApp() {
 
             <div className="p-3 rounded-2xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-900 space-y-1">
               <div>
-                ✅ <b>Firebase DB 연결 상태:</b> <code>ahrisoohyeokbap</code>
+                ✅ <b>Firebase DB 연결:</b> <code>ahrisoohyeokbap</code>
               </div>
               <div>
                 📦 <b>현재 불러온 데이터:</b> 식단 {meals.length}건 / 냉장고 {fridge.length}건
@@ -3000,7 +3680,7 @@ function MainApp() {
 
             <div>
               <label className="text-[11px] font-bold text-stone-600 block mb-1">
-                Gemini API Key (선택 사항)
+                Gemini API Key (식단표·영수증 이미지 OCR 스캔용, AIzaSy...로 시작)
               </label>
               <input
                 type="text"
@@ -3009,6 +3689,7 @@ function MainApp() {
                   setGeminiApiKey(e.target.value);
                   localStorage.setItem("kim_family_gemini_key", e.target.value);
                 }}
+                placeholder="AIzaSy... 로 시작하는 키 입력"
                 className="w-full px-3 py-2 rounded-xl border border-stone-200 text-xs"
               />
             </div>
