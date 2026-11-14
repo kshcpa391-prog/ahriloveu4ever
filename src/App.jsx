@@ -20,12 +20,10 @@ import {
   Pin,
   AlertCircle,
   CheckCircle2,
-  DollarSign,
-  PieChart,
   RefreshCw,
   ArrowRight
 } from "lucide-react";
-import { initializeApp } from "firebase/app";
+import { initializeApp, getApps, getApp } from "firebase/app";
 import {
   getAuth,
   signInAnonymously,
@@ -42,7 +40,7 @@ import {
 } from "firebase/firestore";
 
 // ==========================================
-// 1. 파이어베이스 및 기본 설정 (기존 DB 100% 호환)
+// 1. 파이어베이스 안전 초기화 (중복 초기화 및 경로 에러 원천 차단)
 // ==========================================
 const USER_FIREBASE_CONFIG = {
   apiKey: "AIzaSyDrzf2_cG0PT-dW1lidXYaHk4BpCY-eMao",
@@ -53,18 +51,39 @@ const USER_FIREBASE_CONFIG = {
   appId: "1:746934389532:web:496918d8f66d40bcb088d9"
 };
 
-const firebaseConfig =
-  typeof __firebase_config !== "undefined" && __firebase_config
-    ? JSON.parse(__firebase_config)
-    : USER_FIREBASE_CONFIG;
+let app;
+let auth;
+let db;
 
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getFirestore(app);
+try {
+  const firebaseConfig =
+    typeof __firebase_config !== "undefined" && __firebase_config
+      ? JSON.parse(__firebase_config)
+      : USER_FIREBASE_CONFIG;
+  app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
+  auth = getAuth(app);
+  db = getFirestore(app);
+} catch (e) {
+  console.error("Firebase init error:", e);
+}
 
-// 기존 데이터가 저장된 경로 그대로 유지
-const COLLECTION_BASE = "artifacts/kim-family-meal-app/public/data/family_meals_v3";
+const APP_ID = "kim-family-meal-app";
 const DEFAULT_USER_API_KEY = "AQ.Ab8RN6Ke8u6xRzPlDhMcI7cRjgrktqqiA9v76BVl4x-gaqacsA";
+
+// [중요] Firestore 컬렉션/문서 경로는 반드시 홀수/짝수 세그먼트 규칙을 지켜야 흰 화면이 안 뜹니다!
+// artifacts (1) / APP_ID (2) / public (3) / data (4) / collectionName (5 - 홀수!)
+const getColRef = (colName) => collection(db, "artifacts", APP_ID, "public", "data", colName);
+const getDocRef = (colName, docId) =>
+  doc(db, "artifacts", APP_ID, "public", "data", colName, String(docId));
+
+// 배열 안전 변환 유틸리티 (기존 DB 데이터 형식 충돌로 인한 흰 화면 방지)
+const toSafeArray = (val) => {
+  if (Array.isArray(val)) return val;
+  if (typeof val === "string" && val.trim() !== "") {
+    return val.split(",").map((s) => s.trim()).filter(Boolean);
+  }
+  return [];
+};
 
 // ==========================================
 // 2. 상수 및 초기 데이터
@@ -88,7 +107,6 @@ const MEAL_SLOTS = [
 const STORAGE_LOCATIONS = ["냉장실", "냉동실", "실온·팬트리"];
 const FRIDGE_CATEGORIES = ["채소/과일", "육류/수산", "유제품/계란", "유아식/이유식 재료", "반찬/김치", "양념/소스", "기타"];
 
-// 신당동어린이집 11월 식단표 데이터
 const SHINDANG_NOV_DATA = [
   { date: "2026-11-02", mSnack: "배, 우유", lunch: "잡곡밥, 유부맑은국, 돼지고기두루치기, 얼갈이나물, 김치, 후식 까망베르치즈케이크", aSnack: "감자튀김, 차", cal: "414kcal / 단백질 17g" },
   { date: "2026-11-03", mSnack: "파프리카죽", lunch: "쌀밥, 청경채된장국, 동태전, 콩나물당근무침, 김치, 후식 단감", aSnack: "단팥빵, 우유", cal: "482kcal / 단백질 20g" },
@@ -181,9 +199,10 @@ const INITIAL_NOTICES = [
 ];
 
 // ==========================================
-// 3. 유틸리티 함수
+// 3. 유틸리티 함수 (날짜 오류 방어 적용)
 // ==========================================
 const formatDate = (dateObj) => {
+  if (!dateObj || isNaN(dateObj.getTime())) return "2026-11-14";
   const y = dateObj.getFullYear();
   const m = String(dateObj.getMonth() + 1).padStart(2, "0");
   const d = String(dateObj.getDate()).padStart(2, "0");
@@ -192,46 +211,81 @@ const formatDate = (dateObj) => {
 
 const getDayName = (dateStr) => {
   const days = ["일", "월", "화", "수", "목", "금", "토"];
-  const d = new Date(dateStr + "T00:00:00");
+  const d = new Date(String(dateStr).slice(0, 10) + "T00:00:00");
+  if (isNaN(d.getTime())) return "토";
   return days[d.getDay()];
 };
 
 const getDaysDiff = (expiryStr) => {
   if (!expiryStr) return 999;
   const today = new Date("2026-11-14T00:00:00");
-  const exp = new Date(expiryStr + "T00:00:00");
+  const exp = new Date(String(expiryStr).slice(0, 10) + "T00:00:00");
+  if (isNaN(exp.getTime())) return 999;
   return Math.ceil((exp - today) / (1000 * 60 * 60 * 24));
 };
 
 // ==========================================
-// 4. 메인 애플리케이션 컴포넌트
+// 4. 에러 방어막 컴포넌트 (혹시 모를 런타임 에러 시 흰 화면 방지)
 // ==========================================
-export default function App() {
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, errorMsg: "" };
+  }
+  static getDerivedStateFromError(error) {
+    return { hasError: true, errorMsg: error?.message || "알 수 없는 오류" };
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-stone-50 text-center">
+          <div className="bg-white p-6 rounded-3xl shadow-lg border border-red-200 max-w-sm w-full space-y-3">
+            <div className="text-2xl">⚠️</div>
+            <h2 className="text-sm font-black text-stone-900">화면 복구 모드</h2>
+            <p className="text-xs text-stone-600 break-all">{this.state.errorMsg}</p>
+            <button
+              onClick={() => {
+                localStorage.clear();
+                window.location.reload();
+              }}
+              className="w-full py-2.5 rounded-xl bg-stone-900 text-white text-xs font-extrabold"
+            >
+              캐시 초기화 및 새로고침
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+// ==========================================
+// 5. 메인 애플리케이션 내부 컴포넌트
+// ==========================================
+function MainApp() {
   const [user, setUser] = useState(null);
-  const [activeTab, setActiveTab] = useState("daily"); // daily | weekly | monthly | fridge | shopping | notices | ai
+  const [activeTab, setActiveTab] = useState("daily");
   const [selectedDate, setSelectedDate] = useState("2026-11-14");
   const [selectedMember, setSelectedMember] = useState("전체");
-
-  // DB 로드 완료 여부 잠금장치 (초기화 버그 완벽 방지)
   const [isDbLoaded, setIsDbLoaded] = useState(false);
 
-  // 핵심 데이터 상태 (초기값은 빈 배열로 시작해 덮어쓰기 방지)
   const [meals, setMeals] = useState([]);
   const [fridge, setFridge] = useState([]);
-  const [expenses, setExpenses] = useState([]); // 식비 영구 원장 (냉장고 소진과 분리!)
+  const [expenses, setExpenses] = useState([]);
   const [shoppingList, setShoppingList] = useState([]);
   const [notices, setNotices] = useState([]);
   const [deletedIds, setDeletedIds] = useState(() => {
     try {
-      return JSON.parse(localStorage.getItem("kim_family_deleted_ids") || "[]");
+      const parsed = JSON.parse(localStorage.getItem("kim_family_deleted_ids") || "[]");
+      return Array.isArray(parsed) ? parsed : [];
     } catch {
       return [];
     }
   });
 
-  // 월간 캘린더 & 식비 가계부 상태
-  const [monthlySubTab, setMonthlySubTab] = useState("calendar"); // calendar | expense
-  const [currentMonth, setCurrentMonth] = useState("2026-11");
+  const [monthlySubTab, setMonthlySubTab] = useState("calendar");
+  const [currentMonth] = useState("2026-11");
   const [monthlyMember, setMonthlyMember] = useState("시목");
   const [monthlyBudget, setMonthlyBudget] = useState(() => {
     return Number(localStorage.getItem("kim_family_budget") || 800000);
@@ -267,7 +321,6 @@ export default function App() {
   const [fridgeLocFilter, setFridgeLocFilter] = useState("전체");
   const [fridgeCatFilter, setFridgeCatFilter] = useState("전체");
 
-  // 장보기 메모 상태
   const [shoppingForm, setShoppingForm] = useState({
     name: "",
     quantity: "1개",
@@ -278,7 +331,6 @@ export default function App() {
   const [stockInItem, setStockInItem] = useState(null);
   const [stockInPrice, setStockInPrice] = useState("");
 
-  // 가족 공지사항 상태
   const [isNoticeModalOpen, setIsNoticeModalOpen] = useState(false);
   const [editingNotice, setEditingNotice] = useState(null);
   const [noticeForm, setNoticeForm] = useState({
@@ -289,21 +341,18 @@ export default function App() {
     pinned: true
   });
 
-  // AI 식단 추천 상태 (고정 기본값 완전 제거!)
   const [selectedAiIngredients, setSelectedAiIngredients] = useState([]);
   const [aiTargetGroup, setAiTargetGroup] = useState("온가족 한끼");
   const [aiPromptExtra, setAiPromptExtra] = useState("");
-  const [aiRecipes, setAiRecipes] = useState([]); // 처음엔 빈 배열!
+  const [aiRecipes, setAiRecipes] = useState([]);
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [quickLogRecipe, setQuickLogRecipe] = useState(null);
   const [quickLogDate, setQuickLogDate] = useState("2026-11-14");
   const [quickLogSlot, setQuickLogSlot] = useState("저녁");
 
-  // 스캐너 & 설정 모달
   const [isDaycareModalOpen, setIsDaycareModalOpen] = useState(false);
   const [isReceiptModalOpen, setIsReceiptModalOpen] = useState(false);
   const [scannedReceiptItems, setScannedReceiptItems] = useState([]);
-  const [isScanning, setIsScanning] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [geminiApiKey, setGeminiApiKey] = useState(
     () => localStorage.getItem("kim_family_gemini_key") || DEFAULT_USER_API_KEY
@@ -316,9 +365,10 @@ export default function App() {
   };
 
   // ==========================================
-  // 5. 파이어베이스 실시간 동기화 (초기화 오류 해결)
+  // 6. 파이어베이스 인증 및 실시간 동기화 (기존 DB 구조 + 신규 컬렉션 완벽 호환)
   // ==========================================
   useEffect(() => {
+    if (!auth) return;
     const initAuth = async () => {
       try {
         if (typeof __initial_auth_token !== "undefined" && __initial_auth_token) {
@@ -336,101 +386,166 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user || !db) return;
 
-    const mealsRef = collection(db, COLLECTION_BASE, "meals");
-    const fridgeRef = collection(db, COLLECTION_BASE, "fridge");
-    const expensesRef = collection(db, COLLECTION_BASE, "expenses");
-    const shoppingRef = collection(db, COLLECTION_BASE, "shopping");
-    const noticesRef = collection(db, COLLECTION_BASE, "notices");
-    const metaRef = collection(db, COLLECTION_BASE, "meta");
+    // 0) 기존 family_meals_v3 컬렉션에서 레거시 데이터도 함께 읽어와 100% 보존
+    const unsubLegacy = onSnapshot(
+      getColRef("family_meals_v3"),
+      (snap) => {
+        snap.docs.forEach((d) => {
+          const data = d.data();
+          // 만약 기존 단일 문서에 배열 형태로 들어있다면 자동 복원
+          if (Array.isArray(data.meals) && data.meals.length > 0) {
+            setMeals((prev) => (prev.length === 0 ? data.meals : prev));
+          }
+          if (Array.isArray(data.fridge) && data.fridge.length > 0) {
+            setFridge((prev) =>
+              prev.length === 0
+                ? data.fridge.filter((i) => !deletedIds.includes(i.id))
+                : prev
+            );
+          }
+        });
+      },
+      (err) => console.warn("Legacy listener warning:", err)
+    );
 
-    // 삭제된 ID 목록 동기화 (종가집 포기김치 등 다시 살아나는 현상 원천 차단)
-    const unsubMeta = onSnapshot(metaRef, (snap) => {
-      snap.docs.forEach((d) => {
-        if (d.id === "deleted_tracker") {
-          const list = d.data().ids || [];
-          setDeletedIds(list);
-          localStorage.setItem("kim_family_deleted_ids", JSON.stringify(list));
-        }
-      });
-    });
+    // 1) 삭제 추적기 동기화 (종가집 포기김치 등 삭제한 항목 부활 방지)
+    const unsubMeta = onSnapshot(
+      getColRef("family_meta_v4"),
+      (snap) => {
+        snap.docs.forEach((d) => {
+          if (d.id === "deleted_tracker") {
+            const list = toSafeArray(d.data().ids);
+            setDeletedIds(list);
+            localStorage.setItem("kim_family_deleted_ids", JSON.stringify(list));
+          }
+        });
+      },
+      (err) => console.warn("Meta listener error:", err)
+    );
 
-    // 1) 식단 동기화
-    const unsubMeals = onSnapshot(mealsRef, async (snap) => {
-      const loaded = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-      if (loaded.length === 0 && !localStorage.getItem("kim_meals_seeded_v4")) {
-        localStorage.setItem("kim_meals_seeded_v4", "true");
-        const daycareMeals = buildDaycareMeals();
-        setMeals(daycareMeals);
-        for (const m of daycareMeals.slice(0, 15)) {
-          await setDoc(doc(db, COLLECTION_BASE, "meals", m.id), m);
-        }
-      } else {
-        // 어린이집 식단과 병합하되 삭제된 ID는 제외
+    // 2) 식단 동기화 (family_meals_v4)
+    const unsubMeals = onSnapshot(
+      getColRef("family_meals_v4"),
+      async (snap) => {
+        const loaded = snap.docs.map((d) => {
+          const raw = d.data();
+          return {
+            ...raw,
+            id: d.id,
+            members: toSafeArray(raw.members),
+            ingredients: toSafeArray(raw.ingredients)
+          };
+        });
+
+        const delList = JSON.parse(localStorage.getItem("kim_family_deleted_ids") || "[]");
         const dbIds = new Set(loaded.map((m) => m.id));
         const daycareMeals = buildDaycareMeals().filter(
-          (m) => !dbIds.has(m.id) && !deletedIds.includes(m.id)
+          (m) => !dbIds.has(m.id) && !delList.includes(m.id)
         );
-        setMeals([...loaded, ...daycareMeals]);
-      }
-    });
+        const filteredLoaded = loaded.filter((m) => !delList.includes(m.id));
+        setMeals([...filteredLoaded, ...daycareMeals]);
+      },
+      (err) => console.warn("Meals listener error:", err)
+    );
 
-    // 2) 냉장고 동기화 (강제 재주입 로직 제거!)
-    const unsubFridge = onSnapshot(fridgeRef, async (snap) => {
-      const loaded = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-      const alreadySeeded = localStorage.getItem("kim_fridge_seeded_v4");
+    // 3) 냉장고 동기화 (family_fridge_v4)
+    const unsubFridge = onSnapshot(
+      getColRef("family_fridge_v4"),
+      async (snap) => {
+        const loaded = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        const alreadySeeded = localStorage.getItem("kim_fridge_seeded_v4");
+        const delList = JSON.parse(localStorage.getItem("kim_family_deleted_ids") || "[]");
 
-      if (loaded.length === 0 && !alreadySeeded) {
-        localStorage.setItem("kim_fridge_seeded_v4", "true");
-        setFridge(INITIAL_FRIDGE);
-        for (const item of INITIAL_FRIDGE) {
-          await setDoc(doc(db, COLLECTION_BASE, "fridge", item.id), item);
+        if (loaded.length === 0 && !alreadySeeded) {
+          localStorage.setItem("kim_fridge_seeded_v4", "true");
+          const initialFiltered = INITIAL_FRIDGE.filter((i) => !delList.includes(i.id));
+          setFridge(initialFiltered);
+          for (const item of initialFiltered) {
+            try {
+              await setDoc(getDocRef("family_fridge_v4", item.id), item);
+              if (Number(item.price) > 0) {
+                const expId = `exp-${item.id}`;
+                await setDoc(getDocRef("family_expenses_v4", expId), {
+                  id: expId,
+                  title: item.name,
+                  category: item.category || "기타",
+                  amount: Number(item.price),
+                  date: item.purchaseDate || "2026-11-10",
+                  type: "장보기/식재료"
+                });
+              }
+            } catch (e) {
+              console.error(e);
+            }
+          }
+        } else {
+          localStorage.setItem("kim_fridge_seeded_v4", "true");
+          const filtered = loaded.filter((item) => !delList.includes(item.id));
+          setFridge(filtered);
         }
-      } else {
-        localStorage.setItem("kim_fridge_seeded_v4", "true");
-        // 사용자가 삭제한 항목(예: 종가집 포기김치)은 절대 다시 표시하지 않음
-        const filtered = loaded.filter((item) => !deletedIds.includes(item.id));
-        setFridge(filtered);
-      }
-      setIsDbLoaded(true);
-    });
+        setIsDbLoaded(true);
+      },
+      (err) => console.warn("Fridge listener error:", err)
+    );
 
-    // 3) 식비 가계부 원장 동기화 (기존 냉장고 금액 자동 마이그레이션 포함)
-    const unsubExpenses = onSnapshot(expensesRef, async (snap) => {
-      const loaded = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-      setExpenses(loaded);
-    });
+    // 4) 식비 가계부 원장 동기화 (family_expenses_v4)
+    const unsubExpenses = onSnapshot(
+      getColRef("family_expenses_v4"),
+      (snap) => {
+        const loaded = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        setExpenses(loaded);
+      },
+      (err) => console.warn("Expenses listener error:", err)
+    );
 
-    // 4) 장보기 메모 동기화
-    const unsubShopping = onSnapshot(shoppingRef, async (snap) => {
-      const loaded = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-      if (loaded.length === 0 && !localStorage.getItem("kim_shopping_seeded_v4")) {
-        localStorage.setItem("kim_shopping_seeded_v4", "true");
-        setShoppingList(INITIAL_SHOPPING);
-        for (const s of INITIAL_SHOPPING) {
-          await setDoc(doc(db, COLLECTION_BASE, "shopping", s.id), s);
+    // 5) 장보기 메모 동기화 (family_shopping_v4)
+    const unsubShopping = onSnapshot(
+      getColRef("family_shopping_v4"),
+      async (snap) => {
+        const loaded = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        if (loaded.length === 0 && !localStorage.getItem("kim_shopping_seeded_v4")) {
+          localStorage.setItem("kim_shopping_seeded_v4", "true");
+          setShoppingList(INITIAL_SHOPPING);
+          for (const s of INITIAL_SHOPPING) {
+            try {
+              await setDoc(getDocRef("family_shopping_v4", s.id), s);
+            } catch (e) {
+              console.error(e);
+            }
+          }
+        } else {
+          setShoppingList(loaded);
         }
-      } else {
-        setShoppingList(loaded);
-      }
-    });
+      },
+      (err) => console.warn("Shopping listener error:", err)
+    );
 
-    // 5) 가족 공지사항 동기화
-    const unsubNotices = onSnapshot(noticesRef, async (snap) => {
-      const loaded = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-      if (loaded.length === 0 && !localStorage.getItem("kim_notices_seeded_v4")) {
-        localStorage.setItem("kim_notices_seeded_v4", "true");
-        setNotices(INITIAL_NOTICES);
-        for (const n of INITIAL_NOTICES) {
-          await setDoc(doc(db, COLLECTION_BASE, "notices", n.id), n);
+    // 6) 가족 공지사항 동기화 (family_notices_v4)
+    const unsubNotices = onSnapshot(
+      getColRef("family_notices_v4"),
+      async (snap) => {
+        const loaded = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        if (loaded.length === 0 && !localStorage.getItem("kim_notices_seeded_v4")) {
+          localStorage.setItem("kim_notices_seeded_v4", "true");
+          setNotices(INITIAL_NOTICES);
+          for (const n of INITIAL_NOTICES) {
+            try {
+              await setDoc(getDocRef("family_notices_v4", n.id), n);
+            } catch (e) {
+              console.error(e);
+            }
+          }
+        } else {
+          setNotices(loaded);
         }
-      } else {
-        setNotices(loaded);
-      }
-    });
+      },
+      (err) => console.warn("Notices listener error:", err)
+    );
 
     return () => {
+      unsubLegacy();
       unsubMeta();
       unsubMeals();
       unsubFridge();
@@ -438,43 +553,15 @@ export default function App() {
       unsubShopping();
       unsubNotices();
     };
-  }, [user, deletedIds.length]);
-
-  // 기존 냉장고 항목들의 금액을 식비 원장(expenses)으로 1회 자동 보존 이관
-  useEffect(() => {
-    if (!isDbLoaded || !user || fridge.length === 0) return;
-    const syncFridgeCostsToLedger = async () => {
-      const existingExpIds = new Set(expenses.map((e) => e.id));
-      for (const item of fridge) {
-        const expId = `exp-${item.id}`;
-        if (Number(item.price) > 0 && !existingExpIds.has(expId)) {
-          const expEntry = {
-            id: expId,
-            title: item.name,
-            category: item.category || "기타",
-            amount: Number(item.price),
-            date: item.purchaseDate || "2026-11-10",
-            type: "장보기/식재료"
-          };
-          setExpenses((prev) => [...prev.filter((e) => e.id !== expId), expEntry]);
-          try {
-            await setDoc(doc(db, COLLECTION_BASE, "expenses", expId), expEntry);
-          } catch (e) {
-            console.error(e);
-          }
-        }
-      }
-    };
-    syncFridgeCostsToLedger();
-  }, [isDbLoaded, fridge.length]);
+  }, [user]);
 
   const markIdDeleted = async (id) => {
     const next = Array.from(new Set([...deletedIds, id]));
     setDeletedIds(next);
     localStorage.setItem("kim_family_deleted_ids", JSON.stringify(next));
-    if (user) {
+    if (user && db) {
       try {
-        await setDoc(doc(db, COLLECTION_BASE, "meta", "deleted_tracker"), { ids: next });
+        await setDoc(getDocRef("family_meta_v4", "deleted_tracker"), { ids: next });
       } catch (e) {
         console.error(e);
       }
@@ -482,7 +569,7 @@ export default function App() {
   };
 
   // ==========================================
-  // 6. 냉장고 수정·삭제·소진 핸들러 (식비 분리!)
+  // 7. 냉장고 수정·삭제·소진 핸들러 (식비 분리!)
   // ==========================================
   const handleSaveFridge = async () => {
     if (!fridgeForm.name.trim()) return;
@@ -501,7 +588,6 @@ export default function App() {
       purchaseDate: fridgeForm.purchaseDate || selectedDate
     };
 
-    // 로컬 즉시 반영
     setFridge((prev) => {
       const idx = prev.findIndex((i) => i.id === id);
       if (idx >= 0) {
@@ -515,58 +601,69 @@ export default function App() {
     setIsFridgeModalOpen(false);
     setEditingFridge(null);
 
-    if (user) {
-      await setDoc(doc(db, COLLECTION_BASE, "fridge", id), payload);
-      // 금액이 있으면 식비 원장(expenses)에도 영구 기록 (나중에 냉장고에서 지워도 식비 유지!)
-      if (priceNum > 0 && fridgeForm.recordExpense !== false) {
-        const expId = `exp-${id}`;
-        const expData = {
-          id: expId,
-          title: payload.name,
-          category: payload.category,
-          amount: priceNum,
-          date: payload.purchaseDate,
-          type: "장보기/식재료"
-        };
-        await setDoc(doc(db, COLLECTION_BASE, "expenses", expId), expData);
+    if (user && db) {
+      try {
+        await setDoc(getDocRef("family_fridge_v4", id), payload);
+        if (priceNum > 0 && fridgeForm.recordExpense !== false) {
+          const expId = `exp-${id}`;
+          const expData = {
+            id: expId,
+            title: payload.name,
+            category: payload.category,
+            amount: priceNum,
+            date: payload.purchaseDate,
+            type: "장보기/식재료"
+          };
+          await setDoc(getDocRef("family_expenses_v4", expId), expData);
+        }
+      } catch (e) {
+        console.error(e);
       }
     }
     showToast(editingFridge ? "냉장고 재료가 수정되었습니다." : "냉장고에 새 재료가 입고되었습니다.");
   };
 
-  // 수량 증감 (+/-)
   const handleAdjustQuantity = async (item, delta) => {
-    const nextQty = Math.max(0, Number(item.quantity) + delta);
+    const nextQty = Math.max(0, Number(item.quantity || 0) + delta);
     const updated = { ...item, quantity: nextQty };
     setFridge((prev) => prev.map((i) => (i.id === item.id ? updated : i)));
-    if (user) {
-      await setDoc(doc(db, COLLECTION_BASE, "fridge", item.id), updated);
+    if (user && db) {
+      try {
+        await setDoc(getDocRef("family_fridge_v4", item.id), updated);
+      } catch (e) {
+        console.error(e);
+      }
     }
   };
 
   // [핵심] 다 먹음 (소비완료 -> 냉장고에서는 비우고, 식비 원장은 100% 그대로 유지!)
   const handleConsumeFridgeItem = async (item, addToShopping = false) => {
-    // 1. 먼저 해당 물품의 구매 금액이 식비 원장에 확실히 저장되어 있는지 보장
-    if (user && Number(item.price) > 0) {
+    if (user && db && Number(item.price) > 0) {
       const expId = `exp-${item.id}`;
-      await setDoc(doc(db, COLLECTION_BASE, "expenses", expId), {
-        id: expId,
-        title: item.name,
-        category: item.category || "기타",
-        amount: Number(item.price),
-        date: item.purchaseDate || "2026-11-10",
-        type: "장보기/식재료"
-      });
+      try {
+        await setDoc(getDocRef("family_expenses_v4", expId), {
+          id: expId,
+          title: item.name,
+          category: item.category || "기타",
+          amount: Number(item.price),
+          date: item.purchaseDate || "2026-11-10",
+          type: "장보기/식재료"
+        });
+      } catch (e) {
+        console.error(e);
+      }
     }
 
-    // 2. 냉장고 목록에서 영구 제거
     setFridge((prev) => prev.filter((i) => i.id !== item.id));
     await markIdDeleted(item.id);
-    if (user) {
-      await deleteDoc(doc(db, COLLECTION_BASE, "fridge", item.id));
+    if (user && db) {
+      try {
+        await deleteDoc(getDocRef("family_fridge_v4", item.id));
+      } catch (e) {
+        console.error(e);
+      }
     }
 
-    // 3. 원할 경우 장보기 메모에 자동 추가
     if (addToShopping) {
       const shId = `sh-${Date.now()}`;
       const newShop = {
@@ -579,40 +676,48 @@ export default function App() {
         memo: "냉장고 소진 후 재구매"
       };
       setShoppingList((prev) => [newShop, ...prev]);
-      if (user) {
-        await setDoc(doc(db, COLLECTION_BASE, "shopping", shId), newShop);
+      if (user && db) {
+        try {
+          await setDoc(getDocRef("family_shopping_v4", shId), newShop);
+        } catch (e) {
+          console.error(e);
+        }
       }
-      showToast(`'${item.name}' 소진 완료! (식비 유지 & 장보기 메모에 추가됨)`);
+      showToast(`'${item.name}' 소진 완료! (식비 유지 & 장보기 메모 추가됨)`);
     } else {
       showToast(`'${item.name}' 다 먹음 처리 완료! (이번 달 지출 식비는 그대로 유지됩니다)`);
     }
   };
 
-  // 단순 잘못 입력해서 삭제 (식비 원장에서도 함께 삭제)
   const handleMistakeDeleteFridgeItem = async (item) => {
     setFridge((prev) => prev.filter((i) => i.id !== item.id));
     setExpenses((prev) => prev.filter((e) => e.id !== `exp-${item.id}`));
     await markIdDeleted(item.id);
-    if (user) {
-      await deleteDoc(doc(db, COLLECTION_BASE, "fridge", item.id));
-      await deleteDoc(doc(db, COLLECTION_BASE, "expenses", `exp-${item.id}`));
+    if (user && db) {
+      try {
+        await deleteDoc(getDocRef("family_fridge_v4", item.id));
+        await deleteDoc(getDocRef("family_expenses_v4", `exp-${item.id}`));
+      } catch (e) {
+        console.error(e);
+      }
     }
     showToast(`'${item.name}' 항목이 삭제되었습니다.`);
   };
 
   // ==========================================
-  // 7. 식단 추가·수정·삭제 핸들러
+  // 8. 식단 추가·수정·삭제 핸들러
   // ==========================================
   const handleSaveMeal = async () => {
     if (!mealForm.menu.trim()) return;
     const id = editingMeal ? editingMeal.id : `m-${Date.now()}`;
+    const safeMembers = toSafeArray(mealForm.members);
     const payload = {
       id,
       date: mealForm.date,
       slot: mealForm.slot,
       menu: mealForm.menu.trim(),
-      members: mealForm.members.length > 0 ? mealForm.members : ["수혁", "아리나"],
-      ingredients: mealForm.ingredients || [],
+      members: safeMembers.length > 0 ? safeMembers : ["수혁", "아리나"],
+      ingredients: toSafeArray(mealForm.ingredients),
       note: mealForm.note || "",
       sourceType: mealForm.sourceType || "집밥/온가족식",
       cost: Number(mealForm.cost) || 0
@@ -630,8 +735,12 @@ export default function App() {
 
     setIsMealModalOpen(false);
     setEditingMeal(null);
-    if (user) {
-      await setDoc(doc(db, COLLECTION_BASE, "meals", id), payload);
+    if (user && db) {
+      try {
+        await setDoc(getDocRef("family_meals_v4", id), payload);
+      } catch (e) {
+        console.error(e);
+      }
     }
     showToast("식단이 저장되었습니다.");
   };
@@ -639,14 +748,18 @@ export default function App() {
   const handleDeleteMeal = async (meal) => {
     setMeals((prev) => prev.filter((m) => m.id !== meal.id));
     await markIdDeleted(meal.id);
-    if (user) {
-      await deleteDoc(doc(db, COLLECTION_BASE, "meals", meal.id));
+    if (user && db) {
+      try {
+        await deleteDoc(getDocRef("family_meals_v4", meal.id));
+      } catch (e) {
+        console.error(e);
+      }
     }
     showToast("식단이 삭제되었습니다.");
   };
 
   // ==========================================
-  // 8. 장보기 메모 & 가족 공지사항 핸들러
+  // 9. 장보기 메모 & 가족 공지사항 핸들러
   // ==========================================
   const handleAddShopping = async () => {
     if (!shoppingForm.name.trim()) return;
@@ -656,14 +769,18 @@ export default function App() {
       name: shoppingForm.name.trim(),
       quantity: shoppingForm.quantity || "1개",
       category: shoppingForm.category,
-      urgent: shoppingForm.urgent,
+      urgent: Boolean(shoppingForm.urgent),
       checked: false,
       memo: shoppingForm.memo || ""
     };
     setShoppingList((prev) => [payload, ...prev]);
     setShoppingForm({ name: "", quantity: "1개", category: "채소/과일", urgent: false, memo: "" });
-    if (user) {
-      await setDoc(doc(db, COLLECTION_BASE, "shopping", id), payload);
+    if (user && db) {
+      try {
+        await setDoc(getDocRef("family_shopping_v4", id), payload);
+      } catch (e) {
+        console.error(e);
+      }
     }
     showToast("장보기 메모에 추가되었습니다.");
   };
@@ -671,19 +788,26 @@ export default function App() {
   const handleToggleShopping = async (item) => {
     const updated = { ...item, checked: !item.checked };
     setShoppingList((prev) => prev.map((s) => (s.id === item.id ? updated : s)));
-    if (user) {
-      await setDoc(doc(db, COLLECTION_BASE, "shopping", item.id), updated);
+    if (user && db) {
+      try {
+        await setDoc(getDocRef("family_shopping_v4", item.id), updated);
+      } catch (e) {
+        console.error(e);
+      }
     }
   };
 
   const handleDeleteShopping = async (id) => {
     setShoppingList((prev) => prev.filter((s) => s.id !== id));
-    if (user) {
-      await deleteDoc(doc(db, COLLECTION_BASE, "shopping", id));
+    if (user && db) {
+      try {
+        await deleteDoc(getDocRef("family_shopping_v4", id));
+      } catch (e) {
+        console.error(e);
+      }
     }
   };
 
-  // 장보기 완료 -> 냉장고 입고 + 가계부 지출 연동
   const handleConfirmStockIn = async () => {
     if (!stockInItem) return;
     const fId = `f-${Date.now()}`;
@@ -703,19 +827,23 @@ export default function App() {
     setFridge((prev) => [newFridgeItem, ...prev]);
     setShoppingList((prev) => prev.filter((s) => s.id !== stockInItem.id));
 
-    if (user) {
-      await setDoc(doc(db, COLLECTION_BASE, "fridge", fId), newFridgeItem);
-      await deleteDoc(doc(db, COLLECTION_BASE, "shopping", stockInItem.id));
-      if (priceNum > 0) {
-        const expId = `exp-${fId}`;
-        await setDoc(doc(db, COLLECTION_BASE, "expenses", expId), {
-          id: expId,
-          title: newFridgeItem.name,
-          category: newFridgeItem.category,
-          amount: priceNum,
-          date: selectedDate,
-          type: "장보기/식재료"
-        });
+    if (user && db) {
+      try {
+        await setDoc(getDocRef("family_fridge_v4", fId), newFridgeItem);
+        await deleteDoc(getDocRef("family_shopping_v4", stockInItem.id));
+        if (priceNum > 0) {
+          const expId = `exp-${fId}`;
+          await setDoc(getDocRef("family_expenses_v4", expId), {
+            id: expId,
+            title: newFridgeItem.name,
+            category: newFridgeItem.category,
+            amount: priceNum,
+            date: selectedDate,
+            type: "장보기/식재료"
+          });
+        }
+      } catch (e) {
+        console.error(e);
       }
     }
     setStockInItem(null);
@@ -723,18 +851,17 @@ export default function App() {
     showToast("구매 완료! 냉장고 입고 및 식비 가계부에 반영되었습니다.");
   };
 
-  // 가족 공지사항 저장
   const handleSaveNotice = async () => {
     if (!noticeForm.title.trim()) return;
     const id = editingNotice ? editingNotice.id : `nt-${Date.now()}`;
     const payload = {
       id,
       title: noticeForm.title.trim(),
-      content: noticeForm.content.trim(),
+      content: (noticeForm.content || "").trim(),
       category: noticeForm.category,
       author: noticeForm.author,
-      pinned: noticeForm.pinned,
-      done: editingNotice ? editingNotice.done : false,
+      pinned: Boolean(noticeForm.pinned),
+      done: editingNotice ? Boolean(editingNotice.done) : false,
       createdAt: selectedDate
     };
     setNotices((prev) => {
@@ -748,8 +875,12 @@ export default function App() {
     });
     setIsNoticeModalOpen(false);
     setEditingNotice(null);
-    if (user) {
-      await setDoc(doc(db, COLLECTION_BASE, "notices", id), payload);
+    if (user && db) {
+      try {
+        await setDoc(getDocRef("family_notices_v4", id), payload);
+      } catch (e) {
+        console.error(e);
+      }
     }
     showToast("가족 공지사항이 등록되었습니다.");
   };
@@ -757,24 +888,33 @@ export default function App() {
   const handleToggleNoticeDone = async (notice) => {
     const updated = { ...notice, done: !notice.done };
     setNotices((prev) => prev.map((n) => (n.id === notice.id ? updated : n)));
-    if (user) {
-      await setDoc(doc(db, COLLECTION_BASE, "notices", notice.id), updated);
+    if (user && db) {
+      try {
+        await setDoc(getDocRef("family_notices_v4", notice.id), updated);
+      } catch (e) {
+        console.error(e);
+      }
     }
   };
 
   const handleDeleteNotice = async (id) => {
     setNotices((prev) => prev.filter((n) => n.id !== id));
-    if (user) {
-      await deleteDoc(doc(db, COLLECTION_BASE, "notices", id));
+    if (user && db) {
+      try {
+        await deleteDoc(getDocRef("family_notices_v4", id));
+      } catch (e) {
+        console.error(e);
+      }
     }
     showToast("공지사항이 삭제되었습니다.");
   };
 
   // ==========================================
-  // 9. AI 식단 추천 엔진 (선택 재료 기반 100% 동적 생성)
+  // 10. AI 식단 추천 엔진 (선택 재료 기반 동적 생성)
   // ==========================================
   const generateSmartLocalRecipes = (pickedList, targetGroup, extraNote) => {
-    const ingNames = pickedList.length > 0 ? pickedList : fridge.slice(0, 3).map((f) => f.name);
+    const ingNames =
+      pickedList.length > 0 ? pickedList : fridge.slice(0, 3).map((f) => f.name);
     const main1 = ingNames[0] || "냉장고 채소";
     const main2 = ingNames[1] || "계란/두부";
     const main3 = ingNames[2] || "";
@@ -864,7 +1004,6 @@ export default function App() {
       ];
     }
 
-    // 기본: 온가족 한끼 (한 냄비 조리 후 아이/어른 분리)
     return [
       {
         id: `rec-${Date.now()}-1`,
@@ -904,7 +1043,6 @@ export default function App() {
         ? selectedAiIngredients
         : fridge.slice(0, 3).map((f) => f.name);
 
-    // 표준 Gemini 키(AIzaSy... 형태)인 경우 실제 API 호출 시도, 아니면 즉시 스마트 동적 생성기로 연결
     if (geminiApiKey && geminiApiKey.startsWith("AIzaSy")) {
       try {
         const prompt = `우리 가족(아빠 김수혁, 엄마 최아리나, 첫째 김시목 유아식, 둘째 김시율 이유식)을 위해 현재 선택한 냉장고 재료 [${picked.join(
@@ -930,6 +1068,8 @@ export default function App() {
           const parsed = JSON.parse(jsonMatch[0]).map((r, idx) => ({
             ...r,
             id: `ai-${Date.now()}-${idx}`,
+            usedIngredients: toSafeArray(r.usedIngredients),
+            steps: toSafeArray(r.steps),
             members:
               aiTargetGroup === "시목이 유아식"
                 ? ["시목"]
@@ -945,17 +1085,16 @@ export default function App() {
           return;
         }
       } catch (e) {
-        console.warn("Gemini API fallback to Smart Dynamic Generator:", e);
+        console.warn("Gemini API fallback:", e);
       }
     }
 
-    // 스마트 동적 생성 엔진 실행 (선택한 재료가 100% 제목과 조리법에 반영됨!)
     setTimeout(() => {
       const generated = generateSmartLocalRecipes(picked, aiTargetGroup, aiPromptExtra);
       setAiRecipes(generated);
       setIsAiLoading(false);
       showToast(`선택하신 재료(${picked.join(", ")}) 맞춤 식단이 생성되었습니다!`);
-    }, 500);
+    }, 400);
   };
 
   const handleConfirmQuickLog = async () => {
@@ -966,50 +1105,63 @@ export default function App() {
       date: quickLogDate,
       slot: quickLogSlot,
       menu: quickLogRecipe.title,
-      members: quickLogRecipe.members || ["수혁", "아리나", "시목", "시율"],
-      ingredients: quickLogRecipe.usedIngredients || [],
+      members: toSafeArray(quickLogRecipe.members).length > 0 ? toSafeArray(quickLogRecipe.members) : ["수혁", "아리나", "시목", "시율"],
+      ingredients: toSafeArray(quickLogRecipe.usedIngredients),
       note: `AI 추천 레시피 (${quickLogRecipe.tip || ""})`,
       sourceType: "집밥/온가족식",
       cost: 0
     };
     setMeals((prev) => [...prev, payload]);
-    if (user) {
-      await setDoc(doc(db, COLLECTION_BASE, "meals", id), payload);
+    if (user && db) {
+      try {
+        await setDoc(getDocRef("family_meals_v4", id), payload);
+      } catch (e) {
+        console.error(e);
+      }
     }
     setQuickLogRecipe(null);
     showToast(`${quickLogDate} ${quickLogSlot} 식단표에 등록되었습니다!`);
   };
 
   // ==========================================
-  // 10. 파생 통계 계산 (식비 원장 기반으로 개선!)
+  // 11. 파생 통계 계산 (식비 원장 기준 + 기존 냉장고 미이관 금액 병합)
   // ==========================================
-  // 이번 달 장보기 지출 (냉장고에서 삭제해도 줄어들지 않는 원장 기준!)
   const monthlyExpenseSummary = useMemo(() => {
-    const monthPrefix = currentMonth; // 예: "2026-11"
-    const ledgerItems = expenses.filter((e) => (e.date || "").startsWith(monthPrefix));
+    const monthPrefix = currentMonth;
+    const ledgerItems = expenses.filter((e) => String(e.date || "").startsWith(monthPrefix));
+    const ledgerIds = new Set(ledgerItems.map((e) => e.id));
+
+    // 아직 원장에 안 들어간 냉장고 항목이 있다면 합산에 자동 포함 (무한루프 없이 안전 계산!)
+    const unrecordedFridgeAsLedger = fridge
+      .filter(
+        (f) =>
+          Number(f.price) > 0 &&
+          String(f.purchaseDate || "2026-11").startsWith(monthPrefix) &&
+          !ledgerIds.has(`exp-${f.id}`)
+      )
+      .map((f) => ({
+        id: `exp-${f.id}`,
+        title: f.name,
+        category: f.category || "기타",
+        amount: Number(f.price),
+        date: f.purchaseDate || "2026-11-10"
+      }));
+
+    const combinedLedger = [...ledgerItems, ...unrecordedFridgeAsLedger];
     const diningItems = meals.filter(
-      (m) => (m.date || "").startsWith(monthPrefix) && Number(m.cost) > 0
+      (m) => String(m.date || "").startsWith(monthPrefix) && Number(m.cost) > 0
     );
 
-    const groceryTotal = ledgerItems.reduce((acc, cur) => acc + (Number(cur.amount) || 0), 0);
+    const groceryTotal = combinedLedger.reduce((acc, cur) => acc + (Number(cur.amount) || 0), 0);
     const diningTotal = diningItems.reduce((acc, cur) => acc + (Number(cur.cost) || 0), 0);
     const total = groceryTotal + diningTotal;
 
-    const byCategory = {};
-    ledgerItems.forEach((item) => {
-      const cat = item.category || "기타";
-      byCategory[cat] = (byCategory[cat] || 0) + (Number(item.amount) || 0);
-    });
-    if (diningTotal > 0) {
-      byCategory["외식/배달/야식"] = (byCategory["외식/배달/야식"] || 0) + diningTotal;
-    }
+    return { groceryTotal, diningTotal, total, ledgerItems: combinedLedger, diningItems };
+  }, [expenses, fridge, meals, currentMonth]);
 
-    return { groceryTotal, diningTotal, total, ledgerItems, diningItems, byCategory };
-  }, [expenses, meals, currentMonth]);
-
-  // 주간 날짜 배열 (선택된 날짜 기준 월~일)
   const weekDates = useMemo(() => {
-    const base = new Date(selectedDate + "T00:00:00");
+    const base = new Date(String(selectedDate).slice(0, 10) + "T00:00:00");
+    if (isNaN(base.getTime())) return ["2026-11-09", "2026-11-10", "2026-11-11", "2026-11-12", "2026-11-13", "2026-11-14", "2026-11-15"];
     const day = base.getDay();
     const diffToMon = day === 0 ? -6 : 1 - day;
     const mon = new Date(base);
@@ -1021,7 +1173,6 @@ export default function App() {
     });
   }, [selectedDate]);
 
-  // 소비기한 임박 재료
   const expiringItems = useMemo(() => {
     return fridge
       .map((item) => ({ ...item, diff: getDaysDiff(item.expiryDate) }))
@@ -1029,21 +1180,19 @@ export default function App() {
       .sort((a, b) => a.diff - b.diff);
   }, [fridge]);
 
-  // 상단 고정 공지사항
   const pinnedNotices = useMemo(() => {
     return notices.filter((n) => n.pinned && !n.done);
   }, [notices]);
 
-  // 엑셀(CSV) 내보내기
   const handleExportCsv = () => {
     const headers = ["구분,날짜,분류,내역/품목,대상/보관장소,금액(원),메모"];
     const mealRows = meals.map(
       (m) =>
-        `식단,${m.date},${m.slot},"${m.menu}","${(m.members || []).join("/")}",${m.cost || 0},"${
+        `식단,${m.date},${m.slot},"${m.menu}","${toSafeArray(m.members).join("/")}",${m.cost || 0},"${
           m.note || ""
         }"`
     );
-    const expRows = expenses.map(
+    const expRows = monthlyExpenseSummary.ledgerItems.map(
       (e) => `장보기지출,${e.date},${e.category},"${e.title}",가계부원장,${e.amount || 0},소비완료포함유지`
     );
     const csvContent = "\uFEFF" + [...headers, ...mealRows, ...expRows].join("\n");
@@ -1057,14 +1206,10 @@ export default function App() {
     document.body.removeChild(link);
   };
 
-  // ==========================================
-  // 11. 화면 렌더링
-  // ==========================================
   return (
     <div className="min-h-screen bg-stone-50 text-stone-800 pb-24 max-w-md mx-auto shadow-xl border-x border-stone-200 relative font-sans">
-      {/* 토스트 알림 */}
       {toastMsg && (
-        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-stone-900 text-white px-4 py-2.5 rounded-full text-xs font-bold shadow-lg flex items-center gap-2 animate-bounce">
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-stone-900 text-white px-4 py-2.5 rounded-full text-xs font-bold shadow-lg flex items-center gap-2">
           <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
           <span>{toastMsg}</span>
         </div>
@@ -1073,12 +1218,10 @@ export default function App() {
       {/* 상단 헤더 */}
       <header className="bg-white border-b border-stone-200 px-4 pt-3 pb-2.5 sticky top-0 z-30">
         <div className="flex items-center justify-between mb-1.5">
-          <div className="flex items-center gap-1.5">
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-              ahrisoohyeokbap 실시간 동기화
-            </span>
-          </div>
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+            ahrisoohyeokbap 실시간 동기화
+          </span>
           <div className="flex items-center gap-1.5">
             <button
               onClick={() => {
@@ -1093,39 +1236,34 @@ export default function App() {
             <button
               onClick={() => setIsSettingsOpen(true)}
               className="p-1.5 rounded-full bg-stone-100 hover:bg-stone-200 text-stone-600"
-              title="설정 및 엑셀 백업"
             >
               <Settings className="w-4 h-4" />
             </button>
           </div>
         </div>
 
-        <div className="flex items-center justify-between">
-          <h1 className="text-base font-black tracking-tight text-stone-900">
-            수혁 · 아리나 · 시목 · 시율네 식탁 🍽️
-          </h1>
-        </div>
+        <h1 className="text-base font-black tracking-tight text-stone-900">
+          수혁 · 아리나 · 시목 · 시율네 식탁 🍽️
+        </h1>
 
-        {/* 상단 고정 중요 가족 공지 배너 */}
         {pinnedNotices.length > 0 && activeTab !== "notices" && (
           <div
             onClick={() => setActiveTab("notices")}
             className="mt-2 bg-indigo-50/90 hover:bg-indigo-100/80 border border-indigo-200 rounded-xl px-3 py-2 cursor-pointer flex items-center justify-between transition"
           >
             <div className="flex items-center gap-2 min-w-0">
-              <Pin className="w-3.5 h-3.5 text-indigo-600 shrink-0 fill-indigo-600" />
+              <Pin className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
               <div className="truncate text-xs">
                 <span className="font-extrabold text-indigo-900 mr-1.5">[가족공지]</span>
                 <span className="font-semibold text-indigo-800">{pinnedNotices[0].title}</span>
               </div>
             </div>
             <span className="text-[10px] font-bold text-indigo-600 shrink-0 ml-2">
-              외 {pinnedNotices.length}건 &gt;
+              전체보기 &gt;
             </span>
           </div>
         )}
 
-        {/* 상단 빠른 메뉴 탭바 */}
         <div className="grid grid-cols-6 gap-1 mt-2.5 bg-stone-100 p-1 rounded-xl">
           {[
             { id: "daily", label: "일별식단" },
@@ -1155,12 +1293,9 @@ export default function App() {
         </div>
       </header>
 
-      {/* ==========================================
-          탭 1: 일별 식단 기록 (6단계 끼니)
-      ========================================== */}
+      {/* 탭 1: 일별 식단 */}
       {activeTab === "daily" && (
         <div className="p-4 space-y-4">
-          {/* 스캐너 퀵 배너 */}
           <div className="grid grid-cols-2 gap-2">
             <button
               onClick={() => setIsDaycareModalOpen(true)}
@@ -1193,7 +1328,6 @@ export default function App() {
             </button>
           </div>
 
-          {/* 날짜 네비게이터 */}
           <div className="bg-white p-3 rounded-2xl border border-stone-200 shadow-sm">
             <div className="flex items-center justify-between mb-2.5">
               <button
@@ -1229,7 +1363,6 @@ export default function App() {
               </button>
             </div>
 
-            {/* 주간 미니 날짜 스트립 */}
             <div className="grid grid-cols-7 gap-1">
               {weekDates.map((d) => {
                 const isSel = d === selectedDate;
@@ -1255,7 +1388,6 @@ export default function App() {
             </div>
           </div>
 
-          {/* 구성원 필터 */}
           <div className="flex gap-1.5 overflow-x-auto pb-1">
             <button
               onClick={() => setSelectedMember("전체")}
@@ -1282,14 +1414,13 @@ export default function App() {
             ))}
           </div>
 
-          {/* 6단계 끼니 슬롯 리스트 */}
           <div className="space-y-3">
             {MEAL_SLOTS.map((slot) => {
               const slotMeals = meals.filter(
                 (m) =>
                   m.date === selectedDate &&
                   m.slot === slot.id &&
-                  (selectedMember === "전체" || (m.members || []).includes(selectedMember))
+                  (selectedMember === "전체" || toSafeArray(m.members).includes(selectedMember))
               );
 
               return (
@@ -1335,72 +1466,76 @@ export default function App() {
                     </div>
                   ) : (
                     <div className="space-y-2">
-                      {slotMeals.map((m) => (
-                        <div
-                          key={m.id}
-                          className="p-3 rounded-xl bg-stone-50 border border-stone-200/80 flex flex-col gap-1.5"
-                        >
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="flex flex-wrap items-center gap-1">
-                              <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-stone-200 text-stone-700">
-                                {m.sourceType || "집밥"}
-                              </span>
-                              {(m.members || []).map((memId) => {
-                                const info = FAMILY_MEMBERS.find((f) => f.id === memId);
-                                return info ? (
-                                  <span
-                                    key={memId}
-                                    className={`px-2 py-0.5 rounded-md text-[10px] font-bold border ${info.color}`}
-                                  >
-                                    {info.emoji} {info.name}
-                                  </span>
-                                ) : null;
-                              })}
-                              {Number(m.cost) > 0 && (
-                                <span className="px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-amber-100 text-amber-800">
-                                  💰 {Number(m.cost).toLocaleString()}원
+                      {slotMeals.map((m) => {
+                        const safeMems = toSafeArray(m.members);
+                        const safeIngs = toSafeArray(m.ingredients);
+                        return (
+                          <div
+                            key={m.id}
+                            className="p-3 rounded-xl bg-stone-50 border border-stone-200/80 flex flex-col gap-1.5"
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="flex flex-wrap items-center gap-1">
+                                <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-stone-200 text-stone-700">
+                                  {m.sourceType || "집밥"}
                                 </span>
-                              )}
+                                {safeMems.map((memId) => {
+                                  const info = FAMILY_MEMBERS.find((f) => f.id === memId);
+                                  return info ? (
+                                    <span
+                                      key={memId}
+                                      className={`px-2 py-0.5 rounded-md text-[10px] font-bold border ${info.color}`}
+                                    >
+                                      {info.emoji} {info.name}
+                                    </span>
+                                  ) : null;
+                                })}
+                                {Number(m.cost) > 0 && (
+                                  <span className="px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-amber-100 text-amber-800">
+                                    💰 {Number(m.cost).toLocaleString()}원
+                                  </span>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-1 shrink-0">
+                                <button
+                                  onClick={() => {
+                                    setEditingMeal(m);
+                                    setMealForm({
+                                      date: m.date,
+                                      slot: m.slot,
+                                      menu: m.menu || "",
+                                      members: safeMems,
+                                      ingredients: safeIngs,
+                                      note: m.note || "",
+                                      sourceType: m.sourceType || "집밥/온가족식",
+                                      cost: m.cost || ""
+                                    });
+                                    setIsMealModalOpen(true);
+                                  }}
+                                  className="p-1 rounded-lg hover:bg-stone-200 text-stone-500"
+                                >
+                                  <Edit2 className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteMeal(m)}
+                                  className="p-1 rounded-lg hover:bg-red-100 text-red-500"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
                             </div>
-                            <div className="flex items-center gap-1 shrink-0">
-                              <button
-                                onClick={() => {
-                                  setEditingMeal(m);
-                                  setMealForm({
-                                    date: m.date,
-                                    slot: m.slot,
-                                    menu: m.menu,
-                                    members: m.members || [],
-                                    ingredients: m.ingredients || [],
-                                    note: m.note || "",
-                                    sourceType: m.sourceType || "집밥/온가족식",
-                                    cost: m.cost || ""
-                                  });
-                                  setIsMealModalOpen(true);
-                                }}
-                                className="p-1 rounded-lg hover:bg-stone-200 text-stone-500"
-                              >
-                                <Edit2 className="w-3.5 h-3.5" />
-                              </button>
-                              <button
-                                onClick={() => handleDeleteMeal(m)}
-                                className="p-1 rounded-lg hover:bg-red-100 text-red-500"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
+
+                            <div className="text-sm font-extrabold text-stone-900">{m.menu}</div>
+
+                            {safeIngs.length > 0 && (
+                              <div className="text-[11px] text-emerald-700 font-semibold">
+                                🥬 사용 재료: {safeIngs.join(", ")}
+                              </div>
+                            )}
+                            {m.note && <div className="text-[11px] text-stone-500">💬 {m.note}</div>}
                           </div>
-
-                          <div className="text-sm font-extrabold text-stone-900">{m.menu}</div>
-
-                          {m.ingredients && m.ingredients.length > 0 && (
-                            <div className="text-[11px] text-emerald-700 font-semibold">
-                              🥬 사용 재료: {m.ingredients.join(", ")}
-                            </div>
-                          )}
-                          {m.note && <div className="text-[11px] text-stone-500">💬 {m.note}</div>}
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
                 </div>
@@ -1410,9 +1545,7 @@ export default function App() {
         </div>
       )}
 
-      {/* ==========================================
-          탭 2: 주간 식단현황 요약
-      ========================================== */}
+      {/* 탭 2: 주간 요약 */}
       {activeTab === "weekly" && (
         <div className="p-4 space-y-4">
           <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-sm">
@@ -1428,7 +1561,7 @@ export default function App() {
             <div className="grid grid-cols-4 gap-2 mt-3">
               {FAMILY_MEMBERS.map((mem) => {
                 const cnt = meals.filter(
-                  (m) => weekDates.includes(m.date) && (m.members || []).includes(mem.id)
+                  (m) => weekDates.includes(m.date) && toSafeArray(m.members).includes(mem.id)
                 ).length;
                 return (
                   <button
@@ -1451,20 +1584,13 @@ export default function App() {
             </div>
           </div>
 
-          {/* 요일별 6끼 한눈에 표 보기 */}
           <div className="bg-white rounded-2xl border border-stone-200 overflow-hidden shadow-sm">
-            <div className="p-3 bg-stone-100 border-b border-stone-200 flex justify-between items-center">
-              <span className="text-xs font-extrabold text-stone-700">
-                요일별 식단표 ({selectedMember === "전체" ? "온가족" : selectedMember})
-              </span>
-              <span className="text-[10px] text-stone-500">칸을 누르면 바로 추가됩니다</span>
-            </div>
             <div className="divide-y divide-stone-200">
               {weekDates.map((d) => {
                 const dayMeals = meals.filter(
                   (m) =>
                     m.date === d &&
-                    (selectedMember === "전체" || (m.members || []).includes(selectedMember))
+                    (selectedMember === "전체" || toSafeArray(m.members).includes(selectedMember))
                 );
                 return (
                   <div key={d} className="p-3">
@@ -1509,7 +1635,9 @@ export default function App() {
                             </div>
                             {items.length > 0 ? (
                               <div className="text-[11px] font-bold text-stone-800 line-clamp-2">
-                                {items.map((i) => i.menu.replace(/\[.*?\]\s*/, "")).join(", ")}
+                                {items
+                                  .map((i) => String(i.menu || "").replace(/\[.*?\]\s*/, ""))
+                                  .join(", ")}
                               </div>
                             ) : (
                               <div className="text-[10px] text-stone-300">+ 등록</div>
@@ -1526,9 +1654,7 @@ export default function App() {
         </div>
       )}
 
-      {/* ==========================================
-          탭 3: 인별 월간 현황 & 월간 식비 가계부 (소비 분리형)
-      ========================================== */}
+      {/* 탭 3: 월간·식비 */}
       {activeTab === "monthly" && (
         <div className="p-4 space-y-4">
           <div className="grid grid-cols-2 gap-1.5 bg-stone-200 p-1 rounded-2xl">
@@ -1556,7 +1682,6 @@ export default function App() {
 
           {monthlySubTab === "calendar" ? (
             <div className="space-y-3">
-              {/* 구성원 선택 */}
               <div className="grid grid-cols-4 gap-1.5">
                 {FAMILY_MEMBERS.map((m) => (
                   <button
@@ -1574,44 +1699,6 @@ export default function App() {
                 ))}
               </div>
 
-              {/* 월간 통계 요약 */}
-              <div className="bg-white p-3.5 rounded-2xl border border-stone-200 shadow-sm">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-black text-stone-900">
-                    {currentMonth}월 {monthlyMember}님의 식단 기록
-                  </span>
-                  <span className="text-xs font-extrabold text-amber-700 bg-amber-50 px-2.5 py-0.5 rounded-full">
-                    총{" "}
-                    {
-                      meals.filter(
-                        (m) =>
-                          (m.date || "").startsWith(currentMonth) &&
-                          (m.members || []).includes(monthlyMember)
-                      ).length
-                    }
-                    끼
-                  </span>
-                </div>
-                <div className="grid grid-cols-6 gap-1 text-center">
-                  {MEAL_SLOTS.map((s) => {
-                    const c = meals.filter(
-                      (m) =>
-                        (m.date || "").startsWith(currentMonth) &&
-                        m.slot === s.id &&
-                        (m.members || []).includes(monthlyMember)
-                    ).length;
-                    return (
-                      <div key={s.id} className="bg-stone-50 p-1.5 rounded-xl border border-stone-100">
-                        <div className="text-xs">{s.icon}</div>
-                        <div className="text-[10px] font-bold text-stone-500">{s.shortLabel}</div>
-                        <div className="text-xs font-black text-stone-900">{c}회</div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* 11월 달력 그리드 */}
               <div className="bg-white p-3 rounded-2xl border border-stone-200 shadow-sm">
                 <div className="grid grid-cols-7 gap-1 text-center text-[10px] font-extrabold text-stone-400 mb-1.5">
                   {["일", "월", "화", "수", "목", "금", "토"].map((d) => (
@@ -1623,17 +1710,17 @@ export default function App() {
                     const dayNum = String(i + 1).padStart(2, "0");
                     const dateStr = `${currentMonth}-${dayNum}`;
                     const mList = meals.filter(
-                      (m) => m.date === dateStr && (m.members || []).includes(monthlyMember)
+                      (m) => m.date === dateStr && toSafeArray(m.members).includes(monthlyMember)
                     );
                     const isSel = selectedDate === dateStr;
                     return (
                       <button
                         key={dateStr}
                         onClick={() => setSelectedDate(dateStr)}
-                        className={`p-1.5 rounded-xl border text-left min-h-[52px] transition flex flex-col justify-between ${
+                        className={`p-1.5 rounded-xl border text-left min-h-[50px] transition flex flex-col justify-between ${
                           isSel
                             ? "bg-stone-900 text-white border-stone-900"
-                            : "bg-stone-50 text-stone-700 border-stone-200 hover:bg-stone-100"
+                            : "bg-stone-50 text-stone-700 border-stone-200"
                         }`}
                       >
                         <div className="text-[10px] font-black">{i + 1}</div>
@@ -1652,14 +1739,13 @@ export default function App() {
                 </div>
               </div>
 
-              {/* 선택한 날짜의 인별 상세 메뉴 */}
               <div className="bg-white p-3.5 rounded-2xl border border-stone-200 shadow-sm space-y-2">
                 <div className="text-xs font-black text-stone-900">
                   📌 {selectedDate} ({getDayName(selectedDate)}) {monthlyMember}님의 식단
                 </div>
                 {meals
                   .filter(
-                    (m) => m.date === selectedDate && (m.members || []).includes(monthlyMember)
+                    (m) => m.date === selectedDate && toSafeArray(m.members).includes(monthlyMember)
                   )
                   .map((m) => (
                     <div
@@ -1673,7 +1759,6 @@ export default function App() {
               </div>
             </div>
           ) : (
-            /* 월간 식비 가계부 (냉장고 소진과 분리된 영구 원장 기준) */
             <div className="space-y-4">
               <div className="bg-stone-900 text-white p-4 rounded-2xl shadow-md">
                 <div className="flex items-center justify-between text-xs text-stone-300 mb-1">
@@ -1688,26 +1773,14 @@ export default function App() {
                     }}
                     className="underline text-amber-300 font-bold"
                   >
-                    예산 설정: {monthlyBudget.toLocaleString()}원
+                    예산: {monthlyBudget.toLocaleString()}원
                   </button>
                 </div>
                 <div className="text-2xl font-black text-amber-400">
                   {monthlyExpenseSummary.total.toLocaleString()}원
                 </div>
 
-                <div className="w-full h-2.5 bg-stone-700 rounded-full overflow-hidden my-2.5">
-                  <div
-                    className="h-full bg-amber-400 rounded-full transition-all"
-                    style={{
-                      width: `${Math.min(
-                        100,
-                        Math.round((monthlyExpenseSummary.total / monthlyBudget) * 100)
-                      )}%`
-                    }}
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-2 pt-2 border-t border-stone-700 text-xs">
+                <div className="grid grid-cols-2 gap-2 pt-3 mt-2 border-t border-stone-700 text-xs">
                   <div>
                     <div className="text-stone-400">🛒 장보기/식재료 구입</div>
                     <div className="font-extrabold text-white mt-0.5">
@@ -1724,61 +1797,37 @@ export default function App() {
               </div>
 
               <div className="bg-emerald-50 border border-emerald-200 p-3 rounded-2xl text-xs text-emerald-900 font-semibold">
-                💡 <b>안심 가계부 로직 적용됨:</b> 냉장고에서 재료를 다 먹어 <b>[다 먹음(소비완료)]</b> 처리하더라도, 이미 지출한 장보기 금액은 줄어들지 않고 아래 가계부 원장에 그대로 보존됩니다.
+                💡 <b>안심 가계부 로직 적용됨:</b> 냉장고에서 재료를 다 먹어 <b>[다 먹음(식비유지)]</b> 처리하더라도 이미 지출한 장보기 금액은 줄어들지 않고 아래 원장에 그대로 보존됩니다.
               </div>
 
-              {/* 장보기 지출 원장 내역 */}
               <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-sm space-y-2.5">
                 <h3 className="text-xs font-black text-stone-900">
-                  🧾 이번 달 장보기 및 식재료 지출 내역 ({monthlyExpenseSummary.ledgerItems.length}건)
+                  🧾 이번 달 장보기 지출 원장 ({monthlyExpenseSummary.ledgerItems.length}건)
                 </h3>
-                {monthlyExpenseSummary.ledgerItems.length === 0 ? (
-                  <div className="text-xs text-stone-400 py-3 text-center">
-                    기록된 지출 내역이 없습니다.
-                  </div>
-                ) : (
-                  <div className="divide-y divide-stone-100">
-                    {monthlyExpenseSummary.ledgerItems.map((exp) => (
-                      <div key={exp.id} className="py-2 flex items-center justify-between text-xs">
-                        <div>
-                          <div className="font-bold text-stone-800">{exp.title}</div>
-                          <div className="text-[10px] text-stone-400">
-                            {exp.date} · {exp.category}
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="font-extrabold text-stone-900">
-                            {Number(exp.amount).toLocaleString()}원
-                          </span>
-                          <button
-                            onClick={async () => {
-                              setExpenses((prev) => prev.filter((e) => e.id !== exp.id));
-                              if (user) {
-                                await deleteDoc(doc(db, COLLECTION_BASE, "expenses", exp.id));
-                              }
-                            }}
-                            className="text-stone-300 hover:text-red-500"
-                            title="지출 내역에서 삭제"
-                          >
-                            <X className="w-3.5 h-3.5" />
-                          </button>
+                <div className="divide-y divide-stone-100">
+                  {monthlyExpenseSummary.ledgerItems.map((exp) => (
+                    <div key={exp.id} className="py-2 flex items-center justify-between text-xs">
+                      <div>
+                        <div className="font-bold text-stone-800">{exp.title}</div>
+                        <div className="text-[10px] text-stone-400">
+                          {exp.date} · {exp.category}
                         </div>
                       </div>
-                    ))}
-                  </div>
-                )}
+                      <span className="font-extrabold text-stone-900">
+                        {Number(exp.amount).toLocaleString()}원
+                      </span>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
           )}
         </div>
       )}
 
-      {/* ==========================================
-          탭 4: 스마트 냉장고 관리 (동기화 및 식비유지 소진)
-      ========================================== */}
+      {/* 탭 4: 스마트 냉장고 */}
       {activeTab === "fridge" && (
         <div className="p-4 space-y-4">
-          {/* 소비기한 임박 알림 */}
           {expiringItems.length > 0 && (
             <div className="bg-orange-50 border border-orange-200 rounded-2xl p-3">
               <div className="flex items-center gap-1.5 text-xs font-black text-orange-900 mb-1.5">
@@ -1798,7 +1847,6 @@ export default function App() {
             </div>
           )}
 
-          {/* 상단 액션 바 */}
           <div className="flex items-center justify-between gap-2">
             <div className="flex gap-1 bg-stone-200 p-1 rounded-xl">
               {["전체", ...STORAGE_LOCATIONS].map((loc) => (
@@ -1831,13 +1879,12 @@ export default function App() {
                 });
                 setIsFridgeModalOpen(true);
               }}
-              className="px-3 py-2 rounded-xl bg-stone-900 text-white text-xs font-extrabold flex items-center gap-1 shrink-0 shadow-sm"
+              className="px-3 py-2 rounded-xl bg-stone-900 text-white text-xs font-extrabold flex items-center gap-1 shrink-0"
             >
               <Plus className="w-3.5 h-3.5" /> 재료 추가
             </button>
           </div>
 
-          {/* 카테고리 필터 */}
           <div className="flex gap-1.5 overflow-x-auto pb-1">
             {["전체", ...FRIDGE_CATEGORIES].map((cat) => (
               <button
@@ -1854,7 +1901,6 @@ export default function App() {
             ))}
           </div>
 
-          {/* 냉장고 재료 카드 리스트 */}
           <div className="space-y-2.5">
             {fridge
               .filter(
@@ -1897,7 +1943,6 @@ export default function App() {
                         )}
                       </div>
 
-                      {/* 수량 조절 버튼 */}
                       <div className="flex items-center gap-1.5 bg-stone-100 px-2 py-1 rounded-xl shrink-0">
                         <button
                           onClick={() => handleAdjustQuantity(item, -1)}
@@ -1918,7 +1963,6 @@ export default function App() {
                       </div>
                     </div>
 
-                    {/* 하단 액션 버튼 (식비 유지 소진 vs 장보기 연동 vs 수정/삭제) */}
                     <div className="flex items-center justify-between pt-2 border-t border-stone-100 gap-1.5">
                       <div className="flex items-center gap-1.5">
                         <button
@@ -1953,14 +1997,12 @@ export default function App() {
                             setIsFridgeModalOpen(true);
                           }}
                           className="p-1.5 rounded-lg hover:bg-stone-100 text-stone-500"
-                          title="내용 수정"
                         >
                           <Edit2 className="w-3.5 h-3.5" />
                         </button>
                         <button
                           onClick={() => handleMistakeDeleteFridgeItem(item)}
                           className="p-1.5 rounded-lg hover:bg-red-50 text-stone-400 hover:text-red-500"
-                          title="잘못 입력한 항목 삭제 (식비에서도 제외)"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
@@ -1973,9 +2015,7 @@ export default function App() {
         </div>
       )}
 
-      {/* ==========================================
-          탭 5: 추가로 사야 할 재료 메모 (장보기 체크리스트)
-      ========================================== */}
+      {/* 탭 5: 장보기 메모 */}
       {activeTab === "shopping" && (
         <div className="p-4 space-y-4">
           <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-sm space-y-3">
@@ -2042,84 +2082,75 @@ export default function App() {
             </button>
           </div>
 
-          {/* 장보기 목록 */}
           <div className="space-y-2">
-            {shoppingList.length === 0 ? (
-              <div className="bg-white p-6 rounded-2xl border border-stone-200 text-center text-xs text-stone-400">
-                현재 메모된 장보기 품목이 없습니다.
-              </div>
-            ) : (
-              shoppingList.map((item) => (
+            {shoppingList.map((item) => (
+              <div
+                key={item.id}
+                className={`p-3.5 rounded-2xl border transition flex items-center justify-between gap-2 ${
+                  item.checked
+                    ? "bg-stone-100 border-stone-200 opacity-75"
+                    : "bg-white border-stone-200 shadow-sm"
+                }`}
+              >
                 <div
-                  key={item.id}
-                  className={`p-3.5 rounded-2xl border transition flex items-center justify-between gap-2 ${
-                    item.checked
-                      ? "bg-stone-100 border-stone-200 opacity-75"
-                      : "bg-white border-stone-200 shadow-sm"
-                  }`}
+                  onClick={() => handleToggleShopping(item)}
+                  className="flex items-center gap-3 cursor-pointer flex-1 min-w-0"
                 >
                   <div
-                    onClick={() => handleToggleShopping(item)}
-                    className="flex items-center gap-3 cursor-pointer flex-1 min-w-0"
+                    className={`w-5 h-5 rounded-lg border flex items-center justify-center shrink-0 ${
+                      item.checked
+                        ? "bg-emerald-600 border-emerald-600 text-white"
+                        : "border-stone-300 bg-white"
+                    }`}
                   >
-                    <div
-                      className={`w-5 h-5 rounded-lg border flex items-center justify-center shrink-0 ${
-                        item.checked
-                          ? "bg-emerald-600 border-emerald-600 text-white"
-                          : "border-stone-300 bg-white"
-                      }`}
-                    >
-                      {item.checked && <Check className="w-3.5 h-3.5" />}
-                    </div>
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-1.5">
-                        {item.urgent && (
-                          <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-red-100 text-red-700">
-                            급함
-                          </span>
-                        )}
-                        <span
-                          className={`text-sm font-extrabold truncate ${
-                            item.checked ? "line-through text-stone-400" : "text-stone-900"
-                          }`}
-                        >
-                          {item.name}
-                        </span>
-                        <span className="text-xs font-bold text-emerald-700">
-                          ({item.quantity})
-                        </span>
-                      </div>
-                      {item.memo && <div className="text-[11px] text-stone-500">{item.memo}</div>}
-                    </div>
+                    {item.checked && <Check className="w-3.5 h-3.5" />}
                   </div>
-
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    <button
-                      onClick={() => {
-                        setStockInItem(item);
-                        setStockInPrice("");
-                      }}
-                      className="px-2.5 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-[11px] font-extrabold"
-                    >
-                      구매완료→냉장고입고
-                    </button>
-                    <button
-                      onClick={() => handleDeleteShopping(item.id)}
-                      className="p-1.5 rounded-lg text-stone-400 hover:text-red-500"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      {item.urgent && (
+                        <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-red-100 text-red-700">
+                          급함
+                        </span>
+                      )}
+                      <span
+                        className={`text-sm font-extrabold truncate ${
+                          item.checked ? "line-through text-stone-400" : "text-stone-900"
+                        }`}
+                      >
+                        {item.name}
+                      </span>
+                      <span className="text-xs font-bold text-emerald-700">
+                        ({item.quantity})
+                      </span>
+                    </div>
+                    {item.memo && <div className="text-[11px] text-stone-500">{item.memo}</div>}
                   </div>
                 </div>
-              ))
-            )}
+
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <button
+                    onClick={() => {
+                      setStockInItem(item);
+                      setStockInPrice("");
+                    }}
+                    className="px-2.5 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-[11px] font-extrabold"
+                  >
+                    구매완료→냉장고입고
+                  </button>
+                  <button
+                    onClick={() => handleDeleteShopping(item.id)}
+                    className="p-1.5 rounded-lg text-stone-400 hover:text-red-500"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       )}
 
-      {/* ==========================================
-          탭 6: 가족 공지사항 게시판
-      ========================================== */}
+      {/* 탭 6: 가족 공지사항 */}
       {activeTab === "notices" && (
         <div className="p-4 space-y-4">
           <div className="flex items-center justify-between">
@@ -2163,7 +2194,7 @@ export default function App() {
                   <div className="flex items-center gap-1.5 flex-wrap">
                     {n.pinned && (
                       <span className="px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-indigo-600 text-white flex items-center gap-1">
-                        <Pin className="w-2.5 h-2.5 fill-white" /> 상단고정
+                        <Pin className="w-2.5 h-2.5" /> 상단고정
                       </span>
                     )}
                     <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-stone-200 text-stone-700">
@@ -2189,11 +2220,11 @@ export default function App() {
                       onClick={() => {
                         setEditingNotice(n);
                         setNoticeForm({
-                          title: n.title,
-                          content: n.content,
-                          category: n.category,
-                          author: n.author,
-                          pinned: n.pinned
+                          title: n.title || "",
+                          content: n.content || "",
+                          category: n.category || "육아/아이들",
+                          author: n.author || "김수혁",
+                          pinned: Boolean(n.pinned)
                         });
                         setIsNoticeModalOpen(true);
                       }}
@@ -2226,9 +2257,7 @@ export default function App() {
         </div>
       )}
 
-      {/* ==========================================
-          탭 7: AI 냉장고 파먹기 식단 추천 (기본값 제거 & 동적 생성)
-      ========================================== */}
+      {/* 탭 7: AI 추천 */}
       {activeTab === "ai" && (
         <div className="p-4 space-y-4">
           <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-sm space-y-3.5">
@@ -2242,7 +2271,6 @@ export default function App() {
               </p>
             </div>
 
-            {/* Step 1: 냉장고 재료 선택 */}
             <div>
               <div className="flex items-center justify-between mb-1.5">
                 <span className="text-xs font-extrabold text-stone-700">
@@ -2293,7 +2321,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* Step 2: 식사 대상 선택 */}
             <div>
               <div className="text-xs font-extrabold text-stone-700 mb-1.5">
                 Step 2. 누구를 위한 식단인가요?
@@ -2320,7 +2347,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* 추가 요청 메모 */}
             <input
               type="text"
               placeholder="추가 요청 (예: 국물 요리 위주, 20분 이내 간단 조리 등)"
@@ -2348,7 +2374,6 @@ export default function App() {
             </button>
           </div>
 
-          {/* 추천 결과 표시 영역 (고정 예시 기본값 없음!) */}
           {aiRecipes.length === 0 ? (
             <div className="bg-white p-6 rounded-2xl border border-dashed border-stone-300 text-center space-y-1">
               <div className="text-2xl">👩‍🍳👨‍🍳</div>
@@ -2366,17 +2391,15 @@ export default function App() {
                   key={rec.id}
                   className="bg-white p-4 rounded-2xl border border-stone-200 shadow-sm space-y-2.5"
                 >
-                  <div className="flex items-center justify-between">
-                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-100 text-amber-900">
-                      {rec.target} · ⏱️ {rec.time}
-                    </span>
-                  </div>
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-100 text-amber-900">
+                    {rec.target} · ⏱️ {rec.time}
+                  </span>
                   <h3 className="text-base font-black text-stone-900">{rec.title}</h3>
                   <div className="text-xs font-bold text-emerald-700">
-                    🥬 활용 재료: {(rec.usedIngredients || []).join(", ")}
+                    🥬 활용 재료: {toSafeArray(rec.usedIngredients).join(", ")}
                   </div>
                   <div className="space-y-1 bg-stone-50 p-3 rounded-xl text-xs text-stone-700">
-                    {(rec.steps || []).map((st, i) => (
+                    {toSafeArray(rec.steps).map((st, i) => (
                       <div key={i}>{st}</div>
                     ))}
                   </div>
@@ -2403,9 +2426,7 @@ export default function App() {
         </div>
       )}
 
-      {/* ==========================================
-          하단 고정 네비게이션 바
-      ========================================== */}
+      {/* 하단 네비게이션 */}
       <nav className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md bg-white border-t border-stone-200 px-2 py-1.5 grid grid-cols-6 gap-1 z-30">
         {[
           { id: "daily", label: "일별식단", icon: Utensils },
@@ -2432,9 +2453,7 @@ export default function App() {
         })}
       </nav>
 
-      {/* ==========================================
-          모달 1: 식단 추가/수정
-      ========================================== */}
+      {/* 모달들 */}
       {isMealModalOpen && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-sm w-full p-5 space-y-3.5 max-h-[90vh] overflow-y-auto">
@@ -2467,7 +2486,6 @@ export default function App() {
               </select>
             </div>
 
-            {/* 빠른 대상 선택 */}
             <div>
               <div className="flex items-center justify-between mb-1">
                 <span className="text-xs font-bold text-stone-600">식사 대상</span>
@@ -2486,32 +2504,31 @@ export default function App() {
                     onClick={() => setMealForm({ ...mealForm, members: ["수혁", "아리나"] })}
                     className="px-2 py-0.5 rounded bg-stone-100 text-[10px] font-bold"
                   >
-                    어른(수혁·아리나)
+                    어른
                   </button>
                   <button
                     type="button"
                     onClick={() => setMealForm({ ...mealForm, members: ["시목", "시율"] })}
                     className="px-2 py-0.5 rounded bg-stone-100 text-[10px] font-bold"
                   >
-                    아이(시목·시율)
+                    아이
                   </button>
                 </div>
               </div>
               <div className="grid grid-cols-4 gap-1.5">
                 {FAMILY_MEMBERS.map((m) => {
-                  const sel = mealForm.members.includes(m.id);
+                  const sel = toSafeArray(mealForm.members).includes(m.id);
                   return (
                     <button
                       key={m.id}
                       type="button"
-                      onClick={() =>
+                      onClick={() => {
+                        const cur = toSafeArray(mealForm.members);
                         setMealForm({
                           ...mealForm,
-                          members: sel
-                            ? mealForm.members.filter((id) => id !== m.id)
-                            : [...mealForm.members, m.id]
-                        })
-                      }
+                          members: sel ? cur.filter((id) => id !== m.id) : [...cur, m.id]
+                        });
+                      }}
                       className={`py-1.5 rounded-xl text-xs font-extrabold border ${
                         sel
                           ? "bg-stone-900 text-white border-stone-900"
@@ -2555,7 +2572,7 @@ export default function App() {
 
             <input
               type="text"
-              placeholder="메모 (예: 시목이 리필해서 두 그릇 먹음)"
+              placeholder="메모"
               value={mealForm.note}
               onChange={(e) => setMealForm({ ...mealForm, note: e.target.value })}
               className="w-full px-3 py-2 rounded-xl border border-stone-200 text-xs"
@@ -2579,9 +2596,6 @@ export default function App() {
         </div>
       )}
 
-      {/* ==========================================
-          모달 2: 냉장고 재료 추가/수정
-      ========================================== */}
       {isFridgeModalOpen && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-sm w-full p-5 space-y-3">
@@ -2596,7 +2610,7 @@ export default function App() {
 
             <input
               type="text"
-              placeholder="품목명 (예: 한우 다짐육, 유기농 우유)"
+              placeholder="품목명"
               value={fridgeForm.name}
               onChange={(e) => setFridgeForm({ ...fridgeForm, name: e.target.value })}
               className="w-full px-3 py-2.5 rounded-xl border border-stone-200 text-xs font-bold"
@@ -2684,15 +2698,12 @@ export default function App() {
         </div>
       )}
 
-      {/* ==========================================
-          모달 3: 장보기 완료 -> 냉장고 입고 확인
-      ========================================== */}
       {stockInItem && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-sm w-full p-5 space-y-3">
             <h3 className="text-sm font-black">🛒 구매 완료 및 냉장고 입고</h3>
             <p className="text-xs text-stone-600">
-              <b>{stockInItem.name}</b> 품목을 냉장고에 입고합니다. 결제하신 금액을 입력하면 이번 달 식비 가계부에도 자동으로 기록됩니다.
+              <b>{stockInItem.name}</b> 품목을 냉장고에 입고합니다. 결제 금액을 입력하면 식비 가계부에도 영구 기록됩니다.
             </p>
             <input
               type="number"
@@ -2719,9 +2730,6 @@ export default function App() {
         </div>
       )}
 
-      {/* ==========================================
-          모달 4: 가족 공지사항 작성/수정
-      ========================================== */}
       {isNoticeModalOpen && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-sm w-full p-5 space-y-3">
@@ -2736,7 +2744,7 @@ export default function App() {
 
             <input
               type="text"
-              placeholder="제목 (예: 시목이 현장학습 도시락 준비)"
+              placeholder="제목"
               value={noticeForm.title}
               onChange={(e) => setNoticeForm({ ...noticeForm, title: e.target.value })}
               className="w-full px-3 py-2.5 rounded-xl border border-stone-200 text-xs font-bold"
@@ -2765,7 +2773,7 @@ export default function App() {
 
             <textarea
               rows={3}
-              placeholder="상세 내용을 적어주세요"
+              placeholder="상세 내용"
               value={noticeForm.content}
               onChange={(e) => setNoticeForm({ ...noticeForm, content: e.target.value })}
               className="w-full px-3 py-2 rounded-xl border border-stone-200 text-xs"
@@ -2798,9 +2806,6 @@ export default function App() {
         </div>
       )}
 
-      {/* ==========================================
-          모달 5: AI 추천 메뉴 식단표 원클릭 등록
-      ========================================== */}
       {quickLogRecipe && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-sm w-full p-5 space-y-3">
@@ -2845,9 +2850,6 @@ export default function App() {
         </div>
       )}
 
-      {/* ==========================================
-          모달 6: 어린이집 식단표 스캔 모달
-      ========================================== */}
       {isDaycareModalOpen && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-sm w-full p-5 space-y-3">
@@ -2858,17 +2860,17 @@ export default function App() {
               </button>
             </div>
             <p className="text-xs text-stone-600">
-              첨부해 주신 <b>신당동어린이집 11월 식단표(0-2세)</b> 25일 치(오전간식·점심·오후간식 총 75끼)가 이미 시목이의 11월 달력에 적용되어 있습니다.
+              <b>신당동어린이집 11월 식단표(0-2세)</b> 25일 치(총 75끼)가 시목이 달력에 자동 적용되어 있습니다.
             </p>
             <button
-              onClick={async () => {
+              onClick={() => {
                 const list = buildDaycareMeals();
                 setMeals((prev) => {
                   const existingIds = new Set(prev.map((m) => m.id));
                   return [...prev, ...list.filter((m) => !existingIds.has(m.id))];
                 });
                 setIsDaycareModalOpen(false);
-                showToast("신당동어린이집 11월 전체 식단이 시목이 달력에 동기화되었습니다!");
+                showToast("신당동어린이집 11월 식단이 동기화되었습니다!");
               }}
               className="w-full py-2.5 rounded-xl bg-amber-500 text-white text-xs font-extrabold"
             >
@@ -2878,9 +2880,6 @@ export default function App() {
         </div>
       )}
 
-      {/* ==========================================
-          모달 7: 마트 영수증 스캔 모달
-      ========================================== */}
       {isReceiptModalOpen && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-sm w-full p-5 space-y-3 max-h-[85vh] overflow-y-auto">
@@ -2921,17 +2920,21 @@ export default function App() {
                       const fId = `f-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
                       const newItem = { ...it, id: fId, purchaseDate: selectedDate };
                       setFridge((prev) => [newItem, ...prev]);
-                      if (user) {
-                        await setDoc(doc(db, COLLECTION_BASE, "fridge", fId), newItem);
-                        const expId = `exp-${fId}`;
-                        await setDoc(doc(db, COLLECTION_BASE, "expenses", expId), {
-                          id: expId,
-                          title: newItem.name,
-                          category: newItem.category,
-                          amount: Number(newItem.price),
-                          date: selectedDate,
-                          type: "장보기/식재료"
-                        });
+                      if (user && db) {
+                        try {
+                          await setDoc(getDocRef("family_fridge_v4", fId), newItem);
+                          const expId = `exp-${fId}`;
+                          await setDoc(getDocRef("family_expenses_v4", expId), {
+                            id: expId,
+                            title: newItem.name,
+                            category: newItem.category,
+                            amount: Number(newItem.price),
+                            date: selectedDate,
+                            type: "장보기/식재료"
+                          });
+                        } catch (e) {
+                          console.error(e);
+                        }
                       }
                     }
                     setScannedReceiptItems([]);
@@ -2948,9 +2951,6 @@ export default function App() {
         </div>
       )}
 
-      {/* ==========================================
-          모달 8: 설정 및 엑셀 백업
-      ========================================== */}
       {isSettingsOpen && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-sm w-full p-5 space-y-3.5">
@@ -2962,12 +2962,12 @@ export default function App() {
             </div>
 
             <div className="p-3 rounded-2xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-900">
-              ✅ <b>Firebase DB 연결 상태:</b> <code>ahrisoohyeokbap</code> 프로젝트와 실시간 동기화 중입니다. (기존 데이터 100% 보존됨)
+              ✅ <b>Firebase DB 연결 상태:</b> <code>ahrisoohyeokbap</code> 프로젝트와 정상 동기화 중입니다.
             </div>
 
             <div>
               <label className="text-[11px] font-bold text-stone-600 block mb-1">
-                Gemini API Key (선택 사항 - 없어도 동적 맞춤 레시피 작동)
+                Gemini API Key (선택 사항)
               </label>
               <input
                 type="text"
@@ -2991,5 +2991,13 @@ export default function App() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <ErrorBoundary>
+      <MainApp />
+    </ErrorBoundary>
   );
 }
