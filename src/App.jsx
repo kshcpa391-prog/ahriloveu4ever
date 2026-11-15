@@ -801,6 +801,7 @@ function MainApp() {
 
   // 실시간 서울 중구 날씨 & 미세먼지 상태
   const [weatherInfo, setWeatherInfo] = useState(null);
+  const [isWeeklyWeatherOpen, setIsWeeklyWeatherOpen] = useState(false);
   const [aiDiagStatus, setAiDiagStatus] = useState("");
 
   // 패치노트 기록 및 모달 상태
@@ -968,14 +969,14 @@ function MainApp() {
     setTimeout(() => setToastMsg(""), 3500);
   };
 
-  // 실시간 서울 중구 날씨 + 미세먼지(PM10, PM2.5) 조회 (무료 Open-Meteo API)
+  // 실시간 서울 중구 날씨(오늘 + 7일 주간예보) + 미세먼지(PM10, PM2.5) 조회 (Open-Meteo API, 15분마다 자동 갱신)
   const fetchSeoulJungGuWeather = async () => {
     try {
       const lat = 37.5638;
       const lon = 126.9976;
       const [weatherRes, airRes] = await Promise.all([
         fetch(
-          `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,weather_code&daily=temperature_2m_max,temperature_2m_min&timezone=Asia%2FSeoul&forecast_days=1`
+          `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=Asia%2FSeoul&forecast_days=7`
         ),
         fetch(
           `https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${lat}&longitude=${lon}&current=pm10,pm2_5&timezone=Asia%2FSeoul`
@@ -996,6 +997,29 @@ function MainApp() {
       const pm25 = Math.round(aData?.current?.pm2_5 ?? 0);
       const dust = getDustGrade(pm10, pm25);
 
+      const dailyTimes = wData?.daily?.time || [];
+      const weeklyForecast = dailyTimes.map((dateStr, idx) => {
+        const dMax = Math.round(wData?.daily?.temperature_2m_max?.[idx] ?? 0);
+        const dMin = Math.round(wData?.daily?.temperature_2m_min?.[idx] ?? 0);
+        const dCode = wData?.daily?.weather_code?.[idx] ?? 0;
+        const rainProb = Math.round(wData?.daily?.precipitation_probability_max?.[idx] ?? 0);
+        const dParsed = parseWeatherCode(dCode, Math.round((dMax + dMin) / 2));
+        return {
+          date: dateStr,
+          dayName: idx === 0 ? "오늘" : getDayName(dateStr),
+          emoji: dParsed.emoji,
+          label: dParsed.label,
+          max: dMax,
+          min: dMin,
+          rainProb
+        };
+      });
+
+      const now = new Date();
+      const updatedTime = `${String(now.getHours()).padStart(2, "0")}:${String(
+        now.getMinutes()
+      ).padStart(2, "0")}`;
+
       setWeatherInfo({
         location: "서울 중구",
         temp: curTemp,
@@ -1004,6 +1028,8 @@ function MainApp() {
         pm10,
         pm25,
         dust,
+        weekly: weeklyForecast,
+        updatedTime,
         ...parsed,
         tip: dust.label === "나쁨" || dust.label === "매우나쁨" ? dust.tip : parsed.tip
       });
@@ -1014,6 +1040,8 @@ function MainApp() {
 
   useEffect(() => {
     fetchSeoulJungGuWeather();
+    const interval = setInterval(fetchSeoulJungGuWeather, 15 * 60 * 1000); // 15분마다 자동 업데이트
+    return () => clearInterval(interval);
   }, []);
 
   // AI 연결 1초 자가진단 테스트
@@ -2605,36 +2633,85 @@ function MainApp() {
         {!isHeaderCollapsed && (
           <>
             {weatherInfo && (
-              <div className="mt-2 bg-sky-50/80 border border-sky-200/80 rounded-2xl px-3 py-2 flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2 min-w-0">
-                  <span className="text-lg shrink-0">{weatherInfo.emoji}</span>
-                  <div className="min-w-0">
-                    <div className="text-xs font-black text-stone-900 truncate">
-                      {weatherInfo.location} {weatherInfo.temp}°C{" "}
-                      <span className="text-[10px] font-bold text-stone-500">
-                        ({weatherInfo.label} · 최저 {weatherInfo.min}° / 최고 {weatherInfo.max}°)
-                      </span>
+              <div className="mt-2 bg-sky-50/80 border border-sky-200/80 rounded-2xl px-3 py-2 space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <button
+                    onClick={() => setIsWeeklyWeatherOpen((prev) => !prev)}
+                    className="flex items-center gap-2 min-w-0 text-left flex-1"
+                    title="눌러서 주간 날씨 펼치기/접기"
+                  >
+                    <span className="text-lg shrink-0">{weatherInfo.emoji}</span>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-xs font-black text-stone-900 truncate flex items-center gap-1">
+                        <span>
+                          {weatherInfo.location} {weatherInfo.temp}°C
+                        </span>
+                        <span className="text-[10px] font-bold text-stone-500">
+                          ({weatherInfo.min}°/{weatherInfo.max}°)
+                        </span>
+                        <span className="text-[9px] font-extrabold text-sky-700 bg-sky-100 px-1.5 py-0.2 rounded-full">
+                          주간 {isWeeklyWeatherOpen ? "▲" : "▼"}
+                        </span>
+                      </div>
+                      <div className="text-[10px] font-semibold text-stone-600 truncate">
+                        {weatherInfo.tip}
+                      </div>
                     </div>
-                    <div className="text-[10px] font-semibold text-stone-600 truncate">
-                      {weatherInfo.tip}
+                  </button>
+                  <button
+                    onClick={() => {
+                      fetchSeoulJungGuWeather();
+                      showToast("서울 중구 날씨·주간예보·미세먼지를 새로고침했습니다.");
+                    }}
+                    className={`px-2 py-1 rounded-xl border text-[10px] font-extrabold shrink-0 text-right ${weatherInfo.dust.badgeClass}`}
+                    title="눌러서 날씨·미세먼지 새로고침"
+                  >
+                    <div>
+                      {weatherInfo.dust.emoji} 미세 {weatherInfo.pm10} · 초미세 {weatherInfo.pm25}
                     </div>
-                  </div>
+                    <div className="text-[9px] opacity-85">
+                      {weatherInfo.dust.label} · {weatherInfo.updatedTime} ↻
+                    </div>
+                  </button>
                 </div>
-                <button
-                  onClick={() => {
-                    fetchSeoulJungGuWeather();
-                    showToast("서울 중구 날씨·미세먼지를 새로고침했습니다.");
-                  }}
-                  className={`px-2 py-1 rounded-xl border text-[10px] font-extrabold shrink-0 text-right ${weatherInfo.dust.badgeClass}`}
-                  title="눌러서 날씨·미세먼지 새로고침"
-                >
-                  <div>
-                    {weatherInfo.dust.emoji} 미세 {weatherInfo.pm10} · 초미세 {weatherInfo.pm25}
+
+                {isWeeklyWeatherOpen && Array.isArray(weatherInfo.weekly) && weatherInfo.weekly.length > 0 && (
+                  <div className="pt-2 border-t border-sky-200/70">
+                    <div className="grid grid-cols-7 gap-1">
+                      {weatherInfo.weekly.map((day, idx) => (
+                        <div
+                          key={day.date}
+                          className={`rounded-xl py-1.5 px-0.5 text-center border ${
+                            idx === 0
+                              ? "bg-white border-sky-300 shadow-sm"
+                              : "bg-white/60 border-sky-100"
+                          }`}
+                        >
+                          <div className={`text-[9px] font-black ${idx === 0 ? "text-sky-700" : "text-stone-500"}`}>
+                            {day.dayName}
+                          </div>
+                          <div className="text-sm my-0.5 leading-none">{day.emoji}</div>
+                          <div className="text-[9px] font-extrabold text-stone-800 leading-tight">
+                            <span className="text-rose-600">{day.max}°</span>
+                            <span className="text-stone-400">/</span>
+                            <span className="text-blue-600">{day.min}°</span>
+                          </div>
+                          {day.rainProb > 0 && (
+                            <div className="text-[8px] font-bold text-sky-600 mt-0.5">
+                              💧{day.rainProb}%
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                    <div className="text-[9px] text-stone-400 text-right mt-1">
+                      Open-Meteo 실시간 연동 (15분마다 자동 갱신)
+                    </div>
                   </div>
-                  <div className="text-[9px] opacity-85">대기질 {weatherInfo.dust.label} ↻</div>
-                </button>
+                )}
               </div>
             )}
+
             {imminentSchedulesWithin3Days.length > 0 && activeTab !== "schedule" && (
               <div
                 onClick={() => setActiveTab("schedule")}
@@ -5901,4 +5978,4 @@ export default function App() {
       <MainApp />
     </ErrorBoundary>
   );
-}
+      }
