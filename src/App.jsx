@@ -39,7 +39,10 @@ import {
   CloudUpload,
   ClipboardList,
   ListTodo,
-  CalendarRange
+  CalendarRange,
+  Baby,
+  Activity,
+  Stethoscope
 } from "lucide-react";
 import { initializeApp, getApps, getApp } from "firebase/app";
 import {
@@ -594,6 +597,17 @@ const SCHEDULE_CATEGORIES = ["기념일/생일", "할일(To-Do)", "육아/병원
 
 const INITIAL_PATCH_NOTES = [
   {
+    id: "patch-v7.0",
+    version: "v7.0",
+    date: "2026-11-15",
+    title: "👶 [육아수첩] 탭 신설 (월령별 발달 · 예방접종/영유아검진 · 성장/열 체크 · 일정 원클릭 등록)",
+    changes: [
+      "시목이(2025.08.03생)·시율이(2026.11.06생) 실시간 생후 일수/개월수 자동 계산 및 맞춤 조회",
+      "질병관리청 국가필수예방접종(NIP)·선택접종·영유아 건강검진(1~8차) 체크리스트 및 일정 달력 원클릭 자동 등록",
+      "월령별 발달과정(신체·언어·수면·수유/이유식), 키·몸무게·머리둘레 성장 기록, 소아과 진료·열 체크 메모 추가"
+    ]
+  },
+  {
     id: "patch-v6.3",
     version: "v6.3",
     date: "2026-11-15",
@@ -782,6 +796,141 @@ const INITIAL_SCHEDULES = [
   }
 ];
 
+const CHILDREN_INFO = [
+  { id: "시목", name: "김시목", birthDate: "2025-08-03", emoji: "👦🏻", badge: "첫째" },
+  { id: "시율", name: "김시율", birthDate: "2026-11-06", emoji: "👶🏻", badge: "둘째" }
+];
+
+const getChildAgeStats = (birthStr) => {
+  const today = new Date(getTodayStr() + "T00:00:00");
+  const birth = new Date(birthStr + "T00:00:00");
+  const diffDays = Math.max(0, Math.floor((today - birth) / (1000 * 60 * 60 * 24)));
+  let months = (today.getFullYear() - birth.getFullYear()) * 12 + (today.getMonth() - birth.getMonth());
+  if (today.getDate() < birth.getDate()) months -= 1;
+  months = Math.max(0, months);
+  return { days: diffDays + 1, months };
+};
+
+const addMonthsToDateStr = (birthStr, addMonths, addDays = 0) => {
+  const d = new Date(birthStr + "T00:00:00");
+  d.setMonth(d.getMonth() + addMonths);
+  d.setDate(d.getDate() + addDays);
+  return formatDate(d);
+};
+
+const BABY_MILESTONES = [
+  {
+    id: "m0",
+    minM: 0,
+    maxM: 0,
+    label: "0개월 (신생아)",
+    motor: "원시반사(모로·빨기 반사), 엎드리면 고개 살짝 들기",
+    language: "울음으로 배고픔·기저귀 불편 표현, 엄마 목소리에 반응",
+    feedingSleep: "수유 8~12회(2~3시간 간격), 하루 16~18시간 수면(낮밤 구분 전)",
+    tip: "배꼽 관리, 엎어 재우기 금지(SIDS 예방), 생후 4주 내 BCG 접종"
+  },
+  {
+    id: "m1_2",
+    minM: 1,
+    maxM: 2,
+    label: "1~2개월",
+    motor: "엎드려 고개 45도 들기, 손 쥐었다 펴기, 초점 맞춰 눈 맞추기",
+    language: "사회적 미소(배냇짓 아닌 진짜 웃음), '아~ 우~' 옹알이 시작",
+    feedingSleep: "1회 수유량 증가(80~140ml), 밤잠 4~5시간 연속 수면 시작",
+    tip: "흑백 모빌·터미타임(하루 몇 분씩), 생후 2개월 1차 집중 예방접종"
+  },
+  {
+    id: "m3_4",
+    minM: 3,
+    maxM: 4,
+    label: "3~4개월",
+    motor: "목 가누기 완성, 손 뻗어 장난감 잡기, 뒤집기 시도",
+    language: "소리 내어 까르르 웃기, 다양한 옹알이로 대화 시도",
+    feedingSleep: "수유 텀 3.5~4시간, 밤중 수유 줄어듦, 14~16시간 수면",
+    tip: "뒤집기 낙상 주의! 컬러 모빌 전환 및 4개월 2차 예방접종"
+  },
+  {
+    id: "m5_6",
+    minM: 5,
+    maxM: 6,
+    label: "5~6개월",
+    motor: "완전 뒤집기·되집기, 손 짚고 잠깐 앉기, 발 잡고 놀기",
+    language: "자음+모음 옹알이(마마, 바바), 이름 부르면 고개 돌리기",
+    feedingSleep: "초기 이유식(쌀미음→채소/고기) 시작, 낮잠 2~3회",
+    tip: "이유식 알레르기 테스트(3일 간격 새 재료), 6개월 3차 접종·독감 시작"
+  },
+  {
+    id: "m7_9",
+    minM: 7,
+    maxM: 9,
+    label: "7~9개월",
+    motor: "혼자 앉기, 배밀이·네발기기, 잡고 일어서기 시도, 엄지-검지 집기",
+    language: "낯가림·분리불안 시작, '안돼' 어조 이해, 까꿍놀이 반응",
+    feedingSleep: "중기 이유식(하루 2회, 입자감), 빨대컵·핑거푸드 연습",
+    tip: "모서리·콘센트 안전가드 설치, 9개월 영유아 3차 건강검진"
+  },
+  {
+    id: "m10_12",
+    minM: 10,
+    maxM: 12,
+    label: "10~12개월",
+    motor: "가구 잡고 걷기, 혼자 서기·첫 걸음마, 컵으로 물 마시기",
+    language: "의미 있는 첫 단어(엄마·아빠), 손가락으로 가리키기(포인팅)",
+    feedingSleep: "후기~완료기 이유식(하루 3회), 돌 이후 생우유·유아식 전환",
+    tip: "돌(12개월) MMR·수두·A형간염 등 접종 집중 시기"
+  },
+  {
+    id: "m13_15",
+    minM: 13,
+    maxM: 15,
+    label: "13~15개월",
+    motor: "혼자 안정적으로 걷기, 계단 기어오르기, 블록 2~3개 쌓기",
+    language: "단어 5~15개 말하기, 간단한 지시('가져와') 이해 및 수행",
+    feedingSleep: "어른 식단과 비슷한 유아식(저염), 낮잠 1~2회, 밤잠 11시간",
+    tip: "자기주도 식사(숟가락·포크 연습), 15개월 DTaP 4차·폐렴/Hib 4차"
+  },
+  {
+    id: "m16_18",
+    minM: 16,
+    maxM: 18,
+    label: "16~18개월",
+    motor: "뛰기 시도, 공 차기, 숟가락질 능숙, 낙서하기",
+    language: "단어 20~50개, 2단어 조합 시작('엄마 물'), 고집·자아 표현",
+    feedingSleep: "유아식 3끼 + 간식 2회, 낮잠 1회(1.5~2시간) 정착",
+    tip: "18개월 영유아 4차 검진 + 첫 구강검진, A형간염 2차 접종"
+  },
+  {
+    id: "m19_24",
+    minM: 19,
+    maxM: 24,
+    label: "19~24개월",
+    motor: "계단 한 발씩 오르기, 두 발 모아 점프, 블록 4~6개 쌓기",
+    language: "2~3단어 문장 말하기, 신체 부위 가리키기, 역할놀이 시작",
+    feedingSleep: "규칙적인 3끼 유아식, 배변 훈련 관심 보이기 시작",
+    tip: "감정 떼쓰기(훈육 시작)에 일관된 반응, 24개월 일본뇌염 2차"
+  }
+];
+
+const BABY_VACCINES_AND_CHECKUPS = [
+  { id: "vac-hepb1", type: "필수접종", title: "B형간염 1차", addMonths: 0, addDays: 0, note: "출생 직후 접종" },
+  { id: "vac-bcg", type: "필수접종", title: "결핵(BCG) 피내용/경피용", addMonths: 0, addDays: 21, note: "생후 4주 이내 접종" },
+  { id: "chk-1", type: "영유아검진", title: "1차 영유아 건강검진", addMonths: 0, addDays: 20, note: "생후 14~35일 무료 검진" },
+  { id: "vac-hepb2", type: "필수접종", title: "B형간염 2차", addMonths: 1, addDays: 0, note: "생후 1개월" },
+  { id: "vac-2m-combo", type: "필수접종", title: "생후 2개월 필수 (DTaP·폴리오·Hib·폐렴구균 1차 + 로타 1차)", addMonths: 2, addDays: 0, note: "로타바이러스는 생후 14주 6일 이전 1차 필수" },
+  { id: "vac-4m-combo", type: "필수접종", title: "생후 4개월 필수 (DTaP·폴리오·Hib·폐렴구균·로타 2차)", addMonths: 4, addDays: 0, note: "생후 4개월 집중 접종" },
+  { id: "chk-2", type: "영유아검진", title: "2차 영유아 건강검진", addMonths: 4, addDays: 15, note: "생후 4~6개월 무료 검진" },
+  { id: "vac-6m-combo", type: "필수접종", title: "생후 6개월 필수 (B형간염 3차 · DTaP·폴리오·Hib·폐렴구균 3차)", addMonths: 6, addDays: 0, note: "인플루엔자(독감) 1·2차 접종 시작 가능" },
+  { id: "chk-3", type: "영유아검진", title: "3차 영유아 건강검진 (발달선별 시작)", addMonths: 9, addDays: 15, note: "생후 9~12개월 무료 검진" },
+  { id: "vac-12m-mmr", type: "필수접종", title: "12개월 필수 (MMR 1차 · 수두 · 폐렴구균 4차 · Hib 4차)", addMonths: 12, addDays: 0, note: "돌 접종 (2회 나누어 접종 권장)" },
+  { id: "vac-12m-hepa1", type: "필수접종", title: "A형간염 1차 · 일본뇌염 1차", addMonths: 12, addDays: 14, note: "12~23개월 사이 접종" },
+  { id: "vac-opt-men", type: "선택접종", title: "수막구균 백신 (선택)", addMonths: 12, addDays: 20, note: "어린이집 단체생활 시 소아과 상담 후 선택" },
+  { id: "vac-15m-dtap4", type: "필수접종", title: "DTaP 4차 (생후 15~18개월)", addMonths: 15, addDays: 0, note: "15~18개월 필수 접종" },
+  { id: "vac-18m-hepa2", type: "필수접종", title: "A형간염 2차", addMonths: 18, addDays: 14, note: "1차 접종 후 6개월 뒤" },
+  { id: "chk-4", type: "영유아검진", title: "4차 영유아 건강검진 + 구강검진", addMonths: 18, addDays: 15, note: "생후 18~24개월 (구강검진 18~29개월)" },
+  { id: "vac-24m-je2", type: "필수접종", title: "일본뇌염 2차", addMonths: 24, addDays: 14, note: "1차 접종 12개월 후" },
+  { id: "chk-5", type: "영유아검진", title: "5차 영유아 건강검진 + 구강검진", addMonths: 30, addDays: 15, note: "생후 30~36개월" }
+];
+
 const SHINDANG_NOV_DATA = [
   { date: "2026-11-02", mSnack: "배, 우유", lunch: "잡곡밥, 유부맑은국, 돼지고기두루치기, 얼갈이나물, 김치, 후식 까망베르치즈케이크", aSnack: "감자튀김, 차", cal: "414kcal / 단백질 17g" },
   { date: "2026-11-03", mSnack: "파프리카죽", lunch: "쌀밥, 청경채된장국, 동태전, 콩나물당근무침, 김치, 후식 단감", aSnack: "단팥빵, 우유", cal: "482kcal / 단백질 20g" },
@@ -930,6 +1079,26 @@ function MainApp() {
   const [fridgeMap, setFridgeMap] = useState({});
   const [expenses, setExpenses] = useState([]);
   const [wasteEvents, setWasteEvents] = useState([]);
+
+  // [신규 v7.0] 육아수첩 상태 (선택한 아이, 서브탭, 접종체크, 성장기록, 진료/열 메모)
+  const [selectedChildId, setSelectedChildId] = useState("시율");
+  const [babySubTab, setBabySubTab] = useState("milestones"); // milestones | vaccines | growth | medical
+  const [babyChecks, setBabyChecks] = useState({});
+  const [babyGrowthLogs, setBabyGrowthLogs] = useState([]);
+  const [babyMedicalNotes, setBabyMedicalNotes] = useState([]);
+  const [growthForm, setGrowthForm] = useState({
+    date: getTodayStr(),
+    height: "",
+    weight: "",
+    head: "",
+    memo: ""
+  });
+  const [medNoteForm, setMedNoteForm] = useState({
+    date: getTodayStr(),
+    temp: "",
+    title: "",
+    memo: ""
+  });
   const [shoppingList, setShoppingList] = useState([]);
   const [notices, setNotices] = useState([]);
   const [schedules, setSchedules] = useState([]);
@@ -1398,6 +1567,44 @@ function MainApp() {
 
     unsubscribers.push(
       onSnapshot(
+        getColRef("family_baby_checks_v7"),
+        (snap) => {
+          const obj = {};
+          snap.docs.forEach((d) => {
+            obj[d.id] = d.data();
+          });
+          setBabyChecks(obj);
+        },
+        () => {}
+      )
+    );
+
+    unsubscribers.push(
+      onSnapshot(
+        getColRef("family_baby_growth_v7"),
+        (snap) => {
+          const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+          list.sort((a, b) => String(b.date).localeCompare(String(a.date)));
+          setBabyGrowthLogs(list);
+        },
+        () => {}
+      )
+    );
+
+    unsubscribers.push(
+      onSnapshot(
+        getColRef("family_baby_notes_v7"),
+        (snap) => {
+          const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+          list.sort((a, b) => String(b.date).localeCompare(String(a.date)));
+          setBabyMedicalNotes(list);
+        },
+        () => {}
+      )
+    );
+
+    unsubscribers.push(
+      onSnapshot(
         getColRef("family_shopping_v4"),
         async (snap) => {
           const loaded = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
@@ -1699,7 +1906,7 @@ function MainApp() {
   // ==========================================
   const buildFullBackupJsonString = () => {
     const fullSnapshot = {
-      backupVersion: "v6.3",
+      backupVersion: "v7.0",
       exportedAt: new Date().toISOString(),
       projectId: USER_FIREBASE_CONFIG.projectId,
       data: {
@@ -1873,6 +2080,154 @@ function MainApp() {
   // ==========================================
   // 8. 가족 일정·기념일·D-Day & To-Do 체크리스트 핸들러
   // ==========================================
+  // [신규 v7.0] 육아수첩 핸들러 (예방접종 체크 · 일정 원클릭 자동등록 · 성장/열 체크)
+  const handleToggleBabyCheck = async (childId, itemId) => {
+    const docId = `${childId}_${itemId}`;
+    const prev = babyChecks[docId] || {};
+    const updated = {
+      childId,
+      itemId,
+      done: !prev.done,
+      doneDate: !prev.done ? getTodayStr() : ""
+    };
+    setBabyChecks((p) => ({ ...p, [docId]: updated }));
+    if (user && db) {
+      try {
+        await setDoc(getDocRef("family_baby_checks_v7", docId), updated);
+      } catch (e) {
+        showToast("⚠️ 접종 체크 저장 실패");
+      }
+    }
+  };
+
+  const handleSyncSingleBabySchedule = async (child, item, targetDate) => {
+    const schId = `baby-${child.id}-${item.id}`;
+    const payload = {
+      id: schId,
+      title: `${item.type === "영유아검진" ? "🏥" : "💉"} [${child.id}] ${item.title}`,
+      date: targetDate,
+      category: "육아/병원",
+      members: [child.id, "수혁", "아리나"],
+      isAnnual: false,
+      showDday: false,
+      hasOriginYear: false,
+      done: false,
+      memo: item.note
+    };
+    setSchedules((prev) => {
+      const exists = prev.some((s) => s.id === schId);
+      return exists ? prev.map((s) => (s.id === schId ? payload : s)) : [payload, ...prev];
+    });
+    if (user && db) {
+      try {
+        await setDoc(getDocRef("family_schedules_v4", schId), payload);
+      } catch (e) {}
+    }
+    showToast(`${child.name} '${item.title}' 일정이 달력(${targetDate})에 등록되었습니다!`);
+  };
+
+  const handleSyncAllUpcomingBabySchedules = async (child) => {
+    let added = 0;
+    for (const item of BABY_VACCINES_AND_CHECKUPS) {
+      const checkKey = `${child.id}_${item.id}`;
+      if (babyChecks[checkKey]?.done) continue;
+      const targetDate = addMonthsToDateStr(child.birthDate, item.addMonths, item.addDays);
+      if (targetDate < getTodayStr()) continue;
+      const schId = `baby-${child.id}-${item.id}`;
+      if (schedules.some((s) => s.id === schId)) continue;
+
+      const payload = {
+        id: schId,
+        title: `${item.type === "영유아검진" ? "🏥" : "💉"} [${child.id}] ${item.title}`,
+        date: targetDate,
+        category: "육아/병원",
+        members: [child.id, "수혁", "아리나"],
+        isAnnual: false,
+        showDday: false,
+        hasOriginYear: false,
+        done: false,
+        memo: item.note
+      };
+      setSchedules((prev) => [payload, ...prev]);
+      if (user && db) {
+        try {
+          await setDoc(getDocRef("family_schedules_v4", schId), payload);
+        } catch (e) {}
+      }
+      added++;
+    }
+    showToast(
+      added > 0
+        ? `${child.name} 향후 예방접종·검진 ${added}건이 일정 달력에 자동 등록되었습니다!`
+        : `${child.name} 향후 일정이 이미 모두 등록되어 있습니다.`
+    );
+  };
+
+  const handleAddGrowthLog = async () => {
+    if (!growthForm.height && !growthForm.weight && !growthForm.head) return;
+    const id = `gr-${selectedChildId}-${Date.now()}`;
+    const payload = {
+      id,
+      childId: selectedChildId,
+      date: growthForm.date || getTodayStr(),
+      height: growthForm.height ? Number(growthForm.height) : null,
+      weight: growthForm.weight ? Number(growthForm.weight) : null,
+      head: growthForm.head ? Number(growthForm.head) : null,
+      memo: growthForm.memo || ""
+    };
+    setBabyGrowthLogs((prev) => [payload, ...prev]);
+    setGrowthForm({ date: getTodayStr(), height: "", weight: "", head: "", memo: "" });
+    if (user && db) {
+      try {
+        await setDoc(getDocRef("family_baby_growth_v7", id), payload);
+      } catch (e) {
+        showToast("⚠️ 성장 기록 저장 실패");
+      }
+    }
+    showToast(`${selectedChildId} 성장 기록이 저장되었습니다!`);
+  };
+
+  const handleDeleteGrowthLog = async (id) => {
+    setBabyGrowthLogs((prev) => prev.filter((g) => g.id !== id));
+    if (user && db) {
+      try {
+        await deleteDoc(getDocRef("family_baby_growth_v7", id));
+      } catch (e) {}
+    }
+  };
+
+  const handleAddMedicalNote = async () => {
+    if (!medNoteForm.title.trim() && !medNoteForm.temp) return;
+    const id = `med-${selectedChildId}-${Date.now()}`;
+    const payload = {
+      id,
+      childId: selectedChildId,
+      date: medNoteForm.date || getTodayStr(),
+      temp: medNoteForm.temp ? Number(medNoteForm.temp) : null,
+      title: medNoteForm.title.trim() || "체온/건강 체크",
+      memo: medNoteForm.memo || ""
+    };
+    setBabyMedicalNotes((prev) => [payload, ...prev]);
+    setMedNoteForm({ date: getTodayStr(), temp: "", title: "", memo: "" });
+    if (user && db) {
+      try {
+        await setDoc(getDocRef("family_baby_notes_v7", id), payload);
+      } catch (e) {
+        showToast("⚠️ 진료/열 메모 저장 실패");
+      }
+    }
+    showToast(`${selectedChildId} 진료·체온 메모가 저장되었습니다!`);
+  };
+
+  const handleDeleteMedicalNote = async (id) => {
+    setBabyMedicalNotes((prev) => prev.filter((n) => n.id !== id));
+    if (user && db) {
+      try {
+        await deleteDoc(getDocRef("family_baby_notes_v7", id));
+      } catch (e) {}
+    }
+  };
+
   const handleSaveSchedule = async () => {
     if (!scheduleForm.title.trim()) return;
     const id = editingSchedule ? editingSchedule.id : `sch-${Date.now()}`;
@@ -2984,7 +3339,7 @@ function MainApp() {
               title="패치노트 기록 및 히스토리"
             >
               <ClipboardList className="w-3 h-3 text-stone-600" />
-              <span>패치노트 {patchNotes[0]?.version || "v6.3"}</span>
+              <span>패치노트 {patchNotes[0]?.version || "v7.0"}</span>
             </button>
           </div>
 
@@ -3200,7 +3555,7 @@ function MainApp() {
               </div>
             )}
 
-            <div className="grid grid-cols-4 gap-1.5 mt-2.5 bg-stone-100 p-1.5 rounded-2xl">
+            <div className="grid grid-cols-3 gap-1.5 mt-2.5 bg-stone-100 p-1.5 rounded-2xl">
               {[
                 { id: "daily", label: "일별식단", icon: "🍽️" },
                 { id: "weekly", label: "주간요약", icon: "📊" },
@@ -3211,6 +3566,7 @@ function MainApp() {
                   icon: "🗓️",
                   badge: imminentSchedulesWithin3Days.length
                 },
+                { id: "baby", label: "육아수첩", icon: "👶" },
                 { id: "fridge", label: "냉장고", icon: "❄️" },
                 {
                   id: "shopping",
@@ -5433,6 +5789,415 @@ function MainApp() {
           </div>
         </div>
       )}
+
+      {/* ==========================================
+          탭 9: 👶 육아수첩 (월령별 발달 · 예방접종/영유아검진 · 성장 기록 · 진료/열 체크)
+      ========================================== */}
+      {activeTab === "baby" && (() => {
+        const activeChild = CHILDREN_INFO.find((c) => c.id === selectedChildId) || CHILDREN_INFO[1];
+        const ageStats = getChildAgeStats(activeChild.birthDate);
+        const childGrowth = babyGrowthLogs.filter((g) => g.childId === activeChild.id);
+        const childNotes = babyMedicalNotes.filter((n) => n.childId === activeChild.id);
+
+        return (
+          <div className="p-4 space-y-4">
+            {/* 아이 선택 & 실시간 생후 일수/개월수 카드 */}
+            <div className="grid grid-cols-2 gap-2">
+              {CHILDREN_INFO.map((ch) => {
+                const st = getChildAgeStats(ch.birthDate);
+                const isSel = selectedChildId === ch.id;
+                return (
+                  <button
+                    key={ch.id}
+                    onClick={() => setSelectedChildId(ch.id)}
+                    className={`p-3 rounded-2xl border text-left transition ${
+                      isSel
+                        ? "bg-stone-900 text-white border-stone-900 shadow-md"
+                        : "bg-white text-stone-800 border-stone-200 hover:bg-stone-50"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-lg">{ch.emoji}</span>
+                      <span
+                        className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full ${
+                          isSel ? "bg-amber-400 text-stone-900" : "bg-stone-100 text-stone-600"
+                        }`}
+                      >
+                        {ch.badge} · D+{st.days.toLocaleString()}일
+                      </span>
+                    </div>
+                    <div className="text-sm font-black mt-1">{ch.name}</div>
+                    <div className={`text-[10px] mt-0.5 ${isSel ? "text-stone-300" : "text-stone-500"}`}>
+                      {ch.birthDate}생 · 현재 {st.months}개월
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* 육아수첩 4개 서브 탭 */}
+            <div className="grid grid-cols-4 gap-1 bg-stone-200 p-1 rounded-2xl">
+              {[
+                { id: "milestones", label: "🌱 발달" },
+                { id: "vaccines", label: "💉 접종·검진" },
+                { id: "growth", label: "📏 성장기록" },
+                { id: "medical", label: "🩺 진료·열" }
+              ].map((st) => (
+                <button
+                  key={st.id}
+                  onClick={() => setBabySubTab(st.id)}
+                  className={`py-2 rounded-xl text-[11px] font-extrabold transition ${
+                    babySubTab === st.id
+                      ? "bg-white text-stone-900 shadow-sm"
+                      : "text-stone-600"
+                  }`}
+                >
+                  {st.label}
+                </button>
+              ))}
+            </div>
+
+            {/* 서브탭 1: 월령별 발달과정 */}
+            {babySubTab === "milestones" && (
+              <div className="space-y-2.5">
+                {BABY_MILESTONES.map((ms) => {
+                  const isCurrent = ageStats.months >= ms.minM && ageStats.months <= ms.maxM;
+                  return (
+                    <div
+                      key={ms.id}
+                      className={`p-3.5 rounded-2xl border space-y-2 ${
+                        isCurrent
+                          ? "bg-amber-50/90 border-amber-300 shadow-sm ring-2 ring-amber-200"
+                          : "bg-white border-stone-200"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-black text-stone-900">{ms.label}</span>
+                        {isCurrent && (
+                          <span className="px-2 py-0.5 rounded-full bg-amber-500 text-white text-[10px] font-black">
+                            ⭐ 지금 {activeChild.id} 시기
+                          </span>
+                        )}
+                      </div>
+                      <div className="space-y-1 text-xs text-stone-700 leading-snug">
+                        <div>
+                          <b>🏃 신체/운동:</b> {ms.motor}
+                        </div>
+                        <div>
+                          <b>💬 언어/사회:</b> {ms.language}
+                        </div>
+                        <div>
+                          <b>🍼 수유·수면:</b> {ms.feedingSleep}
+                        </div>
+                        <div className="p-2 rounded-xl bg-white/80 border border-stone-200/70 text-[11px] font-semibold text-amber-900">
+                          💡 <b>핵심 팁:</b> {ms.tip}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* 서브탭 2: 국가예방접종 + 선택접종 + 영유아 건강검진 + 일정 원클릭 등록 */}
+            {babySubTab === "vaccines" && (
+              <div className="space-y-3">
+                <button
+                  onClick={() => handleSyncAllUpcomingBabySchedules(activeChild)}
+                  className="w-full py-2.5 px-3 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-extrabold flex items-center justify-center gap-1.5 shadow-sm"
+                >
+                  <CalendarDays className="w-4 h-4" />
+                  <span>{activeChild.id} 향후 미완료 접종·검진 일정 달력에 일괄 자동등록</span>
+                </button>
+
+                <div className="space-y-2">
+                  {BABY_VACCINES_AND_CHECKUPS.map((item) => {
+                    const checkKey = `${activeChild.id}_${item.id}`;
+                    const isDone = Boolean(babyChecks[checkKey]?.done);
+                    const doneDate = babyChecks[checkKey]?.doneDate;
+                    const recDate = addMonthsToDateStr(activeChild.birthDate, item.addMonths, item.addDays);
+                    const isScheduled = schedules.some((s) => s.id === `baby-${activeChild.id}-${item.id}`);
+
+                    return (
+                      <div
+                        key={item.id}
+                        className={`p-3 rounded-2xl border transition flex items-start justify-between gap-2 ${
+                          isDone
+                            ? "bg-stone-100 border-stone-200 opacity-75"
+                            : "bg-white border-stone-200 shadow-sm"
+                        }`}
+                      >
+                        <div
+                          onClick={() => handleToggleBabyCheck(activeChild.id, item.id)}
+                          className="flex items-start gap-2.5 cursor-pointer flex-1 min-w-0"
+                        >
+                          <div
+                            className={`w-5 h-5 mt-0.5 rounded-lg border flex items-center justify-center shrink-0 ${
+                              isDone
+                                ? "bg-emerald-600 border-emerald-600 text-white"
+                                : "border-stone-300 bg-white"
+                            }`}
+                          >
+                            {isDone && <Check className="w-3.5 h-3.5" />}
+                          </div>
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-1 mb-0.5">
+                              <span
+                                className={`px-1.5 py-0.2 rounded text-[9px] font-black ${
+                                  item.type === "영유아검진"
+                                    ? "bg-indigo-100 text-indigo-800"
+                                    : item.type === "선택접종"
+                                    ? "bg-amber-100 text-amber-800"
+                                    : "bg-emerald-100 text-emerald-800"
+                                }`}
+                              >
+                                {item.type}
+                              </span>
+                              <span className="text-[10px] font-bold text-stone-500">
+                                권장일: {recDate}
+                              </span>
+                              {isDone && doneDate && (
+                                <span className="text-[10px] font-extrabold text-emerald-700">
+                                  ({doneDate} 완료)
+                                </span>
+                              )}
+                            </div>
+                            <div
+                              className={`text-xs font-extrabold break-keep ${
+                                isDone ? "line-through text-stone-400" : "text-stone-900"
+                              }`}
+                            >
+                              {item.title}
+                            </div>
+                            <div className="text-[10px] text-stone-500 mt-0.5">{item.note}</div>
+                          </div>
+                        </div>
+
+                        {!isDone && (
+                          <button
+                            onClick={() => handleSyncSingleBabySchedule(activeChild, item, recDate)}
+                            className={`px-2 py-1 rounded-xl text-[10px] font-extrabold shrink-0 border ${
+                              isScheduled
+                                ? "bg-stone-100 text-stone-500 border-stone-200"
+                                : "bg-pink-50 hover:bg-pink-100 text-pink-700 border-pink-200"
+                            }`}
+                          >
+                            {isScheduled ? "등록됨" : "+ 일정등록"}
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* 서브탭 3: 성장 기록 (키·몸무게·머리둘레) */}
+            {babySubTab === "growth" && (
+              <div className="space-y-3">
+                <div className="bg-white p-3.5 rounded-2xl border border-stone-200 shadow-sm space-y-2.5">
+                  <div className="text-xs font-black text-stone-900">
+                    📏 {activeChild.name} 성장 측정 기록하기
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <input
+                      type="date"
+                      value={growthForm.date}
+                      onChange={(e) => setGrowthForm({ ...growthForm, date: e.target.value })}
+                      className="px-2.5 py-2 rounded-xl border border-stone-200 text-xs font-bold"
+                    />
+                    <input
+                      type="number"
+                      step="0.1"
+                      placeholder="키 (cm)"
+                      value={growthForm.height}
+                      onChange={(e) => setGrowthForm({ ...growthForm, height: e.target.value })}
+                      className="px-2.5 py-2 rounded-xl border border-stone-200 text-xs font-bold"
+                    />
+                    <input
+                      type="number"
+                      step="0.1"
+                      placeholder="몸무게 (kg)"
+                      value={growthForm.weight}
+                      onChange={(e) => setGrowthForm({ ...growthForm, weight: e.target.value })}
+                      className="px-2.5 py-2 rounded-xl border border-stone-200 text-xs font-bold"
+                    />
+                    <input
+                      type="number"
+                      step="0.1"
+                      placeholder="머리둘레 (cm, 선택)"
+                      value={growthForm.head}
+                      onChange={(e) => setGrowthForm({ ...growthForm, head: e.target.value })}
+                      className="px-2.5 py-2 rounded-xl border border-stone-200 text-xs font-bold"
+                    />
+                  </div>
+                  <input
+                    type="text"
+                    placeholder="메모 (예: 1차 영유아검진 측정치)"
+                    value={growthForm.memo}
+                    onChange={(e) => setGrowthForm({ ...growthForm, memo: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl border border-stone-200 text-xs"
+                  />
+                  <button
+                    onClick={handleAddGrowthLog}
+                    className="w-full py-2.5 rounded-xl bg-stone-900 text-white text-xs font-extrabold"
+                  >
+                    + 성장 기록 저장하기
+                  </button>
+                </div>
+
+                {childGrowth.length === 0 ? (
+                  <div className="text-xs text-stone-400 py-6 text-center bg-white rounded-2xl border border-dashed border-stone-200">
+                    아직 기록된 {activeChild.id} 성장 데이터가 없습니다.
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {childGrowth.map((g, idx) => {
+                      const prev = childGrowth[idx + 1];
+                      const wDiff =
+                        prev && g.weight && prev.weight ? (g.weight - prev.weight).toFixed(1) : null;
+                      const hDiff =
+                        prev && g.height && prev.height ? (g.height - prev.height).toFixed(1) : null;
+                      return (
+                        <div
+                          key={g.id}
+                          className="bg-white p-3 rounded-2xl border border-stone-200 flex items-center justify-between gap-2"
+                        >
+                          <div>
+                            <div className="text-[11px] font-bold text-stone-500">{g.date}</div>
+                            <div className="text-xs font-black text-stone-900 mt-0.5 flex flex-wrap gap-2">
+                              {g.height && (
+                                <span>
+                                  📏 {g.height}cm{" "}
+                                  {hDiff && (
+                                    <span className="text-emerald-600 text-[10px]">
+                                      ({Number(hDiff) >= 0 ? `+${hDiff}` : hDiff})
+                                    </span>
+                                  )}
+                                </span>
+                              )}
+                              {g.weight && (
+                                <span>
+                                  ⚖️ {g.weight}kg{" "}
+                                  {wDiff && (
+                                    <span className="text-emerald-600 text-[10px]">
+                                      ({Number(wDiff) >= 0 ? `+${wDiff}` : wDiff})
+                                    </span>
+                                  )}
+                                </span>
+                              )}
+                              {g.head && <span>🧢 머리 {g.head}cm</span>}
+                            </div>
+                            {g.memo && <div className="text-[11px] text-stone-500 mt-0.5">💬 {g.memo}</div>}
+                          </div>
+                          <button
+                            onClick={() => handleDeleteGrowthLog(g.id)}
+                            className="p-1.5 text-stone-400 hover:text-red-500"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* 서브탭 4: 소아과 진료 · 열 체크 메모 */}
+            {babySubTab === "medical" && (
+              <div className="space-y-3">
+                <div className="bg-white p-3.5 rounded-2xl border border-stone-200 shadow-sm space-y-2.5">
+                  <div className="text-xs font-black text-stone-900">
+                    🩺 {activeChild.name} 소아과 진료 · 체온 메모
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <input
+                      type="date"
+                      value={medNoteForm.date}
+                      onChange={(e) => setMedNoteForm({ ...medNoteForm, date: e.target.value })}
+                      className="px-2.5 py-2 rounded-xl border border-stone-200 text-xs font-bold"
+                    />
+                    <input
+                      type="number"
+                      step="0.1"
+                      placeholder="체온 °C (예: 37.8)"
+                      value={medNoteForm.temp}
+                      onChange={(e) => setMedNoteForm({ ...medNoteForm, temp: e.target.value })}
+                      className="px-2.5 py-2 rounded-xl border border-stone-200 text-xs font-bold"
+                    />
+                  </div>
+                  <input
+                    type="text"
+                    placeholder="증상/진료 제목 (예: 접종 후 미열, 콧물 소아과 진료)"
+                    value={medNoteForm.title}
+                    onChange={(e) => setMedNoteForm({ ...medNoteForm, title: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl border border-stone-200 text-xs font-bold"
+                  />
+                  <input
+                    type="text"
+                    placeholder="처방약/해열제 복용시간 등 메모"
+                    value={medNoteForm.memo}
+                    onChange={(e) => setMedNoteForm({ ...medNoteForm, memo: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl border border-stone-200 text-xs"
+                  />
+                  <button
+                    onClick={handleAddMedicalNote}
+                    className="w-full py-2.5 rounded-xl bg-stone-900 text-white text-xs font-extrabold"
+                  >
+                    + 진료·열 체크 저장하기
+                  </button>
+                </div>
+
+                {childNotes.length === 0 ? (
+                  <div className="text-xs text-stone-400 py-6 text-center bg-white rounded-2xl border border-dashed border-stone-200">
+                    아직 기록된 {activeChild.id} 진료·체온 메모가 없습니다.
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {childNotes.map((n) => {
+                      const isFever = n.temp && Number(n.temp) >= 38.0;
+                      return (
+                        <div
+                          key={n.id}
+                          className={`p-3 rounded-2xl border flex items-start justify-between gap-2 ${
+                            isFever ? "bg-rose-50 border-rose-200" : "bg-white border-stone-200"
+                          }`}
+                        >
+                          <div>
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-[11px] font-bold text-stone-500">{n.date}</span>
+                              {n.temp && (
+                                <span
+                                  className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+                                    isFever
+                                      ? "bg-rose-600 text-white"
+                                      : "bg-emerald-100 text-emerald-800"
+                                  }`}
+                                >
+                                  🌡️ {n.temp}°C {isFever ? "(발열)" : ""}
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-xs font-black text-stone-900 mt-1">{n.title}</div>
+                            {n.memo && <div className="text-[11px] text-stone-600 mt-0.5">💬 {n.memo}</div>}
+                          </div>
+                          <button
+                            onClick={() => handleDeleteMedicalNote(n.id)}
+                            className="p-1.5 text-stone-400 hover:text-red-500"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {/* 하단 네비게이션 */}
       <nav className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md bg-white border-t border-stone-200 px-1.5 py-1.5 grid grid-cols-6 gap-0.5 z-30">
