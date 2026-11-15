@@ -13,11 +13,14 @@ import {
   X,
   ChevronLeft,
   ChevronRight,
+  ChevronUp,
+  ChevronDown,
   Camera,
   Receipt,
   Settings,
   Download,
   Pin,
+  PinOff,
   AlertCircle,
   CheckCircle2,
   RefreshCw,
@@ -31,7 +34,10 @@ import {
   Star,
   Clock,
   FileJson,
-  RotateCcw
+  RotateCcw,
+  Mail,
+  CloudUpload,
+  ClipboardList
 } from "lucide-react";
 import { initializeApp, getApps, getApp } from "firebase/app";
 import {
@@ -111,6 +117,12 @@ const formatDate = (dateObj) => {
 
 const getTodayStr = () => formatDate(new Date());
 const getCurrentYearMonth = () => getTodayStr().slice(0, 7);
+
+const getTwiceDailySlotKey = () => {
+  const now = new Date();
+  const half = now.getHours() < 12 ? "AM(오전)" : "PM(오후)";
+  return `${formatDate(now)}_${half}`;
+};
 
 const getDayName = (dateStr) => {
   const days = ["일", "월", "화", "수", "목", "금", "토"];
@@ -364,7 +376,7 @@ const fileToBase64 = (file) =>
   });
 
 // ==========================================
-// 3. 상수 및 기본 데이터
+// 3. 상수 및 기본 데이터 (패치노트 히스토리 포함!)
 // ==========================================
 const FAMILY_MEMBERS = [
   { id: "수혁", name: "김수혁", role: "아빠", emoji: "👨🏻", color: "bg-blue-100 text-blue-800 border-blue-200" },
@@ -385,6 +397,56 @@ const MEAL_SLOTS = [
 const STORAGE_LOCATIONS = ["냉장실", "냉동실", "실온·팬트리"];
 const FRIDGE_CATEGORIES = ["채소/과일", "육류/수산", "유제품/계란", "유아식/이유식 재료", "반찬/김치", "양념/소스", "기타"];
 const SCHEDULE_CATEGORIES = ["기념일/생일", "할일(To-Do)", "육아/병원", "가족행사/경조사"];
+
+// [복원 완료] 패치노트(버전별 업데이트 기록) 기본 내역
+const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v5.5",
+    version: "v5.5",
+    date: "2026-11-15",
+    title: "패치노트 & 상단바 접기/틀고정 해제 복원 + 일정 달력 상단 배치",
+    changes: [
+      "상단 바 펼치기/접기(▲/▼) 및 상단 틀고정 해제/고정(📌) 토글 버튼 완벽 복원",
+      "버전별 업데이트 내역을 확인하고 직접 기록·관리할 수 있는 [패치노트] 모달 복원",
+      "일정 탭에서 [월간 달력]을 최상단에, [가족 D-Day 카운트다운 보드]를 최하단에 배치",
+      "하루 2회(오전/오후) 클라우드 자동 백업 및 Gmail/구글 드라이브 즉시 전송 기능 탑재"
+    ]
+  },
+  {
+    id: "patch-v5.0",
+    version: "v5.0",
+    date: "2026-11-15",
+    title: "가족 일정·기념일·D-Day 탭 신설 & JSON 1초 백업/복원",
+    changes: [
+      "우리 가족 6대 기념일 및 생일(매년 자동 반복 & 생후 D+일수 계산) 탑재",
+      "3일 이내 도래하는 일정(D-3 ~ D-Day) 상단 자동 알림 배너 추가",
+      "상단 8개 메뉴 2줄 균일 높이(h-9) 그리드 적용 및 새 일정 D-Day 기본 체크 해제",
+      "전체 DB 원본(JSON) 1초 다운로드 및 1초 완벽 복원 기능 추가"
+    ]
+  },
+  {
+    id: "patch-v4.0",
+    version: "v4.0",
+    date: "2026-11-14",
+    title: "Gemini 2.5 AI 스캔 고도화 & 식비 원장 분리 & 장보기·공지 탭 추가",
+    changes: [
+      "냉장고 재료 소진(다 먹음) 시에도 월간 식비 지출 총액이 줄어들지 않도록 가계부 원장(expenses) 분리",
+      "화이트보드 손글씨(아/점/저) 및 모든 월(1~12월) 식단표 이미지 AI Vision 스캔 지원",
+      "장보기 체크리스트(구매완료 시 냉장고 직행) 및 가족 공지사항 탭 신설",
+      "기존 파이어베이스(v3/v4) 데이터 100% 무손실 통합 연동"
+    ]
+  },
+  {
+    id: "patch-v1.0",
+    version: "v1.0",
+    date: "2026-11-01",
+    title: "수혁·아리나·시목·시율네 식탁 앱 최초 런칭",
+    changes: [
+      "일별 6단계 끼니(아침/오전간식/점심/오후간식/저녁/야식) 및 신당동어린이집 식단 연동",
+      "스마트 냉장고 재고·소비기한 관리 및 부부 스마트폰 실시간 동기화 구축"
+    ]
+  }
+];
 
 const INITIAL_SCHEDULES = [
   {
@@ -581,6 +643,24 @@ function MainApp() {
   const [selectedDate, setSelectedDate] = useState(() => getTodayStr());
   const [selectedMember, setSelectedMember] = useState("전체");
 
+  // [복원 완료 1] 상단 바 펼치기/접기 및 틀고정(Sticky) 해제 상태
+  const [isHeaderCollapsed, setIsHeaderCollapsed] = useState(() => {
+    return localStorage.getItem("kim_header_collapsed") === "true";
+  });
+  const [isHeaderPinned, setIsHeaderPinned] = useState(() => {
+    // 기본값은 틀고정 해제(false)로 두어 화면을 가리지 않게 하고, 원할 때만 고정 가능
+    return localStorage.getItem("kim_header_pinned") === "true";
+  });
+
+  // [복원 완료 2] 패치노트 기록 및 모달 상태
+  const [patchNotes, setPatchNotes] = useState(INITIAL_PATCH_NOTES);
+  const [isPatchModalOpen, setIsPatchModalOpen] = useState(false);
+  const [patchForm, setPatchForm] = useState({
+    version: "",
+    title: "",
+    changesText: ""
+  });
+
   const [mealsMap, setMealsMap] = useState({});
   const [fridgeMap, setFridgeMap] = useState({});
   const [expenses, setExpenses] = useState([]);
@@ -596,6 +676,12 @@ function MainApp() {
     }
   });
 
+  const [lastAutoBackupSlot, setLastAutoBackupSlot] = useState(() => {
+    return localStorage.getItem("kim_twice_daily_backup_slot") || "";
+  });
+  const [backupEmail, setBackupEmail] = useState(() => {
+    return localStorage.getItem("kim_family_backup_email") || "";
+  });
   const [backupBannerDismissedMonth, setBackupBannerDismissedMonth] = useState(() => {
     return localStorage.getItem("kim_backup_done_month") || "";
   });
@@ -610,7 +696,7 @@ function MainApp() {
     return Number(localStorage.getItem("kim_family_budget") || 800000);
   });
 
-  // [요청사항 1 완벽 반영] 일정 생성 시 카운트다운(showDday) 및 경과일(hasOriginYear) 기본값을 false(해제)로 설정!
+  // 일정 탭 상태 (체크박스 기본 해제 상태 유지)
   const [scheduleMonth, setScheduleMonth] = useState(() => getCurrentYearMonth());
   const [scheduleSelectedDate, setScheduleSelectedDate] = useState(() => getTodayStr());
   const [scheduleMemberFilter, setScheduleMemberFilter] = useState("전체");
@@ -729,7 +815,7 @@ function MainApp() {
   };
 
   // ==========================================
-  // 6. 파이어베이스 실시간 동기화
+  // 6. 파이어베이스 실시간 동기화 (패치노트 포함!)
   // ==========================================
   useEffect(() => {
     if (!auth) return;
@@ -770,6 +856,14 @@ function MainApp() {
                 setGeminiApiKey(sharedKey);
                 setTempKeyInput(sharedKey);
                 localStorage.setItem("kim_family_gemini_key", sharedKey);
+              }
+            }
+            if (d.id === "backup_status" && d.data().lastSlot) {
+              setLastAutoBackupSlot(d.data().lastSlot);
+              localStorage.setItem("kim_twice_daily_backup_slot", d.data().lastSlot);
+              if (d.data().email) {
+                setBackupEmail(d.data().email);
+                localStorage.setItem("kim_family_backup_email", d.data().email);
               }
             }
           });
@@ -920,6 +1014,34 @@ function MainApp() {
       )
     );
 
+    // [복원 완료] 패치노트 파이어베이스 동기화
+    unsubscribers.push(
+      onSnapshot(
+        getColRef("family_patchnotes_v4"),
+        async (snap) => {
+          const loaded = snap.docs.map((d) => ({
+            ...d.data(),
+            id: d.id,
+            changes: toSafeArray(d.data().changes)
+          }));
+          const loadedIds = new Set(loaded.map((p) => p.id));
+          const missingDefaults = INITIAL_PATCH_NOTES.filter((p) => !loadedIds.has(p.id));
+          if (missingDefaults.length > 0) {
+            for (const p of missingDefaults) {
+              try {
+                await setDoc(getDocRef("family_patchnotes_v4", p.id), p);
+              } catch (e) {}
+            }
+          }
+          const combined = [...loaded, ...missingDefaults].sort((a, b) =>
+            String(b.version || "").localeCompare(String(a.version || ""))
+          );
+          setPatchNotes(combined);
+        },
+        () => {}
+      )
+    );
+
     return () => {
       unsubscribers.forEach((u) => u && u());
     };
@@ -951,6 +1073,105 @@ function MainApp() {
     });
     return Object.values(merged);
   }, [fridgeMap, deletedIds]);
+
+  // 하루 2번(오전 AM / 오후 PM) 자동 클라우드 스냅샷 백업 엔진
+  useEffect(() => {
+    if (!user || !db || meals.length === 0) return;
+    const currentSlot = getTwiceDailySlotKey();
+    if (lastAutoBackupSlot === currentSlot) return;
+
+    const timer = setTimeout(async () => {
+      try {
+        const snapshotPayload = {
+          slot: currentSlot,
+          createdAt: new Date().toISOString(),
+          counts: {
+            meals: meals.length,
+            fridge: fridge.length,
+            schedules: schedules.length
+          },
+          data: {
+            meals: meals.slice(0, 200),
+            fridge,
+            expenses,
+            shoppingList,
+            notices,
+            schedules,
+            patchNotes
+          }
+        };
+        await setDoc(getDocRef("family_backups_v4", currentSlot), snapshotPayload);
+        await setDoc(
+          getDocRef("family_meta_v4", "backup_status"),
+          { lastSlot: currentSlot, updatedAt: new Date().toISOString(), email: backupEmail },
+          { merge: true }
+        );
+        setLastAutoBackupSlot(currentSlot);
+        localStorage.setItem("kim_twice_daily_backup_slot", currentSlot);
+      } catch (e) {
+        console.warn("Auto snapshot warning:", e);
+      }
+    }, 3500);
+
+    return () => clearTimeout(timer);
+  }, [user, meals.length, fridge.length, schedules.length, lastAutoBackupSlot]);
+
+  // 상단 바 접기/펼치기 및 틀고정 토글 핸들러
+  const handleToggleHeaderCollapse = () => {
+    const next = !isHeaderCollapsed;
+    setIsHeaderCollapsed(next);
+    localStorage.setItem("kim_header_collapsed", String(next));
+  };
+
+  const handleToggleHeaderPin = () => {
+    const next = !isHeaderPinned;
+    setIsHeaderPinned(next);
+    localStorage.setItem("kim_header_pinned", String(next));
+    showToast(
+      next
+        ? "상단 바 틀고정이 설정되었습니다 (스크롤 시 따라옴)"
+        : "상단 바 틀고정이 해제되었습니다 (넓은 화면 스크롤)"
+    );
+  };
+
+  // 패치노트 직접 추가 및 삭제 핸들러
+  const handleAddPatchNote = async () => {
+    if (!patchForm.title.trim()) return;
+    const id = `patch-${Date.now()}`;
+    const ver = patchForm.version.trim() || `v5.${patchNotes.length + 1}`;
+    const changesArr = patchForm.changesText
+      .split("\n")
+      .map((s) => s.replace(/^[-•*]\s*/, "").trim())
+      .filter(Boolean);
+
+    const newPatch = {
+      id,
+      version: ver,
+      date: getTodayStr(),
+      title: patchForm.title.trim(),
+      changes: changesArr.length > 0 ? changesArr : [patchForm.title.trim()]
+    };
+
+    setPatchNotes((prev) => [newPatch, ...prev]);
+    setPatchForm({ version: "", title: "", changesText: "" });
+
+    if (user && db) {
+      try {
+        await setDoc(getDocRef("family_patchnotes_v4", id), newPatch);
+      } catch (e) {}
+    }
+    showToast(`패치노트(${ver})가 기록되었습니다!`);
+  };
+
+  const handleDeletePatchNote = async (id) => {
+    setPatchNotes((prev) => prev.filter((p) => p.id !== id));
+    if (user && db) {
+      try {
+        await deleteDoc(getDocRef("family_patchnotes_v4", id));
+      } catch (e) {}
+    }
+    showToast("패치노트 항목이 삭제되었습니다.");
+  };
 
   const markIdDeleted = async (id) => {
     const next = Array.from(new Set([...deletedIds, id]));
@@ -1003,11 +1224,11 @@ function MainApp() {
   }, [selectedDate]);
 
   // ==========================================
-  // 7. 전체 DB 원본(JSON) 1초 백업 다운로드 & 1초 복원
+  // 7. 전체 DB 원본(JSON) 1초 백업 다운로드 & Gmail/구글 드라이브 전송 & 1초 복원
   // ==========================================
-  const handleDownloadJsonBackup = () => {
+  const buildFullBackupJsonString = () => {
     const fullSnapshot = {
-      backupVersion: "v5",
+      backupVersion: "v5.5",
       exportedAt: new Date().toISOString(),
       projectId: USER_FIREBASE_CONFIG.projectId,
       data: {
@@ -1017,11 +1238,15 @@ function MainApp() {
         shoppingList,
         notices,
         schedules,
+        patchNotes,
         deletedIds
       }
     };
+    return JSON.stringify(fullSnapshot, null, 2);
+  };
 
-    const jsonString = JSON.stringify(fullSnapshot, null, 2);
+  const handleDownloadJsonBackup = () => {
+    const jsonString = buildFullBackupJsonString();
     const blob = new Blob([jsonString], { type: "application/json;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
@@ -1035,6 +1260,32 @@ function MainApp() {
     localStorage.setItem("kim_backup_done_month", curYm);
     setBackupBannerDismissedMonth(curYm);
     showToast("전체 DB 원본(JSON) 백업 파일이 다운로드되었습니다!");
+  };
+
+  const handleSendBackupToGmailOrDrive = async () => {
+    const jsonString = buildFullBackupJsonString();
+    const fileName = `수혁아리나시목시율_DB백업_${getTodayStr()}.json`;
+    const fileObj = new File([jsonString], fileName, { type: "application/json" });
+
+    if (navigator.canShare && navigator.canShare({ files: [fileObj] })) {
+      try {
+        await navigator.share({
+          title: `[가족식탁 DB백업] ${getTodayStr()}`,
+          text: `식단 ${meals.length}건, 냉장고 ${fridge.length}건, 일정 ${schedules.length}건 전체 백업 파일입니다.`,
+          files: [fileObj]
+        });
+        showToast("구글 드라이브 / Gmail 공유 창이 실행되었습니다!");
+        return;
+      } catch (e) {}
+    }
+
+    handleDownloadJsonBackup();
+    const targetMail = backupEmail.trim() || "";
+    const subject = encodeURIComponent(`[가족식탁 자동백업] ${getTodayStr()} 전체 데이터베이스 백업본`);
+    const body = encodeURIComponent(
+      `수혁·아리나·시목·시율네 식탁 데이터베이스 백업입니다.\n\n• 백업 일시: ${new Date().toLocaleString()}\n• 식단: ${meals.length}건 / 냉장고: ${fridge.length}건 / 가족일정: ${schedules.length}건\n\n방금 다운로드된 '${fileName}' 파일을 첨부하거나 구글 드라이브에 보관해 두세요.`
+    );
+    window.open(`mailto:${targetMail}?subject=${subject}&body=${body}`, "_blank");
   };
 
   const handleRestoreFromJsonFile = async (e) => {
@@ -1069,6 +1320,7 @@ function MainApp() {
       if (Array.isArray(payload.shoppingList)) setShoppingList(payload.shoppingList);
       if (Array.isArray(payload.notices)) setNotices(payload.notices);
       if (Array.isArray(payload.schedules)) setSchedules(payload.schedules);
+      if (Array.isArray(payload.patchNotes)) setPatchNotes(payload.patchNotes);
 
       if (user && db) {
         const writePromises = [];
@@ -1096,6 +1348,9 @@ function MainApp() {
         (payload.schedules || []).forEach((sc) => {
           if (sc?.id) writePromises.push(setDoc(getDocRef("family_schedules_v4", sc.id), sc));
         });
+        (payload.patchNotes || []).forEach((pt) => {
+          if (pt?.id) writePromises.push(setDoc(getDocRef("family_patchnotes_v4", pt.id), pt));
+        });
 
         await Promise.allSettled(writePromises);
       }
@@ -1118,7 +1373,6 @@ function MainApp() {
     return isDayOne && backupBannerDismissedMonth !== curYm;
   }, [backupBannerDismissedMonth]);
 
-  // 3일 이내 도래하는 임박 일정 자동 추출
   const imminentSchedulesWithin3Days = useMemo(() => {
     return schedules
       .filter((s) => !s.done)
@@ -1927,18 +2181,22 @@ function MainApp() {
       )}
 
       {/* ==========================================
-          상단 헤더 (슬림 고정 높이 2줄 그리드 메뉴 + 메뉴명 "일정" 적용!)
+          상단 헤더 (틀고정 해제/고정 토글 + 상단 바 접기/펼치기 + 패치노트 버튼 완벽 복원!)
       ========================================== */}
-      <header className="bg-white border-b border-stone-200 px-3.5 pt-3 pb-3 sticky top-0 z-30">
+      <header
+        className={`bg-white border-b border-stone-200 px-3.5 pt-2.5 pb-2.5 z-30 transition-all ${
+          isHeaderPinned ? "sticky top-0 shadow-md" : "relative"
+        }`}
+      >
         {isFirstDayOfMonthBackupNeeded && (
-          <div className="mb-2.5 bg-amber-500 text-white rounded-2xl p-3 shadow-sm flex items-center justify-between gap-2">
+          <div className="mb-2 bg-amber-500 text-white rounded-2xl p-2.5 shadow-sm flex items-center justify-between gap-2">
             <div className="text-xs font-extrabold leading-snug">
               📦 [매월 1일 정기 백업] 이번 달 가족 데이터를 백업할까요?
             </div>
             <div className="flex items-center gap-1 shrink-0">
               <button
-                onClick={handleDownloadJsonBackup}
-                className="px-2.5 py-1.5 rounded-xl bg-stone-900 text-white text-[11px] font-black"
+                onClick={handleSendBackupToGmailOrDrive}
+                className="px-2.5 py-1 rounded-xl bg-stone-900 text-white text-[11px] font-black"
               >
                 1초 백업
               </button>
@@ -1956,20 +2214,33 @@ function MainApp() {
           </div>
         )}
 
-        <div className="flex items-center justify-between mb-1.5">
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-            <Zap className="w-3 h-3 text-emerald-600 fill-emerald-600" />
-            ahrisoohyeokbap 실시간 동기화
-          </span>
-          <div className="flex items-center gap-1.5">
+        {/* 최상단 컨트롤 바: 동기화 상태 + 패치노트 + 식비 + 설정 */}
+        <div className="flex items-center justify-between gap-1 mb-1.5">
+          <div className="flex items-center gap-1">
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+              <Zap className="w-3 h-3 text-emerald-600 fill-emerald-600" />
+              동기화 중
+            </span>
+            {/* [복원 완료] 패치노트 열람/기록 버튼 */}
+            <button
+              onClick={() => setIsPatchModalOpen(true)}
+              className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-stone-100 hover:bg-stone-200 text-stone-700 border border-stone-200 flex items-center gap-1"
+              title="패치노트 기록 및 히스토리"
+            >
+              <ClipboardList className="w-3 h-3 text-stone-600" />
+              <span>패치노트 {patchNotes[0]?.version || "v5.5"}</span>
+            </button>
+          </div>
+
+          <div className="flex items-center gap-1">
             <button
               onClick={() => {
                 setActiveTab("monthly");
                 setMonthlySubTab("expense");
               }}
-              className="px-2.5 py-1 rounded-full bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-900 text-[11px] font-extrabold flex items-center gap-1"
+              className="px-2 py-0.5 rounded-full bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-900 text-[11px] font-extrabold flex items-center gap-1"
             >
-              <span>💰 {currentMonth.slice(5)}월 식비</span>
+              <span>💰 {currentMonth.slice(5)}월</span>
               <span>{monthlyExpenseSummary.total.toLocaleString()}원</span>
             </button>
             <button
@@ -1978,121 +2249,156 @@ function MainApp() {
                 setIsSettingsOpen(true);
               }}
               className="p-1.5 rounded-full bg-stone-100 hover:bg-stone-200 text-stone-600"
-              title="JSON 백업/복원 및 설정"
+              title="백업 및 설정"
             >
-              <Settings className="w-4 h-4" />
+              <Settings className="w-3.5 h-3.5" />
             </button>
           </div>
         </div>
 
-        <div className="flex items-center justify-between">
-          <h1 className="text-base font-black tracking-tight text-stone-900">
+        {/* 타이틀 & [복원 완료] 상단 틀고정 토글 + 상단 바 접기/펼치기 버튼 */}
+        <div className="flex items-center justify-between gap-1">
+          <h1 className="text-sm font-black tracking-tight text-stone-900 truncate">
             수혁 · 아리나 · 시목 · 시율네 식탁 🍽️
           </h1>
-          <button
-            onClick={() => setActiveTab("schedule")}
-            className="text-[11px] font-extrabold text-pink-700 bg-pink-50 border border-pink-200 px-2.5 py-0.5 rounded-full flex items-center gap-1 shrink-0"
-          >
-            <Heart className="w-3 h-3 fill-pink-500 text-pink-500" />
-            <span>가족 D-Day</span>
-          </button>
-        </div>
 
-        {/* 3일 이내 도래하는 일정(D-3 ~ D-Day) 상단 자동 알림 배너 */}
-        {imminentSchedulesWithin3Days.length > 0 && activeTab !== "schedule" && (
-          <div
-            onClick={() => setActiveTab("schedule")}
-            className="mt-2 bg-rose-50 hover:bg-rose-100/80 border border-rose-200 rounded-xl px-3 py-2 cursor-pointer transition space-y-1"
-          >
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] font-black text-rose-900 flex items-center gap-1">
-                <Clock className="w-3.5 h-3.5 text-rose-600" />
-                <span>3일 이내 도래하는 가족 일정 ({imminentSchedulesWithin3Days.length}건)</span>
-              </span>
-              <span className="text-[10px] font-extrabold text-rose-600">일정표 열기 &gt;</span>
-            </div>
-            <div className="flex flex-wrap gap-1.5">
-              {imminentSchedulesWithin3Days.map((ev) => (
-                <span
-                  key={ev.id}
-                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-white border border-rose-200 text-[11px] font-extrabold text-rose-900"
-                >
-                  <span>{ev.title}</span>
-                  <span className="px-1.5 py-0.2 rounded bg-rose-600 text-white text-[10px] font-black">
-                    {ev.calc.dDayText}
-                  </span>
-                </span>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* 상단 고정 가족 공지 */}
-        {pinnedNotices.length > 0 && activeTab !== "notices" && (
-          <div
-            onClick={() => setActiveTab("notices")}
-            className="mt-2 bg-indigo-50/90 hover:bg-indigo-100/80 border border-indigo-200 rounded-xl px-3 py-2 cursor-pointer flex items-start justify-between gap-2 transition"
-          >
-            <div className="flex items-start gap-1.5 min-w-0">
-              <Pin className="w-3.5 h-3.5 text-indigo-600 shrink-0 mt-0.5" />
-              <div className="text-xs leading-snug break-keep">
-                <span className="font-extrabold text-indigo-900 mr-1">[가족공지]</span>
-                <span className="font-semibold text-indigo-800">{pinnedNotices[0].title}</span>
-              </div>
-            </div>
-            <span className="text-[10px] font-bold text-indigo-600 shrink-0 mt-0.5">
-              전체보기 &gt;
-            </span>
-          </div>
-        )}
-
-        {/* [요청사항 2 완벽 반영] 메뉴명을 "일정"으로 변경하고, 8개 모든 버튼 높이를 h-9(36px)로 슬림하게 통일!
-            배지는 우측 상단 모서리에 미니 플로팅 형태로 배치하여 글자가 절대 두 줄로 꺾이지 않습니다. */}
-        <div className="grid grid-cols-4 gap-1.5 mt-2.5 bg-stone-100 p-1.5 rounded-2xl">
-          {[
-            { id: "daily", label: "일별식단", icon: "🍽️" },
-            { id: "weekly", label: "주간요약", icon: "📊" },
-            { id: "monthly", label: "월간·식비", icon: "💰" },
-            {
-              id: "schedule",
-              label: "일정",
-              icon: "🗓️",
-              badge: imminentSchedulesWithin3Days.length
-            },
-            { id: "fridge", label: "냉장고", icon: "❄️" },
-            {
-              id: "shopping",
-              label: "장보기",
-              icon: "🛒",
-              badge: shoppingList.filter((s) => !s.checked).length
-            },
-            {
-              id: "notices",
-              label: "가족공지",
-              icon: "📌",
-              badge: notices.filter((n) => !n.done).length
-            },
-            { id: "ai", label: "AI추천", icon: "✨" }
-          ].map((t) => (
+          <div className="flex items-center gap-1 shrink-0">
             <button
-              key={t.id}
-              onClick={() => setActiveTab(t.id)}
-              className={`relative h-9 px-1.5 rounded-xl text-[11px] font-extrabold whitespace-nowrap transition flex items-center justify-center gap-1 ${
-                activeTab === t.id
-                  ? "bg-stone-900 text-white shadow-sm"
-                  : "bg-white text-stone-700 hover:bg-stone-50 border border-stone-200/80"
+              onClick={handleToggleHeaderPin}
+              className={`px-2 py-1 rounded-lg text-[10px] font-extrabold border flex items-center gap-0.5 transition ${
+                isHeaderPinned
+                  ? "bg-amber-100 text-amber-900 border-amber-300"
+                  : "bg-stone-100 text-stone-600 border-stone-200"
               }`}
+              title="상단 바 틀고정 설정/해제"
             >
-              <span className="text-xs leading-none">{t.icon}</span>
-              <span className="tracking-tight leading-none">{t.label}</span>
-              {t.badge > 0 && (
-                <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 text-[9px] rounded-full bg-orange-500 text-white font-black flex items-center justify-center shadow-sm">
-                  {t.badge}
-                </span>
+              {isHeaderPinned ? (
+                <>
+                  <Pin className="w-3 h-3 text-amber-700" />
+                  <span>틀고정중</span>
+                </>
+              ) : (
+                <>
+                  <PinOff className="w-3 h-3 text-stone-500" />
+                  <span>고정해제됨</span>
+                </>
               )}
             </button>
-          ))}
+
+            <button
+              onClick={handleToggleHeaderCollapse}
+              className="px-2 py-1 rounded-lg bg-stone-900 text-white text-[10px] font-extrabold flex items-center gap-0.5"
+              title="상단 메뉴 바 접기/펼치기"
+            >
+              <span>{isHeaderCollapsed ? "펼치기" : "접기"}</span>
+              {isHeaderCollapsed ? (
+                <ChevronDown className="w-3 h-3" />
+              ) : (
+                <ChevronUp className="w-3 h-3" />
+              )}
+            </button>
+          </div>
         </div>
+
+        {/* 접기(isHeaderCollapsed === true) 상태일 때는 아래 배너들과 메뉴 그리드를 숨겨 화면을 넓게 씀! */}
+        {!isHeaderCollapsed && (
+          <>
+            {/* 3일 이내 도래하는 일정 상단 자동 알림 배너 */}
+            {imminentSchedulesWithin3Days.length > 0 && activeTab !== "schedule" && (
+              <div
+                onClick={() => setActiveTab("schedule")}
+                className="mt-2 bg-rose-50 hover:bg-rose-100/80 border border-rose-200 rounded-xl px-3 py-2 cursor-pointer transition space-y-1"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-black text-rose-900 flex items-center gap-1">
+                    <Clock className="w-3.5 h-3.5 text-rose-600" />
+                    <span>3일 이내 도래하는 가족 일정 ({imminentSchedulesWithin3Days.length}건)</span>
+                  </span>
+                  <span className="text-[10px] font-extrabold text-rose-600">일정표 열기 &gt;</span>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {imminentSchedulesWithin3Days.map((ev) => (
+                    <span
+                      key={ev.id}
+                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-white border border-rose-200 text-[11px] font-extrabold text-rose-900"
+                    >
+                      <span>{ev.title}</span>
+                      <span className="px-1.5 py-0.2 rounded bg-rose-600 text-white text-[10px] font-black">
+                        {ev.calc.dDayText}
+                      </span>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* 상단 고정 가족 공지 */}
+            {pinnedNotices.length > 0 && activeTab !== "notices" && (
+              <div
+                onClick={() => setActiveTab("notices")}
+                className="mt-2 bg-indigo-50/90 hover:bg-indigo-100/80 border border-indigo-200 rounded-xl px-3 py-2 cursor-pointer flex items-start justify-between gap-2 transition"
+              >
+                <div className="flex items-start gap-1.5 min-w-0">
+                  <Pin className="w-3.5 h-3.5 text-indigo-600 shrink-0 mt-0.5" />
+                  <div className="text-xs leading-snug break-keep">
+                    <span className="font-extrabold text-indigo-900 mr-1">[가족공지]</span>
+                    <span className="font-semibold text-indigo-800">{pinnedNotices[0].title}</span>
+                  </div>
+                </div>
+                <span className="text-[10px] font-bold text-indigo-600 shrink-0 mt-0.5">
+                  전체보기 &gt;
+                </span>
+              </div>
+            )}
+
+            {/* 8개 균일 높이(h-9) 2줄 메뉴 그리드 ("일정" 메뉴명 적용) */}
+            <div className="grid grid-cols-4 gap-1.5 mt-2.5 bg-stone-100 p-1.5 rounded-2xl">
+              {[
+                { id: "daily", label: "일별식단", icon: "🍽️" },
+                { id: "weekly", label: "주간요약", icon: "📊" },
+                { id: "monthly", label: "월간·식비", icon: "💰" },
+                {
+                  id: "schedule",
+                  label: "일정",
+                  icon: "🗓️",
+                  badge: imminentSchedulesWithin3Days.length
+                },
+                { id: "fridge", label: "냉장고", icon: "❄️" },
+                {
+                  id: "shopping",
+                  label: "장보기",
+                  icon: "🛒",
+                  badge: shoppingList.filter((s) => !s.checked).length
+                },
+                {
+                  id: "notices",
+                  label: "가족공지",
+                  icon: "📌",
+                  badge: notices.filter((n) => !n.done).length
+                },
+                { id: "ai", label: "AI추천", icon: "✨" }
+              ].map((t) => (
+                <button
+                  key={t.id}
+                  onClick={() => setActiveTab(t.id)}
+                  className={`relative h-9 px-1.5 rounded-xl text-[11px] font-extrabold whitespace-nowrap transition flex items-center justify-center gap-1 ${
+                    activeTab === t.id
+                      ? "bg-stone-900 text-white shadow-sm"
+                      : "bg-white text-stone-700 hover:bg-stone-50 border border-stone-200/80"
+                  }`}
+                >
+                  <span className="text-xs leading-none">{t.icon}</span>
+                  <span className="tracking-tight leading-none">{t.label}</span>
+                  {t.badge > 0 && (
+                    <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 text-[9px] rounded-full bg-orange-500 text-white font-black flex items-center justify-center shadow-sm">
+                      {t.badge}
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+          </>
+        )}
       </header>
 
       {/* ==========================================
@@ -2733,7 +3039,7 @@ function MainApp() {
       )}
 
       {/* ==========================================
-          탭 4: 가족 일정 & 기념일 보드 (새 일정 추가 시 카운트다운/D+ 체크 기본 해제!)
+          탭 4: 일정 (1순위: 월간 달력 최상단 -> 2순위: 선택일 상세일정 -> 3순위: D-Day 카운트다운 보드 최하단!)
       ========================================== */}
       {activeTab === "schedule" && (
         <div className="p-4 space-y-4">
@@ -2741,7 +3047,7 @@ function MainApp() {
             <div>
               <h2 className="text-sm font-black text-stone-900 flex items-center gap-1.5">
                 <CalendarDays className="w-4 h-4 text-pink-600" />
-                <span>우리 가족 일정표 & 기념일</span>
+                <span>우리 가족 월간 일정표</span>
               </h2>
               <p className="text-[11px] text-stone-500">
                 가족별 할 일·경조사 및 매년 반복 생일·기념일 통합 관리
@@ -2771,7 +3077,6 @@ function MainApp() {
             </button>
           </div>
 
-          {/* 5칸 균등 가족 필터 */}
           <div className="grid grid-cols-5 gap-1">
             <button
               onClick={() => setScheduleMemberFilter("전체")}
@@ -2798,62 +3103,7 @@ function MainApp() {
             ))}
           </div>
 
-          {/* 1) 가족 D-Day & 기념일 하이라이트 보드 */}
-          <div className="bg-gradient-to-br from-stone-900 via-stone-800 to-stone-900 text-white p-4 rounded-2xl shadow-md space-y-2.5">
-            <div className="flex items-center justify-between">
-              <div className="text-xs font-black text-amber-300 flex items-center gap-1.5">
-                <Star className="w-3.5 h-3.5 fill-amber-300 text-amber-300" />
-                <span>고정된 가족 기념일 & D-Day 보드 (오늘: {getTodayStr()})</span>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              {dDayCards.map((item) => (
-                <div
-                  key={item.id}
-                  onClick={() => {
-                    const targetMonth = item.isAnnual
-                      ? `${scheduleMonth.slice(0, 4)}-${String(item.date).slice(5, 7)}`
-                      : String(item.date).slice(0, 7);
-                    const targetDay = item.isAnnual
-                      ? `${scheduleMonth.slice(0, 4)}-${String(item.date).slice(5, 10)}`
-                      : String(item.date).slice(0, 10);
-                    setScheduleMonth(targetMonth);
-                    setScheduleSelectedDate(targetDay);
-                  }}
-                  className="bg-white/10 hover:bg-white/15 border border-white/15 rounded-xl px-3 py-2.5 cursor-pointer transition flex items-center justify-between gap-2"
-                >
-                  <div className="min-w-0 flex-1">
-                    <div className="text-xs font-extrabold text-white break-keep leading-snug">
-                      {item.title}
-                    </div>
-                    <div className="text-[11px] font-semibold text-stone-300 mt-0.5 flex flex-wrap items-center gap-2">
-                      <span>
-                        📅 {item.isAnnual ? `매년 ${String(item.date).slice(5).replace("-", "월 ")}일` : item.date}
-                      </span>
-                      {item.calc.elapsedDays !== null && (
-                        <span className="text-amber-300 font-extrabold">
-                          • {item.id.includes("bday") ? "생후" : "함께한 지"} D+{item.calc.elapsedDays.toLocaleString()}일째
-                        </span>
-                      )}
-                    </div>
-                  </div>
-
-                  <span
-                    className={`px-2.5 py-1 rounded-xl text-xs font-black shrink-0 ${
-                      item.calc.daysUntil <= 3 && item.calc.daysUntil >= 0
-                        ? "bg-rose-500 text-white animate-pulse"
-                        : "bg-amber-400 text-stone-900"
-                    }`}
-                  >
-                    {item.calc.dDayText}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* 2) 월간 가족 일정 캘린더 */}
+          {/* [1순위 최상단 배치] 월간 가족 일정 캘린더 */}
           <div className="bg-white p-3.5 rounded-2xl border border-stone-200 shadow-sm space-y-3">
             <div className="flex items-center justify-between">
               <button
@@ -2992,7 +3242,7 @@ function MainApp() {
             </div>
           </div>
 
-          {/* 3) 선택한 날짜의 상세 일정 / To-Do / 기념일 관리 */}
+          {/* [2순위 중간 배치] 선택한 날짜의 상세 일정 / To-Do / 기념일 관리 */}
           <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-sm space-y-2.5">
             <div className="flex items-center justify-between">
               <div className="text-xs font-black text-stone-900">
@@ -3128,6 +3378,62 @@ function MainApp() {
                 })}
               </div>
             )}
+          </div>
+
+          {/* [3순위 최하단 배치] 우리 가족 D-Day & 기념일 카운트다운 보드 */}
+          <div className="bg-gradient-to-br from-stone-900 via-stone-800 to-stone-900 text-white p-4 rounded-2xl shadow-md space-y-2.5">
+            <div className="flex items-center justify-between">
+              <div className="text-xs font-black text-amber-300 flex items-center gap-1.5">
+                <Star className="w-3.5 h-3.5 fill-amber-300 text-amber-300" />
+                <span>우리 가족 D-Day & 기념일 카운트다운 (오늘: {getTodayStr()})</span>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              {dDayCards.map((item) => (
+                <div
+                  key={item.id}
+                  onClick={() => {
+                    const targetMonth = item.isAnnual
+                      ? `${scheduleMonth.slice(0, 4)}-${String(item.date).slice(5, 7)}`
+                      : String(item.date).slice(0, 7);
+                    const targetDay = item.isAnnual
+                      ? `${scheduleMonth.slice(0, 4)}-${String(item.date).slice(5, 10)}`
+                      : String(item.date).slice(0, 10);
+                    setScheduleMonth(targetMonth);
+                    setScheduleSelectedDate(targetDay);
+                    window.scrollTo({ top: 0, behavior: "smooth" });
+                  }}
+                  className="bg-white/10 hover:bg-white/15 border border-white/15 rounded-xl px-3 py-2.5 cursor-pointer transition flex items-center justify-between gap-2"
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="text-xs font-extrabold text-white break-keep leading-snug">
+                      {item.title}
+                    </div>
+                    <div className="text-[11px] font-semibold text-stone-300 mt-0.5 flex flex-wrap items-center gap-2">
+                      <span>
+                        📅 {item.isAnnual ? `매년 ${String(item.date).slice(5).replace("-", "월 ")}일` : item.date}
+                      </span>
+                      {item.calc.elapsedDays !== null && (
+                        <span className="text-amber-300 font-extrabold">
+                          • {item.id.includes("bday") ? "생후" : "함께한 지"} D+{item.calc.elapsedDays.toLocaleString()}일째
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <span
+                    className={`px-2.5 py-1 rounded-xl text-xs font-black shrink-0 ${
+                      item.calc.daysUntil <= 3 && item.calc.daysUntil >= 0
+                        ? "bg-rose-500 text-white animate-pulse"
+                        : "bg-amber-400 text-stone-900"
+                    }`}
+                  >
+                    {item.calc.dDayText}
+                  </span>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       )}
@@ -3768,7 +4074,7 @@ function MainApp() {
         </div>
       )}
 
-      {/* 하단 네비게이션 (메뉴명 "일정"으로 통일!) */}
+      {/* 하단 네비게이션 */}
       <nav className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md bg-white border-t border-stone-200 px-1.5 py-1.5 grid grid-cols-6 gap-0.5 z-30">
         {[
           { id: "daily", label: "일별식단", icon: Utensils },
@@ -3796,7 +4102,103 @@ function MainApp() {
       </nav>
 
       {/* ==========================================
-          모달: 가족 일정 추가·수정 (카운트다운/D+ 기본 체크 해제!)
+          [복원 완료] 모달: 패치노트 (업데이트 히스토리 열람 및 새 기록 작성)
+      ========================================== */}
+      {isPatchModalOpen && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-md w-full p-5 space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-black text-stone-900 flex items-center gap-1.5">
+                  <ClipboardList className="w-4 h-4 text-amber-600" />
+                  <span>우리 가족 식탁 앱 패치노트 (업데이트 기록)</span>
+                </h3>
+                <p className="text-[11px] text-stone-500">
+                  그동안의 기능 보완 내역을 확인하고 새 패치 기록을 남길 수 있습니다.
+                </p>
+              </div>
+              <button onClick={() => setIsPatchModalOpen(false)}>
+                <X className="w-5 h-5 text-stone-400" />
+              </button>
+            </div>
+
+            {/* 새 패치노트 직접 기록 폼 */}
+            <div className="bg-stone-50 p-3.5 rounded-2xl border border-stone-200 space-y-2">
+              <div className="text-xs font-extrabold text-stone-800">
+                ✍️ 새 패치노트 기록 추가하기
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                <input
+                  type="text"
+                  placeholder="버전 (예: v5.6)"
+                  value={patchForm.version}
+                  onChange={(e) => setPatchForm({ ...patchForm, version: e.target.value })}
+                  className="px-2.5 py-1.5 rounded-xl border border-stone-200 text-xs font-black bg-white"
+                />
+                <input
+                  type="text"
+                  placeholder="패치 제목 (예: 시율이 예방접종 추가)"
+                  value={patchForm.title}
+                  onChange={(e) => setPatchForm({ ...patchForm, title: e.target.value })}
+                  className="col-span-2 px-2.5 py-1.5 rounded-xl border border-stone-200 text-xs font-bold bg-white"
+                />
+              </div>
+              <textarea
+                rows={2}
+                placeholder="상세 변경 내역 (줄바꿈으로 여러 줄 입력 가능)"
+                value={patchForm.changesText}
+                onChange={(e) => setPatchForm({ ...patchForm, changesText: e.target.value })}
+                className="w-full px-2.5 py-1.5 rounded-xl border border-stone-200 text-xs bg-white"
+              />
+              <button
+                onClick={handleAddPatchNote}
+                className="w-full py-2 rounded-xl bg-stone-900 text-white text-xs font-extrabold"
+              >
+                + 패치노트 저장하기
+              </button>
+            </div>
+
+            {/* 버전별 패치노트 타임라인 리스트 */}
+            <div className="space-y-3">
+              {patchNotes.map((pn) => (
+                <div
+                  key={pn.id}
+                  className="p-3.5 rounded-2xl bg-white border border-stone-200 shadow-sm space-y-2"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="px-2 py-0.5 rounded-lg bg-amber-500 text-white text-[11px] font-black">
+                        {pn.version}
+                      </span>
+                      <span className="text-xs font-black text-stone-900">{pn.title}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[10px] font-bold text-stone-400">{pn.date}</span>
+                      <button
+                        onClick={() => handleDeletePatchNote(pn.id)}
+                        className="text-stone-300 hover:text-red-500"
+                        title="삭제"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                  <ul className="space-y-1 text-xs text-stone-600 pl-1">
+                    {toSafeArray(pn.changes).map((line, i) => (
+                      <li key={i} className="leading-snug break-keep">
+                        • {line}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ==========================================
+          모달: 가족 일정 추가·수정
       ========================================== */}
       {isScheduleModalOpen && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
@@ -3893,7 +4295,6 @@ function MainApp() {
               </div>
             </div>
 
-            {/* 특별 기념일용 선택 옵션 (기본값은 모두 체크 해제 상태!) */}
             <div className="space-y-2 bg-stone-50 p-3 rounded-2xl border border-stone-200">
               <div className="text-[10px] font-extrabold text-stone-500">
                 기념일/생일 전용 추가 옵션 (필요할 때만 체크)
@@ -3917,7 +4318,7 @@ function MainApp() {
                     setScheduleForm({ ...scheduleForm, showDday: e.target.checked })
                   }
                 />
-                <span>⭐ 상단 D-Day 카운트다운 위젯에 고정 표시하기</span>
+                <span>⭐ 하단 D-Day 카운트다운 보드에 고정 표시하기</span>
               </label>
 
               <label className="flex items-center gap-2 text-xs font-bold text-stone-800 cursor-pointer">
@@ -4714,12 +5115,12 @@ function MainApp() {
         </div>
       )}
 
-      {/* 설정 모달: 전체 DB 원본(JSON) 1초 백업 다운로드 & 백업 파일로 1초 복원하기 */}
+      {/* 설정 모달 */}
       {isSettingsOpen && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-sm w-full p-5 space-y-3.5 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between">
-              <h3 className="text-sm font-black">⚙️ 전체 DB 1초 백업·복원 및 설정</h3>
+              <h3 className="text-sm font-black">⚙️ 1일 2회 자동백업 · Gmail/Drive · 설정</h3>
               <button onClick={() => setIsSettingsOpen(false)}>
                 <X className="w-5 h-5 text-stone-400" />
               </button>
@@ -4727,27 +5128,57 @@ function MainApp() {
 
             <div className="p-3 rounded-2xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-900 space-y-1">
               <div>
-                ✅ <b>연결된 DB:</b> <code>ahrisoohyeokbap</code>
+                ✅ <b>하루 2회(오전/오후) 클라우드 스냅샷:</b> 정상 가동 중
               </div>
               <div>
-                📦 <b>보관 중인 데이터:</b> 식단 {meals.length}건 · 냉장고 {fridge.length}건 · 일정 {schedules.length}건 · 공지 {notices.length}건
+                🕒 <b>최근 자동백업 슬롯:</b> <code>{lastAutoBackupSlot || getTwiceDailySlotKey()}</code>
+              </div>
+              <div>
+                📦 <b>보관 중인 데이터:</b> 식단 {meals.length}건 · 냉장고 {fridge.length}건 · 일정 {schedules.length}건
               </div>
             </div>
 
+            <button
+              onClick={() => {
+                setIsSettingsOpen(false);
+                setIsPatchModalOpen(true);
+              }}
+              className="w-full py-2.5 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-800 border border-stone-300 text-xs font-extrabold flex items-center justify-center gap-1.5"
+            >
+              <ClipboardList className="w-4 h-4 text-amber-600" />
+              <span>📝 앱 패치노트 열람 및 새 업데이트 기록하기</span>
+            </button>
+
             <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 space-y-2.5">
               <div className="text-xs font-black text-amber-900 flex items-center gap-1.5">
-                <FileJson className="w-4 h-4 text-amber-700" />
-                <span>전체 DB 마스터 원본(JSON) 백업 및 복원</span>
+                <CloudUpload className="w-4 h-4 text-amber-700" />
+                <span>Gmail / 구글 드라이브 백업 및 1초 복원</span>
               </div>
-              <p className="text-[11px] text-amber-800 leading-relaxed">
-                모든 식단, 냉장고, 식비 가계부, 장보기, 공지사항, 가족 일정을 원본 그대로 백업하고 언제든 1초 만에 복원할 수 있습니다. (매월 1일 자동 알림 지원)
-              </p>
+
+              <input
+                type="email"
+                value={backupEmail}
+                onChange={(e) => {
+                  setBackupEmail(e.target.value);
+                  localStorage.setItem("kim_family_backup_email", e.target.value);
+                }}
+                placeholder="수신받을 내 Gmail 주소 입력 (선택)"
+                className="w-full px-3 py-2 rounded-xl border border-amber-300 text-xs font-bold bg-white"
+              />
+
+              <button
+                onClick={handleSendBackupToGmailOrDrive}
+                className="w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-extrabold flex items-center justify-center gap-1.5 shadow-sm"
+              >
+                <Mail className="w-4 h-4" />
+                <span>내 Gmail / 구글 드라이브로 백업 즉시 보내기</span>
+              </button>
 
               <button
                 onClick={handleDownloadJsonBackup}
                 className="w-full py-2.5 rounded-xl bg-stone-900 hover:bg-stone-800 text-white text-xs font-extrabold flex items-center justify-center gap-1.5 shadow-sm"
               >
-                <Download className="w-4 h-4 text-amber-400" />
+                <FileJson className="w-4 h-4 text-amber-400" />
                 <span>전체 DB 원본(JSON) 1초 백업 다운로드</span>
               </button>
 
