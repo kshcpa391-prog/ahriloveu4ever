@@ -49,7 +49,10 @@ import {
   getAuth,
   signInAnonymously,
   onAuthStateChanged,
-  signInWithCustomToken
+  signInWithCustomToken,
+  GoogleAuthProvider,
+  signInWithPopup,
+  signOut
 } from "firebase/auth";
 import {
   getFirestore,
@@ -597,6 +600,18 @@ const SCHEDULE_CATEGORIES = ["기념일/생일", "할일(To-Do)", "육아/병원
 
 const INITIAL_PATCH_NOTES = [
   {
+    id: "patch-v7.1",
+    version: "v7.1",
+    date: "2026-11-15",
+    title: "안정화 패치 (육아수첩 백업·Google 로그인·재고차감 확인창·성장그래프·AI 오류센터)",
+    changes: [
+      "전체 JSON 백업/복원에 육아수첩(성장·접종·진료메모) 및 폐기손실 데이터 포함 + 200건 제한 해제",
+      "부부 전용 Google 계정 로그인 지원 추가 & 접종 일정 덮어쓰기 방지·월말 날짜 보정 적용",
+      "요리 완료 시 재료 차감 수량 확인 팝업, 재고 부족 시 음수 차감 차단, 저장 실패 시 롤백 적용",
+      "성장 기록 내 키·몸무게 추이 SVG 그래프 & 설정 내 GPT/Gemini 통합 진단·AI 오류센터 추가"
+    ]
+  },
+  {
     id: "patch-v7.0",
     version: "v7.0",
     date: "2026-11-15",
@@ -813,8 +828,12 @@ const getChildAgeStats = (birthStr) => {
 
 const addMonthsToDateStr = (birthStr, addMonths, addDays = 0) => {
   const d = new Date(birthStr + "T00:00:00");
+  const origDay = d.getDate();
+  d.setDate(1);
   d.setMonth(d.getMonth() + addMonths);
-  d.setDate(d.getDate() + addDays);
+  const lastDayOfTargetMonth = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+  d.setDate(Math.min(origDay, lastDayOfTargetMonth));
+  if (addDays !== 0) d.setDate(d.getDate() + addDays);
   return formatDate(d);
 };
 
@@ -1081,6 +1100,9 @@ function MainApp() {
   const [wasteEvents, setWasteEvents] = useState([]);
 
   // [신규 v7.0] 육아수첩 상태 (선택한 아이, 서브탭, 접종체크, 성장기록, 진료/열 메모)
+  const [aiCallLogs, setAiCallLogs] = useState([]);
+  const [cookingConfirmModal, setCookingConfirmModal] = useState(null);
+
   const [selectedChildId, setSelectedChildId] = useState("시율");
   const [babySubTab, setBabySubTab] = useState("milestones"); // milestones | vaccines | growth | medical
   const [babyChecks, setBabyChecks] = useState({});
@@ -1394,40 +1416,105 @@ function MainApp() {
     return () => clearInterval(interval);
   }, []);
 
-  // AI 연결 1초 자가진단 테스트
-  const handleRunAiDiagnostic = async () => {
-    setAiDiagStatus("진단 중... 구글 AI 서버에 연결 테스트를 보내고 있습니다.");
-    const testKey = String(tempKeyInput || geminiApiKey || EMBEDDED_GEMINI_KEY).trim();
+  const pushAiLog = (provider, task, ok, detail) => {
+    const now = new Date();
+    const timeStr = `${String(now.getHours()).padStart(2, "0")}:${String(
+      now.getMinutes()
+    ).padStart(2, "0")}:${String(now.getSeconds()).padStart(2, "0")}`;
+    setAiCallLogs((prev) => [{ id: Date.now() + Math.random(), time: timeStr, provider, task, ok, detail }, ...prev].slice(0, 15));
+  };
+
+  const handleGoogleSignIn = async () => {
+    if (!auth) return;
     try {
-      if (!testKey) {
-        setAiDiagStatus("❌ API 키가 비어 있습니다. 위 칸에 Google AI Studio 키를 입력해 주세요.");
-        return;
-      }
-      const res = await fetch(
-        "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent",
-        {
+      const provider = new GoogleAuthProvider();
+      await signInWithPopup(auth, provider);
+      showToast("Google 계정으로 로그인되었습니다!");
+    } catch (e) {
+      showToast(`⚠️ Google 로그인 실패: ${e.message}`);
+    }
+  };
+
+  const handleGoogleSignOut = async () => {
+    if (!auth) return;
+    try {
+      await signOut(auth);
+      await signInAnonymously(auth);
+      showToast("로그아웃되었습니다.");
+    } catch (e) {
+      showToast(`⚠️ 로그아웃 오류: ${e.message}`);
+    }
+  };
+
+  // [v7.1 개선] OpenAI GPT + Google Gemini 통합 자가진단 테스트
+  const handleRunAiDiagnostic = async () => {
+    setAiDiagStatus("진단 중... GPT 및 Gemini 서버 상태를 확인하고 있습니다.");
+    const testGeminiKey = String(tempKeyInput || geminiApiKey || "").trim();
+    const testOpenaiKey = String(tempOpenaiKeyInput || openaiApiKey || "").trim();
+    const reportLines = [];
+
+    if (testOpenaiKey) {
+      try {
+        const res = await fetch("https://api.openai.com/v1/chat/completions", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            "x-goog-api-key": testKey
+            Authorization: `Bearer ${testOpenaiKey}`
           },
           body: JSON.stringify({
-            contents: [{ parts: [{ text: "Hello" }] }]
+            model: "gpt-4o-mini",
+            max_tokens: 10,
+            messages: [{ role: "user", content: "Hi" }]
           })
+        });
+        const data = await res.json();
+        if (res.ok) {
+          reportLines.push("✅ [OpenAI GPT] 연결 성공! (gpt-4o-mini 정상 작동)");
+          pushAiLog("OpenAI GPT", "자가진단", true, "정상 연결");
+        } else {
+          const msg = data?.error?.message || `HTTP ${res.status}`;
+          reportLines.push(`❌ [OpenAI GPT] 거절: ${msg}`);
+          pushAiLog("OpenAI GPT", "자가진단", false, msg);
         }
-      );
-      const data = await res.json();
-      if (res.ok && data?.candidates) {
-        setAiDiagStatus("✅ [연결 성공!] 현재 API 키로 Gemini 3.8 Flash AI가 100% 정상 작동합니다.");
-      } else {
-        const msg = data?.error?.message || `HTTP ${res.status}`;
-        setAiDiagStatus(
-          `❌ [구글 서버 거절 사유]: ${msg}\n👉 해결법: Google AI Studio(aistudio.google.com/app/apikey)에서 'Create API key in new project'로 새 키를 발급받아 위 칸에 저장해 주세요!`
-        );
+      } catch (e) {
+        reportLines.push(`❌ [OpenAI GPT] 네트워크 오류: ${e.message}`);
       }
-    } catch (e) {
-      setAiDiagStatus(`❌ 네트워크 오류: ${e.message}`);
+    } else {
+      reportLines.push("⚪ [OpenAI GPT] API 키 미입력");
     }
+
+    if (testGeminiKey) {
+      try {
+        const res = await fetch(
+          "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "x-goog-api-key": testGeminiKey
+            },
+            body: JSON.stringify({
+              contents: [{ parts: [{ text: "Hello" }] }]
+            })
+          }
+        );
+        const data = await res.json();
+        if (res.ok && data?.candidates) {
+          reportLines.push("✅ [Gemini] 연결 성공! (gemini-3.8-flash 정상 작동)");
+          pushAiLog("Gemini", "자가진단", true, "정상 연결");
+        } else {
+          const msg = data?.error?.message || `HTTP ${res.status}`;
+          reportLines.push(`❌ [Gemini] 거절: ${msg}`);
+          pushAiLog("Gemini", "자가진단", false, msg);
+        }
+      } catch (e) {
+        reportLines.push(`❌ [Gemini] 네트워크 오류: ${e.message}`);
+      }
+    } else {
+      reportLines.push("⚪ [Gemini] API 키 미입력");
+    }
+
+    setAiDiagStatus(reportLines.join("\n"));
   };
 
   // ==========================================
@@ -1768,7 +1855,7 @@ function MainApp() {
             schedules: schedules.length
           },
           data: {
-            meals: meals.slice(0, 200),
+            meals,
             fridge,
             expenses,
             shoppingList,
@@ -1916,7 +2003,7 @@ function MainApp() {
   // ==========================================
   const buildFullBackupJsonString = () => {
     const fullSnapshot = {
-      backupVersion: "v7.0",
+      backupVersion: "v7.1",
       exportedAt: new Date().toISOString(),
       projectId: USER_FIREBASE_CONFIG.projectId,
       data: {
@@ -1927,7 +2014,11 @@ function MainApp() {
         notices,
         schedules,
         patchNotes,
-        deletedIds
+        deletedIds,
+        wasteEvents,
+        babyChecks,
+        babyGrowthLogs,
+        babyMedicalNotes
       }
     };
     return JSON.stringify(fullSnapshot, null, 2);
@@ -2018,6 +2109,10 @@ function MainApp() {
       if (Array.isArray(payload.notices)) setNotices(payload.notices);
       if (Array.isArray(payload.schedules)) setSchedules(payload.schedules);
       if (Array.isArray(payload.patchNotes)) setPatchNotes(payload.patchNotes);
+      if (Array.isArray(payload.wasteEvents)) setWasteEvents(payload.wasteEvents);
+      if (payload.babyChecks && typeof payload.babyChecks === "object") setBabyChecks(payload.babyChecks);
+      if (Array.isArray(payload.babyGrowthLogs)) setBabyGrowthLogs(payload.babyGrowthLogs);
+      if (Array.isArray(payload.babyMedicalNotes)) setBabyMedicalNotes(payload.babyMedicalNotes);
 
       if (user && db) {
         const writePromises = [];
@@ -2047,6 +2142,18 @@ function MainApp() {
         });
         (payload.patchNotes || []).forEach((pt) => {
           if (pt?.id) writePromises.push(setDoc(getDocRef("family_patchnotes_v4", pt.id), pt));
+        });
+        (payload.wasteEvents || []).forEach((we) => {
+          if (we?.id) writePromises.push(setDoc(getDocRef("family_inventory_events_v7", we.id), we));
+        });
+        Object.entries(payload.babyChecks || {}).forEach(([ckId, ckVal]) => {
+          if (ckId && ckVal) writePromises.push(setDoc(getDocRef("family_baby_checks_v7", ckId), ckVal));
+        });
+        (payload.babyGrowthLogs || []).forEach((bg) => {
+          if (bg?.id) writePromises.push(setDoc(getDocRef("family_baby_growth_v7", bg.id), bg));
+        });
+        (payload.babyMedicalNotes || []).forEach((bm) => {
+          if (bm?.id) writePromises.push(setDoc(getDocRef("family_baby_notes_v7", bm.id), bm));
         });
 
         const results = await Promise.allSettled(writePromises);
@@ -2124,6 +2231,13 @@ function MainApp() {
       done: false,
       memo: item.note
     };
+    const existing = schedules.find((s) => s.id === schId);
+    if (existing) {
+      const ok = window.confirm(
+        `이미 '${existing.title}' 일정(${existing.date})이 등록되어 있습니다. 기존 메모/완료 여부를 덮어쓰고 권장일(${targetDate})로 초기화할까요?`
+      );
+      if (!ok) return;
+    }
     setSchedules((prev) => {
       const exists = prev.some((s) => s.id === schId);
       return exists ? prev.map((s) => (s.id === schId ? payload : s)) : [payload, ...prev];
@@ -2185,15 +2299,16 @@ function MainApp() {
       head: growthForm.head ? Number(growthForm.head) : null,
       memo: growthForm.memo || ""
     };
-    setBabyGrowthLogs((prev) => [payload, ...prev]);
-    setGrowthForm({ date: getTodayStr(), height: "", weight: "", head: "", memo: "" });
     if (user && db) {
       try {
         await setDoc(getDocRef("family_baby_growth_v7", id), payload);
       } catch (e) {
-        showToast("⚠️ 성장 기록 저장 실패");
+        showToast("⚠️ 성장 기록 서버 저장 실패: 네트워크를 확인해 주세요.");
+        return;
       }
     }
+    setBabyGrowthLogs((prev) => [payload, ...prev]);
+    setGrowthForm({ date: getTodayStr(), height: "", weight: "", head: "", memo: "" });
     showToast(`${selectedChildId} 성장 기록이 저장되었습니다!`);
   };
 
@@ -2217,15 +2332,16 @@ function MainApp() {
       title: medNoteForm.title.trim() || "체온/건강 체크",
       memo: medNoteForm.memo || ""
     };
-    setBabyMedicalNotes((prev) => [payload, ...prev]);
-    setMedNoteForm({ date: getTodayStr(), temp: "", title: "", memo: "" });
     if (user && db) {
       try {
         await setDoc(getDocRef("family_baby_notes_v7", id), payload);
       } catch (e) {
-        showToast("⚠️ 진료/열 메모 저장 실패");
+        showToast("⚠️ 진료/열 메모 서버 저장 실패: 네트워크를 확인해 주세요.");
+        return;
       }
     }
+    setBabyMedicalNotes((prev) => [payload, ...prev]);
+    setMedNoteForm({ date: getTodayStr(), temp: "", title: "", memo: "" });
     showToast(`${selectedChildId} 진료·체온 메모가 저장되었습니다!`);
   };
 
@@ -2481,9 +2597,11 @@ function MainApp() {
       }));
 
       setAiRecipes(mapped);
+      pushAiLog(aiProvider.toUpperCase(), "레시피 추천", true, `${mapped.length}개 생성`);
       showToast("맞춤 레시피 3가지가 생성되었습니다!");
     } catch (err) {
       console.error("AI Recommendation Error:", err);
+      pushAiLog(aiProvider.toUpperCase(), "레시피 추천", false, err.message);
       setAiErrorMsg(err.message);
     } finally {
       setIsAiLoading(false);
@@ -2548,13 +2666,15 @@ function MainApp() {
 
       setPlatingResult({
         ...first,
-        colorScore: Number(first.colorScore) || 4,
-        layoutScore: Number(first.layoutScore) || 4,
+        colorScore: Number.isFinite(Number(first.colorScore)) && Number(first.colorScore) > 0 ? Number(first.colorScore) : "미평가",
+        layoutScore: Number.isFinite(Number(first.layoutScore)) && Number(first.layoutScore) > 0 ? Number(first.layoutScore) : "미평가",
         tips: toSafeArray(first.tips)
       });
+      pushAiLog(aiProvider.toUpperCase(), "플레이팅 분석", true, first.dishName || "완료");
       showToast("AI 플레이팅 분석이 완료되었습니다!");
     } catch (err) {
       console.error("Plating analysis error:", err);
+      pushAiLog(aiProvider.toUpperCase(), "플레이팅 분석", false, err.message);
       setPlatingErrorMsg(err.message);
     } finally {
       setIsPlatingLoading(false);
@@ -2829,11 +2949,18 @@ function MainApp() {
             return;
           }
           const serverQty = Number(snap.data().quantity || 0);
-          const next = Math.max(0, serverQty + delta);
+          const next = serverQty + delta;
+          if (!Number.isFinite(next) || next < 0) {
+            throw new Error("재고가 부족하여 차감할 수 없습니다.");
+          }
           tx.update(ref, { quantity: next, updatedAt: new Date().toISOString() });
         });
       } catch (e) {
-        showToast("⚠️ 수량 저장 실패: 네트워크를 확인해 주세요.");
+        setFridgeMap((prev) => ({
+          ...prev,
+          local: { ...(prev.local || {}), [item.id]: item }
+        }));
+        showToast(`⚠️ ${e.message || "수량 저장 실패"}`);
       }
     }
   };
@@ -2902,8 +3029,8 @@ function MainApp() {
     showToast(`부족한 재료 ${missing.length}종을 장보기 목록에 담았습니다!`);
   };
 
-  // [신규 v6.2] 요리 완료 시 매칭되는 냉장고 재료 수량 1씩 안전 차감
-  const handleCompleteRecipeCooking = async (recipe) => {
+  // [v7.1 개선] 요리 완료 전 차감 수량 확인 팝업 열기 & 확정 차감
+  const handleCompleteRecipeCooking = (recipe) => {
     const used = toSafeArray(recipe.usedIngredients);
     const matched = fridge.filter((f) =>
       used.some(
@@ -2916,10 +3043,23 @@ function MainApp() {
       showToast("차감할 매칭 냉장고 재고가 없습니다.");
       return;
     }
-    for (const item of matched) {
-      await handleAdjustQuantity(item, -1);
+    setCookingConfirmModal({
+      recipeTitle: recipe.title,
+      items: matched.map((m) => ({
+        item: m,
+        deductQty: 1
+      }))
+    });
+  };
+
+  const handleConfirmCookingDeduction = async () => {
+    if (!cookingConfirmModal) return;
+    const toDeduct = cookingConfirmModal.items.filter((x) => x.deductQty > 0);
+    for (const entry of toDeduct) {
+      await handleAdjustQuantity(entry.item, -entry.deductQty);
     }
-    showToast(`요리 완료! 냉장고 재료 ${matched.length}종 수량이 1씩 차감되었습니다.`);
+    setCookingConfirmModal(null);
+    showToast(`요리 완료! 선택한 재료 ${toDeduct.length}종이 재고에서 차감되었습니다.`);
   };
 
   const handleConsumeFridgeItem = async (item, addToShopping = false) => {
@@ -3349,7 +3489,7 @@ function MainApp() {
               title="패치노트 기록 및 히스토리"
             >
               <ClipboardList className="w-3 h-3 text-stone-600" />
-              <span>패치노트 {patchNotes[0]?.version || "v7.0"}</span>
+              <span>패치노트 {patchNotes[0]?.version || "v7.1"}</span>
             </button>
           </div>
 
@@ -6067,6 +6207,70 @@ function MainApp() {
                   </button>
                 </div>
 
+                {childGrowth.length >= 2 && (() => {
+                  const sorted = [...childGrowth].reverse().slice(-8);
+                  const weights = sorted.map((g) => Number(g.weight || 0)).filter((v) => v > 0);
+                  const heights = sorted.map((g) => Number(g.height || 0)).filter((v) => v > 0);
+                  const minW = weights.length ? Math.min(...weights) - 0.5 : 0;
+                  const maxW = weights.length ? Math.max(...weights) + 0.5 : 10;
+                  const minH = heights.length ? Math.min(...heights) - 2 : 40;
+                  const maxH = heights.length ? Math.max(...heights) + 2 : 100;
+                  const W = 280;
+                  const H = 90;
+                  const makePoints = (arr, key, minV, maxV) =>
+                    arr
+                      .map((item, i) => {
+                        const val = Number(item[key] || 0);
+                        if (!val) return null;
+                        const x = arr.length === 1 ? W / 2 : (i / (arr.length - 1)) * (W - 24) + 12;
+                        const y = H - 14 - ((val - minV) / Math.max(0.1, maxV - minV)) * (H - 28);
+                        return `${x.toFixed(1)},${y.toFixed(1)}`;
+                      })
+                      .filter(Boolean)
+                      .join(" ");
+
+                  const weightPts = makePoints(sorted, "weight", minW, maxW);
+                  const heightPts = makePoints(sorted, "height", minH, maxH);
+
+                  return (
+                    <div className="bg-white p-3.5 rounded-2xl border border-stone-200 shadow-sm space-y-2">
+                      <div className="flex items-center justify-between text-xs font-black text-stone-900">
+                        <span>📈 {activeChild.id} 성장 추이 그래프 (최근 {sorted.length}회)</span>
+                        <div className="flex items-center gap-2 text-[10px]">
+                          <span className="text-emerald-600 font-extrabold">● 키(cm)</span>
+                          <span className="text-indigo-600 font-extrabold">● 몸무게(kg)</span>
+                        </div>
+                      </div>
+                      <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-24 bg-stone-50 rounded-xl border border-stone-100">
+                        {heightPts && (
+                          <polyline
+                            fill="none"
+                            stroke="#059669"
+                            strokeWidth="2.5"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            points={heightPts}
+                          />
+                        )}
+                        {weightPts && (
+                          <polyline
+                            fill="none"
+                            stroke="#4f46e5"
+                            strokeWidth="2.5"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            points={weightPts}
+                          />
+                        )}
+                      </svg>
+                      <div className="flex justify-between text-[9px] font-bold text-stone-400 px-1">
+                        <span>{sorted[0]?.date}</span>
+                        <span>{sorted[sorted.length - 1]?.date}</span>
+                      </div>
+                    </div>
+                  );
+                })()}
+
                 {childGrowth.length === 0 ? (
                   <div className="text-xs text-stone-400 py-6 text-center bg-white rounded-2xl border border-dashed border-stone-200">
                     아직 기록된 {activeChild.id} 성장 데이터가 없습니다.
@@ -7259,6 +7463,80 @@ function MainApp() {
         </div>
       )}
 
+      {/* 요리 완료 재고 차감 확인 모달 */}
+      {cookingConfirmModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-sm w-full p-5 space-y-3.5">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-black">🍳 요리 완료 · 재고 차감 확인</h3>
+              <button onClick={() => setCookingConfirmModal(null)}>
+                <X className="w-5 h-5 text-stone-400" />
+              </button>
+            </div>
+            <div className="text-xs font-bold text-stone-700">
+              <b>{cookingConfirmModal.recipeTitle}</b>에 사용한 냉장고 재료 수량을 확인해 주세요.
+            </div>
+            <div className="space-y-2 max-h-60 overflow-y-auto">
+              {cookingConfirmModal.items.map((entry, idx) => (
+                <div
+                  key={entry.item.id}
+                  className="p-2.5 rounded-xl bg-stone-50 border border-stone-200 flex items-center justify-between gap-2 text-xs"
+                >
+                  <div>
+                    <div className="font-extrabold text-stone-900">{entry.item.name}</div>
+                    <div className="text-[10px] text-stone-500">
+                      현재고: {entry.item.quantity}{entry.item.unit}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      onClick={() => {
+                        const copy = [...cookingConfirmModal.items];
+                        copy[idx].deductQty = Math.max(0, copy[idx].deductQty - 1);
+                        setCookingConfirmModal({ ...cookingConfirmModal, items: copy });
+                      }}
+                      className="w-6 h-6 rounded-lg bg-white border border-stone-200 font-black"
+                    >
+                      -
+                    </button>
+                    <span className="font-black text-amber-700 min-w-[24px] text-center">
+                      -{entry.deductQty}
+                    </span>
+                    <button
+                      onClick={() => {
+                        const copy = [...cookingConfirmModal.items];
+                        copy[idx].deductQty = Math.min(
+                          Number(entry.item.quantity || 0),
+                          copy[idx].deductQty + 1
+                        );
+                        setCookingConfirmModal({ ...cookingConfirmModal, items: copy });
+                      }}
+                      className="w-6 h-6 rounded-lg bg-white border border-stone-200 font-black"
+                    >
+                      +
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="flex gap-2 pt-1">
+              <button
+                onClick={() => setCookingConfirmModal(null)}
+                className="flex-1 py-2.5 rounded-xl bg-stone-100 text-stone-600 text-xs font-extrabold"
+              >
+                취소
+              </button>
+              <button
+                onClick={handleConfirmCookingDeduction}
+                className="flex-1 py-2.5 rounded-xl bg-stone-900 text-white text-xs font-extrabold"
+              >
+                확인 후 차감하기
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 설정 모달 */}
       {isSettingsOpen && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
@@ -7268,6 +7546,30 @@ function MainApp() {
               <button onClick={() => setIsSettingsOpen(false)}>
                 <X className="w-5 h-5 text-stone-400" />
               </button>
+            </div>
+
+            <div className="p-3 rounded-2xl bg-indigo-50 border border-indigo-200 text-xs space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="font-black text-indigo-900">🔐 가족 계정 (Google 로그인)</span>
+                <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-white border border-indigo-200 text-indigo-700">
+                  {user?.isAnonymous ? "익명 접속중" : user?.email || "로그인됨"}
+                </span>
+              </div>
+              {user?.isAnonymous ? (
+                <button
+                  onClick={handleGoogleSignIn}
+                  className="w-full py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-extrabold"
+                >
+                  Google 계정으로 로그인하기
+                </button>
+              ) : (
+                <button
+                  onClick={handleGoogleSignOut}
+                  className="w-full py-2 rounded-xl bg-white border border-indigo-300 text-indigo-800 text-xs font-extrabold"
+                >
+                  Google 계정 로그아웃
+                </button>
+              )}
             </div>
 
             <div className="p-3 rounded-2xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-900 space-y-1">
@@ -7420,6 +7722,37 @@ function MainApp() {
               )}
             </div>
 
+            {aiCallLogs.length > 0 && (
+              <div className="p-3 rounded-2xl bg-stone-50 border border-stone-200 space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-black text-stone-800">🩺 AI 오류센터 (최근 호출 기록)</span>
+                  <button
+                    onClick={() => setAiCallLogs([])}
+                    className="text-[10px] font-bold text-stone-400 hover:text-stone-700"
+                  >
+                    지우기
+                  </button>
+                </div>
+                <div className="space-y-1 max-h-32 overflow-y-auto">
+                  {aiCallLogs.map((log) => (
+                    <div
+                      key={log.id}
+                      className={`p-2 rounded-xl text-[10px] border ${
+                        log.ok
+                          ? "bg-emerald-50 border-emerald-200 text-emerald-900"
+                          : "bg-rose-50 border-rose-200 text-rose-900"
+                      }`}
+                    >
+                      <div className="font-extrabold">
+                        {log.ok ? "✅" : "❌"} [{log.time}] {log.provider} · {log.task}
+                      </div>
+                      <div className="opacity-85 break-all">{log.detail}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <button
               onClick={handleRestoreAllDeleted}
               className="w-full py-2.5 rounded-xl bg-stone-200 hover:bg-stone-300 text-stone-800 text-xs font-extrabold flex items-center justify-center gap-1.5"
@@ -7448,4 +7781,4 @@ export default function App() {
       <MainApp />
     </ErrorBoundary>
   );
-   }
+}
