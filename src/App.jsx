@@ -631,11 +631,22 @@ const STORAGE_LOCATIONS = ["냉장실", "냉동실", "실온·팬트리"];
 const FRIDGE_CATEGORIES = ["채소/과일", "육류/수산", "유제품/계란", "유아식/이유식 재료", "반찬/김치", "밀키트", "양념/소스", "기타"];
 const SCHEDULE_CATEGORIES = ["기념일/생일", "할일(To-Do)", "육아/병원", "가족행사/경조사"];
 
-const APP_CODE_VERSION = "v9.1";
-const APP_BUILD_DATE = "2026-11-15 23:10";
+const APP_CODE_VERSION = "v9.2";
+const APP_BUILD_DATE = "2026-11-15 23:30";
 const EDITOR_INVITE_CODE = "0402";
 
 const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v9.2",
+    version: "v9.2",
+    date: "2026-11-15",
+    title: "AI 자유 날짜·완성형 식단 추천(성인/유아 완전 분리) + 냉장고 전체 재고 내보내기",
+    changes: [
+      "날짜별 아침·점심·저녁 개별 체크, 비연속 날짜 추가/삭제, 성인식(일반/다이어트/고단백)·유아식(생년월일 기반 월령 자동계산)·온가족식 프롬프트 완전 분리",
+      "완성형 한 끼(주식·메인·반찬/채소, 인분, 조리시간, 재료 소요량) 구조 및 카드 내 메뉴 직접 수정·특정 끼니만 재추천 지원",
+      "냉장고 유효 전체 재고(25개 제한 해제, 만료·0개 제외) AI 반영 및 냉장고 탭 상단 [📤 전체 재고 내보내기](복사·TXT·공유) 추가"
+    ]
+  },
   {
     id: "patch-v9.1",
     version: "v9.1",
@@ -1628,14 +1639,31 @@ function MainApp() {
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [aiErrorMsg, setAiErrorMsg] = useState("");
   const [aiSubMode, setAiSubMode] = useState("recipe");
-  const [planStartDate, setPlanStartDate] = useState(() => getTodayStr());
-  const [planTarget, setPlanTarget] = useState("온가족 원팟 (어른+시목)");
-  const [planSlots, setPlanSlots] = useState(["아침", "저녁"]);
+  const [planScheduleMap, setPlanScheduleMap] = useState(() => {
+    const base = getTodayStr();
+    const d0 = addMonthsToDateStr(base, 0, 0);
+    const d1 = addMonthsToDateStr(base, 0, 1);
+    const d2 = addMonthsToDateStr(base, 0, 2);
+    return {
+      [d0]: ["아침", "저녁"],
+      [d1]: ["아침", "저녁"],
+      [d2]: ["아침", "저녁"]
+    };
+  });
+  const [planAddDateInput, setPlanAddDateInput] = useState(() => addMonthsToDateStr(getTodayStr(), 0, 3));
+  const [planTarget, setPlanTarget] = useState("adults");
+  const [planAdultStyle, setPlanAdultStyle] = useState("일반 집밥");
   const [isPlanLoading, setIsPlanLoading] = useState(false);
+  const [regeneratingPlanId, setRegeneratingPlanId] = useState("");
   const [planErrorMsg, setPlanErrorMsg] = useState("");
   const [planItems, setPlanItems] = useState([]);
   const [planSnapshotMeta, setPlanSnapshotMeta] = useState(null);
   const [isSavingPlan, setIsSavingPlan] = useState(false);
+
+  // 전체 재고 텍스트 내보내기 모달 상태
+  const [isInventoryExportOpen, setIsInventoryExportOpen] = useState(false);
+  const [exportIncludePrice, setExportIncludePrice] = useState(false);
+  const [exportIncludeZeroOrExpired, setExportIncludeZeroOrExpired] = useState(false);
   const [quickLogRecipe, setQuickLogRecipe] = useState(null);
   const [quickLogDate, setQuickLogDate] = useState(() => getTodayStr());
   const [quickLogSlot, setQuickLogSlot] = useState("저녁");
@@ -3241,65 +3269,229 @@ function MainApp() {
     }
   };
 
+  const buildValidFridgeContext = () => {
+    const valid = fridge
+      .filter((f) => Number(f.quantity || 0) > 0 && getDaysDiff(f.expiryDate) >= 0)
+      .sort((a, b) => getDaysDiff(a.expiryDate) - getDaysDiff(b.expiryDate));
+    const textList =
+      valid.length > 0
+        ? valid
+            .map((f) => {
+              const d = getDaysDiff(f.expiryDate);
+              return `${f.name}|${f.location}|${f.category}|${f.quantity}${f.unit || "개"}|소비기한:${f.expiryDate || "미확인"}(D-${d})`;
+            })
+            .join("\n")
+        : "등록된 유효 재고 없음";
+    return { valid, textList };
+  };
+
+  const buildMealPromptForRequests = (requests, targetMode, adultStyle, validText) => {
+    const simokProfile = CHILDREN_INFO.find((c) => c.id === "시목") || CHILDREN_INFO[0];
+    const simokMonths = getChildAgeStats(simokProfile.birthDate).months;
+    const reqListStr = requests.map((r) => `${r.date} ${r.slot}`).join(", ");
+
+    if (targetMode === "adults") {
+      return `당신은 한국 가정식 및 성인 균형 영양 전문 셰프입니다.
+대상: 성인 2인 (수혁·아리나)
+식사 목적: ${adultStyle}
+요청 날짜·끼니(${requests.length}끼): ${reqListStr}
+
+[냉장고·냉동실·실온 전체 유효 재고 (만료·0개 제외, 임박순)]
+${validText}
+
+중요 규칙:
+1. 오직 성인 2인 기준 완성형 한 끼 식단만 제안하세요. 유아식, 아기, 월령, 저염 아이용 설명(babyTip/simokTip 등)은 절대 포함하지 마세요.
+2. 한 끼는 에너지원(밥·면·빵 등) + 단백질 + 채소 균형을 갖추되, 덮밥·파스타·솥밥·면요리 등 다양한 식사 형태를 허용합니다.
+3. 위 냉장고 유효 재고를 최대한 우선 활용하되, 식단 완성도를 위해 꼭 필요한 부족 재료만 missingIngredients에 적으세요. 없는 재료를 보유 재료(ingredients)로 거짓 표기하지 마세요.
+4. 반드시 요청한 ${requests.length}개 날짜·끼니 조합과 1:1로 정확히 일치하는 순수 JSON 배열만 출력하세요(마크다운 금지):
+[
+  {
+    "date": "${requests[0].date}",
+    "slot": "${requests[0].slot}",
+    "target": "adults",
+    "mealName": "완성형 한 끼 식단명",
+    "components": [
+      {"role": "staple", "name": "잡곡밥"},
+      {"role": "main", "name": "소고기 구이"},
+      {"role": "vegetable", "name": "브로콜리 버섯볶음"}
+    ],
+    "servings": 2,
+    "estimatedMinutes": 30,
+    "ingredients": [{"name": "소고기", "quantity": 300, "unit": "g"}],
+    "missingIngredients": [{"name": "양송이버섯", "quantity": "1팩"}],
+    "tip": "성인 기준 조리/보관 핵심 팁"
+  }
+]`;
+    }
+
+    if (targetMode === "toddler") {
+      return `당신은 영유아 영양 및 유아식 전문 셰프입니다.
+대상: 생후 ${simokMonths}개월 유아 1인 (출생일 ${simokProfile.birthDate} 기준)
+요청 날짜·끼니(${requests.length}끼): ${reqListStr}
+
+[냉장고·냉동실·실온 전체 유효 재고 (만료·0개 제외, 임박순)]
+${validText}
+
+중요 규칙:
+1. 생후 ${simokMonths}개월 아기가 안전하게 씹고 삼킬 수 있는 크기·부드러운 식감·저염 조리법으로 구성하고, 알레르기 주의 재료를 고려하세요.
+2. 한 끼는 탄수화물·단백질·채소가 균형을 이루는 완성형 유아식으로 구성하세요.
+3. 위 냉장고 유효 재고를 우선 활용하고, 없는 재료는 missingIngredients에 적으세요.
+4. 반드시 요청한 ${requests.length}개 날짜·끼니 조합과 1:1로 일치하는 순수 JSON 배열만 출력하세요(마크다운 금지):
+[
+  {
+    "date": "${requests[0].date}",
+    "slot": "${requests[0].slot}",
+    "target": "toddler",
+    "mealName": "유아식 한 끼 식단명",
+    "components": [
+      {"role": "staple", "name": "진밥"},
+      {"role": "main", "name": "부드러운 소고기 애호박볶음"},
+      {"role": "vegetable", "name": "계란찜"}
+    ],
+    "servings": 1,
+    "estimatedMinutes": 25,
+    "ingredients": [{"name": "애호박", "quantity": 50, "unit": "g"}],
+    "missingIngredients": [],
+    "tip": "조리 팁",
+    "babyTip": "생후 ${simokMonths}개월 기준 식감·크기·알레르기 주의사항"
+  }
+]`;
+    }
+
+    return `당신은 한국 가정식 및 가족 통합 식단 전문 셰프입니다.
+대상: 온가족 (성인 2인 + 생후 ${simokMonths}개월 유아 1인, 출생일 ${simokProfile.birthDate} 기준)
+요청 날짜·끼니(${requests.length}끼): ${reqListStr}
+
+[냉장고·냉동실·실온 전체 유효 재고 (만료·0개 제외, 임박순)]
+${validText}
+
+중요 규칙:
+1. 성인 2인이 맛있게 먹는 완성형 한 끼를 기본으로 하되, 생후 ${simokMonths}개월 아기에게 덜어내어 변형하기 좋은 구성(또는 아이에게 부적합한 매운·딱딱한 재료 분리 안내)을 babyTip에 별도로 적으세요.
+2. 위 냉장고 유효 재고를 최대한 우선 활용하고, 부족한 재료만 missingIngredients에 적으세요.
+3. 반드시 요청한 ${requests.length}개 날짜·끼니 조합과 1:1로 일치하는 순수 JSON 배열만 출력하세요(마크다운 금지):
+[
+  {
+    "date": "${requests[0].date}",
+    "slot": "${requests[0].slot}",
+    "target": "family",
+    "mealName": "온가족 한 끼 식단명",
+    "components": [
+      {"role": "staple", "name": "잡곡밥"},
+      {"role": "main", "name": "소고기 무국"},
+      {"role": "vegetable", "name": "시금치 나물"}
+    ],
+    "servings": 3,
+    "estimatedMinutes": 35,
+    "ingredients": [{"name": "소고기", "quantity": 250, "unit": "g"}],
+    "missingIngredients": [],
+    "tip": "조리 핵심 팁",
+    "babyTip": "생후 ${simokMonths}개월 아기용 덜어내기/식감 변형 팁"
+  }
+]`;
+  };
+
+  const normalizeAiPlanItems = (rawList, requestedPairs, targetMode, validFridge) => {
+    const reqSet = new Set(requestedPairs.map((r) => `${r.date}__${r.slot}`));
+    const seen = new Set();
+    const validFridgeNames = validFridge.map((f) => String(f.name || "").toLowerCase());
+    const out = [];
+
+    for (const item of toSafeArray(rawList)) {
+      const dStr = String(item?.date || "").trim();
+      const sStr = String(item?.slot || "").trim();
+      const key = `${dStr}__${sStr}`;
+      const mealName = String(item?.mealName || item?.menu || "").trim();
+      if (!reqSet.has(key) || seen.has(key) || !mealName) continue;
+      seen.add(key);
+
+      const components = toSafeArray(item?.components)
+        .map((c) => ({
+          role: String(c?.role || "main"),
+          name: String(c?.name || "").trim()
+        }))
+        .filter((c) => c.name);
+
+      const rawIngredients = toSafeArray(item?.ingredients).map((ing) => {
+        if (ing && typeof ing === "object") {
+          return {
+            name: String(ing.name || "").trim(),
+            quantity: Number(ing.quantity) || 1,
+            unit: String(ing.unit || "개").trim() || "개"
+          };
+        }
+        return { name: String(ing || "").trim(), quantity: 1, unit: "개" };
+      }).filter((x) => x.name);
+
+      // Verify which ingredients actually exist in valid fridge stock vs missing
+      const verifiedInFridge = [];
+      const extraMissingFromCheck = [];
+      for (const ing of rawIngredients) {
+        const lower = ing.name.toLowerCase();
+        const exists = validFridgeNames.some((fn) => fn === lower || fn.includes(lower) || lower.includes(fn));
+        if (exists) {
+          verifiedInFridge.push(ing);
+        } else {
+          extraMissingFromCheck.push({ name: ing.name, quantity: `${ing.quantity}${ing.unit}` });
+        }
+      }
+
+      const explicitMissing = toSafeArray(item?.missingIngredients).map((mi) => {
+        if (mi && typeof mi === "object") {
+          return {
+            name: String(mi.name || "").trim(),
+            quantity: String(mi.quantity || "1개").trim() || "1개"
+          };
+        }
+        return { name: String(mi || "").trim(), quantity: "1개" };
+      }).filter((x) => x.name);
+
+      const mergedMissingMap = new Map();
+      [...explicitMissing, ...extraMissingFromCheck].forEach((m) => {
+        const k = m.name.toLowerCase();
+        if (!mergedMissingMap.has(k)) mergedMissingMap.set(k, m);
+      });
+
+      const usedNames = verifiedInFridge.map((x) => `${x.name}(${x.quantity}${x.unit})`);
+      const compNames = components.map((c) => c.name);
+
+      out.push({
+        id: `plan-${Date.now()}-${out.length}-${Math.random().toString(36).slice(2, 5)}`,
+        date: dStr,
+        slot: sStr,
+        target: targetMode,
+        mealName,
+        menu: compNames.length > 0 ? `${mealName} (${compNames.join(" · ")})` : mealName,
+        components,
+        servings: Number(item?.servings) || (targetMode === "adults" ? 2 : targetMode === "toddler" ? 1 : 3),
+        estimatedMinutes: Number(item?.estimatedMinutes) || 25,
+        ingredients: verifiedInFridge,
+        usedIngredients: verifiedInFridge.map((x) => x.name),
+        usedIngredientsDisplay: usedNames,
+        missingIngredients: Array.from(mergedMissingMap.values()),
+        tip: String(item?.tip || "").trim(),
+        babyTip: targetMode === "adults" ? "" : String(item?.babyTip || item?.simokTip || "").trim(),
+        selected: true
+      });
+    }
+    return out;
+  };
+
   const handleGenerate3DayPlan = async () => {
     if (!requireEditorAccess()) return;
-    if (planSlots.length === 0) {
-      setPlanErrorMsg("추천받을 끼니(아침·점심·저녁)를 최소 1개 이상 체크해 주세요.");
+    const requestedPairs = Object.entries(planScheduleMap)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .flatMap(([date, slots]) => toSafeArray(slots).map((slot) => ({ date, slot })));
+
+    if (requestedPairs.length === 0) {
+      setPlanErrorMsg("추천받을 날짜와 끼니(최소 1끼)를 선택해 주세요.");
       return;
     }
+
     setPlanErrorMsg("");
     setIsPlanLoading(true);
     try {
-      const days = [0, 1, 2].map((offset) => addMonthsToDateStr(planStartDate || getTodayStr(), 0, offset));
-      const sortedFridge = [...fridge].sort(
-        (a, b) => getDaysDiff(a.expiryDate) - getDaysDiff(b.expiryDate)
-      );
-      const fridgeSummary =
-        sortedFridge.length > 0
-          ? sortedFridge
-              .slice(0, 25)
-              .map((f) => {
-                const d = getDaysDiff(f.expiryDate);
-                return `${f.name}(${f.quantity}${f.unit || "개"}, ${d <= 3 ? `임박 D${d >= 0 ? `-${d}` : `+${Math.abs(d)}`}` : `D-${d}`})`;
-              })
-              .join(", ")
-          : "등록된 냉장고 재료 없음";
-
-      const targetDesc =
-        planTarget === "시목이 유아식 (15개월)"
-          ? "만 15개월 유아(김시목) 맞춤 저염·부드러운 유아식"
-          : planTarget === "어른밥 (수혁·아리나)"
-          ? "성인 부부(수혁·아리나) 맞춤 집밥 식단"
-          : "성인 부부 + 만 15개월 아기(시목이)가 함께 먹는 원팟 집밥 식단 (아기용 덜어내기/저염 팁 포함)";
-
-      const snapshotMembers =
-        planTarget === "시목이 유아식 (15개월)"
-          ? ["시목"]
-          : planTarget === "어른밥 (수혁·아리나)"
-          ? ["수혁", "아리나"]
-          : ["수혁", "아리나", "시목"];
-
-      const expectedCount = days.length * planSlots.length;
-      const prompt = `당신은 한국 가정식 및 영유아 식단 전문 영양사입니다.
-대상: ${targetDesc}
-날짜(3일): ${days.join(", ")}
-추천할 끼니: ${planSlots.join(", ")}
-현재 냉장고 보유 재료(소비기한 임박순): [${fridgeSummary}]
-
-규칙:
-1. 최대한 위 냉장고 보유 재료(특히 임박 재료)를 우선 활용해 3일치 식단이 겹치지 않게 다양하게 짜주세요.
-2. 정말 꼭 필요한 부족한 재료만 최소한(끼니당 0~2개)으로 missingIngredients에 {"name":"재료명","quantity":"수량+단위"} 형태로 적어주세요.
-3. 반드시 날짜 ${days.length}일 × 끼니 ${planSlots.length}개 = 정확히 ${expectedCount}개 항목(중복 없이)을 순수 JSON 배열로만 출력하세요 (마크다운 금지):
-[
-  {
-    "date": "${days[0]}",
-    "slot": "${planSlots[0]}",
-    "menu": "구체적인 메뉴명",
-    "usedIngredients": ["냉장고재료1", "냉장고재료2"],
-    "missingIngredients": [{"name": "부족재료1", "quantity": "1개"}],
-    "simokTip": "시목이(15개월) 맞춤 변형 팁 또는 조리 팁"
-  }
-]`;
+      const { valid: validFridge, textList } = buildValidFridgeContext();
+      const prompt = buildMealPromptForRequests(requestedPairs, planTarget, planAdultStyle, textList);
 
       let actualProvider = aiProvider.toUpperCase();
       const parsed = await callReliableAiEngine({
@@ -3311,65 +3503,80 @@ function MainApp() {
         onProviderUsed: (prov) => { actualProvider = prov; }
       });
 
-      const allowedDates = new Set(days);
-      const allowedSlots = new Set(planSlots);
-      const seenPairs = new Set();
-      const validated = [];
-
-      for (const item of toSafeArray(parsed)) {
-        const dStr = String(item?.date || "").trim();
-        const sStr = String(item?.slot || "").trim();
-        const mStr = String(item?.menu || "").trim();
-        if (!allowedDates.has(dStr) || !allowedSlots.has(sStr) || !mStr) continue;
-        const pairKey = `${dStr}__${sStr}`;
-        if (seenPairs.has(pairKey)) continue;
-        seenPairs.add(pairKey);
-
-        const rawMissing = toSafeArray(item.missingIngredients).map((mi) => {
-          if (mi && typeof mi === "object") {
-            return {
-              name: String(mi.name || "").trim(),
-              quantity: String(mi.quantity || "1개").trim() || "1개"
-            };
-          }
-          return { name: String(mi || "").trim(), quantity: "1개" };
-        }).filter((x) => x.name);
-
-        validated.push({
-          id: `plan-${Date.now()}-${validated.length}`,
-          date: dStr,
-          slot: sStr,
-          menu: mStr,
-          usedIngredients: toSafeArray(item.usedIngredients).map((u) => String(u || "").trim()).filter(Boolean),
-          missingIngredients: rawMissing,
-          simokTip: String(item.simokTip || "").trim(),
-          selected: true
-        });
-      }
-
+      const validated = normalizeAiPlanItems(parsed, requestedPairs, planTarget, validFridge);
       if (validated.length === 0) {
-        throw new Error("AI가 요청한 날짜·끼니 조건에 맞는 식단을 반환하지 못했습니다. 다시 시도해 주세요.");
+        throw new Error("AI가 요청한 날짜·끼니에 맞는 완성형 식단을 반환하지 못했습니다. 다시 시도해 주세요.");
       }
+
+      const snapshotMembers =
+        planTarget === "toddler"
+          ? ["시목"]
+          : planTarget === "adults"
+          ? ["수혁", "아리나"]
+          : ["수혁", "아리나", "시목"];
 
       setPlanItems(validated);
       setPlanSnapshotMeta({
-        operationId: `plan3d-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        operationId: `plan-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
         target: planTarget,
         members: snapshotMembers,
-        startDate: days[0],
-        slots: [...planSlots],
+        requestedCount: requestedPairs.length,
         applied: false
       });
-      pushAiLog(actualProvider, "3일치 식단표", true, `${validated.length}/${expectedCount}끼 생성`);
-      if (validated.length < expectedCount) {
-        setPlanErrorMsg(`요청한 ${expectedCount}끼 중 ${validated.length}끼만 조건에 맞게 생성되었습니다. 부족하면 다시 추천받아 주세요.`);
+      pushAiLog(actualProvider, "맞춤 식단표", true, `${validated.length}/${requestedPairs.length}끼 생성`);
+      if (validated.length < requestedPairs.length) {
+        setPlanErrorMsg(`요청한 ${requestedPairs.length}끼 중 ${validated.length}끼만 조건에 맞게 생성되었습니다. 누락된 끼니는 개별 재추천하거나 다시 생성해 주세요.`);
       }
-      showToast(`3일치 맞춤 식단(${validated.length}끼)이 생성되었습니다!`);
+      showToast(`맞춤 식단(${validated.length}끼)이 생성되었습니다!`);
     } catch (err) {
-      pushAiLog(aiProvider.toUpperCase(), "3일치 식단표", false, err.message);
+      pushAiLog(aiProvider.toUpperCase(), "맞춤 식단표", false, err.message);
       setPlanErrorMsg(err.message);
     } finally {
       setIsPlanLoading(false);
+    }
+  };
+
+  const handleRegenerateSinglePlanSlot = async (targetItem) => {
+    if (!requireEditorAccess()) return;
+    if (regeneratingPlanId) return;
+    setRegeneratingPlanId(targetItem.id);
+    setPlanErrorMsg("");
+    try {
+      const targetMode = planSnapshotMeta?.target || targetItem.target || planTarget;
+      const { valid: validFridge, textList } = buildValidFridgeContext();
+      const prompt = buildMealPromptForRequests(
+        [{ date: targetItem.date, slot: targetItem.slot }],
+        targetMode,
+        planAdultStyle,
+        textList
+      );
+      let actualProvider = aiProvider.toUpperCase();
+      const parsed = await callReliableAiEngine({
+        apiKey: geminiApiKey,
+        openaiApiKey,
+        aiProvider,
+        promptText: prompt,
+        temperature: 0.7,
+        onProviderUsed: (prov) => { actualProvider = prov; }
+      });
+      const validated = normalizeAiPlanItems(
+        parsed,
+        [{ date: targetItem.date, slot: targetItem.slot }],
+        targetMode,
+        validFridge
+      );
+      if (validated.length === 0) {
+        throw new Error("재추천 결과를 불러오지 못했습니다.");
+      }
+      setPlanItems((prev) =>
+        prev.map((x) => (x.id === targetItem.id ? { ...validated[0], selected: x.selected } : x))
+      );
+      pushAiLog(actualProvider, "끼니 재추천", true, `${targetItem.date} ${targetItem.slot}`);
+      showToast(`${targetItem.date} ${targetItem.slot} 메뉴가 새로 추천되었습니다!`);
+    } catch (err) {
+      showToast(`⚠️ 재추천 실패: ${err.message}`);
+    } finally {
+      setRegeneratingPlanId("");
     }
   };
 
@@ -3380,7 +3587,7 @@ function MainApp() {
       showToast("이미 일별 식단표에 반영 완료된 추천 식단입니다.");
       return;
     }
-    const picked = planItems.filter((it) => it.selected && it.menu);
+    const picked = planItems.filter((it) => it.selected && (it.mealName || it.menu));
     if (picked.length === 0) {
       showToast("식단표에 반영할 끼니를 1개 이상 체크해 주세요.");
       return;
@@ -3389,8 +3596,9 @@ function MainApp() {
       showToast("⚠️ 서버 연결 후 식단표에 반영할 수 있습니다.");
       return;
     }
-    const members = planSnapshotMeta?.members || ["수혁", "아리나", "시목"];
-    const opId = planSnapshotMeta?.operationId || `plan3d-${Date.now()}`;
+    const members = planSnapshotMeta?.members || ["수혁", "아리나"];
+    const targetMode = planSnapshotMeta?.target || "adults";
+    const opId = planSnapshotMeta?.operationId || `plan-${Date.now()}`;
 
     setIsSavingPlan(true);
     beginWrite();
@@ -3409,14 +3617,22 @@ function MainApp() {
         }
         picked.forEach((it, idx) => {
           const mId = `m-${opId}-${idx}`;
+          const compStr = toSafeArray(it.components).map((c) => c.name).filter(Boolean).join(" · ");
+          const fullMenu = compStr && !String(it.menu || "").includes(compStr)
+            ? `${it.mealName} (${compStr})`
+            : (it.menu || it.mealName);
+          const noteParts = [];
+          if (it.tip) noteParts.push(`조리팁: ${it.tip}`);
+          if (targetMode !== "adults" && it.babyTip) noteParts.push(`아이 변형: ${it.babyTip}`);
+
           const payload = {
             id: mId,
             date: it.date,
             slot: it.slot,
-            menu: it.menu,
+            menu: fullMenu,
             members,
-            ingredients: it.usedIngredients,
-            note: it.simokTip ? `✨ AI 3일식단: ${it.simokTip}` : "✨ AI 3일치 추천 식단",
+            ingredients: toSafeArray(it.usedIngredients),
+            note: noteParts.length > 0 ? `✨ AI 식단 (${it.servings || 2}인분/${it.estimatedMinutes || 25}분) · ${noteParts.join(" / ")}` : "✨ AI 맞춤 식단",
             sourceType: "집밥/온가족식",
             cost: 0
           };
@@ -3426,7 +3642,7 @@ function MainApp() {
         });
         tx.set(opRef, {
           id: opId,
-          type: "plan3d",
+          type: "plan_custom",
           count: picked.length,
           createdAt: new Date().toISOString()
         });
@@ -3450,6 +3666,49 @@ function MainApp() {
       endWrite(ok, errMsg);
       setIsSavingPlan(false);
     }
+  };
+
+  const buildInventoryExportText = () => {
+    const todayStr = getTodayStr();
+    const filtered = fridge.filter((f) => {
+      if (exportIncludeZeroOrExpired) return true;
+      return Number(f.quantity || 0) > 0 && getDaysDiff(f.expiryDate) >= 0;
+    });
+
+    const groups = ["냉장실", "냉동실", "실온·팬트리"].map((loc) => {
+      const items = filtered
+        .filter((f) => (f.location || "냉장실") === loc)
+        .sort((a, b) => String(a.name || "").localeCompare(String(b.name || ""), "ko"));
+      return { loc, items };
+    });
+
+    const lines = [
+      `우리 가족 식탁 - 전체 재고 현황`,
+      `기준일: ${todayStr} | 총 ${filtered.length}개 품목 (${groups.map((g) => `${g.loc} ${g.items.length}`).join(" · ")})`,
+      ""
+    ];
+
+    for (const g of groups) {
+      lines.push(`[${g.loc}] (${g.items.length}개)`);
+      if (g.items.length === 0) {
+        lines.push("- 없음");
+      } else {
+        for (const it of g.items) {
+          const qtyStr = `${it.quantity ?? 0}${it.unit || "개"}`;
+          const expStr = it.expiryDate
+            ? `소비기한 ${it.expiryDate}${it.expiryIsTemp ? "(임시값)" : ""}`
+            : "소비기한 미확인";
+          const buyStr = it.purchaseDate ? `구매일 ${it.purchaseDate}` : "";
+          const priceStr = exportIncludePrice && Number(it.price) > 0 ? `${Number(it.price).toLocaleString()}원` : "";
+          const parts = [it.name, qtyStr, it.category || "기타", expStr, buyStr, priceStr].filter(Boolean);
+          lines.push(parts.join(" | "));
+        }
+      }
+      lines.push("");
+    }
+
+    lines.push("※ 외부 AI 평가용 텍스트입니다. 수량 및 소비기한은 사용자가 확인한 기록을 기준으로 합니다.");
+    return lines.join("\n");
   };
 
   const handlePlatingImageSelect = async (e) => {
@@ -3856,6 +4115,7 @@ function MainApp() {
       quantity: Number(fridgeForm.quantity) || 1,
       unit: fridgeForm.unit || "개",
       expiryDate: fridgeForm.expiryDate || getTodayStr(),
+      expiryIsTemp: editingFridge ? Boolean(editingFridge.expiryIsTemp && !isExpiryManuallyEdited) : !isExpiryManuallyEdited,
       price: priceNum,
       purchaseDate: fridgeForm.purchaseDate || selectedDate
     };
@@ -6427,6 +6687,14 @@ function MainApp() {
             </div>
             <span className="text-xs font-extrabold text-emerald-700 shrink-0">스캔 &gt;</span>
           </button>
+
+          <button
+            onClick={() => setIsInventoryExportOpen(true)}
+            className="w-full py-2.5 px-3 rounded-2xl bg-stone-100 hover:bg-stone-200/80 border border-stone-200 text-stone-800 text-xs font-extrabold flex items-center justify-between"
+          >
+            <span>📤 전체 재고 내보내기 (냉장·냉동·실온 텍스트 추출)</span>
+            <span className="text-stone-500">열기 &gt;</span>
+          </button>
           {expiringItems.length > 0 && (
             <div className="bg-orange-50 border border-orange-200 rounded-2xl p-3">
               <div className="flex items-center gap-1.5 text-xs font-black text-orange-900 mb-1.5">
@@ -6901,65 +7169,152 @@ function MainApp() {
                 <div>
                   <h2 className="text-sm font-black text-stone-900 flex items-center gap-1.5">
                     <CalendarDays className="w-4 h-4 text-amber-600" />
-                    <span>AI 3일치 맞춤 식단표 (냉장고 우선 활용)</span>
+                    <span>AI 날짜·대상별 맞춤 식단표</span>
                   </h2>
                   <p className="text-[11px] text-stone-500 mt-0.5">
-                    소비기한 임박 재료를 최대한 먼저 쓰면서 3일치 식단과 부족 재료만 쏙 골라줍니다.
+                    원하는 날짜·끼니만 자유롭게 고르고, 성인식·유아식·온가족식을 분리해 완성형 한 끼를 만듭니다.
                   </p>
                 </div>
 
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="text-[11px] font-bold text-stone-500">시작 날짜</label>
-                    <input
-                      type="date"
-                      value={planStartDate}
-                      onChange={(e) => setPlanStartDate(e.target.value)}
-                      className="w-full mt-0.5 px-3 py-2 rounded-xl border border-stone-200 text-xs font-bold bg-white"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[11px] font-bold text-stone-500">대상 선택</label>
-                    <select
-                      value={planTarget}
-                      onChange={(e) => setPlanTarget(e.target.value)}
-                      className="w-full mt-0.5 px-2.5 py-2 rounded-xl border border-stone-200 text-xs font-bold bg-white"
-                    >
-                      <option value="온가족 원팟 (어른+시목)">온가족 (어른+시목)</option>
-                      <option value="어른밥 (수혁·아리나)">어른밥 (수혁·아리나)</option>
-                      <option value="시목이 유아식 (15개월)">시목이 유아식</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div>
-                  <div className="text-xs font-extrabold text-stone-700 mb-1.5">
-                    추천받을 끼니 체크 ({planSlots.length}끼 × 3일 = 총 {planSlots.length * 3}끼)
-                  </div>
+                {/* 대상 & 성인 식사 목적 선택 */}
+                <div className="space-y-2">
+                  <label className="text-xs font-extrabold text-stone-700">1. 식사 대상 선택</label>
                   <div className="grid grid-cols-3 gap-1.5">
-                    {["아침", "점심", "저녁"].map((slotName) => {
-                      const active = planSlots.includes(slotName);
-                      return (
+                    {[
+                      { id: "adults", label: "성인식 (2인)" },
+                      { id: "toddler", label: "유아식 (시목)" },
+                      { id: "family", label: "온가족식" }
+                    ].map((opt) => (
+                      <button
+                        key={opt.id}
+                        onClick={() => setPlanTarget(opt.id)}
+                        className={`py-2 px-1.5 rounded-xl text-xs font-extrabold border transition ${
+                          planTarget === opt.id
+                            ? "bg-stone-900 text-white border-stone-900"
+                            : "bg-stone-50 text-stone-700 border-stone-200"
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                  {planTarget === "adults" && (
+                    <div className="flex items-center gap-1.5 flex-wrap pt-1">
+                      {["일반 집밥", "다이어트·저탄수", "고단백·체력보충", "간편 원플레이트"].map((st) => (
                         <button
-                          key={slotName}
-                          onClick={() =>
-                            setPlanSlots((prev) =>
-                              prev.includes(slotName)
-                                ? prev.filter((x) => x !== slotName)
-                                : [...prev, slotName]
-                            )
-                          }
-                          className={`py-2 rounded-xl text-xs font-extrabold border transition flex items-center justify-center gap-1 ${
-                            active
-                              ? "bg-stone-900 text-white border-stone-900"
-                              : "bg-stone-50 text-stone-600 border-stone-200"
+                          key={st}
+                          onClick={() => setPlanAdultStyle(st)}
+                          className={`px-2.5 py-1 rounded-full text-[11px] font-bold border ${
+                            planAdultStyle === st
+                              ? "bg-amber-100 text-amber-900 border-amber-300"
+                              : "bg-white text-stone-600 border-stone-200"
                           }`}
                         >
-                          <span>{active ? "✅" : "⬜"}</span>
-                          <span>{slotName}</span>
+                          {st}
                         </button>
-                      );
-                    })}
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* 날짜 추가 & 날짜별 끼니 개별 선택 */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-extrabold text-stone-700">
+                      2. 날짜별 끼니 선택 (총 {Object.values(planScheduleMap).reduce((a, b) => a + toSafeArray(b).length, 0)}끼)
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      type="date"
+                      value={planAddDateInput}
+                      onChange={(e) => setPlanAddDateInput(e.target.value)}
+                      className="flex-1 px-3 py-1.5 rounded-xl border border-stone-200 text-xs font-bold bg-white"
+                    />
+                    <button
+                      onClick={() => {
+                        if (!planAddDateInput) return;
+                        setPlanScheduleMap((prev) =>
+                          prev[planAddDateInput]
+                            ? prev
+                            : { ...prev, [planAddDateInput]: ["아침", "저녁"] }
+                        );
+                      }}
+                      className="px-3 py-1.5 rounded-xl bg-stone-800 text-white text-xs font-extrabold shrink-0"
+                    >
+                      + 날짜 추가
+                    </button>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    {Object.keys(planScheduleMap)
+                      .sort()
+                      .map((dStr) => {
+                        const slots = toSafeArray(planScheduleMap[dStr]);
+                        const allChecked = slots.length === 3;
+                        return (
+                          <div
+                            key={dStr}
+                            className="p-2.5 rounded-xl bg-stone-50 border border-stone-200 flex items-center justify-between gap-2 flex-wrap"
+                          >
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-xs font-black text-stone-800">{dStr}</span>
+                              <button
+                                onClick={() =>
+                                  setPlanScheduleMap((prev) => ({
+                                    ...prev,
+                                    [dStr]: allChecked ? [] : ["아침", "점심", "저녁"]
+                                  }))
+                                }
+                                className="text-[10px] font-bold text-amber-700 underline"
+                              >
+                                {allChecked ? "전체해제" : "전체선택"}
+                              </button>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              {["아침", "점심", "저녁"].map((sName) => {
+                                const on = slots.includes(sName);
+                                return (
+                                  <button
+                                    key={sName}
+                                    onClick={() =>
+                                      setPlanScheduleMap((prev) => {
+                                        const cur = toSafeArray(prev[dStr]);
+                                        return {
+                                          ...prev,
+                                          [dStr]: cur.includes(sName)
+                                            ? cur.filter((x) => x !== sName)
+                                            : [...cur, sName]
+                                        };
+                                      })
+                                    }
+                                    className={`px-2 py-1 rounded-lg text-[11px] font-extrabold border ${
+                                      on
+                                        ? "bg-stone-900 text-white border-stone-900"
+                                        : "bg-white text-stone-500 border-stone-200"
+                                    }`}
+                                  >
+                                    {sName}
+                                  </button>
+                                );
+                              })}
+                              <button
+                                onClick={() =>
+                                  setPlanScheduleMap((prev) => {
+                                    const copy = { ...prev };
+                                    delete copy[dStr];
+                                    return copy;
+                                  })
+                                }
+                                className="w-7 h-7 flex items-center justify-center rounded-lg text-stone-400 hover:text-rose-600"
+                                title="날짜 삭제"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
                   </div>
                 </div>
 
@@ -6977,12 +7332,18 @@ function MainApp() {
                   }`}
                 >
                   <Sparkles className="w-4 h-4" />
-                  <span>{isPlanLoading ? "냉장고 재료로 3일 식단 짜는 중..." : "✨ 냉장고 기반 3일치 식단 추천받기"}</span>
+                  <span>
+                    {isPlanLoading
+                      ? "전체 유효 재고로 맞춤 식단 짜는 중..."
+                      : "✨ 선택한 날짜·대상 맞춤 식단 추천받기"}
+                  </span>
                 </button>
               </div>
 
               {planItems.length > 0 && (() => {
-                const fridgeNamesLower = fridge.map((f) => String(f.name || "").toLowerCase());
+                const fridgeNamesLower = fridge
+                  .filter((f) => Number(f.quantity || 0) > 0 && getDaysDiff(f.expiryDate) >= 0)
+                  .map((f) => String(f.name || "").toLowerCase());
                 const shopNamesLower = shoppingList.map((s) => String(s.name || "").toLowerCase());
                 const missingMap = new Map();
                 for (const it of planItems.filter((x) => x.selected)) {
@@ -7003,6 +7364,7 @@ function MainApp() {
                   }
                 }
                 const allMissing = Array.from(missingMap.values());
+                const groupedDates = Array.from(new Set(planItems.map((it) => it.date))).sort();
 
                 return (
                   <div className="space-y-3">
@@ -7030,7 +7392,7 @@ function MainApp() {
                       </div>
                     )}
 
-                    <div className="bg-white p-3.5 rounded-2xl border border-stone-200 shadow-sm space-y-2.5">
+                    <div className="bg-white p-3.5 rounded-2xl border border-stone-200 shadow-sm space-y-3">
                       <div className="flex items-center justify-between">
                         <span className="text-xs font-black text-stone-900">
                           추천 식단 미리보기 ({planItems.filter((x) => x.selected).length}끼 선택됨)
@@ -7046,53 +7408,106 @@ function MainApp() {
                         </button>
                       </div>
 
-                      <div className="space-y-2">
-                        {planItems.map((it) => {
-                          const hasExisting = meals.some((m) => m.date === it.date && m.slot === it.slot);
-                          return (
-                            <div
-                              key={it.id}
-                              onClick={() =>
-                                setPlanItems((prev) =>
-                                  prev.map((x) => (x.id === it.id ? { ...x, selected: !x.selected } : x))
-                                )
-                              }
-                              className={`p-3 rounded-xl border cursor-pointer transition space-y-1 ${
-                                it.selected
-                                  ? "bg-amber-50/70 border-amber-300"
-                                  : "bg-stone-50 border-stone-200 opacity-65"
-                              }`}
-                            >
-                              <div className="flex items-center justify-between gap-2">
-                                <div className="flex items-center gap-1.5 flex-wrap">
-                                  <span>{it.selected ? "✅" : "⬜"}</span>
-                                  <span className="text-xs font-black text-stone-900">
-                                    {it.date} · {it.slot}
-                                  </span>
-                                  {hasExisting && (
-                                    <span className="px-1.5 py-0.5 rounded bg-rose-100 text-rose-800 text-[10px] font-extrabold">
-                                      기존 식단 있음(추가)
-                                    </span>
+                      {groupedDates.map((gDate) => (
+                        <div key={gDate} className="space-y-2">
+                          <div className="text-xs font-black text-stone-700 bg-stone-100 px-2.5 py-1 rounded-lg">
+                            📅 {gDate}
+                          </div>
+                          {planItems
+                            .filter((it) => it.date === gDate)
+                            .map((it) => {
+                              const hasExisting = meals.some((m) => m.date === it.date && m.slot === it.slot);
+                              const isAdultOnly = (planSnapshotMeta?.target || it.target) === "adults";
+                              return (
+                                <div
+                                  key={it.id}
+                                  className={`p-3 rounded-xl border space-y-2 ${
+                                    it.selected
+                                      ? "bg-amber-50/50 border-amber-300"
+                                      : "bg-stone-50 border-stone-200 opacity-65"
+                                  }`}
+                                >
+                                  <div className="flex items-center justify-between gap-2">
+                                    <button
+                                      onClick={() =>
+                                        setPlanItems((prev) =>
+                                          prev.map((x) => (x.id === it.id ? { ...x, selected: !x.selected } : x))
+                                        )
+                                      }
+                                      className="flex items-center gap-1.5 text-left"
+                                    >
+                                      <span>{it.selected ? "✅" : "⬜"}</span>
+                                      <span className="text-xs font-black text-stone-900">{it.slot}</span>
+                                      <span className="text-[11px] font-bold text-stone-500">
+                                        · {it.servings}인분 · {it.estimatedMinutes}분
+                                      </span>
+                                    </button>
+                                    <div className="flex items-center gap-1.5">
+                                      {hasExisting && (
+                                        <span className="px-1.5 py-0.5 rounded bg-rose-100 text-rose-800 text-[10px] font-extrabold">
+                                          기존 식단 있음(추가)
+                                        </span>
+                                      )}
+                                      <button
+                                        onClick={() => handleRegenerateSinglePlanSlot(it)}
+                                        disabled={regeneratingPlanId === it.id}
+                                        className="px-2 py-1 rounded-lg bg-white border border-stone-200 text-[11px] font-extrabold text-stone-700 hover:bg-stone-100"
+                                      >
+                                        {regeneratingPlanId === it.id ? "추천중..." : "🔄 다시 추천"}
+                                      </button>
+                                    </div>
+                                  </div>
+
+                                  <input
+                                    type="text"
+                                    value={it.mealName}
+                                    onChange={(e) => {
+                                      const val = e.target.value;
+                                      setPlanItems((prev) =>
+                                        prev.map((x) => (x.id === it.id ? { ...x, mealName: val, menu: val } : x))
+                                      );
+                                    }}
+                                    className="w-full px-2.5 py-1.5 rounded-lg bg-white border border-stone-200 text-sm font-extrabold text-stone-900"
+                                  />
+
+                                  {toSafeArray(it.components).length > 0 && (
+                                    <div className="flex flex-wrap gap-1">
+                                      {toSafeArray(it.components).map((c, cIdx) => (
+                                        <span
+                                          key={cIdx}
+                                          className="px-2 py-0.5 rounded-md bg-white border border-stone-200 text-[11px] font-bold text-stone-700"
+                                        >
+                                          {c.role === "staple" ? "🍚" : c.role === "vegetable" ? "🥬" : "🍖"} {c.name}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  )}
+
+                                  {toSafeArray(it.usedIngredientsDisplay).length > 0 && (
+                                    <div className="text-[11px] font-semibold text-emerald-700">
+                                      🥬 보유 재료: {it.usedIngredientsDisplay.join(", ")}
+                                    </div>
+                                  )}
+                                  {toSafeArray(it.missingIngredients).length > 0 && (
+                                    <div className="text-[11px] font-semibold text-rose-700">
+                                      🛒 부족 재료: {it.missingIngredients.map((m) => `${m.name}(${m.quantity})`).join(", ")}
+                                    </div>
+                                  )}
+                                  {it.tip && (
+                                    <div className="text-[11px] font-semibold text-stone-600">
+                                      💡 조리 팁: {it.tip}
+                                    </div>
+                                  )}
+                                  {!isAdultOnly && it.babyTip && (
+                                    <div className="text-[11px] font-semibold text-amber-900 bg-white/80 p-2 rounded-lg border border-amber-200">
+                                      👶 아이 맞춤 팁: {it.babyTip}
+                                    </div>
                                   )}
                                 </div>
-                              </div>
-                              <div className="text-sm font-extrabold text-stone-900 pl-6">
-                                {it.menu}
-                              </div>
-                              {it.usedIngredients.length > 0 && (
-                                <div className="text-[11px] font-semibold text-emerald-700 pl-6">
-                                  🥬 냉장고 활용: {it.usedIngredients.join(", ")}
-                                </div>
-                              )}
-                              {it.simokTip && (
-                                <div className="text-[11px] font-semibold text-amber-900 pl-6">
-                                  💡 팁: {it.simokTip}
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
+                              );
+                            })}
+                        </div>
+                      ))}
 
                       {planSnapshotMeta && (
                         <div className="text-[11px] font-bold text-stone-500 bg-stone-50 px-2.5 py-1.5 rounded-xl border border-stone-200">
@@ -9656,6 +10071,113 @@ function MainApp() {
           </div>
         </div>
       )}
+      {isInventoryExportOpen && (() => {
+        const exportText = buildInventoryExportText();
+        return (
+          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-3xl max-w-md w-full p-5 space-y-3.5 max-h-[90vh] flex flex-col">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-black text-stone-900">
+                  📤 전체 재고 텍스트 내보내기
+                </h3>
+                <button
+                  onClick={() => setIsInventoryExportOpen(false)}
+                  className="w-8 h-8 flex items-center justify-center rounded-xl bg-stone-100 text-stone-600"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="flex items-center gap-3 flex-wrap text-xs font-bold text-stone-700">
+                <label className="inline-flex items-center gap-1.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={exportIncludePrice}
+                    onChange={(e) => setExportIncludePrice(e.target.checked)}
+                    className="rounded"
+                  />
+                  <span>가격 포함</span>
+                </label>
+                <label className="inline-flex items-center gap-1.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={exportIncludeZeroOrExpired}
+                    onChange={(e) => setExportIncludeZeroOrExpired(e.target.checked)}
+                    className="rounded"
+                  />
+                  <span>0개·만료 품목 포함</span>
+                </label>
+              </div>
+
+              <textarea
+                readOnly
+                value={exportText}
+                rows={12}
+                className="w-full p-3 rounded-2xl bg-stone-50 border border-stone-200 text-[11px] font-mono text-stone-800 leading-relaxed resize-none"
+              />
+
+              <div className="grid grid-cols-3 gap-1.5">
+                <button
+                  onClick={async () => {
+                    try {
+                      await navigator.clipboard.writeText(exportText);
+                      showToast("📋 전체 재고 텍스트가 복사되었습니다!");
+                    } catch (e) {
+                      showToast("⚠️ 클립보드 복사 권한이 없어 TXT 다운로드를 이용해 주세요.");
+                    }
+                  }}
+                  className="py-2.5 rounded-xl bg-stone-900 text-white text-xs font-extrabold"
+                >
+                  📋 복사하기
+                </button>
+                <button
+                  onClick={() => {
+                    const blob = new Blob([exportText], { type: "text/plain;charset=utf-8" });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement("a");
+                    a.href = url;
+                    a.download = `우리집_전체재고_${getTodayStr()}.txt`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                    showToast("📄 TXT 파일이 다운로드되었습니다!");
+                  }}
+                  className="py-2.5 rounded-xl bg-amber-600 text-white text-xs font-extrabold"
+                >
+                  📄 TXT 저장
+                </button>
+                <button
+                  onClick={async () => {
+                    if (navigator.share) {
+                      try {
+                        await navigator.share({
+                          title: `우리 가족 식탁 전체 재고 (${getTodayStr()})`,
+                          text: exportText
+                        });
+                        return;
+                      } catch (e) {}
+                    }
+                    const blob = new Blob([exportText], { type: "text/plain;charset=utf-8" });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement("a");
+                    a.href = url;
+                    a.download = `우리집_전체재고_${getTodayStr()}.txt`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                    showToast("공유 기능이 제한되어 TXT 파일로 저장했습니다.");
+                  }}
+                  className="py-2.5 rounded-xl bg-emerald-600 text-white text-xs font-extrabold"
+                >
+                  📤 공유하기
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
@@ -9666,4 +10188,4 @@ export default function App() {
       <MainApp />
     </ErrorBoundary>
   );
-  }
+}
