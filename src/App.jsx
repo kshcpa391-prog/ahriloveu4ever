@@ -1241,6 +1241,7 @@ function MainApp() {
   const [isPlatingLoading, setIsPlatingLoading] = useState(false);
   const [platingErrorMsg, setPlatingErrorMsg] = useState("");
   const platingFileInputRef = useRef(null);
+  const currentMilestoneRef = useRef(null);
 
   // 식단표 이미지 AI 스캐너 상태
   const [isDaycareModalOpen, setIsDaycareModalOpen] = useState(false);
@@ -1377,6 +1378,15 @@ function MainApp() {
       setIsWeatherLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (activeTab === "baby" && babySubTab === "milestones") {
+      const timer = setTimeout(() => {
+        currentMilestoneRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      }, 150);
+      return () => clearTimeout(timer);
+    }
+  }, [activeTab, babySubTab, selectedChildId]);
 
   useEffect(() => {
     fetchSeoulJungGuWeather();
@@ -5860,11 +5870,22 @@ function MainApp() {
             {/* 서브탭 1: 월령별 발달과정 */}
             {babySubTab === "milestones" && (
               <div className="space-y-2.5">
+                <div className="flex justify-end">
+                  <button
+                    onClick={() =>
+                      currentMilestoneRef.current?.scrollIntoView({ behavior: "smooth", block: "center" })
+                    }
+                    className="px-2.5 py-1 rounded-xl bg-amber-100 hover:bg-amber-200 text-amber-900 text-[11px] font-extrabold border border-amber-300"
+                  >
+                    📍 {activeChild.id} 현재 시기({ageStats.months}개월)로 이동
+                  </button>
+                </div>
                 {BABY_MILESTONES.map((ms) => {
                   const isCurrent = ageStats.months >= ms.minM && ageStats.months <= ms.maxM;
                   return (
                     <div
                       key={ms.id}
+                      ref={isCurrent ? currentMilestoneRef : null}
                       className={`p-3.5 rounded-2xl border space-y-2 ${
                         isCurrent
                           ? "bg-amber-50/90 border-amber-300 shadow-sm ring-2 ring-amber-200"
@@ -7427,4 +7448,4 @@ export default function App() {
       <MainApp />
     </ErrorBoundary>
   );
-}
+   }
