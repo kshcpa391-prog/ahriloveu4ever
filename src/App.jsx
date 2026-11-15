@@ -631,11 +631,23 @@ const STORAGE_LOCATIONS = ["냉장실", "냉동실", "실온·팬트리"];
 const FRIDGE_CATEGORIES = ["채소/과일", "육류/수산", "유제품/계란", "유아식/이유식 재료", "반찬/김치", "밀키트", "양념/소스", "기타"];
 const SCHEDULE_CATEGORIES = ["기념일/생일", "할일(To-Do)", "육아/병원", "가족행사/경조사"];
 
-const APP_CODE_VERSION = "v9.0";
-const APP_BUILD_DATE = "2026-11-15 23:00";
+const APP_CODE_VERSION = "v9.1";
+const APP_BUILD_DATE = "2026-11-15 23:10";
 const EDITOR_INVITE_CODE = "0402";
 
 const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v9.1",
+    version: "v9.1",
+    date: "2026-11-15",
+    title: "v9.0 JSX 빌드 오류 수정 · AI 3일 식단 검증/중복반영 방지 · 장보기 배치 저장 · 재고삭제 분리",
+    changes: [
+      "AI 탭 Fragment(</>) 닫힘 위치 및 육아수첩 잉여 태그 제거로 JSX 구문 오류 0건 해결",
+      "3일치 AI 식단에 operationId 중복 반영 방지, 생성 당시 대상자 스냅샷 고정, 날짜·끼니·건수 엄격 검증 적용",
+      "부족 재료 장보기 추가 시 수량/단위 지원, 기존 장보기·냉장고 중복 대사 및 writeBatch 원자적 저장 적용",
+      "냉장고 재고 삭제 시 무관한 family_meals_v3 문서 삭제 코드 제거 (식비·식단 100% 보존)"
+    ]
+  },
   {
     id: "patch-v9.0",
     version: "v9.0",
@@ -1622,6 +1634,7 @@ function MainApp() {
   const [isPlanLoading, setIsPlanLoading] = useState(false);
   const [planErrorMsg, setPlanErrorMsg] = useState("");
   const [planItems, setPlanItems] = useState([]);
+  const [planSnapshotMeta, setPlanSnapshotMeta] = useState(null);
   const [isSavingPlan, setIsSavingPlan] = useState(false);
   const [quickLogRecipe, setQuickLogRecipe] = useState(null);
   const [quickLogDate, setQuickLogDate] = useState(() => getTodayStr());
@@ -3259,6 +3272,14 @@ function MainApp() {
           ? "성인 부부(수혁·아리나) 맞춤 집밥 식단"
           : "성인 부부 + 만 15개월 아기(시목이)가 함께 먹는 원팟 집밥 식단 (아기용 덜어내기/저염 팁 포함)";
 
+      const snapshotMembers =
+        planTarget === "시목이 유아식 (15개월)"
+          ? ["시목"]
+          : planTarget === "어른밥 (수혁·아리나)"
+          ? ["수혁", "아리나"]
+          : ["수혁", "아리나", "시목"];
+
+      const expectedCount = days.length * planSlots.length;
       const prompt = `당신은 한국 가정식 및 영유아 식단 전문 영양사입니다.
 대상: ${targetDesc}
 날짜(3일): ${days.join(", ")}
@@ -3267,15 +3288,15 @@ function MainApp() {
 
 규칙:
 1. 최대한 위 냉장고 보유 재료(특히 임박 재료)를 우선 활용해 3일치 식단이 겹치지 않게 다양하게 짜주세요.
-2. 정말 꼭 필요한 부족한 재료만 최소한(끼니당 0~2개)으로 missingIngredients에 적어주세요.
-3. 날짜 ${days.length}일 × 끼니 ${planSlots.length}개 = 총 ${days.length * planSlots.length}개 항목을 순수 JSON 배열로만 출력하세요 (마크다운 금지):
+2. 정말 꼭 필요한 부족한 재료만 최소한(끼니당 0~2개)으로 missingIngredients에 {"name":"재료명","quantity":"수량+단위"} 형태로 적어주세요.
+3. 반드시 날짜 ${days.length}일 × 끼니 ${planSlots.length}개 = 정확히 ${expectedCount}개 항목(중복 없이)을 순수 JSON 배열로만 출력하세요 (마크다운 금지):
 [
   {
     "date": "${days[0]}",
     "slot": "${planSlots[0]}",
     "menu": "구체적인 메뉴명",
     "usedIngredients": ["냉장고재료1", "냉장고재료2"],
-    "missingIngredients": ["부족재료1"],
+    "missingIngredients": [{"name": "부족재료1", "quantity": "1개"}],
     "simokTip": "시목이(15개월) 맞춤 변형 팁 또는 조리 팁"
   }
 ]`;
@@ -3286,24 +3307,64 @@ function MainApp() {
         openaiApiKey,
         aiProvider,
         promptText: prompt,
-        temperature: 0.6,
+        temperature: 0.55,
         onProviderUsed: (prov) => { actualProvider = prov; }
       });
 
-      const normalized = toSafeArray(parsed).map((item, idx) => ({
-        id: `plan-${Date.now()}-${idx}`,
-        date: item.date || days[Math.min(2, Math.floor(idx / Math.max(1, planSlots.length)))],
-        slot: MEAL_SLOTS.some((s) => s.id === item.slot) ? item.slot : planSlots[0],
-        menu: String(item.menu || "").trim() || "추천 가정식",
-        usedIngredients: toSafeArray(item.usedIngredients),
-        missingIngredients: toSafeArray(item.missingIngredients),
-        simokTip: String(item.simokTip || "").trim(),
-        selected: true
-      }));
+      const allowedDates = new Set(days);
+      const allowedSlots = new Set(planSlots);
+      const seenPairs = new Set();
+      const validated = [];
 
-      setPlanItems(normalized);
-      pushAiLog(actualProvider, "3일치 식단표", true, `${normalized.length}끼 생성`);
-      showToast(`3일치 맞춤 식단(${normalized.length}끼)이 생성되었습니다!`);
+      for (const item of toSafeArray(parsed)) {
+        const dStr = String(item?.date || "").trim();
+        const sStr = String(item?.slot || "").trim();
+        const mStr = String(item?.menu || "").trim();
+        if (!allowedDates.has(dStr) || !allowedSlots.has(sStr) || !mStr) continue;
+        const pairKey = `${dStr}__${sStr}`;
+        if (seenPairs.has(pairKey)) continue;
+        seenPairs.add(pairKey);
+
+        const rawMissing = toSafeArray(item.missingIngredients).map((mi) => {
+          if (mi && typeof mi === "object") {
+            return {
+              name: String(mi.name || "").trim(),
+              quantity: String(mi.quantity || "1개").trim() || "1개"
+            };
+          }
+          return { name: String(mi || "").trim(), quantity: "1개" };
+        }).filter((x) => x.name);
+
+        validated.push({
+          id: `plan-${Date.now()}-${validated.length}`,
+          date: dStr,
+          slot: sStr,
+          menu: mStr,
+          usedIngredients: toSafeArray(item.usedIngredients).map((u) => String(u || "").trim()).filter(Boolean),
+          missingIngredients: rawMissing,
+          simokTip: String(item.simokTip || "").trim(),
+          selected: true
+        });
+      }
+
+      if (validated.length === 0) {
+        throw new Error("AI가 요청한 날짜·끼니 조건에 맞는 식단을 반환하지 못했습니다. 다시 시도해 주세요.");
+      }
+
+      setPlanItems(validated);
+      setPlanSnapshotMeta({
+        operationId: `plan3d-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        target: planTarget,
+        members: snapshotMembers,
+        startDate: days[0],
+        slots: [...planSlots],
+        applied: false
+      });
+      pushAiLog(actualProvider, "3일치 식단표", true, `${validated.length}/${expectedCount}끼 생성`);
+      if (validated.length < expectedCount) {
+        setPlanErrorMsg(`요청한 ${expectedCount}끼 중 ${validated.length}끼만 조건에 맞게 생성되었습니다. 부족하면 다시 추천받아 주세요.`);
+      }
+      showToast(`3일치 맞춤 식단(${validated.length}끼)이 생성되었습니다!`);
     } catch (err) {
       pushAiLog(aiProvider.toUpperCase(), "3일치 식단표", false, err.message);
       setPlanErrorMsg(err.message);
@@ -3315,6 +3376,10 @@ function MainApp() {
   const handleApply3DayPlan = async () => {
     if (!requireEditorAccess()) return;
     if (isSavingPlan) return;
+    if (planSnapshotMeta?.applied) {
+      showToast("이미 일별 식단표에 반영 완료된 추천 식단입니다.");
+      return;
+    }
     const picked = planItems.filter((it) => it.selected && it.menu);
     if (picked.length === 0) {
       showToast("식단표에 반영할 끼니를 1개 이상 체크해 주세요.");
@@ -3324,45 +3389,60 @@ function MainApp() {
       showToast("⚠️ 서버 연결 후 식단표에 반영할 수 있습니다.");
       return;
     }
-    const members =
-      planTarget === "시목이 유아식 (15개월)"
-        ? ["시목"]
-        : planTarget === "어른밥 (수혁·아리나)"
-        ? ["수혁", "아리나"]
-        : ["수혁", "아리나", "시목"];
+    const members = planSnapshotMeta?.members || ["수혁", "아리나", "시목"];
+    const opId = planSnapshotMeta?.operationId || `plan3d-${Date.now()}`;
 
     setIsSavingPlan(true);
     beginWrite();
     let ok = false;
     let errMsg = "";
     try {
-      const batch = writeBatch(db);
+      const opRef = getDocRef("family_cooking_operations_v7", opId);
+      let alreadyApplied = false;
       const newLocal = {};
-      picked.forEach((it, idx) => {
-        const mId = `m-${Date.now()}-${idx}-${Math.random().toString(36).slice(2, 5)}`;
-        const payload = {
-          id: mId,
-          date: it.date,
-          slot: it.slot,
-          menu: it.menu,
-          members,
-          ingredients: it.usedIngredients,
-          note: it.simokTip ? `✨ AI 3일식단: ${it.simokTip}` : "✨ AI 3일치 추천 식단",
-          sourceType: "집밥/온가족식",
-          cost: 0
-        };
-        newLocal[mId] = payload;
-        batch.set(getDocRef("family_meals_v3", mId), payload);
-        batch.set(getDocRef("family_meals_v4", mId), payload);
-      });
-      await batch.commit();
 
-      setMealsMap((prev) => ({
-        ...prev,
-        local: { ...(prev.local || {}), ...newLocal }
-      }));
+      await runTransaction(db, async (tx) => {
+        const existingOp = await tx.get(opRef);
+        if (existingOp.exists()) {
+          alreadyApplied = true;
+          return;
+        }
+        picked.forEach((it, idx) => {
+          const mId = `m-${opId}-${idx}`;
+          const payload = {
+            id: mId,
+            date: it.date,
+            slot: it.slot,
+            menu: it.menu,
+            members,
+            ingredients: it.usedIngredients,
+            note: it.simokTip ? `✨ AI 3일식단: ${it.simokTip}` : "✨ AI 3일치 추천 식단",
+            sourceType: "집밥/온가족식",
+            cost: 0
+          };
+          newLocal[mId] = payload;
+          tx.set(getDocRef("family_meals_v3", mId), payload);
+          tx.set(getDocRef("family_meals_v4", mId), payload);
+        });
+        tx.set(opRef, {
+          id: opId,
+          type: "plan3d",
+          count: picked.length,
+          createdAt: new Date().toISOString()
+        });
+      });
+
       ok = true;
-      showToast(`✅ 선택한 ${picked.length}끼가 일별 식단표에 반영되었습니다!`);
+      setPlanSnapshotMeta((prev) => (prev ? { ...prev, applied: true } : prev));
+      if (alreadyApplied) {
+        showToast("이미 다른 기기 또는 이전 요청으로 반영 완료된 식단입니다.");
+      } else {
+        setMealsMap((prev) => ({
+          ...prev,
+          local: { ...(prev.local || {}), ...newLocal }
+        }));
+        showToast(`✅ 선택한 ${picked.length}끼가 일별 식단표에 반영되었습니다!`);
+      }
     } catch (e) {
       errMsg = e.message;
       showToast("⚠️ 식단표 일괄 반영 실패: 네트워크를 확인해 주세요.");
@@ -3889,33 +3969,62 @@ function MainApp() {
   // [신규 v6.2] AI 레시피 부족 재료 일괄 장보기 담기
   const handleAddMissingIngredientsToShopping = async (usedIngs) => {
     if (!requireEditorAccess()) return;
-    const fridgeNames = fridge.map((f) => String(f.name || "").toLowerCase());
-    const missing = toSafeArray(usedIngs).filter(
-      (ing) => !fridgeNames.some((fn) => fn.includes(ing.toLowerCase()) || ing.toLowerCase().includes(fn))
-    );
-    if (missing.length === 0) {
-      showToast("모든 재료가 이미 냉장고에 있습니다!");
+    if (!user || !db) {
+      showToast("⚠️ 서버 연결 후 장보기 목록에 담을 수 있습니다.");
       return;
     }
-    for (const ing of missing) {
-      const shId = `sh-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`;
-      const newShop = {
-        id: shId,
-        name: ing,
-        quantity: "1개",
-        category: "기타",
-        urgent: false,
-        checked: false,
-        memo: "AI 레시피 부족 재료"
-      };
-      setShoppingList((prev) => [newShop, ...prev]);
-      if (user && db) {
-        try {
-          await setDoc(getDocRef("family_shopping_v4", shId), newShop);
-        } catch (e) {}
+    const fridgeNames = fridge.map((f) => String(f.name || "").toLowerCase());
+    const shopNames = shoppingList.map((s) => String(s.name || "").toLowerCase());
+    const dedupMap = new Map();
+    for (const raw of toSafeArray(usedIngs)) {
+      const name = typeof raw === "object" ? String(raw.name || "").trim() : String(raw || "").trim();
+      const quantity = typeof raw === "object" ? String(raw.quantity || "1개").trim() || "1개" : "1개";
+      if (!name) continue;
+      const lower = name.toLowerCase();
+      if (
+        fridgeNames.some((fn) => fn.includes(lower) || lower.includes(fn)) ||
+        shopNames.some((sn) => sn.includes(lower) || lower.includes(sn))
+      ) {
+        continue;
       }
+      if (!dedupMap.has(lower)) dedupMap.set(lower, { name, quantity });
     }
-    showToast(`부족한 재료 ${missing.length}종을 장보기 목록에 담았습니다!`);
+    const missing = Array.from(dedupMap.values());
+    if (missing.length === 0) {
+      showToast("부족한 재료가 이미 냉장고 또는 장보기 목록에 있습니다!");
+      return;
+    }
+
+    beginWrite();
+    let ok = false;
+    let errMsg = "";
+    try {
+      const batch = writeBatch(db);
+      const created = [];
+      missing.forEach((ing, idx) => {
+        const shId = `sh-${Date.now()}-${idx}-${Math.random().toString(36).slice(2, 5)}`;
+        const newShop = {
+          id: shId,
+          name: ing.name,
+          quantity: ing.quantity,
+          category: "기타",
+          urgent: false,
+          checked: false,
+          memo: "AI 추천 부족 재료"
+        };
+        created.push(newShop);
+        batch.set(getDocRef("family_shopping_v4", shId), newShop);
+      });
+      await batch.commit();
+      setShoppingList((prev) => [...created, ...prev]);
+      ok = true;
+      showToast(`부족한 재료 ${created.length}종을 장보기 목록에 담았습니다!`);
+    } catch (e) {
+      errMsg = e.message;
+      showToast("⚠️ 장보기 일괄 저장 실패: 네트워크를 확인해 주세요.");
+    } finally {
+      endWrite(ok, errMsg);
+    }
   };
 
   // [v7.1 개선] 요리 완료 전 차감 수량 확인 팝업 열기 & 확정 차감
@@ -4088,7 +4197,6 @@ function MainApp() {
       batch.set(getDocRef("family_meta_v4", "deleted_tracker"), { ids: arrayUnion(item.id) }, { merge: true });
       batch.delete(getDocRef("family_fridge_v3", item.id));
       batch.delete(getDocRef("family_fridge_v4", item.id));
-      batch.delete(getDocRef("family_meals_v3", item.id));
       await batch.commit();
 
       setDeletedIds((prev) => {
@@ -6876,19 +6984,25 @@ function MainApp() {
               {planItems.length > 0 && (() => {
                 const fridgeNamesLower = fridge.map((f) => String(f.name || "").toLowerCase());
                 const shopNamesLower = shoppingList.map((s) => String(s.name || "").toLowerCase());
-                const allMissing = Array.from(
-                  new Set(
-                    planItems
-                      .filter((it) => it.selected)
-                      .flatMap((it) => toSafeArray(it.missingIngredients))
-                      .map((m) => String(m || "").trim())
-                      .filter(Boolean)
-                  )
-                ).filter(
-                  (m) =>
-                    !fridgeNamesLower.some((fn) => fn.includes(m.toLowerCase()) || m.toLowerCase().includes(fn)) &&
-                    !shopNamesLower.some((sn) => sn.includes(m.toLowerCase()) || m.toLowerCase().includes(sn))
-                );
+                const missingMap = new Map();
+                for (const it of planItems.filter((x) => x.selected)) {
+                  for (const raw of toSafeArray(it.missingIngredients)) {
+                    const mName = typeof raw === "object" ? String(raw.name || "").trim() : String(raw || "").trim();
+                    const mQty = typeof raw === "object" ? String(raw.quantity || "1개").trim() : "1개";
+                    if (!mName) continue;
+                    const lower = mName.toLowerCase();
+                    if (
+                      fridgeNamesLower.some((fn) => fn.includes(lower) || lower.includes(fn)) ||
+                      shopNamesLower.some((sn) => sn.includes(lower) || lower.includes(sn))
+                    ) {
+                      continue;
+                    }
+                    if (!missingMap.has(lower)) {
+                      missingMap.set(lower, { name: mName, quantity: mQty });
+                    }
+                  }
+                }
+                const allMissing = Array.from(missingMap.values());
 
                 return (
                   <div className="space-y-3">
@@ -6900,10 +7014,10 @@ function MainApp() {
                         <div className="flex flex-wrap gap-1.5">
                           {allMissing.map((m) => (
                             <span
-                              key={m}
+                              key={m.name}
                               className="px-2 py-0.5 rounded-full bg-white border border-emerald-200 text-[11px] font-bold text-emerald-800"
                             >
-                              {m}
+                              {m.name} ({m.quantity})
                             </span>
                           ))}
                         </div>
@@ -6980,14 +7094,23 @@ function MainApp() {
                         })}
                       </div>
 
+                      {planSnapshotMeta && (
+                        <div className="text-[11px] font-bold text-stone-500 bg-stone-50 px-2.5 py-1.5 rounded-xl border border-stone-200">
+                          📌 등록 대상(생성 시점 고정): <span className="text-stone-800">{planSnapshotMeta.members.join(", ")}</span>
+                        </div>
+                      )}
                       <button
                         onClick={handleApply3DayPlan}
-                        disabled={isSavingPlan}
+                        disabled={isSavingPlan || planSnapshotMeta?.applied}
                         className={`w-full py-3 rounded-2xl text-white text-xs font-black ${
-                          isSavingPlan ? "bg-stone-400" : "bg-stone-900 hover:bg-stone-800"
+                          isSavingPlan || planSnapshotMeta?.applied
+                            ? "bg-stone-400 cursor-not-allowed"
+                            : "bg-stone-900 hover:bg-stone-800"
                         }`}
                       >
-                        {isSavingPlan
+                        {planSnapshotMeta?.applied
+                          ? "✅ 일별 식단표 반영 완료"
+                          : isSavingPlan
                           ? "식단표에 반영 중..."
                           : `✅ 선택한 ${planItems.filter((x) => x.selected).length}끼 일별 식단표에 반영하기`}
                       </button>
@@ -7346,6 +7469,8 @@ function MainApp() {
               </div>
             )}
           </div>
+          </>
+          )}
         </div>
       )}
 
@@ -7839,8 +7964,6 @@ function MainApp() {
                 )}
               </div>
             )}
-          </>
-          )}
           </div>
         );
       })()}
@@ -9543,4 +9666,4 @@ export default function App() {
       <MainApp />
     </ErrorBoundary>
   );
-        }
+  }
