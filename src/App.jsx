@@ -631,11 +631,23 @@ const STORAGE_LOCATIONS = ["냉장실", "냉동실", "실온·팬트리"];
 const FRIDGE_CATEGORIES = ["채소/과일", "육류/수산", "유제품/계란", "유아식/이유식 재료", "반찬/김치", "밀키트", "양념/소스", "기타"];
 const SCHEDULE_CATEGORIES = ["기념일/생일", "할일(To-Do)", "육아/병원", "가족행사/경조사"];
 
-const APP_CODE_VERSION = "v9.6";
-const APP_BUILD_DATE = "2026-11-16 08:00";
+const APP_CODE_VERSION = "v9.7";
+const APP_BUILD_DATE = "2026-11-16 08:20";
 const EDITOR_INVITE_CODE = "0402";
 
 const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v9.7",
+    version: "v9.7",
+    date: "2026-11-16",
+    title: "재고 동시수정 중복저장 제거 · 복원 전 안전백업/충돌확인 · 장보기 기존수량 차감 · 소비기한 구분",
+    changes: [
+      "handleSaveFridge()에서 트랜잭션 충돌 검증·저장 후 writeBatch가 중복 실행되던 문제 제거",
+      "JSON 복원 전 기존 데이터와 신규/충돌 건수 비교 확인창 + 복원 직전 자동 안전 백업(pre_restore) 생성",
+      "자동백업이 데이터 수량·수정시각 지문(signature) 변화를 감지해 동일 슬롯 내 변경도 안전 백업",
+      "장보기 기존 예정 수량까지 차감 계산, 한그릇 요리도 재료 수량 검증, AI에 임시 소비기한 명시"
+    ]
+  },
   {
     id: "patch-v9.6",
     version: "v9.6",
@@ -2486,11 +2498,16 @@ function MainApp() {
     return Object.values(merged);
   }, [fridgeMap, deletedIds]);
 
-  // 하루 2번(오전 AM / 오후 PM) 자동 클라우드 스냅샷 백업 엔진
+  // 하루 2번(오전 AM / 오후 PM) + 실제 내용 변경 감지 자동 클라우드 스냅샷 백업 엔진
   useEffect(() => {
     if (!isEditorUnlocked || !user || !db || meals.length === 0) return;
     const currentSlot = getTwiceDailySlotKey();
-    if (lastAutoBackupSlot === currentSlot) return;
+    const totalFridgeQty = fridge.reduce((acc, f) => acc + (Number(f.quantity) || 0), 0);
+    const dataSig = `${meals.length}:${fridge.length}:${totalFridgeQty}:${expenses.length}:${schedules.length}:${babyGrowthLogs.length}:${babyMedicalNotes.length}`;
+    const lastSig = (() => {
+      try { return localStorage.getItem("kim_last_backup_sig_v1") || ""; } catch (e) { return ""; }
+    })();
+    if (lastAutoBackupSlot === currentSlot && lastSig === dataSig) return;
 
     const timer = setTimeout(async () => {
       try {
@@ -2524,6 +2541,7 @@ function MainApp() {
         );
         setLastAutoBackupSlot(currentSlot);
         localStorage.setItem("kim_twice_daily_backup_slot", currentSlot);
+        try { localStorage.setItem("kim_last_backup_sig_v1", dataSig); } catch (e) {}
       } catch (e) {
         console.warn("Auto snapshot warning:", e);
       }
@@ -2743,8 +2761,20 @@ function MainApp() {
         throw new Error("유효한 백업 JSON 파일이 아닙니다.");
       }
 
+      const existingMealIds = new Set(meals.map((m) => m.id));
+      const existingFridgeIds = new Set(fridge.map((f) => f.id));
+      const existingSchIds = new Set(schedules.map((s) => s.id));
+      const mealConflicts = toSafeArray(payload.meals).filter((m) => m?.id && existingMealIds.has(m.id)).length;
+      const fridgeConflicts = toSafeArray(payload.fridge).filter((f) => f?.id && existingFridgeIds.has(f.id)).length;
+      const schConflicts = toSafeArray(payload.schedules).filter((s) => s?.id && existingSchIds.has(s.id)).length;
+      const totalConflicts = mealConflicts + fridgeConflicts + schConflicts;
+
       const confirmRestore = window.confirm(
-        `백업 파일을 불러올까요?\n(식단 ${(payload.meals || []).length}건, 냉장고 ${(payload.fridge || []).length}건, 일정 ${(payload.schedules || []).length}건이 현재 데이터에 병합·복원됩니다.)`
+        `백업 파일을 복원할까요?\n` +
+        `• 식단 ${toSafeArray(payload.meals).length}건 (기존 충돌 ${mealConflicts}건)\n` +
+        `• 냉장고 ${toSafeArray(payload.fridge).length}건 (기존 충돌 ${fridgeConflicts}건)\n` +
+        `• 일정 ${toSafeArray(payload.schedules).length}건 (기존 충돌 ${schConflicts}건)\n` +
+        (totalConflicts > 0 ? `⚠️ 기존 충돌 ${totalConflicts}건은 백업 내용으로 덮어써집니다. 복원 직전 현재 상태를 안전 백업합니다.` : `복원 직전 현재 상태를 안전 백업합니다.`)
       );
       if (!confirmRestore) {
         if (jsonRestoreInputRef.current) jsonRestoreInputRef.current.value = "";
@@ -2752,6 +2782,17 @@ function MainApp() {
       }
 
       setIsRestoringJson(true);
+      if (user && db) {
+        try {
+          await setDoc(getDocRef("family_backups_v4", `pre_restore_${Date.now()}`), {
+            slot: "pre_restore",
+            createdAt: new Date().toISOString(),
+            data: { meals, fridge, expenses, shoppingList, notices, schedules, babyChecks, babyGrowthLogs, babyMedicalNotes }
+          });
+        } catch (bkErr) {
+          throw new Error("복원 전 안전 백업 생성에 실패하여 복원을 중단했습니다.");
+        }
+      }
 
       if (Array.isArray(payload.meals)) {
         const mObj = {};
@@ -3354,7 +3395,7 @@ function MainApp() {
         ? valid
             .map((f) => {
               const d = getDaysDiff(f.expiryDate);
-              return `${f.name}|${f.location}|${f.category}|${f.quantity}${f.unit || "개"}|소비기한:${f.expiryDate || "미확인"}(D-${d})`;
+              return `${f.name}|${f.location}|${f.category}|${f.quantity}${f.unit || "개"}|${f.expiryDate ? (f.expiryIsTemp ? `추정기한:${f.expiryDate}(임시)` : `소비기한:${f.expiryDate}(확정)`) : "소비기한:미확인"}(D-${d})`;
             })
             .join("\n")
         : "등록된 유효 재고 없음";
@@ -3505,17 +3546,18 @@ ${validText}
     return null;
   };
 
-  const checkMealCompleteness = (mealName, components) => {
+  const checkMealCompleteness = (mealName, components, ingredients = []) => {
     const oneBowlKeywords = ["덮밥", "비빔밥", "볶음밥", "파스타", "국수", "칼국수", "우동", "라면", "카레", "리조또", "죽", "솥밥", "전골", "찌개", "정식", "도시락", "김밥", "샌드위치", "토스트"];
     const nameStr = String(mealName || "");
-    if (oneBowlKeywords.some((kw) => nameStr.includes(kw))) {
+    const hasEnoughIngredients = toSafeArray(ingredients).length >= 2;
+    if (oneBowlKeywords.some((kw) => nameStr.includes(kw)) && (components.length >= 1 || hasEnoughIngredients)) {
       return { ok: true, reason: "" };
     }
     const roles = new Set(toSafeArray(components).map((c) => String(c.role || "").toLowerCase()));
     if (components.length >= 2 && (roles.has("staple") || roles.has("main"))) {
       return { ok: true, reason: "" };
     }
-    return { ok: false, reason: "단일 반찬/요리 위주입니다. 재추천을 권장합니다." };
+    return { ok: false, reason: "구성요소·재료가 부족한 단일 요리입니다. 재추천을 권장합니다." };
   };
 
   const normalizeAiPlanItems = (rawList, requestedPairs, targetMode, validFridge) => {
@@ -3593,7 +3635,7 @@ ${validText}
       });
 
       const compNames = components.map((c) => c.name);
-      const completeness = checkMealCompleteness(mealName, components);
+      const completeness = checkMealCompleteness(mealName, components, rawIngredients);
 
       out.push({
         id: `plan-${Date.now()}-${out.length}-${Math.random().toString(36).slice(2, 5)}`,
@@ -3927,24 +3969,45 @@ ${validText}
     }
 
     const shortages = [];
+    const parseQtyStr = (str) => {
+      const m = String(str || "").trim().match(/^([0-9]+(?:\.[0-9]+)?)\s*([a-zA-Z가-힣ℓ]*)$/);
+      return m ? { qty: Number(m[1]), unit: m[2] || "개" } : null;
+    };
+
     for (const [lower, entry] of demandMap.entries()) {
-      if (shopNamesLower.some((sn) => sn === lower || sn.includes(lower) || lower.includes(sn))) {
-        continue;
-      }
+      const existingShop = shoppingList.find((s) => {
+        const sn = String(s.name || "").toLowerCase();
+        return !s.checked && (sn === lower || sn.includes(lower) || lower.includes(sn));
+      });
+      const parsedShop = existingShop ? parseQtyStr(existingShop.quantity) : null;
+
       if (!entry.matchedItem) {
+        if (existingShop && !entry.unit) continue;
+        let needed = entry.totalReq;
+        if (parsedShop && entry.unit) {
+          const shopConv = convertUnitQty(parsedShop.qty, parsedShop.unit, entry.unit);
+          if (shopConv !== null) needed = Math.max(0, needed - shopConv);
+        }
+        if (needed <= 0) continue;
         shortages.push({
           name: entry.name,
-          quantity: entry.rawQtyLabel || `${Math.ceil(entry.totalReq)}${entry.unit}`,
-          detail: entry.rawQtyLabel ? "미보유" : `총 필요 ${entry.totalReq}${entry.unit} / 보유 0`
+          quantity: entry.rawQtyLabel || `${Math.round(needed * 10) / 10}${entry.unit}`,
+          detail: entry.rawQtyLabel ? "미보유" : `총 필요 ${entry.totalReq}${entry.unit}${parsedShop ? ` (장보기 ${existingShop.quantity} 반영)` : ""}`
         });
       } else if (!entry.unitMismatch && entry.unit) {
         const availConv = convertUnitQty(entry.matchedItem.quantity, entry.matchedItem.unit, entry.unit);
         if (availConv !== null && entry.totalReq > availConv) {
-          const diff = Math.round((entry.totalReq - availConv) * 10) / 10;
+          let diff = entry.totalReq - availConv;
+          if (parsedShop) {
+            const shopConv = convertUnitQty(parsedShop.qty, parsedShop.unit, entry.unit);
+            if (shopConv !== null) diff = Math.max(0, diff - shopConv);
+          }
+          diff = Math.round(diff * 10) / 10;
+          if (diff <= 0) continue;
           shortages.push({
             name: entry.name,
             quantity: `${diff}${entry.unit}`,
-            detail: `총 필요 ${entry.totalReq}${entry.unit} / 보유 ${availConv}${entry.unit}`
+            detail: `총 필요 ${entry.totalReq}${entry.unit} / 보유 ${availConv}${entry.unit}${parsedShop ? ` / 장보기 ${existingShop.quantity}` : ""}`
           });
         }
       }
@@ -4488,24 +4551,26 @@ ${validText}
           showToast("⚠️ 다른 기기에서 먼저 수정된 재고입니다. 최신 내용을 확인 후 다시 수정해 주세요.");
           setIsFridgeModalOpen(false);
           setEditingFridge(null);
+          ok = true;
           return;
         }
+      } else {
+        const batch = writeBatch(db);
+        batch.set(getDocRef("family_fridge_v3", id), payload);
+        batch.set(getDocRef("family_fridge_v4", id), payload);
+        if (!editingFridge && priceNum > 0 && fridgeForm.recordExpense !== false) {
+          const expId = `exp-${id}`;
+          batch.set(getDocRef("family_expenses_v4", expId), {
+            id: expId,
+            title: payload.name,
+            category: payload.category,
+            amount: priceNum,
+            date: payload.purchaseDate,
+            type: "장보기/식재료"
+          });
+        }
+        await batch.commit();
       }
-      const batch = writeBatch(db);
-      batch.set(getDocRef("family_fridge_v3", id), payload);
-      batch.set(getDocRef("family_fridge_v4", id), payload);
-      if (!editingFridge && priceNum > 0 && fridgeForm.recordExpense !== false) {
-        const expId = `exp-${id}`;
-        batch.set(getDocRef("family_expenses_v4", expId), {
-          id: expId,
-          title: payload.name,
-          category: payload.category,
-          amount: priceNum,
-          date: payload.purchaseDate,
-          type: "장보기/식재료"
-        });
-      }
-      await batch.commit();
 
       setFridgeMap((prev) => ({
         ...prev,
