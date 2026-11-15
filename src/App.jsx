@@ -593,6 +593,7 @@ const FAMILY_MEMBERS = [
 
 const MemberAvatar = ({ member, id, size = "sm", className = "" }) => {
   const resolved = member || FAMILY_MEMBERS.find((f) => f.id === id);
+  const sizePx = size === "lg" ? 32 : size === "md" ? 24 : 16;
   const sizeClass =
     size === "lg"
       ? "w-8 h-8"
@@ -604,6 +605,7 @@ const MemberAvatar = ({ member, id, size = "sm", className = "" }) => {
       <img
         src={resolved.avatar}
         alt={resolved.name || resolved.id || "가족"}
+        style={{ width: sizePx, height: sizePx, borderRadius: "9999px", objectFit: "cover" }}
         className={`${sizeClass} rounded-full object-cover border border-white/90 shadow-sm shrink-0 inline-block ${className}`}
       />
     );
