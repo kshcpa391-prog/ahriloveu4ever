@@ -527,8 +527,8 @@ const SCHEDULE_CATEGORIES = ["기념일/생일", "할일(To-Do)", "육아/병원
 
 const INITIAL_PATCH_NOTES = [
   {
-    id: "patch-v5.8",
-    version: "v5.8",
+    id: "patch-v5.9",
+    version: "v5.9",
     date: "2026-11-15",
     title: "AI 엔진(JSON 파싱·자가진단) 개선 & 서울 중구 날씨·미세먼지 위젯 탑재",
     changes: [
@@ -802,6 +802,8 @@ function MainApp() {
   // 실시간 서울 중구 날씨 & 미세먼지 상태
   const [weatherInfo, setWeatherInfo] = useState(null);
   const [isWeeklyWeatherOpen, setIsWeeklyWeatherOpen] = useState(false);
+  const [isWeatherLoading, setIsWeatherLoading] = useState(true);
+  const [weatherError, setWeatherError] = useState("");
   const [aiDiagStatus, setAiDiagStatus] = useState("");
 
   // 패치노트 기록 및 모달 상태
@@ -969,8 +971,10 @@ function MainApp() {
     setTimeout(() => setToastMsg(""), 3500);
   };
 
-  // 실시간 서울 중구 날씨(오늘 + 7일 주간예보) + 미세먼지(PM10, PM2.5) 조회 (Open-Meteo API, 15분마다 자동 갱신)
+  // 실시간 서울 중구 날씨(오늘 + 7일 주간예보) + 미세먼지(PM10, PM2.5) 조회 (Open-Meteo + wttr.in 백업)
   const fetchSeoulJungGuWeather = async () => {
+    setIsWeatherLoading(true);
+    setWeatherError("");
     try {
       const lat = 37.5638;
       const lon = 126.9976;
@@ -983,7 +987,7 @@ function MainApp() {
         )
       ]);
 
-      if (!weatherRes.ok) return;
+      if (!weatherRes.ok) throw new Error(`Weather HTTP ${weatherRes.status}`);
       const wData = await weatherRes.json();
       const aData = airRes.ok ? await airRes.json() : null;
 
@@ -1034,7 +1038,39 @@ function MainApp() {
         tip: dust.label === "나쁨" || dust.label === "매우나쁨" ? dust.tip : parsed.tip
       });
     } catch (e) {
-      console.warn("Weather/Air fetch skipped:", e);
+      console.warn("Open-Meteo error, trying wttr.in fallback:", e);
+      try {
+        const wRes = await fetch("https://wttr.in/Seoul?format=j1");
+        if (!wRes.ok) throw new Error("wttr.in failed");
+        const wJson = await wRes.json();
+        const cur = wJson?.current_condition?.[0];
+        const todayW = wJson?.weather?.[0];
+        const curTemp = Math.round(Number(cur?.temp_C ?? 12));
+        const maxT = Math.round(Number(todayW?.maxtempC ?? curTemp + 3));
+        const minT = Math.round(Number(todayW?.mintempC ?? curTemp - 3));
+        const now = new Date();
+        const updatedTime = `${String(now.getHours()).padStart(2, "0")}:${String(
+          now.getMinutes()
+        ).padStart(2, "0")}`;
+        setWeatherInfo({
+          location: "서울 중구",
+          temp: curTemp,
+          max: maxT,
+          min: minT,
+          pm10: "-",
+          pm25: "-",
+          dust: getDustGrade(20, 10),
+          weekly: [],
+          updatedTime,
+          emoji: "🌤️",
+          label: cur?.weatherDesc?.[0]?.value || "맑음",
+          tip: "실시간 날씨 정보입니다."
+        });
+      } catch (err2) {
+        setWeatherError("날씨 서버 연결 지연");
+      }
+    } finally {
+      setIsWeatherLoading(false);
     }
   };
 
@@ -1477,7 +1513,7 @@ function MainApp() {
   // ==========================================
   const buildFullBackupJsonString = () => {
     const fullSnapshot = {
-      backupVersion: "v5.8",
+      backupVersion: "v5.9",
       exportedAt: new Date().toISOString(),
       projectId: USER_FIREBASE_CONFIG.projectId,
       data: {
@@ -2559,7 +2595,7 @@ function MainApp() {
               title="패치노트 기록 및 히스토리"
             >
               <ClipboardList className="w-3 h-3 text-stone-600" />
-              <span>패치노트 {patchNotes[0]?.version || "v5.8"}</span>
+              <span>패치노트 {patchNotes[0]?.version || "v5.9"}</span>
             </button>
           </div>
 
@@ -2632,7 +2668,8 @@ function MainApp() {
 
         {!isHeaderCollapsed && (
           <>
-            {weatherInfo && (
+            {/* 서울 중구 실시간 날씨 · 주간예보 · 미세먼지 바 (접기 시 함께 접힘) */}
+            {weatherInfo ? (
               <div className="mt-2 bg-sky-50/80 border border-sky-200/80 rounded-2xl px-3 py-2 space-y-2">
                 <div className="flex items-center justify-between gap-2">
                   <button
@@ -2710,9 +2747,24 @@ function MainApp() {
                   </div>
                 )}
               </div>
+            ) : (
+              <div className="mt-2 bg-sky-50/70 border border-sky-200/80 rounded-2xl px-3 py-2 flex items-center justify-between text-[11px] font-bold text-sky-900">
+                <span>
+                  {isWeatherLoading
+                    ? "🌤️ 서울 중구 실시간 날씨·미세먼지 불러오는 중..."
+                    : `⚠️ ${weatherError || "날씨 정보를 불러오지 못했습니다."}`}
+                </span>
+                <button
+                  onClick={fetchSeoulJungGuWeather}
+                  className="px-2 py-0.5 rounded-lg bg-white border border-sky-300 text-[10px] font-extrabold text-sky-800"
+                >
+                  새로고침 ↻
+                </button>
+              </div>
             )}
 
-            {imminentSchedulesWithin3Days.length > 0 && activeTab !== "schedule" && (
+
+            {imminentSchedulesWithin3Days.length > 0            {imminentSchedulesWithin3Days.length > 0 && activeTab !== "schedule" && (
               <div
                 onClick={() => setActiveTab("schedule")}
                 className="mt-2 bg-rose-50 hover:bg-rose-100/80 border border-rose-200 rounded-xl px-3 py-2 cursor-pointer transition space-y-1"
