@@ -630,11 +630,23 @@ const STORAGE_LOCATIONS = ["냉장실", "냉동실", "실온·팬트리"];
 const FRIDGE_CATEGORIES = ["채소/과일", "육류/수산", "유제품/계란", "유아식/이유식 재료", "반찬/김치", "밀키트", "양념/소스", "기타"];
 const SCHEDULE_CATEGORIES = ["기념일/생일", "할일(To-Do)", "육아/병원", "가족행사/경조사"];
 
-const APP_CODE_VERSION = "v8.5";
-const APP_BUILD_DATE = "2026-11-15 22:05";
+const APP_CODE_VERSION = "v8.6";
+const APP_BUILD_DATE = "2026-11-15 22:15";
 const EDITOR_INVITE_CODE = "0402";
 
 const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v8.6",
+    version: "v8.6",
+    date: "2026-11-15",
+    title: "데이터 안정화 패치 (부부간 삭제 로그 공유·원자적 복구·저장 오류 감지·요리 차감 잠금)",
+    changes: [
+      "식단·일정·냉장고 삭제 시 공통 5초 Undo 토스트 및 Firestore(family_deleted_logs_v8) 부부 기기 간 삭제 로그 공유",
+      "삭제 복구를 Firestore 트랜잭션으로 원자적 처리하고 동일 ID 충돌 방지 및 서버 성공 후 화면 갱신 적용",
+      "동시 저장 카운터·hasPendingWrites·오류 감지를 반영한 실시간 동기화 상태 배지 및 catch(e){} 오류 무시 제거",
+      "요리 완료 재고 차감 시 미연결 차단·중복 클릭 방지·+/- 버튼 44px 확대"
+    ]
+  },
   {
     id: "patch-v8.5",
     version: "v8.5",
@@ -1310,9 +1322,33 @@ function MainApp() {
   const [isTopAlertsExpanded, setIsTopAlertsExpanded] = useState(false);
   const [isQuickMenuExpanded, setIsQuickMenuExpanded] = useState(false);
   const [isMoreNavOpen, setIsMoreNavOpen] = useState(false);
-  const [syncStatus, setSyncStatus] = useState(() =>
-    typeof navigator !== "undefined" && !navigator.onLine ? "offline" : "connecting"
+  const [isOnline, setIsOnline] = useState(() =>
+    typeof navigator !== "undefined" ? navigator.onLine : true
   );
+  const [activeWriteCount, setActiveWriteCount] = useState(0);
+  const [hasPendingWrites, setHasPendingWrites] = useState(false);
+  const [syncErrorMsg, setSyncErrorMsg] = useState("");
+  const [isCookingDeducting, setIsCookingDeducting] = useState(false);
+  const [restoringLogIds, setRestoringLogIds] = useState([]);
+
+  const syncStatus = !isOnline
+    ? "offline"
+    : syncErrorMsg
+    ? "error"
+    : activeWriteCount > 0 || hasPendingWrites
+    ? "saving"
+    : user && db
+    ? "connected"
+    : "connecting";
+
+  const beginWrite = () => {
+    setSyncErrorMsg("");
+    setActiveWriteCount((c) => c + 1);
+  };
+  const endWrite = (ok = true, errMsg = "") => {
+    setActiveWriteCount((c) => Math.max(0, c - 1));
+    if (!ok) setSyncErrorMsg(errMsg || "저장 오류");
+  };
   const [deletedLogs, setDeletedLogs] = useState(() => {
     try {
       const raw = localStorage.getItem("kim_deleted_logs_v1");
@@ -1563,93 +1599,147 @@ function MainApp() {
     }, undoAction ? 5000 : 3500);
   };
 
-  const recordDeletedLog = (type, label, data) => {
-    if (!data?.id) return;
+  const recordDeletedLog = async (type, label, data, actionType = "delete") => {
+    if (!data?.id) return null;
     const entry = {
       logId: `dlog-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       id: data.id,
       type,
+      actionType,
       label,
       data,
+      createdAtMs: Date.now(),
       deletedAt: new Date().toLocaleString("ko-KR", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })
     };
     setDeletedLogs((prev) => {
-      const next = [entry, ...prev].slice(0, 30);
+      const next = [entry, ...prev.filter((x) => x.logId !== entry.logId)].slice(0, 30);
       try {
         localStorage.setItem("kim_deleted_logs_v1", JSON.stringify(next));
       } catch (e) {}
       return next;
     });
+    if (user && db) {
+      beginWrite();
+      try {
+        await setDoc(getDocRef("family_deleted_logs_v8", entry.logId), entry);
+        endWrite(true);
+      } catch (e) {
+        endWrite(false, e.message);
+      }
+    }
     return entry;
   };
 
   const restoreDeletedLogEntry = async (entry) => {
     if (!requireEditorAccess()) return;
     if (!entry?.data?.id) return;
+    if (restoringLogIds.includes(entry.logId)) return;
+    if (!user || !db) {
+      showToast("⚠️ 서버 연결 후 복구할 수 있습니다.");
+      return;
+    }
+
     const itemId = entry.data.id;
-    setDeletedIds((prev) => {
-      const next = prev.filter((x) => x !== itemId);
-      try {
-        localStorage.setItem("kim_family_deleted_ids", JSON.stringify(next));
-      } catch (e) {}
-      return next;
-    });
-    if (entry.type === "meal") {
-      setMealsMap((prev) => ({ ...prev, local: { ...(prev.local || {}), [itemId]: entry.data } }));
-    } else if (entry.type === "fridge") {
-      setFridgeMap((prev) => ({ ...prev, local: { ...(prev.local || {}), [itemId]: entry.data } }));
-    } else if (entry.type === "schedule") {
-      setSchedules((prev) => (prev.some((s) => s.id === itemId) ? prev : [entry.data, ...prev]));
-    }
-    if (user && db) {
-      setSyncStatus("saving");
-      try {
-        await setDoc(getDocRef("family_meta_v4", "deleted_tracker"), { ids: arrayRemove(itemId) }, { merge: true });
-        if (entry.type === "meal") {
-          await setDoc(getDocRef("family_meals_v3", itemId), entry.data);
-          await setDoc(getDocRef("family_meals_v4", itemId), entry.data);
-        } else if (entry.type === "fridge") {
-          await setDoc(getDocRef("family_fridge_v3", itemId), entry.data);
-          await setDoc(getDocRef("family_fridge_v4", itemId), entry.data);
-        } else if (entry.type === "schedule") {
-          await setDoc(getDocRef("family_schedules_v4", itemId), entry.data);
+    setRestoringLogIds((prev) => [...prev, entry.logId]);
+    beginWrite();
+    try {
+      const trackerRef = getDocRef("family_meta_v4", "deleted_tracker");
+      const logRef = getDocRef("family_deleted_logs_v8", entry.logId);
+      const primaryRef =
+        entry.type === "meal"
+          ? getDocRef("family_meals_v4", itemId)
+          : entry.type === "fridge"
+          ? getDocRef("family_fridge_v4", itemId)
+          : getDocRef("family_schedules_v4", itemId);
+
+      await runTransaction(db, async (tx) => {
+        const existingPrimary = await tx.get(primaryRef);
+        if (existingPrimary.exists()) {
+          throw new Error("동일 ID의 데이터가 이미 존재해 덮어쓰지 않았습니다.");
         }
-        setSyncStatus("connected");
-      } catch (e) {
-        setSyncStatus("error");
-        showToast("⚠️ 복원 서버 저장 실패: 네트워크를 확인해 주세요.");
-        return;
+        if (entry.type === "meal") {
+          tx.set(getDocRef("family_meals_v3", itemId), entry.data);
+          tx.set(getDocRef("family_meals_v4", itemId), entry.data);
+        } else if (entry.type === "fridge") {
+          tx.set(getDocRef("family_fridge_v3", itemId), entry.data);
+          tx.set(getDocRef("family_fridge_v4", itemId), entry.data);
+        } else if (entry.type === "schedule") {
+          tx.set(getDocRef("family_schedules_v4", itemId), entry.data);
+        }
+        tx.set(trackerRef, { ids: arrayRemove(itemId) }, { merge: true });
+        tx.delete(logRef);
+      });
+
+      setDeletedIds((prev) => {
+        const next = prev.filter((x) => x !== itemId);
+        try {
+          localStorage.setItem("kim_family_deleted_ids", JSON.stringify(next));
+        } catch (e) {}
+        return next;
+      });
+      if (entry.type === "meal") {
+        setMealsMap((prev) => ({ ...prev, local: { ...(prev.local || {}), [itemId]: entry.data } }));
+      } else if (entry.type === "fridge") {
+        setFridgeMap((prev) => ({ ...prev, local: { ...(prev.local || {}), [itemId]: entry.data } }));
+      } else if (entry.type === "schedule") {
+        setSchedules((prev) => (prev.some((s) => s.id === itemId) ? prev : [entry.data, ...prev]));
       }
+      setDeletedLogs((prev) => {
+        const next = prev.filter((l) => l.logId !== entry.logId);
+        try {
+          localStorage.setItem("kim_deleted_logs_v1", JSON.stringify(next));
+        } catch (e) {}
+        return next;
+      });
+      endWrite(true);
+      showToast(`↩️ '${entry.label}' 항목이 복구되었습니다!`);
+    } catch (e) {
+      endWrite(false, e.message);
+      showToast(`⚠️ 복구 실패: ${e.message || "네트워크를 확인해 주세요."}`);
+    } finally {
+      setRestoringLogIds((prev) => prev.filter((id) => id !== entry.logId));
     }
-    setDeletedLogs((prev) => {
-      const next = prev.filter((l) => l.logId !== entry.logId);
-      try {
-        localStorage.setItem("kim_deleted_logs_v1", JSON.stringify(next));
-      } catch (e) {}
-      return next;
-    });
-    showToast(`↩️ '${entry.label}' 항목이 복구되었습니다!`);
   };
 
   useEffect(() => {
-    const onOnline = () => setSyncStatus(user ? "connected" : "connecting");
-    const onOffline = () => setSyncStatus("offline");
+    const onOnline = () => {
+      setIsOnline(true);
+      setSyncErrorMsg("");
+    };
+    const onOffline = () => setIsOnline(false);
     window.addEventListener("online", onOnline);
     window.addEventListener("offline", onOffline);
     return () => {
       window.removeEventListener("online", onOnline);
       window.removeEventListener("offline", onOffline);
     };
-  }, [user]);
+  }, []);
 
   useEffect(() => {
-    if (typeof navigator !== "undefined" && !navigator.onLine) {
-      setSyncStatus("offline");
-    } else if (user && db) {
-      setSyncStatus("connected");
-    } else {
-      setSyncStatus("connecting");
-    }
+    if (!user || !db) return;
+    const unsub = onSnapshot(
+      getColRef("family_deleted_logs_v8"),
+      { includeMetadataChanges: true },
+      (snap) => {
+        setHasPendingWrites(Boolean(snap.metadata?.hasPendingWrites));
+        setSyncErrorMsg("");
+        const remote = snap.docs
+          .map((d) => d.data())
+          .filter((x) => x && x.logId)
+          .sort((a, b) => Number(b.createdAtMs || 0) - Number(a.createdAtMs || 0))
+          .slice(0, 30);
+        if (remote.length > 0) {
+          setDeletedLogs(remote);
+          try {
+            localStorage.setItem("kim_deleted_logs_v1", JSON.stringify(remote));
+          } catch (e) {}
+        }
+      },
+      (err) => {
+        setSyncErrorMsg(err?.message || "Firestore 동기화 오류");
+      }
+    );
+    return () => unsub && unsub();
   }, [user]);
 
   useEffect(() => {
@@ -2338,21 +2428,28 @@ function MainApp() {
     setReceiptErrorMsg("");
     setPlatingErrorMsg("");
 
-    if (user && db) {
-      try {
-        await setDoc(
-          getDocRef("family_meta_v4", "api_config"),
-          {
-            ...(cleanedGemini ? { geminiKey: cleanedGemini } : {}),
-            openaiKey: cleanedOpenai,
-            aiProvider: providerVal,
-            updatedAt: new Date().toISOString()
-          },
-          { merge: true }
-        );
-      } catch (e) {}
+    if (!user || !db) {
+      showToast("⚠️ 이 기기에는 임시 저장되었으나, 서버 미연결로 부부 공유 저장에 실패했습니다.");
+      return;
     }
-    showToast("AI 키 및 엔진 설정이 부부 스마트폰에 저장되었습니다!");
+    beginWrite();
+    try {
+      await setDoc(
+        getDocRef("family_meta_v4", "api_config"),
+        {
+          ...(cleanedGemini ? { geminiKey: cleanedGemini } : {}),
+          openaiKey: cleanedOpenai,
+          aiProvider: providerVal,
+          updatedAt: new Date().toISOString()
+        },
+        { merge: true }
+      );
+      endWrite(true);
+      showToast("AI 키 및 엔진 설정이 부부 스마트폰에 저장되었습니다!");
+    } catch (e) {
+      endWrite(false, e.message);
+      showToast("⚠️ 서버 저장 실패: 네트워크 상태를 확인해 주세요.");
+    }
   };
 
   const weekDates = useMemo(() => getWeekDatesFromBase(selectedDate), [selectedDate]);
@@ -2838,14 +2935,22 @@ function MainApp() {
 
   const handleDeleteSchedule = async (item) => {
     if (!requireEditorAccess()) return;
-    setSchedules((prev) => prev.filter((s) => s.id !== item.id));
-    await markIdDeleted(item.id);
-    if (user && db) {
-      try {
-        await deleteDoc(getDocRef("family_schedules_v4", item.id));
-      } catch (e) {}
+    if (!user || !db) {
+      showToast("⚠️ 서버 연결 후 삭제할 수 있습니다.");
+      return;
     }
-    showToast("일정이 삭제되었습니다.");
+    beginWrite();
+    try {
+      const entry = await recordDeletedLog("schedule", item.title || "가족 일정", item, "delete");
+      await markIdDeleted(item.id);
+      await deleteDoc(getDocRef("family_schedules_v4", item.id));
+      setSchedules((prev) => prev.filter((s) => s.id !== item.id));
+      endWrite(true);
+      showToast(`'${item.title || "일정"}' 삭제됨`, entry ? () => restoreDeletedLogEntry(entry) : null);
+    } catch (e) {
+      endWrite(false, e.message);
+      showToast("⚠️ 일정 삭제 실패: 네트워크 상태를 확인해 주세요.");
+    }
   };
 
   const getSchedulesForDate = (targetDateStr, memberFilter = "전체", catFilter = "전체") => {
@@ -3576,7 +3681,11 @@ function MainApp() {
 
   const handleConfirmCookingDeduction = async () => {
     if (!requireEditorAccess()) return;
-    if (!cookingConfirmModal) return;
+    if (!cookingConfirmModal || isCookingDeducting) return;
+    if (!user || !db) {
+      showToast("⚠️ 서버 연결 대기 중입니다. 잠시 후 다시 시도해 주세요.");
+      return;
+    }
     const rawDeduct = cookingConfirmModal.items.filter((x) => Number(x.deductQty) > 0);
     if (rawDeduct.length === 0) {
       setCookingConfirmModal(null);
@@ -3596,6 +3705,8 @@ function MainApp() {
     }
     const toDeduct = Array.from(aggregatedMap.values());
     if (user && db) {
+      setIsCookingDeducting(true);
+      beginWrite();
       try {
         const opId = cookingConfirmModal.operationId || `cook-${Date.now()}`;
         const opRef = getDocRef("family_cooking_operations_v7", opId);
@@ -3635,13 +3746,16 @@ function MainApp() {
           showToast("이미 처리된 요리 완료 기록입니다.");
           return;
         }
+        endWrite(true);
+        setCookingConfirmModal(null);
+        showToast(`요리 완료! 선택한 재료 ${toDeduct.length}종이 안전하게 일괄 차감되었습니다.`);
       } catch (e) {
+        endWrite(false, e.message);
         showToast(`⚠️ 차감 실패(전체 취소됨): ${e.message}`);
-        return;
+      } finally {
+        setIsCookingDeducting(false);
       }
     }
-    setCookingConfirmModal(null);
-    showToast(`요리 완료! 선택한 재료 ${toDeduct.length}종이 안전하게 일괄 차감되었습니다.`);
   };
 
   const handleConsumeFridgeItem = async (item, addToShopping = false) => {
@@ -3694,17 +3808,25 @@ function MainApp() {
 
   const handleMistakeDeleteFridgeItem = async (item) => {
     if (!requireEditorAccess()) return;
-    await markIdDeleted(item.id);
-    setExpenses((prev) => prev.filter((e) => e.id !== `exp-${item.id}`));
-    if (user && db) {
-      try {
-        await deleteDoc(getDocRef("family_fridge_v3", item.id));
-        await deleteDoc(getDocRef("family_fridge_v4", item.id));
-        await deleteDoc(getDocRef("family_meals_v3", item.id));
-        await deleteDoc(getDocRef("family_expenses_v4", `exp-${item.id}`));
-      } catch (e) {}
+    if (!user || !db) {
+      showToast("⚠️ 서버 연결 후 삭제할 수 있습니다.");
+      return;
     }
-    showToast(`'${item.name}' 항목이 삭제되었습니다.`);
+    beginWrite();
+    try {
+      const entry = await recordDeletedLog("fridge", item.name || "냉장고 재료", item, "delete");
+      await markIdDeleted(item.id);
+      await deleteDoc(getDocRef("family_fridge_v3", item.id));
+      await deleteDoc(getDocRef("family_fridge_v4", item.id));
+      await deleteDoc(getDocRef("family_meals_v3", item.id));
+      await deleteDoc(getDocRef("family_expenses_v4", `exp-${item.id}`));
+      setExpenses((prev) => prev.filter((e) => e.id !== `exp-${item.id}`));
+      endWrite(true);
+      showToast(`'${item.name}' 삭제됨`, entry ? () => restoreDeletedLogEntry(entry) : null);
+    } catch (e) {
+      endWrite(false, e.message);
+      showToast("⚠️ 재고 삭제 실패: 네트워크 상태를 확인해 주세요.");
+    }
   };
 
   const handleSaveMeal = async () => {
@@ -3731,30 +3853,40 @@ function MainApp() {
 
     setIsMealModalOpen(false);
     setEditingMeal(null);
-    if (user && db) {
-      try {
-        await setDoc(getDocRef("family_meals_v3", id), payload);
-        await setDoc(getDocRef("family_meals_v4", id), payload);
-      } catch (e) {}
+    if (!user || !db) {
+      showToast("⚠️ 서버 미연결 상태입니다. 연결 후 다시 저장해 주세요.");
+      return;
     }
-    showToast("식단이 저장되었습니다.");
+    beginWrite();
+    try {
+      await setDoc(getDocRef("family_meals_v3", id), payload);
+      await setDoc(getDocRef("family_meals_v4", id), payload);
+      endWrite(true);
+      showToast("식단이 저장되었습니다.");
+    } catch (e) {
+      endWrite(false, e.message);
+      showToast("⚠️ 식단 저장 실패: 네트워크 상태를 확인해 주세요.");
+    }
   };
 
   const handleDeleteMeal = async (meal) => {
     if (!requireEditorAccess()) return;
-    const entry = recordDeletedLog("meal", meal.menu || "식단", meal);
-    await markIdDeleted(meal.id);
-    if (user && db) {
-      setSyncStatus("saving");
-      try {
-        await deleteDoc(getDocRef("family_meals_v3", meal.id));
-        await deleteDoc(getDocRef("family_meals_v4", meal.id));
-        setSyncStatus("connected");
-      } catch (e) {
-        setSyncStatus("error");
-      }
+    if (!user || !db) {
+      showToast("⚠️ 서버 연결 후 삭제할 수 있습니다.");
+      return;
     }
-    showToast(`'${meal.menu || "식단"}' 삭제됨`, entry ? () => restoreDeletedLogEntry(entry) : null);
+    beginWrite();
+    try {
+      const entry = await recordDeletedLog("meal", meal.menu || "식단", meal, "delete");
+      await markIdDeleted(meal.id);
+      await deleteDoc(getDocRef("family_meals_v3", meal.id));
+      await deleteDoc(getDocRef("family_meals_v4", meal.id));
+      endWrite(true);
+      showToast(`'${meal.menu || "식단"}' 삭제됨`, entry ? () => restoreDeletedLogEntry(entry) : null);
+    } catch (e) {
+      endWrite(false, e.message);
+      showToast("⚠️ 식단 삭제 실패: 네트워크 상태를 확인해 주세요.");
+    }
   };
 
   const handleAddShopping = async () => {
@@ -8398,7 +8530,7 @@ function MainApp() {
                         copy[idx].deductQty = Math.max(0, copy[idx].deductQty - 1);
                         setCookingConfirmModal({ ...cookingConfirmModal, items: copy });
                       }}
-                      className="w-6 h-6 rounded-lg bg-white border border-stone-200 font-black"
+                      className="w-11 h-11 rounded-xl bg-white border border-stone-200 text-base font-black flex items-center justify-center"
                     >
                       -
                     </button>
@@ -8414,7 +8546,7 @@ function MainApp() {
                         );
                         setCookingConfirmModal({ ...cookingConfirmModal, items: copy });
                       }}
-                      className="w-6 h-6 rounded-lg bg-white border border-stone-200 font-black"
+                      className="w-11 h-11 rounded-xl bg-white border border-stone-200 text-base font-black flex items-center justify-center"
                     >
                       +
                     </button>
@@ -8431,9 +8563,12 @@ function MainApp() {
               </button>
               <button
                 onClick={handleConfirmCookingDeduction}
-                className="flex-1 py-2.5 rounded-xl bg-stone-900 text-white text-xs font-extrabold"
+                disabled={isCookingDeducting}
+                className={`flex-1 py-2.5 rounded-xl text-white text-xs font-extrabold ${
+                  isCookingDeducting ? "bg-stone-400 cursor-not-allowed" : "bg-stone-900 hover:bg-stone-800"
+                }`}
               >
-                확인 후 차감하기
+                {isCookingDeducting ? "차감 처리 중..." : "확인 후 차감하기"}
               </button>
             </div>
           </div>
@@ -8704,9 +8839,14 @@ function MainApp() {
                         </div>
                         <button
                           onClick={() => restoreDeletedLogEntry(log)}
-                          className="px-2.5 py-1 rounded-lg bg-amber-100 hover:bg-amber-200 text-amber-900 text-[11px] font-extrabold shrink-0"
+                          disabled={restoringLogIds.includes(log.logId)}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-extrabold shrink-0 ${
+                            restoringLogIds.includes(log.logId)
+                              ? "bg-stone-200 text-stone-400"
+                              : "bg-amber-100 hover:bg-amber-200 text-amber-900"
+                          }`}
                         >
-                          복구
+                          {restoringLogIds.includes(log.logId) ? "복구중" : "복구"}
                         </button>
                       </div>
                     ))}
@@ -8844,4 +8984,4 @@ export default function App() {
       <MainApp />
     </ErrorBoundary>
   );
-}
+    }
