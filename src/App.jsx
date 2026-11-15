@@ -37,7 +37,9 @@ import {
   RotateCcw,
   Mail,
   CloudUpload,
-  ClipboardList
+  ClipboardList,
+  ListTodo,
+  CalendarRange
 } from "lucide-react";
 import { initializeApp, getApps, getApp } from "firebase/app";
 import {
@@ -149,6 +151,24 @@ const shiftYearMonth = (yearMonth, deltaMonths) => {
   const [y, m] = String(yearMonth).split("-").map(Number);
   const d = new Date(y || 2026, (m || 11) - 1 + deltaMonths, 1);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+};
+
+// 특정 기준 날짜가 속한 주간(월~일) 7일 배열 반환
+const getWeekDatesFromBase = (baseDateStr) => {
+  const base = new Date(String(baseDateStr).slice(0, 10) + "T00:00:00");
+  if (isNaN(base.getTime())) {
+    const today = getTodayStr();
+    return [today, today, today, today, today, today, today];
+  }
+  const day = base.getDay();
+  const diffToMon = day === 0 ? -6 : 1 - day;
+  const mon = new Date(base);
+  mon.setDate(base.getDate() + diffToMon);
+  return Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(mon);
+    d.setDate(mon.getDate() + i);
+    return formatDate(d);
+  });
 };
 
 const calculateScheduleDday = (item) => {
@@ -376,7 +396,7 @@ const fileToBase64 = (file) =>
   });
 
 // ==========================================
-// 3. 상수 및 기본 데이터 (패치노트 히스토리 포함!)
+// 3. 상수 및 기본 데이터 (패치노트 히스토리 v5.6 포함!)
 // ==========================================
 const FAMILY_MEMBERS = [
   { id: "수혁", name: "김수혁", role: "아빠", emoji: "👨🏻", color: "bg-blue-100 text-blue-800 border-blue-200" },
@@ -398,8 +418,18 @@ const STORAGE_LOCATIONS = ["냉장실", "냉동실", "실온·팬트리"];
 const FRIDGE_CATEGORIES = ["채소/과일", "육류/수산", "유제품/계란", "유아식/이유식 재료", "반찬/김치", "양념/소스", "기타"];
 const SCHEDULE_CATEGORIES = ["기념일/생일", "할일(To-Do)", "육아/병원", "가족행사/경조사"];
 
-// [복원 완료] 패치노트(버전별 업데이트 기록) 기본 내역
 const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v5.6",
+    version: "v5.6",
+    date: "2026-11-15",
+    title: "일정 탭 내 [주간 일정 요약 보드] & [전체 To-Do 체크리스트] 추가",
+    changes: [
+      "일정 탭에 해당 주간(월~일) 중 일정이 있는 날짜만 모아서 보여주는 [주간 일정 요약] 화면 추가",
+      "모든 할 일(To-Do)을 한곳에서 체크박스로 완료/미완료 관리하고 바로 추가하는 [전체 To-Do 체크리스트] 추가",
+      "기존 패치노트, 상단바 접기/펼치기, 틀고정 해제, 1일 2회 자동백업 기능 100% 유지"
+    ]
+  },
   {
     id: "patch-v5.5",
     version: "v5.5",
@@ -643,16 +673,15 @@ function MainApp() {
   const [selectedDate, setSelectedDate] = useState(() => getTodayStr());
   const [selectedMember, setSelectedMember] = useState("전체");
 
-  // [복원 완료 1] 상단 바 펼치기/접기 및 틀고정(Sticky) 해제 상태
+  // 상단 바 펼치기/접기 및 틀고정(Sticky) 해제 상태
   const [isHeaderCollapsed, setIsHeaderCollapsed] = useState(() => {
     return localStorage.getItem("kim_header_collapsed") === "true";
   });
   const [isHeaderPinned, setIsHeaderPinned] = useState(() => {
-    // 기본값은 틀고정 해제(false)로 두어 화면을 가리지 않게 하고, 원할 때만 고정 가능
     return localStorage.getItem("kim_header_pinned") === "true";
   });
 
-  // [복원 완료 2] 패치노트 기록 및 모달 상태
+  // 패치노트 기록 및 모달 상태
   const [patchNotes, setPatchNotes] = useState(INITIAL_PATCH_NOTES);
   const [isPatchModalOpen, setIsPatchModalOpen] = useState(false);
   const [patchForm, setPatchForm] = useState({
@@ -696,11 +725,14 @@ function MainApp() {
     return Number(localStorage.getItem("kim_family_budget") || 800000);
   });
 
-  // 일정 탭 상태 (체크박스 기본 해제 상태 유지)
+  // 일정 탭 상태 + [신규] 전체 To-Do 체크리스트 필터 및 빠른 추가 상태
   const [scheduleMonth, setScheduleMonth] = useState(() => getCurrentYearMonth());
   const [scheduleSelectedDate, setScheduleSelectedDate] = useState(() => getTodayStr());
   const [scheduleMemberFilter, setScheduleMemberFilter] = useState("전체");
   const [scheduleCatFilter, setScheduleCatFilter] = useState("전체");
+  const [todoStatusFilter, setTodoStatusFilter] = useState("all"); // all | active | completed
+  const [quickTodoTitle, setQuickTodoTitle] = useState("");
+  const [quickTodoDate, setQuickTodoDate] = useState(() => getTodayStr());
   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
   const [editingSchedule, setEditingSchedule] = useState(null);
   const [scheduleForm, setScheduleForm] = useState({
@@ -815,7 +847,7 @@ function MainApp() {
   };
 
   // ==========================================
-  // 6. 파이어베이스 실시간 동기화 (패치노트 포함!)
+  // 6. 파이어베이스 실시간 동기화
   // ==========================================
   useEffect(() => {
     if (!auth) return;
@@ -1014,7 +1046,6 @@ function MainApp() {
       )
     );
 
-    // [복원 완료] 패치노트 파이어베이스 동기화
     unsubscribers.push(
       onSnapshot(
         getColRef("family_patchnotes_v4"),
@@ -1138,7 +1169,7 @@ function MainApp() {
   const handleAddPatchNote = async () => {
     if (!patchForm.title.trim()) return;
     const id = `patch-${Date.now()}`;
-    const ver = patchForm.version.trim() || `v5.${patchNotes.length + 1}`;
+    const ver = patchForm.version.trim() || `v5.${patchNotes.length + 2}`;
     const changesArr = patchForm.changesText
       .split("\n")
       .map((s) => s.replace(/^[-•*]\s*/, "").trim())
@@ -1206,29 +1237,18 @@ function MainApp() {
     showToast("API 키가 저장되어 부부 스마트폰에 모두 적용되었습니다!");
   };
 
-  const weekDates = useMemo(() => {
-    const base = new Date(String(selectedDate).slice(0, 10) + "T00:00:00");
-    if (isNaN(base.getTime())) {
-      const today = getTodayStr();
-      return [today, today, today, today, today, today, today];
-    }
-    const day = base.getDay();
-    const diffToMon = day === 0 ? -6 : 1 - day;
-    const mon = new Date(base);
-    mon.setDate(base.getDate() + diffToMon);
-    return Array.from({ length: 7 }, (_, i) => {
-      const d = new Date(mon);
-      d.setDate(mon.getDate() + i);
-      return formatDate(d);
-    });
-  }, [selectedDate]);
+  const weekDates = useMemo(() => getWeekDatesFromBase(selectedDate), [selectedDate]);
+  const scheduleWeekDates = useMemo(
+    () => getWeekDatesFromBase(scheduleSelectedDate),
+    [scheduleSelectedDate]
+  );
 
   // ==========================================
   // 7. 전체 DB 원본(JSON) 1초 백업 다운로드 & Gmail/구글 드라이브 전송 & 1초 복원
   // ==========================================
   const buildFullBackupJsonString = () => {
     const fullSnapshot = {
-      backupVersion: "v5.5",
+      backupVersion: "v5.6",
       exportedAt: new Date().toISOString(),
       projectId: USER_FIREBASE_CONFIG.projectId,
       data: {
@@ -1385,7 +1405,7 @@ function MainApp() {
   }, [schedules]);
 
   // ==========================================
-  // 8. 가족 일정·기념일·D-Day 핸들러
+  // 8. 가족 일정·기념일·D-Day & To-Do 체크리스트 핸들러
   // ==========================================
   const handleSaveSchedule = async () => {
     if (!scheduleForm.title.trim()) return;
@@ -1426,6 +1446,39 @@ function MainApp() {
     showToast(editingSchedule ? "일정이 수정되었습니다." : "새 가족 일정이 등록되었습니다.");
   };
 
+  // [신규] 체크리스트에서 1초 만에 할 일(To-Do) 빠른 등록
+  const handleQuickAddTodo = async () => {
+    if (!quickTodoTitle.trim()) return;
+    const id = `sch-${Date.now()}`;
+    const targetMembers =
+      scheduleMemberFilter === "전체"
+        ? ["수혁", "아리나", "시목", "시율"]
+        : [scheduleMemberFilter];
+
+    const payload = {
+      id,
+      title: quickTodoTitle.trim(),
+      date: quickTodoDate || getTodayStr(),
+      category: "할일(To-Do)",
+      members: targetMembers,
+      isAnnual: false,
+      showDday: false,
+      hasOriginYear: false,
+      done: false,
+      memo: ""
+    };
+
+    setSchedules((prev) => [payload, ...prev]);
+    setQuickTodoTitle("");
+
+    if (user && db) {
+      try {
+        await setDoc(getDocRef("family_schedules_v4", id), payload);
+      } catch (e) {}
+    }
+    showToast("To-Do 체크리스트에 새 할 일이 추가되었습니다!");
+  };
+
   const handleToggleScheduleDone = async (item) => {
     const updated = { ...item, done: !item.done };
     setSchedules((prev) => prev.map((s) => (s.id === item.id ? updated : s)));
@@ -1461,6 +1514,57 @@ function MainApp() {
       return String(s.date).slice(0, 10) === targetDateStr;
     });
   };
+
+  // [신규 요청사항 2] 주간(월~일) 일정 중 실제 일정이 있는 날짜와 항목만 추출하는 요약 데이터
+  const weeklyActiveScheduleSummary = useMemo(() => {
+    return scheduleWeekDates
+      .map((d) => ({
+        date: d,
+        dayName: getDayName(d),
+        items: getSchedulesForDate(d, scheduleMemberFilter, scheduleCatFilter)
+      }))
+      .filter((dayGroup) => dayGroup.items.length > 0);
+  }, [scheduleWeekDates, schedules, scheduleMemberFilter, scheduleCatFilter]);
+
+  // [신규 요청사항 1] 전체 To-Do 체크리스트 전용 데이터 (기념일/생일 제외한 모든 체크 가능 할일·일정 모아보기)
+  const allTodoChecklistItems = useMemo(() => {
+    return schedules
+      .filter((s) => {
+        if (s.category === "기념일/생일" || s.isAnnual) return false;
+        const memMatch =
+          scheduleMemberFilter === "전체" ||
+          toSafeArray(s.members).includes(scheduleMemberFilter);
+        if (!memMatch) return false;
+        if (todoStatusFilter === "active") return !s.done;
+        if (todoStatusFilter === "completed") return Boolean(s.done);
+        return true;
+      })
+      .map((s) => ({
+        ...s,
+        calc: calculateScheduleDday(s)
+      }))
+      .sort((a, b) => {
+        // 미완료 항목을 먼저 보여주고, 날짜순 정렬
+        if (Boolean(a.done) !== Boolean(b.done)) {
+          return a.done ? 1 : -1;
+        }
+        return String(a.date).localeCompare(String(b.date));
+      });
+  }, [schedules, scheduleMemberFilter, todoStatusFilter]);
+
+  const todoStats = useMemo(() => {
+    const nonAnniv = schedules.filter(
+      (s) =>
+        s.category !== "기념일/생일" &&
+        !s.isAnnual &&
+        (scheduleMemberFilter === "전체" ||
+          toSafeArray(s.members).includes(scheduleMemberFilter))
+    );
+    const total = nonAnniv.length;
+    const doneCount = nonAnniv.filter((s) => s.done).length;
+    const activeCount = total - doneCount;
+    return { total, doneCount, activeCount };
+  }, [schedules, scheduleMemberFilter]);
 
   const dDayCards = useMemo(() => {
     return schedules
@@ -2181,7 +2285,7 @@ function MainApp() {
       )}
 
       {/* ==========================================
-          상단 헤더 (틀고정 해제/고정 토글 + 상단 바 접기/펼치기 + 패치노트 버튼 완벽 복원!)
+          상단 헤더 (패치노트 + 상단바 접기/펼치기 + 틀고정 해제/고정 토글 모두 유지!)
       ========================================== */}
       <header
         className={`bg-white border-b border-stone-200 px-3.5 pt-2.5 pb-2.5 z-30 transition-all ${
@@ -2214,21 +2318,19 @@ function MainApp() {
           </div>
         )}
 
-        {/* 최상단 컨트롤 바: 동기화 상태 + 패치노트 + 식비 + 설정 */}
         <div className="flex items-center justify-between gap-1 mb-1.5">
           <div className="flex items-center gap-1">
             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
               <Zap className="w-3 h-3 text-emerald-600 fill-emerald-600" />
               동기화 중
             </span>
-            {/* [복원 완료] 패치노트 열람/기록 버튼 */}
             <button
               onClick={() => setIsPatchModalOpen(true)}
               className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-stone-100 hover:bg-stone-200 text-stone-700 border border-stone-200 flex items-center gap-1"
               title="패치노트 기록 및 히스토리"
             >
               <ClipboardList className="w-3 h-3 text-stone-600" />
-              <span>패치노트 {patchNotes[0]?.version || "v5.5"}</span>
+              <span>패치노트 {patchNotes[0]?.version || "v5.6"}</span>
             </button>
           </div>
 
@@ -2256,7 +2358,6 @@ function MainApp() {
           </div>
         </div>
 
-        {/* 타이틀 & [복원 완료] 상단 틀고정 토글 + 상단 바 접기/펼치기 버튼 */}
         <div className="flex items-center justify-between gap-1">
           <h1 className="text-sm font-black tracking-tight text-stone-900 truncate">
             수혁 · 아리나 · 시목 · 시율네 식탁 🍽️
@@ -2300,10 +2401,8 @@ function MainApp() {
           </div>
         </div>
 
-        {/* 접기(isHeaderCollapsed === true) 상태일 때는 아래 배너들과 메뉴 그리드를 숨겨 화면을 넓게 씀! */}
         {!isHeaderCollapsed && (
           <>
-            {/* 3일 이내 도래하는 일정 상단 자동 알림 배너 */}
             {imminentSchedulesWithin3Days.length > 0 && activeTab !== "schedule" && (
               <div
                 onClick={() => setActiveTab("schedule")}
@@ -2332,7 +2431,6 @@ function MainApp() {
               </div>
             )}
 
-            {/* 상단 고정 가족 공지 */}
             {pinnedNotices.length > 0 && activeTab !== "notices" && (
               <div
                 onClick={() => setActiveTab("notices")}
@@ -2351,7 +2449,6 @@ function MainApp() {
               </div>
             )}
 
-            {/* 8개 균일 높이(h-9) 2줄 메뉴 그리드 ("일정" 메뉴명 적용) */}
             <div className="grid grid-cols-4 gap-1.5 mt-2.5 bg-stone-100 p-1.5 rounded-2xl">
               {[
                 { id: "daily", label: "일별식단", icon: "🍽️" },
@@ -2562,7 +2659,6 @@ function MainApp() {
             </div>
           )}
 
-          {/* 5칸 균등 가족 필터 */}
           <div className="grid grid-cols-5 gap-1">
             <button
               onClick={() => setSelectedMember("전체")}
@@ -3039,7 +3135,7 @@ function MainApp() {
       )}
 
       {/* ==========================================
-          탭 4: 일정 (1순위: 월간 달력 최상단 -> 2순위: 선택일 상세일정 -> 3순위: D-Day 카운트다운 보드 최하단!)
+          탭 4: 일정 (1. 월간 달력 -> 2. 선택일 상세일정 -> 3. [신규] 주간 일정 요약 -> 4. [신규] 전체 To-Do 체크리스트 -> 5. 최하단 D-Day 보드)
       ========================================== */}
       {activeTab === "schedule" && (
         <div className="p-4 space-y-4">
@@ -3050,7 +3146,7 @@ function MainApp() {
                 <span>우리 가족 월간 일정표</span>
               </h2>
               <p className="text-[11px] text-stone-500">
-                가족별 할 일·경조사 및 매년 반복 생일·기념일 통합 관리
+                월간 달력 · 주간 일정 요약 · 전체 To-Do 체크리스트 · 기념일 D-Day
               </p>
             </div>
             <button
@@ -3242,7 +3338,7 @@ function MainApp() {
             </div>
           </div>
 
-          {/* [2순위 중간 배치] 선택한 날짜의 상세 일정 / To-Do / 기념일 관리 */}
+          {/* [2순위 배치] 선택한 날짜의 상세 일정 관리 */}
           <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-sm space-y-2.5">
             <div className="flex items-center justify-between">
               <div className="text-xs font-black text-stone-900">
@@ -3272,7 +3368,7 @@ function MainApp() {
             {getSchedulesForDate(scheduleSelectedDate, scheduleMemberFilter, scheduleCatFilter)
               .length === 0 ? (
               <div className="text-xs text-stone-400 py-4 text-center bg-stone-50 rounded-xl border border-dashed border-stone-200">
-                등록된 일정이나 기념일이 없습니다.
+                이 날짜에 등록된 일정이나 기념일이 없습니다.
               </div>
             ) : (
               <div className="space-y-2">
@@ -3380,7 +3476,319 @@ function MainApp() {
             )}
           </div>
 
-          {/* [3순위 최하단 배치] 우리 가족 D-Day & 기념일 카운트다운 보드 */}
+          {/* ==========================================
+              [신규 요청사항 2 완벽 반영] 주간 일정이 있는 항목만 요약하는 화면
+          ========================================== */}
+          <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-sm space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5">
+                <CalendarRange className="w-4 h-4 text-indigo-600" />
+                <h3 className="text-xs font-black text-stone-900">
+                  📊 주간 일정 요약 ({scheduleWeekDates[0].slice(5)} ~ {scheduleWeekDates[6].slice(5)})
+                </h3>
+              </div>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => {
+                    const d = new Date(scheduleSelectedDate + "T00:00:00");
+                    d.setDate(d.getDate() - 7);
+                    const nextStr = formatDate(d);
+                    setScheduleSelectedDate(nextStr);
+                    setScheduleMonth(nextStr.slice(0, 7));
+                  }}
+                  className="px-2 py-0.5 rounded-lg bg-stone-100 hover:bg-stone-200 text-[10px] font-extrabold text-stone-700"
+                >
+                  &lt; 이전주
+                </button>
+                <button
+                  onClick={() => {
+                    const today = getTodayStr();
+                    setScheduleSelectedDate(today);
+                    setScheduleMonth(today.slice(0, 7));
+                  }}
+                  className="px-2 py-0.5 rounded-lg bg-indigo-50 text-indigo-700 text-[10px] font-extrabold"
+                >
+                  이번주
+                </button>
+                <button
+                  onClick={() => {
+                    const d = new Date(scheduleSelectedDate + "T00:00:00");
+                    d.setDate(d.getDate() + 7);
+                    const nextStr = formatDate(d);
+                    setScheduleSelectedDate(nextStr);
+                    setScheduleMonth(nextStr.slice(0, 7));
+                  }}
+                  className="px-2 py-0.5 rounded-lg bg-stone-100 hover:bg-stone-200 text-[10px] font-extrabold text-stone-700"
+                >
+                  다음주 &gt;
+                </button>
+              </div>
+            </div>
+
+            {weeklyActiveScheduleSummary.length === 0 ? (
+              <div className="text-xs text-stone-400 py-4 text-center bg-stone-50 rounded-xl border border-dashed border-stone-200">
+                이 주간({scheduleWeekDates[0].slice(5)} ~ {scheduleWeekDates[6].slice(5)})에는 등록된 일정이 없습니다.
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {weeklyActiveScheduleSummary.map((dayGroup) => {
+                  const isToday = dayGroup.date === getTodayStr();
+                  return (
+                    <div
+                      key={dayGroup.date}
+                      onClick={() => setScheduleSelectedDate(dayGroup.date)}
+                      className={`p-3 rounded-xl border cursor-pointer transition ${
+                        dayGroup.date === scheduleSelectedDate
+                          ? "bg-indigo-50/70 border-indigo-300"
+                          : "bg-stone-50 border-stone-200 hover:bg-stone-100/70"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-1.5">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-xs font-black text-stone-900">
+                            {dayGroup.date.slice(5).replace("-", "월 ")}일 ({dayGroup.dayName})
+                          </span>
+                          {isToday && (
+                            <span className="px-1.5 py-0.2 rounded bg-amber-400 text-stone-900 text-[9px] font-black">
+                              오늘
+                            </span>
+                          )}
+                        </div>
+                        <span className="text-[10px] font-extrabold text-indigo-700">
+                          {dayGroup.items.length}건
+                        </span>
+                      </div>
+
+                      <div className="space-y-1">
+                        {dayGroup.items.map((ev) => {
+                          const dInfo = calculateScheduleDday(ev);
+                          return (
+                            <div
+                              key={ev.id}
+                              className="flex items-center justify-between gap-2 bg-white px-2.5 py-1.5 rounded-lg border border-stone-200/80 text-xs"
+                            >
+                              <div className="flex items-center gap-1.5 min-w-0">
+                                {ev.category !== "기념일/생일" && (
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleToggleScheduleDone(ev);
+                                    }}
+                                    className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${
+                                      ev.done
+                                        ? "bg-emerald-600 border-emerald-600 text-white"
+                                        : "border-stone-300 bg-white"
+                                    }`}
+                                  >
+                                    {ev.done && <Check className="w-3 h-3" />}
+                                  </button>
+                                )}
+                                <span
+                                  className={`font-bold truncate ${
+                                    ev.done ? "line-through text-stone-400" : "text-stone-800"
+                                  }`}
+                                >
+                                  {ev.title}
+                                </span>
+                              </div>
+
+                              <div className="flex items-center gap-1 shrink-0">
+                                {toSafeArray(ev.members).map((mId) => {
+                                  const info = FAMILY_MEMBERS.find((f) => f.id === mId);
+                                  return info ? (
+                                    <span key={mId} className="text-[11px]" title={info.name}>
+                                      {info.emoji}
+                                    </span>
+                                  ) : null;
+                                })}
+                                <span className="px-1.5 py-0.2 rounded bg-stone-100 text-stone-700 text-[10px] font-extrabold">
+                                  {dInfo.dDayText}
+                                </span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* ==========================================
+              [신규 요청사항 1 완벽 반영] To-Do List 전체를 체크리스트처럼 표시하는 화면
+          ========================================== */}
+          <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-sm space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5">
+                <ListTodo className="w-4 h-4 text-emerald-600" />
+                <div>
+                  <h3 className="text-xs font-black text-stone-900">
+                    ✅ 전체 To-Do 체크리스트 ({todoStats.activeCount}건 남음 / 완료 {todoStats.doneCount}건)
+                  </h3>
+                </div>
+              </div>
+
+              <div className="flex gap-1 bg-stone-100 p-0.5 rounded-lg">
+                {[
+                  { id: "all", label: "전체" },
+                  { id: "active", label: "진행중" },
+                  { id: "completed", label: "완료됨" }
+                ].map((tab) => (
+                  <button
+                    key={tab.id}
+                    onClick={() => setTodoStatusFilter(tab.id)}
+                    className={`px-2 py-0.5 rounded-md text-[10px] font-extrabold transition ${
+                      todoStatusFilter === tab.id
+                        ? "bg-stone-900 text-white"
+                        : "text-stone-500 hover:text-stone-800"
+                    }`}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* 진행률 바 */}
+            {todoStats.total > 0 && (
+              <div className="w-full h-2 bg-stone-100 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-emerald-500 transition-all"
+                  style={{
+                    width: `${Math.round((todoStats.doneCount / todoStats.total) * 100)}%`
+                  }}
+                />
+              </div>
+            )}
+
+            {/* 체크리스트 인라인 빠른 할 일 추가 바 */}
+            <div className="flex items-center gap-1.5 bg-stone-50 p-2 rounded-xl border border-stone-200">
+              <input
+                type="date"
+                value={quickTodoDate}
+                onChange={(e) => setQuickTodoDate(e.target.value)}
+                className="px-2 py-1.5 rounded-lg border border-stone-200 text-[11px] font-bold bg-white w-[112px] shrink-0"
+              />
+              <input
+                type="text"
+                placeholder="할 일 빠른 입력 (예: 시목이 상담, 예방접종)"
+                value={quickTodoTitle}
+                onChange={(e) => setQuickTodoTitle(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handleQuickAddTodo();
+                }}
+                className="flex-1 px-2.5 py-1.5 rounded-lg border border-stone-200 text-xs font-bold bg-white min-w-0"
+              />
+              <button
+                onClick={handleQuickAddTodo}
+                className="px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold shrink-0"
+              >
+                + 추가
+              </button>
+            </div>
+
+            {/* 전체 체크리스트 목록 */}
+            {allTodoChecklistItems.length === 0 ? (
+              <div className="text-xs text-stone-400 py-4 text-center bg-stone-50 rounded-xl border border-dashed border-stone-200">
+                표시할 To-Do 체크리스트 항목이 없습니다.
+              </div>
+            ) : (
+              <div className="space-y-1.5 max-h-80 overflow-y-auto pr-0.5">
+                {allTodoChecklistItems.map((todo) => (
+                  <div
+                    key={todo.id}
+                    className={`p-3 rounded-xl border transition flex items-center justify-between gap-2 ${
+                      todo.done
+                        ? "bg-stone-100 border-stone-200 opacity-70"
+                        : "bg-white border-stone-200 shadow-sm"
+                    }`}
+                  >
+                    <div
+                      onClick={() => handleToggleScheduleDone(todo)}
+                      className="flex items-center gap-2.5 cursor-pointer flex-1 min-w-0"
+                    >
+                      <div
+                        className={`w-5 h-5 rounded-lg border flex items-center justify-center shrink-0 transition ${
+                          todo.done
+                            ? "bg-emerald-600 border-emerald-600 text-white"
+                            : "border-stone-300 bg-white hover:border-emerald-500"
+                        }`}
+                      >
+                        {todo.done && <Check className="w-3.5 h-3.5" />}
+                      </div>
+
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span
+                            className={`text-xs font-extrabold break-keep ${
+                              todo.done ? "line-through text-stone-400" : "text-stone-900"
+                            }`}
+                          >
+                            {todo.title}
+                          </span>
+                          {!todo.done && (
+                            <span
+                              className={`px-1.5 py-0.2 rounded text-[9px] font-black ${
+                                todo.calc.daysUntil <= 3 && todo.calc.daysUntil >= 0
+                                  ? "bg-rose-500 text-white"
+                                  : "bg-amber-100 text-amber-900"
+                              }`}
+                            >
+                              {todo.calc.dDayText}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-1.5 text-[10px] text-stone-500 mt-0.5">
+                          <span>
+                            📅 {todo.date} ({getDayName(todo.date)})
+                          </span>
+                          <span>· {todo.category}</span>
+                          <span>
+                            ·{" "}
+                            {toSafeArray(todo.members)
+                              .map((m) => FAMILY_MEMBERS.find((f) => f.id === m)?.emoji || m)
+                              .join("")}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        onClick={() => {
+                          setEditingSchedule(todo);
+                          setScheduleForm({
+                            title: todo.title,
+                            date: todo.date,
+                            category: todo.category,
+                            members: toSafeArray(todo.members),
+                            isAnnual: Boolean(todo.isAnnual),
+                            showDday: Boolean(todo.showDday),
+                            hasOriginYear: Boolean(todo.hasOriginYear),
+                            memo: todo.memo || ""
+                          });
+                          setIsScheduleModalOpen(true);
+                        }}
+                        className="p-1 text-stone-400 hover:text-stone-700"
+                      >
+                        <Edit2 className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteSchedule(todo)}
+                        className="p-1 text-stone-400 hover:text-red-500"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* [5순위 최하단 배치] 우리 가족 D-Day & 기념일 카운트다운 보드 */}
           <div className="bg-gradient-to-br from-stone-900 via-stone-800 to-stone-900 text-white p-4 rounded-2xl shadow-md space-y-2.5">
             <div className="flex items-center justify-between">
               <div className="text-xs font-black text-amber-300 flex items-center gap-1.5">
@@ -4102,7 +4510,7 @@ function MainApp() {
       </nav>
 
       {/* ==========================================
-          [복원 완료] 모달: 패치노트 (업데이트 히스토리 열람 및 새 기록 작성)
+          모달: 패치노트 (업데이트 히스토리 열람 및 새 기록 작성)
       ========================================== */}
       {isPatchModalOpen && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
@@ -4122,7 +4530,6 @@ function MainApp() {
               </button>
             </div>
 
-            {/* 새 패치노트 직접 기록 폼 */}
             <div className="bg-stone-50 p-3.5 rounded-2xl border border-stone-200 space-y-2">
               <div className="text-xs font-extrabold text-stone-800">
                 ✍️ 새 패치노트 기록 추가하기
@@ -4130,14 +4537,14 @@ function MainApp() {
               <div className="grid grid-cols-3 gap-2">
                 <input
                   type="text"
-                  placeholder="버전 (예: v5.6)"
+                  placeholder="버전 (예: v5.7)"
                   value={patchForm.version}
                   onChange={(e) => setPatchForm({ ...patchForm, version: e.target.value })}
                   className="px-2.5 py-1.5 rounded-xl border border-stone-200 text-xs font-black bg-white"
                 />
                 <input
                   type="text"
-                  placeholder="패치 제목 (예: 시율이 예방접종 추가)"
+                  placeholder="패치 제목"
                   value={patchForm.title}
                   onChange={(e) => setPatchForm({ ...patchForm, title: e.target.value })}
                   className="col-span-2 px-2.5 py-1.5 rounded-xl border border-stone-200 text-xs font-bold bg-white"
@@ -4158,7 +4565,6 @@ function MainApp() {
               </button>
             </div>
 
-            {/* 버전별 패치노트 타임라인 리스트 */}
             <div className="space-y-3">
               {patchNotes.map((pn) => (
                 <div
