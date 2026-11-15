@@ -606,6 +606,17 @@ const SCHEDULE_CATEGORIES = ["기념일/생일", "할일(To-Do)", "육아/병원
 
 const INITIAL_PATCH_NOTES = [
   {
+    id: "patch-v7.3",
+    version: "v7.3",
+    date: "2026-11-15",
+    title: "요리 완료 중복 차감 방지(operationId) · 이미지 25초 타임아웃 · 접종일 저장 롤백 · 미평가 UI 개선",
+    changes: [
+      "요리 완료 재고 차감 시 operationId를 트랜잭션으로 검증하여 연속 터치/재시도 시 중복 차감 완벽 방지",
+      "플레이팅 예시 이미지 생성에 25초 타임아웃 적용 (OpenAI 실패 시 Gemini 자동 전환 유지)",
+      "예방접종 완료 체크/날짜 수정 시 서버 저장 실패하면 화면 상태 자동 롤백, 플레이팅 점수 '미평가' 시 /5 숨김 처리"
+    ]
+  },
+  {
     id: "patch-v7.2",
     version: "v7.2",
     date: "2026-11-15",
@@ -2005,7 +2016,7 @@ function MainApp() {
   // ==========================================
   const buildFullBackupJsonString = () => {
     const fullSnapshot = {
-      backupVersion: "v7.2",
+      backupVersion: "v7.3",
       exportedAt: new Date().toISOString(),
       projectId: USER_FIREBASE_CONFIG.projectId,
       data: {
@@ -2211,16 +2222,17 @@ function MainApp() {
   // [신규 v7.0] 육아수첩 핸들러 (예방접종 체크 · 일정 원클릭 자동등록 · 성장/열 체크)
   const handleUpdateBabyCheckDate = async (childId, itemId, newDate) => {
     const docId = `${childId}_${itemId}`;
-    const prev = babyChecks[docId] || {};
-    const updated = { ...prev, childId, itemId, done: true, doneDate: newDate };
-    setBabyChecks((p) => ({ ...p, [docId]: updated }));
+    const prev = babyChecks[docId] || null;
+    const updated = { ...(prev || {}), childId, itemId, done: true, doneDate: newDate };
     if (user && db) {
       try {
         await setDoc(getDocRef("family_baby_checks_v7", docId), updated);
       } catch (e) {
-        showToast("⚠️ 접종일 수정 실패");
+        showToast("⚠️ 접종일 서버 저장 실패: 네트워크를 확인해 주세요.");
+        return;
       }
     }
+    setBabyChecks((p) => ({ ...p, [docId]: updated }));
   };
 
   const handleToggleBabyCheck = async (childId, itemId) => {
@@ -2232,14 +2244,15 @@ function MainApp() {
       done: !prev.done,
       doneDate: !prev.done ? getTodayStr() : ""
     };
-    setBabyChecks((p) => ({ ...p, [docId]: updated }));
     if (user && db) {
       try {
         await setDoc(getDocRef("family_baby_checks_v7", docId), updated);
       } catch (e) {
-        showToast("⚠️ 접종 체크 저장 실패");
+        showToast("⚠️ 접종 체크 서버 저장 실패: 네트워크를 확인해 주세요.");
+        return;
       }
     }
+    setBabyChecks((p) => ({ ...p, [docId]: updated }));
   };
 
   const handleSyncSingleBabySchedule = async (child, item, targetDate) => {
@@ -2667,66 +2680,86 @@ function MainApp() {
     const visualPrompt = `Overhead food photography of Korean home-cooked dish "${platingResult.dishName}", styled beautifully on ${platingResult.plateAndGarnish || "a clean ceramic plate with fresh garnish"}, natural daylight, appetizing restaurant plating, no text.`;
 
     try {
-      // 1순위: 가장 저렴한 OpenAI gpt-image-1-mini (low quality, 1024x1024)
+      // 1순위: 가장 저렴한 OpenAI gpt-image-1-mini (low quality, 1024x1024, 25초 타임아웃)
       if (cleanOpenai) {
-        const res = await fetch("https://api.openai.com/v1/images/generations", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${cleanOpenai}`
-          },
-          body: JSON.stringify({
-            model: "gpt-image-1-mini",
-            prompt: visualPrompt,
-            n: 1,
-            size: "1024x1024",
-            quality: "low"
-          })
-        });
-        const data = await res.json();
-        if (res.ok && data?.data?.[0]) {
-          const imgObj = data.data[0];
-          const url = imgObj.b64_json
-            ? `data:image/png;base64,${imgObj.b64_json}`
-            : imgObj.url;
-          if (url) {
-            setPlatingExampleImageUrl(url);
-            pushAiLog("OpenAI Image", "플레이팅 예시 이미지", true, "gpt-image-1-mini(low)");
-            showToast("플레이팅 예시 이미지가 생성되었습니다!");
-            return;
-          }
-        }
-        if (!cleanGemini) {
-          throw new Error(data?.error?.message || `OpenAI Image HTTP ${res.status}`);
-        }
-      }
-
-      // 2순위: Gemini 이미지 모델 (gemini-2.5-flash-image)
-      if (cleanGemini) {
-        const gRes = await fetch(
-          "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent",
-          {
+        const oaiCtrl = new AbortController();
+        const oaiTimer = setTimeout(() => oaiCtrl.abort(), 25000);
+        try {
+          const res = await fetch("https://api.openai.com/v1/images/generations", {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
-              "x-goog-api-key": cleanGemini
+              Authorization: `Bearer ${cleanOpenai}`
             },
+            signal: oaiCtrl.signal,
             body: JSON.stringify({
-              contents: [{ parts: [{ text: visualPrompt }] }]
+              model: "gpt-image-1-mini",
+              prompt: visualPrompt,
+              n: 1,
+              size: "1024x1024",
+              quality: "low"
             })
+          });
+          const data = await res.json();
+          if (res.ok && data?.data?.[0]) {
+            const imgObj = data.data[0];
+            const url = imgObj.b64_json
+              ? `data:image/png;base64,${imgObj.b64_json}`
+              : imgObj.url;
+            if (url) {
+              setPlatingExampleImageUrl(url);
+              pushAiLog("OpenAI Image", "플레이팅 예시 이미지", true, "gpt-image-1-mini(low)");
+              showToast("플레이팅 예시 이미지가 생성되었습니다!");
+              return;
+            }
           }
-        );
-        const gData = await gRes.json();
-        if (!gRes.ok) {
-          throw new Error(gData?.error?.message || `Gemini Image HTTP ${gRes.status}`);
+          if (!cleanGemini) {
+            throw new Error(data?.error?.message || `OpenAI Image HTTP ${res.status}`);
+          }
+        } catch (oaiErr) {
+          if (!cleanGemini) {
+            throw new Error(oaiErr.name === "AbortError" ? "이미지 생성 시간 초과(25초)" : oaiErr.message);
+          }
+        } finally {
+          clearTimeout(oaiTimer);
         }
-        const imgPart = (gData?.candidates?.[0]?.content?.parts || []).find((p) => p.inlineData?.data);
-        if (!imgPart) throw new Error("이미지 데이터를 받지 못했습니다.");
-        setPlatingExampleImageUrl(
-          `data:${imgPart.inlineData.mimeType || "image/png"};base64,${imgPart.inlineData.data}`
-        );
-        pushAiLog("Gemini Image", "플레이팅 예시 이미지", true, "gemini-2.5-flash-image");
-        showToast("플레이팅 예시 이미지가 생성되었습니다!");
+      }
+
+      // 2순위: Gemini 이미지 모델 (gemini-2.5-flash-image, 25초 타임아웃)
+      if (cleanGemini) {
+        const gCtrl = new AbortController();
+        const gTimer = setTimeout(() => gCtrl.abort(), 25000);
+        try {
+          const gRes = await fetch(
+            "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent",
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "x-goog-api-key": cleanGemini
+              },
+              signal: gCtrl.signal,
+              body: JSON.stringify({
+                contents: [{ parts: [{ text: visualPrompt }] }]
+              })
+            }
+          );
+          const gData = await gRes.json();
+          if (!gRes.ok) {
+            throw new Error(gData?.error?.message || `Gemini Image HTTP ${gRes.status}`);
+          }
+          const imgPart = (gData?.candidates?.[0]?.content?.parts || []).find((p) => p.inlineData?.data);
+          if (!imgPart) throw new Error("이미지 데이터를 받지 못했습니다.");
+          setPlatingExampleImageUrl(
+            `data:${imgPart.inlineData.mimeType || "image/png"};base64,${imgPart.inlineData.data}`
+          );
+          pushAiLog("Gemini Image", "플레이팅 예시 이미지", true, "gemini-2.5-flash-image");
+          showToast("플레이팅 예시 이미지가 생성되었습니다!");
+        } catch (gErr) {
+          throw new Error(gErr.name === "AbortError" ? "이미지 생성 시간 초과(25초)" : gErr.message);
+        } finally {
+          clearTimeout(gTimer);
+        }
       }
     } catch (err) {
       pushAiLog("Image AI", "플레이팅 예시 이미지", false, err.message);
@@ -3158,6 +3191,7 @@ function MainApp() {
       return;
     }
     setCookingConfirmModal({
+      operationId: `cook-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       recipeTitle: recipe.title,
       items: matched.map((m) => ({
         item: m,
@@ -3175,7 +3209,15 @@ function MainApp() {
     }
     if (user && db) {
       try {
+        const opId = cookingConfirmModal.operationId || `cook-${Date.now()}`;
+        const opRef = getDocRef("family_cooking_operations_v7", opId);
+        let alreadyProcessed = false;
         await runTransaction(db, async (tx) => {
+          const existingOp = await tx.get(opRef);
+          if (existingOp.exists()) {
+            alreadyProcessed = true;
+            return;
+          }
           const snapshots = [];
           for (const entry of toDeduct) {
             const ref = getDocRef("family_fridge_v4", entry.item.id);
@@ -3188,12 +3230,23 @@ function MainApp() {
             if (!Number.isFinite(next) || next < 0) {
               throw new Error(`'${entry.item.name}' 재고가 부족합니다 (현재고 ${cur}).`);
             }
-            snapshots.push({ ref, next, item: entry.item });
+            snapshots.push({ ref, next });
           }
           for (const s of snapshots) {
             tx.update(s.ref, { quantity: s.next, updatedAt: new Date().toISOString() });
           }
+          tx.set(opRef, {
+            id: opId,
+            recipeTitle: cookingConfirmModal.recipeTitle,
+            status: "completed",
+            createdAt: new Date().toISOString()
+          });
         });
+        if (alreadyProcessed) {
+          setCookingConfirmModal(null);
+          showToast("이미 처리된 요리 완료 기록입니다.");
+          return;
+        }
       } catch (e) {
         showToast(`⚠️ 차감 실패(전체 취소됨): ${e.message}`);
         return;
@@ -3630,7 +3683,7 @@ function MainApp() {
               title="패치노트 기록 및 히스토리"
             >
               <ClipboardList className="w-3 h-3 text-stone-600" />
-              <span>패치노트 {patchNotes[0]?.version || "v7.2"}</span>
+              <span>패치노트 {patchNotes[0]?.version || "v7.3"}</span>
             </button>
           </div>
 
@@ -6050,10 +6103,10 @@ function MainApp() {
                   </span>
                   <div className="flex items-center gap-1 shrink-0">
                     <span className="px-2 py-0.5 rounded-lg bg-white border border-rose-200 text-[10px] font-extrabold text-rose-800">
-                      색감 {platingResult.colorScore}/5
+                      색감 {platingResult.colorScore === "미평가" ? "미평가" : `${platingResult.colorScore}/5`}
                     </span>
                     <span className="px-2 py-0.5 rounded-lg bg-white border border-rose-200 text-[10px] font-extrabold text-rose-800">
-                      구성 {platingResult.layoutScore}/5
+                      구성 {platingResult.layoutScore === "미평가" ? "미평가" : `${platingResult.layoutScore}/5`}
                     </span>
                   </div>
                 </div>
@@ -6075,7 +6128,6 @@ function MainApp() {
                     </div>
                   ))}
                 </div>
-                      </div>
 
                 <button
                   onClick={handleGeneratePlatingExampleImage}
@@ -7946,4 +7998,4 @@ export default function App() {
       <MainApp />
     </ErrorBoundary>
   );
-}
+      }
