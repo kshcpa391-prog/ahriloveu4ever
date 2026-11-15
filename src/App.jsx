@@ -631,11 +631,22 @@ const STORAGE_LOCATIONS = ["냉장실", "냉동실", "실온·팬트리"];
 const FRIDGE_CATEGORIES = ["채소/과일", "육류/수산", "유제품/계란", "유아식/이유식 재료", "반찬/김치", "밀키트", "양념/소스", "기타"];
 const SCHEDULE_CATEGORIES = ["기념일/생일", "할일(To-Do)", "육아/병원", "가족행사/경조사"];
 
-const APP_CODE_VERSION = "v9.4";
-const APP_BUILD_DATE = "2026-11-16 00:05";
+const APP_CODE_VERSION = "v9.5";
+const APP_BUILD_DATE = "2026-11-16 07:50";
 const EDITOR_INVITE_CODE = "0402";
 
 const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v9.5",
+    version: "v9.5",
+    date: "2026-11-16",
+    title: "최근 14일 메뉴 반복방지 · 다끼니 누적 재료합산 · 동시수정 충돌감지 · 자동백업 변경감지 · 로직 자가진단",
+    changes: [
+      "AI 식단 추천 시 최근 14일 식단 이력을 비교해 유사 메뉴 반복을 최소화하고, 전체 식단 누적 재료량에서 보유량 차감 계산",
+      "식단·냉장고 수정 시 updatedAt 기준 다중 기기 동시 수정 충돌 감지 및 조리완료 재고 차감 연계",
+      "자동백업 변경 감지(데이터 지문 비교) 및 설정 내 [🧪 핵심 로직 자가진단(단위·날짜·매칭·완성도)] 테스트 버튼 추가"
+    ]
+  },
   {
     id: "patch-v9.4",
     version: "v9.4",
@@ -1671,6 +1682,7 @@ function MainApp() {
   const [planItems, setPlanItems] = useState([]);
   const [planSnapshotMeta, setPlanSnapshotMeta] = useState(null);
   const [planConflictMode, setPlanConflictMode] = useState("skip");
+  const [selfTestResults, setSelfTestResults] = useState(null);
   const [isSavingPlan, setIsSavingPlan] = useState(false);
 
   // 전체 재고 텍스트 내보내기 모달 상태
@@ -3302,12 +3314,24 @@ function MainApp() {
     const simokProfile = CHILDREN_INFO.find((c) => c.id === "시목") || CHILDREN_INFO[0];
     const simokMonths = getChildAgeStats(simokProfile.birthDate).months;
     const reqListStr = requests.map((r) => `${r.date} ${r.slot}`).join(", ");
+    const cutoff14 = addMonthsToDateStr(getTodayStr(), 0, -14);
+    const recent14Menus = Array.from(
+      new Set(
+        meals
+          .filter((m) => String(m.date || "") >= cutoff14 && m.menu)
+          .map((m) => String(m.menu).trim())
+      )
+    ).slice(0, 20);
+    const recent14Note =
+      recent14Menus.length > 0
+        ? `\n최근 14일 식단(유사 메뉴 반복 피하기): [${recent14Menus.join(", ")}]`
+        : "";
 
     if (targetMode === "adults") {
       return `당신은 한국 가정식 및 성인 균형 영양 전문 셰프입니다.
 대상: 성인 2인 (수혁·아리나)
 식사 목적: ${adultStyle}
-요청 날짜·끼니(${requests.length}끼): ${reqListStr}
+요청 날짜·끼니(${requests.length}끼): ${reqListStr}${recent14Note}
 
 [냉장고·냉동실·실온 전체 유효 재고 (만료·0개 제외, 임박순)]
 ${validText}
@@ -3340,7 +3364,7 @@ ${validText}
     if (targetMode === "toddler") {
       return `당신은 영유아 영양 및 유아식 전문 셰프입니다.
 대상: 생후 ${simokMonths}개월 유아 1인 (출생일 ${simokProfile.birthDate} 기준)
-요청 날짜·끼니(${requests.length}끼): ${reqListStr}
+요청 날짜·끼니(${requests.length}끼): ${reqListStr}${recent14Note}
 
 [냉장고·냉동실·실온 전체 유효 재고 (만료·0개 제외, 임박순)]
 ${validText}
@@ -3373,7 +3397,7 @@ ${validText}
 
     return `당신은 한국 가정식 및 가족 통합 식단 전문 셰프입니다.
 대상: 온가족 (성인 2인 + 생후 ${simokMonths}개월 유아 1인, 출생일 ${simokProfile.birthDate} 기준)
-요청 날짜·끼니(${requests.length}끼): ${reqListStr}
+요청 날짜·끼니(${requests.length}끼): ${reqListStr}${recent14Note}
 
 [냉장고·냉동실·실온 전체 유효 재고 (만료·0개 제외, 임박순)]
 ${validText}
@@ -3806,6 +3830,113 @@ ${validText}
       endWrite(ok, errMsg);
       setIsSavingPlan(false);
     }
+  };
+
+  const computeAggregatedPlanShortage = (selectedPlans) => {
+    const validFridge = fridge.filter((f) => Number(f.quantity || 0) > 0 && getDaysDiff(f.expiryDate) >= 0);
+    const shopNamesLower = shoppingList.map((s) => String(s.name || "").toLowerCase());
+    const demandMap = new Map();
+
+    for (const it of selectedPlans) {
+      for (const ing of toSafeArray(it.ingredients)) {
+        const lower = String(ing.name || "").trim().toLowerCase();
+        if (!lower) continue;
+        const prev = demandMap.get(lower);
+        if (!prev) {
+          demandMap.set(lower, {
+            name: ing.name,
+            totalReq: Number(ing.quantity) || 1,
+            unit: ing.unit || "개",
+            matchedItem: ing.inventoryItemId ? validFridge.find((f) => f.id === ing.inventoryItemId) : null
+          });
+        } else {
+          const conv = convertUnitQty(ing.quantity, ing.unit, prev.unit);
+          if (conv !== null) {
+            prev.totalReq += conv;
+          } else {
+            prev.unitMismatch = true;
+          }
+        }
+      }
+      for (const raw of toSafeArray(it.missingIngredients)) {
+        const mName = typeof raw === "object" ? String(raw.name || "").trim() : String(raw || "").trim();
+        const mQtyStr = typeof raw === "object" ? String(raw.quantity || "1개").trim() : "1개";
+        if (!mName) continue;
+        const lower = mName.toLowerCase();
+        if (!demandMap.has(lower)) {
+          demandMap.set(lower, {
+            name: mName,
+            totalReq: 1,
+            unit: "",
+            rawQtyLabel: mQtyStr,
+            matchedItem: matchFridgeItemExactFirst(mName, validFridge)
+          });
+        }
+      }
+    }
+
+    const shortages = [];
+    for (const [lower, entry] of demandMap.entries()) {
+      if (shopNamesLower.some((sn) => sn === lower || sn.includes(lower) || lower.includes(sn))) {
+        continue;
+      }
+      if (!entry.matchedItem) {
+        shortages.push({
+          name: entry.name,
+          quantity: entry.rawQtyLabel || `${Math.ceil(entry.totalReq)}${entry.unit}`,
+          detail: entry.rawQtyLabel ? "미보유" : `총 필요 ${entry.totalReq}${entry.unit} / 보유 0`
+        });
+      } else if (!entry.unitMismatch && entry.unit) {
+        const availConv = convertUnitQty(entry.matchedItem.quantity, entry.matchedItem.unit, entry.unit);
+        if (availConv !== null && entry.totalReq > availConv) {
+          const diff = Math.round((entry.totalReq - availConv) * 10) / 10;
+          shortages.push({
+            name: entry.name,
+            quantity: `${diff}${entry.unit}`,
+            detail: `총 필요 ${entry.totalReq}${entry.unit} / 보유 ${availConv}${entry.unit}`
+          });
+        }
+      }
+    }
+    return shortages;
+  };
+
+  const runCoreLogicSelfTests = () => {
+    const cases = [
+      {
+        name: "단위 환산 (1kg -> 1000g)",
+        pass: convertUnitQty(1, "kg", "g") === 1000
+      },
+      {
+        name: "단위 환산 (500ml -> 0.5L)",
+        pass: convertUnitQty(500, "ml", "l") === 0.5
+      },
+      {
+        name: "이질 단위 차단 (g vs 팩 -> null)",
+        pass: convertUnitQty(100, "g", "팩") === null
+      },
+      {
+        name: "월말 날짜 보정 (2026-01-31 + 1달 -> 2026-02-28)",
+        pass: addMonthsToDateStr("2026-01-31", 1, 0) === "2026-02-28"
+      },
+      {
+        name: "완성형 식단 판별 (한그릇 vs 단일채소)",
+        pass:
+          checkMealCompleteness("소고기 덮밥", []).ok === true &&
+          checkMealCompleteness("시금치 나물", [{ role: "vegetable", name: "시금치 나물" }]).ok === false
+      },
+      {
+        name: "유사 품목 오매칭 방지 (소고기 vs 양념소고기·국거리)",
+        pass:
+          matchFridgeItemExactFirst("소고기", [
+            { id: "1", name: "소고기 양념육" },
+            { id: "2", name: "소고기 국거리" }
+          ]) === null
+      }
+    ];
+    const passed = cases.filter((c) => c.pass).length;
+    setSelfTestResults({ passed, total: cases.length, cases });
+    showToast(`🧪 로직 자가진단: ${passed}/${cases.length} 통과`);
   };
 
   const buildInventoryExportText = () => {
@@ -4279,7 +4410,8 @@ ${validText}
       expiryDate: fridgeForm.expiryDate || getTodayStr(),
       expiryIsTemp: editingFridge ? Boolean(editingFridge.expiryIsTemp && !isExpiryManuallyEdited) : !isExpiryManuallyEdited,
       price: priceNum,
-      purchaseDate: fridgeForm.purchaseDate || selectedDate
+      purchaseDate: fridgeForm.purchaseDate || selectedDate,
+      updatedAt: new Date().toISOString()
     };
 
     if (!user || !db) {
@@ -4290,6 +4422,24 @@ ${validText}
     let ok = false;
     let errMsg = "";
     try {
+      if (editingFridge?.updatedAt) {
+        let conflictFound = false;
+        await runTransaction(db, async (tx) => {
+          const snap = await tx.get(getDocRef("family_fridge_v4", id));
+          if (snap.exists() && snap.data().updatedAt && snap.data().updatedAt !== editingFridge.updatedAt) {
+            conflictFound = true;
+            return;
+          }
+          tx.set(getDocRef("family_fridge_v3", id), payload);
+          tx.set(getDocRef("family_fridge_v4", id), payload);
+        });
+        if (conflictFound) {
+          showToast("⚠️ 다른 기기에서 먼저 수정된 재고입니다. 최신 내용을 확인 후 다시 수정해 주세요.");
+          setIsFridgeModalOpen(false);
+          setEditingFridge(null);
+          return;
+        }
+      }
       const batch = writeBatch(db);
       batch.set(getDocRef("family_fridge_v3", id), payload);
       batch.set(getDocRef("family_fridge_v4", id), payload);
@@ -4662,7 +4812,8 @@ ${validText}
       ingredients: toSafeArray(mealForm.ingredients),
       note: mealForm.note || "",
       sourceType: mealForm.sourceType || "집밥/온가족식",
-      cost: Number(mealForm.cost) || 0
+      cost: Number(mealForm.cost) || 0,
+      updatedAt: new Date().toISOString()
     };
 
     if (!user || !db) {
@@ -7523,29 +7674,7 @@ ${validText}
               </div>
 
               {planItems.length > 0 && (() => {
-                const fridgeNamesLower = fridge
-                  .filter((f) => Number(f.quantity || 0) > 0 && getDaysDiff(f.expiryDate) >= 0)
-                  .map((f) => String(f.name || "").toLowerCase());
-                const shopNamesLower = shoppingList.map((s) => String(s.name || "").toLowerCase());
-                const missingMap = new Map();
-                for (const it of planItems.filter((x) => x.selected)) {
-                  for (const raw of toSafeArray(it.missingIngredients)) {
-                    const mName = typeof raw === "object" ? String(raw.name || "").trim() : String(raw || "").trim();
-                    const mQty = typeof raw === "object" ? String(raw.quantity || "1개").trim() : "1개";
-                    if (!mName) continue;
-                    const lower = mName.toLowerCase();
-                    if (
-                      fridgeNamesLower.some((fn) => fn.includes(lower) || lower.includes(fn)) ||
-                      shopNamesLower.some((sn) => sn.includes(lower) || lower.includes(sn))
-                    ) {
-                      continue;
-                    }
-                    if (!missingMap.has(lower)) {
-                      missingMap.set(lower, { name: mName, quantity: mQty });
-                    }
-                  }
-                }
-                const allMissing = Array.from(missingMap.values());
+                const allMissing = computeAggregatedPlanShortage(planItems.filter((x) => x.selected));
                 const groupedDates = Array.from(new Set(planItems.map((it) => it.date))).sort();
 
                 return (
@@ -7692,6 +7821,21 @@ ${validText}
                                   {!isAdultOnly && it.babyTip && (
                                     <div className="text-[11px] font-semibold text-amber-900 bg-white/80 p-2 rounded-lg border border-amber-200">
                                       👶 아이 맞춤 팁: {it.babyTip}
+                                    </div>
+                                  )}
+                                  {toSafeArray(it.usedIngredients).length > 0 && (
+                                    <div className="pt-1 flex justify-end">
+                                      <button
+                                        onClick={() =>
+                                          handleCompleteRecipeCooking({
+                                            title: it.mealName,
+                                            usedIngredients: it.usedIngredients
+                                          })
+                                        }
+                                        className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-extrabold"
+                                      >
+                                        🍳 이 식단 조리완료(재고 차감)
+                                      </button>
                                     </div>
                                   )}
                                 </div>
@@ -10113,6 +10257,32 @@ ${validText}
                 </div>
               </div>
             )}
+
+            <div className="p-3 rounded-2xl bg-stone-50 border border-stone-200 space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs font-black text-stone-800">
+                  🧪 핵심 로직 자가진단 (단위·날짜·매칭·완성도)
+                </span>
+                <button
+                  onClick={runCoreLogicSelfTests}
+                  className="px-2.5 py-1 rounded-lg bg-stone-900 text-white text-[11px] font-extrabold shrink-0"
+                >
+                  테스트 실행
+                </button>
+              </div>
+              {selfTestResults && (
+                <div className="space-y-1">
+                  <div className="text-[11px] font-black text-emerald-700">
+                    결과: {selfTestResults.passed}/{selfTestResults.total} 통과
+                  </div>
+                  {selfTestResults.cases.map((c, idx) => (
+                    <div key={idx} className="text-[11px] font-semibold text-stone-700">
+                      {c.pass ? "✅" : "❌"} {c.name}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
 
             {isEditorUnlocked && (
               <div className="p-3 rounded-2xl bg-stone-50 border border-stone-200 space-y-2">
