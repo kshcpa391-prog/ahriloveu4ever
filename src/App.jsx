@@ -631,11 +631,22 @@ const STORAGE_LOCATIONS = ["냉장실", "냉동실", "실온·팬트리"];
 const FRIDGE_CATEGORIES = ["채소/과일", "육류/수산", "유제품/계란", "유아식/이유식 재료", "반찬/김치", "밀키트", "양념/소스", "기타"];
 const SCHEDULE_CATEGORIES = ["기념일/생일", "할일(To-Do)", "육아/병원", "가족행사/경조사"];
 
-const APP_CODE_VERSION = "v9.5";
-const APP_BUILD_DATE = "2026-11-16 07:50";
+const APP_CODE_VERSION = "v9.6";
+const APP_BUILD_DATE = "2026-11-16 08:00";
 const EDITOR_INVITE_CODE = "0402";
 
 const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v9.6",
+    version: "v9.6",
+    date: "2026-11-16",
+    title: "식단 기록 시 칩(+) 추가 · 최근 자주 먹은 메뉴 원터치 · 즐겨찾기 조합 저장 지원",
+    changes: [
+      "메뉴 입력창에서 [+] 버튼으로 메뉴를 추가하면 자동으로 ' + '로 연결되고 개별 칩(×)으로 쉽게 수정 가능",
+      "최근 먹은 개별 메뉴(Top 8) 원터치 칩 및 자주 먹는 조합(⭐ 즐겨찾기) 저장/불러오기 추가",
+      "저장된 식단 카드는 기존처럼 깔끔한 한 줄('스무디 + 감') 형태 유지"
+    ]
+  },
   {
     id: "patch-v9.5",
     version: "v9.5",
@@ -1559,6 +1570,46 @@ function MainApp() {
 
   // 식단 모달 상태
   const [isMealModalOpen, setIsMealModalOpen] = useState(false);
+  const [mealChipInput, setMealChipInput] = useState("");
+  const [favoriteMealCombos, setFavoriteMealCombos] = useState(() => {
+    try {
+      const raw = localStorage.getItem("kim_favorite_meal_combos_v1");
+      const parsed = raw ? JSON.parse(raw) : [];
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (e) {
+      return [];
+    }
+  });
+
+  const appendMenuChipToForm = (rawItem) => {
+    const item = String(rawItem || "").trim();
+    if (!item) return;
+    setMealForm((prev) => {
+      const existing = String(prev.menu || "")
+        .split(/\s*\+\s*/)
+        .map((s) => s.trim())
+        .filter(Boolean);
+      if (existing.includes(item)) return prev;
+      return { ...prev, menu: [...existing, item].join(" + ") };
+    });
+  };
+
+  const recentSingleMenuChips = useMemo(() => {
+    const counts = new Map();
+    for (const m of meals) {
+      const parts = String(m.menu || "")
+        .split(/\s*[+,&]\s*/)
+        .map((s) => s.trim())
+        .filter((s) => s && s.length <= 20);
+      for (const pt of parts) {
+        counts.set(pt, (counts.get(pt) || 0) + 1);
+      }
+    }
+    return Array.from(counts.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 8)
+      .map(([name]) => name);
+  }, [meals]);
   const [editingMeal, setEditingMeal] = useState(null);
   const [mealForm, setMealForm] = useState({
     date: getTodayStr(),
@@ -9634,13 +9685,154 @@ ${validText}
               </div>
             </div>
 
-            <input
-              type="text"
-              placeholder="메뉴명 (예: 한우 미역국 & 고등어구이)"
-              value={mealForm.menu}
-              onChange={(e) => setMealForm({ ...mealForm, menu: e.target.value })}
-              className="w-full px-3 py-2.5 rounded-xl border border-stone-200 text-xs font-bold"
-            />
+            <div className="space-y-2 bg-stone-50 p-3 rounded-2xl border border-stone-200">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-extrabold text-stone-700">메뉴 구성 (자동 + 연결)</span>
+                {mealForm.menu.trim() && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const combo = mealForm.menu.trim();
+                      if (!combo) return;
+                      setFavoriteMealCombos((prev) => {
+                        if (prev.includes(combo)) return prev;
+                        const next = [combo, ...prev].slice(0, 12);
+                        try { localStorage.setItem("kim_favorite_meal_combos_v1", JSON.stringify(next)); } catch (e) {}
+                        return next;
+                      });
+                      showToast("⭐ 자주 먹는 조합에 저장했습니다!");
+                    }}
+                    className="text-[11px] font-extrabold text-amber-700 hover:text-amber-800"
+                  >
+                    ⭐ 조합 즐겨찾기 저장
+                  </button>
+                )}
+              </div>
+
+              {/* 칩으로 하나씩 추가 */}
+              <div className="flex items-center gap-1.5">
+                <input
+                  type="text"
+                  placeholder="메뉴 하나씩 입력 후 + (예: 스무디)"
+                  value={mealChipInput}
+                  onChange={(e) => setMealChipInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      appendMenuChipToForm(mealChipInput);
+                      setMealChipInput("");
+                    }
+                  }}
+                  className="flex-1 px-3 py-2 rounded-xl border border-stone-200 text-xs font-bold bg-white"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    appendMenuChipToForm(mealChipInput);
+                    setMealChipInput("");
+                  }}
+                  className="px-3 py-2 rounded-xl bg-stone-900 text-white text-xs font-extrabold shrink-0"
+                >
+                  + 추가
+                </button>
+              </div>
+
+              {/* 현재 조합된 칩 목록 */}
+              {String(mealForm.menu || "").trim() && (
+                <div className="flex flex-wrap gap-1">
+                  {String(mealForm.menu)
+                    .split(/\s*\+\s*/)
+                    .map((s) => s.trim())
+                    .filter(Boolean)
+                    .map((chip, cIdx) => (
+                      <span
+                        key={`${chip}-${cIdx}`}
+                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-100 text-amber-950 border border-amber-300 text-xs font-extrabold"
+                      >
+                        <span>{chip}</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const parts = String(mealForm.menu)
+                              .split(/\s*\+\s*/)
+                              .map((s) => s.trim())
+                              .filter(Boolean);
+                            parts.splice(cIdx, 1);
+                            setMealForm({ ...mealForm, menu: parts.join(" + ") });
+                          }}
+                          className="text-amber-700 hover:text-rose-600 font-black"
+                        >
+                          ×
+                        </button>
+                      </span>
+                    ))}
+                </div>
+              )}
+
+              {/* 최종 한 줄 메뉴명 직접 수정도 가능 */}
+              <input
+                type="text"
+                placeholder="최종 한 줄 메뉴명 (예: 스무디 + 감)"
+                value={mealForm.menu}
+                onChange={(e) => setMealForm({ ...mealForm, menu: e.target.value })}
+                className="w-full px-3 py-2 rounded-xl border border-stone-200 text-xs font-bold bg-white"
+              />
+
+              {/* 최근 자주 먹은 개별 메뉴 원터치 칩 */}
+              {recentSingleMenuChips.length > 0 && (
+                <div className="space-y-1">
+                  <div className="text-[10px] font-bold text-stone-500">⚡ 최근 자주 먹은 메뉴 (터치로 + 추가)</div>
+                  <div className="flex flex-wrap gap-1">
+                    {recentSingleMenuChips.map((chip) => (
+                      <button
+                        key={chip}
+                        type="button"
+                        onClick={() => appendMenuChipToForm(chip)}
+                        className="px-2 py-1 rounded-full bg-white hover:bg-amber-50 border border-stone-200 text-[11px] font-bold text-stone-700"
+                      >
+                        + {chip}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* 즐겨찾기 조합 */}
+              {favoriteMealCombos.length > 0 && (
+                <div className="space-y-1 pt-0.5">
+                  <div className="text-[10px] font-bold text-amber-800">⭐ 즐겨찾기 조합 (1초 불러오기)</div>
+                  <div className="flex flex-wrap gap-1">
+                    {favoriteMealCombos.map((combo) => (
+                      <span
+                        key={combo}
+                        className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-amber-50 border border-amber-200 text-[11px] font-bold text-amber-900"
+                      >
+                        <button
+                          type="button"
+                          onClick={() => setMealForm({ ...mealForm, menu: combo })}
+                          className="hover:underline"
+                        >
+                          {combo}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setFavoriteMealCombos((prev) => {
+                              const next = prev.filter((x) => x !== combo);
+                              try { localStorage.setItem("kim_favorite_meal_combos_v1", JSON.stringify(next)); } catch (e) {}
+                              return next;
+                            });
+                          }}
+                          className="text-amber-500 hover:text-rose-600"
+                        >
+                          ×
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
 
             <div className="grid grid-cols-2 gap-2">
               <select
