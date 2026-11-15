@@ -631,11 +631,23 @@ const STORAGE_LOCATIONS = ["냉장실", "냉동실", "실온·팬트리"];
 const FRIDGE_CATEGORIES = ["채소/과일", "육류/수산", "유제품/계란", "유아식/이유식 재료", "반찬/김치", "밀키트", "양념/소스", "기타"];
 const SCHEDULE_CATEGORIES = ["기념일/생일", "할일(To-Do)", "육아/병원", "가족행사/경조사"];
 
-const APP_CODE_VERSION = "v9.3";
-const APP_BUILD_DATE = "2026-11-15 23:55";
+const APP_CODE_VERSION = "v9.4";
+const APP_BUILD_DATE = "2026-11-16 00:05";
 const EDITOR_INVITE_CODE = "0402";
 
 const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v9.4",
+    version: "v9.4",
+    date: "2026-11-16",
+    title: "AI 식단 수량·단위 비교 · 완성도 검증 · 누락끼니 추가생성 · 기존식단 충돌방지 · 냉장고 배치입고",
+    changes: [
+      "g/kg·ml/L 단위 변환 및 보유수량-필요수량 합산 비교로 부족분만 장보기에 정확히 반영 (미변환 단위는 확인 표시)",
+      "완성형 한 끼 품질 검사(단독 1품목 채소/전 등 미달 시 경고) 및 누락된 끼니만 추가 생성 버튼 제공",
+      "스냅샷에 성인 식사 목적(planAdultStyle)까지 고정, 메뉴 직접 수정 시 구 구성요소 결합 방지",
+      "식단표 반영 시 기존 날짜·끼니 충돌 건너뛰기/추가 선택 지원, 냉장고 입고를 writeBatch 원자적 저장으로 개선"
+    ]
+  },
   {
     id: "patch-v9.2",
     version: "v9.2",
@@ -1658,6 +1670,7 @@ function MainApp() {
   const [planErrorMsg, setPlanErrorMsg] = useState("");
   const [planItems, setPlanItems] = useState([]);
   const [planSnapshotMeta, setPlanSnapshotMeta] = useState(null);
+  const [planConflictMode, setPlanConflictMode] = useState("skip");
   const [isSavingPlan, setIsSavingPlan] = useState(false);
 
   // 전체 재고 텍스트 내보내기 모달 상태
@@ -3390,10 +3403,49 @@ ${validText}
 ]`;
   };
 
+  const convertUnitQty = (qty, fromUnit, toUnit) => {
+    const q = Number(qty);
+    if (!Number.isFinite(q) || q <= 0) return null;
+    const f = String(fromUnit || "").trim().toLowerCase();
+    const t = String(toUnit || "").trim().toLowerCase();
+    if (f === t) return q;
+    if (f === "kg" && t === "g") return q * 1000;
+    if (f === "g" && t === "kg") return q / 1000;
+    if ((f === "l" || f === "ℓ") && t === "ml") return q * 1000;
+    if (f === "ml" && (t === "l" || t === "ℓ")) return q / 1000;
+    return null;
+  };
+
+  const matchFridgeItemExactFirst = (ingName, validFridge) => {
+    const lower = String(ingName || "").trim().toLowerCase();
+    if (!lower) return null;
+    const exact = validFridge.find((f) => String(f.name || "").trim().toLowerCase() === lower);
+    if (exact) return exact;
+    // Only match partial if token boundary or short clean inclusion without mixing distinct seasoned meats
+    const candidates = validFridge.filter((f) => {
+      const fn = String(f.name || "").trim().toLowerCase();
+      return fn.includes(lower) || lower.includes(fn);
+    });
+    if (candidates.length === 1) return candidates[0];
+    return null;
+  };
+
+  const checkMealCompleteness = (mealName, components) => {
+    const oneBowlKeywords = ["덮밥", "비빔밥", "볶음밥", "파스타", "국수", "칼국수", "우동", "라면", "카레", "리조또", "죽", "솥밥", "전골", "찌개", "정식", "도시락", "김밥", "샌드위치", "토스트"];
+    const nameStr = String(mealName || "");
+    if (oneBowlKeywords.some((kw) => nameStr.includes(kw))) {
+      return { ok: true, reason: "" };
+    }
+    const roles = new Set(toSafeArray(components).map((c) => String(c.role || "").toLowerCase()));
+    if (components.length >= 2 && (roles.has("staple") || roles.has("main"))) {
+      return { ok: true, reason: "" };
+    }
+    return { ok: false, reason: "단일 반찬/요리 위주입니다. 재추천을 권장합니다." };
+  };
+
   const normalizeAiPlanItems = (rawList, requestedPairs, targetMode, validFridge) => {
     const reqSet = new Set(requestedPairs.map((r) => `${r.date}__${r.slot}`));
     const seen = new Set();
-    const validFridgeNames = validFridge.map((f) => String(f.name || "").toLowerCase());
     const out = [];
 
     for (const item of toSafeArray(rawList)) {
@@ -3422,16 +3474,30 @@ ${validText}
         return { name: String(ing || "").trim(), quantity: 1, unit: "개" };
       }).filter((x) => x.name);
 
-      // Verify which ingredients actually exist in valid fridge stock vs missing
-      const verifiedInFridge = [];
-      const extraMissingFromCheck = [];
+      const matchedEntries = [];
+      const unitCheckEntries = [];
+      const unmatchedMissing = [];
+
       for (const ing of rawIngredients) {
-        const lower = ing.name.toLowerCase();
-        const exists = validFridgeNames.some((fn) => fn === lower || fn.includes(lower) || lower.includes(fn));
-        if (exists) {
-          verifiedInFridge.push(ing);
+        const matched = matchFridgeItemExactFirst(ing.name, validFridge);
+        if (matched) {
+          const convertedAvail = convertUnitQty(matched.quantity, matched.unit, ing.unit);
+          matchedEntries.push({
+            ...ing,
+            inventoryItemId: matched.id,
+            availableQty: Number(matched.quantity || 0),
+            availableUnit: matched.unit || "개",
+            convertedAvail,
+            needsUnitCheck: convertedAvail === null
+          });
+          if (convertedAvail === null) {
+            unitCheckEntries.push({
+              name: ing.name,
+              quantity: `${ing.quantity}${ing.unit} (보유: ${matched.quantity}${matched.unit || "개"})`
+            });
+          }
         } else {
-          extraMissingFromCheck.push({ name: ing.name, quantity: `${ing.quantity}${ing.unit}` });
+          unmatchedMissing.push({ name: ing.name, quantity: `${ing.quantity}${ing.unit}` });
         }
       }
 
@@ -3446,13 +3512,13 @@ ${validText}
       }).filter((x) => x.name);
 
       const mergedMissingMap = new Map();
-      [...explicitMissing, ...extraMissingFromCheck].forEach((m) => {
+      [...explicitMissing, ...unmatchedMissing].forEach((m) => {
         const k = m.name.toLowerCase();
         if (!mergedMissingMap.has(k)) mergedMissingMap.set(k, m);
       });
 
-      const usedNames = verifiedInFridge.map((x) => `${x.name}(${x.quantity}${x.unit})`);
       const compNames = components.map((c) => c.name);
+      const completeness = checkMealCompleteness(mealName, components);
 
       out.push({
         id: `plan-${Date.now()}-${out.length}-${Math.random().toString(36).slice(2, 5)}`,
@@ -3461,12 +3527,15 @@ ${validText}
         target: targetMode,
         mealName,
         menu: compNames.length > 0 ? `${mealName} (${compNames.join(" · ")})` : mealName,
+        isManuallyEdited: false,
         components,
+        completeness,
         servings: Number(item?.servings) || (targetMode === "adults" ? 2 : targetMode === "toddler" ? 1 : 3),
         estimatedMinutes: Number(item?.estimatedMinutes) || 25,
-        ingredients: verifiedInFridge,
-        usedIngredients: verifiedInFridge.map((x) => x.name),
-        usedIngredientsDisplay: usedNames,
+        ingredients: matchedEntries,
+        unitCheckEntries,
+        usedIngredients: matchedEntries.map((x) => x.name),
+        usedIngredientsDisplay: matchedEntries.map((x) => `${x.name}(${x.quantity}${x.unit})`),
         missingIngredients: Array.from(mergedMissingMap.values()),
         tip: String(item?.tip || "").trim(),
         babyTip: targetMode === "adults" ? "" : String(item?.babyTip || item?.simokTip || "").trim(),
@@ -3516,16 +3585,21 @@ ${validText}
           : ["수혁", "아리나", "시목"];
 
       setPlanItems(validated);
+      const gotSet = new Set(validated.map((v) => `${v.date}__${v.slot}`));
+      const missingPairs = requestedPairs.filter((r) => !gotSet.has(`${r.date}__${r.slot}`));
+
       setPlanSnapshotMeta({
         operationId: `plan-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
         target: planTarget,
+        adultStyle: planAdultStyle,
         members: snapshotMembers,
         requestedCount: requestedPairs.length,
+        missingPairs,
         applied: false
       });
       pushAiLog(actualProvider, "맞춤 식단표", true, `${validated.length}/${requestedPairs.length}끼 생성`);
-      if (validated.length < requestedPairs.length) {
-        setPlanErrorMsg(`요청한 ${requestedPairs.length}끼 중 ${validated.length}끼만 조건에 맞게 생성되었습니다. 누락된 끼니는 개별 재추천하거나 다시 생성해 주세요.`);
+      if (missingPairs.length > 0) {
+        setPlanErrorMsg(`완료 ${validated.length}/${requestedPairs.length}끼 · 누락 ${missingPairs.length}끼 (${missingPairs.map((m) => `${m.date} ${m.slot}`).join(", ")})`);
       }
       showToast(`맞춤 식단(${validated.length}끼)이 생성되었습니다!`);
     } catch (err) {
@@ -3543,11 +3617,12 @@ ${validText}
     setPlanErrorMsg("");
     try {
       const targetMode = planSnapshotMeta?.target || targetItem.target || planTarget;
+      const lockedStyle = planSnapshotMeta?.adultStyle || planAdultStyle;
       const { valid: validFridge, textList } = buildValidFridgeContext();
       const prompt = buildMealPromptForRequests(
         [{ date: targetItem.date, slot: targetItem.slot }],
         targetMode,
-        planAdultStyle,
+        lockedStyle,
         textList
       );
       let actualProvider = aiProvider.toUpperCase();
@@ -3577,6 +3652,47 @@ ${validText}
       showToast(`⚠️ 재추천 실패: ${err.message}`);
     } finally {
       setRegeneratingPlanId("");
+    }
+  };
+
+  const handleGenerateMissingPlanSlots = async () => {
+    if (!requireEditorAccess()) return;
+    const missingPairs = toSafeArray(planSnapshotMeta?.missingPairs);
+    if (missingPairs.length === 0 || isPlanLoading) return;
+    setIsPlanLoading(true);
+    setPlanErrorMsg("");
+    try {
+      const targetMode = planSnapshotMeta?.target || planTarget;
+      const lockedStyle = planSnapshotMeta?.adultStyle || planAdultStyle;
+      const { valid: validFridge, textList } = buildValidFridgeContext();
+      const prompt = buildMealPromptForRequests(missingPairs, targetMode, lockedStyle, textList);
+      let actualProvider = aiProvider.toUpperCase();
+      const parsed = await callReliableAiEngine({
+        apiKey: geminiApiKey,
+        openaiApiKey,
+        aiProvider,
+        promptText: prompt,
+        temperature: 0.6,
+        onProviderUsed: (prov) => { actualProvider = prov; }
+      });
+      const added = normalizeAiPlanItems(parsed, missingPairs, targetMode, validFridge);
+      if (added.length === 0) throw new Error("누락된 끼니를 추가로 생성하지 못했습니다.");
+      setPlanItems((prev) => {
+        const existingKeys = new Set(prev.map((x) => `${x.date}__${x.slot}`));
+        return [...prev, ...added.filter((a) => !existingKeys.has(`${a.date}__${a.slot}`))];
+      });
+      setPlanSnapshotMeta((prev) => {
+        if (!prev) return prev;
+        const addedKeys = new Set(added.map((a) => `${a.date}__${a.slot}`));
+        const rem = toSafeArray(prev.missingPairs).filter((m) => !addedKeys.has(`${m.date}__${m.slot}`));
+        return { ...prev, missingPairs: rem };
+      });
+      pushAiLog(actualProvider, "누락 끼니 추가생성", true, `${added.length}끼 보완`);
+      showToast(`누락되었던 ${added.length}끼를 추가로 생성했습니다!`);
+    } catch (err) {
+      setPlanErrorMsg(err.message);
+    } finally {
+      setIsPlanLoading(false);
     }
   };
 
@@ -3615,10 +3731,24 @@ ${validText}
           alreadyApplied = true;
           return;
         }
+        let skippedCount = 0;
+        let addedCount = 0;
         picked.forEach((it, idx) => {
+          const hasConflict = meals.some(
+            (m) =>
+              m.date === it.date &&
+              m.slot === it.slot &&
+              toSafeArray(m.members).some((mem) => members.includes(mem))
+          );
+          if (planConflictMode === "skip" && hasConflict) {
+            skippedCount += 1;
+            return;
+          }
           const mId = `m-${opId}-${idx}`;
           const compStr = toSafeArray(it.components).map((c) => c.name).filter(Boolean).join(" · ");
-          const fullMenu = compStr && !String(it.menu || "").includes(compStr)
+          const fullMenu = it.isManuallyEdited
+            ? it.mealName
+            : compStr && !String(it.menu || "").includes(compStr)
             ? `${it.mealName} (${compStr})`
             : (it.menu || it.mealName);
           const noteParts = [];
@@ -3637,13 +3767,15 @@ ${validText}
             cost: 0
           };
           newLocal[mId] = payload;
+          addedCount += 1;
           tx.set(getDocRef("family_meals_v3", mId), payload);
           tx.set(getDocRef("family_meals_v4", mId), payload);
         });
         tx.set(opRef, {
           id: opId,
           type: "plan_custom",
-          count: picked.length,
+          count: addedCount,
+          skipped: skippedCount,
           createdAt: new Date().toISOString()
         });
       });
@@ -3653,11 +3785,19 @@ ${validText}
       if (alreadyApplied) {
         showToast("이미 다른 기기 또는 이전 요청으로 반영 완료된 식단입니다.");
       } else {
-        setMealsMap((prev) => ({
-          ...prev,
-          local: { ...(prev.local || {}), ...newLocal }
-        }));
-        showToast(`✅ 선택한 ${picked.length}끼가 일별 식단표에 반영되었습니다!`);
+        const addedNum = Object.keys(newLocal).length;
+        const skippedNum = picked.length - addedNum;
+        if (addedNum > 0) {
+          setMealsMap((prev) => ({
+            ...prev,
+            local: { ...(prev.local || {}), ...newLocal }
+          }));
+        }
+        showToast(
+          skippedNum > 0
+            ? `✅ 신규 ${addedNum}끼 반영 / 기존 충돌 ${skippedNum}끼 건너뜀`
+            : `✅ 선택한 ${addedNum}끼가 일별 식단표에 반영되었습니다!`
+        );
       }
     } catch (e) {
       errMsg = e.message;
@@ -3693,9 +3833,20 @@ ${validText}
       })
       .filter((g) => g.loc !== "기타 보관" || g.items.length > 0);
 
+    const unknownExpiryCount = filtered.filter((f) => !f.expiryDate).length;
+    const tempExpiryCount = filtered.filter((f) => f.expiryDate && f.expiryIsTemp).length;
+    const syncLabel =
+      syncStatus === "connected"
+        ? "서버 동기화 확인됨"
+        : syncStatus === "saving"
+        ? "서버 저장 진행 중"
+        : "로컬 캐시 기준(오프라인/대기)";
+    const scopeLabel = exportIncludeZeroOrExpired ? "전체(0개·만료 포함)" : "유효 재고 기준(0개·만료 제외)";
+
     const lines = [
-      `우리 가족 식탁 - 전체 재고 현황`,
-      `기준일: ${todayStr} | 총 ${filtered.length}개 품목 (${groups.map((g) => `${g.loc} ${g.items.length}`).join(" · ")})`,
+      `우리 가족 식탁 - 전체 재고 현황 (${scopeLabel})`,
+      `기준일시: ${todayStr} ${new Date().toTimeString().slice(0, 5)} | 상태: ${syncLabel}`,
+      `총 ${filtered.length}개 품목 (${groups.map((g) => `${g.loc} ${g.items.length}`).join(" · ")}) | 미확인 ${unknownExpiryCount} · 임시소비기한 ${tempExpiryCount}`,
       ""
     ];
 
@@ -4131,33 +4282,44 @@ ${validText}
       purchaseDate: fridgeForm.purchaseDate || selectedDate
     };
 
-    setFridgeMap((prev) => ({
-      ...prev,
-      local: { ...(prev.local || {}), [id]: payload }
-    }));
-
-    setIsFridgeModalOpen(false);
-    setEditingFridge(null);
-
-    if (user && db) {
-      try {
-        await setDoc(getDocRef("family_fridge_v3", id), payload);
-        await setDoc(getDocRef("family_fridge_v4", id), payload);
-
-        if (!editingFridge && priceNum > 0 && fridgeForm.recordExpense !== false) {
-          const expId = `exp-${id}`;
-          await setDoc(getDocRef("family_expenses_v4", expId), {
-            id: expId,
-            title: payload.name,
-            category: payload.category,
-            amount: priceNum,
-            date: payload.purchaseDate,
-            type: "장보기/식재료"
-          });
-        }
-      } catch (e) {}
+    if (!user || !db) {
+      showToast("⚠️ 서버 연결 후 재고를 저장할 수 있습니다.");
+      return;
     }
-    showToast(editingFridge ? "냉장고 재료가 수정되었습니다." : "냉장고에 새 재료가 입고되었습니다.");
+    beginWrite();
+    let ok = false;
+    let errMsg = "";
+    try {
+      const batch = writeBatch(db);
+      batch.set(getDocRef("family_fridge_v3", id), payload);
+      batch.set(getDocRef("family_fridge_v4", id), payload);
+      if (!editingFridge && priceNum > 0 && fridgeForm.recordExpense !== false) {
+        const expId = `exp-${id}`;
+        batch.set(getDocRef("family_expenses_v4", expId), {
+          id: expId,
+          title: payload.name,
+          category: payload.category,
+          amount: priceNum,
+          date: payload.purchaseDate,
+          type: "장보기/식재료"
+        });
+      }
+      await batch.commit();
+
+      setFridgeMap((prev) => ({
+        ...prev,
+        local: { ...(prev.local || {}), [id]: payload }
+      }));
+      setIsFridgeModalOpen(false);
+      setEditingFridge(null);
+      ok = true;
+      showToast(editingFridge ? "냉장고 재료가 수정되었습니다." : "냉장고에 새 재료가 입고되었습니다.");
+    } catch (e) {
+      errMsg = e.message;
+      showToast("⚠️ 재고 저장 실패: 네트워크 상태를 확인해 주세요.");
+    } finally {
+      endWrite(ok, errMsg);
+    }
   };
 
   const handleAdjustQuantity = async (item, delta) => {
@@ -7330,8 +7492,17 @@ ${validText}
                 </div>
 
                 {planErrorMsg && (
-                  <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-xs font-bold text-rose-800">
-                    ⚠️ {planErrorMsg}
+                  <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-xs font-bold text-rose-800 space-y-2">
+                    <div>⚠️ {planErrorMsg}</div>
+                    {toSafeArray(planSnapshotMeta?.missingPairs).length > 0 && (
+                      <button
+                        onClick={handleGenerateMissingPlanSlots}
+                        disabled={isPlanLoading}
+                        className="px-3 py-1.5 rounded-lg bg-rose-600 text-white text-[11px] font-extrabold"
+                      >
+                        🔄 누락된 {planSnapshotMeta.missingPairs.length}끼만 추가 생성
+                      </button>
+                    )}
                   </div>
                 )}
 
@@ -7475,11 +7646,20 @@ ${validText}
                                     onChange={(e) => {
                                       const val = e.target.value;
                                       setPlanItems((prev) =>
-                                        prev.map((x) => (x.id === it.id ? { ...x, mealName: val, menu: val } : x))
+                                        prev.map((x) =>
+                                          x.id === it.id
+                                            ? { ...x, mealName: val, menu: val, isManuallyEdited: true }
+                                            : x
+                                        )
                                       );
                                     }}
                                     className="w-full px-2.5 py-1.5 rounded-lg bg-white border border-stone-200 text-sm font-extrabold text-stone-900"
                                   />
+                                  {it.completeness && !it.completeness.ok && (
+                                    <div className="text-[11px] font-bold text-rose-700">
+                                      ⚠️ {it.completeness.reason}
+                                    </div>
+                                  )}
 
                                   {toSafeArray(it.components).length > 0 && (
                                     <div className="flex flex-wrap gap-1">
@@ -7521,8 +7701,33 @@ ${validText}
                       ))}
 
                       {planSnapshotMeta && (
-                        <div className="text-[11px] font-bold text-stone-500 bg-stone-50 px-2.5 py-1.5 rounded-xl border border-stone-200">
-                          📌 등록 대상(생성 시점 고정): <span className="text-stone-800">{planSnapshotMeta.members.join(", ")}</span>
+                        <div className="text-[11px] font-bold text-stone-500 bg-stone-50 px-2.5 py-2 rounded-xl border border-stone-200 space-y-1.5">
+                          <div>
+                            📌 등록 대상(생성 시점 고정): <span className="text-stone-800">{planSnapshotMeta.members.join(", ")}</span>
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            <span>기존 식단 충돌 시:</span>
+                            <button
+                              onClick={() => setPlanConflictMode("skip")}
+                              className={`px-2 py-0.5 rounded-md border ${
+                                planConflictMode === "skip"
+                                  ? "bg-stone-900 text-white border-stone-900"
+                                  : "bg-white text-stone-600 border-stone-200"
+                              }`}
+                            >
+                              건너뛰기
+                            </button>
+                            <button
+                              onClick={() => setPlanConflictMode("append")}
+                              className={`px-2 py-0.5 rounded-md border ${
+                                planConflictMode === "append"
+                                  ? "bg-stone-900 text-white border-stone-900"
+                                  : "bg-white text-stone-600 border-stone-200"
+                              }`}
+                            >
+                              함께 추가
+                            </button>
+                          </div>
                         </div>
                       )}
                       <button
