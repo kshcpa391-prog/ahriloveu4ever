@@ -277,15 +277,13 @@ async function callReliableAiEngine({ apiKey, promptText, imagePart = null, temp
     }
   });
 
-  const modelsToTry = ["gemini-3.8-flash", "gemini-2.5-flash", "gemini-2.0-flash"];
-  let detailedGoogleError = "";
-
-  for (const modelName of modelsToTry) {
+  const trySingleModel = async (modelId) => {
+    const cleanModel = String(modelId).replace(/^models\//, "");
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 18000);
+    const timer = setTimeout(() => controller.abort(), 20000);
     try {
       const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${encodeURIComponent(
+        `https://generativelanguage.googleapis.com/v1beta/models/${cleanModel}:generateContent?key=${encodeURIComponent(
           effectiveKey
         )}`,
         {
@@ -295,31 +293,63 @@ async function callReliableAiEngine({ apiKey, promptText, imagePart = null, temp
           signal: controller.signal
         }
       );
-
       const data = await res.json();
       if (res.ok) {
         const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
         const parsed = extractJsonArray(text);
-        if (parsed) return parsed;
-        detailedGoogleError = "AI 응답을 JSON 배열로 변환하지 못했습니다.";
-      } else {
-        const errMsg = data?.error?.message || `HTTP ${res.status}`;
-        detailedGoogleError = `[${res.status}] ${errMsg}`;
-        if (
-          errMsg.includes("blocked") ||
-          errMsg.includes("API_KEY_SERVICE_BLOCKED") ||
-          errMsg.includes("API key not valid") ||
-          errMsg.includes("expired") ||
-          errMsg.includes("referer")
-        ) {
-          break;
-        }
+        if (parsed) return { ok: true, data: parsed };
+        return { ok: false, error: `[${cleanModel}] 응답을 JSON으로 파싱하지 못했습니다.` };
       }
+      const errMsg = data?.error?.message || `HTTP ${res.status}`;
+      return { ok: false, error: `[${cleanModel} ${res.status}] ${errMsg}`, rawMsg: errMsg };
     } catch (e) {
-      detailedGoogleError = e.name === "AbortError" ? "응답 시간 초과(18초)" : e.message;
+      return { ok: false, error: `[${cleanModel}] ${e.name === "AbortError" ? "응답 시간 초과" : e.message}` };
     } finally {
       clearTimeout(timer);
     }
+  };
+
+  // 1차: 최신 권장 모델 gemini-3.8-flash 직접 호출
+  const primaryRes = await trySingleModel("gemini-3.8-flash");
+  if (primaryRes.ok) return primaryRes.data;
+
+  const modelErrors = [primaryRes.error];
+
+  // 키 자체 차단/만료가 아니라면, 현재 키에서 실제 사용 가능한 모델 목록을 구글 서버에서 자동 조회하여 재시도
+  const rawPrimary = primaryRes.rawMsg || "";
+  if (
+    !rawPrimary.includes("blocked") &&
+    !rawPrimary.includes("API_KEY_SERVICE_BLOCKED") &&
+    !rawPrimary.includes("API key not valid") &&
+    !rawPrimary.includes("expired")
+  ) {
+    try {
+      const listRes = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(effectiveKey)}`
+      );
+      if (listRes.ok) {
+        const listData = await listRes.json();
+        const availableFlash = (listData?.models || [])
+          .filter(
+            (m) =>
+              Array.isArray(m.supportedGenerationMethods) &&
+              m.supportedGenerationMethods.includes("generateContent") &&
+              m.name &&
+              m.name.includes("flash") &&
+              !m.name.includes("3.8-flash") &&
+              !m.name.includes("thinking") &&
+              !m.name.includes("image")
+          )
+          .map((m) => m.name)
+          .slice(0, 2);
+
+        for (const candidate of availableFlash) {
+          const retryRes = await trySingleModel(candidate);
+          if (retryRes.ok) return retryRes.data;
+          modelErrors.push(retryRes.error);
+        }
+      }
+    } catch {}
   }
 
   // 텍스트 전용 요청(레시피 추천)일 경우 오픈 엔드포인트 보조 시도
@@ -349,18 +379,18 @@ async function callReliableAiEngine({ apiKey, promptText, imagePart = null, temp
   }
 
   if (
-    detailedGoogleError.includes("blocked") ||
-    detailedGoogleError.includes("API_KEY_SERVICE_BLOCKED") ||
-    detailedGoogleError.includes("API key not valid") ||
-    detailedGoogleError.includes("expired")
+    rawPrimary.includes("blocked") ||
+    rawPrimary.includes("API_KEY_SERVICE_BLOCKED") ||
+    rawPrimary.includes("API key not valid") ||
+    rawPrimary.includes("expired")
   ) {
     throw new Error(
-      "현재 API 키가 차단되었거나 만료되었습니다. Google AI Studio(aistudio.google.com/app/apikey)에서 새 키를 발급받아 우측 상단 ⚙️설정에 입력해 주세요."
+      `API 키 오류: ${rawPrimary} (Google AI Studio에서 새 키를 발급받아 ⚙️설정에 저장해 주세요)`
     );
   }
 
   throw new Error(
-    `AI 호출 오류: ${detailedGoogleError || "일시적 통신 지연"} (⚙️설정에서 'AI 연결 자가진단'을 눌러 확인해 보세요)`
+    `AI 호출 오류: ${modelErrors[0]} (⚙️설정에서 'AI 연결 자가진단'을 눌러 확인해 주세요)`
   );
 }
 
@@ -5871,4 +5901,4 @@ export default function App() {
       <MainApp />
     </ErrorBoundary>
   );
-        }
+}
