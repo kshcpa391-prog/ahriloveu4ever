@@ -604,7 +604,21 @@ const STORAGE_LOCATIONS = ["냉장실", "냉동실", "실온·팬트리"];
 const FRIDGE_CATEGORIES = ["채소/과일", "육류/수산", "유제품/계란", "유아식/이유식 재료", "반찬/김치", "양념/소스", "기타"];
 const SCHEDULE_CATEGORIES = ["기념일/생일", "할일(To-Do)", "육아/병원", "가족행사/경조사"];
 
+const APP_CODE_VERSION = "v7.4";
+const APP_BUILD_DATE = "2026-11-15 17:10";
+
 const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v7.4",
+    version: "v7.4",
+    date: "2026-11-15",
+    title: "실행 코드 버전·접속 도메인 실시간 표시 및 원터치 캐시 초기화 새로고침 추가",
+    changes: [
+      "상단 패치노트 배지에 실제 빌드된 코드 버전(APP_CODE_VERSION)을 직접 고정 표시하여 구버전/캐시 혼선 방지",
+      "패치노트 모달 상단에 현재 실행 코드 버전, 접속 도메인(hostname), 빌드 일시 진단 박스 추가",
+      "모바일 브라우저 캐시로 구버전이 보일 때 즉시 우회할 수 있는 [캐시 지우고 새로고침] 버튼 추가"
+    ]
+  },
   {
     id: "patch-v7.3",
     version: "v7.3",
@@ -3683,7 +3697,7 @@ function MainApp() {
               title="패치노트 기록 및 히스토리"
             >
               <ClipboardList className="w-3 h-3 text-stone-600" />
-              <span>패치노트 {patchNotes[0]?.version || "v7.3"}</span>
+              <span>패치노트 {APP_CODE_VERSION}</span>
             </button>
           </div>
 
@@ -6697,6 +6711,33 @@ function MainApp() {
               <button onClick={() => setIsPatchModalOpen(false)}>
                 <X className="w-5 h-5 text-stone-400" />
               </button>
+            </div>
+
+            <div className="bg-indigo-50 p-3 rounded-2xl border border-indigo-200 space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <div className="text-[11px] font-extrabold text-indigo-950">
+                  🔎 현재 실행 코드: <span className="text-indigo-700">{APP_CODE_VERSION}</span> ({APP_BUILD_DATE})
+                </div>
+                <button
+                  onClick={async () => {
+                    try {
+                      if ("caches" in window) {
+                        const keys = await caches.keys();
+                        await Promise.all(keys.map((k) => caches.delete(k)));
+                      }
+                    } catch (e) {}
+                    const url = new URL(window.location.href);
+                    url.searchParams.set("_v", String(Date.now()));
+                    window.location.replace(url.toString());
+                  }}
+                  className="px-2.5 py-1 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-extrabold shrink-0"
+                >
+                  🔄 캐시 비우고 새로고침
+                </button>
+              </div>
+              <div className="text-[10px] text-indigo-800 break-all">
+                접속 도메인: <span className="font-bold">{typeof window !== "undefined" ? window.location.hostname : ""}</span>
+              </div>
             </div>
 
             <div className="bg-stone-50 p-3.5 rounded-2xl border border-stone-200 space-y-2">
