@@ -604,10 +604,22 @@ const STORAGE_LOCATIONS = ["냉장실", "냉동실", "실온·팬트리"];
 const FRIDGE_CATEGORIES = ["채소/과일", "육류/수산", "유제품/계란", "유아식/이유식 재료", "반찬/김치", "양념/소스", "기타"];
 const SCHEDULE_CATEGORIES = ["기념일/생일", "할일(To-Do)", "육아/병원", "가족행사/경조사"];
 
-const APP_CODE_VERSION = "v7.4";
-const APP_BUILD_DATE = "2026-11-15 17:10";
+const APP_CODE_VERSION = "v7.5";
+const APP_BUILD_DATE = "2026-11-15 20:10";
+const EDITOR_INVITE_CODE = "0402";
 
 const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v7.5",
+    version: "v7.5",
+    date: "2026-11-15",
+    title: "초대 비밀코드 기반 편집 잠금(열람 전용 / 초대자 편집 분리) 기능 추가",
+    changes: [
+      "누구나 로그인 없이 식단·일정·육아수첩을 열람할 수 있도록 기본 열람 전용 모드 적용",
+      "상단 [🔒 열람전용 / ✏️ 편집가능] 배지 및 초대 코드(0402) 입력 모달·원터치 초대 링크 복사(?invite=0402) 추가",
+      "열람 전용 모드에서는 데이터 추가·수정·삭제, AI 키 설정 및 JSON 복원 동작을 안전하게 차단"
+    ]
+  },
   {
     id: "patch-v7.4",
     version: "v7.4",
@@ -1131,6 +1143,24 @@ function MainApp() {
   // 패치노트 기록 및 모달 상태
   const [patchNotes, setPatchNotes] = useState(INITIAL_PATCH_NOTES);
   const [isPatchModalOpen, setIsPatchModalOpen] = useState(false);
+  const [isEditorUnlocked, setIsEditorUnlocked] = useState(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("invite") === EDITOR_INVITE_CODE) {
+        localStorage.setItem("family_editor_unlocked_v1", "true");
+        params.delete("invite");
+        const cleanQuery = params.toString();
+        const cleanUrl = window.location.pathname + (cleanQuery ? `?${cleanQuery}` : "") + window.location.hash;
+        window.history.replaceState({}, "", cleanUrl);
+        return true;
+      }
+      return localStorage.getItem("family_editor_unlocked_v1") === "true";
+    } catch (e) {
+      return false;
+    }
+  });
+  const [isEditorUnlockModalOpen, setIsEditorUnlockModalOpen] = useState(false);
+  const [editorCodeInput, setEditorCodeInput] = useState("");
   const [patchForm, setPatchForm] = useState({
     version: "",
     title: "",
@@ -1332,6 +1362,13 @@ function MainApp() {
   // 설정 모달
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [toastMsg, setToastMsg] = useState("");
+
+  const requireEditorAccess = () => {
+    if (isEditorUnlocked) return true;
+    showToast("🔒 열람 전용 모드입니다. 초대 코드를 입력하면 편집할 수 있어요.");
+    setIsEditorUnlockModalOpen(true);
+    return false;
+  };
 
   const showToast = (msg) => {
     setToastMsg(msg);
@@ -1863,7 +1900,7 @@ function MainApp() {
 
   // 하루 2번(오전 AM / 오후 PM) 자동 클라우드 스냅샷 백업 엔진
   useEffect(() => {
-    if (!user || !db || meals.length === 0) return;
+    if (!isEditorUnlocked || !user || !db || meals.length === 0) return;
     const currentSlot = getTwiceDailySlotKey();
     if (lastAutoBackupSlot === currentSlot) return;
 
@@ -1927,6 +1964,7 @@ function MainApp() {
 
   // 패치노트 직접 추가 및 삭제 핸들러
   const handleAddPatchNote = async () => {
+    if (!requireEditorAccess()) return;
     if (!patchForm.title.trim()) return;
     const id = `patch-${Date.now()}`;
     const ver = patchForm.version.trim() || `v5.${patchNotes.length + 2}`;
@@ -1955,6 +1993,7 @@ function MainApp() {
   };
 
   const handleDeletePatchNote = async (id) => {
+    if (!requireEditorAccess()) return;
     setPatchNotes((prev) => prev.filter((p) => p.id !== id));
     if (user && db) {
       try {
@@ -1982,6 +2021,7 @@ function MainApp() {
   };
 
   const handleSaveApiKey = async (geminiKeyVal, openaiKeyVal = openaiApiKey, providerVal = aiProvider) => {
+    if (!requireEditorAccess()) return;
     const cleanedGemini = String(geminiKeyVal || "").trim();
     const cleanedOpenai = String(openaiKeyVal || "").trim();
 
@@ -2095,6 +2135,7 @@ function MainApp() {
   };
 
   const handleRestoreFromJsonFile = async (e) => {
+    if (!requireEditorAccess()) return;
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -2235,6 +2276,7 @@ function MainApp() {
   // ==========================================
   // [신규 v7.0] 육아수첩 핸들러 (예방접종 체크 · 일정 원클릭 자동등록 · 성장/열 체크)
   const handleUpdateBabyCheckDate = async (childId, itemId, newDate) => {
+    if (!requireEditorAccess()) return;
     const docId = `${childId}_${itemId}`;
     const prev = babyChecks[docId] || null;
     const updated = { ...(prev || {}), childId, itemId, done: true, doneDate: newDate };
@@ -2250,6 +2292,7 @@ function MainApp() {
   };
 
   const handleToggleBabyCheck = async (childId, itemId) => {
+    if (!requireEditorAccess()) return;
     const docId = `${childId}_${itemId}`;
     const prev = babyChecks[docId] || {};
     const updated = {
@@ -2270,6 +2313,7 @@ function MainApp() {
   };
 
   const handleSyncSingleBabySchedule = async (child, item, targetDate) => {
+    if (!requireEditorAccess()) return;
     const schId = `baby-${child.id}-${item.id}`;
     const payload = {
       id: schId,
@@ -2303,6 +2347,7 @@ function MainApp() {
   };
 
   const handleSyncAllUpcomingBabySchedules = async (child) => {
+    if (!requireEditorAccess()) return;
     let added = 0;
     for (const item of BABY_VACCINES_AND_CHECKUPS) {
       const checkKey = `${child.id}_${item.id}`;
@@ -2340,6 +2385,7 @@ function MainApp() {
   };
 
   const handleAddGrowthLog = async () => {
+    if (!requireEditorAccess()) return;
     if (!growthForm.height && !growthForm.weight && !growthForm.head) return;
     const id = `gr-${selectedChildId}-${Date.now()}`;
     const payload = {
@@ -2365,6 +2411,7 @@ function MainApp() {
   };
 
   const handleDeleteGrowthLog = async (id) => {
+    if (!requireEditorAccess()) return;
     setBabyGrowthLogs((prev) => prev.filter((g) => g.id !== id));
     if (user && db) {
       try {
@@ -2374,6 +2421,7 @@ function MainApp() {
   };
 
   const handleAddMedicalNote = async () => {
+    if (!requireEditorAccess()) return;
     if (!medNoteForm.title.trim() && !medNoteForm.temp) return;
     const id = `med-${selectedChildId}-${Date.now()}`;
     const payload = {
@@ -2398,6 +2446,7 @@ function MainApp() {
   };
 
   const handleDeleteMedicalNote = async (id) => {
+    if (!requireEditorAccess()) return;
     setBabyMedicalNotes((prev) => prev.filter((n) => n.id !== id));
     if (user && db) {
       try {
@@ -2407,6 +2456,7 @@ function MainApp() {
   };
 
   const handleSaveSchedule = async () => {
+    if (!requireEditorAccess()) return;
     if (!scheduleForm.title.trim()) return;
     const id = editingSchedule ? editingSchedule.id : `sch-${Date.now()}`;
     const safeMembers = toSafeArray(scheduleForm.members);
@@ -2447,6 +2497,7 @@ function MainApp() {
 
   // [신규] 체크리스트에서 1초 만에 할 일(To-Do) 빠른 등록
   const handleQuickAddTodo = async () => {
+    if (!requireEditorAccess()) return;
     if (!quickTodoTitle.trim()) return;
     const id = `sch-${Date.now()}`;
     const targetMembers =
@@ -2479,6 +2530,7 @@ function MainApp() {
   };
 
   const handleToggleScheduleDone = async (item) => {
+    if (!requireEditorAccess()) return;
     const updated = { ...item, done: !item.done };
     setSchedules((prev) => prev.map((s) => (s.id === item.id ? updated : s)));
     if (user && db) {
@@ -2489,6 +2541,7 @@ function MainApp() {
   };
 
   const handleDeleteSchedule = async (item) => {
+    if (!requireEditorAccess()) return;
     setSchedules((prev) => prev.filter((s) => s.id !== item.id));
     await markIdDeleted(item.id);
     if (user && db) {
@@ -2898,6 +2951,7 @@ function MainApp() {
   };
 
   const handleSaveScannedMenuDays = async () => {
+    if (!requireEditorAccess()) return;
     if (scannedMenuDays.length === 0) return;
 
     const targetMembers =
@@ -3048,6 +3102,7 @@ function MainApp() {
   // 10. 냉장고·식단·장보기·공지사항 핸들러
   // ==========================================
   const handleSaveFridge = async () => {
+    if (!requireEditorAccess()) return;
     if (!fridgeForm.name.trim()) return;
     const id = editingFridge ? editingFridge.id : `f-${Date.now()}`;
     const priceNum = Number(fridgeForm.price) || 0;
@@ -3094,6 +3149,7 @@ function MainApp() {
   };
 
   const handleAdjustQuantity = async (item, delta) => {
+    if (!requireEditorAccess()) return;
     const optimisticNext = Math.max(0, Number(item.quantity || 0) + delta);
     const updated = { ...item, quantity: optimisticNext };
     setFridgeMap((prev) => ({
@@ -3128,6 +3184,7 @@ function MainApp() {
 
   // [신규 v6.2] 냉장고 식재료 폐기(소비기한 경과 등) -> 손실 금액 별도 기록
   const handleWasteFridgeItem = async (item) => {
+    if (!requireEditorAccess()) return;
     const lossAmount = Number(item.price) || 0;
     const eventId = `waste-${item.id}-${Date.now()}`;
     const wasteRecord = {
@@ -3161,6 +3218,7 @@ function MainApp() {
 
   // [신규 v6.2] AI 레시피 부족 재료 일괄 장보기 담기
   const handleAddMissingIngredientsToShopping = async (usedIngs) => {
+    if (!requireEditorAccess()) return;
     const fridgeNames = fridge.map((f) => String(f.name || "").toLowerCase());
     const missing = toSafeArray(usedIngs).filter(
       (ing) => !fridgeNames.some((fn) => fn.includes(ing.toLowerCase()) || ing.toLowerCase().includes(fn))
@@ -3192,6 +3250,7 @@ function MainApp() {
 
   // [v7.1 개선] 요리 완료 전 차감 수량 확인 팝업 열기 & 확정 차감
   const handleCompleteRecipeCooking = (recipe) => {
+    if (!requireEditorAccess()) return;
     const used = toSafeArray(recipe.usedIngredients);
     const matched = fridge.filter((f) =>
       used.some(
@@ -3215,6 +3274,7 @@ function MainApp() {
   };
 
   const handleConfirmCookingDeduction = async () => {
+    if (!requireEditorAccess()) return;
     if (!cookingConfirmModal) return;
     const toDeduct = cookingConfirmModal.items.filter((x) => x.deductQty > 0);
     if (toDeduct.length === 0) {
@@ -3271,6 +3331,7 @@ function MainApp() {
   };
 
   const handleConsumeFridgeItem = async (item, addToShopping = false) => {
+    if (!requireEditorAccess()) return;
     if (user && db && Number(item.price) > 0) {
       const expId = `exp-${item.id}`;
       try {
@@ -3318,6 +3379,7 @@ function MainApp() {
   };
 
   const handleMistakeDeleteFridgeItem = async (item) => {
+    if (!requireEditorAccess()) return;
     await markIdDeleted(item.id);
     setExpenses((prev) => prev.filter((e) => e.id !== `exp-${item.id}`));
     if (user && db) {
@@ -3332,6 +3394,7 @@ function MainApp() {
   };
 
   const handleSaveMeal = async () => {
+    if (!requireEditorAccess()) return;
     if (!mealForm.menu.trim()) return;
     const id = editingMeal ? editingMeal.id : `m-${Date.now()}`;
     const safeMembers = toSafeArray(mealForm.members);
@@ -3364,6 +3427,7 @@ function MainApp() {
   };
 
   const handleDeleteMeal = async (meal) => {
+    if (!requireEditorAccess()) return;
     await markIdDeleted(meal.id);
     if (user && db) {
       try {
@@ -3375,6 +3439,7 @@ function MainApp() {
   };
 
   const handleAddShopping = async () => {
+    if (!requireEditorAccess()) return;
     if (!shoppingForm.name.trim()) return;
     const id = `sh-${Date.now()}`;
     const payload = {
@@ -3397,6 +3462,7 @@ function MainApp() {
   };
 
   const handleToggleShopping = async (item) => {
+    if (!requireEditorAccess()) return;
     const updated = { ...item, checked: !item.checked };
     setShoppingList((prev) => prev.map((s) => (s.id === item.id ? updated : s)));
     if (user && db) {
@@ -3407,6 +3473,7 @@ function MainApp() {
   };
 
   const handleDeleteShopping = async (id) => {
+    if (!requireEditorAccess()) return;
     setShoppingList((prev) => prev.filter((s) => s.id !== id));
     if (user && db) {
       try {
@@ -3416,6 +3483,7 @@ function MainApp() {
   };
 
   const handleConfirmStockIn = async () => {
+    if (!requireEditorAccess()) return;
     if (!stockInItem) return;
     const fId = `f-${Date.now()}`;
     const priceNum = Number(stockInPrice) || 0;
@@ -3464,6 +3532,7 @@ function MainApp() {
   };
 
   const handleSaveNotice = async () => {
+    if (!requireEditorAccess()) return;
     if (!noticeForm.title.trim()) return;
     const id = editingNotice ? editingNotice.id : `nt-${Date.now()}`;
     const payload = {
@@ -3496,6 +3565,7 @@ function MainApp() {
   };
 
   const handleToggleNoticeDone = async (notice) => {
+    if (!requireEditorAccess()) return;
     const updated = { ...notice, done: !notice.done };
     setNotices((prev) => prev.map((n) => (n.id === notice.id ? updated : n)));
     if (user && db) {
@@ -3506,6 +3576,7 @@ function MainApp() {
   };
 
   const handleDeleteNotice = async (id) => {
+    if (!requireEditorAccess()) return;
     setNotices((prev) => prev.filter((n) => n.id !== id));
     if (user && db) {
       try {
@@ -3516,6 +3587,7 @@ function MainApp() {
   };
 
   const handleConfirmQuickLog = async () => {
+    if (!requireEditorAccess()) return;
     if (!quickLogRecipe) return;
     const id = `m-${Date.now()}`;
     const payload = {
@@ -3603,6 +3675,7 @@ function MainApp() {
   }, [notices]);
 
   const handleRestoreAllDeleted = async () => {
+    if (!requireEditorAccess()) return;
     setDeletedIds([]);
     localStorage.removeItem("kim_family_deleted_ids");
     if (user && db) {
@@ -3698,6 +3771,17 @@ function MainApp() {
             >
               <ClipboardList className="w-3 h-3 text-stone-600" />
               <span>패치노트 {APP_CODE_VERSION}</span>
+            </button>
+            <button
+              onClick={() => setIsEditorUnlockModalOpen(true)}
+              className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold border flex items-center gap-1 ${
+                isEditorUnlocked
+                  ? "bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border-emerald-200"
+                  : "bg-amber-50 hover:bg-amber-100 text-amber-800 border-amber-200"
+              }`}
+              title={isEditorUnlocked ? "편집 가능 (초대 링크/잠금)" : "열람 전용 모드 (초대 코드 입력)"}
+            >
+              <span>{isEditorUnlocked ? "✏️ 편집가능" : "🔒 열람전용"}</span>
             </button>
           </div>
 
@@ -7893,6 +7977,25 @@ function MainApp() {
               </button>
             </div>
 
+            {!isEditorUnlocked ? (
+              <div className="bg-amber-50 p-3.5 rounded-2xl border border-amber-200 space-y-2">
+                <div className="text-xs font-extrabold text-amber-900">
+                  🔒 열람 전용 모드입니다
+                </div>
+                <p className="text-[11px] text-amber-800">
+                  API 키 설정과 데이터 편집·복원은 초대 비밀코드를 입력한 가족만 사용할 수 있습니다.
+                </p>
+                <button
+                  onClick={() => {
+                    setIsSettingsOpen(false);
+                    setIsEditorUnlockModalOpen(true);
+                  }}
+                  className="px-3 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-extrabold"
+                >
+                  🔑 초대 코드 입력하기
+                </button>
+              </div>
+            ) : (
             <div className="p-3 rounded-2xl bg-stone-50 border border-stone-200 space-y-2.5">
               <div className="text-xs font-black text-stone-800">
                 🤖 듀얼 AI 엔진 설정 (GPT + Gemini)
@@ -8011,6 +8114,8 @@ function MainApp() {
               </div>
             )}
 
+            )}
+
             <button
               onClick={handleRestoreAllDeleted}
               className="w-full py-2.5 rounded-xl bg-stone-200 hover:bg-stone-300 text-stone-800 text-xs font-extrabold flex items-center justify-center gap-1.5"
@@ -8026,6 +8131,107 @@ function MainApp() {
               <Download className="w-4 h-4" />
               <span>엑셀 열람용(CSV) 통합 파일 다운로드</span>
             </button>
+          </div>
+        </div>
+      )}
+
+      {isEditorUnlockModalOpen && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-sm w-full p-5 space-y-4 shadow-xl">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-black text-stone-900">
+                {isEditorUnlocked ? "✏️ 가족 편집 권한 활성화됨" : "🔐 초대 비밀코드 입력"}
+              </h3>
+              <button onClick={() => setIsEditorUnlockModalOpen(false)}>
+                <X className="w-5 h-5 text-stone-400" />
+              </button>
+            </div>
+
+            {isEditorUnlocked ? (
+              <div className="space-y-3">
+                <p className="text-xs text-stone-600 leading-relaxed">
+                  현재 기기에서는 식단·냉장고·일정·육아수첩 편집이 가능합니다. 가족에게 아래 초대 링크를 공유하면 링크 접속만으로 편집 권한이 바로 열립니다.
+                </p>
+                <div className="bg-stone-50 p-3 rounded-2xl border border-stone-200 space-y-1.5">
+                  <div className="text-[11px] font-bold text-stone-500">초대 비밀코드</div>
+                  <div className="text-base font-black text-stone-900 tracking-widest">{EDITOR_INVITE_CODE}</div>
+                </div>
+                <button
+                  onClick={async () => {
+                    const inviteUrl = `${window.location.origin}/?invite=${EDITOR_INVITE_CODE}`;
+                    try {
+                      await navigator.clipboard.writeText(inviteUrl);
+                      showToast("🔗 가족 초대 링크가 복사되었습니다!");
+                    } catch (e) {
+                      showToast(`초대 링크: ${inviteUrl}`);
+                    }
+                  }}
+                  className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold"
+                >
+                  🔗 가족 초대 링크 복사하기
+                </button>
+                <button
+                  onClick={() => {
+                    try {
+                      localStorage.removeItem("family_editor_unlocked_v1");
+                    } catch (e) {}
+                    setIsEditorUnlocked(false);
+                    setIsEditorUnlockModalOpen(false);
+                    showToast("🔒 열람 전용 모드로 전환되었습니다.");
+                  }}
+                  className="w-full py-2 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-xs font-bold"
+                >
+                  🔒 열람 전용 모드로 잠그기
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <p className="text-xs text-stone-600 leading-relaxed">
+                  누구나 내용을 열람할 수 있지만, 추가·수정·삭제는 초대 비밀코드를 입력한 가족만 가능합니다.
+                </p>
+                <input
+                  type="password"
+                  inputMode="numeric"
+                  placeholder="초대 비밀코드 입력"
+                  value={editorCodeInput}
+                  onChange={(e) => setEditorCodeInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      if (editorCodeInput.trim() === EDITOR_INVITE_CODE) {
+                        try {
+                          localStorage.setItem("family_editor_unlocked_v1", "true");
+                        } catch (e2) {}
+                        setIsEditorUnlocked(true);
+                        setEditorCodeInput("");
+                        setIsEditorUnlockModalOpen(false);
+                        showToast("✅ 편집 권한이 활성화되었습니다!");
+                      } else {
+                        showToast("❌ 초대 코드가 일치하지 않습니다.");
+                      }
+                    }
+                  }}
+                  className="w-full px-3 py-2.5 rounded-xl border border-stone-300 text-sm font-bold text-center tracking-widest"
+                />
+                <button
+                  onClick={() => {
+                    if (editorCodeInput.trim() === EDITOR_INVITE_CODE) {
+                      try {
+                        localStorage.setItem("family_editor_unlocked_v1", "true");
+                      } catch (e) {}
+                      setIsEditorUnlocked(true);
+                      setEditorCodeInput("");
+                      setIsEditorUnlockModalOpen(false);
+                      showToast("✅ 편집 권한이 활성화되었습니다!");
+                    } else {
+                      showToast("❌ 초대 코드가 일치하지 않습니다.");
+                    }
+                  }}
+                  className="w-full py-2.5 rounded-xl bg-stone-900 hover:bg-stone-800 text-white text-xs font-extrabold"
+                >
+                  편집 권한 잠금 해제
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
