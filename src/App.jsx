@@ -2764,7 +2764,7 @@ function MainApp() {
             )}
 
 
-            {imminentSchedulesWithin3Days.length > 0            {imminentSchedulesWithin3Days.length > 0 && activeTab !== "schedule" && (
+            {imminentSchedulesWithin3Days.length > 0 && activeTab !== "schedule" && (
               <div
                 onClick={() => setActiveTab("schedule")}
                 className="mt-2 bg-rose-50 hover:bg-rose-100/80 border border-rose-200 rounded-xl px-3 py-2 cursor-pointer transition space-y-1"
