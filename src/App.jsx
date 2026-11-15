@@ -54,7 +54,9 @@ import {
   doc,
   setDoc,
   deleteDoc,
-  onSnapshot
+  onSnapshot,
+  arrayUnion,
+  increment
 } from "firebase/firestore";
 
 // ==========================================
@@ -69,7 +71,7 @@ const USER_FIREBASE_CONFIG = {
   appId: "1:746934389532:web:496918d8f66d40bcb088d9"
 };
 
-const EMBEDDED_GEMINI_KEY = "AIzaSyDrzf2_cG0PT-dW1lidXYaHk4BpCY-eMao";
+const EMBEDDED_GEMINI_KEY = ""; // 보안상 코드에 직접 입력하지 않고 ⚙️설정 또는 Firebase로 관리
 
 let app;
 let auth;
@@ -257,7 +259,10 @@ const extractJsonArray = (rawText) => {
 };
 
 async function callReliableAiEngine({ apiKey, promptText, imagePart = null, temperature = 0.5 }) {
-  const effectiveKey = String(apiKey || EMBEDDED_GEMINI_KEY).trim();
+  const effectiveKey = String(apiKey || EMBEDDED_GEMINI_KEY || "").trim();
+  if (!effectiveKey) {
+    throw new Error("Gemini API 키가 설정되지 않았습니다. 우측 상단 ⚙️설정에서 API 키를 입력해 주세요.");
+  }
 
   const parts = [{ text: promptText }];
   if (imagePart) {
@@ -283,12 +288,13 @@ async function callReliableAiEngine({ apiKey, promptText, imagePart = null, temp
     const timer = setTimeout(() => controller.abort(), 20000);
     try {
       const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${cleanModel}:generateContent?key=${encodeURIComponent(
-          effectiveKey
-        )}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/${cleanModel}:generateContent`,
         {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            "x-goog-api-key": effectiveKey
+          },
           body: geminiBody,
           signal: controller.signal
         }
@@ -324,9 +330,9 @@ async function callReliableAiEngine({ apiKey, promptText, imagePart = null, temp
     !rawPrimary.includes("expired")
   ) {
     try {
-      const listRes = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(effectiveKey)}`
-      );
+      const listRes = await fetch("https://generativelanguage.googleapis.com/v1beta/models", {
+        headers: { "x-goog-api-key": effectiveKey }
+      });
       if (listRes.ok) {
         const listData = await listRes.json();
         const availableFlash = (listData?.models || [])
@@ -348,32 +354,6 @@ async function callReliableAiEngine({ apiKey, promptText, imagePart = null, temp
           if (retryRes.ok) return retryRes.data;
           modelErrors.push(retryRes.error);
         }
-      }
-    } catch {}
-  }
-
-  // 텍스트 전용 요청(레시피 추천)일 경우 오픈 엔드포인트 보조 시도
-  if (!imagePart) {
-    try {
-      const res = await fetch("https://text.pollinations.ai/", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: "openai",
-          jsonMode: true,
-          messages: [
-            {
-              role: "system",
-              content: "Output ONLY a valid JSON array in Korean. No markdown fences."
-            },
-            { role: "user", content: promptText }
-          ]
-        })
-      });
-      if (res.ok) {
-        const txt = await res.text();
-        const parsed = extractJsonArray(txt);
-        if (parsed) return parsed;
       }
     } catch {}
   }
@@ -526,6 +506,18 @@ const FRIDGE_CATEGORIES = ["채소/과일", "육류/수산", "유제품/계란",
 const SCHEDULE_CATEGORIES = ["기념일/생일", "할일(To-Do)", "육아/병원", "가족행사/경조사"];
 
 const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v6.0",
+    version: "v6.0",
+    date: "2026-11-15",
+    title: "보안·동기화 무결성 강화 & 월간 달력 요일 정렬 수정",
+    changes: [
+      "Gemini API 키 코드 내 하드코딩 제거 및 x-goog-api-key 헤더 전송, 제3자 폴백 제거",
+      "Firestore 동시 삭제 유실 방지(arrayUnion) 및 v4 최신 데이터 우선 병합 적용",
+      "재고 수정 시 과거 식비 원장 보호, JSON 복원 전 확인창 및 실패 건수 알림 추가",
+      "월간 식단 달력 1일 앞 요일 공백 정렬 수정 & 백업 날씨 미세먼지 '미측정' 정직 표기"
+    ]
+  },
   {
     id: "patch-v5.9",
     version: "v5.9",
@@ -1059,7 +1051,12 @@ function MainApp() {
           min: minT,
           pm10: "-",
           pm25: "-",
-          dust: getDustGrade(20, 10),
+          dust: {
+            label: "미측정",
+            emoji: "⚪",
+            badgeClass: "bg-stone-100 text-stone-600 border-stone-200",
+            tip: "백업 서버 기온 정보입니다."
+          },
           weekly: [],
           updatedTime,
           emoji: "🌤️",
@@ -1085,13 +1082,18 @@ function MainApp() {
     setAiDiagStatus("진단 중... 구글 AI 서버에 연결 테스트를 보내고 있습니다.");
     const testKey = String(tempKeyInput || geminiApiKey || EMBEDDED_GEMINI_KEY).trim();
     try {
+      if (!testKey) {
+        setAiDiagStatus("❌ API 키가 비어 있습니다. 위 칸에 Google AI Studio 키를 입력해 주세요.");
+        return;
+      }
       const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key=${encodeURIComponent(
-          testKey
-        )}`,
+        "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent",
         {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            "x-goog-api-key": testKey
+          },
           body: JSON.stringify({
             contents: [{ parts: [{ text: "Hello" }] }]
           })
@@ -1348,7 +1350,8 @@ function MainApp() {
     buildDaycareMeals().forEach((m) => {
       if (!deletedIds.includes(m.id)) merged[m.id] = m;
     });
-    Object.values(mealsMap).forEach((sourceObj) => {
+    ["local", "restored", "src_0", "src_1"].forEach((key) => {
+      const sourceObj = mealsMap[key] || {};
       Object.values(sourceObj).forEach((m) => {
         if (m && m.id && !deletedIds.includes(m.id)) {
           merged[m.id] = m;
@@ -1360,7 +1363,8 @@ function MainApp() {
 
   const fridge = useMemo(() => {
     const merged = {};
-    Object.values(fridgeMap).forEach((sourceObj) => {
+    ["local", "restored", "src_0", "src_1"].forEach((key) => {
+      const sourceObj = fridgeMap[key] || {};
       Object.values(sourceObj).forEach((f) => {
         if (f && f.id && !deletedIds.includes(f.id)) {
           merged[f.id] = f;
@@ -1475,8 +1479,14 @@ function MainApp() {
     localStorage.setItem("kim_family_deleted_ids", JSON.stringify(next));
     if (user && db) {
       try {
-        await setDoc(getDocRef("family_meta_v4", "deleted_tracker"), { ids: next });
-      } catch (e) {}
+        await setDoc(
+          getDocRef("family_meta_v4", "deleted_tracker"),
+          { ids: arrayUnion(id) },
+          { merge: true }
+        );
+      } catch (e) {
+        showToast("⚠️ 삭제 동기화 실패: 네트워크 상태를 확인해 주세요.");
+      }
     }
   };
 
@@ -1513,7 +1523,7 @@ function MainApp() {
   // ==========================================
   const buildFullBackupJsonString = () => {
     const fullSnapshot = {
-      backupVersion: "v5.9",
+      backupVersion: "v6.0",
       exportedAt: new Date().toISOString(),
       projectId: USER_FIREBASE_CONFIG.projectId,
       data: {
@@ -1577,7 +1587,6 @@ function MainApp() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    setIsRestoringJson(true);
     try {
       const text = await file.text();
       const parsed = JSON.parse(text);
@@ -1586,6 +1595,16 @@ function MainApp() {
       if (!payload || typeof payload !== "object") {
         throw new Error("유효한 백업 JSON 파일이 아닙니다.");
       }
+
+      const confirmRestore = window.confirm(
+        `백업 파일을 불러올까요?\n(식단 ${(payload.meals || []).length}건, 냉장고 ${(payload.fridge || []).length}건, 일정 ${(payload.schedules || []).length}건이 현재 데이터에 병합·복원됩니다.)`
+      );
+      if (!confirmRestore) {
+        if (jsonRestoreInputRef.current) jsonRestoreInputRef.current.value = "";
+        return;
+      }
+
+      setIsRestoringJson(true);
 
       if (Array.isArray(payload.meals)) {
         const mObj = {};
@@ -1637,7 +1656,13 @@ function MainApp() {
           if (pt?.id) writePromises.push(setDoc(getDocRef("family_patchnotes_v4", pt.id), pt));
         });
 
-        await Promise.allSettled(writePromises);
+        const results = await Promise.allSettled(writePromises);
+        const failedCount = results.filter((r) => r.status === "rejected").length;
+        if (failedCount > 0) {
+          showToast(`⚠️ 일부(${failedCount}건) 복원에 실패했습니다. 네트워크를 확인해 주세요.`);
+          setIsSettingsOpen(false);
+          return;
+        }
       }
 
       setIsSettingsOpen(false);
@@ -2147,7 +2172,7 @@ function MainApp() {
         await setDoc(getDocRef("family_fridge_v3", id), payload);
         await setDoc(getDocRef("family_fridge_v4", id), payload);
 
-        if (priceNum > 0 && fridgeForm.recordExpense !== false) {
+        if (!editingFridge && priceNum > 0 && fridgeForm.recordExpense !== false) {
           const expId = `exp-${id}`;
           await setDoc(getDocRef("family_expenses_v4", expId), {
             id: expId,
@@ -2172,9 +2197,14 @@ function MainApp() {
     }));
     if (user && db) {
       try {
-        await setDoc(getDocRef("family_fridge_v3", item.id), updated);
-        await setDoc(getDocRef("family_fridge_v4", item.id), updated);
-      } catch (e) {}
+        if (Number(item.quantity || 0) + delta >= 0) {
+          await setDoc(getDocRef("family_fridge_v4", item.id), { ...updated, quantity: increment(delta) }, { merge: true });
+        } else {
+          await setDoc(getDocRef("family_fridge_v4", item.id), updated, { merge: true });
+        }
+      } catch (e) {
+        showToast("⚠️ 수량 저장 실패: 네트워크를 확인해 주세요.");
+      }
     }
   };
 
@@ -2595,7 +2625,7 @@ function MainApp() {
               title="패치노트 기록 및 히스토리"
             >
               <ClipboardList className="w-3 h-3 text-stone-600" />
-              <span>패치노트 {patchNotes[0]?.version || "v5.9"}</span>
+              <span>패치노트 {patchNotes[0]?.version || "v6.0"}</span>
             </button>
           </div>
 
@@ -3380,6 +3410,12 @@ function MainApp() {
                   ))}
                 </div>
                 <div className="grid grid-cols-7 gap-1">
+                  {Array.from(
+                    { length: new Date(`${currentMonth}-01T00:00:00`).getDay() || 0 },
+                    (_, idx) => (
+                      <div key={`m-empty-${idx}`} className="min-h-[50px]" />
+                    )
+                  )}
                   {Array.from({ length: getDaysInMonth(currentMonth) }, (_, i) => {
                     const dayNum = String(i + 1).padStart(2, "0");
                     const dateStr = `${currentMonth}-${dayNum}`;
