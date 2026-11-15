@@ -277,7 +277,7 @@ async function callReliableAiEngine({ apiKey, promptText, imagePart = null, temp
     }
   });
 
-  const modelsToTry = ["gemini-2.5-flash", "gemini-2.0-flash"];
+  const modelsToTry = ["gemini-3.8-flash", "gemini-2.5-flash", "gemini-2.0-flash"];
   let detailedGoogleError = "";
 
   for (const modelName of modelsToTry) {
@@ -497,8 +497,8 @@ const SCHEDULE_CATEGORIES = ["기념일/생일", "할일(To-Do)", "육아/병원
 
 const INITIAL_PATCH_NOTES = [
   {
-    id: "patch-v5.7",
-    version: "v5.7",
+    id: "patch-v5.8",
+    version: "v5.8",
     date: "2026-11-15",
     title: "AI 엔진(JSON 파싱·자가진단) 개선 & 서울 중구 날씨·미세먼지 위젯 탑재",
     changes: [
@@ -894,11 +894,11 @@ function MainApp() {
   // AI 추천 상태
   const [geminiApiKey, setGeminiApiKey] = useState(() => {
     const saved = localStorage.getItem("kim_family_gemini_key");
-    return saved && saved.startsWith("AIzaSy") ? saved : EMBEDDED_GEMINI_KEY;
+    return saved && (saved.startsWith("AIzaSy") || saved.startsWith("AQ.")) ? saved : EMBEDDED_GEMINI_KEY;
   });
   const [tempKeyInput, setTempKeyInput] = useState(() => {
     const saved = localStorage.getItem("kim_family_gemini_key");
-    return saved && saved.startsWith("AIzaSy") ? saved : EMBEDDED_GEMINI_KEY;
+    return saved && (saved.startsWith("AIzaSy") || saved.startsWith("AQ.")) ? saved : EMBEDDED_GEMINI_KEY;
   });
   const [selectedAiIngredients, setSelectedAiIngredients] = useState([]);
   const [aiTargetGroup, setAiTargetGroup] = useState("온가족 한끼");
@@ -992,7 +992,7 @@ function MainApp() {
     const testKey = String(tempKeyInput || geminiApiKey || EMBEDDED_GEMINI_KEY).trim();
     try {
       const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key=${encodeURIComponent(
           testKey
         )}`,
         {
@@ -1005,7 +1005,7 @@ function MainApp() {
       );
       const data = await res.json();
       if (res.ok && data?.candidates) {
-        setAiDiagStatus("✅ [연결 성공!] 현재 API 키로 Gemini 2.5 AI가 100% 정상 작동합니다.");
+        setAiDiagStatus("✅ [연결 성공!] 현재 API 키로 Gemini 3.8 Flash AI가 100% 정상 작동합니다.");
       } else {
         const msg = data?.error?.message || `HTTP ${res.status}`;
         setAiDiagStatus(
@@ -1055,7 +1055,7 @@ function MainApp() {
             }
             if (d.id === "api_config" && d.data().geminiKey) {
               const sharedKey = String(d.data().geminiKey).trim();
-              if (sharedKey.startsWith("AIzaSy")) {
+              if (sharedKey.startsWith("AIzaSy") || sharedKey.startsWith("AQ.")) {
                 setGeminiApiKey(sharedKey);
                 setTempKeyInput(sharedKey);
                 localStorage.setItem("kim_family_gemini_key", sharedKey);
@@ -1419,7 +1419,7 @@ function MainApp() {
   // ==========================================
   const buildFullBackupJsonString = () => {
     const fullSnapshot = {
-      backupVersion: "v5.7",
+      backupVersion: "v5.8",
       exportedAt: new Date().toISOString(),
       projectId: USER_FIREBASE_CONFIG.projectId,
       data: {
@@ -2501,7 +2501,7 @@ function MainApp() {
               title="패치노트 기록 및 히스토리"
             >
               <ClipboardList className="w-3 h-3 text-stone-600" />
-              <span>패치노트 {patchNotes[0]?.version || "v5.7"}</span>
+              <span>패치노트 {patchNotes[0]?.version || "v5.8"}</span>
             </button>
           </div>
 
@@ -5871,4 +5871,4 @@ export default function App() {
       <MainApp />
     </ErrorBoundary>
   );
-  }
+        }
