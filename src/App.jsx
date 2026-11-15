@@ -631,11 +631,22 @@ const STORAGE_LOCATIONS = ["냉장실", "냉동실", "실온·팬트리"];
 const FRIDGE_CATEGORIES = ["채소/과일", "육류/수산", "유제품/계란", "유아식/이유식 재료", "반찬/김치", "밀키트", "양념/소스", "기타"];
 const SCHEDULE_CATEGORIES = ["기념일/생일", "할일(To-Do)", "육아/병원", "가족행사/경조사"];
 
-const APP_CODE_VERSION = "v8.9";
-const APP_BUILD_DATE = "2026-11-15 22:50";
+const APP_CODE_VERSION = "v9.0";
+const APP_BUILD_DATE = "2026-11-15 23:00";
 const EDITOR_INVITE_CODE = "0402";
 
 const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v9.0",
+    version: "v9.0",
+    date: "2026-11-15",
+    title: "📅 3일치 AI 맞춤 식단표 생성 + 부족 재료 장보기 담기 + 선택 끼니 일괄 반영",
+    changes: [
+      "AI추천 탭에 [📅 3일치 식단표] 모드 추가 (어른밥 / 시목이 유아식 / 온가족 원팟 선택 및 아침·점심·저녁 끼니 체크)",
+      "냉장고 보유 및 소비기한 임박 재료를 최대한 우선 활용하고, 꼭 필요한 부족 재료만 추려 원클릭 장보기 담기 지원",
+      "생성된 3일치 식단 중 마음에 드는 끼니만 체크해 기존 식단표에 덮어쓰기 없이 안전하게 일괄 반영"
+    ]
+  },
   {
     id: "patch-v8.9",
     version: "v8.9",
@@ -1604,6 +1615,14 @@ function MainApp() {
   const [aiRecipes, setAiRecipes] = useState([]);
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [aiErrorMsg, setAiErrorMsg] = useState("");
+  const [aiSubMode, setAiSubMode] = useState("recipe");
+  const [planStartDate, setPlanStartDate] = useState(() => getTodayStr());
+  const [planTarget, setPlanTarget] = useState("온가족 원팟 (어른+시목)");
+  const [planSlots, setPlanSlots] = useState(["아침", "저녁"]);
+  const [isPlanLoading, setIsPlanLoading] = useState(false);
+  const [planErrorMsg, setPlanErrorMsg] = useState("");
+  const [planItems, setPlanItems] = useState([]);
+  const [isSavingPlan, setIsSavingPlan] = useState(false);
   const [quickLogRecipe, setQuickLogRecipe] = useState(null);
   const [quickLogDate, setQuickLogDate] = useState(() => getTodayStr());
   const [quickLogSlot, setQuickLogSlot] = useState("저녁");
@@ -3206,6 +3225,150 @@ function MainApp() {
       setAiErrorMsg(err.message);
     } finally {
       setIsAiLoading(false);
+    }
+  };
+
+  const handleGenerate3DayPlan = async () => {
+    if (!requireEditorAccess()) return;
+    if (planSlots.length === 0) {
+      setPlanErrorMsg("추천받을 끼니(아침·점심·저녁)를 최소 1개 이상 체크해 주세요.");
+      return;
+    }
+    setPlanErrorMsg("");
+    setIsPlanLoading(true);
+    try {
+      const days = [0, 1, 2].map((offset) => addMonthsToDateStr(planStartDate || getTodayStr(), 0, offset));
+      const sortedFridge = [...fridge].sort(
+        (a, b) => getDaysDiff(a.expiryDate) - getDaysDiff(b.expiryDate)
+      );
+      const fridgeSummary =
+        sortedFridge.length > 0
+          ? sortedFridge
+              .slice(0, 25)
+              .map((f) => {
+                const d = getDaysDiff(f.expiryDate);
+                return `${f.name}(${f.quantity}${f.unit || "개"}, ${d <= 3 ? `임박 D${d >= 0 ? `-${d}` : `+${Math.abs(d)}`}` : `D-${d}`})`;
+              })
+              .join(", ")
+          : "등록된 냉장고 재료 없음";
+
+      const targetDesc =
+        planTarget === "시목이 유아식 (15개월)"
+          ? "만 15개월 유아(김시목) 맞춤 저염·부드러운 유아식"
+          : planTarget === "어른밥 (수혁·아리나)"
+          ? "성인 부부(수혁·아리나) 맞춤 집밥 식단"
+          : "성인 부부 + 만 15개월 아기(시목이)가 함께 먹는 원팟 집밥 식단 (아기용 덜어내기/저염 팁 포함)";
+
+      const prompt = `당신은 한국 가정식 및 영유아 식단 전문 영양사입니다.
+대상: ${targetDesc}
+날짜(3일): ${days.join(", ")}
+추천할 끼니: ${planSlots.join(", ")}
+현재 냉장고 보유 재료(소비기한 임박순): [${fridgeSummary}]
+
+규칙:
+1. 최대한 위 냉장고 보유 재료(특히 임박 재료)를 우선 활용해 3일치 식단이 겹치지 않게 다양하게 짜주세요.
+2. 정말 꼭 필요한 부족한 재료만 최소한(끼니당 0~2개)으로 missingIngredients에 적어주세요.
+3. 날짜 ${days.length}일 × 끼니 ${planSlots.length}개 = 총 ${days.length * planSlots.length}개 항목을 순수 JSON 배열로만 출력하세요 (마크다운 금지):
+[
+  {
+    "date": "${days[0]}",
+    "slot": "${planSlots[0]}",
+    "menu": "구체적인 메뉴명",
+    "usedIngredients": ["냉장고재료1", "냉장고재료2"],
+    "missingIngredients": ["부족재료1"],
+    "simokTip": "시목이(15개월) 맞춤 변형 팁 또는 조리 팁"
+  }
+]`;
+
+      let actualProvider = aiProvider.toUpperCase();
+      const parsed = await callReliableAiEngine({
+        apiKey: geminiApiKey,
+        openaiApiKey,
+        aiProvider,
+        promptText: prompt,
+        temperature: 0.6,
+        onProviderUsed: (prov) => { actualProvider = prov; }
+      });
+
+      const normalized = toSafeArray(parsed).map((item, idx) => ({
+        id: `plan-${Date.now()}-${idx}`,
+        date: item.date || days[Math.min(2, Math.floor(idx / Math.max(1, planSlots.length)))],
+        slot: MEAL_SLOTS.some((s) => s.id === item.slot) ? item.slot : planSlots[0],
+        menu: String(item.menu || "").trim() || "추천 가정식",
+        usedIngredients: toSafeArray(item.usedIngredients),
+        missingIngredients: toSafeArray(item.missingIngredients),
+        simokTip: String(item.simokTip || "").trim(),
+        selected: true
+      }));
+
+      setPlanItems(normalized);
+      pushAiLog(actualProvider, "3일치 식단표", true, `${normalized.length}끼 생성`);
+      showToast(`3일치 맞춤 식단(${normalized.length}끼)이 생성되었습니다!`);
+    } catch (err) {
+      pushAiLog(aiProvider.toUpperCase(), "3일치 식단표", false, err.message);
+      setPlanErrorMsg(err.message);
+    } finally {
+      setIsPlanLoading(false);
+    }
+  };
+
+  const handleApply3DayPlan = async () => {
+    if (!requireEditorAccess()) return;
+    if (isSavingPlan) return;
+    const picked = planItems.filter((it) => it.selected && it.menu);
+    if (picked.length === 0) {
+      showToast("식단표에 반영할 끼니를 1개 이상 체크해 주세요.");
+      return;
+    }
+    if (!user || !db) {
+      showToast("⚠️ 서버 연결 후 식단표에 반영할 수 있습니다.");
+      return;
+    }
+    const members =
+      planTarget === "시목이 유아식 (15개월)"
+        ? ["시목"]
+        : planTarget === "어른밥 (수혁·아리나)"
+        ? ["수혁", "아리나"]
+        : ["수혁", "아리나", "시목"];
+
+    setIsSavingPlan(true);
+    beginWrite();
+    let ok = false;
+    let errMsg = "";
+    try {
+      const batch = writeBatch(db);
+      const newLocal = {};
+      picked.forEach((it, idx) => {
+        const mId = `m-${Date.now()}-${idx}-${Math.random().toString(36).slice(2, 5)}`;
+        const payload = {
+          id: mId,
+          date: it.date,
+          slot: it.slot,
+          menu: it.menu,
+          members,
+          ingredients: it.usedIngredients,
+          note: it.simokTip ? `✨ AI 3일식단: ${it.simokTip}` : "✨ AI 3일치 추천 식단",
+          sourceType: "집밥/온가족식",
+          cost: 0
+        };
+        newLocal[mId] = payload;
+        batch.set(getDocRef("family_meals_v3", mId), payload);
+        batch.set(getDocRef("family_meals_v4", mId), payload);
+      });
+      await batch.commit();
+
+      setMealsMap((prev) => ({
+        ...prev,
+        local: { ...(prev.local || {}), ...newLocal }
+      }));
+      ok = true;
+      showToast(`✅ 선택한 ${picked.length}끼가 일별 식단표에 반영되었습니다!`);
+    } catch (e) {
+      errMsg = e.message;
+      showToast("⚠️ 식단표 일괄 반영 실패: 네트워크를 확인해 주세요.");
+    } finally {
+      endWrite(ok, errMsg);
+      setIsSavingPlan(false);
     }
   };
 
@@ -6601,6 +6764,242 @@ function MainApp() {
       ========================================== */}
       {activeTab === "ai" && (
         <div className="p-4 space-y-4">
+          <div className="grid grid-cols-2 gap-1.5 bg-stone-200/80 p-1 rounded-2xl">
+            <button
+              onClick={() => setAiSubMode("recipe")}
+              className={`py-2 px-3 rounded-xl text-xs font-extrabold transition ${
+                aiSubMode === "recipe"
+                  ? "bg-stone-900 text-white shadow-sm"
+                  : "text-stone-600 hover:text-stone-900"
+              }`}
+            >
+              🍳 냉장고 레시피 · 플레이팅
+            </button>
+            <button
+              onClick={() => setAiSubMode("plan3d")}
+              className={`py-2 px-3 rounded-xl text-xs font-extrabold transition ${
+                aiSubMode === "plan3d"
+                  ? "bg-stone-900 text-white shadow-sm"
+                  : "text-stone-600 hover:text-stone-900"
+              }`}
+            >
+              📅 3일치 식단표 짜기
+            </button>
+          </div>
+
+          {aiSubMode === "plan3d" && (
+            <div className="space-y-3.5">
+              <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-sm space-y-3.5">
+                <div>
+                  <h2 className="text-sm font-black text-stone-900 flex items-center gap-1.5">
+                    <CalendarDays className="w-4 h-4 text-amber-600" />
+                    <span>AI 3일치 맞춤 식단표 (냉장고 우선 활용)</span>
+                  </h2>
+                  <p className="text-[11px] text-stone-500 mt-0.5">
+                    소비기한 임박 재료를 최대한 먼저 쓰면서 3일치 식단과 부족 재료만 쏙 골라줍니다.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-[11px] font-bold text-stone-500">시작 날짜</label>
+                    <input
+                      type="date"
+                      value={planStartDate}
+                      onChange={(e) => setPlanStartDate(e.target.value)}
+                      className="w-full mt-0.5 px-3 py-2 rounded-xl border border-stone-200 text-xs font-bold bg-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-bold text-stone-500">대상 선택</label>
+                    <select
+                      value={planTarget}
+                      onChange={(e) => setPlanTarget(e.target.value)}
+                      className="w-full mt-0.5 px-2.5 py-2 rounded-xl border border-stone-200 text-xs font-bold bg-white"
+                    >
+                      <option value="온가족 원팟 (어른+시목)">온가족 (어른+시목)</option>
+                      <option value="어른밥 (수혁·아리나)">어른밥 (수혁·아리나)</option>
+                      <option value="시목이 유아식 (15개월)">시목이 유아식</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <div className="text-xs font-extrabold text-stone-700 mb-1.5">
+                    추천받을 끼니 체크 ({planSlots.length}끼 × 3일 = 총 {planSlots.length * 3}끼)
+                  </div>
+                  <div className="grid grid-cols-3 gap-1.5">
+                    {["아침", "점심", "저녁"].map((slotName) => {
+                      const active = planSlots.includes(slotName);
+                      return (
+                        <button
+                          key={slotName}
+                          onClick={() =>
+                            setPlanSlots((prev) =>
+                              prev.includes(slotName)
+                                ? prev.filter((x) => x !== slotName)
+                                : [...prev, slotName]
+                            )
+                          }
+                          className={`py-2 rounded-xl text-xs font-extrabold border transition flex items-center justify-center gap-1 ${
+                            active
+                              ? "bg-stone-900 text-white border-stone-900"
+                              : "bg-stone-50 text-stone-600 border-stone-200"
+                          }`}
+                        >
+                          <span>{active ? "✅" : "⬜"}</span>
+                          <span>{slotName}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {planErrorMsg && (
+                  <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-xs font-bold text-rose-800">
+                    ⚠️ {planErrorMsg}
+                  </div>
+                )}
+
+                <button
+                  onClick={handleGenerate3DayPlan}
+                  disabled={isPlanLoading}
+                  className={`w-full py-3 rounded-2xl text-white text-xs font-black flex items-center justify-center gap-1.5 shadow-sm ${
+                    isPlanLoading ? "bg-stone-400" : "bg-stone-900 hover:bg-amber-600"
+                  }`}
+                >
+                  <Sparkles className="w-4 h-4" />
+                  <span>{isPlanLoading ? "냉장고 재료로 3일 식단 짜는 중..." : "✨ 냉장고 기반 3일치 식단 추천받기"}</span>
+                </button>
+              </div>
+
+              {planItems.length > 0 && (() => {
+                const fridgeNamesLower = fridge.map((f) => String(f.name || "").toLowerCase());
+                const shopNamesLower = shoppingList.map((s) => String(s.name || "").toLowerCase());
+                const allMissing = Array.from(
+                  new Set(
+                    planItems
+                      .filter((it) => it.selected)
+                      .flatMap((it) => toSafeArray(it.missingIngredients))
+                      .map((m) => String(m || "").trim())
+                      .filter(Boolean)
+                  )
+                ).filter(
+                  (m) =>
+                    !fridgeNamesLower.some((fn) => fn.includes(m.toLowerCase()) || m.toLowerCase().includes(fn)) &&
+                    !shopNamesLower.some((sn) => sn.includes(m.toLowerCase()) || m.toLowerCase().includes(sn))
+                );
+
+                return (
+                  <div className="space-y-3">
+                    {allMissing.length > 0 && (
+                      <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-3.5 space-y-2">
+                        <div className="text-xs font-black text-emerald-900">
+                          🛒 부족한 최소 재료 ({allMissing.length}종)
+                        </div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {allMissing.map((m) => (
+                            <span
+                              key={m}
+                              className="px-2 py-0.5 rounded-full bg-white border border-emerald-200 text-[11px] font-bold text-emerald-800"
+                            >
+                              {m}
+                            </span>
+                          ))}
+                        </div>
+                        <button
+                          onClick={() => handleAddMissingIngredientsToShopping(allMissing)}
+                          className="w-full py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold"
+                        >
+                          🛒 부족한 재료 장보기 목록에 한 번에 담기
+                        </button>
+                      </div>
+                    )}
+
+                    <div className="bg-white p-3.5 rounded-2xl border border-stone-200 shadow-sm space-y-2.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-black text-stone-900">
+                          추천 식단 미리보기 ({planItems.filter((x) => x.selected).length}끼 선택됨)
+                        </span>
+                        <button
+                          onClick={() => {
+                            const allSel = planItems.every((x) => x.selected);
+                            setPlanItems((prev) => prev.map((x) => ({ ...x, selected: !allSel })));
+                          }}
+                          className="text-[11px] font-bold text-amber-700 underline"
+                        >
+                          {planItems.every((x) => x.selected) ? "전체 해제" : "전체 선택"}
+                        </button>
+                      </div>
+
+                      <div className="space-y-2">
+                        {planItems.map((it) => {
+                          const hasExisting = meals.some((m) => m.date === it.date && m.slot === it.slot);
+                          return (
+                            <div
+                              key={it.id}
+                              onClick={() =>
+                                setPlanItems((prev) =>
+                                  prev.map((x) => (x.id === it.id ? { ...x, selected: !x.selected } : x))
+                                )
+                              }
+                              className={`p-3 rounded-xl border cursor-pointer transition space-y-1 ${
+                                it.selected
+                                  ? "bg-amber-50/70 border-amber-300"
+                                  : "bg-stone-50 border-stone-200 opacity-65"
+                              }`}
+                            >
+                              <div className="flex items-center justify-between gap-2">
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <span>{it.selected ? "✅" : "⬜"}</span>
+                                  <span className="text-xs font-black text-stone-900">
+                                    {it.date} · {it.slot}
+                                  </span>
+                                  {hasExisting && (
+                                    <span className="px-1.5 py-0.5 rounded bg-rose-100 text-rose-800 text-[10px] font-extrabold">
+                                      기존 식단 있음(추가)
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                              <div className="text-sm font-extrabold text-stone-900 pl-6">
+                                {it.menu}
+                              </div>
+                              {it.usedIngredients.length > 0 && (
+                                <div className="text-[11px] font-semibold text-emerald-700 pl-6">
+                                  🥬 냉장고 활용: {it.usedIngredients.join(", ")}
+                                </div>
+                              )}
+                              {it.simokTip && (
+                                <div className="text-[11px] font-semibold text-amber-900 pl-6">
+                                  💡 팁: {it.simokTip}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      <button
+                        onClick={handleApply3DayPlan}
+                        disabled={isSavingPlan}
+                        className={`w-full py-3 rounded-2xl text-white text-xs font-black ${
+                          isSavingPlan ? "bg-stone-400" : "bg-stone-900 hover:bg-stone-800"
+                        }`}
+                      >
+                        {isSavingPlan
+                          ? "식단표에 반영 중..."
+                          : `✅ 선택한 ${planItems.filter((x) => x.selected).length}끼 일별 식단표에 반영하기`}
+                      </button>
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+          )}
+
+          {aiSubMode === "recipe" && (
+          <>
           <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-sm space-y-3.5">
             <div className="flex items-center justify-between">
               <div>
@@ -7440,6 +7839,8 @@ function MainApp() {
                 )}
               </div>
             )}
+          </>
+          )}
           </div>
         );
       })()}
@@ -9142,4 +9543,4 @@ export default function App() {
       <MainApp />
     </ErrorBoundary>
   );
-   }
+}
