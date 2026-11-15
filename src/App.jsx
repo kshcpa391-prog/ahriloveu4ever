@@ -41,6 +41,7 @@ import {
   ListTodo,
   CalendarRange,
   Baby,
+  LayoutGrid,
   Activity,
   Stethoscope
 } from "lucide-react";
@@ -607,7 +608,7 @@ const MemberAvatar = ({ member, id, size = "sm", className = "" }) => {
       <img
         src={resolved.avatar}
         alt={resolved.name || resolved.id || "가족"}
-        style={{ width: sizePx, height: sizePx, borderRadius: "9999px", objectFit: "cover" }}
+        style={{ width: sizePx, height: sizePx, minWidth: sizePx, minHeight: sizePx, aspectRatio: "1 / 1", borderRadius: "9999px", objectFit: "cover" }}
         className={`${sizeClass} rounded-full object-cover border border-white/90 shadow-sm shrink-0 inline-block ${className}`}
       />
     );
@@ -625,14 +626,35 @@ const MEAL_SLOTS = [
 ];
 
 const STORAGE_LOCATIONS = ["냉장실", "냉동실", "실온·팬트리"];
-const FRIDGE_CATEGORIES = ["채소/과일", "육류/수산", "유제품/계란", "유아식/이유식 재료", "반찬/김치", "양념/소스", "기타"];
+const FRIDGE_CATEGORIES = ["채소/과일", "육류/수산", "유제품/계란", "유아식/이유식 재료", "반찬/김치", "밀키트", "양념/소스", "기타"];
 const SCHEDULE_CATEGORIES = ["기념일/생일", "할일(To-Do)", "육아/병원", "가족행사/경조사"];
 
-const APP_CODE_VERSION = "v8.0";
-const APP_BUILD_DATE = "2026-11-15 21:20";
+const APP_CODE_VERSION = "v8.2";
+const APP_BUILD_DATE = "2026-11-15 21:45";
 const EDITOR_INVITE_CODE = "0402";
 
 const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v8.2",
+    version: "v8.2",
+    date: "2026-11-15",
+    title: "모바일 UI 고도화 (컴팩트 배너·상단 요약 접기/펼치기·5버튼 하단바·터치 영역 확대)",
+    changes: [
+      "상단 가족사진 배너 높이를 모바일 최적화(h-24)로 축소하고 접기/펼치기 기능 유지",
+      "날씨·3일내 일정·가족공지를 기본 1줄 핵심 요약 바 + [상세 ▼] 펼치기로 정리해 오늘의 식단까지 스크롤 거리 대폭 단축",
+      "하단 내비게이션을 5개 핵심 메뉴(식단·일정·육아·냉장고·더보기)로 재설계하고 [더보기]에서 주간/월간/장보기/공지/AI 접근 지원",
+      "편집·삭제 버튼 터치 영역 확대(32x32px) 및 간격(gap-2) 확보, 아바타 1:1 비율 고정"
+    ]
+  },
+  {
+    id: "patch-v8.1",
+    version: "v8.1",
+    date: "2026-11-15",
+    title: "냉장고·장보기·입고 카테고리에 '밀키트' 추가",
+    changes: [
+      "FRIDGE_CATEGORIES에 '밀키트' 카테고리를 추가해 냉장고 필터, 재료 등록, 장보기 입고 시 바로 분류 가능"
+    ]
+  },
   {
     id: "patch-v8.0",
     version: "v8.0",
@@ -1261,6 +1283,8 @@ function MainApp() {
   // 패치노트 기록 및 모달 상태
   const [patchNotes, setPatchNotes] = useState(INITIAL_PATCH_NOTES);
   const [isPatchModalOpen, setIsPatchModalOpen] = useState(false);
+  const [isTopAlertsExpanded, setIsTopAlertsExpanded] = useState(false);
+  const [isMoreNavOpen, setIsMoreNavOpen] = useState(false);
   const [isEditorUnlocked, setIsEditorUnlocked] = useState(() => {
     try {
       const params = new URLSearchParams(window.location.search);
@@ -3948,7 +3972,7 @@ function MainApp() {
         </div>
 
         {!isHeaderCollapsed && (
-          <div className="relative h-36 rounded-2xl overflow-hidden mb-2 border border-stone-200 shadow-sm bg-gradient-to-r from-amber-100 via-stone-100 to-rose-100">
+          <div className="relative h-24 sm:h-28 rounded-2xl overflow-hidden mb-2 border border-stone-200 shadow-sm bg-gradient-to-r from-amber-100 via-stone-100 to-rose-100">
             <img
               src="/og-family.png"
               alt="수혁 아리나 시목 시율 가족사진"
@@ -3958,7 +3982,7 @@ function MainApp() {
                   e.currentTarget.src = HERO_FAMILY_FALLBACK;
                 }
               }}
-              className="w-full h-36 object-cover object-[50%_28%]"
+              className="w-full h-full object-cover object-[50%_28%]"
             />
             <div className="absolute inset-0 bg-gradient-to-t from-stone-950/75 via-stone-900/10 to-transparent pointer-events-none" />
             <div className="absolute bottom-2 left-3 right-3 flex items-end justify-between gap-2">
@@ -4014,6 +4038,47 @@ function MainApp() {
 
         {!isHeaderCollapsed && (
           <>
+            {/* 핵심 1줄 요약 바 (날씨 · 3일내 일정 · 공지) + 상세 펼치기 */}
+            <div className="mt-2 flex items-center justify-between gap-1.5 bg-stone-50 border border-stone-200/90 rounded-2xl px-2.5 py-1.5">
+              <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+                <button
+                  onClick={() => setIsTopAlertsExpanded((v) => !v)}
+                  className="inline-flex items-center gap-1 text-[11px] font-bold text-stone-800 whitespace-nowrap"
+                >
+                  <span>{weatherInfo ? `${weatherInfo.emoji} ${weatherInfo.temp}°C` : "🌤️ 날씨"}</span>
+                  {weatherInfo && (
+                    <span className="text-[10px] font-semibold text-stone-500">
+                      · 미세 {weatherInfo.pm10}
+                    </span>
+                  )}
+                </button>
+                {imminentSchedulesWithin3Days.length > 0 && (
+                  <button
+                    onClick={() => setActiveTab("schedule")}
+                    className="px-2 py-0.5 rounded-full bg-rose-50 border border-rose-200 text-rose-800 text-[10px] font-extrabold whitespace-nowrap"
+                  >
+                    🗓️ 3일내 {imminentSchedulesWithin3Days.length}건
+                  </button>
+                )}
+                {pinnedNotices.length > 0 && (
+                  <button
+                    onClick={() => setActiveTab("notices")}
+                    className="px-2 py-0.5 rounded-full bg-amber-50 border border-amber-200 text-amber-900 text-[10px] font-extrabold whitespace-nowrap"
+                  >
+                    📌 공지 {pinnedNotices.length}
+                  </button>
+                )}
+              </div>
+              <button
+                onClick={() => setIsTopAlertsExpanded((v) => !v)}
+                className="px-2 py-1 rounded-xl bg-white border border-stone-200 text-[10px] font-extrabold text-stone-700 shrink-0 whitespace-nowrap"
+              >
+                {isTopAlertsExpanded ? "요약 ▲" : "상세 ▼"}
+              </button>
+            </div>
+
+            {isTopAlertsExpanded && (
+              <>
             {/* 서울 중구 실시간 날씨 · 주간예보 · 미세먼지 바 (접기 시 함께 접힘) */}
             {weatherInfo ? (
               <div className="mt-2 bg-sky-50/80 border border-sky-200/80 rounded-2xl px-3 py-2 space-y-2">
@@ -4156,7 +4221,10 @@ function MainApp() {
               </div>
             )}
 
-            <div className="grid grid-cols-3 gap-1.5 mt-2.5 bg-stone-100 p-1.5 rounded-2xl">
+              </>
+            )}
+
+            <div className="grid grid-cols-3 gap-1.5 mt-2 bg-stone-100 p-1.5 rounded-2xl">
               {[
                 { id: "daily", label: "일별식단", icon: "🍽️" },
                 { id: "weekly", label: "주간요약", icon: "📊" },
@@ -4477,7 +4545,7 @@ function MainApp() {
                                   </span>
                                 )}
                               </div>
-                              <div className="flex items-center gap-1 shrink-0">
+                              <div className="flex items-center gap-2 shrink-0">
                                 <button
                                   onClick={() => {
                                     setEditingMeal(m);
@@ -4493,13 +4561,15 @@ function MainApp() {
                                     });
                                     setIsMealModalOpen(true);
                                   }}
-                                  className="p-1 rounded-lg hover:bg-stone-200 text-stone-500"
+                                  className="w-8 h-8 flex items-center justify-center rounded-xl bg-stone-50 hover:bg-stone-200 border border-stone-200 text-stone-600"
+                                  title="식단 수정"
                                 >
                                   <Edit2 className="w-3.5 h-3.5" />
                                 </button>
                                 <button
                                   onClick={() => handleDeleteMeal(m)}
-                                  className="p-1 rounded-lg hover:bg-red-100 text-red-500"
+                                  className="w-8 h-8 flex items-center justify-center rounded-xl bg-rose-50/70 hover:bg-rose-100 border border-rose-200/70 text-rose-600"
+                                  title="식단 삭제"
                                 >
                                   <Trash2 className="w-3.5 h-3.5" />
                                 </button>
@@ -6915,31 +6985,97 @@ function MainApp() {
         );
       })()}
 
-      {/* 하단 네비게이션 */}
-      <nav className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md bg-white border-t border-stone-200 px-1.5 py-1.5 grid grid-cols-6 gap-0.5 z-30">
+      {/* 하단 더보기 메뉴 시트 */}
+      {isMoreNavOpen && (
+        <div
+          className="fixed inset-0 bg-black/40 z-40 flex items-end justify-center"
+          onClick={() => setIsMoreNavOpen(false)}
+        >
+          <div
+            className="bg-white w-full max-w-md rounded-t-3xl p-4 pb-20 space-y-3 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-black text-stone-900">전체 메뉴 바로가기</span>
+              <button
+                onClick={() => setIsMoreNavOpen(false)}
+                className="w-8 h-8 flex items-center justify-center rounded-xl bg-stone-100 text-stone-600"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              {[
+                { id: "weekly", label: "주간요약", icon: "📊" },
+                { id: "monthly", label: "월간·식비", icon: "💰" },
+                { id: "shopping", label: "장보기", icon: "🛒" },
+                { id: "notices", label: "가족공지", icon: "📌" },
+                { id: "ai", label: "AI추천", icon: "✨" }
+              ].map((m) => (
+                <button
+                  key={m.id}
+                  onClick={() => {
+                    setActiveTab(m.id);
+                    setIsMoreNavOpen(false);
+                  }}
+                  className={`py-3 px-2 rounded-2xl border text-xs font-extrabold flex flex-col items-center gap-1 ${
+                    activeTab === m.id
+                      ? "bg-stone-900 text-white border-stone-900"
+                      : "bg-stone-50 text-stone-800 border-stone-200 hover:bg-amber-50"
+                  }`}
+                >
+                  <span className="text-base">{m.icon}</span>
+                  <span>{m.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 하단 네비게이션 (5개 핵심 메뉴) */}
+      <nav className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md bg-white/95 backdrop-blur border-t border-stone-200 px-2 py-1.5 grid grid-cols-5 gap-1 z-30">
         {[
-          { id: "daily", label: "일별식단", icon: Utensils },
-          { id: "monthly", label: "월간·식비", icon: Calendar },
+          { id: "daily", label: "식단", icon: Utensils },
           { id: "schedule", label: "일정", icon: CalendarDays },
-          { id: "fridge", label: "냉장고", icon: Package },
-          { id: "shopping", label: "장보기", icon: ShoppingCart },
-          { id: "ai", label: "AI추천", icon: Sparkles }
+          { id: "baby", label: "육아", icon: Baby },
+          { id: "fridge", label: "냉장고", icon: Package }
         ].map((item) => {
           const IconComp = item.icon;
           const active = activeTab === item.id;
           return (
             <button
               key={item.id}
-              onClick={() => setActiveTab(item.id)}
-              className={`flex flex-col items-center justify-center py-1 rounded-xl transition ${
-                active ? "text-stone-900 font-black" : "text-stone-400 font-semibold"
+              onClick={() => {
+                setActiveTab(item.id);
+                setIsMoreNavOpen(false);
+              }}
+              className={`flex flex-col items-center justify-center py-1.5 rounded-xl transition ${
+                active ? "text-stone-900 font-black bg-amber-50/80" : "text-stone-400 font-semibold"
               }`}
             >
               <IconComp className={`w-4 h-4 ${active ? "text-amber-600" : ""}`} />
-              <span className="text-[10px] mt-0.5">{item.label}</span>
+              <span className="text-[10px] mt-0.5 whitespace-nowrap">{item.label}</span>
             </button>
           );
         })}
+        <button
+          onClick={() => setIsMoreNavOpen((v) => !v)}
+          className={`flex flex-col items-center justify-center py-1.5 rounded-xl transition ${
+            ["weekly", "monthly", "shopping", "notices", "ai"].includes(activeTab) || isMoreNavOpen
+              ? "text-stone-900 font-black bg-amber-50/80"
+              : "text-stone-400 font-semibold"
+          }`}
+        >
+          <LayoutGrid
+            className={`w-4 h-4 ${
+              ["weekly", "monthly", "shopping", "notices", "ai"].includes(activeTab) || isMoreNavOpen
+                ? "text-amber-600"
+                : ""
+            }`}
+          />
+          <span className="text-[10px] mt-0.5 whitespace-nowrap">더보기</span>
+        </button>
       </nav>
 
       {/* ==========================================
@@ -8418,4 +8554,4 @@ export default function App() {
       <MainApp />
     </ErrorBoundary>
   );
-}
+   }
