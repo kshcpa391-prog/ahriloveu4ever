@@ -13,8 +13,6 @@ import {
   X,
   ChevronLeft,
   ChevronRight,
-  ChevronUp,
-  ChevronDown,
   Camera,
   Receipt,
   Settings,
@@ -33,8 +31,7 @@ import {
   Star,
   Clock,
   FileJson,
-  RotateCcw,
-  History
+  RotateCcw
 } from "lucide-react";
 import { initializeApp, getApps, getApp } from "firebase/app";
 import {
@@ -65,7 +62,6 @@ const USER_FIREBASE_CONFIG = {
 };
 
 const EMBEDDED_GEMINI_KEY = "AIzaSyDrzf2_cG0PT-dW1lidXYaHk4BpCY-eMao";
-const CURRENT_APP_VERSION = "v6.0";
 
 let app;
 let auth;
@@ -96,78 +92,6 @@ const toSafeArray = (val) => {
   }
   return [];
 };
-
-// ==========================================
-// [신규] 버전별 업데이트 기록 (패치노트 데이터)
-// ==========================================
-const PATCH_NOTES_HISTORY = [
-  {
-    version: "v6.0",
-    date: "2026-11-15 (최신 버전)",
-    badge: "최신",
-    title: "다가오는 일정 TOP 3 브리핑 · 패치노트 · 스마트 스크롤 헤더",
-    changes: [
-      "가장 먼저 도래하는 가족 일정·기념일 상위 3개(TOP 3)를 상단에 상시 표시하도록 개선",
-      "앱 버전별 변경 내역을 한눈에 확인할 수 있는 '패치노트(버전 기록)' 모달 신설",
-      "상단 메뉴바 고정(Sticky)을 해제하여 스크롤 시 화면 가림 없이 넓게 보도록 개선",
-      "상단 일정 및 가족공지 브리핑 영역 '접기/펼치기' 토글 버튼 추가"
-    ]
-  },
-  {
-    version: "v5.0",
-    date: "2026-11-15",
-    badge: "백업·UI",
-    title: "전체 DB 1초 JSON 백업/복원 및 모바일 글자 잘림 완벽 해결",
-    changes: [
-      "설정(⚙️) 창에 전체 데이터베이스 원본(JSON) 1초 다운로드 및 1초 완벽 복원 기능 탑재",
-      "매월 1일 앱 상단에 정기 데이터 백업 알림 배너 자동 노출 기능 추가",
-      "모바일 화면에서 탭 글자가 잘리던 현상을 해결하기 위해 4x2(2줄) 벤토 그리드 메뉴 적용"
-    ]
-  },
-  {
-    version: "v4.5",
-    date: "2026-11-15",
-    badge: "일정·D-Day",
-    title: "월간 가족 일정표 · 매년 반복 기념일 · 실시간 오늘 날짜 자동 적용",
-    changes: [
-      "우리 가족 6대 기념일(가족의 시작, 결혼기념일, 수혁·아리나·시목·시율 생일) 기본 탑재",
-      "생일 및 기념일 매년 자동 반복 및 경과 일수(D+일째) · 남은 디데이(D-Day) 동시 계산",
-      "앱 실행 시 고정 날짜가 아닌 실제 오늘 날짜(Real-time Today)로 자동 시작되도록 개선"
-    ]
-  },
-  {
-    version: "v4.0",
-    date: "2026-11-14",
-    badge: "AI 비전",
-    title: "Gemini 2.5 실시간 AI 셰프 & 화이트보드 손글씨(아/점/저) 스캔",
-    changes: [
-      "파이어베이스 프로젝트 표준 Gemini API 직통 연동 및 부부 스마트폰 키 자동 동기화",
-      "어린이집 인쇄물뿐만 아니라 가정용 칠판/화이트보드 손글씨(아침/점심/저녁) 이미지 OCR 해독",
-      "모든 연도·모든 월(1~12월) 식단표 스캔 및 월간 캘린더 자유 이동 지원"
-    ]
-  },
-  {
-    version: "v3.5",
-    date: "2026-11-14",
-    badge: "가계부·안정화",
-    title: "냉장고 소진 시 식비 유지(원장 분리) · 장보기 메모 · 가족 공지사항",
-    changes: [
-      "냉장고 재료를 다 먹어 소진해도 이번 달 지출한 식비 총액이 줄어들지 않도록 식비 원장 분리",
-      "냉장고 초기 항목 삭제 시 다시 살아나던 초기화 버그 해결 및 v3/v4 DB 통합 호환",
-      "장보기 체크리스트(구매 완료 시 냉장고 직행) 및 가족 공지사항 게시판 탭 신설"
-    ]
-  },
-  {
-    version: "v1.0 ~ v3.0",
-    date: "2026-11 초기",
-    badge: "출시",
-    title: "수혁 · 아리나 · 시목 · 시율네 식탁 웹앱 최초 구축 및 배포",
-    changes: [
-      "아침·오전간식·점심·오후간식·저녁·야식 6단계 일별/주간/월간 가족 식단 관리 구축",
-      "신당동어린이집 11월 식단표 탑재 및 파이어베이스(ahrisoohyeokbap) 실시간 부부 공유 연동"
-    ]
-  }
-];
 
 // ==========================================
 // 2. 실시간 오늘 날짜 & D-Day 정밀 계산 유틸리티
@@ -215,7 +139,6 @@ const shiftYearMonth = (yearMonth, deltaMonths) => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 };
 
-// 매년 반복 기념일/생일 및 일반 일정의 D-Day / 경과일(D+) 계산기
 const calculateScheduleDday = (item) => {
   const todayStr = getTodayStr();
   const today = new Date(todayStr + "T00:00:00");
@@ -229,7 +152,7 @@ const calculateScheduleDday = (item) => {
 
   let elapsedDays = null;
   let yearsCount = null;
-  if (item.hasOriginYear !== false && origYear >= 1950 && origYear <= currentYear) {
+  if (item.hasOriginYear === true && origYear >= 1950 && origYear <= currentYear) {
     const origDateObj = new Date(origYear, origMonth - 1, origDay);
     const diffFromOrigin = Math.floor((today - origDateObj) / (1000 * 60 * 60 * 24));
     if (diffFromOrigin >= 0) {
@@ -673,12 +596,6 @@ function MainApp() {
     }
   });
 
-  // [요청사항 2 & 3 반영] 패치노트 모달 상태 & 상단 브리핑 접기/펼치기 상태
-  const [isPatchNotesOpen, setIsPatchNotesOpen] = useState(false);
-  const [isTopBriefingCollapsed, setIsTopBriefingCollapsed] = useState(() => {
-    return localStorage.getItem("kim_top_briefing_collapsed") === "true";
-  });
-
   const [backupBannerDismissedMonth, setBackupBannerDismissedMonth] = useState(() => {
     return localStorage.getItem("kim_backup_done_month") || "";
   });
@@ -693,7 +610,7 @@ function MainApp() {
     return Number(localStorage.getItem("kim_family_budget") || 800000);
   });
 
-  // 월간 가족 일정표 & D-Day 탭 상태
+  // [요청사항 1 완벽 반영] 일정 생성 시 카운트다운(showDday) 및 경과일(hasOriginYear) 기본값을 false(해제)로 설정!
   const [scheduleMonth, setScheduleMonth] = useState(() => getCurrentYearMonth());
   const [scheduleSelectedDate, setScheduleSelectedDate] = useState(() => getTodayStr());
   const [scheduleMemberFilter, setScheduleMemberFilter] = useState("전체");
@@ -706,8 +623,8 @@ function MainApp() {
     category: "할일(To-Do)",
     members: ["수혁", "아리나"],
     isAnnual: false,
-    showDday: true,
-    hasOriginYear: true,
+    showDday: false,
+    hasOriginYear: false,
     memo: ""
   });
 
@@ -1090,7 +1007,7 @@ function MainApp() {
   // ==========================================
   const handleDownloadJsonBackup = () => {
     const fullSnapshot = {
-      backupVersion: CURRENT_APP_VERSION,
+      backupVersion: "v5",
       exportedAt: new Date().toISOString(),
       projectId: USER_FIREBASE_CONFIG.projectId,
       data: {
@@ -1201,23 +1118,20 @@ function MainApp() {
     return isDayOne && backupBannerDismissedMonth !== curYm;
   }, [backupBannerDismissedMonth]);
 
-  // ==========================================
-  // 8. [요청사항 1 완벽 반영] 가장 먼저 도래하는 일정 TOP 3 자동 추출!
-  // ==========================================
-  const top3UpcomingSchedules = useMemo(() => {
+  // 3일 이내 도래하는 임박 일정 자동 추출
+  const imminentSchedulesWithin3Days = useMemo(() => {
     return schedules
       .filter((s) => !s.done)
       .map((s) => ({
         ...s,
         calc: calculateScheduleDday(s)
       }))
-      .filter((s) => s.calc.daysUntil >= 0)
-      .sort((a, b) => a.calc.daysUntil - b.calc.daysUntil)
-      .slice(0, 3);
+      .filter((s) => s.calc.daysUntil >= 0 && s.calc.daysUntil <= 3)
+      .sort((a, b) => a.calc.daysUntil - b.calc.daysUntil);
   }, [schedules]);
 
   // ==========================================
-  // 9. 가족 일정·기념일·D-Day 핸들러
+  // 8. 가족 일정·기념일·D-Day 핸들러
   // ==========================================
   const handleSaveSchedule = async () => {
     if (!scheduleForm.title.trim()) return;
@@ -1255,7 +1169,7 @@ function MainApp() {
         await setDoc(getDocRef("family_schedules_v4", id), payload);
       } catch (e) {}
     }
-    showToast(editingSchedule ? "일정이 수정되었습니다." : "새 가족 일정/디데이가 등록되었습니다.");
+    showToast(editingSchedule ? "일정이 수정되었습니다." : "새 가족 일정이 등록되었습니다.");
   };
 
   const handleToggleScheduleDone = async (item) => {
@@ -1314,7 +1228,7 @@ function MainApp() {
   }, [schedules, scheduleMemberFilter]);
 
   // ==========================================
-  // 10. AI 식단 추천 & 식단표/영수증 이미지 스캔 핸들러
+  // 9. AI 식단 추천 & 식단표/영수증 이미지 스캔 핸들러
   // ==========================================
   const handleRunAiRecommend = async () => {
     setAiErrorMsg("");
@@ -1578,7 +1492,7 @@ function MainApp() {
   };
 
   // ==========================================
-  // 11. 냉장고·식단·장보기·공지사항 핸들러
+  // 10. 냉장고·식단·장보기·공지사항 핸들러
   // ==========================================
   const handleSaveFridge = async () => {
     if (!fridgeForm.name.trim()) return;
@@ -1918,7 +1832,7 @@ function MainApp() {
   };
 
   // ==========================================
-  // 12. 파생 통계 계산
+  // 11. 파생 통계 계산
   // ==========================================
   const monthlyExpenseSummary = useMemo(() => {
     const monthPrefix = currentMonth;
@@ -2003,12 +1917,6 @@ function MainApp() {
     document.body.removeChild(link);
   };
 
-  const toggleTopBriefing = () => {
-    const next = !isTopBriefingCollapsed;
-    setIsTopBriefingCollapsed(next);
-    localStorage.setItem("kim_top_briefing_collapsed", String(next));
-  };
-
   return (
     <div className="min-h-screen bg-stone-50 text-stone-800 pb-24 max-w-md mx-auto shadow-xl border-x border-stone-200 relative font-sans">
       {toastMsg && (
@@ -2019,13 +1927,9 @@ function MainApp() {
       )}
 
       {/* ==========================================
-          [요청사항 1, 2, 3 완벽 반영]
-          - 상단 고정(sticky top-0) 해제 -> 스크롤 시 자연스럽게 올라가 화면이 넓어짐!
-          - 버전 기록(패치노트 v6.0) 버튼 탑재
-          - 가장 먼저 도래하는 일정 TOP 3 상단 표시 + 접기/펼치기 지원
+          상단 헤더 (슬림 고정 높이 2줄 그리드 메뉴 + 메뉴명 "일정" 적용!)
       ========================================== */}
-      <header className="bg-white border-b border-stone-200 px-3.5 pt-3 pb-3">
-        {/* 매월 1일 자동 백업 알림 배너 */}
+      <header className="bg-white border-b border-stone-200 px-3.5 pt-3 pb-3 sticky top-0 z-30">
         {isFirstDayOfMonthBackupNeeded && (
           <div className="mb-2.5 bg-amber-500 text-white rounded-2xl p-3 shadow-sm flex items-center justify-between gap-2">
             <div className="text-xs font-extrabold leading-snug">
@@ -2053,21 +1957,10 @@ function MainApp() {
         )}
 
         <div className="flex items-center justify-between mb-1.5">
-          <div className="flex items-center gap-1.5">
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-              <Zap className="w-3 h-3 text-emerald-600 fill-emerald-600" />
-              실시간 동기화
-            </span>
-            {/* [요청사항 2 반영] 버전 기록(패치노트) 바로가기 배지 */}
-            <button
-              onClick={() => setIsPatchNotesOpen(true)}
-              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-stone-900 text-amber-300 hover:bg-stone-800 transition shadow-sm"
-            >
-              <History className="w-3 h-3" />
-              <span>{CURRENT_APP_VERSION} 패치노트</span>
-            </button>
-          </div>
-
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+            <Zap className="w-3 h-3 text-emerald-600 fill-emerald-600" />
+            ahrisoohyeokbap 실시간 동기화
+          </span>
           <div className="flex items-center gap-1.5">
             <button
               onClick={() => {
@@ -2097,91 +1990,64 @@ function MainApp() {
             수혁 · 아리나 · 시목 · 시율네 식탁 🍽️
           </h1>
           <button
-            onClick={toggleTopBriefing}
-            className="text-[11px] font-extrabold text-stone-600 bg-stone-100 hover:bg-stone-200 px-2.5 py-1 rounded-full flex items-center gap-1 shrink-0 transition"
+            onClick={() => setActiveTab("schedule")}
+            className="text-[11px] font-extrabold text-pink-700 bg-pink-50 border border-pink-200 px-2.5 py-0.5 rounded-full flex items-center gap-1 shrink-0"
           >
-            <span>{isTopBriefingCollapsed ? "상단 브리핑 펼치기" : "브리핑 접기"}</span>
-            {isTopBriefingCollapsed ? (
-              <ChevronDown className="w-3.5 h-3.5" />
-            ) : (
-              <ChevronUp className="w-3.5 h-3.5" />
-            )}
+            <Heart className="w-3 h-3 fill-pink-500 text-pink-500" />
+            <span>가족 D-Day</span>
           </button>
         </div>
 
-        {/* 상단 브리핑 영역 (접기/펼치기 가능) */}
-        {!isTopBriefingCollapsed && (
-          <div className="space-y-2 mt-2">
-            {/* [요청사항 1 완벽 반영] 가장 먼저 도래하는 일정 TOP 3 상시 표시 */}
-            {top3UpcomingSchedules.length > 0 && activeTab !== "schedule" && (
-              <div
-                onClick={() => setActiveTab("schedule")}
-                className="bg-rose-50/90 hover:bg-rose-100/80 border border-rose-200 rounded-xl px-3 py-2.5 cursor-pointer transition space-y-1.5"
-              >
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-black text-rose-900 flex items-center gap-1">
-                    <Clock className="w-3.5 h-3.5 text-rose-600" />
-                    <span>가장 먼저 도래하는 가족 일정 TOP 3</span>
+        {/* 3일 이내 도래하는 일정(D-3 ~ D-Day) 상단 자동 알림 배너 */}
+        {imminentSchedulesWithin3Days.length > 0 && activeTab !== "schedule" && (
+          <div
+            onClick={() => setActiveTab("schedule")}
+            className="mt-2 bg-rose-50 hover:bg-rose-100/80 border border-rose-200 rounded-xl px-3 py-2 cursor-pointer transition space-y-1"
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-black text-rose-900 flex items-center gap-1">
+                <Clock className="w-3.5 h-3.5 text-rose-600" />
+                <span>3일 이내 도래하는 가족 일정 ({imminentSchedulesWithin3Days.length}건)</span>
+              </span>
+              <span className="text-[10px] font-extrabold text-rose-600">일정표 열기 &gt;</span>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {imminentSchedulesWithin3Days.map((ev) => (
+                <span
+                  key={ev.id}
+                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-white border border-rose-200 text-[11px] font-extrabold text-rose-900"
+                >
+                  <span>{ev.title}</span>
+                  <span className="px-1.5 py-0.2 rounded bg-rose-600 text-white text-[10px] font-black">
+                    {ev.calc.dDayText}
                   </span>
-                  <span className="text-[10px] font-extrabold text-rose-600">일정·D데이 탭 &gt;</span>
-                </div>
-                <div className="grid grid-cols-1 gap-1">
-                  {top3UpcomingSchedules.map((ev, idx) => {
-                    const isUrgent = ev.calc.daysUntil <= 3;
-                    return (
-                      <div
-                        key={ev.id}
-                        className="flex items-center justify-between bg-white/95 px-2.5 py-1.5 rounded-lg border border-rose-200/80 text-xs"
-                      >
-                        <div className="flex items-center gap-1.5 min-w-0">
-                          <span className="w-4 h-4 rounded-full bg-rose-100 text-rose-800 text-[10px] font-black flex items-center justify-center shrink-0">
-                            {idx + 1}
-                          </span>
-                          <span className="font-extrabold text-stone-900 truncate">
-                            {ev.title}
-                          </span>
-                          <span className="text-[10px] font-semibold text-stone-400 shrink-0">
-                            ({ev.calc.nextDateStr.slice(5).replace("-", ".")})
-                          </span>
-                        </div>
-                        <span
-                          className={`px-2 py-0.5 rounded-md text-[10px] font-black shrink-0 ml-2 ${
-                            isUrgent
-                              ? "bg-rose-600 text-white animate-pulse"
-                              : "bg-amber-100 text-amber-900"
-                          }`}
-                        >
-                          {ev.calc.dDayText}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {/* 상단 고정 가족 공지 */}
-            {pinnedNotices.length > 0 && activeTab !== "notices" && (
-              <div
-                onClick={() => setActiveTab("notices")}
-                className="bg-indigo-50/90 hover:bg-indigo-100/80 border border-indigo-200 rounded-xl px-3 py-2 cursor-pointer flex items-start justify-between gap-2 transition"
-              >
-                <div className="flex items-start gap-1.5 min-w-0">
-                  <Pin className="w-3.5 h-3.5 text-indigo-600 shrink-0 mt-0.5" />
-                  <div className="text-xs leading-snug break-keep">
-                    <span className="font-extrabold text-indigo-900 mr-1">[가족공지]</span>
-                    <span className="font-semibold text-indigo-800">{pinnedNotices[0].title}</span>
-                  </div>
-                </div>
-                <span className="text-[10px] font-bold text-indigo-600 shrink-0 mt-0.5">
-                  전체보기 &gt;
                 </span>
-              </div>
-            )}
+              ))}
+            </div>
           </div>
         )}
 
-        {/* 글자 잘림 없는 4칸 x 2줄 메뉴 그리드 */}
+        {/* 상단 고정 가족 공지 */}
+        {pinnedNotices.length > 0 && activeTab !== "notices" && (
+          <div
+            onClick={() => setActiveTab("notices")}
+            className="mt-2 bg-indigo-50/90 hover:bg-indigo-100/80 border border-indigo-200 rounded-xl px-3 py-2 cursor-pointer flex items-start justify-between gap-2 transition"
+          >
+            <div className="flex items-start gap-1.5 min-w-0">
+              <Pin className="w-3.5 h-3.5 text-indigo-600 shrink-0 mt-0.5" />
+              <div className="text-xs leading-snug break-keep">
+                <span className="font-extrabold text-indigo-900 mr-1">[가족공지]</span>
+                <span className="font-semibold text-indigo-800">{pinnedNotices[0].title}</span>
+              </div>
+            </div>
+            <span className="text-[10px] font-bold text-indigo-600 shrink-0 mt-0.5">
+              전체보기 &gt;
+            </span>
+          </div>
+        )}
+
+        {/* [요청사항 2 완벽 반영] 메뉴명을 "일정"으로 변경하고, 8개 모든 버튼 높이를 h-9(36px)로 슬림하게 통일!
+            배지는 우측 상단 모서리에 미니 플로팅 형태로 배치하여 글자가 절대 두 줄로 꺾이지 않습니다. */}
         <div className="grid grid-cols-4 gap-1.5 mt-2.5 bg-stone-100 p-1.5 rounded-2xl">
           {[
             { id: "daily", label: "일별식단", icon: "🍽️" },
@@ -2189,9 +2055,9 @@ function MainApp() {
             { id: "monthly", label: "월간·식비", icon: "💰" },
             {
               id: "schedule",
-              label: "일정·D데이",
-              icon: "🎂",
-              badge: top3UpcomingSchedules.filter((s) => s.calc.daysUntil <= 3).length
+              label: "일정",
+              icon: "🗓️",
+              badge: imminentSchedulesWithin3Days.length
             },
             { id: "fridge", label: "냉장고", icon: "❄️" },
             {
@@ -2211,16 +2077,16 @@ function MainApp() {
             <button
               key={t.id}
               onClick={() => setActiveTab(t.id)}
-              className={`relative py-1.5 px-1 rounded-xl text-[11px] font-extrabold transition flex items-center justify-center gap-1 ${
+              className={`relative h-9 px-1.5 rounded-xl text-[11px] font-extrabold whitespace-nowrap transition flex items-center justify-center gap-1 ${
                 activeTab === t.id
                   ? "bg-stone-900 text-white shadow-sm"
-                  : "bg-white text-stone-700 hover:bg-stone-50 border border-stone-200/70"
+                  : "bg-white text-stone-700 hover:bg-stone-50 border border-stone-200/80"
               }`}
             >
-              <span>{t.icon}</span>
-              <span className="tracking-tight">{t.label}</span>
+              <span className="text-xs leading-none">{t.icon}</span>
+              <span className="tracking-tight leading-none">{t.label}</span>
               {t.badge > 0 && (
-                <span className="px-1.5 py-0.2 text-[9px] rounded-full bg-orange-500 text-white font-black">
+                <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 text-[9px] rounded-full bg-orange-500 text-white font-black flex items-center justify-center shadow-sm">
                   {t.badge}
                 </span>
               )}
@@ -2390,6 +2256,7 @@ function MainApp() {
             </div>
           )}
 
+          {/* 5칸 균등 가족 필터 */}
           <div className="grid grid-cols-5 gap-1">
             <button
               onClick={() => setSelectedMember("전체")}
@@ -2866,7 +2733,7 @@ function MainApp() {
       )}
 
       {/* ==========================================
-          탭 4: 월간 가족별/전체 일정표 & 매년 반복 기념일 & D-Day 보드
+          탭 4: 가족 일정 & 기념일 보드 (새 일정 추가 시 카운트다운/D+ 체크 기본 해제!)
       ========================================== */}
       {activeTab === "schedule" && (
         <div className="p-4 space-y-4">
@@ -2874,10 +2741,10 @@ function MainApp() {
             <div>
               <h2 className="text-sm font-black text-stone-900 flex items-center gap-1.5">
                 <CalendarDays className="w-4 h-4 text-pink-600" />
-                <span>우리 가족 일정표 & 기념일 D-Day</span>
+                <span>우리 가족 일정표 & 기념일</span>
               </h2>
               <p className="text-[11px] text-stone-500">
-                생일·기념일 매년 자동 반복 및 가족별 할 일·경조사 통합 관리
+                가족별 할 일·경조사 및 매년 반복 생일·기념일 통합 관리
               </p>
             </div>
             <button
@@ -2892,18 +2759,19 @@ function MainApp() {
                       ? ["수혁", "아리나", "시목", "시율"]
                       : [scheduleMemberFilter],
                   isAnnual: false,
-                  showDday: true,
-                  hasOriginYear: true,
+                  showDday: false,
+                  hasOriginYear: false,
                   memo: ""
                 });
                 setIsScheduleModalOpen(true);
               }}
               className="px-3 py-2 rounded-xl bg-stone-900 text-white text-xs font-extrabold flex items-center gap-1 shrink-0 shadow-sm"
             >
-              <Plus className="w-3.5 h-3.5" /> 일정/디데이 추가
+              <Plus className="w-3.5 h-3.5" /> 일정 추가
             </button>
           </div>
 
+          {/* 5칸 균등 가족 필터 */}
           <div className="grid grid-cols-5 gap-1">
             <button
               onClick={() => setScheduleMemberFilter("전체")}
@@ -2930,11 +2798,12 @@ function MainApp() {
             ))}
           </div>
 
+          {/* 1) 가족 D-Day & 기념일 하이라이트 보드 */}
           <div className="bg-gradient-to-br from-stone-900 via-stone-800 to-stone-900 text-white p-4 rounded-2xl shadow-md space-y-2.5">
             <div className="flex items-center justify-between">
               <div className="text-xs font-black text-amber-300 flex items-center gap-1.5">
                 <Star className="w-3.5 h-3.5 fill-amber-300 text-amber-300" />
-                <span>우리 가족 D-Day & 기념일 카운트다운 (오늘: {getTodayStr()})</span>
+                <span>고정된 가족 기념일 & D-Day 보드 (오늘: {getTodayStr()})</span>
               </div>
             </div>
 
@@ -2984,6 +2853,7 @@ function MainApp() {
             </div>
           </div>
 
+          {/* 2) 월간 가족 일정 캘린더 */}
           <div className="bg-white p-3.5 rounded-2xl border border-stone-200 shadow-sm space-y-3">
             <div className="flex items-center justify-between">
               <button
@@ -3122,6 +2992,7 @@ function MainApp() {
             </div>
           </div>
 
+          {/* 3) 선택한 날짜의 상세 일정 / To-Do / 기념일 관리 */}
           <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-sm space-y-2.5">
             <div className="flex items-center justify-between">
               <div className="text-xs font-black text-stone-900">
@@ -3136,8 +3007,8 @@ function MainApp() {
                     category: "할일(To-Do)",
                     members: ["수혁", "아리나"],
                     isAnnual: false,
-                    showDday: true,
-                    hasOriginYear: true,
+                    showDday: false,
+                    hasOriginYear: false,
                     memo: ""
                   });
                   setIsScheduleModalOpen(true);
@@ -3226,7 +3097,7 @@ function MainApp() {
                                 members: toSafeArray(ev.members),
                                 isAnnual: Boolean(ev.isAnnual),
                                 showDday: Boolean(ev.showDday),
-                                hasOriginYear: ev.hasOriginYear !== false,
+                                hasOriginYear: Boolean(ev.hasOriginYear),
                                 memo: ev.memo || ""
                               });
                               setIsScheduleModalOpen(true);
@@ -3897,12 +3768,12 @@ function MainApp() {
         </div>
       )}
 
-      {/* 하단 네비게이션 */}
+      {/* 하단 네비게이션 (메뉴명 "일정"으로 통일!) */}
       <nav className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md bg-white border-t border-stone-200 px-1.5 py-1.5 grid grid-cols-6 gap-0.5 z-30">
         {[
           { id: "daily", label: "일별식단", icon: Utensils },
           { id: "monthly", label: "월간·식비", icon: Calendar },
-          { id: "schedule", label: "일정·D데이", icon: CalendarDays },
+          { id: "schedule", label: "일정", icon: CalendarDays },
           { id: "fridge", label: "냉장고", icon: Package },
           { id: "shopping", label: "장보기", icon: ShoppingCart },
           { id: "ai", label: "AI추천", icon: Sparkles }
@@ -3925,87 +3796,14 @@ function MainApp() {
       </nav>
 
       {/* ==========================================
-          [요청사항 2 완벽 반영] 모달: 버전별 변경 이력 (패치노트 타임라인)
+          모달: 가족 일정 추가·수정 (카운트다운/D+ 기본 체크 해제!)
       ========================================== */}
-      {isPatchNotesOpen && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-sm w-full p-5 space-y-4 max-h-[88vh] overflow-y-auto">
-            <div className="flex items-center justify-between border-b border-stone-200 pb-3">
-              <div>
-                <h3 className="text-sm font-black text-stone-900 flex items-center gap-1.5">
-                  <History className="w-4 h-4 text-amber-600" />
-                  <span>우리 가족 앱 버전 기록 (패치노트)</span>
-                </h3>
-                <p className="text-[11px] text-stone-500 mt-0.5">
-                  현재 적용 버전: <b className="text-stone-900">{CURRENT_APP_VERSION}</b>
-                </p>
-              </div>
-              <button onClick={() => setIsPatchNotesOpen(false)}>
-                <X className="w-5 h-5 text-stone-400" />
-              </button>
-            </div>
-
-            <div className="space-y-3">
-              {PATCH_NOTES_HISTORY.map((item, idx) => (
-                <div
-                  key={item.version}
-                  className={`p-3.5 rounded-2xl border space-y-2 ${
-                    idx === 0
-                      ? "bg-amber-50/70 border-amber-300 shadow-sm"
-                      : "bg-stone-50 border-stone-200"
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-1.5">
-                      <span
-                        className={`px-2 py-0.5 rounded-md text-[10px] font-black ${
-                          idx === 0
-                            ? "bg-stone-900 text-amber-300"
-                            : "bg-stone-200 text-stone-700"
-                        }`}
-                      >
-                        {item.version}
-                      </span>
-                      <span className="px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-white border border-stone-200 text-stone-600">
-                        {item.badge}
-                      </span>
-                    </div>
-                    <span className="text-[10px] font-bold text-stone-400">{item.date}</span>
-                  </div>
-
-                  <div className="text-xs font-black text-stone-900 leading-snug">
-                    {item.title}
-                  </div>
-
-                  <ul className="space-y-1 text-[11px] text-stone-700 leading-relaxed">
-                    {item.changes.map((ch, cIdx) => (
-                      <li key={cIdx} className="flex items-start gap-1.5">
-                        <span className="text-amber-600 font-black mt-0.5">•</span>
-                        <span>{ch}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ))}
-            </div>
-
-            <button
-              onClick={() => setIsPatchNotesOpen(false)}
-              className="w-full py-2.5 rounded-xl bg-stone-900 text-white text-xs font-extrabold"
-            >
-              닫기
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* 모달: 가족 일정 / 기념일 / D-Day 추가·수정 */}
       {isScheduleModalOpen && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-sm w-full p-5 space-y-3.5 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-black">
-                {editingSchedule ? "일정 / 기념일 수정" : "새 가족 일정 · D-Day 추가"}
+                {editingSchedule ? "가족 일정 수정" : "새 가족 일정 추가"}
               </h3>
               <button onClick={() => setIsScheduleModalOpen(false)}>
                 <X className="w-5 h-5 text-stone-400" />
@@ -4014,7 +3812,7 @@ function MainApp() {
 
             <input
               type="text"
-              placeholder="일정/기념일 제목 (예: 시율이 영유아검진, 어버이날)"
+              placeholder="일정 제목 (예: 시목 어린이집상담 2시반, 병원 예약)"
               value={scheduleForm.title}
               onChange={(e) => setScheduleForm({ ...scheduleForm, title: e.target.value })}
               className="w-full px-3 py-2.5 rounded-xl border border-stone-200 text-xs font-bold"
@@ -4038,8 +3836,7 @@ function MainApp() {
                     const cat = e.target.value;
                     setScheduleForm({
                       ...scheduleForm,
-                      category: cat,
-                      isAnnual: cat === "기념일/생일" ? true : scheduleForm.isAnnual
+                      category: cat
                     });
                   }}
                   className="w-full px-3 py-2 rounded-xl border border-stone-200 text-xs font-bold"
@@ -4096,7 +3893,11 @@ function MainApp() {
               </div>
             </div>
 
+            {/* 특별 기념일용 선택 옵션 (기본값은 모두 체크 해제 상태!) */}
             <div className="space-y-2 bg-stone-50 p-3 rounded-2xl border border-stone-200">
+              <div className="text-[10px] font-extrabold text-stone-500">
+                기념일/생일 전용 추가 옵션 (필요할 때만 체크)
+              </div>
               <label className="flex items-center gap-2 text-xs font-bold text-stone-800 cursor-pointer">
                 <input
                   type="checkbox"
@@ -4913,7 +4714,7 @@ function MainApp() {
         </div>
       )}
 
-      {/* 설정 모달 */}
+      {/* 설정 모달: 전체 DB 원본(JSON) 1초 백업 다운로드 & 백업 파일로 1초 복원하기 */}
       {isSettingsOpen && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-sm w-full p-5 space-y-3.5 max-h-[90vh] overflow-y-auto">
@@ -4925,19 +4726,8 @@ function MainApp() {
             </div>
 
             <div className="p-3 rounded-2xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-900 space-y-1">
-              <div className="flex items-center justify-between">
-                <span>
-                  ✅ <b>연결된 DB:</b> <code>ahrisoohyeokbap</code>
-                </span>
-                <button
-                  onClick={() => {
-                    setIsSettingsOpen(false);
-                    setIsPatchNotesOpen(true);
-                  }}
-                  className="px-2 py-0.5 rounded bg-stone-900 text-amber-300 text-[10px] font-extrabold"
-                >
-                  {CURRENT_APP_VERSION} 패치노트 보기
-                </button>
+              <div>
+                ✅ <b>연결된 DB:</b> <code>ahrisoohyeokbap</code>
               </div>
               <div>
                 📦 <b>보관 중인 데이터:</b> 식단 {meals.length}건 · 냉장고 {fridge.length}건 · 일정 {schedules.length}건 · 공지 {notices.length}건
@@ -4950,7 +4740,7 @@ function MainApp() {
                 <span>전체 DB 마스터 원본(JSON) 백업 및 복원</span>
               </div>
               <p className="text-[11px] text-amber-800 leading-relaxed">
-                모든 식단, 냉장고, 식비 가계부, 장보기, 공지사항, 가족 일정을 원본 그대로 백업하고 언제든 1초 만에 복원할 수 있습니다.
+                모든 식단, 냉장고, 식비 가계부, 장보기, 공지사항, 가족 일정을 원본 그대로 백업하고 언제든 1초 만에 복원할 수 있습니다. (매월 1일 자동 알림 지원)
               </p>
 
               <button
