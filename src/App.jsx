@@ -630,11 +630,21 @@ const STORAGE_LOCATIONS = ["냉장실", "냉동실", "실온·팬트리"];
 const FRIDGE_CATEGORIES = ["채소/과일", "육류/수산", "유제품/계란", "유아식/이유식 재료", "반찬/김치", "밀키트", "양념/소스", "기타"];
 const SCHEDULE_CATEGORIES = ["기념일/생일", "할일(To-Do)", "육아/병원", "가족행사/경조사"];
 
-const APP_CODE_VERSION = "v8.6";
-const APP_BUILD_DATE = "2026-11-15 22:15";
+const APP_CODE_VERSION = "v8.7";
+const APP_BUILD_DATE = "2026-11-15 22:28";
 const EDITOR_INVITE_CODE = "0402";
 
 const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v8.7",
+    version: "v8.7",
+    date: "2026-11-15",
+    title: "To-Do 체크리스트 기본 [할일(To-Do)]만 표시 + 병원·행사 포함 토글 추가",
+    changes: [
+      "전체 To-Do 체크리스트에서 기본으로 '할일(To-Do)' 분류만 깔끔하게 표시하도록 개선",
+      "필요할 때 육아/병원·가족행사 일정도 함께 체크할 수 있는 [🏥 병원·행사 포함] 토글 버튼 추가"
+    ]
+  },
   {
     id: "patch-v8.6",
     version: "v8.6",
@@ -1450,7 +1460,8 @@ function MainApp() {
   const [scheduleSelectedDate, setScheduleSelectedDate] = useState(() => getTodayStr());
   const [scheduleMemberFilter, setScheduleMemberFilter] = useState("전체");
   const [scheduleCatFilter, setScheduleCatFilter] = useState("전체");
-  const [todoStatusFilter, setTodoStatusFilter] = useState("all"); // all | active | completed
+  const [todoStatusFilter, setTodoStatusFilter] = useState("all");
+  const [todoIncludeOtherCats, setTodoIncludeOtherCats] = useState(false); // all | active | completed
   const [quickTodoTitle, setQuickTodoTitle] = useState("");
   const [quickTodoDate, setQuickTodoDate] = useState(() => getTodayStr());
   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
@@ -2979,11 +2990,12 @@ function MainApp() {
       .filter((dayGroup) => dayGroup.items.length > 0);
   }, [scheduleWeekDates, schedules, scheduleMemberFilter, scheduleCatFilter]);
 
-  // [신규 요청사항 1] 전체 To-Do 체크리스트 전용 데이터 (기념일/생일 제외한 모든 체크 가능 할일·일정 모아보기)
+  // 전체 To-Do 체크리스트 전용 데이터 (기본: 할일(To-Do)만 / 토글 시 병원·행사 포함)
   const allTodoChecklistItems = useMemo(() => {
     return schedules
       .filter((s) => {
         if (s.category === "기념일/생일" || s.isAnnual) return false;
+        if (!todoIncludeOtherCats && s.category !== "할일(To-Do)") return false;
         const memMatch =
           scheduleMemberFilter === "전체" ||
           toSafeArray(s.members).includes(scheduleMemberFilter);
@@ -2997,19 +3009,19 @@ function MainApp() {
         calc: calculateScheduleDday(s)
       }))
       .sort((a, b) => {
-        // 미완료 항목을 먼저 보여주고, 날짜순 정렬
         if (Boolean(a.done) !== Boolean(b.done)) {
           return a.done ? 1 : -1;
         }
         return String(a.date).localeCompare(String(b.date));
       });
-  }, [schedules, scheduleMemberFilter, todoStatusFilter]);
+  }, [schedules, scheduleMemberFilter, todoStatusFilter, todoIncludeOtherCats]);
 
   const todoStats = useMemo(() => {
     const nonAnniv = schedules.filter(
       (s) =>
         s.category !== "기념일/생일" &&
         !s.isAnnual &&
+        (todoIncludeOtherCats || s.category === "할일(To-Do)") &&
         (scheduleMemberFilter === "전체" ||
           toSafeArray(s.members).includes(scheduleMemberFilter))
     );
@@ -3017,7 +3029,7 @@ function MainApp() {
     const doneCount = nonAnniv.filter((s) => s.done).length;
     const activeCount = total - doneCount;
     return { total, doneCount, activeCount };
-  }, [schedules, scheduleMemberFilter]);
+  }, [schedules, scheduleMemberFilter, todoIncludeOtherCats]);
 
   const dDayCards = useMemo(() => {
     return schedules
@@ -5782,6 +5794,22 @@ function MainApp() {
                   </button>
                 ))}
               </div>
+            </div>
+
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[11px] font-semibold text-stone-500">
+                {todoIncludeOtherCats ? "할일 + 육아/병원·가족행사 함께 표시 중" : "할일(To-Do)만 표시 중"}
+              </span>
+              <button
+                onClick={() => setTodoIncludeOtherCats((v) => !v)}
+                className={`px-2.5 py-1 rounded-lg text-[11px] font-extrabold border transition whitespace-nowrap ${
+                  todoIncludeOtherCats
+                    ? "bg-amber-100 text-amber-900 border-amber-300"
+                    : "bg-stone-100 text-stone-600 border-stone-200 hover:bg-stone-200"
+                }`}
+              >
+                {todoIncludeOtherCats ? "🏥 병원·행사 포함 ON" : "🏥 병원·행사 포함"}
+              </button>
             </div>
 
             {/* 진행률 바 */}
@@ -8984,4 +9012,4 @@ export default function App() {
       <MainApp />
     </ErrorBoundary>
   );
-    }
+}
