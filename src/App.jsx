@@ -62,7 +62,8 @@ import {
   arrayUnion,
   arrayRemove,
   increment,
-  runTransaction
+  runTransaction,
+  writeBatch
 } from "firebase/firestore";
 
 // ==========================================
@@ -630,11 +631,23 @@ const STORAGE_LOCATIONS = ["냉장실", "냉동실", "실온·팬트리"];
 const FRIDGE_CATEGORIES = ["채소/과일", "육류/수산", "유제품/계란", "유아식/이유식 재료", "반찬/김치", "밀키트", "양념/소스", "기타"];
 const SCHEDULE_CATEGORIES = ["기념일/생일", "할일(To-Do)", "육아/병원", "가족행사/경조사"];
 
-const APP_CODE_VERSION = "v8.8";
-const APP_BUILD_DATE = "2026-11-15 22:36";
+const APP_CODE_VERSION = "v8.9";
+const APP_BUILD_DATE = "2026-11-15 22:50";
 const EDITOR_INVITE_CODE = "0402";
 
 const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v8.9",
+    version: "v8.9",
+    date: "2026-11-15",
+    title: "데이터 정합성 패치 (식비 원장 보호·원자적 삭제 배치·빈 로그 동기화·쓰기 카운터 누수 수정)",
+    changes: [
+      "냉장고 재고 삭제 시 연결된 식비 원장(family_expenses_v4)을 보존해 구매비용 누락 방지",
+      "식단·일정·냉장고 삭제를 Firestore writeBatch 원자적 처리로 통합하고 실패 시 Undo/화면 상태 변경 차단",
+      "family_deleted_logs_v8 빈 스냅샷(0건)도 즉시 반영해 기기 간 삭제 로그 동기화 오류 수정",
+      "요리 완료 중복 차감 시 activeWriteCount 카운터 누수 수정, handleSaveMeal/handleAdjustQuantity 서버 성공 후 UI 확정"
+    ]
+  },
   {
     id: "patch-v8.8",
     version: "v8.8",
@@ -1706,6 +1719,13 @@ function MainApp() {
           throw new Error("동일 ID의 데이터가 이미 존재해 덮어쓰지 않았습니다.");
         }
         if (entry.type === "meal") {
+          const exV3 = await tx.get(getDocRef("family_meals_v3", itemId));
+          if (exV3.exists()) throw new Error("동일 ID 식단(v3)이 이미 존재합니다.");
+        } else if (entry.type === "fridge") {
+          const exV3 = await tx.get(getDocRef("family_fridge_v3", itemId));
+          if (exV3.exists()) throw new Error("동일 ID 재고(v3)가 이미 존재합니다.");
+        }
+        if (entry.type === "meal") {
           tx.set(getDocRef("family_meals_v3", itemId), entry.data);
           tx.set(getDocRef("family_meals_v4", itemId), entry.data);
         } else if (entry.type === "fridge") {
@@ -1776,12 +1796,10 @@ function MainApp() {
           .filter((x) => x && x.logId)
           .sort((a, b) => Number(b.createdAtMs || 0) - Number(a.createdAtMs || 0))
           .slice(0, 30);
-        if (remote.length > 0) {
-          setDeletedLogs(remote);
-          try {
-            localStorage.setItem("kim_deleted_logs_v1", JSON.stringify(remote));
-          } catch (e) {}
-        }
+        setDeletedLogs(remote);
+        try {
+          localStorage.setItem("kim_deleted_logs_v1", JSON.stringify(remote));
+        } catch (e) {}
       },
       (err) => {
         setSyncErrorMsg(err?.message || "Firestore 동기화 오류");
@@ -2981,23 +2999,48 @@ function MainApp() {
     }
   };
 
+  const createLogEntryPayload = (type, label, data, actionType = "delete") => ({
+    logId: `dlog-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    id: data.id,
+    type,
+    actionType,
+    label,
+    data,
+    createdAtMs: Date.now(),
+    deletedAt: new Date().toLocaleString("ko-KR", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })
+  });
+
   const handleDeleteSchedule = async (item) => {
     if (!requireEditorAccess()) return;
     if (!user || !db) {
       showToast("⚠️ 서버 연결 후 삭제할 수 있습니다.");
       return;
     }
+    const entry = createLogEntryPayload("schedule", item.title || "가족 일정", item, "delete");
     beginWrite();
+    let ok = false;
+    let errMsg = "";
     try {
-      const entry = await recordDeletedLog("schedule", item.title || "가족 일정", item, "delete");
-      await markIdDeleted(item.id);
-      await deleteDoc(getDocRef("family_schedules_v4", item.id));
+      const batch = writeBatch(db);
+      batch.set(getDocRef("family_deleted_logs_v8", entry.logId), entry);
+      batch.set(getDocRef("family_meta_v4", "deleted_tracker"), { ids: arrayUnion(item.id) }, { merge: true });
+      batch.delete(getDocRef("family_schedules_v4", item.id));
+      await batch.commit();
+
+      setDeletedIds((prev) => {
+        const next = Array.from(new Set([...prev, item.id]));
+        try { localStorage.setItem("kim_family_deleted_ids", JSON.stringify(next)); } catch (e) {}
+        return next;
+      });
       setSchedules((prev) => prev.filter((s) => s.id !== item.id));
-      endWrite(true);
-      showToast(`'${item.title || "일정"}' 삭제됨`, entry ? () => restoreDeletedLogEntry(entry) : null);
+      setDeletedLogs((prev) => [entry, ...prev.filter((x) => x.logId !== entry.logId)].slice(0, 30));
+      ok = true;
+      showToast(`'${item.title || "일정"}' 삭제됨`, () => restoreDeletedLogEntry(entry));
     } catch (e) {
-      endWrite(false, e.message);
+      errMsg = e.message;
       showToast("⚠️ 일정 삭제 실패: 네트워크 상태를 확인해 주세요.");
+    } finally {
+      endWrite(ok, errMsg);
     }
   };
 
@@ -3606,34 +3649,43 @@ function MainApp() {
   const handleAdjustQuantity = async (item, delta) => {
     if (!requireEditorAccess()) return;
     if (!Number.isFinite(delta)) return;
+    if (!user || !db) {
+      showToast("⚠️ 서버 연결 후 수량을 변경할 수 있습니다.");
+      return;
+    }
     const optimisticNext = Math.max(0, Number(item.quantity || 0) + delta);
     const updated = { ...item, quantity: optimisticNext };
     setFridgeMap((prev) => ({
       ...prev,
       local: { ...(prev.local || {}), [item.id]: updated }
     }));
-    if (user && db) {
-      try {
-        const ref = getDocRef("family_fridge_v4", item.id);
-        await runTransaction(db, async (tx) => {
-          const snap = await tx.get(ref);
-          if (!snap.exists()) {
-            throw new Error("이미 삭제되었거나 존재하지 않는 재고입니다.");
-          }
-          const serverQty = Number(snap.data().quantity || 0);
-          const next = serverQty + delta;
-          if (!Number.isFinite(next) || next < 0) {
-            throw new Error("재고가 부족하여 차감할 수 없습니다.");
-          }
-          tx.update(ref, { quantity: next, updatedAt: new Date().toISOString() });
-        });
-      } catch (e) {
-        setFridgeMap((prev) => ({
-          ...prev,
-          local: { ...(prev.local || {}), [item.id]: item }
-        }));
-        showToast(`⚠️ ${e.message || "수량 저장 실패"}`);
-      }
+    beginWrite();
+    let ok = false;
+    let errMsg = "";
+    try {
+      const ref = getDocRef("family_fridge_v4", item.id);
+      await runTransaction(db, async (tx) => {
+        const snap = await tx.get(ref);
+        if (!snap.exists()) {
+          throw new Error("이미 삭제되었거나 존재하지 않는 재고입니다.");
+        }
+        const serverQty = Number(snap.data().quantity || 0);
+        const next = serverQty + delta;
+        if (!Number.isFinite(next) || next < 0) {
+          throw new Error("재고가 부족하여 차감할 수 없습니다.");
+        }
+        tx.update(ref, { quantity: next, updatedAt: new Date().toISOString() });
+      });
+      ok = true;
+    } catch (e) {
+      errMsg = e.message;
+      setFridgeMap((prev) => ({
+        ...prev,
+        local: { ...(prev.local || {}), [item.id]: item }
+      }));
+      showToast(`⚠️ ${e.message || "수량 저장 실패"}`);
+    } finally {
+      endWrite(ok, errMsg);
     }
   };
 
@@ -3756,6 +3808,8 @@ function MainApp() {
     if (user && db) {
       setIsCookingDeducting(true);
       beginWrite();
+      let ok = false;
+      let errMsg = "";
       try {
         const opId = cookingConfirmModal.operationId || `cook-${Date.now()}`;
         const opRef = getDocRef("family_cooking_operations_v7", opId);
@@ -3790,18 +3844,18 @@ function MainApp() {
             createdAt: new Date().toISOString()
           });
         });
-        if (alreadyProcessed) {
-          setCookingConfirmModal(null);
-          showToast("이미 처리된 요리 완료 기록입니다.");
-          return;
-        }
-        endWrite(true);
+        ok = true;
         setCookingConfirmModal(null);
-        showToast(`요리 완료! 선택한 재료 ${toDeduct.length}종이 안전하게 일괄 차감되었습니다.`);
+        if (alreadyProcessed) {
+          showToast("이미 처리된 요리 완료 기록입니다.");
+        } else {
+          showToast(`요리 완료! 선택한 재료 ${toDeduct.length}종이 안전하게 일괄 차감되었습니다.`);
+        }
       } catch (e) {
-        endWrite(false, e.message);
+        errMsg = e.message;
         showToast(`⚠️ 차감 실패(전체 취소됨): ${e.message}`);
       } finally {
+        endWrite(ok, errMsg);
         setIsCookingDeducting(false);
       }
     }
@@ -3861,20 +3915,32 @@ function MainApp() {
       showToast("⚠️ 서버 연결 후 삭제할 수 있습니다.");
       return;
     }
+    const entry = createLogEntryPayload("fridge", item.name || "냉장고 재료", item, "delete");
     beginWrite();
+    let ok = false;
+    let errMsg = "";
     try {
-      const entry = await recordDeletedLog("fridge", item.name || "냉장고 재료", item, "delete");
-      await markIdDeleted(item.id);
-      await deleteDoc(getDocRef("family_fridge_v3", item.id));
-      await deleteDoc(getDocRef("family_fridge_v4", item.id));
-      await deleteDoc(getDocRef("family_meals_v3", item.id));
-      await deleteDoc(getDocRef("family_expenses_v4", `exp-${item.id}`));
-      setExpenses((prev) => prev.filter((e) => e.id !== `exp-${item.id}`));
-      endWrite(true);
-      showToast(`'${item.name}' 삭제됨`, entry ? () => restoreDeletedLogEntry(entry) : null);
+      const batch = writeBatch(db);
+      batch.set(getDocRef("family_deleted_logs_v8", entry.logId), entry);
+      batch.set(getDocRef("family_meta_v4", "deleted_tracker"), { ids: arrayUnion(item.id) }, { merge: true });
+      batch.delete(getDocRef("family_fridge_v3", item.id));
+      batch.delete(getDocRef("family_fridge_v4", item.id));
+      batch.delete(getDocRef("family_meals_v3", item.id));
+      await batch.commit();
+
+      setDeletedIds((prev) => {
+        const next = Array.from(new Set([...prev, item.id]));
+        try { localStorage.setItem("kim_family_deleted_ids", JSON.stringify(next)); } catch (e) {}
+        return next;
+      });
+      setDeletedLogs((prev) => [entry, ...prev.filter((x) => x.logId !== entry.logId)].slice(0, 30));
+      ok = true;
+      showToast(`'${item.name}' 삭제됨 (식비 원장 보존)`, () => restoreDeletedLogEntry(entry));
     } catch (e) {
-      endWrite(false, e.message);
+      errMsg = e.message;
       showToast("⚠️ 재고 삭제 실패: 네트워크 상태를 확인해 주세요.");
+    } finally {
+      endWrite(ok, errMsg);
     }
   };
 
@@ -3895,26 +3961,32 @@ function MainApp() {
       cost: Number(mealForm.cost) || 0
     };
 
-    setMealsMap((prev) => ({
-      ...prev,
-      local: { ...(prev.local || {}), [id]: payload }
-    }));
-
-    setIsMealModalOpen(false);
-    setEditingMeal(null);
     if (!user || !db) {
       showToast("⚠️ 서버 미연결 상태입니다. 연결 후 다시 저장해 주세요.");
       return;
     }
     beginWrite();
+    let ok = false;
+    let errMsg = "";
     try {
-      await setDoc(getDocRef("family_meals_v3", id), payload);
-      await setDoc(getDocRef("family_meals_v4", id), payload);
-      endWrite(true);
+      const batch = writeBatch(db);
+      batch.set(getDocRef("family_meals_v3", id), payload);
+      batch.set(getDocRef("family_meals_v4", id), payload);
+      await batch.commit();
+
+      setMealsMap((prev) => ({
+        ...prev,
+        local: { ...(prev.local || {}), [id]: payload }
+      }));
+      setIsMealModalOpen(false);
+      setEditingMeal(null);
+      ok = true;
       showToast("식단이 저장되었습니다.");
     } catch (e) {
-      endWrite(false, e.message);
-      showToast("⚠️ 식단 저장 실패: 네트워크 상태를 확인해 주세요.");
+      errMsg = e.message;
+      showToast("⚠️ 식단 저장 실패: 입력 내용은 유지되었으니 다시 시도해 주세요.");
+    } finally {
+      endWrite(ok, errMsg);
     }
   };
 
@@ -3924,17 +3996,31 @@ function MainApp() {
       showToast("⚠️ 서버 연결 후 삭제할 수 있습니다.");
       return;
     }
+    const entry = createLogEntryPayload("meal", meal.menu || "식단", meal, "delete");
     beginWrite();
+    let ok = false;
+    let errMsg = "";
     try {
-      const entry = await recordDeletedLog("meal", meal.menu || "식단", meal, "delete");
-      await markIdDeleted(meal.id);
-      await deleteDoc(getDocRef("family_meals_v3", meal.id));
-      await deleteDoc(getDocRef("family_meals_v4", meal.id));
-      endWrite(true);
-      showToast(`'${meal.menu || "식단"}' 삭제됨`, entry ? () => restoreDeletedLogEntry(entry) : null);
+      const batch = writeBatch(db);
+      batch.set(getDocRef("family_deleted_logs_v8", entry.logId), entry);
+      batch.set(getDocRef("family_meta_v4", "deleted_tracker"), { ids: arrayUnion(meal.id) }, { merge: true });
+      batch.delete(getDocRef("family_meals_v3", meal.id));
+      batch.delete(getDocRef("family_meals_v4", meal.id));
+      await batch.commit();
+
+      setDeletedIds((prev) => {
+        const next = Array.from(new Set([...prev, meal.id]));
+        try { localStorage.setItem("kim_family_deleted_ids", JSON.stringify(next)); } catch (e) {}
+        return next;
+      });
+      setDeletedLogs((prev) => [entry, ...prev.filter((x) => x.logId !== entry.logId)].slice(0, 30));
+      ok = true;
+      showToast(`'${meal.menu || "식단"}' 삭제됨`, () => restoreDeletedLogEntry(entry));
     } catch (e) {
-      endWrite(false, e.message);
+      errMsg = e.message;
       showToast("⚠️ 식단 삭제 실패: 네트워크 상태를 확인해 주세요.");
+    } finally {
+      endWrite(ok, errMsg);
     }
   };
 
@@ -8377,7 +8463,7 @@ function MainApp() {
 
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <label className="text-[10px] font-bold text-stone-500">소비기한</label>
+                <label className="text-[10px] font-bold text-stone-500">소비기한 {!editingFridge && !isExpiryManuallyEdited && <span className="text-amber-600">(임시값·상품 확인)</span>}</label>
                 <input
                   type="date"
                   value={fridgeForm.expiryDate}
@@ -9056,4 +9142,4 @@ export default function App() {
       <MainApp />
     </ErrorBoundary>
   );
-}
+   }
