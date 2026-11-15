@@ -631,8 +631,8 @@ const STORAGE_LOCATIONS = ["냉장실", "냉동실", "실온·팬트리"];
 const FRIDGE_CATEGORIES = ["채소/과일", "육류/수산", "유제품/계란", "유아식/이유식 재료", "반찬/김치", "밀키트", "양념/소스", "기타"];
 const SCHEDULE_CATEGORIES = ["기념일/생일", "할일(To-Do)", "육아/병원", "가족행사/경조사"];
 
-const APP_CODE_VERSION = "v9.7";
-const APP_BUILD_DATE = "2026-11-16 08:20";
+const APP_CODE_VERSION = "v9.8";
+const APP_BUILD_DATE = "2026-11-16 08:25";
 const EDITOR_INVITE_CODE = "0402";
 
 const INITIAL_PATCH_NOTES = [
@@ -1606,22 +1606,6 @@ function MainApp() {
     });
   };
 
-  const recentSingleMenuChips = useMemo(() => {
-    const counts = new Map();
-    for (const m of meals) {
-      const parts = String(m.menu || "")
-        .split(/\s*[+,&]\s*/)
-        .map((s) => s.trim())
-        .filter((s) => s && s.length <= 20);
-      for (const pt of parts) {
-        counts.set(pt, (counts.get(pt) || 0) + 1);
-      }
-    }
-    return Array.from(counts.entries())
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 8)
-      .map(([name]) => name);
-  }, [meals]);
   const [editingMeal, setEditingMeal] = useState(null);
   const [mealForm, setMealForm] = useState({
     date: getTodayStr(),
@@ -2484,6 +2468,23 @@ function MainApp() {
     });
     return Object.values(merged);
   }, [mealsMap, deletedIds]);
+
+  const recentSingleMenuChips = useMemo(() => {
+    const counts = new Map();
+    for (const m of meals) {
+      const parts = String(m.menu || "")
+        .split(/\s*[+,&]\s*/)
+        .map((s) => s.trim())
+        .filter((s) => s && s.length <= 20);
+      for (const pt of parts) {
+        counts.set(pt, (counts.get(pt) || 0) + 1);
+      }
+    }
+    return Array.from(counts.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 8)
+      .map(([name]) => name);
+  }, [meals]);
 
   const fridge = useMemo(() => {
     const merged = {};
