@@ -56,7 +56,8 @@ import {
   deleteDoc,
   onSnapshot,
   arrayUnion,
-  increment
+  increment,
+  runTransaction
 } from "firebase/firestore";
 
 // ==========================================
@@ -507,6 +508,28 @@ const SCHEDULE_CATEGORIES = ["기념일/생일", "할일(To-Do)", "육아/병원
 
 const INITIAL_PATCH_NOTES = [
   {
+    id: "patch-v6.2",
+    version: "v6.2",
+    date: "2026-11-15",
+    title: "주방 매니저(재고 차감·장보기 연동) · 한 냄비 가족식 · 폐기손실 분석 · 주간이동 추가",
+    changes: [
+      "Firestore runTransaction() 적용으로 부부 동시 재고 수량 변경 충돌 완벽 방지",
+      "AI 레시피 카드에 [한 냄비 가족별 맞춤 가이드(수혁/아리나/시목/시율)] + [부족 재료 장보기 1초 담기] + [요리 완료 재고 차감] 추가",
+      "냉장고 [폐기(손실기록)] 버튼 및 월간 식비 가계부 내 [폐기손실 별도 집계] 카드 추가",
+      "주간 식단 요약 탭에 [이전주 / 이번주 / 다음주] 이동 버튼 추가"
+    ]
+  },
+  {
+    id: "patch-v6.1",
+    version: "v6.1",
+    date: "2026-11-15",
+    title: "AI 플레이팅 코치(요리 사진 업로드 분석) 기능 추가",
+    changes: [
+      "AI추천 탭에 완성 요리 사진을 올리면 색감·구도 점수, 그릇·가니쉬, 플레이팅 개선 팁을 알려주는 [AI 플레이팅 코치] 추가",
+      "Firebase Storage 유료 전환 없이 기존 Gemini Vision 엔진으로 즉시 분석 및 셰프 노트 기록 지원"
+    ]
+  },
+  {
     id: "patch-v6.0",
     version: "v6.0",
     date: "2026-11-15",
@@ -810,6 +833,7 @@ function MainApp() {
   const [mealsMap, setMealsMap] = useState({});
   const [fridgeMap, setFridgeMap] = useState({});
   const [expenses, setExpenses] = useState([]);
+  const [wasteEvents, setWasteEvents] = useState([]);
   const [shoppingList, setShoppingList] = useState([]);
   const [notices, setNotices] = useState([]);
   const [schedules, setSchedules] = useState([]);
@@ -934,6 +958,15 @@ function MainApp() {
   const [quickLogRecipe, setQuickLogRecipe] = useState(null);
   const [quickLogDate, setQuickLogDate] = useState(() => getTodayStr());
   const [quickLogSlot, setQuickLogSlot] = useState("저녁");
+
+  // AI 플레이팅 코치 (사진 업로드 분석) 상태
+  const [platingPreviewUrl, setPlatingPreviewUrl] = useState("");
+  const [platingImagePart, setPlatingImagePart] = useState(null);
+  const [platingStyleHint, setPlatingStyleHint] = useState("");
+  const [platingResult, setPlatingResult] = useState(null);
+  const [isPlatingLoading, setIsPlatingLoading] = useState(false);
+  const [platingErrorMsg, setPlatingErrorMsg] = useState("");
+  const platingFileInputRef = useRef(null);
 
   // 식단표 이미지 AI 스캐너 상태
   const [isDaycareModalOpen, setIsDaycareModalOpen] = useState(false);
@@ -1238,6 +1271,16 @@ function MainApp() {
 
     unsubscribers.push(
       onSnapshot(
+        getColRef("family_inventory_events_v7"),
+        (snap) => {
+          setWasteEvents(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+        },
+        () => {}
+      )
+    );
+
+    unsubscribers.push(
+      onSnapshot(
         getColRef("family_shopping_v4"),
         async (snap) => {
           const loaded = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
@@ -1523,7 +1566,7 @@ function MainApp() {
   // ==========================================
   const buildFullBackupJsonString = () => {
     const fullSnapshot = {
-      backupVersion: "v6.0",
+      backupVersion: "v6.2",
       exportedAt: new Date().toISOString(),
       projectId: USER_FIREBASE_CONFIG.projectId,
       data: {
@@ -1906,6 +1949,12 @@ function MainApp() {
     "time": "20분",
     "usedIngredients": ["사용재료1", "사용재료2"],
     "steps": ["1. 재료 손질...", "2. 조리 과정...", "3. 완성 및 플레이팅..."],
+    "familyGuide": {
+      "수혁": "성인 균형식(적정량)",
+      "아리나": "영양·단백질 보충",
+      "시목": "유아식(작게 잘라 저염 분리)",
+      "시율": "신생아(고형식 제외)"
+    },
     "tip": "셰프의 핵심 조리 팁"
   }
 ]`;
@@ -1938,6 +1987,75 @@ function MainApp() {
       setAiErrorMsg(err.message);
     } finally {
       setIsAiLoading(false);
+    }
+  };
+
+  const handlePlatingImageSelect = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setPlatingErrorMsg("");
+    setPlatingResult(null);
+    try {
+      const { base64, mimeType, previewUrl } = await fileToBase64(file);
+      setPlatingPreviewUrl(previewUrl);
+      setPlatingImagePart({ base64, mimeType });
+    } catch (err) {
+      setPlatingErrorMsg("이미지를 불러오는 중 오류가 발생했습니다.");
+    } finally {
+      if (platingFileInputRef.current) platingFileInputRef.current.value = "";
+    }
+  };
+
+  const handleAnalyzePlating = async () => {
+    if (!platingImagePart) {
+      setPlatingErrorMsg("먼저 요리 완성 사진을 선택해 주세요.");
+      return;
+    }
+    setPlatingErrorMsg("");
+    setIsPlatingLoading(true);
+    try {
+      const promptText = `당신은 미슐랭 레스토랑 푸드 스타일리스트이자 가정식 플레이팅 코치입니다.
+업로드된 음식 사진을 보고 플레이팅을 분석해 주세요.
+요청 스타일/상황: ${platingStyleHint || "깔끔하고 먹음직스러운 가정식 한 상"}
+
+반드시 마크다운 코드블록 없이 아래 형식의 순수 JSON 배열(요소 1개)만 출력하세요:
+[
+  {
+    "dishName": "사진 속 요리명",
+    "colorScore": 4,
+    "layoutScore": 3,
+    "summary": "현재 담음새의 장점과 한 줄 총평",
+    "plateAndGarnish": "어울리는 그릇 색상/모양 및 추천 가니쉬(쪽파, 깨, 허브 등)",
+    "tips": [
+      "1. 높이감/중앙 배치 개선 팁",
+      "2. 여백 및 소스 연출 팁",
+      "3. 색감 포인트 보완 팁"
+    ]
+  }
+]`;
+
+      const parsed = await callReliableAiEngine({
+        apiKey: geminiApiKey,
+        promptText,
+        imagePart: platingImagePart,
+        temperature: 0.4
+      });
+
+      const first = Array.isArray(parsed) && parsed.length > 0 ? parsed[0] : null;
+      if (!first) throw new Error("플레이팅 분석 결과를 읽지 못했습니다.");
+
+      setPlatingResult({
+        ...first,
+        colorScore: Number(first.colorScore) || 4,
+        layoutScore: Number(first.layoutScore) || 4,
+        tips: toSafeArray(first.tips)
+      });
+      showToast("AI 플레이팅 분석이 완료되었습니다!");
+    } catch (err) {
+      console.error("Plating analysis error:", err);
+      setPlatingErrorMsg(err.message);
+    } finally {
+      setIsPlatingLoading(false);
     }
   };
 
@@ -2189,23 +2307,113 @@ function MainApp() {
   };
 
   const handleAdjustQuantity = async (item, delta) => {
-    const nextQty = Math.max(0, Number(item.quantity || 0) + delta);
-    const updated = { ...item, quantity: nextQty };
+    const optimisticNext = Math.max(0, Number(item.quantity || 0) + delta);
+    const updated = { ...item, quantity: optimisticNext };
     setFridgeMap((prev) => ({
       ...prev,
       local: { ...(prev.local || {}), [item.id]: updated }
     }));
     if (user && db) {
       try {
-        if (Number(item.quantity || 0) + delta >= 0) {
-          await setDoc(getDocRef("family_fridge_v4", item.id), { ...updated, quantity: increment(delta) }, { merge: true });
-        } else {
-          await setDoc(getDocRef("family_fridge_v4", item.id), updated, { merge: true });
-        }
+        const ref = getDocRef("family_fridge_v4", item.id);
+        await runTransaction(db, async (tx) => {
+          const snap = await tx.get(ref);
+          if (!snap.exists()) {
+            tx.set(ref, updated);
+            return;
+          }
+          const serverQty = Number(snap.data().quantity || 0);
+          const next = Math.max(0, serverQty + delta);
+          tx.update(ref, { quantity: next, updatedAt: new Date().toISOString() });
+        });
       } catch (e) {
         showToast("⚠️ 수량 저장 실패: 네트워크를 확인해 주세요.");
       }
     }
+  };
+
+  // [신규 v6.2] 냉장고 식재료 폐기(소비기한 경과 등) -> 손실 금액 별도 기록
+  const handleWasteFridgeItem = async (item) => {
+    const lossAmount = Number(item.price) || 0;
+    const eventId = `waste-${item.id}-${Date.now()}`;
+    const wasteRecord = {
+      id: eventId,
+      itemId: item.id,
+      name: item.name,
+      eventType: "waste",
+      estimatedLoss: lossAmount,
+      date: getTodayStr(),
+      reason: "폐기 처리",
+      createdAt: new Date().toISOString()
+    };
+
+    setWasteEvents((prev) => [wasteRecord, ...prev]);
+    await markIdDeleted(item.id);
+    if (user && db) {
+      try {
+        await setDoc(getDocRef("family_inventory_events_v7", eventId), wasteRecord);
+        await deleteDoc(getDocRef("family_fridge_v3", item.id));
+        await deleteDoc(getDocRef("family_fridge_v4", item.id));
+      } catch (e) {
+        showToast("⚠️ 폐기 기록 저장 중 오류가 발생했습니다.");
+      }
+    }
+    showToast(
+      lossAmount > 0
+        ? `'${item.name}' 폐기 완료 (추정 손실 ${lossAmount.toLocaleString()}원 기록됨)`
+        : `'${item.name}' 폐기 처리 완료`
+    );
+  };
+
+  // [신규 v6.2] AI 레시피 부족 재료 일괄 장보기 담기
+  const handleAddMissingIngredientsToShopping = async (usedIngs) => {
+    const fridgeNames = fridge.map((f) => String(f.name || "").toLowerCase());
+    const missing = toSafeArray(usedIngs).filter(
+      (ing) => !fridgeNames.some((fn) => fn.includes(ing.toLowerCase()) || ing.toLowerCase().includes(fn))
+    );
+    if (missing.length === 0) {
+      showToast("모든 재료가 이미 냉장고에 있습니다!");
+      return;
+    }
+    for (const ing of missing) {
+      const shId = `sh-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`;
+      const newShop = {
+        id: shId,
+        name: ing,
+        quantity: "1개",
+        category: "기타",
+        urgent: false,
+        checked: false,
+        memo: "AI 레시피 부족 재료"
+      };
+      setShoppingList((prev) => [newShop, ...prev]);
+      if (user && db) {
+        try {
+          await setDoc(getDocRef("family_shopping_v4", shId), newShop);
+        } catch (e) {}
+      }
+    }
+    showToast(`부족한 재료 ${missing.length}종을 장보기 목록에 담았습니다!`);
+  };
+
+  // [신규 v6.2] 요리 완료 시 매칭되는 냉장고 재료 수량 1씩 안전 차감
+  const handleCompleteRecipeCooking = async (recipe) => {
+    const used = toSafeArray(recipe.usedIngredients);
+    const matched = fridge.filter((f) =>
+      used.some(
+        (u) =>
+          String(f.name || "").toLowerCase().includes(u.toLowerCase()) ||
+          u.toLowerCase().includes(String(f.name || "").toLowerCase())
+      ) && Number(f.quantity || 0) > 0
+    );
+    if (matched.length === 0) {
+      showToast("차감할 매칭 냉장고 재고가 없습니다.");
+      return;
+    }
+    for (const item of matched) {
+      await handleAdjustQuantity(item, -1);
+    }
+    showToast(`요리 완료! 냉장고 재료 ${matched.length}종 수량이 1씩 차감되었습니다.`);
   };
 
   const handleConsumeFridgeItem = async (item, addToShopping = false) => {
@@ -2515,9 +2723,19 @@ function MainApp() {
     const groceryTotal = combinedLedger.reduce((acc, cur) => acc + (Number(cur.amount) || 0), 0);
     const diningTotal = diningItems.reduce((acc, cur) => acc + (Number(cur.cost) || 0), 0);
     const total = groceryTotal + diningTotal;
+    const monthWasteItems = wasteEvents.filter((w) => String(w.date || "").startsWith(monthPrefix));
+    const wasteTotal = monthWasteItems.reduce((acc, cur) => acc + (Number(cur.estimatedLoss) || 0), 0);
 
-    return { groceryTotal, diningTotal, total, ledgerItems: combinedLedger, diningItems };
-  }, [expenses, fridge, meals, currentMonth]);
+    return {
+      groceryTotal,
+      diningTotal,
+      total,
+      wasteTotal,
+      wasteCount: monthWasteItems.length,
+      ledgerItems: combinedLedger,
+      diningItems
+    };
+  }, [expenses, fridge, meals, wasteEvents, currentMonth]);
 
   const expiringItems = useMemo(() => {
     return fridge
@@ -2625,7 +2843,7 @@ function MainApp() {
               title="패치노트 기록 및 히스토리"
             >
               <ClipboardList className="w-3 h-3 text-stone-600" />
-              <span>패치노트 {patchNotes[0]?.version || "v6.0"}</span>
+              <span>패치노트 {patchNotes[0]?.version || "v6.2"}</span>
             </button>
           </div>
 
@@ -3217,13 +3435,46 @@ function MainApp() {
       {activeTab === "weekly" && (
         <div className="p-4 space-y-4">
           <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-sm">
-            <div className="flex items-center justify-between mb-2">
-              <h2 className="text-sm font-black text-stone-900">
-                📊 주간 식단 현황 ({weekDates[0].slice(5)} ~ {weekDates[6].slice(5)})
+            <div className="flex items-center justify-between mb-2 gap-1">
+              <h2 className="text-sm font-black text-stone-900 truncate">
+                📊 주간 식단 ({weekDates[0].slice(5)} ~ {weekDates[6].slice(5)})
               </h2>
-              <span className="text-xs font-extrabold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full">
-                총 {meals.filter((m) => weekDates.includes(m.date)).length}끼 기록됨
-              </span>
+              <div className="flex items-center gap-1 shrink-0">
+                <button
+                  onClick={() => {
+                    const d = new Date(selectedDate + "T00:00:00");
+                    d.setDate(d.getDate() - 7);
+                    const nextStr = formatDate(d);
+                    setSelectedDate(nextStr);
+                    setCurrentMonth(nextStr.slice(0, 7));
+                  }}
+                  className="px-2 py-0.5 rounded-lg bg-stone-100 hover:bg-stone-200 text-[10px] font-extrabold"
+                >
+                  &lt; 이전주
+                </button>
+                <button
+                  onClick={() => {
+                    const today = getTodayStr();
+                    setSelectedDate(today);
+                    setCurrentMonth(today.slice(0, 7));
+                  }}
+                  className="px-2 py-0.5 rounded-lg bg-emerald-50 text-emerald-700 text-[10px] font-extrabold"
+                >
+                  이번주
+                </button>
+                <button
+                  onClick={() => {
+                    const d = new Date(selectedDate + "T00:00:00");
+                    d.setDate(d.getDate() + 7);
+                    const nextStr = formatDate(d);
+                    setSelectedDate(nextStr);
+                    setCurrentMonth(nextStr.slice(0, 7));
+                  }}
+                  className="px-2 py-0.5 rounded-lg bg-stone-100 hover:bg-stone-200 text-[10px] font-extrabold"
+                >
+                  다음주 &gt;
+                </button>
+              </div>
             </div>
 
             <div className="grid grid-cols-4 gap-2 mt-3">
@@ -3504,6 +3755,17 @@ function MainApp() {
                     </div>
                   </div>
                 </div>
+
+                {monthlyExpenseSummary.wasteCount > 0 && (
+                  <div className="mt-2.5 pt-2 border-t border-stone-700 flex items-center justify-between text-[11px]">
+                    <span className="text-rose-300 font-bold">
+                      🗑️ 이번 달 폐기손실 추정 ({monthlyExpenseSummary.wasteCount}건 · 합산 제외)
+                    </span>
+                    <span className="font-black text-rose-300">
+                      {monthlyExpenseSummary.wasteTotal.toLocaleString()}원
+                    </span>
+                  </div>
+                )}
               </div>
 
               <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-sm space-y-2.5">
@@ -4408,9 +4670,16 @@ function MainApp() {
                           </button>
                           <button
                             onClick={() => handleConsumeFridgeItem(item, true)}
-                            className="px-2.5 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 text-[11px] font-extrabold"
+                            className="px-2 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 text-[10px] font-extrabold"
                           >
-                            + 소진 후 장보기메모
+                            + 장보기
+                          </button>
+                          <button
+                            onClick={() => handleWasteFridgeItem(item)}
+                            className="px-2 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-800 border border-rose-200 text-[10px] font-extrabold"
+                            title="폐기 처리 및 손실 기록"
+                          >
+                            🗑️ 폐기
                           </button>
                         </div>
 
@@ -4861,6 +5130,32 @@ function MainApp() {
                       💡 <b>셰프의 팁:</b> {rec.tip}
                     </div>
                   )}
+                  {rec.familyGuide && typeof rec.familyGuide === "object" && (
+                    <div className="grid grid-cols-2 gap-1.5 bg-stone-50 p-2.5 rounded-xl border border-stone-200/80 text-[10px]">
+                      {Object.entries(rec.familyGuide).map(([mem, guide]) => (
+                        <div key={mem} className="bg-white px-2 py-1.5 rounded-lg border border-stone-200">
+                          <span className="font-black text-stone-900">{mem}: </span>
+                          <span className="text-stone-600">{guide}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-2 gap-1.5">
+                    <button
+                      onClick={() => handleAddMissingIngredientsToShopping(rec.usedIngredients)}
+                      className="py-2 px-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-[11px] font-extrabold"
+                    >
+                      🛒 부족재료 장보기 담기
+                    </button>
+                    <button
+                      onClick={() => handleCompleteRecipeCooking(rec)}
+                      className="py-2 px-2 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 text-[11px] font-extrabold"
+                    >
+                      🍳 요리완료 (재고 -1)
+                    </button>
+                  </div>
+
                   <button
                     onClick={() => {
                       setQuickLogRecipe(rec);
@@ -4876,6 +5171,124 @@ function MainApp() {
               ))}
             </div>
           )}
+          {/* ==========================================
+              [신규 v6.1] AI 플레이팅 코치 (요리 사진 업로드 -> 담음새/그릇/가니쉬 코칭)
+          ========================================== */}
+          <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-sm space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-sm font-black text-stone-900 flex items-center gap-1.5">
+                  <Camera className="w-4 h-4 text-rose-500" />
+                  <span>AI 플레이팅 코치 (사진 분석)</span>
+                </h2>
+                <p className="text-[11px] text-stone-500 mt-0.5">
+                  완성한 요리 사진을 올리면 색감·여백 점수와 그릇·가니쉬 팁을 알려드려요.
+                </p>
+              </div>
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-rose-50 text-rose-700 border border-rose-200 shrink-0">
+                📸 Vision
+              </span>
+            </div>
+
+            <input
+              ref={platingFileInputRef}
+              type="file"
+              accept="image/*"
+              onChange={handlePlatingImageSelect}
+              className="hidden"
+            />
+
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                onClick={() => platingFileInputRef.current?.click()}
+                className="py-2.5 px-3 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-800 text-xs font-extrabold flex items-center justify-center gap-1.5 border border-stone-200"
+              >
+                <Upload className="w-3.5 h-3.5" />
+                <span>{platingPreviewUrl ? "사진 다시 선택" : "요리 사진 올리기"}</span>
+              </button>
+              <input
+                type="text"
+                placeholder="스타일 (예: 손님상, 아이 식판)"
+                value={platingStyleHint}
+                onChange={(e) => setPlatingStyleHint(e.target.value)}
+                className="px-3 py-2 rounded-xl border border-stone-200 text-xs"
+              />
+            </div>
+
+            {platingPreviewUrl && (
+              <div className="rounded-2xl overflow-hidden border border-stone-200 bg-stone-100">
+                <img
+                  src={platingPreviewUrl}
+                  alt="플레이팅 분석 사진"
+                  className="w-full max-h-52 object-cover"
+                />
+              </div>
+            )}
+
+            {platingErrorMsg && (
+              <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-xs text-red-700 font-bold">
+                ⚠️ {platingErrorMsg}
+              </div>
+            )}
+
+            <button
+              onClick={handleAnalyzePlating}
+              disabled={isPlatingLoading || !platingImagePart}
+              className={`w-full py-3 rounded-2xl font-black text-xs flex items-center justify-center gap-2 shadow-sm transition ${
+                !platingImagePart
+                  ? "bg-stone-200 text-stone-400 cursor-not-allowed"
+                  : "bg-rose-600 hover:bg-rose-700 text-white"
+              }`}
+            >
+              {isPlatingLoading ? (
+                <>
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                  <span>AI가 플레이팅 구도·색감 분석 중...</span>
+                </>
+              ) : (
+                <>
+                  <Sparkles className="w-4 h-4" />
+                  <span>AI 플레이팅 추천 · 코칭 받기</span>
+                </>
+              )}
+            </button>
+
+            {platingResult && (
+              <div className="p-3.5 rounded-2xl bg-rose-50/60 border border-rose-200 space-y-2.5">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-sm font-black text-stone-900">
+                    🍽️ {platingResult.dishName}
+                  </span>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <span className="px-2 py-0.5 rounded-lg bg-white border border-rose-200 text-[10px] font-extrabold text-rose-800">
+                      색감 {platingResult.colorScore}/5
+                    </span>
+                    <span className="px-2 py-0.5 rounded-lg bg-white border border-rose-200 text-[10px] font-extrabold text-rose-800">
+                      구성 {platingResult.layoutScore}/5
+                    </span>
+                  </div>
+                </div>
+
+                <div className="text-xs font-bold text-stone-800 leading-snug">
+                  {platingResult.summary}
+                </div>
+
+                {platingResult.plateAndGarnish && (
+                  <div className="p-2.5 rounded-xl bg-white border border-rose-100 text-[11px] font-semibold text-stone-700">
+                    🥣 <b>추천 그릇·가니쉬:</b> {platingResult.plateAndGarnish}
+                  </div>
+                )}
+
+                <div className="space-y-1 bg-white p-2.5 rounded-xl border border-rose-100 text-xs text-stone-700">
+                  {toSafeArray(platingResult.tips).map((tip, idx) => (
+                    <div key={idx} className="leading-snug">
+                      {tip}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
