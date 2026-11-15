@@ -630,11 +630,21 @@ const STORAGE_LOCATIONS = ["냉장실", "냉동실", "실온·팬트리"];
 const FRIDGE_CATEGORIES = ["채소/과일", "육류/수산", "유제품/계란", "유아식/이유식 재료", "반찬/김치", "밀키트", "양념/소스", "기타"];
 const SCHEDULE_CATEGORIES = ["기념일/생일", "할일(To-Do)", "육아/병원", "가족행사/경조사"];
 
-const APP_CODE_VERSION = "v8.7";
-const APP_BUILD_DATE = "2026-11-15 22:28";
+const APP_CODE_VERSION = "v8.8";
+const APP_BUILD_DATE = "2026-11-15 22:36";
 const EDITOR_INVITE_CODE = "0402";
 
 const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v8.8",
+    version: "v8.8",
+    date: "2026-11-15",
+    title: "냉장고 재료추가 현재 필터(보관위치·카테고리) 자동 반영 + 소비기한 기본값(냉장 1주/냉동 1달)",
+    changes: [
+      "냉장고 탭 및 + 플로팅 버튼으로 재료 추가 시 현재 선택된 보관위치(냉동실 등)와 카테고리(유제품/계란 등)를 기본값으로 자동 입력",
+      "소비기한 기본값을 냉장실·실온은 1주 뒤(+7일), 냉동실은 1달 뒤(+1개월)로 자동 세팅 (모달 내 보관위치 변경 시에도 자동 연동)"
+    ]
+  },
   {
     id: "patch-v8.7",
     version: "v8.7",
@@ -1493,6 +1503,33 @@ function MainApp() {
 
   // 냉장고 모달 상태
   const [isFridgeModalOpen, setIsFridgeModalOpen] = useState(false);
+  const [isExpiryManuallyEdited, setIsExpiryManuallyEdited] = useState(false);
+
+  const getDefaultExpiryForLocation = (loc) => {
+    const todayStr = getTodayStr();
+    return loc === "냉동실"
+      ? addMonthsToDateStr(todayStr, 1, 0)
+      : addMonthsToDateStr(todayStr, 0, 7);
+  };
+
+  const openAddFridgeModal = () => {
+    const defaultLoc = fridgeLocFilter === "전체" ? "냉장실" : fridgeLocFilter;
+    const defaultCat = fridgeCatFilter === "전체" ? "채소/과일" : fridgeCatFilter;
+    setEditingFridge(null);
+    setIsExpiryManuallyEdited(false);
+    setFridgeForm({
+      name: "",
+      location: defaultLoc,
+      category: defaultCat,
+      quantity: 1,
+      unit: "개",
+      expiryDate: getDefaultExpiryForLocation(defaultLoc),
+      price: "",
+      purchaseDate: selectedDate,
+      recordExpense: true
+    });
+    setIsFridgeModalOpen(true);
+  };
   const [editingFridge, setEditingFridge] = useState(null);
   const [fridgeForm, setFridgeForm] = useState({
     name: "",
@@ -6069,23 +6106,7 @@ function MainApp() {
               ))}
             </div>
             <button
-              onClick={() => {
-                setEditingFridge(null);
-                const defaultExp = new Date();
-                defaultExp.setDate(defaultExp.getDate() + 7);
-                setFridgeForm({
-                  name: "",
-                  location: "냉장실",
-                  category: "채소/과일",
-                  quantity: 1,
-                  unit: "개",
-                  expiryDate: formatDate(defaultExp),
-                  price: "",
-                  purchaseDate: selectedDate,
-                  recordExpense: true
-                });
-                setIsFridgeModalOpen(true);
-              }}
+              onClick={openAddFridgeModal}
               className="px-3 py-2 rounded-xl bg-stone-900 text-white text-xs font-extrabold flex items-center gap-1 shrink-0"
             >
               <Plus className="w-3.5 h-3.5" /> 재료 추가
@@ -7341,9 +7362,19 @@ function MainApp() {
       <button
         onClick={() => {
           if (activeTab === "fridge") {
-            setEditingFridge(null);
-            setIsFridgeModalOpen(true);
+            openAddFridgeModal();
           } else if (activeTab === "schedule") {
+            setEditingSchedule(null);
+            setScheduleForm({
+              title: "",
+              date: scheduleSelectedDate || getTodayStr(),
+              category: scheduleCatFilter === "전체" ? "할일(To-Do)" : scheduleCatFilter,
+              members: scheduleMemberFilter === "전체" ? ["수혁", "아리나", "시목", "시율"] : [scheduleMemberFilter],
+              isAnnual: false,
+              showDday: false,
+              hasOriginYear: false,
+              memo: ""
+            });
             setIsScheduleModalOpen(true);
           } else if (activeTab === "notices") {
             setIsNoticeModalOpen(true);
@@ -8295,7 +8326,17 @@ function MainApp() {
             <div className="grid grid-cols-2 gap-2">
               <select
                 value={fridgeForm.location}
-                onChange={(e) => setFridgeForm({ ...fridgeForm, location: e.target.value })}
+                onChange={(e) => {
+                  const newLoc = e.target.value;
+                  setFridgeForm((prev) => ({
+                    ...prev,
+                    location: newLoc,
+                    expiryDate:
+                      !editingFridge && !isExpiryManuallyEdited
+                        ? getDefaultExpiryForLocation(newLoc)
+                        : prev.expiryDate
+                  }));
+                }}
                 className="px-3 py-2 rounded-xl border border-stone-200 text-xs font-bold"
               >
                 {STORAGE_LOCATIONS.map((loc) => (
@@ -8340,7 +8381,10 @@ function MainApp() {
                 <input
                   type="date"
                   value={fridgeForm.expiryDate}
-                  onChange={(e) => setFridgeForm({ ...fridgeForm, expiryDate: e.target.value })}
+                  onChange={(e) => {
+                    setIsExpiryManuallyEdited(true);
+                    setFridgeForm({ ...fridgeForm, expiryDate: e.target.value });
+                  }}
                   className="w-full px-3 py-2 rounded-xl border border-stone-200 text-xs font-bold"
                 />
               </div>
