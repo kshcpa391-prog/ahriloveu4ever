@@ -630,11 +630,22 @@ const STORAGE_LOCATIONS = ["냉장실", "냉동실", "실온·팬트리"];
 const FRIDGE_CATEGORIES = ["채소/과일", "육류/수산", "유제품/계란", "유아식/이유식 재료", "반찬/김치", "밀키트", "양념/소스", "기타"];
 const SCHEDULE_CATEGORIES = ["기념일/생일", "할일(To-Do)", "육아/병원", "가족행사/경조사"];
 
-const APP_CODE_VERSION = "v8.4";
-const APP_BUILD_DATE = "2026-11-15 22:00";
+const APP_CODE_VERSION = "v8.5";
+const APP_BUILD_DATE = "2026-11-15 22:05";
 const EDITOR_INVITE_CODE = "0402";
 
 const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v8.5",
+    version: "v8.5",
+    date: "2026-11-15",
+    title: "영수증 스캔 냉장고 탭 이동 · 식단표 스캔 슬림화 · 헤더 제목 잘림 제거",
+    changes: [
+      "마트 영수증 AI 스캔 버튼을 냉장고 탭 상단으로 이동",
+      "일별식단 탭의 식단표 AI 스캔 버튼을 컴팩트한 1줄 바로 축소해 오늘의 식단 노출 강화",
+      "상단 헤더 제목을 '우리 가족 식탁 🍽️'으로 간결화해 모바일 가로 잘림(...) 제거"
+    ]
+  },
   {
     id: "patch-v8.4",
     version: "v8.4",
@@ -4167,8 +4178,8 @@ function MainApp() {
         )}
 
         <div className="flex items-center justify-between gap-1">
-          <h1 className="text-sm font-black tracking-tight text-stone-900 truncate">
-            수혁 · 아리나 · 시목 · 시율네 식탁 🍽️
+          <h1 className="text-sm font-black tracking-tight text-stone-900 whitespace-nowrap">
+            우리 가족 식탁 🍽️
           </h1>
 
           <div className="flex items-center gap-1 shrink-0">
@@ -4464,44 +4475,21 @@ function MainApp() {
       ========================================== */}
       {activeTab === "daily" && (
         <div className="p-4 space-y-3.5">
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              onClick={() => {
-                setScanTargetMonth(selectedDate.slice(0, 7));
-                setIsDaycareModalOpen(true);
-              }}
-              className="p-3 rounded-2xl bg-amber-50 border border-amber-200 text-left hover:bg-amber-100 transition flex items-center gap-2.5"
-            >
-              <div className="p-2 rounded-xl bg-amber-500 text-white shrink-0">
-                <Camera className="w-4 h-4" />
-              </div>
-              <div className="min-w-0">
-                <div className="text-xs font-black text-amber-900 leading-tight">
-                  식단표 AI 스캔
-                </div>
-                <div className="text-[10px] font-semibold text-amber-700 leading-tight mt-0.5">
-                  손글씨·어린이집 자동입력
-                </div>
-              </div>
-            </button>
-
-            <button
-              onClick={() => setIsReceiptModalOpen(true)}
-              className="p-3 rounded-2xl bg-emerald-50 border border-emerald-200 text-left hover:bg-emerald-100 transition flex items-center gap-2.5"
-            >
-              <div className="p-2 rounded-xl bg-emerald-600 text-white shrink-0">
-                <Receipt className="w-4 h-4" />
-              </div>
-              <div className="min-w-0">
-                <div className="text-xs font-black text-emerald-900 leading-tight">
-                  마트 영수증 스캔
-                </div>
-                <div className="text-[10px] font-semibold text-emerald-700 leading-tight mt-0.5">
-                  냉장고+가계부 자동입고
-                </div>
-              </div>
-            </button>
-          </div>
+          <button
+            onClick={() => {
+              setScanTargetMonth(selectedDate.slice(0, 7));
+              setIsDaycareModalOpen(true);
+            }}
+            className="w-full py-2 px-3 rounded-xl bg-amber-50/90 border border-amber-200 hover:bg-amber-100 transition flex items-center justify-between gap-2"
+          >
+            <div className="flex items-center gap-2 min-w-0">
+              <Camera className="w-4 h-4 text-amber-600 shrink-0" />
+              <span className="text-xs font-extrabold text-amber-900 truncate">
+                식단표 AI 스캔 (어린이집·손글씨)
+              </span>
+            </div>
+            <span className="text-[11px] font-bold text-amber-700 shrink-0">열기 &gt;</span>
+          </button>
 
           <div className="bg-white p-3 rounded-2xl border border-stone-200 shadow-sm">
             <div className="flex items-center justify-between mb-2.5">
@@ -5865,7 +5853,26 @@ function MainApp() {
           탭 5: 스마트 냉장고
       ========================================== */}
       {activeTab === "fridge" && (
-        <div className="p-4 space-y-4">
+        <div className="p-4 space-y-3.5">
+          <button
+            onClick={() => setIsReceiptModalOpen(true)}
+            className="w-full p-3 rounded-2xl bg-emerald-50 border border-emerald-200 text-left hover:bg-emerald-100 transition flex items-center justify-between gap-2.5"
+          >
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="p-2 rounded-xl bg-emerald-600 text-white shrink-0">
+                <Receipt className="w-4 h-4" />
+              </div>
+              <div className="min-w-0">
+                <div className="text-xs font-black text-emerald-900 leading-tight">
+                  마트 영수증 AI 스캔
+                </div>
+                <div className="text-[11px] font-semibold text-emerald-700 leading-tight mt-0.5">
+                  사진 1장으로 냉장고 + 가계부 자동입고
+                </div>
+              </div>
+            </div>
+            <span className="text-xs font-extrabold text-emerald-700 shrink-0">스캔 &gt;</span>
+          </button>
           {expiringItems.length > 0 && (
             <div className="bg-orange-50 border border-orange-200 rounded-2xl p-3">
               <div className="flex items-center gap-1.5 text-xs font-black text-orange-900 mb-1.5">
@@ -8837,4 +8844,4 @@ export default function App() {
       <MainApp />
     </ErrorBoundary>
   );
-                       }
+}
