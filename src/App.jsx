@@ -624,11 +624,22 @@ const STORAGE_LOCATIONS = ["냉장실", "냉동실", "실온·팬트리"];
 const FRIDGE_CATEGORIES = ["채소/과일", "육류/수산", "유제품/계란", "유아식/이유식 재료", "반찬/김치", "양념/소스", "기타"];
 const SCHEDULE_CATEGORIES = ["기념일/생일", "할일(To-Do)", "육아/병원", "가족행사/경조사"];
 
-const APP_CODE_VERSION = "v7.6";
-const APP_BUILD_DATE = "2026-11-15 20:20";
+const APP_CODE_VERSION = "v7.7";
+const APP_BUILD_DATE = "2026-11-15 20:30";
 const EDITOR_INVITE_CODE = "0402";
 
 const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v7.7",
+    version: "v7.7",
+    date: "2026-11-15",
+    title: "JSX 빌드 오류 수정 · 영수증/AI 열람전용 차단 보완 · 재고 트랜잭션 정합성 개선",
+    changes: [
+      "설정 모달 조건부 JSX 닫힘 괄호 위치 오류 수정 (Vercel npm run build 오류 해결)",
+      "영수증 일괄 입고 및 AI 호출 핸들러에 열람 전용 모드 차단(requireEditorAccess) 적용",
+      "재고 수량 조절 시 삭제된 문서 재생성 방지, 요리 차감 시 동일 재고 ID 수량 합산 및 저장 실패 알림 보완"
+    ]
+  },
   {
     id: "patch-v7.6",
     version: "v7.6",
@@ -2671,6 +2682,7 @@ function MainApp() {
   // 9. AI 식단 추천 & 식단표/영수증 이미지 스캔 핸들러
   // ==========================================
   const handleRunAiRecommend = async () => {
+    if (!requireEditorAccess()) return;
     setAiErrorMsg("");
 
     const picked =
@@ -2764,6 +2776,7 @@ function MainApp() {
 
   // [신규 v7.2] 버튼 클릭 시에만 저비용 AI 플레이팅 예시 이미지 생성
   const handleGeneratePlatingExampleImage = async () => {
+    if (!requireEditorAccess()) return;
     if (!platingResult) return;
     const cleanOpenai = String(openaiApiKey || "").trim();
     const cleanGemini = String(geminiApiKey || "").trim();
@@ -2867,6 +2880,7 @@ function MainApp() {
   };
 
   const handleAnalyzePlating = async () => {
+    if (!requireEditorAccess()) return;
     if (!platingImagePart) {
       setPlatingErrorMsg("먼저 요리 완성 사진을 선택해 주세요.");
       return;
@@ -2926,6 +2940,7 @@ function MainApp() {
   };
 
   const handleMenuImageUpload = async (e) => {
+    if (!requireEditorAccess()) return;
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -3096,6 +3111,7 @@ function MainApp() {
   };
 
   const handleReceiptImageUpload = async (e) => {
+    if (!requireEditorAccess()) return;
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -3180,6 +3196,7 @@ function MainApp() {
 
   const handleAdjustQuantity = async (item, delta) => {
     if (!requireEditorAccess()) return;
+    if (!Number.isFinite(delta)) return;
     const optimisticNext = Math.max(0, Number(item.quantity || 0) + delta);
     const updated = { ...item, quantity: optimisticNext };
     setFridgeMap((prev) => ({
@@ -3192,8 +3209,7 @@ function MainApp() {
         await runTransaction(db, async (tx) => {
           const snap = await tx.get(ref);
           if (!snap.exists()) {
-            tx.set(ref, updated);
-            return;
+            throw new Error("이미 삭제되었거나 존재하지 않는 재고입니다.");
           }
           const serverQty = Number(snap.data().quantity || 0);
           const next = serverQty + delta;
@@ -3306,11 +3322,24 @@ function MainApp() {
   const handleConfirmCookingDeduction = async () => {
     if (!requireEditorAccess()) return;
     if (!cookingConfirmModal) return;
-    const toDeduct = cookingConfirmModal.items.filter((x) => x.deductQty > 0);
-    if (toDeduct.length === 0) {
+    const rawDeduct = cookingConfirmModal.items.filter((x) => Number(x.deductQty) > 0);
+    if (rawDeduct.length === 0) {
       setCookingConfirmModal(null);
       return;
     }
+    const aggregatedMap = new Map();
+    for (const entry of rawDeduct) {
+      const id = entry.item?.id;
+      if (!id) continue;
+      const prev = aggregatedMap.get(id);
+      const qty = Number(entry.deductQty) || 0;
+      if (prev) {
+        prev.deductQty += qty;
+      } else {
+        aggregatedMap.set(id, { item: entry.item, deductQty: qty });
+      }
+    }
+    const toDeduct = Array.from(aggregatedMap.values());
     if (user && db) {
       try {
         const opId = cookingConfirmModal.operationId || `cook-${Date.now()}`;
@@ -7412,6 +7441,8 @@ function MainApp() {
                 ))}
                 <button
                   onClick={async () => {
+                    if (!requireEditorAccess()) return;
+                    let failCount = 0;
                     for (const it of scannedReceiptItems) {
                       const fId = `f-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
                       const newItem = { ...it, id: fId, purchaseDate: selectedDate };
@@ -7432,13 +7463,19 @@ function MainApp() {
                             date: selectedDate,
                             type: "장보기/식재료"
                           });
-                        } catch (e) {}
+                        } catch (e) {
+                          failCount += 1;
+                        }
                       }
                     }
                     setScannedReceiptItems([]);
                     setReceiptPreviewUrl("");
                     setIsReceiptModalOpen(false);
-                    showToast("영수증 품목이 냉장고와 식비 가계부에 일괄 등록되었습니다!");
+                    if (failCount > 0) {
+                      showToast(`⚠️ ${failCount}건 서버 저장에 실패했습니다. 네트워크 상태를 확인해 주세요.`);
+                    } else {
+                      showToast("영수증 품목이 냉장고와 식비 가계부에 일괄 등록되었습니다!");
+                    }
                   }}
                   className="w-full py-2.5 rounded-xl bg-stone-900 text-white text-xs font-extrabold"
                 >
@@ -8114,6 +8151,7 @@ function MainApp() {
                 </button>
               </div>
             </div>
+            )}
 
             {aiCallLogs.length > 0 && (
               <div className="p-3 rounded-2xl bg-stone-50 border border-stone-200 space-y-1.5">
@@ -8144,8 +8182,6 @@ function MainApp() {
                   ))}
                 </div>
               </div>
-            )}
-
             )}
 
             <button
