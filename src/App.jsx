@@ -631,8 +631,8 @@ const STORAGE_LOCATIONS = ["냉장실", "냉동실", "실온·팬트리"];
 const FRIDGE_CATEGORIES = ["채소/과일", "육류/수산", "유제품/계란", "유아식/이유식 재료", "반찬/김치", "밀키트", "양념/소스", "기타"];
 const SCHEDULE_CATEGORIES = ["기념일/생일", "할일(To-Do)", "육아/병원", "가족행사/경조사"];
 
-const APP_CODE_VERSION = "v9.2";
-const APP_BUILD_DATE = "2026-11-15 23:30";
+const APP_CODE_VERSION = "v9.3";
+const APP_BUILD_DATE = "2026-11-15 23:55";
 const EDITOR_INVITE_CODE = "0402";
 
 const INITIAL_PATCH_NOTES = [
@@ -3675,12 +3675,23 @@ ${validText}
       return Number(f.quantity || 0) > 0 && getDaysDiff(f.expiryDate) >= 0;
     });
 
-    const groups = ["냉장실", "냉동실", "실온·팬트리"].map((loc) => {
-      const items = filtered
-        .filter((f) => (f.location || "냉장실") === loc)
-        .sort((a, b) => String(a.name || "").localeCompare(String(b.name || ""), "ko"));
-      return { loc, items };
-    });
+    const normalizeExportLoc = (rawLoc) => {
+      const s = String(rawLoc || "").trim();
+      if (s.includes("냉동")) return "냉동실";
+      if (s.includes("실온") || s.includes("팬트리") || s.includes("상온")) return "실온·팬트리";
+      if (!s || s.includes("냉장")) return "냉장실";
+      return "기타 보관";
+    };
+
+    const locOrder = ["냉장실", "냉동실", "실온·팬트리", "기타 보관"];
+    const groups = locOrder
+      .map((loc) => {
+        const items = filtered
+          .filter((f) => normalizeExportLoc(f.location) === loc)
+          .sort((a, b) => String(a.name || "").localeCompare(String(b.name || ""), "ko"));
+        return { loc, items };
+      })
+      .filter((g) => g.loc !== "기타 보관" || g.items.length > 0);
 
     const lines = [
       `우리 가족 식탁 - 전체 재고 현황`,
