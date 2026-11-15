@@ -233,6 +233,17 @@ const extractJsonArray = (rawText) => {
     .replace(/```json/gi, "")
     .replace(/```/g, "")
     .trim();
+
+  try {
+    const parsed = JSON.parse(cleaned);
+    if (Array.isArray(parsed)) return parsed;
+    if (parsed && typeof parsed === "object") {
+      const firstArray = Object.values(parsed).find((v) => Array.isArray(v));
+      if (firstArray) return firstArray;
+      return [parsed];
+    }
+  } catch {}
+
   const startIdx = cleaned.indexOf("[");
   const endIdx = cleaned.lastIndexOf("]");
   if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
@@ -246,14 +257,13 @@ const extractJsonArray = (rawText) => {
 };
 
 async function callReliableAiEngine({ apiKey, promptText, imagePart = null, temperature = 0.5 }) {
-  const cleanKey = String(apiKey || EMBEDDED_GEMINI_KEY).trim();
-  const projectKey = USER_FIREBASE_CONFIG.apiKey;
+  const effectiveKey = String(apiKey || EMBEDDED_GEMINI_KEY).trim();
 
   const parts = [{ text: promptText }];
   if (imagePart) {
     parts.push({
-      inline_data: {
-        mime_type: imagePart.mimeType,
+      inlineData: {
+        mimeType: imagePart.mimeType,
         data: imagePart.base64
       }
     });
@@ -267,13 +277,16 @@ async function callReliableAiEngine({ apiKey, promptText, imagePart = null, temp
     }
   });
 
-  const tryGoogleEndpoint = async (keyToUse, modelName = "gemini-2.5-flash") => {
+  const modelsToTry = ["gemini-2.5-flash", "gemini-2.0-flash"];
+  let detailedGoogleError = "";
+
+  for (const modelName of modelsToTry) {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 12000);
+    const timer = setTimeout(() => controller.abort(), 18000);
     try {
       const res = await fetch(
         `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${encodeURIComponent(
-          keyToUse
+          effectiveKey
         )}`,
         {
           method: "POST",
@@ -282,83 +295,147 @@ async function callReliableAiEngine({ apiKey, promptText, imagePart = null, temp
           signal: controller.signal
         }
       );
-      if (!res.ok) throw new Error(`Google HTTP ${res.status}`);
+
       const data = await res.json();
-      const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
-      const parsed = extractJsonArray(text);
-      if (!parsed) throw new Error("Google invalid JSON");
-      return parsed;
+      if (res.ok) {
+        const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+        const parsed = extractJsonArray(text);
+        if (parsed) return parsed;
+        detailedGoogleError = "AI 응답을 JSON 배열로 변환하지 못했습니다.";
+      } else {
+        const errMsg = data?.error?.message || `HTTP ${res.status}`;
+        detailedGoogleError = `[${res.status}] ${errMsg}`;
+        if (
+          errMsg.includes("blocked") ||
+          errMsg.includes("API_KEY_SERVICE_BLOCKED") ||
+          errMsg.includes("API key not valid") ||
+          errMsg.includes("expired") ||
+          errMsg.includes("referer")
+        ) {
+          break;
+        }
+      }
+    } catch (e) {
+      detailedGoogleError = e.name === "AbortError" ? "응답 시간 초과(18초)" : e.message;
     } finally {
       clearTimeout(timer);
     }
-  };
+  }
 
-  const tryMultimodalBridge = async (bridgeModel = "openai") => {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 22000);
+  // 텍스트 전용 요청(레시피 추천)일 경우 오픈 엔드포인트 보조 시도
+  if (!imagePart) {
     try {
-      const userContent = [{ type: "text", text: promptText }];
-      if (imagePart) {
-        userContent.push({
-          type: "image_url",
-          image_url: {
-            url: `data:${imagePart.mimeType};base64,${imagePart.base64}`
-          }
-        });
-      }
-
-      const res = await fetch("https://text.pollinations.ai/openai", {
+      const res = await fetch("https://text.pollinations.ai/", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        signal: controller.signal,
         body: JSON.stringify({
-          model: bridgeModel,
-          temperature,
+          model: "openai",
+          jsonMode: true,
           messages: [
             {
               role: "system",
-              content:
-                "You are an expert Korean OCR & culinary AI. Output ONLY a valid JSON array. Do not include markdown fences."
+              content: "Output ONLY a valid JSON array in Korean. No markdown fences."
             },
-            {
-              role: "user",
-              content: imagePart ? userContent : promptText
-            }
+            { role: "user", content: promptText }
           ]
         })
       });
-
-      if (!res.ok) throw new Error(`Bridge HTTP ${res.status}`);
-      const raw = await res.text();
-      let contentStr = raw;
-      try {
-        const jsonObj = JSON.parse(raw);
-        if (jsonObj?.choices?.[0]?.message?.content) {
-          contentStr = jsonObj.choices[0].message.content;
-        }
-      } catch {}
-
-      const parsed = extractJsonArray(contentStr);
-      if (!parsed) throw new Error("Bridge JSON parse failed");
-      return parsed;
-    } finally {
-      clearTimeout(timer);
-    }
-  };
-
-  const raceTasks = [
-    tryGoogleEndpoint(projectKey, "gemini-2.5-flash"),
-    tryGoogleEndpoint(cleanKey, "gemini-2.5-flash"),
-    tryGoogleEndpoint(projectKey, "gemini-2.0-flash"),
-    tryMultimodalBridge("openai")
-  ];
-
-  try {
-    return await Promise.any(raceTasks);
-  } catch (err) {
-    throw new Error("AI 응답 지연: 잠시 후 다시 한 번 눌러주세요.");
+      if (res.ok) {
+        const txt = await res.text();
+        const parsed = extractJsonArray(txt);
+        if (parsed) return parsed;
+      }
+    } catch {}
   }
+
+  if (
+    detailedGoogleError.includes("blocked") ||
+    detailedGoogleError.includes("API_KEY_SERVICE_BLOCKED") ||
+    detailedGoogleError.includes("API key not valid") ||
+    detailedGoogleError.includes("expired")
+  ) {
+    throw new Error(
+      "현재 API 키가 차단되었거나 만료되었습니다. Google AI Studio(aistudio.google.com/app/apikey)에서 새 키를 발급받아 우측 상단 ⚙️설정에 입력해 주세요."
+    );
+  }
+
+  throw new Error(
+    `AI 호출 오류: ${detailedGoogleError || "일시적 통신 지연"} (⚙️설정에서 'AI 연결 자가진단'을 눌러 확인해 보세요)`
+  );
 }
+
+// 서울 중구 날씨 코드 & 환경부 기준 미세먼지(PM10/PM2.5) 등급 판별 유틸리티
+const parseWeatherCode = (code, temp) => {
+  let label = "맑음";
+  let emoji = "☀️";
+  let tip = "아이들과 산책하기 좋은 날씨예요!";
+
+  if (code === 0 || code === 1) {
+    label = "쾌청/맑음";
+    emoji = "☀️";
+  } else if (code === 2 || code === 3) {
+    label = "구름/흐림";
+    emoji = "⛅";
+  } else if (code >= 45 && code <= 48) {
+    label = "안개";
+    emoji = "🌫️";
+    tip = "시야가 흐리니 등하원길 안전에 유의하세요.";
+  } else if (code >= 51 && code <= 67) {
+    label = "비/이슬비";
+    emoji = "🌧️";
+    tip = "외출 시 우산과 레인부츠를 챙겨주세요!";
+  } else if (code >= 71 && code <= 77) {
+    label = "눈";
+    emoji = "❄️";
+    tip = "길이 미끄러우니 따뜻하게 입히고 조심하세요!";
+  } else if (code >= 80 && code <= 99) {
+    label = "소나기/천둥";
+    emoji = "⛈️";
+    tip = "갑작스러운 비에 대비해 휴대용 우산을 챙기세요.";
+  }
+
+  if (temp <= 5) {
+    tip = "날씨가 쌀쌀해요! 시목이·시율이 체온 유지에 신경 써주세요 🧣";
+  } else if (temp >= 28) {
+    tip = "날씨가 더워요! 시원한 물과 수분 보충을 자주 해주세요 💧";
+  }
+
+  return { label, emoji, tip };
+};
+
+const getDustGrade = (pm10, pm25) => {
+  const getPm10Level = (v) => (v <= 30 ? 0 : v <= 80 ? 1 : v <= 150 ? 2 : 3);
+  const getPm25Level = (v) => (v <= 15 ? 0 : v <= 35 ? 1 : v <= 75 ? 2 : 3);
+  const maxLevel = Math.max(getPm10Level(pm10), getPm25Level(pm25));
+
+  const levels = [
+    {
+      label: "좋음",
+      emoji: "🟢",
+      badgeClass: "bg-emerald-100 text-emerald-800 border-emerald-200",
+      tip: "공기가 맑아 환기·산책하기 좋아요!"
+    },
+    {
+      label: "보통",
+      emoji: "🔵",
+      badgeClass: "bg-sky-100 text-sky-800 border-sky-200",
+      tip: "무난한 대기질이에요."
+    },
+    {
+      label: "나쁨",
+      emoji: "🟠",
+      badgeClass: "bg-amber-100 text-amber-900 border-amber-300",
+      tip: "미세먼지가 나빠요! 아이들 외출 시 마스크 챙기세요 😷"
+    },
+    {
+      label: "매우나쁨",
+      emoji: "🔴",
+      badgeClass: "bg-rose-100 text-rose-900 border-rose-300",
+      tip: "공기가 매우 탁해요! 오늘은 실내 놀이를 추천해요 🏠"
+    }
+  ];
+  return levels[maxLevel];
+};
 
 const fileToBase64 = (file) =>
   new Promise((resolve, reject) => {
@@ -419,6 +496,17 @@ const FRIDGE_CATEGORIES = ["채소/과일", "육류/수산", "유제품/계란",
 const SCHEDULE_CATEGORIES = ["기념일/생일", "할일(To-Do)", "육아/병원", "가족행사/경조사"];
 
 const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v5.7",
+    version: "v5.7",
+    date: "2026-11-15",
+    title: "AI 엔진(JSON 파싱·자가진단) 개선 & 서울 중구 날씨·미세먼지 위젯 탑재",
+    changes: [
+      "AI 응답 JSON 객체/배열 자동 파싱 및 정확한 API 오류 안내 + ⚙️설정 내 [AI 연결 자가진단] 버튼 추가",
+      "상단 헤더에 실시간 서울 중구 기온·최고/최저·미세먼지(PM10)·초미세먼지(PM2.5) 위젯 추가",
+      "기존 파이어베이스 데이터·일정·장보기·공지·자동백업 기능 100% 유지"
+    ]
+  },
   {
     id: "patch-v5.6",
     version: "v5.6",
@@ -681,6 +769,10 @@ function MainApp() {
     return localStorage.getItem("kim_header_pinned") === "true";
   });
 
+  // 실시간 서울 중구 날씨 & 미세먼지 상태
+  const [weatherInfo, setWeatherInfo] = useState(null);
+  const [aiDiagStatus, setAiDiagStatus] = useState("");
+
   // 패치노트 기록 및 모달 상태
   const [patchNotes, setPatchNotes] = useState(INITIAL_PATCH_NOTES);
   const [isPatchModalOpen, setIsPatchModalOpen] = useState(false);
@@ -844,6 +936,85 @@ function MainApp() {
   const showToast = (msg) => {
     setToastMsg(msg);
     setTimeout(() => setToastMsg(""), 3500);
+  };
+
+  // 실시간 서울 중구 날씨 + 미세먼지(PM10, PM2.5) 조회 (무료 Open-Meteo API)
+  const fetchSeoulJungGuWeather = async () => {
+    try {
+      const lat = 37.5638;
+      const lon = 126.9976;
+      const [weatherRes, airRes] = await Promise.all([
+        fetch(
+          `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,weather_code&daily=temperature_2m_max,temperature_2m_min&timezone=Asia%2FSeoul&forecast_days=1`
+        ),
+        fetch(
+          `https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${lat}&longitude=${lon}&current=pm10,pm2_5&timezone=Asia%2FSeoul`
+        )
+      ]);
+
+      if (!weatherRes.ok) return;
+      const wData = await weatherRes.json();
+      const aData = airRes.ok ? await airRes.json() : null;
+
+      const curTemp = Math.round(wData?.current?.temperature_2m ?? 12);
+      const wCode = wData?.current?.weather_code ?? 0;
+      const maxT = Math.round(wData?.daily?.temperature_2m_max?.[0] ?? curTemp + 4);
+      const minT = Math.round(wData?.daily?.temperature_2m_min?.[0] ?? curTemp - 4);
+      const parsed = parseWeatherCode(wCode, curTemp);
+
+      const pm10 = Math.round(aData?.current?.pm10 ?? 0);
+      const pm25 = Math.round(aData?.current?.pm2_5 ?? 0);
+      const dust = getDustGrade(pm10, pm25);
+
+      setWeatherInfo({
+        location: "서울 중구",
+        temp: curTemp,
+        max: maxT,
+        min: minT,
+        pm10,
+        pm25,
+        dust,
+        ...parsed,
+        tip: dust.label === "나쁨" || dust.label === "매우나쁨" ? dust.tip : parsed.tip
+      });
+    } catch (e) {
+      console.warn("Weather/Air fetch skipped:", e);
+    }
+  };
+
+  useEffect(() => {
+    fetchSeoulJungGuWeather();
+  }, []);
+
+  // AI 연결 1초 자가진단 테스트
+  const handleRunAiDiagnostic = async () => {
+    setAiDiagStatus("진단 중... 구글 AI 서버에 연결 테스트를 보내고 있습니다.");
+    const testKey = String(tempKeyInput || geminiApiKey || EMBEDDED_GEMINI_KEY).trim();
+    try {
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(
+          testKey
+        )}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: "Hello" }] }]
+          })
+        }
+      );
+      const data = await res.json();
+      if (res.ok && data?.candidates) {
+        setAiDiagStatus("✅ [연결 성공!] 현재 API 키로 Gemini 2.5 AI가 100% 정상 작동합니다.");
+      } else {
+        const msg = data?.error?.message || `HTTP ${res.status}`;
+        setAiDiagStatus(
+          `❌ [구글 서버 거절 사유]: ${msg}\n👉 해결법: Google AI Studio(aistudio.google.com/app/apikey)에서 'Create API key in new project'로 새 키를 발급받아 위 칸에 저장해 주세요!`
+        );
+      }
+    } catch (e) {
+      setAiDiagStatus(`❌ 네트워크 오류: ${e.message}`);
+    }
   };
 
   // ==========================================
@@ -1248,7 +1419,7 @@ function MainApp() {
   // ==========================================
   const buildFullBackupJsonString = () => {
     const fullSnapshot = {
-      backupVersion: "v5.6",
+      backupVersion: "v5.7",
       exportedAt: new Date().toISOString(),
       projectId: USER_FIREBASE_CONFIG.projectId,
       data: {
@@ -2330,7 +2501,7 @@ function MainApp() {
               title="패치노트 기록 및 히스토리"
             >
               <ClipboardList className="w-3 h-3 text-stone-600" />
-              <span>패치노트 {patchNotes[0]?.version || "v5.6"}</span>
+              <span>패치노트 {patchNotes[0]?.version || "v5.7"}</span>
             </button>
           </div>
 
@@ -2403,6 +2574,37 @@ function MainApp() {
 
         {!isHeaderCollapsed && (
           <>
+            {weatherInfo && (
+              <div className="mt-2 bg-sky-50/80 border border-sky-200/80 rounded-2xl px-3 py-2 flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="text-lg shrink-0">{weatherInfo.emoji}</span>
+                  <div className="min-w-0">
+                    <div className="text-xs font-black text-stone-900 truncate">
+                      {weatherInfo.location} {weatherInfo.temp}°C{" "}
+                      <span className="text-[10px] font-bold text-stone-500">
+                        ({weatherInfo.label} · 최저 {weatherInfo.min}° / 최고 {weatherInfo.max}°)
+                      </span>
+                    </div>
+                    <div className="text-[10px] font-semibold text-stone-600 truncate">
+                      {weatherInfo.tip}
+                    </div>
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    fetchSeoulJungGuWeather();
+                    showToast("서울 중구 날씨·미세먼지를 새로고침했습니다.");
+                  }}
+                  className={`px-2 py-1 rounded-xl border text-[10px] font-extrabold shrink-0 text-right ${weatherInfo.dust.badgeClass}`}
+                  title="눌러서 날씨·미세먼지 새로고침"
+                >
+                  <div>
+                    {weatherInfo.dust.emoji} 미세 {weatherInfo.pm10} · 초미세 {weatherInfo.pm25}
+                  </div>
+                  <div className="text-[9px] opacity-85">대기질 {weatherInfo.dust.label} ↻</div>
+                </button>
+              </div>
+            )}
             {imminentSchedulesWithin3Days.length > 0 && activeTab !== "schedule" && (
               <div
                 onClick={() => setActiveTab("schedule")}
@@ -5620,12 +5822,25 @@ function MainApp() {
                 placeholder="API 키 입력"
                 className="w-full px-3 py-2 rounded-xl border border-stone-300 text-xs font-bold bg-white"
               />
-              <button
-                onClick={() => handleSaveApiKey(tempKeyInput)}
-                className="w-full py-2 rounded-xl bg-stone-800 text-white text-xs font-extrabold"
-              >
-                API 키 저장
-              </button>
+              <div className="grid grid-cols-2 gap-1.5">
+                <button
+                  onClick={() => handleSaveApiKey(tempKeyInput)}
+                  className="py-2 rounded-xl bg-stone-800 text-white text-xs font-extrabold"
+                >
+                  API 키 저장
+                </button>
+                <button
+                  onClick={handleRunAiDiagnostic}
+                  className="py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-extrabold"
+                >
+                  AI 연결 자가진단
+                </button>
+              </div>
+              {aiDiagStatus && (
+                <div className="p-2.5 rounded-xl bg-white border border-stone-200 text-[11px] font-bold text-stone-700 whitespace-pre-line">
+                  {aiDiagStatus}
+                </div>
+              )}
             </div>
 
             <button
@@ -5656,4 +5871,4 @@ export default function App() {
       <MainApp />
     </ErrorBoundary>
   );
-}
+  }
