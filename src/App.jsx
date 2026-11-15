@@ -7946,4 +7946,4 @@ export default function App() {
       <MainApp />
     </ErrorBoundary>
   );
-    }
+}
