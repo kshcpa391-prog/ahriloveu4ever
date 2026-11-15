@@ -259,120 +259,206 @@ const extractJsonArray = (rawText) => {
   return null;
 };
 
-async function callReliableAiEngine({ apiKey, promptText, imagePart = null, temperature = 0.5 }) {
-  const effectiveKey = String(apiKey || EMBEDDED_GEMINI_KEY || "").trim();
-  if (!effectiveKey) {
-    throw new Error("Gemini API 키가 설정되지 않았습니다. 우측 상단 ⚙️설정에서 API 키를 입력해 주세요.");
-  }
+async function callOpenAiEngine({ openaiKey, promptText, imagePart = null, temperature = 0.5 }) {
+  const cleanKey = String(openaiKey || "").trim();
+  if (!cleanKey) throw new Error("OpenAI API 키가 비어 있습니다.");
 
-  const parts = [{ text: promptText }];
+  const userContent = [{ type: "text", text: promptText }];
   if (imagePart) {
-    parts.push({
-      inlineData: {
-        mimeType: imagePart.mimeType,
-        data: imagePart.base64
+    userContent.push({
+      type: "image_url",
+      image_url: {
+        url: `data:${imagePart.mimeType};base64,${imagePart.base64}`
       }
     });
   }
 
-  const geminiBody = JSON.stringify({
-    contents: [{ role: "user", parts }],
-    generationConfig: {
-      temperature,
-      responseMimeType: "application/json"
-    }
-  });
-
-  const trySingleModel = async (modelId) => {
-    const cleanModel = String(modelId).replace(/^models\//, "");
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 20000);
-    try {
-      const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${cleanModel}:generateContent`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "x-goog-api-key": effectiveKey
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 25000);
+  try {
+    const res = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${cleanKey}`
+      },
+      signal: controller.signal,
+      body: JSON.stringify({
+        model: "gpt-4o-mini",
+        temperature,
+        messages: [
+          {
+            role: "system",
+            content:
+              "You are an expert Korean culinary & OCR AI. Output ONLY a valid JSON array. No markdown fences."
           },
-          body: geminiBody,
-          signal: controller.signal
-        }
-      );
-      const data = await res.json();
-      if (res.ok) {
-        const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
-        const parsed = extractJsonArray(text);
-        if (parsed) return { ok: true, data: parsed };
-        return { ok: false, error: `[${cleanModel}] 응답을 JSON으로 파싱하지 못했습니다.` };
-      }
-      const errMsg = data?.error?.message || `HTTP ${res.status}`;
-      return { ok: false, error: `[${cleanModel} ${res.status}] ${errMsg}`, rawMsg: errMsg };
-    } catch (e) {
-      return { ok: false, error: `[${cleanModel}] ${e.name === "AbortError" ? "응답 시간 초과" : e.message}` };
-    } finally {
-      clearTimeout(timer);
+          {
+            role: "user",
+            content: imagePart ? userContent : promptText
+          }
+        ]
+      })
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(`[GPT ${res.status}] ${data?.error?.message || "OpenAI 호출 오류"}`);
     }
-  };
-
-  // 1차: 최신 권장 모델 gemini-3.8-flash 직접 호출
-  const primaryRes = await trySingleModel("gemini-3.8-flash");
-  if (primaryRes.ok) return primaryRes.data;
-
-  const modelErrors = [primaryRes.error];
-
-  // 키 자체 차단/만료가 아니라면, 현재 키에서 실제 사용 가능한 모델 목록을 구글 서버에서 자동 조회하여 재시도
-  const rawPrimary = primaryRes.rawMsg || "";
-  if (
-    !rawPrimary.includes("blocked") &&
-    !rawPrimary.includes("API_KEY_SERVICE_BLOCKED") &&
-    !rawPrimary.includes("API key not valid") &&
-    !rawPrimary.includes("expired")
-  ) {
-    try {
-      const listRes = await fetch("https://generativelanguage.googleapis.com/v1beta/models", {
-        headers: { "x-goog-api-key": effectiveKey }
-      });
-      if (listRes.ok) {
-        const listData = await listRes.json();
-        const availableFlash = (listData?.models || [])
-          .filter(
-            (m) =>
-              Array.isArray(m.supportedGenerationMethods) &&
-              m.supportedGenerationMethods.includes("generateContent") &&
-              m.name &&
-              m.name.includes("flash") &&
-              !m.name.includes("3.8-flash") &&
-              !m.name.includes("thinking") &&
-              !m.name.includes("image")
-          )
-          .map((m) => m.name)
-          .slice(0, 2);
-
-        for (const candidate of availableFlash) {
-          const retryRes = await trySingleModel(candidate);
-          if (retryRes.ok) return retryRes.data;
-          modelErrors.push(retryRes.error);
-        }
-      }
-    } catch {}
+    const text = data?.choices?.[0]?.message?.content || "";
+    const parsed = extractJsonArray(text);
+    if (!parsed) throw new Error("[GPT] 응답을 JSON 배열로 변환하지 못했습니다.");
+    return parsed;
+  } finally {
+    clearTimeout(timer);
   }
+}
 
-  if (
-    rawPrimary.includes("blocked") ||
-    rawPrimary.includes("API_KEY_SERVICE_BLOCKED") ||
-    rawPrimary.includes("API key not valid") ||
-    rawPrimary.includes("expired")
-  ) {
+async function callReliableAiEngine({
+  apiKey,
+  openaiApiKey = "",
+  aiProvider = "auto",
+  promptText,
+  imagePart = null,
+  temperature = 0.5
+}) {
+  const effectiveGeminiKey = String(apiKey || EMBEDDED_GEMINI_KEY || "").trim();
+  const effectiveOpenaiKey = String(openaiApiKey || "").trim();
+
+  if (!effectiveGeminiKey && !effectiveOpenaiKey) {
     throw new Error(
-      `API 키 오류: ${rawPrimary} (Google AI Studio에서 새 키를 발급받아 ⚙️설정에 저장해 주세요)`
+      "AI API 키가 없습니다. 우측 상단 ⚙️설정에서 Gemini 또는 OpenAI GPT API 키를 입력해 주세요."
     );
   }
 
-  throw new Error(
-    `AI 호출 오류: ${modelErrors[0]} (⚙️설정에서 'AI 연결 자가진단'을 눌러 확인해 주세요)`
-  );
+  const runGemini = async () => {
+    if (!effectiveGeminiKey) throw new Error("Gemini API 키가 설정되지 않았습니다.");
+
+    const parts = [{ text: promptText }];
+    if (imagePart) {
+      parts.push({
+        inlineData: {
+          mimeType: imagePart.mimeType,
+          data: imagePart.base64
+        }
+      });
+    }
+
+    const geminiBody = JSON.stringify({
+      contents: [{ role: "user", parts }],
+      generationConfig: {
+        temperature,
+        responseMimeType: "application/json"
+      }
+    });
+
+    const trySingleModel = async (modelId) => {
+      const cleanModel = String(modelId).replace(/^models\//, "");
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 20000);
+      try {
+        const res = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${cleanModel}:generateContent`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "x-goog-api-key": effectiveGeminiKey
+            },
+            body: geminiBody,
+            signal: controller.signal
+          }
+        );
+        const data = await res.json();
+        if (res.ok) {
+          const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+          const parsed = extractJsonArray(text);
+          if (parsed) return { ok: true, data: parsed };
+          return { ok: false, error: `[${cleanModel}] 응답을 JSON으로 파싱하지 못했습니다.` };
+        }
+        const errMsg = data?.error?.message || `HTTP ${res.status}`;
+        return { ok: false, error: `[${cleanModel} ${res.status}] ${errMsg}`, rawMsg: errMsg };
+      } catch (e) {
+        return {
+          ok: false,
+          error: `[${cleanModel}] ${e.name === "AbortError" ? "응답 시간 초과" : e.message}`
+        };
+      } finally {
+        clearTimeout(timer);
+      }
+    };
+
+    const primaryRes = await trySingleModel("gemini-3.8-flash");
+    if (primaryRes.ok) return primaryRes.data;
+
+    const rawPrimary = primaryRes.rawMsg || "";
+    if (
+      !rawPrimary.includes("blocked") &&
+      !rawPrimary.includes("API_KEY_SERVICE_BLOCKED") &&
+      !rawPrimary.includes("API key not valid") &&
+      !rawPrimary.includes("expired")
+    ) {
+      try {
+        const listRes = await fetch("https://generativelanguage.googleapis.com/v1beta/models", {
+          headers: { "x-goog-api-key": effectiveGeminiKey }
+        });
+        if (listRes.ok) {
+          const listData = await listRes.json();
+          const availableFlash = (listData?.models || [])
+            .filter(
+              (m) =>
+                Array.isArray(m.supportedGenerationMethods) &&
+                m.supportedGenerationMethods.includes("generateContent") &&
+                m.name &&
+                m.name.includes("flash") &&
+                !m.name.includes("3.8-flash") &&
+                !m.name.includes("thinking") &&
+                !m.name.includes("image")
+            )
+            .map((m) => m.name)
+            .slice(0, 2);
+
+          for (const candidate of availableFlash) {
+            const retryRes = await trySingleModel(candidate);
+            if (retryRes.ok) return retryRes.data;
+          }
+        }
+      } catch {}
+    }
+    throw new Error(primaryRes.error || "Gemini 호출 실패");
+  };
+
+  const runOpenAi = () =>
+    callOpenAiEngine({
+      openaiKey: effectiveOpenaiKey,
+      promptText,
+      imagePart,
+      temperature
+    });
+
+  // 엔진 선택 정책에 따른 실행 및 자동 페일오버
+  if (aiProvider === "openai") {
+    return await runOpenAi();
+  }
+  if (aiProvider === "gemini") {
+    return await runGemini();
+  }
+
+  // auto 모드: OpenAI 키가 있으면 GPT 우선 -> 실패 시 Gemini / 없으면 Gemini -> GPT
+  const errors = [];
+  if (effectiveOpenaiKey) {
+    try {
+      return await runOpenAi();
+    } catch (e) {
+      errors.push(e.message);
+    }
+  }
+  if (effectiveGeminiKey) {
+    try {
+      return await runGemini();
+    } catch (e) {
+      errors.push(e.message);
+    }
+  }
+  throw new Error(`AI 호출 오류: ${errors.join(" / ")} (⚙️설정에서 API 키를 확인해 주세요)`);
 }
 
 // 서울 중구 날씨 코드 & 환경부 기준 미세먼지(PM10/PM2.5) 등급 판별 유틸리티
@@ -507,6 +593,16 @@ const FRIDGE_CATEGORIES = ["채소/과일", "육류/수산", "유제품/계란",
 const SCHEDULE_CATEGORIES = ["기념일/생일", "할일(To-Do)", "육아/병원", "가족행사/경조사"];
 
 const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v6.3",
+    version: "v6.3",
+    date: "2026-11-15",
+    title: "OpenAI GPT + Google Gemini 듀얼 AI 엔진 탑재 (자동 전환 지원)",
+    changes: [
+      "⚙️설정에 OpenAI GPT API 키 입력 및 엔진 선택(자동 / GPT 우선 / Gemini 우선) 기능 추가",
+      "Gemini 서버 혼잡(503) 시 자동으로 OpenAI GPT(gpt-4o-mini 등 Vision 지원)로 전환하여 끊김 없는 AI 추천·사진 분석 지원"
+    ]
+  },
   {
     id: "patch-v6.2",
     version: "v6.2",
@@ -949,6 +1045,15 @@ function MainApp() {
     const saved = localStorage.getItem("kim_family_gemini_key");
     return saved && (saved.startsWith("AIzaSy") || saved.startsWith("AQ.")) ? saved : EMBEDDED_GEMINI_KEY;
   });
+  const [openaiApiKey, setOpenaiApiKey] = useState(() => {
+    return localStorage.getItem("kim_family_openai_key") || "";
+  });
+  const [tempOpenaiKeyInput, setTempOpenaiKeyInput] = useState(() => {
+    return localStorage.getItem("kim_family_openai_key") || "";
+  });
+  const [aiProvider, setAiProvider] = useState(() => {
+    return localStorage.getItem("kim_family_ai_provider") || "auto";
+  });
   const [selectedAiIngredients, setSelectedAiIngredients] = useState([]);
   const [aiTargetGroup, setAiTargetGroup] = useState("온가족 한끼");
   const [aiPromptExtra, setAiPromptExtra] = useState("");
@@ -1182,12 +1287,24 @@ function MainApp() {
               setDeletedIds(list);
               localStorage.setItem("kim_family_deleted_ids", JSON.stringify(list));
             }
-            if (d.id === "api_config" && d.data().geminiKey) {
-              const sharedKey = String(d.data().geminiKey).trim();
-              if (sharedKey.startsWith("AIzaSy") || sharedKey.startsWith("AQ.")) {
-                setGeminiApiKey(sharedKey);
-                setTempKeyInput(sharedKey);
-                localStorage.setItem("kim_family_gemini_key", sharedKey);
+            if (d.id === "api_config") {
+              if (d.data().geminiKey) {
+                const sharedKey = String(d.data().geminiKey).trim();
+                if (sharedKey.startsWith("AIzaSy") || sharedKey.startsWith("AQ.")) {
+                  setGeminiApiKey(sharedKey);
+                  setTempKeyInput(sharedKey);
+                  localStorage.setItem("kim_family_gemini_key", sharedKey);
+                }
+              }
+              if (d.data().openaiKey) {
+                const sharedOpenai = String(d.data().openaiKey).trim();
+                setOpenaiApiKey(sharedOpenai);
+                setTempOpenaiKeyInput(sharedOpenai);
+                localStorage.setItem("kim_family_openai_key", sharedOpenai);
+              }
+              if (d.data().aiProvider) {
+                setAiProvider(d.data().aiProvider);
+                localStorage.setItem("kim_family_ai_provider", d.data().aiProvider);
               }
             }
             if (d.id === "backup_status" && d.data().lastSlot) {
@@ -1533,26 +1650,42 @@ function MainApp() {
     }
   };
 
-  const handleSaveApiKey = async (keyToSave) => {
-    const cleaned = String(keyToSave || "").trim();
-    if (!cleaned) return;
+  const handleSaveApiKey = async (geminiKeyVal, openaiKeyVal = openaiApiKey, providerVal = aiProvider) => {
+    const cleanedGemini = String(geminiKeyVal || "").trim();
+    const cleanedOpenai = String(openaiKeyVal || "").trim();
 
-    setGeminiApiKey(cleaned);
-    setTempKeyInput(cleaned);
-    localStorage.setItem("kim_family_gemini_key", cleaned);
+    if (cleanedGemini) {
+      setGeminiApiKey(cleanedGemini);
+      setTempKeyInput(cleanedGemini);
+      localStorage.setItem("kim_family_gemini_key", cleanedGemini);
+    }
+    setOpenaiApiKey(cleanedOpenai);
+    setTempOpenaiKeyInput(cleanedOpenai);
+    localStorage.setItem("kim_family_openai_key", cleanedOpenai);
+
+    setAiProvider(providerVal);
+    localStorage.setItem("kim_family_ai_provider", providerVal);
+
     setAiErrorMsg("");
     setScanErrorMsg("");
     setReceiptErrorMsg("");
+    setPlatingErrorMsg("");
 
     if (user && db) {
       try {
-        await setDoc(getDocRef("family_meta_v4", "api_config"), {
-          geminiKey: cleaned,
-          updatedAt: new Date().toISOString()
-        });
+        await setDoc(
+          getDocRef("family_meta_v4", "api_config"),
+          {
+            ...(cleanedGemini ? { geminiKey: cleanedGemini } : {}),
+            openaiKey: cleanedOpenai,
+            aiProvider: providerVal,
+            updatedAt: new Date().toISOString()
+          },
+          { merge: true }
+        );
       } catch (e) {}
     }
-    showToast("API 키가 저장되어 부부 스마트폰에 모두 적용되었습니다!");
+    showToast("AI 키 및 엔진 설정이 부부 스마트폰에 저장되었습니다!");
   };
 
   const weekDates = useMemo(() => getWeekDatesFromBase(selectedDate), [selectedDate]);
@@ -1566,7 +1699,7 @@ function MainApp() {
   // ==========================================
   const buildFullBackupJsonString = () => {
     const fullSnapshot = {
-      backupVersion: "v6.2",
+      backupVersion: "v6.3",
       exportedAt: new Date().toISOString(),
       projectId: USER_FIREBASE_CONFIG.projectId,
       data: {
@@ -1961,6 +2094,8 @@ function MainApp() {
 
       const parsedArray = await callReliableAiEngine({
         apiKey: geminiApiKey,
+        openaiApiKey,
+        aiProvider,
         promptText: prompt,
         temperature: 0.65
       });
@@ -2036,6 +2171,8 @@ function MainApp() {
 
       const parsed = await callReliableAiEngine({
         apiKey: geminiApiKey,
+        openaiApiKey,
+        aiProvider,
         promptText,
         imagePart: platingImagePart,
         temperature: 0.4
@@ -2086,6 +2223,8 @@ function MainApp() {
 
       const parsedArray = await callReliableAiEngine({
         apiKey: geminiApiKey,
+        openaiApiKey,
+        aiProvider,
         promptText,
         imagePart: { base64, mimeType },
         temperature: 0.1
@@ -2241,6 +2380,8 @@ function MainApp() {
 
       const parsedArray = await callReliableAiEngine({
         apiKey: geminiApiKey,
+        openaiApiKey,
+        aiProvider,
         promptText,
         imagePart: { base64, mimeType },
         temperature: 0.1
@@ -2843,7 +2984,7 @@ function MainApp() {
               title="패치노트 기록 및 히스토리"
             >
               <ClipboardList className="w-3 h-3 text-stone-600" />
-              <span>패치노트 {patchNotes[0]?.version || "v6.2"}</span>
+              <span>패치노트 {patchNotes[0]?.version || "v6.3"}</span>
             </button>
           </div>
 
@@ -2861,6 +3002,7 @@ function MainApp() {
             <button
               onClick={() => {
                 setTempKeyInput(geminiApiKey);
+                setTempOpenaiKeyInput(openaiApiKey);
                 setIsSettingsOpen(true);
               }}
               className="p-1.5 rounded-full bg-stone-100 hover:bg-stone-200 text-stone-600"
@@ -6419,23 +6561,64 @@ function MainApp() {
               </button>
             </div>
 
-            <div className="p-3 rounded-2xl bg-stone-50 border border-stone-200 space-y-2">
-              <label className="text-xs font-black text-stone-800 block">
-                🔑 Gemini API 키 (부부 폰 자동 동기화)
-              </label>
-              <input
-                type="text"
-                value={tempKeyInput}
-                onChange={(e) => setTempKeyInput(e.target.value)}
-                placeholder="API 키 입력"
-                className="w-full px-3 py-2 rounded-xl border border-stone-300 text-xs font-bold bg-white"
-              />
+            <div className="p-3 rounded-2xl bg-stone-50 border border-stone-200 space-y-2.5">
+              <div className="text-xs font-black text-stone-800">
+                🤖 듀얼 AI 엔진 설정 (GPT + Gemini)
+              </div>
+
+              <div className="grid grid-cols-3 gap-1">
+                {[
+                  { id: "auto", label: "자동(GPT우선)" },
+                  { id: "openai", label: "OpenAI GPT" },
+                  { id: "gemini", label: "Gemini만" }
+                ].map((opt) => (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    onClick={() => setAiProvider(opt.id)}
+                    className={`py-1.5 rounded-xl text-[10px] font-extrabold border ${
+                      aiProvider === opt.id
+                        ? "bg-stone-900 text-white border-stone-900"
+                        : "bg-white text-stone-600 border-stone-300"
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+
+              <div>
+                <label className="text-[10px] font-bold text-stone-600 block mb-1">
+                  🟢 OpenAI GPT API 키 (platform.openai.com, 권장)
+                </label>
+                <input
+                  type="password"
+                  value={tempOpenaiKeyInput}
+                  onChange={(e) => setTempOpenaiKeyInput(e.target.value)}
+                  placeholder="sk-proj-... 또는 sk-... 입력"
+                  className="w-full px-3 py-2 rounded-xl border border-stone-300 text-xs font-bold bg-white"
+                />
+              </div>
+
+              <div>
+                <label className="text-[10px] font-bold text-stone-600 block mb-1">
+                  🔵 Google Gemini API 키 (aistudio.google.com)
+                </label>
+                <input
+                  type="password"
+                  value={tempKeyInput}
+                  onChange={(e) => setTempKeyInput(e.target.value)}
+                  placeholder="Gemini API 키 입력"
+                  className="w-full px-3 py-2 rounded-xl border border-stone-300 text-xs font-bold bg-white"
+                />
+              </div>
+
               <div className="grid grid-cols-2 gap-1.5">
                 <button
-                  onClick={() => handleSaveApiKey(tempKeyInput)}
+                  onClick={() => handleSaveApiKey(tempKeyInput, tempOpenaiKeyInput, aiProvider)}
                   className="py-2 rounded-xl bg-stone-800 text-white text-xs font-extrabold"
                 >
-                  API 키 저장
+                  AI 설정 저장
                 </button>
                 <button
                   onClick={handleRunAiDiagnostic}
