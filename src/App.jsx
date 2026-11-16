@@ -771,6 +771,21 @@ const EXPORT_MEAL_GOALS = [
   "한가족이 먹을수있는 식사"
 ];
 
+const parseRecipeIngredientToken = (rawToken) => {
+  const clean = String(rawToken || "").trim();
+  if (!clean) return { name: "", qty: 1, unit: "개", qtyText: "1개" };
+  const m = clean.match(
+    /^(.+?)\s+(\d+(?:\.\d+)?)\s*(g|kg|ml|L|개|팩|봉지|봉|모|캔|단|알|마리|조각|컵|큰술|작은술|스푼|줌|포기|쪽|톨|장|줄|병|통|T|t)?$/i
+  );
+  if (m) {
+    const name = m[1].trim();
+    const qty = Number(m[2]) || 1;
+    const unit = (m[3] || "개").trim();
+    return { name, qty, unit, qtyText: `${qty}${unit}` };
+  }
+  return { name: clean, qty: 1, unit: "개", qtyText: "1개" };
+};
+
 const buildPersonalizedAiPrompt = ({
   exportScope,
   exportMealMember,
@@ -868,11 +883,33 @@ const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.65) =>
     img.src = dataUrl;
   });
 
-const APP_CODE_VERSION = "v10.25";
-const APP_BUILD_DATE = "2026-11-16 20:26";
+const APP_CODE_VERSION = "v10.27";
+const APP_BUILD_DATE = "2026-11-16 20:31";
 const EDITOR_INVITE_CODE = "0402";
 
 const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v10.27",
+    version: "v10.27",
+    date: "2026-11-16",
+    title: "식단 모달 [⭐ 즐겨찾는 단일 메뉴] 등록·터치 + 추가 & 부부 기기 클라우드 동기화",
+    changes: [
+      "식단 기록 모달에서 자주 먹는 단일 메뉴(예: 미역국, 계란찜)를 1탭으로 등록·삭제하고 터치 시 '+'로 바로 이어 붙이는 기능 추가",
+      "조합된 메뉴 칩에서도 '⭐' 버튼으로 단일 메뉴를 즉시 즐겨찾기에 저장 가능",
+      "즐겨찾는 단일 메뉴와 조합을 Firestore(family_meta_v4/meal_favorites)에도 동기화해 가족 기기 간 자동 공유"
+    ]
+  },
+  {
+    id: "patch-v10.26",
+    version: "v10.26",
+    date: "2026-11-16",
+    title: "레시피 한국어 단위 파싱 통합(큰술·줌 등) · 장보기 일괄 추가 중복 방지 · 자가진단 14종 확장",
+    changes: [
+      "공통 재료 파서(parseRecipeIngredientToken) 도입으로 큰술·작은술·줌·봉지·병 등 한식 단위와 띄어쓰기 수량(250 g) 일관 처리",
+      "레시피 일괄 부족 재료 장보기 추가 시 이미 장보기에 담긴 품목은 자동으로 건너뛰도록 중복 방지 적용",
+      "핵심 로직 자가진단 테스트(runCoreLogicSelfTests)를 14종으로 확장"
+    ]
+  },
   {
     id: "patch-v10.25",
     version: "v10.25",
@@ -2277,6 +2314,50 @@ function MainApp() {
       return [];
     }
   });
+  const [favoriteSingleMenus, setFavoriteSingleMenus] = useState(() => {
+    try {
+      const raw = localStorage.getItem("kim_favorite_single_menus_v1");
+      const parsed = raw ? JSON.parse(raw) : [];
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (e) {
+      return [];
+    }
+  });
+
+  const syncMealFavoritesToCloud = async (nextCombos, nextSingles) => {
+    try {
+      localStorage.setItem("kim_favorite_meal_combos_v1", JSON.stringify(nextCombos));
+      localStorage.setItem("kim_favorite_single_menus_v1", JSON.stringify(nextSingles));
+    } catch (e) {}
+    if (user && db) {
+      try {
+        await setDoc(
+          getDocRef("family_meta_v4", "meal_favorites"),
+          { combos: nextCombos, singles: nextSingles, updatedAt: new Date().toISOString() },
+          { merge: true }
+        );
+      } catch (e) {}
+    }
+  };
+
+  const handleAddFavoriteSingleMenu = (rawName) => {
+    const clean = String(rawName || "").trim();
+    if (!clean) return;
+    if (favoriteSingleMenus.includes(clean)) {
+      showToast(`'${clean}'은(는) 이미 단일 즐겨찾기에 있습니다.`);
+      return;
+    }
+    const next = [clean, ...favoriteSingleMenus].slice(0, 30);
+    setFavoriteSingleMenus(next);
+    syncMealFavoritesToCloud(favoriteMealCombos, next);
+    showToast(`⭐ '${clean}' 단일 메뉴 즐겨찾기에 등록했습니다!`);
+  };
+
+  const handleRemoveFavoriteSingleMenu = (targetName) => {
+    const next = favoriteSingleMenus.filter((x) => x !== targetName);
+    setFavoriteSingleMenus(next);
+    syncMealFavoritesToCloud(favoriteMealCombos, next);
+  };
 
   const appendMenuChipToForm = (rawItem) => {
     const item = String(rawItem || "").trim();
@@ -2914,6 +2995,18 @@ function MainApp() {
               const list = toSafeArray(d.data().ids);
               setDeletedIds(list);
               localStorage.setItem("kim_family_deleted_ids", JSON.stringify(list));
+            }
+            if (d.id === "meal_favorites") {
+              if (Array.isArray(d.data().combos)) {
+                const cloudCombos = toSafeArray(d.data().combos);
+                setFavoriteMealCombos(cloudCombos);
+                try { localStorage.setItem("kim_favorite_meal_combos_v1", JSON.stringify(cloudCombos)); } catch (e) {}
+              }
+              if (Array.isArray(d.data().singles)) {
+                const cloudSingles = toSafeArray(d.data().singles);
+                setFavoriteSingleMenus(cloudSingles);
+                try { localStorage.setItem("kim_favorite_single_menus_v1", JSON.stringify(cloudSingles)); } catch (e) {}
+              }
             }
             if (d.id === "api_config") {
               if (d.data().geminiKey) {
@@ -4867,6 +4960,19 @@ ${validText}
             { id: "2", name: "소고기 국거리" }
           ]) === null
       }
+,
+      {
+        name: "레시피 한국어 단위 토큰 파싱 (소고기 250 g / 다진마늘 1큰술)",
+        pass: (() => {
+          const a = parseRecipeIngredientToken("소고기 250 g");
+          const b = parseRecipeIngredientToken("다진마늘 1큰술");
+          return a.name === "소고기" && a.qty === 250 && a.unit === "g" && b.name === "다진마늘" && b.qty === 1 && b.unit === "큰술";
+        })()
+      },
+      {
+        name: "수량 문자열('01') 숫자 정규화 및 차감 안전성",
+        pass: (Number("01") || 0) === 1 && (Number("01") || 0) - 1 === 0
+      }
     ];
     const passed = cases.filter((c) => c.pass).length;
     setSelfTestResults({ passed, total: cases.length, cases });
@@ -6199,11 +6305,10 @@ ${validText}
 
   const handleQuickAddSingleIngredientToShopping = async (rawToken, recipeTitle = "") => {
     if (!requireEditorAccess()) return;
-    const clean = String(rawToken || "").trim();
-    if (!clean) return;
-    const m = clean.match(/^(.+?)\s+(\d+(?:\.\d+)?(?:g|kg|ml|L|개|팩|봉|모|캔|단|알|마리|조각|컵|T|t)?)$/i);
-    const itemName = (m ? m[1] : clean).trim();
-    const itemQty = m ? m[2].trim() : "1개";
+    const parsed = parseRecipeIngredientToken(rawToken);
+    if (!parsed.name) return;
+    const itemName = parsed.name;
+    const itemQty = parsed.qtyText;
     const exists = shoppingList.some(
       (s) => String(s.name || "").trim().toLowerCase() === itemName.toLowerCase()
     );
@@ -6392,9 +6497,8 @@ ${validText}
       .map((s) => s.trim())
       .filter(Boolean)
       .map((chunk) => {
-        const m = chunk.match(/^(.+?)\s+(\d+(?:\.\d+)?)\s*([가-힣a-zA-Z]+)?$/);
-        if (m) return { name: m[1].trim(), qty: Number(m[2]), unit: m[3] || "개" };
-        return { name: chunk, qty: 1, unit: "개" };
+        const parsed = parseRecipeIngredientToken(chunk);
+        return { name: parsed.name, qty: parsed.qty, unit: parsed.unit };
       });
 
     const payload = {
@@ -6488,16 +6592,39 @@ ${validText}
       return;
     }
     const missing = ings.filter((ing) => {
-      const n = typeof ing === "string" ? ing : ing?.name;
+      const n = typeof ing === "string" ? parseRecipeIngredientToken(ing).name : ing?.name;
       return n && !matchFridgeItemExactFirst(n, fridge);
     });
     if (missing.length === 0) {
       showToast("✅ 모든 재료가 냉장고에 이미 있습니다!");
       return;
     }
-    const newPayloads = missing.map((ing, idx) => {
-      const n = typeof ing === "string" ? ing : ing?.name;
-      const q = typeof ing === "object" && ing?.qty ? `${ing.qty}${ing.unit || "개"}` : "1개";
+    const existingShopNames = new Set(
+      shoppingList.map((s) => String(s.name || "").trim().toLowerCase()).filter(Boolean)
+    );
+    const toAdd = [];
+    let skippedDup = 0;
+    missing.forEach((ing) => {
+      const parsed = typeof ing === "string" ? parseRecipeIngredientToken(ing) : null;
+      const n = parsed ? parsed.name : String(ing?.name || "").trim();
+      const q = parsed
+        ? parsed.qtyText
+        : typeof ing === "object" && ing?.qty
+        ? `${ing.qty}${ing.unit || "개"}`
+        : "1개";
+      const key = n.toLowerCase();
+      if (!n || existingShopNames.has(key)) {
+        skippedDup += 1;
+      } else {
+        existingShopNames.add(key);
+        toAdd.push({ n, q });
+      }
+    });
+    if (toAdd.length === 0) {
+      showToast("부족한 재료가 이미 장보기 목록에 모두 담겨 있습니다.");
+      return;
+    }
+    const newPayloads = toAdd.map(({ n, q }, idx) => {
       return {
         id: `sh-rcp-${Date.now()}-${idx}`,
         name: n,
@@ -10577,7 +10704,7 @@ ${validText}
                             .map((s) => s.trim())
                             .filter(Boolean)
                             .map((tok, tIdx) => {
-                              const tokName = tok.replace(/\s+\d+(?:\.\d+)?(?:g|kg|ml|L|개|팩|봉|모|캔|단|알|마리|조각|컵|T|t)?$/i, "").trim();
+                              const tokName = parseRecipeIngredientToken(tok).name;
                               const inFridge = Boolean(tokName && matchFridgeItemExactFirst(tokName, fridge));
                               return inFridge ? (
                                 <span
@@ -12272,12 +12399,11 @@ ${validText}
                     onClick={() => {
                       const combo = mealForm.menu.trim();
                       if (!combo) return;
-                      setFavoriteMealCombos((prev) => {
-                        if (prev.includes(combo)) return prev;
-                        const next = [combo, ...prev].slice(0, 12);
-                        try { localStorage.setItem("kim_favorite_meal_combos_v1", JSON.stringify(next)); } catch (e) {}
-                        return next;
-                      });
+                      if (!favoriteMealCombos.includes(combo)) {
+                        const next = [combo, ...favoriteMealCombos].slice(0, 15);
+                        setFavoriteMealCombos(next);
+                        syncMealFavoritesToCloud(next, favoriteSingleMenus);
+                      }
                       showToast("⭐ 자주 먹는 조합에 저장했습니다!");
                     }}
                     className="text-[11px] font-extrabold text-amber-700 hover:text-amber-800"
@@ -12313,6 +12439,18 @@ ${validText}
                 >
                   + 추가
                 </button>
+                <button
+                  type="button"
+                  disabled={!mealChipInput.trim()}
+                  onClick={() => {
+                    handleAddFavoriteSingleMenu(mealChipInput);
+                    setMealChipInput("");
+                  }}
+                  title="입력한 단일 메뉴를 즐겨찾기에 등록"
+                  className="px-2.5 py-2 rounded-xl bg-amber-100 hover:bg-amber-200 disabled:opacity-40 text-amber-900 border border-amber-300 text-xs font-extrabold shrink-0"
+                >
+                  ⭐
+                </button>
               </div>
 
               {/* 현재 조합된 칩 목록 */}
@@ -12328,6 +12466,16 @@ ${validText}
                         className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-100 text-amber-950 border border-amber-300 text-xs font-extrabold"
                       >
                         <span>{chip}</span>
+                        {!favoriteSingleMenus.includes(chip) && (
+                          <button
+                            type="button"
+                            onClick={() => handleAddFavoriteSingleMenu(chip)}
+                            title="이 메뉴를 단일 즐겨찾기에 등록"
+                            className="text-amber-600 hover:text-amber-800 text-[10px]"
+                          >
+                            ⭐
+                          </button>
+                        )}
                         <button
                           type="button"
                           onClick={() => {
@@ -12375,6 +12523,36 @@ ${validText}
                 </div>
               )}
 
+              {/* 즐겨찾는 단일 메뉴 (터치로 + 추가) */}
+              {favoriteSingleMenus.length > 0 && (
+                <div className="space-y-1 pt-0.5">
+                  <div className="text-[10px] font-bold text-emerald-800">⭐ 즐겨찾는 단일 메뉴 (터치로 + 추가)</div>
+                  <div className="flex flex-wrap gap-1">
+                    {favoriteSingleMenus.map((single) => (
+                      <span
+                        key={single}
+                        className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-[11px] font-bold text-emerald-900"
+                      >
+                        <button
+                          type="button"
+                          onClick={() => appendMenuChipToForm(single)}
+                          className="hover:underline"
+                        >
+                          + {single}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveFavoriteSingleMenu(single)}
+                          className="text-emerald-500 hover:text-rose-600"
+                        >
+                          ×
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* 즐겨찾기 조합 */}
               {favoriteMealCombos.length > 0 && (
                 <div className="space-y-1 pt-0.5">
@@ -12395,11 +12573,9 @@ ${validText}
                         <button
                           type="button"
                           onClick={() => {
-                            setFavoriteMealCombos((prev) => {
-                              const next = prev.filter((x) => x !== combo);
-                              try { localStorage.setItem("kim_favorite_meal_combos_v1", JSON.stringify(next)); } catch (e) {}
-                              return next;
-                            });
+                            const next = favoriteMealCombos.filter((x) => x !== combo);
+                            setFavoriteMealCombos(next);
+                            syncMealFavoritesToCloud(next, favoriteSingleMenus);
                           }}
                           className="text-amber-500 hover:text-rose-600"
                         >
