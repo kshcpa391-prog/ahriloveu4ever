@@ -158,9 +158,9 @@ const ROUTINE_ORDERED_SLOTS = ["아침", "점심", "하원후", "오후", "저�
 
 const isWeekendNow = () => [0, 6].includes(new Date().getDay());
 
-const getCurrentRoutineTimeSlot = (ranges = DEFAULT_ROUTINE_TIME_RANGES) => {
+const getCurrentRoutineTimeSlot = (ranges = DEFAULT_ROUTINE_TIME_RANGES, hourOverride = null) => {
   const now = new Date();
-  const h = now.getHours();
+  const h = typeof hourOverride === "number" ? hourOverride : now.getHours();
   const isWknd = [0, 6].includes(now.getDay());
   const slots = isWknd ? ROUTINE_WEEKEND_SLOTS : ROUTINE_WEEKDAY_SLOTS;
   const r = { ...DEFAULT_ROUTINE_TIME_RANGES, ...(ranges || {}) };
@@ -170,6 +170,24 @@ const getCurrentRoutineTimeSlot = (ranges = DEFAULT_ROUTINE_TIME_RANGES) => {
     if (isHourInRange(h, r[slot], r[nextSlot])) return slot;
   }
   return "자기전";
+};
+
+const matchesRoutineTarget = (rt, filter) => {
+  if (!filter || filter === "전체") return true;
+  const a = rt?.assignee || "공통";
+  if (filter === "공통") return a === "공통";
+  if (filter === "시목") return a === "시목" || a === "시목·시율";
+  if (filter === "시율") return a === "시율" || a === "시목·시율";
+  return a === filter;
+};
+
+const getRoutineAssigneeBadgeCls = (assignee) => {
+  const a = assignee || "공통";
+  if (a === "시목") return "bg-sky-100 text-sky-800";
+  if (a === "시율") return "bg-rose-100 text-rose-800";
+  if (a === "시목·시율") return "bg-purple-100 text-purple-800";
+  if (a === "공통") return "bg-emerald-100 text-emerald-800";
+  return "bg-amber-100 text-amber-800";
 };
 
 const parseRoutineSteps = (title) => {
@@ -188,8 +206,8 @@ const DEFAULT_HOME_TIME_RANGES = {
   nightStart: 20
 };
 
-const getAutoHomeTimeMode = (ranges = DEFAULT_HOME_TIME_RANGES) => {
-  const h = new Date().getHours();
+const getAutoHomeTimeMode = (ranges = DEFAULT_HOME_TIME_RANGES, hourOverride = null) => {
+  const h = typeof hourOverride === "number" ? hourOverride : new Date().getHours();
   const mS = ranges?.morningStart ?? 5;
   const aS = ranges?.afternoonStart ?? 11;
   const nS = ranges?.nightStart ?? 20;
@@ -1068,11 +1086,42 @@ const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.65) =>
     img.src = dataUrl;
   });
 
-const APP_CODE_VERSION = "v10.68";
-const APP_BUILD_DATE = "2026-11-17 03:46";
+const APP_CODE_VERSION = "v10.71";
+const APP_BUILD_DATE = "2026-11-17 03:55";
 const EDITOR_INVITE_CODE = "0402";
 
 const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v10.71",
+    version: "v10.71",
+    date: "2026-11-17",
+    title: "시간대 경계 자동 갱신 타이머(1분 주기·화면 복귀) & 홈 루틴 필터 빠른 복귀",
+    changes: [
+      "앱을 켜 둔 상태에서도 시각 경계(예: 11시·15시·20시)를 지나면 홈 시간대 UI와 현재 루틴 시간대가 1분 주기로 자동 갱신",
+      "홈 루틴 카드에서 특정 시간대나 대상을 고정해 둔 경우 상단에 [자동 복귀] 빠른 초기화 버튼 제공"
+    ]
+  },
+  {
+    id: "patch-v10.70",
+    version: "v10.70",
+    date: "2026-11-17",
+    title: "홈 루틴 [자동] 모드에서 현재 시간대 루틴만 엄격히 표출",
+    changes: [
+      "홈 루틴 카드 기본 [자동(현재시간대)] 필터에서 [상시] 루틴을 섞지 않고 현재 시간대(s === curSlot)에 해당하는 루틴만 표시하도록 변경",
+      "상시 루틴은 바로 옆 [상시] 또는 [전체] 칩을 눌러 확인 가능"
+    ]
+  },
+  {
+    id: "patch-v10.69",
+    version: "v10.69",
+    date: "2026-11-17",
+    title: "루틴 대상 분리(공통·시목·시율·시목·시율·수혁·아리나) 및 대상별 필터·색상 배지 추가",
+    changes: [
+      "루틴 등록·수정 시 대상 선택에 [👨‍👩‍👧‍👦 공통], [👦 시목], [👶 시율], [👦👶 시목·시율], [👨 수혁], [👩 아리나] 추가",
+      "같은 이름·시간대 루틴이라도 시목/시율/공통 등 대상이 다르면 각각 별도 루틴으로 등록 가능",
+      "홈 루틴 카드와 일정→반복 루틴 모두에서 대상별 필터(전체·공통·시목·시율 등) 및 색상 배지 지원"
+    ]
+  },
   {
     id: "patch-v10.68",
     version: "v10.68",
@@ -2717,6 +2766,21 @@ function MainApp() {
     return localStorage.getItem("kim_home_routine_slot_v1") || "auto";
   });
   const [homeTimeModeOverride, setHomeTimeModeOverride] = useState("auto");
+  const [liveHourTick, setLiveHourTick] = useState(() => new Date().getHours());
+  useEffect(() => {
+    const syncHour = () => {
+      const h = new Date().getHours();
+      setLiveHourTick((prev) => (prev === h ? prev : h));
+    };
+    const timer = setInterval(syncHour, 60000);
+    window.addEventListener("focus", syncHour);
+    document.addEventListener("visibilitychange", syncHour);
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener("focus", syncHour);
+      document.removeEventListener("visibilitychange", syncHour);
+    };
+  }, []);
   const [isHomeEditMode, setIsHomeEditMode] = useState(false);
   const [isRoutineRangeEditOpen, setIsRoutineRangeEditOpen] = useState(false);
   const [routineTimeRanges, setRoutineTimeRanges] = useState(() => {
@@ -3033,6 +3097,14 @@ function MainApp() {
   const [newRoutineIntervalDays, setNewRoutineIntervalDays] = useState(2);
   const [newRoutineNthWeek, setNewRoutineNthWeek] = useState(1);
   const [routineTimeFilter, setRoutineTimeFilter] = useState("전체");
+  const [routineTargetFilter, setRoutineTargetFilter] = useState("전체");
+  const [homeRoutineTargetFilter, setHomeRoutineTargetFilter] = useState(() => {
+    try {
+      return localStorage.getItem("kim_home_routine_target_v1") || "전체";
+    } catch (e) {
+      return "전체";
+    }
+  });
   const [editingRoutineId, setEditingRoutineId] = useState(null);
   const [showAllTodayRoutinesOnMain, setShowAllTodayRoutinesOnMain] = useState(false);
   const [isMainRoutineCollapsed, setIsMainRoutineCollapsed] = useState(false);
@@ -3249,10 +3321,11 @@ function MainApp() {
           r.id !== editingRoutineId &&
           String(r.title || "").trim().toLowerCase() === title.toLowerCase() &&
           r.cycle === cycleVal &&
-          (r.timeSlot || "상시") === newRoutineTimeSlot
+          (r.timeSlot || "상시") === newRoutineTimeSlot &&
+          (r.assignee || "공통") === (newRoutineAssignee || "공통")
       )
     ) {
-      showToast("이미 같은 이름·시간대·주기의 루틴이 등록되어 있습니다.");
+      showToast("이미 같은 대상·이름·시간대·주기의 루틴이 등록되어 있습니다.");
       return;
     }
     if (editingRoutineId) {
@@ -8602,7 +8675,7 @@ ${validText}
       ========================================== */}
       {activeTab === "home" && (() => {
         const activeHomeTimeMode =
-          homeTimeModeOverride === "auto" ? getAutoHomeTimeMode(homeTimeRanges) : homeTimeModeOverride;
+          homeTimeModeOverride === "auto" ? getAutoHomeTimeMode(homeTimeRanges, liveHourTick) : homeTimeModeOverride;
         const modeMeta =
           activeHomeTimeMode === "morning"
             ? {
@@ -8782,10 +8855,10 @@ ${validText}
           }
         };
 
-        const curSlot = getCurrentRoutineTimeSlot(routineTimeRanges);
+        const curSlot = getCurrentRoutineTimeSlot(routineTimeRanges, liveHourTick);
         const wkndNow = isWeekendNow();
         const activeRoutines = familyRoutines.filter((r) => !isRoutineDoneNow(r));
-        const visibleRoutineList =
+        const slotFilteredRoutines =
           homeRoutineSlotFilter === "전체"
             ? activeRoutines
             : homeRoutineSlotFilter === "auto"
@@ -8793,9 +8866,12 @@ ${validText}
                 const s = r.timeSlot || "상시";
                 if (wkndNow && s === "하원후") return false;
                 if (!wkndNow && s === "오후") return false;
-                return s === curSlot || s === "상시";
+                return s === curSlot;
               })
             : activeRoutines.filter((r) => (r.timeSlot || "상시") === homeRoutineSlotFilter);
+        const visibleRoutineList = slotFilteredRoutines.filter((r) =>
+          matchesRoutineTarget(r, homeRoutineTargetFilter)
+        );
 
         const scheduleTodoSize = blockSizes.schedule_todo || "normal";
         const previewLimit = scheduleTodoSize === "compact" ? 2 : scheduleTodoSize === "large" ? 5 : 3;
@@ -8905,16 +8981,60 @@ ${validText}
                   <span className="text-xs font-black text-indigo-950 truncate">
                     🔄 {homeRoutineSlotFilter === "auto" ? `지금(${curSlot}) 루틴` : homeRoutineSlotFilter === "전체" ? "오늘 남은 루틴" : `${homeRoutineSlotFilter} 루틴`} ({visibleRoutineList.length}건)
                   </span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setScheduleSubTab("routine");
-                      setActiveTab("schedule");
-                    }}
-                    className="px-2 py-0.5 rounded-lg bg-indigo-600 text-white text-[10px] font-extrabold whitespace-nowrap shrink-0"
-                  >
-                    관리
-                  </button>
+                  <div className="flex items-center gap-1 shrink-0">
+                    {(homeRoutineSlotFilter !== "auto" || homeRoutineTargetFilter !== "전체") && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setHomeRoutineSlotFilter("auto");
+                          setHomeRoutineTargetFilter("전체");
+                          try {
+                            localStorage.setItem("kim_home_routine_slot_v1", "auto");
+                            localStorage.setItem("kim_home_routine_target_v1", "전체");
+                          } catch (e) {}
+                        }}
+                        className="px-2 py-0.5 rounded-lg bg-white border border-indigo-200 text-indigo-700 text-[10px] font-extrabold whitespace-nowrap"
+                      >
+                        자동 복귀
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setScheduleSubTab("routine");
+                        setActiveTab("schedule");
+                      }}
+                      className="px-2 py-0.5 rounded-lg bg-indigo-600 text-white text-[10px] font-extrabold whitespace-nowrap"
+                    >
+                      관리
+                    </button>
+                  </div>
+                </div>
+
+                {/* 대상별 필터 (전체 · 공통 · 시목 · 시율) */}
+                <div className="flex items-center gap-1 overflow-x-auto">
+                  {[
+                    { id: "전체", label: "전체" },
+                    { id: "공통", label: "👨‍👩‍👧‍👦 공통" },
+                    { id: "시목", label: "👦 시목" },
+                    { id: "시율", label: "👶 시율" }
+                  ].map((tgt) => (
+                    <button
+                      key={tgt.id}
+                      type="button"
+                      onClick={() => {
+                        setHomeRoutineTargetFilter(tgt.id);
+                        try { localStorage.setItem("kim_home_routine_target_v1", tgt.id); } catch (e) {}
+                      }}
+                      className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold whitespace-nowrap border transition shrink-0 ${
+                        homeRoutineTargetFilter === tgt.id
+                          ? "bg-stone-900 text-white border-stone-900"
+                          : "bg-white text-stone-600 border-stone-200"
+                      }`}
+                    >
+                      {tgt.label}
+                    </button>
+                  ))}
                 </div>
 
                 {/* 표출 시간대 직접 선택 바 */}
@@ -9007,7 +9127,7 @@ ${validText}
                               <span className="px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-800 text-[9px] font-black">
                                 {rt.timeSlot || "상시"}
                               </span>
-                              <span className="px-1.5 py-0.5 rounded bg-stone-100 text-stone-600 text-[9px] font-bold">
+                              <span className={`px-1.5 py-0.5 rounded text-[9px] font-black ${getRoutineAssigneeBadgeCls(rt.assignee)}`}>
                                 {rt.assignee || "공통"}
                               </span>
                               {steps.length >= 2 && (
@@ -11002,9 +11122,12 @@ ${validText}
                 onChange={(e) => setNewRoutineAssignee(e.target.value)}
                 className="px-2 py-1.5 rounded-xl border border-stone-200 bg-stone-50 text-[11px] font-extrabold"
               >
-                <option value="공통">공통</option>
-                <option value="수혁">수혁</option>
-                <option value="아리나">아리나</option>
+                <option value="공통">👨‍👩‍👧‍👦 공통</option>
+                <option value="시목">👦 시목</option>
+                <option value="시율">👶 시율</option>
+                <option value="시목·시율">👦👶 시목·시율</option>
+                <option value="수혁">👨 수혁</option>
+                <option value="아리나">👩 아리나</option>
               </select>
               <button
                 type="button"
@@ -11022,6 +11145,30 @@ ${validText}
                   취소
                 </button>
               )}
+            </div>
+
+            <div className="flex gap-1 overflow-x-auto">
+              {[
+                { id: "전체", label: "전체" },
+                { id: "공통", label: "👨‍👩‍👧‍👦 공통" },
+                { id: "시목", label: "👦 시목" },
+                { id: "시율", label: "👶 시율" },
+                { id: "수혁", label: "👨 수혁" },
+                { id: "아리나", label: "👩 아리나" }
+              ].map((tgt) => (
+                <button
+                  key={tgt.id}
+                  type="button"
+                  onClick={() => setRoutineTargetFilter(tgt.id)}
+                  className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold border shrink-0 ${
+                    routineTargetFilter === tgt.id
+                      ? "bg-stone-900 text-white border-stone-900"
+                      : "bg-stone-50 text-stone-600 border-stone-200"
+                  }`}
+                >
+                  {tgt.label}
+                </button>
+              ))}
             </div>
 
             <div className="flex gap-1 overflow-x-auto pb-0.5">
@@ -11048,7 +11195,7 @@ ${validText}
             ) : (
               <div className="space-y-1.5">
                 {[...familyRoutines]
-                  .filter((rt) => routineTimeFilter === "전체" || (rt.timeSlot || "상시") === routineTimeFilter)
+                  .filter((rt) => (routineTimeFilter === "전체" || (rt.timeSlot || "상시") === routineTimeFilter) && matchesRoutineTarget(rt, routineTargetFilter))
                   .sort((a, b) => {
                     const aDone = Number(isRoutineDoneNow(a));
                     const bDone = Number(isRoutineDoneNow(b));
@@ -11190,7 +11337,7 @@ ${validText}
                                   </span>
                                 );
                               })()}
-                              <span className="px-1.5 py-0.5 rounded bg-stone-100 text-stone-600 text-[9px] font-bold">
+                              <span className={`px-1.5 py-0.5 rounded text-[9px] font-black ${getRoutineAssigneeBadgeCls(rt.assignee)}`}>
                                 {rt.assignee || "공통"}
                               </span>
                             </div>
