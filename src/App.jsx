@@ -701,11 +701,21 @@ const STORAGE_LOCATIONS = ["냉장실", "냉동실", "실온·팬트리"];
 const FRIDGE_CATEGORIES = ["채소/과일", "육류/수산", "유제품/계란", "유아식/이유식 재료", "반찬/김치", "밀키트", "양념/소스", "기타"];
 const SCHEDULE_CATEGORIES = ["기념일/생일", "할일(To-Do)", "육아/병원", "가족행사/경조사"];
 
-const APP_CODE_VERSION = "v10.2";
-const APP_BUILD_DATE = "2026-11-16 13:00";
+const APP_CODE_VERSION = "v10.3";
+const APP_BUILD_DATE = "2026-11-16 13:16";
 const EDITOR_INVITE_CODE = "0402";
 
 const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v10.3",
+    version: "v10.3",
+    date: "2026-11-16",
+    title: "패치노트 버전 정렬 오류(v10.x가 v9.9 아래로 내려가던 현상) 수정",
+    changes: [
+      "패치노트 정렬이 문자열 사전순(v9 > v10)으로 되어 있어 v10.0~v10.2가 맨 아래에 숨겨지던 버그 수정",
+      "메이저·마이너 숫자 기준 내림차순 정렬(v10.3 → v10.2 → v10.1 → v10.0 → v9.9) 적용"
+    ]
+  },
   {
     id: "patch-v10.2",
     version: "v10.2",
@@ -2558,9 +2568,21 @@ function MainApp() {
               } catch (e) {}
             }
           }
-          const combined = [...loaded, ...missingDefaults].sort((a, b) =>
-            String(b.version || "").localeCompare(String(a.version || ""))
-          );
+          const parseVer = (v) =>
+            String(v || "")
+              .replace(/^v/i, "")
+              .split(".")
+              .map((n) => parseInt(n, 10) || 0);
+          const combined = [...loaded, ...missingDefaults].sort((a, b) => {
+            const pa = parseVer(a.version);
+            const pb = parseVer(b.version);
+            const len = Math.max(pa.length, pb.length);
+            for (let i = 0; i < len; i++) {
+              const diff = (pb[i] || 0) - (pa[i] || 0);
+              if (diff !== 0) return diff;
+            }
+            return String(b.date || "").localeCompare(String(a.date || ""));
+          });
           setPatchNotes(combined);
         },
         () => {}
