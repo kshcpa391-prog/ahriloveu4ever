@@ -868,11 +868,32 @@ const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.65) =>
     img.src = dataUrl;
   });
 
-const APP_CODE_VERSION = "v10.18";
-const APP_BUILD_DATE = "2026-11-16 15:30";
+const APP_CODE_VERSION = "v10.20";
+const APP_BUILD_DATE = "2026-11-16 15:38";
 const EDITOR_INVITE_CODE = "0402";
 
 const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v10.20",
+    version: "v10.20",
+    date: "2026-11-16",
+    title: "장보기·가족공지 목록 비움 시 초기 샘플 자동 부활 버그 수정",
+    changes: [
+      "장보기(family_shopping_v4) 및 가족공지(family_notices_v4)가 0건이 되었을 때 localStorage 미보유 기기에서 초기 샘플 데이터가 자동 재주입되던 로직 제거",
+      "장보기·공지 실시간 스냅샷 오류 시 상단 동기화 알림(syncErrorMsg) 연결"
+    ]
+  },
+  {
+    id: "patch-v10.19",
+    version: "v10.19",
+    date: "2026-11-16",
+    title: "모바일 칩 touch-action: none 시작 시점 고정 (브라우저 스크롤 컴포지터 선점 차단)",
+    changes: [
+      "칩 버튼에 시작 시점(touchstart)부터 touch-action: none 적용하여 모바일 브라우저가 스크롤로 먼저 가로채는 현상 근본 차단",
+      "터치 기기에서 HTML5 draggable 속성 비활성화로 안드로이드 크롬 터치 충돌 제거",
+      "롱프레스 인식 시간을 0.18초로 단축하여 더 빠르고 부드러운 칸 이동 체감 제공"
+    ]
+  },
   {
     id: "patch-v10.18",
     version: "v10.18",
@@ -2984,42 +3005,22 @@ function MainApp() {
     unsubscribers.push(
       onSnapshot(
         getColRef("family_shopping_v4"),
-        async (snap) => {
+        (snap) => {
           const loaded = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-          if (loaded.length === 0 && !localStorage.getItem("kim_shopping_seeded_v5")) {
-            localStorage.setItem("kim_shopping_seeded_v5", "true");
-            setShoppingList(INITIAL_SHOPPING);
-            for (const s of INITIAL_SHOPPING) {
-              try {
-                await setDoc(getDocRef("family_shopping_v4", s.id), s);
-              } catch (e) {}
-            }
-          } else {
-            setShoppingList(loaded);
-          }
+          setShoppingList(loaded);
         },
-        () => {}
+        (err) => setSyncErrorMsg(err?.message || "장보기 동기화 오류")
       )
     );
 
     unsubscribers.push(
       onSnapshot(
         getColRef("family_notices_v4"),
-        async (snap) => {
+        (snap) => {
           const loaded = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-          if (loaded.length === 0 && !localStorage.getItem("kim_notices_seeded_v5")) {
-            localStorage.setItem("kim_notices_seeded_v5", "true");
-            setNotices(INITIAL_NOTICES);
-            for (const n of INITIAL_NOTICES) {
-              try {
-                await setDoc(getDocRef("family_notices_v4", n.id), n);
-              } catch (e) {}
-            }
-          } else {
-            setNotices(loaded);
-          }
+          setNotices(loaded);
         },
-        () => {}
+        (err) => setSyncErrorMsg(err?.message || "가족공지 동기화 오류")
       )
     );
 
@@ -8664,14 +8665,14 @@ ${validText}
                         return (
                           <button
                             key={it.id}
-                            draggable
+                            draggable={typeof window !== "undefined" && !("ontouchstart" in window)}
                             onDragStart={(e) => {
                               e.dataTransfer?.setData("text/plain", it.id);
                             }}
                             onContextMenu={(e) => e.preventDefault()}
                             style={{
                               WebkitTouchCallout: "none",
-                              touchAction: draggingChip?.item?.id === it.id ? "none" : "pan-y"
+                              touchAction: "none"
                             }}
                             onTouchStart={(e) => {
                               const t = e.touches?.[0];
@@ -8687,7 +8688,7 @@ ${validText}
                                   try { navigator.vibrate(18); } catch {}
                                 }
                                 setDraggingChip({ item: it, x: startX, y: startY });
-                              }, 250);
+                              }, 180);
                               chipTouchRef.current = {
                                 item: it,
                                 startX,
