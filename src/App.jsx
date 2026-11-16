@@ -698,6 +698,75 @@ const STORAGE_LOCATIONS = ["냉장실", "냉동실", "실온·팬트리"];
 const FRIDGE_CATEGORIES = ["채소/과일", "육류/수산", "유제품/계란", "유아식/이유식 재료", "반찬/김치", "밀키트", "양념/소스", "기타"];
 const SCHEDULE_CATEGORIES = ["기념일/생일", "할일(To-Do)", "육아/병원", "가족행사/경조사"];
 const RECIPE_CATEGORIES = ["메인반찬", "국·찌개", "한그릇·면·밥", "유아식·이유식", "간식·디저트", "샐러드·가벼운식", "기타"];
+const EXPORT_MEAL_GOALS = [
+  "재고소진",
+  "산후조리/영양보충",
+  "다이어트",
+  "치팅",
+  "숙취해소",
+  "한가족이 먹을수있는 식사"
+];
+
+const buildPersonalizedAiPrompt = ({
+  exportScope,
+  exportMealMember,
+  exportMealGoal,
+  exportMealDays,
+  simokM,
+  siyulM
+}) => {
+  const daysNum = Number(exportMealDays) || 7;
+  const goal = exportMealGoal || "재고소진";
+  const scopeDesc =
+    exportScope === "all"
+      ? `최근 ${daysNum}일 식단과 현재 냉장·냉동·실온 재고`
+      : exportScope === "meals_only"
+      ? `최근 ${daysNum}일 식단`
+      : "현재 냉장·냉동·실온 재고";
+
+  const goalGuideMap = {
+    "재고소진": "냉장고 소비기한 임박 재료와 보유 재고를 최대한 소진하면서 추가 장보기를 최소화하는 방향",
+    "산후조리/영양보충": "산후 회복·철분·단백질·칼슘·따뜻한 국물과 소화 편한 영양 보충 방향",
+    "다이어트": "적정 열량 관리·고단백·저정제탄수·식이섬유 포만감을 살린 식단 방향",
+    "치팅": "일상 스트레스를 풀 수 있는 만족감 높은 특식·홈파티·별미 위주 방향",
+    "숙취해소": "위장에 부담이 적고 수분·전해질·아미노산(콩나물·북어·조개 등) 보충에 좋은 해장·회복 방향",
+    "한가족이 먹을수있는 식사": "어른과 아이(시목)가 같은 베이스로 함께 먹기 좋은 한 냄비/공통 집밥 방향"
+  };
+  const goalGuide = goalGuideMap[goal] || goalGuideMap["재고소진"];
+
+  let targetIntro = `우리 가족(성인 2인, 첫째 시목 생후 ${simokM}개월, 둘째 시율 생후 ${siyulM}개월)`;
+  let evalLine = `1) 영양 균형·메뉴 중복·[${goal}] 목표 부합도 관점에서 평가해 주세요.`;
+  let recLine = `2) ${goalGuide}으로 다음 3~7일 추천 식단과 최소 장보기 목록을 제안해 주세요.`;
+
+  if (exportScope !== "fridge_only") {
+    if (exportMealMember === "수혁") {
+      targetIntro = "김수혁(성인 남성)";
+      evalLine = `1) 성인 남성 기준 영양 균형·메뉴 중복·[${goal}] 목표 관점에서 평가해 주세요.`;
+      recLine = `2) 김수혁 개인 맞춤으로 ${goalGuide}에 맞춘 다음 3~7일 추천 식단(냉장고 재고 활용 포함)을 제안해 주세요.`;
+    } else if (exportMealMember === "아리나") {
+      targetIntro = "최아리나(성인 여성)";
+      evalLine = `1) 성인 여성 기준 영양 균형·철분/단백질·메뉴 중복·[${goal}] 목표 관점에서 평가해 주세요.`;
+      recLine = `2) 최아리나 개인 맞춤으로 ${goalGuide}에 맞춘 다음 3~7일 추천 식단(냉장고 재고 활용 포함)을 제안해 주세요.`;
+    } else if (exportMealMember === "시목") {
+      targetIntro = `첫째 김시목(생후 ${simokM}개월 유아식)`;
+      evalLine = `1) 생후 ${simokM}개월 유아식 기준으로 탄수화물·단백질·채소 균형, 씹기 편한 식감/크기, 저염 여부, 메뉴 중복을 평가해 주세요.`;
+      recLine = `2) 냉장고 보유 유아식·일반 재료를 우선 활용해 시목이에게 안전하고 영양이 고른 다음 3~7일 유아식·간식 식단(부족 재료만 최소화)을 제안해 주세요.`;
+    } else if (exportMealMember === "시율") {
+      targetIntro = `둘째 김시율(생후 ${siyulM}개월)`;
+      evalLine = `1) 생후 ${siyulM}개월 월령 기준으로 현재 수유·돌봄 흐름(또는 만 6개월 이후 초기 이유식 준비 시 철분·알레르기 테스트 식재료)을 점검해 주세요.`;
+      recLine = `2) 현재 월령에 맞는 주의사항과 함께, 보유 재고 중 향후 이유식·가족식 연계 가능한 포인트를 안내해 주세요.`;
+    }
+  }
+
+  return [
+    `[AI 요청문] 아래는 ${targetIntro}의 ${scopeDesc}입니다. (선택 목표: ${goal})`,
+    evalLine,
+    recLine,
+    "----------------------------------------",
+    ""
+  ];
+};
+
 
 const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.65) =>
   new Promise((resolve) => {
@@ -735,11 +804,22 @@ const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.65) =>
     img.src = dataUrl;
   });
 
-const APP_CODE_VERSION = "v10.10";
-const APP_BUILD_DATE = "2026-11-16 14:35";
+const APP_CODE_VERSION = "v10.11";
+const APP_BUILD_DATE = "2026-11-16 14:40";
 const EDITOR_INVITE_CODE = "0402";
 
 const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v10.11",
+    version: "v10.11",
+    date: "2026-11-16",
+    title: "내보내기 인별·목표별 AI 요청문 맞춤화 & 레시피북 자유비율 사진 자르기(크롭) 추가",
+    changes: [
+      "식단 내보내기에 [식단 목표 선택(재고소진 · 산후조리/영양보충 · 다이어트 · 치팅 · 숙취해소 · 한가족이 먹을수있는 식사)] 드롭다운 추가",
+      "선택한 대상자(김수혁·최아리나·김시목·김시율·가족 전체)와 목표에 맞춰 AI 평가 요청문이 자동으로 달라지도록 개선",
+      "레시피북 사진 업로드 시 한상차림에서 원하는 요리만 자유비율(드래그·모서리 크기조절)로 잘라 올리는 모바일 터치 크롭 에디터 추가"
+    ]
+  },
   {
     id: "patch-v10.10",
     version: "v10.10",
@@ -1880,6 +1960,12 @@ function MainApp() {
     platingCoach: null
   });
   const recipePhotoInputRef = useRef(null);
+  const [cropModal, setCropModal] = useState(null); // { srcUrl }
+  const [cropRect, setCropRect] = useState({ x: 0.08, y: 0.08, w: 0.84, h: 0.84 });
+  const [cropAspect, setCropAspect] = useState("free"); // free | 1:1 | 4:3 | 16:9
+  const cropBoxRef = useRef(null);
+  const cropImgRef = useRef(null);
+  const cropDragRef = useRef(null);
   const [notices, setNotices] = useState([]);
   const [schedules, setSchedules] = useState([]);
   const [deletedIds, setDeletedIds] = useState(() => {
@@ -2094,6 +2180,7 @@ function MainApp() {
   const [exportFridgeLoc, setExportFridgeLoc] = useState("전체"); // 전체 | 냉장실 | 냉동실 | 실온·팬트리
   const [exportMealDays, setExportMealDays] = useState(7); // 3 | 7 | 14
   const [exportIncludeAiPrompt, setExportIncludeAiPrompt] = useState(true);
+  const [exportMealGoal, setExportMealGoal] = useState("재고소진");
   const [quickLogRecipe, setQuickLogRecipe] = useState(null);
   const [quickLogDate, setQuickLogDate] = useState(() => getTodayStr());
   const [quickLogSlot, setQuickLogSlot] = useState("저녁");
@@ -4632,19 +4719,14 @@ ${validText}
       if (!exportIncludeAiPrompt) return [];
       const simokM = getChildAgeStats("2025-08-03").months;
       const siyulM = getChildAgeStats("2026-11-06").months;
-      const scopeDesc =
-        exportScope === "all"
-          ? `최근 ${Number(exportMealDays) || 7}일 식단과 현재 냉장·냉동·실온 재고`
-          : exportScope === "meals_only"
-          ? `최근 ${Number(exportMealDays) || 7}일 식단`
-          : "현재 냉장·냉동·실온 재고";
-      return [
-        `[AI 요청문] 아래는 우리 가족(성인 2인, 첫째 시목 생후 ${simokM}개월, 둘째 시율 생후 ${siyulM}개월)의 ${scopeDesc}입니다.`,
-        "1) 영양 균형·메뉴 중복·소비기한 임박 재료 우선 활용 관점에서 평가해 주세요.",
-        "2) 보유 재고를 최대한 소진하면서 부족한 재료만 최소화한 다음 3~7일 추천 식단과 장보기 목록을 제안해 주세요.",
-        "----------------------------------------",
-        ""
-      ];
+      return buildPersonalizedAiPrompt({
+        exportScope,
+        exportMealMember,
+        exportMealGoal,
+        exportMealDays,
+        simokM,
+        siyulM
+      });
     };
 
     const prefix = buildAiPromptPrefix();
@@ -5726,21 +5808,134 @@ ${validText}
     }
   };
 
+  const openCropModalWithUrl = (srcUrl) => {
+    if (!srcUrl) return;
+    setCropAspect("free");
+    setCropRect({ x: 0.08, y: 0.08, w: 0.84, h: 0.84 });
+    setCropModal({ srcUrl });
+  };
+
   const handleRecipePhotoSelect = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
     try {
-      const { previewUrl, base64, mimeType } = await fileToBase64(file, { maxSide: 720, quality: 0.65 });
+      const { previewUrl, base64, mimeType } = await fileToBase64(file, { maxSide: 1400, quality: 0.88 });
       const rawUrl = previewUrl || (base64 ? `data:${mimeType || "image/jpeg"};base64,${base64}` : "");
-      const safeUrl = await compressDataUrlForFirestore(rawUrl, 720, 0.65);
-      if (!safeUrl) {
-        showToast("⚠️ 이미지 용량이 너무 크거나 읽을 수 없습니다. 다른 사진을 선택해 주세요.");
+      if (!rawUrl) {
+        showToast("⚠️ 이미지를 읽을 수 없습니다. 다른 사진을 선택해 주세요.");
         return;
       }
-      setRecipeForm((prev) => ({ ...prev, photoDataUrl: safeUrl }));
+      openCropModalWithUrl(rawUrl);
     } catch (err) {
       showToast("⚠️ 사진 처리 중 오류가 발생했습니다.");
+    } finally {
+      if (recipePhotoInputRef.current) recipePhotoInputRef.current.value = "";
     }
+  };
+
+  const handleApplyCrop = async () => {
+    if (!cropModal?.srcUrl || !cropImgRef.current) return;
+    const img = cropImgRef.current;
+    const natW = img.naturalWidth || img.width;
+    const natH = img.naturalHeight || img.height;
+    if (!natW || !natH) return;
+
+    const sx = Math.max(0, Math.round(cropRect.x * natW));
+    const sy = Math.max(0, Math.round(cropRect.y * natH));
+    const sw = Math.max(20, Math.round(cropRect.w * natW));
+    const sh = Math.max(20, Math.round(cropRect.h * natH));
+
+    const maxSide = 720;
+    let dw = sw;
+    let dh = sh;
+    if (dw > dh && dw > maxSide) {
+      dh = Math.round((dh * maxSide) / dw);
+      dw = maxSide;
+    } else if (dh >= dw && dh > maxSide) {
+      dw = Math.round((dw * maxSide) / dh);
+      dh = maxSide;
+    }
+
+    const canvas = document.createElement("canvas");
+    canvas.width = dw;
+    canvas.height = dh;
+    const ctx = canvas.getContext("2d");
+    ctx.drawImage(img, sx, sy, sw, sh, 0, 0, dw, dh);
+    const croppedRaw = canvas.toDataURL("image/jpeg", 0.68);
+    const safeUrl = await compressDataUrlForFirestore(croppedRaw, 720, 0.65);
+    setRecipeForm((prev) => ({ ...prev, photoDataUrl: safeUrl || croppedRaw }));
+    setCropModal(null);
+    showToast("✂️ 선택한 영역으로 사진이 잘렸습니다!");
+  };
+
+  const handleCropPointerDown = (mode, e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const box = cropBoxRef.current?.getBoundingClientRect();
+    if (!box || box.width <= 0 || box.height <= 0) return;
+    const pt = e.touches ? e.touches[0] : e;
+    cropDragRef.current = {
+      mode,
+      startX: pt.clientX,
+      startY: pt.clientY,
+      boxW: box.width,
+      boxH: box.height,
+      init: { ...cropRect }
+    };
+
+    const onMove = (ev) => {
+      const drag = cropDragRef.current;
+      if (!drag) return;
+      if (ev.cancelable) ev.preventDefault();
+      const curPt = ev.touches ? ev.touches[0] : ev;
+      const dx = (curPt.clientX - drag.startX) / drag.boxW;
+      const dy = (curPt.clientY - drag.startY) / drag.boxH;
+      const minSize = 0.12;
+      let { x, y, w, h } = drag.init;
+
+      if (drag.mode === "move") {
+        x = Math.max(0, Math.min(1 - w, x + dx));
+        y = Math.max(0, Math.min(1 - h, y + dy));
+      } else {
+        if (drag.mode.includes("e")) {
+          w = Math.max(minSize, Math.min(1 - x, w + dx));
+        }
+        if (drag.mode.includes("s")) {
+          h = Math.max(minSize, Math.min(1 - y, h + dy));
+        }
+        if (drag.mode.includes("w")) {
+          const newX = Math.max(0, Math.min(x + w - minSize, x + dx));
+          w = w + (x - newX);
+          x = newX;
+        }
+        if (drag.mode.includes("n")) {
+          const newY = Math.max(0, Math.min(y + h - minSize, y + dy));
+          h = h + (y - newY);
+          y = newY;
+        }
+        if (cropAspect !== "free") {
+          const ratioMap = { "1:1": 1, "4:3": 4 / 3, "16:9": 16 / 9 };
+          const targetRatio = ratioMap[cropAspect] || 1;
+          const imgRatio = drag.boxW / drag.boxH;
+          h = Math.min(1 - y, Math.max(minSize, (w * imgRatio) / targetRatio));
+          if (x + w > 1) w = 1 - x;
+        }
+      }
+      setCropRect({ x, y, w, h });
+    };
+
+    const onUp = () => {
+      cropDragRef.current = null;
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+      window.removeEventListener("touchmove", onMove);
+      window.removeEventListener("touchend", onUp);
+    };
+
+    window.addEventListener("mousemove", onMove, { passive: false });
+    window.addEventListener("mouseup", onUp);
+    window.addEventListener("touchmove", onMove, { passive: false });
+    window.addEventListener("touchend", onUp);
   };
 
   const openNewRecipeModal = (prefill = null) => {
@@ -12357,6 +12552,21 @@ ${validText}
                 </div>
               </div>
 
+              {exportIncludeAiPrompt && (
+                <div className="bg-amber-50/70 p-2.5 rounded-2xl border border-amber-200 flex items-center justify-between gap-2 text-xs">
+                  <label className="font-extrabold text-amber-950 shrink-0">🎯 AI 요청 목표</label>
+                  <select
+                    value={exportMealGoal}
+                    onChange={(e) => setExportMealGoal(e.target.value)}
+                    className="flex-1 px-2.5 py-1.5 rounded-xl border border-amber-300 bg-white font-bold text-stone-900 text-xs"
+                  >
+                    {EXPORT_MEAL_GOALS.map((g) => (
+                      <option key={g} value={g}>{g}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
               <div className="flex items-center gap-3 flex-wrap text-xs font-bold text-stone-700">
                 <label className="inline-flex items-center gap-1.5 cursor-pointer">
                   <input
@@ -12504,12 +12714,22 @@ ${validText}
                 onChange={handleRecipePhotoSelect}
                 className="hidden"
               />
-              <button
-                onClick={() => recipePhotoInputRef.current?.click()}
-                className="w-full py-2 rounded-xl bg-stone-100 hover:bg-stone-200 text-xs font-extrabold text-stone-700"
-              >
-                📷 {recipeForm.photoDataUrl ? "완성 사진 변경" : "완성 사진 올리기"}
-              </button>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => recipePhotoInputRef.current?.click()}
+                  className="flex-1 py-2 rounded-xl bg-stone-100 hover:bg-stone-200 text-xs font-extrabold text-stone-700"
+                >
+                  📷 {recipeForm.photoDataUrl ? "사진 변경" : "완성 사진 올리기"}
+                </button>
+                {recipeForm.photoDataUrl && (
+                  <button
+                    onClick={() => openCropModalWithUrl(recipeForm.photoDataUrl)}
+                    className="px-3 py-2 rounded-xl bg-rose-50 hover:bg-rose-100 border border-rose-200 text-xs font-extrabold text-rose-700 shrink-0"
+                  >
+                    ✂️ 사진 자르기
+                  </button>
+                )}
+              </div>
               {recipeForm.photoDataUrl && (
                 <img src={recipeForm.photoDataUrl} alt="미리보기" className="w-full h-36 object-cover rounded-xl border border-stone-200" />
               )}
@@ -12587,6 +12807,129 @@ ${validText}
           </div>
         </div>
       )}
+      {cropModal && (
+        <div className="fixed inset-0 z-[60] bg-black/85 backdrop-blur-sm flex items-center justify-center p-3">
+          <div className="bg-white w-full max-w-md rounded-3xl p-4 space-y-3 shadow-2xl">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-black text-stone-900">✂️ 한상차림 사진 자르기 (자유비율)</h3>
+                <p className="text-[11px] text-stone-500">사각형을 드래그해 이동하고 모서리 핸들로 크기를 조절하세요.</p>
+              </div>
+              <button
+                onClick={() => setCropModal(null)}
+                className="p-1.5 rounded-xl bg-stone-100 text-stone-600"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {[
+                { id: "free", label: "자유비율" },
+                { id: "1:1", label: "1:1 정사각" },
+                { id: "4:3", label: "4:3" },
+                { id: "16:9", label: "16:9" }
+              ].map((ar) => (
+                <button
+                  key={ar.id}
+                  onClick={() => {
+                    setCropAspect(ar.id);
+                    if (ar.id !== "free" && cropBoxRef.current) {
+                      const box = cropBoxRef.current.getBoundingClientRect();
+                      const ratioMap = { "1:1": 1, "4:3": 4 / 3, "16:9": 16 / 9 };
+                      const targetRatio = ratioMap[ar.id] || 1;
+                      const imgRatio = box.width / Math.max(1, box.height);
+                      const newH = Math.min(1 - cropRect.y, Math.max(0.15, (cropRect.w * imgRatio) / targetRatio));
+                      setCropRect((prev) => ({ ...prev, h: newH }));
+                    }
+                  }}
+                  className={`px-2.5 py-1 rounded-full text-[11px] font-extrabold border ${
+                    cropAspect === ar.id
+                      ? "bg-stone-900 text-white border-stone-900"
+                      : "bg-stone-50 text-stone-600 border-stone-200"
+                  }`}
+                >
+                  {ar.label}
+                </button>
+              ))}
+              <button
+                onClick={() => {
+                  setCropAspect("free");
+                  setCropRect({ x: 0, y: 0, w: 1, h: 1 });
+                }}
+                className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-50 text-amber-800 border border-amber-200 ml-auto"
+              >
+                전체 선택
+              </button>
+            </div>
+
+            <div className="flex justify-center bg-stone-900 rounded-2xl p-2 overflow-hidden">
+              <div ref={cropBoxRef} className="relative inline-block select-none touch-none max-h-[52vh]">
+                <img
+                  ref={cropImgRef}
+                  src={cropModal.srcUrl}
+                  alt="자르기 대상"
+                  draggable={false}
+                  className="max-h-[50vh] max-w-full block rounded-lg pointer-events-none"
+                />
+                <div
+                  onMouseDown={(e) => handleCropPointerDown("move", e)}
+                  onTouchStart={(e) => handleCropPointerDown("move", e)}
+                  style={{
+                    left: `${cropRect.x * 100}%`,
+                    top: `${cropRect.y * 100}%`,
+                    width: `${cropRect.w * 100}%`,
+                    height: `${cropRect.h * 100}%`,
+                    boxShadow: "0 0 0 9999px rgba(0,0,0,0.55)"
+                  }}
+                  className="absolute border-2 border-white cursor-move touch-none"
+                >
+                  <div
+                    onMouseDown={(e) => handleCropPointerDown("nw", e)}
+                    onTouchStart={(e) => handleCropPointerDown("nw", e)}
+                    className="absolute -top-2 -left-2 w-5 h-5 rounded-full bg-white border-2 border-rose-600 shadow cursor-nwse-resize"
+                  />
+                  <div
+                    onMouseDown={(e) => handleCropPointerDown("ne", e)}
+                    onTouchStart={(e) => handleCropPointerDown("ne", e)}
+                    className="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-white border-2 border-rose-600 shadow cursor-nesw-resize"
+                  />
+                  <div
+                    onMouseDown={(e) => handleCropPointerDown("sw", e)}
+                    onTouchStart={(e) => handleCropPointerDown("sw", e)}
+                    className="absolute -bottom-2 -left-2 w-5 h-5 rounded-full bg-white border-2 border-rose-600 shadow cursor-nesw-resize"
+                  />
+                  <div
+                    onMouseDown={(e) => handleCropPointerDown("se", e)}
+                    onTouchStart={(e) => handleCropPointerDown("se", e)}
+                    className="absolute -bottom-2 -right-2 w-5 h-5 rounded-full bg-white border-2 border-rose-600 shadow cursor-nwse-resize"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                onClick={async () => {
+                  const safeUrl = await compressDataUrlForFirestore(cropModal.srcUrl, 720, 0.65);
+                  setRecipeForm((prev) => ({ ...prev, photoDataUrl: safeUrl || cropModal.srcUrl }));
+                  setCropModal(null);
+                }}
+                className="py-2.5 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-xs font-extrabold"
+              >
+                원본 그대로 사용
+              </button>
+              <button
+                onClick={handleApplyCrop}
+                className="py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-extrabold"
+              >
+                ✂️ 이 영역 잘라서 적용
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {zoomedRecipePhoto && (
         <div
           className="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex flex-col items-center justify-center p-4"
