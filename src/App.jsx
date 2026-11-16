@@ -129,6 +129,24 @@ const formatDate = (dateObj) => {
 const getTodayStr = () => formatDate(new Date());
 const getCurrentYearMonth = () => getTodayStr().slice(0, 7);
 
+const getIsoWeekKey = (dateStr = getTodayStr()) => {
+  const d = new Date(String(dateStr).slice(0, 10) + "T00:00:00");
+  if (Number.isNaN(d.getTime())) return "2026-W47";
+  const tmp = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  const dayNum = tmp.getUTCDay() || 7;
+  tmp.setUTCDate(tmp.getUTCDate() + 4 - dayNum);
+  const yearStart = new Date(Date.UTC(tmp.getUTCFullYear(), 0, 1));
+  const weekNo = Math.ceil(((tmp - yearStart) / 86400000 + 1) / 7);
+  return `${tmp.getUTCFullYear()}-W${String(weekNo).padStart(2, "0")}`;
+};
+
+const INITIAL_FAMILY_ROUTINES = [
+  { id: "rt-1", title: "시목이 어린이집 가방·낮잠이불 챙기기", cycle: "daily", assignee: "공통", lastDoneKey: "" },
+  { id: "rt-2", title: "젖병·유축기 열탕 및 소독", cycle: "daily", assignee: "공통", lastDoneKey: "" },
+  { id: "rt-3", title: "시목·시율 유산균 & 비타민D", cycle: "daily", assignee: "공통", lastDoneKey: "" },
+  { id: "rt-4", title: "재활용·음식물 분리수거", cycle: "weekly", assignee: "수혁", lastDoneKey: "" }
+];
+
 const getTwiceDailySlotKey = () => {
   const now = new Date();
   const half = now.getHours() < 12 ? "AM(오전)" : "PM(오후)";
@@ -883,11 +901,53 @@ const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.65) =>
     img.src = dataUrl;
   });
 
-const APP_CODE_VERSION = "v10.41";
-const APP_BUILD_DATE = "2026-11-16 20:58";
+const APP_CODE_VERSION = "v10.45";
+const APP_BUILD_DATE = "2026-11-16 21:20";
 const EDITOR_INVITE_CODE = "0402";
 
 const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v10.45",
+    version: "v10.45",
+    date: "2026-11-16",
+    title: "루틴 자정 경계 동기화 · 월간 임박/예정 우선 정렬 · 매주 요일 지정 & 동기화 상태 표시",
+    changes: [
+      "루틴 체크(handleToggleRoutine) 시 currentDayKey와 getTodayStr()을 즉시 동기화해 자정 직후 키 불일치 가능성 원천 차단",
+      "월간 루틴 중 예정일이 많이 남은 항목(D-4 이상)은 아래로, 오늘 해야 할 일과 임박(D-3 이내) 루틴은 위로 우선 정렬",
+      "매주 루틴 추가 시 요일 선택(전체 또는 월~일) 지원 및 루틴 저장 시 상단 sync 배지(beginWrite/endWrite) 연동"
+    ]
+  },
+  {
+    id: "patch-v10.44",
+    version: "v10.44",
+    date: "2026-11-16",
+    title: "루틴 [매월 특정 일자(1~31일)] 반복 옵션 및 월별 자동 리셋·D-Day 표시 추가",
+    changes: [
+      "데일리·위클리 루틴 추가 시 반복 주기에 [매월] 옵션과 일자 선택(1~31일) 추가",
+      "월간 루틴은 매월 1일(YYYY-MM 변경 시) 자동 리셋되며, 당월 마지막 날(28/30일) 보정 및 예정일까지 D-Day/오늘 예정 배지 표시"
+    ]
+  },
+  {
+    id: "patch-v10.43",
+    version: "v10.43",
+    date: "2026-11-16",
+    title: "자정 경과 화면 복귀 시 루틴·To-Do 배지 즉시 갱신 & 루틴 중복 방지·백업 연동",
+    changes: [
+      "스마트폰 화면을 다시 켜거나 탭으로 복귀(visibilitychange/focus)할 때 날짜 변경을 즉시 감지해 자정 리셋 루틴과 To-Do 긴급 배지를 새로고침 없이 자동 갱신",
+      "동일한 이름·주기의 루틴 중복 등록 방지 및 JSON 백업·복원 대상에 familyRoutines 포함"
+    ]
+  },
+  {
+    id: "patch-v10.42",
+    version: "v10.42",
+    date: "2026-11-16",
+    title: "하단 일정·상단 바로가기 To-Do 남은 개수 배지 & 자정 자동 리셋 데일리·위클리 루틴",
+    changes: [
+      "하단 네비게이션 [일정] 아이콘 우측 상단과 상단 바로가기 바에 미완료 To-Do 남은 개수 배지(할일 N) 표시 및 클릭 시 To-Do 섹션으로 바로 스크롤",
+      "마감일 경과·오늘 마감 To-Do가 있으면 빨간색, 일반 할 일만 남았으면 주황색 배지로 긴급도 구분",
+      "자정·주간 자동 리셋 [🔄 데일리·위클리 육아/집안일 루틴] 보드 추가 및 부부 기기 간 Firestore(family_meta_v4/daily_routines) 실시간 동기화"
+    ]
+  },
   {
     id: "patch-v10.41",
     version: "v10.41",
@@ -2452,6 +2512,132 @@ function MainApp() {
   const [todoIncludeOtherCats, setTodoIncludeOtherCats] = useState(false); // all | active | completed
   const [quickTodoTitle, setQuickTodoTitle] = useState("");
   const [quickTodoDate, setQuickTodoDate] = useState(() => getTodayStr());
+  const [familyRoutines, setFamilyRoutines] = useState(() => {
+    try {
+      const raw = localStorage.getItem("kim_family_routines_v1");
+      const parsed = raw ? JSON.parse(raw) : null;
+      return Array.isArray(parsed) ? parsed : INITIAL_FAMILY_ROUTINES;
+    } catch (e) {
+      return INITIAL_FAMILY_ROUTINES;
+    }
+  });
+  const [newRoutineTitle, setNewRoutineTitle] = useState("");
+  const [newRoutineCycle, setNewRoutineCycle] = useState("daily");
+  const [newRoutineAssignee, setNewRoutineAssignee] = useState("공통");
+  const [newRoutineMonthDay, setNewRoutineMonthDay] = useState(1);
+  const [newRoutineWeekDay, setNewRoutineWeekDay] = useState("any"); // any | 0..6
+  const [currentDayKey, setCurrentDayKey] = useState(() => getTodayStr());
+  useEffect(() => {
+    const syncDayKey = () => {
+      const nowDay = getTodayStr();
+      setCurrentDayKey((prev) => (prev !== nowDay ? nowDay : prev));
+    };
+    window.addEventListener("focus", syncDayKey);
+    document.addEventListener("visibilitychange", syncDayKey);
+    return () => {
+      window.removeEventListener("focus", syncDayKey);
+      document.removeEventListener("visibilitychange", syncDayKey);
+    };
+  }, []);
+
+  const syncRoutinesToCloud = async (nextList) => {
+    try {
+      localStorage.setItem("kim_family_routines_v1", JSON.stringify(nextList));
+    } catch (e) {}
+    if (user && db) {
+      beginWrite();
+      let ok = false;
+      let errMsg = "";
+      try {
+        await setDoc(
+          getDocRef("family_meta_v4", "daily_routines"),
+          { items: nextList, initialized: true, updatedAt: new Date().toISOString() },
+          { merge: true }
+        );
+        ok = true;
+      } catch (e) {
+        errMsg = e?.message || "루틴 동기화 오류";
+        setSyncErrorMsg(errMsg);
+      } finally {
+        endWrite(ok, errMsg);
+      }
+    }
+  };
+
+  const getRoutineResetKey = (rt, dayStr = currentDayKey) => {
+    if (!rt) return dayStr;
+    if (rt.cycle === "weekly") return getIsoWeekKey(dayStr);
+    if (rt.cycle === "monthly") return String(dayStr).slice(0, 7);
+    return dayStr;
+  };
+
+  const getMonthlyRoutineDueInfo = (rt, dayStr = currentDayKey) => {
+    if (!rt || rt.cycle !== "monthly") return null;
+    const [y, m, d] = String(dayStr).slice(0, 10).split("-").map((n) => Number(n) || 1);
+    const lastDay = new Date(y, m, 0).getDate();
+    const targetDay = Math.min(Math.max(1, Number(rt.monthDay) || 1), lastDay);
+    const diff = targetDay - d;
+    return { targetDay, diff };
+  };
+
+  const isRoutineDoneNow = (rt) => {
+    if (!rt) return false;
+    return rt.lastDoneKey === getRoutineResetKey(rt, currentDayKey);
+  };
+
+  const handleToggleRoutine = (rtId) => {
+    if (!requireEditorAccess()) return;
+    const todayKey = getTodayStr();
+    if (todayKey !== currentDayKey) setCurrentDayKey(todayKey);
+    const nextList = familyRoutines.map((r) => {
+      if (r.id !== rtId) return r;
+      const targetKey = getRoutineResetKey(r, todayKey);
+      const already = r.lastDoneKey === targetKey;
+      return { ...r, lastDoneKey: already ? "" : targetKey };
+    });
+    setFamilyRoutines(nextList);
+    syncRoutinesToCloud(nextList);
+  };
+
+  const handleAddRoutine = () => {
+    if (!requireEditorAccess()) return;
+    const title = newRoutineTitle.trim();
+    if (!title) return;
+    const cycleVal = ["daily", "weekly", "monthly"].includes(newRoutineCycle) ? newRoutineCycle : "daily";
+    const mDayVal = cycleVal === "monthly" ? Math.min(31, Math.max(1, Number(newRoutineMonthDay) || 1)) : null;
+    if (
+      familyRoutines.some(
+        (r) =>
+          String(r.title || "").trim().toLowerCase() === title.toLowerCase() &&
+          r.cycle === cycleVal &&
+          (cycleVal !== "monthly" || Number(r.monthDay || 1) === mDayVal)
+      )
+    ) {
+      showToast("이미 같은 이름과 주기의 루틴이 등록되어 있습니다.");
+      return;
+    }
+    const nextItem = {
+      id: `rt-${Date.now()}`,
+      title,
+      cycle: cycleVal,
+      ...(cycleVal === "monthly" ? { monthDay: mDayVal } : {}),
+      ...(cycleVal === "weekly" && newRoutineWeekDay !== "any" ? { weekDay: Number(newRoutineWeekDay) } : {}),
+      assignee: newRoutineAssignee || "공통",
+      lastDoneKey: ""
+    };
+    const nextList = [nextItem, ...familyRoutines];
+    setFamilyRoutines(nextList);
+    setNewRoutineTitle("");
+    syncRoutinesToCloud(nextList);
+    showToast(`🔄 '${title}' 루틴이 추가되었습니다!`);
+  };
+
+  const handleDeleteRoutine = (rtId) => {
+    if (!requireEditorAccess()) return;
+    const nextList = familyRoutines.filter((r) => r.id !== rtId);
+    setFamilyRoutines(nextList);
+    syncRoutinesToCloud(nextList);
+  };
   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
   const [editingSchedule, setEditingSchedule] = useState(null);
   const [scheduleForm, setScheduleForm] = useState({
@@ -3165,6 +3351,11 @@ function MainApp() {
               const list = toSafeArray(d.data().ids);
               setDeletedIds(list);
               localStorage.setItem("kim_family_deleted_ids", JSON.stringify(list));
+            }
+            if (d.id === "daily_routines" && Array.isArray(d.data().items)) {
+              const cloudRoutines = toSafeArray(d.data().items);
+              setFamilyRoutines(cloudRoutines);
+              try { localStorage.setItem("kim_family_routines_v1", JSON.stringify(cloudRoutines)); } catch (e) {}
             }
             if (d.id === "meal_favorites") {
               if (Array.isArray(d.data().combos)) {
@@ -3891,6 +4082,10 @@ function MainApp() {
         setFavoriteSingleMenus(rSingles);
         syncMealFavoritesToCloud(rCombos, rSingles);
       }
+      if (Array.isArray(payload.familyRoutines)) {
+        setFamilyRoutines(payload.familyRoutines);
+        syncRoutinesToCloud(payload.familyRoutines);
+      }
       if (Array.isArray(payload.notices)) setNotices(payload.notices);
       if (Array.isArray(payload.schedules)) setSchedules(payload.schedules);
       if (Array.isArray(payload.patchNotes)) setPatchNotes(payload.patchNotes);
@@ -4377,6 +4572,16 @@ function MainApp() {
     const activeCount = total - doneCount;
     return { total, doneCount, activeCount };
   }, [schedules, scheduleMemberFilter, todoIncludeOtherCats]);
+
+  const globalTodoBadgeStats = useMemo(() => {
+    const todayStr = currentDayKey;
+    const activeTodos = schedules.filter((s) => s.category === "할일(To-Do)" && !s.done);
+    const urgentCount = activeTodos.filter((s) => s.date && String(s.date) <= todayStr).length;
+    return {
+      activeCount: activeTodos.length,
+      urgentCount
+    };
+  }, [schedules, currentDayKey]);
 
   const dDayCards = useMemo(() => {
     return schedules
@@ -7592,6 +7797,23 @@ ${validText}
                     일정 {imminentSchedulesWithin3Days.length}
                   </button>
                 )}
+                {globalTodoBadgeStats.activeCount > 0 && (
+                  <button
+                    onClick={() => {
+                      setActiveTab("schedule");
+                      setTimeout(() => {
+                        document.getElementById("schedule-todo-section")?.scrollIntoView({ behavior: "smooth", block: "start" });
+                      }, 120);
+                    }}
+                    className={`px-2 py-0.5 rounded-full border text-[11px] font-extrabold whitespace-nowrap shrink-0 ${
+                      globalTodoBadgeStats.urgentCount > 0
+                        ? "bg-rose-600 border-rose-600 text-white"
+                        : "bg-amber-50 border-amber-300 text-amber-900"
+                    }`}
+                  >
+                    할일 {globalTodoBadgeStats.activeCount}
+                  </button>
+                )}
                 {pinnedNotices.length > 0 && (
                   <button
                     onClick={() => setActiveTab("notices")}
@@ -9018,10 +9240,191 @@ ${validText}
             )}
           </div>
 
+          {/* 🔄 자정/주간 자동 리셋 데일리·위클리 육아/집안일 루틴 */}
+          <div className="bg-white p-4 rounded-2xl border border-indigo-200 shadow-sm space-y-3">
+            <div className="flex items-center justify-between gap-2">
+              <div>
+                <h3 className="text-xs font-black text-stone-900 flex items-center gap-1.5">
+                  <span>🔄 데일리·위클리 육아/집안일 루틴</span>
+                  <span className="px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-800 text-[10px] font-black">
+                    남은 {familyRoutines.filter((r) => !isRoutineDoneNow(r)).length}건
+                  </span>
+                </h3>
+                <p className="text-[10px] text-stone-500 font-semibold mt-0.5">
+                  매일 자정(00:00) · 매주 월요일에 자동으로 미완료 상태로 리셋됩니다
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap gap-1.5">
+              <input
+                type="text"
+                value={newRoutineTitle}
+                onChange={(e) => setNewRoutineTitle(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    handleAddRoutine();
+                  }
+                }}
+                placeholder="반복 루틴 추가 (예: 가습기 물 갈기)"
+                className="flex-1 min-w-[140px] px-3 py-1.5 rounded-xl border border-stone-200 text-xs font-bold"
+              />
+              <select
+                value={newRoutineCycle}
+                onChange={(e) => setNewRoutineCycle(e.target.value)}
+                className="px-2 py-1.5 rounded-xl border border-stone-200 bg-stone-50 text-[11px] font-extrabold"
+              >
+                <option value="daily">매일</option>
+                <option value="weekly">매주</option>
+                <option value="monthly">매월 일자</option>
+              </select>
+              {newRoutineCycle === "monthly" && (
+                <select
+                  value={newRoutineMonthDay}
+                  onChange={(e) => setNewRoutineMonthDay(Number(e.target.value))}
+                  className="px-2 py-1.5 rounded-xl border border-amber-300 bg-amber-50 text-[11px] font-extrabold text-amber-900"
+                >
+                  {Array.from({ length: 31 }, (_, idx) => idx + 1).map((dayNum) => (
+                    <option key={dayNum} value={dayNum}>매월 {dayNum}일</option>
+                  ))}
+                </select>
+              )}
+              {newRoutineCycle === "weekly" && (
+                <select
+                  value={newRoutineWeekDay}
+                  onChange={(e) => setNewRoutineWeekDay(e.target.value)}
+                  className="px-2 py-1.5 rounded-xl border border-purple-300 bg-purple-50 text-[11px] font-extrabold text-purple-900"
+                >
+                  <option value="any">매주 (요일 무관)</option>
+                  {["일", "월", "화", "수", "목", "금", "토"].map((dLabel, dIdx) => (
+                    <option key={dIdx} value={String(dIdx)}>매주 {dLabel}요일</option>
+                  ))}
+                </select>
+              )}
+              <select
+                value={newRoutineAssignee}
+                onChange={(e) => setNewRoutineAssignee(e.target.value)}
+                className="px-2 py-1.5 rounded-xl border border-stone-200 bg-stone-50 text-[11px] font-extrabold"
+              >
+                <option value="공통">공통</option>
+                <option value="수혁">수혁</option>
+                <option value="아리나">아리나</option>
+              </select>
+              <button
+                type="button"
+                onClick={handleAddRoutine}
+                className="px-3 py-1.5 rounded-xl bg-indigo-600 text-white text-xs font-extrabold shrink-0"
+              >
+                + 추가
+              </button>
+            </div>
+
+            {familyRoutines.length === 0 ? (
+              <div className="text-center py-3 text-xs text-stone-400">
+                등록된 루틴이 없습니다. 위에서 매일/매주 반복 루틴을 추가해 보세요.
+              </div>
+            ) : (
+              <div className="space-y-1.5">
+                {[...familyRoutines]
+                  .sort((a, b) => {
+                    const aDone = Number(isRoutineDoneNow(a));
+                    const bDone = Number(isRoutineDoneNow(b));
+                    if (aDone !== bDone) return aDone - bDone;
+                    const urgency = (r) => {
+                      if (r.cycle === "monthly") {
+                        const info = getMonthlyRoutineDueInfo(r);
+                        return info && info.diff > 3 ? 1 : 0;
+                      }
+                      return 0;
+                    };
+                    return urgency(a) - urgency(b);
+                  })
+                  .map((rt) => {
+                    const doneNow = isRoutineDoneNow(rt);
+                    return (
+                      <div
+                        key={rt.id}
+                        className={`p-2.5 rounded-xl border flex items-center justify-between gap-2 transition ${
+                          doneNow ? "bg-stone-50 border-stone-200 opacity-65" : "bg-indigo-50/40 border-indigo-200"
+                        }`}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => handleToggleRoutine(rt.id)}
+                          className="flex items-center gap-2.5 flex-1 text-left min-w-0"
+                        >
+                          <span
+                            className={`w-5 h-5 rounded-lg border flex items-center justify-center shrink-0 ${
+                              doneNow
+                                ? "bg-indigo-600 border-indigo-600 text-white"
+                                : "bg-white border-indigo-300"
+                            }`}
+                          >
+                            {doneNow && <Check className="w-3.5 h-3.5" />}
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <div className={`text-xs font-extrabold truncate ${doneNow ? "line-through text-stone-400" : "text-stone-900"}`}>
+                              {rt.title}
+                            </div>
+                            <div className="flex items-center gap-1 mt-0.5">
+                              {(() => {
+                                if (rt.cycle === "monthly") {
+                                  const info = getMonthlyRoutineDueInfo(rt);
+                                  const dLabel = !info
+                                    ? ""
+                                    : info.diff === 0
+                                    ? " · 오늘 예정"
+                                    : info.diff < 0
+                                    ? ` · ${Math.abs(info.diff)}일 지남`
+                                    : ` · D-${info.diff}`;
+                                  return (
+                                    <span className={`px-1.5 py-0.5 rounded text-[9px] font-black ${
+                                      !doneNow && info && info.diff <= 0
+                                        ? "bg-rose-100 text-rose-800"
+                                        : "bg-amber-100 text-amber-900"
+                                    }`}>
+                                      매월 {rt.monthDay || 1}일{doneNow ? " (이번달 완료)" : dLabel}
+                                    </span>
+                                  );
+                                }
+                                return (
+                                  <span className={`px-1.5 py-0.5 rounded text-[9px] font-black ${
+                                    rt.cycle === "weekly" ? "bg-purple-100 text-purple-800" : "bg-sky-100 text-sky-800"
+                                  }`}>
+                                    {rt.cycle === "weekly"
+                                      ? rt.weekDay !== undefined && rt.weekDay !== null
+                                        ? `매주 ${["일", "월", "화", "수", "목", "금", "토"][Number(rt.weekDay)] || ""}요일`
+                                        : "매주 리셋"
+                                      : "매일 자정 리셋"}
+                                  </span>
+                                );
+                              })()}
+                              <span className="px-1.5 py-0.5 rounded bg-stone-100 text-stone-600 text-[9px] font-bold">
+                                {rt.assignee || "공통"}
+                              </span>
+                            </div>
+                          </div>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteRoutine(rt.id)}
+                          className="p-1 text-stone-400 hover:text-rose-600 shrink-0"
+                          title="루틴 삭제"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    );
+                  })}
+              </div>
+            )}
+          </div>
+
           {/* ==========================================
               [신규 요청사항 1 완벽 반영] To-Do List 전체를 체크리스트처럼 표시하는 화면
           ========================================== */}
-          <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-sm space-y-3">
+          <div id="schedule-todo-section" className="bg-white p-4 rounded-2xl border border-stone-200 shadow-sm space-y-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-1.5">
                 <ListTodo className="w-4 h-4 text-emerald-600" />
@@ -12011,7 +12414,18 @@ ${validText}
                 active ? "text-stone-900 font-black bg-amber-50/80" : "text-stone-400 font-semibold"
               }`}
             >
-              <IconComp className={`w-4 h-4 ${active ? "text-amber-600" : ""}`} />
+              <div className="relative">
+                <IconComp className={`w-4 h-4 ${active ? "text-amber-600" : ""}`} />
+                {item.id === "schedule" && globalTodoBadgeStats.activeCount > 0 && (
+                  <span
+                    className={`absolute -top-1.5 -right-2.5 min-w-[16px] h-4 px-1 rounded-full text-[9px] font-black text-white flex items-center justify-center leading-none shadow-sm ${
+                      globalTodoBadgeStats.urgentCount > 0 ? "bg-rose-600" : "bg-amber-500"
+                    }`}
+                  >
+                    {globalTodoBadgeStats.activeCount > 99 ? "99+" : globalTodoBadgeStats.activeCount}
+                  </span>
+                )}
+              </div>
               <span className="text-[10px] mt-0.5 whitespace-nowrap">{item.label}</span>
             </button>
           );
