@@ -143,13 +143,41 @@ const isHourInRange = (h, start, end) => {
   return h >= s || h < e;
 };
 
+const toTimeMinutes = (val, fallbackHour = 0) => {
+  if (typeof val === "string" && val.includes(":")) {
+    const [hh, mm] = val.split(":").map(Number);
+    if (Number.isFinite(hh) && Number.isFinite(mm)) {
+      return Math.max(0, Math.min(1439, hh * 60 + mm));
+    }
+  }
+  const num = Number(val);
+  if (Number.isFinite(num)) {
+    if (num >= 0 && num <= 23) return num * 60;
+    if (num >= 24 && num <= 1439) return num;
+  }
+  return fallbackHour * 60;
+};
+
+const formatMinutesHHMM = (mins) => {
+  const m = ((Number(mins) || 0) % 1440 + 1440) % 1440;
+  return `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+};
+
+const isMinuteInRange = (curMin, startMin, endMin) => {
+  const s = ((Number(startMin) || 0) % 1440 + 1440) % 1440;
+  const e = ((Number(endMin) || 0) % 1440 + 1440) % 1440;
+  if (s === e) return false;
+  if (s < e) return curMin >= s && curMin < e;
+  return curMin >= s || curMin < e;
+};
+
 const DEFAULT_ROUTINE_TIME_RANGES = {
-  아침: 5,
-  점심: 11,
-  하원후: 15,
-  오후: 12,
-  저녁: 18,
-  자기전: 20
+  아침: "05:00",
+  점심: "11:00",
+  하원후: "15:00",
+  오후: "12:00",
+  저녁: "18:00",
+  자기전: "20:30"
 };
 
 const ROUTINE_WEEKDAY_SLOTS = ["아침", "점심", "하원후", "저녁", "자기전"];
@@ -158,16 +186,18 @@ const ROUTINE_ORDERED_SLOTS = ["아침", "점심", "하원후", "오후", "저�
 
 const isWeekendNow = () => [0, 6].includes(new Date().getDay());
 
-const getCurrentRoutineTimeSlot = (ranges = DEFAULT_ROUTINE_TIME_RANGES, hourOverride = null) => {
+const getCurrentRoutineTimeSlot = (ranges = DEFAULT_ROUTINE_TIME_RANGES, minuteOverride = null) => {
   const now = new Date();
-  const h = typeof hourOverride === "number" ? hourOverride : now.getHours();
+  const curMin = typeof minuteOverride === "number" ? minuteOverride : now.getHours() * 60 + now.getMinutes();
   const isWknd = [0, 6].includes(now.getDay());
   const slots = isWknd ? ROUTINE_WEEKEND_SLOTS : ROUTINE_WEEKDAY_SLOTS;
   const r = { ...DEFAULT_ROUTINE_TIME_RANGES, ...(ranges || {}) };
   for (let i = 0; i < slots.length; i++) {
     const slot = slots[i];
     const nextSlot = slots[(i + 1) % slots.length];
-    if (isHourInRange(h, r[slot], r[nextSlot])) return slot;
+    const sMin = toTimeMinutes(r[slot], toTimeMinutes(DEFAULT_ROUTINE_TIME_RANGES[slot]) / 60);
+    const eMin = toTimeMinutes(r[nextSlot], toTimeMinutes(DEFAULT_ROUTINE_TIME_RANGES[nextSlot]) / 60);
+    if (isMinuteInRange(curMin, sMin, eMin)) return slot;
   }
   return "자기전";
 };
@@ -1086,11 +1116,62 @@ const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.65) =>
     img.src = dataUrl;
   });
 
-const APP_CODE_VERSION = "v10.71";
-const APP_BUILD_DATE = "2026-11-17 03:55";
+const APP_CODE_VERSION = "v10.76";
+const APP_BUILD_DATE = "2026-11-17 08:08";
 const EDITOR_INVITE_CODE = "0402";
 
 const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v10.76",
+    version: "v10.76",
+    date: "2026-11-17",
+    title: "루틴 시간대 분 단위(HH:MM) 설정 · 1분 정밀 갱신 · 홈 루틴 시간대 우선 정렬",
+    changes: [
+      "일정 → [🔄 반복 루틴 → ⏰ 시간대 설정]에서 시·분 단위(<input type='time'>)로 각 시간대 시작 시각을 자유롭게 설정 가능",
+      "1분 정밀 타이머(liveMinuteTick)로 분 단위 경계(예: 20:30 자기전 전환) 즉시 반영 및 새 루틴 추가 시 현재 시간대 자동 기본 선택",
+      "홈 루틴 목록에서 현재 시간대 루틴을 [상시] 루틴보다 위쪽에 우선 정렬해 중요 루틴 시인성 향상"
+    ]
+  },
+  {
+    id: "patch-v10.75",
+    version: "v10.75",
+    date: "2026-11-17",
+    title: "홈 화면 [안 1: 무채색 베이스 + 특이사항만 시그널 컬러] 적용",
+    changes: [
+      "홈의 모든 카드(브리핑·루틴·일정·할일·바로가기 그리드) 배경을 깔끔한 화이트/스톤 무채색으로 통일해 시각적 피로도 대폭 감소",
+      "오늘(D-Day) 일정, 기한 지난 할 일, 냉장고 임박/만료 재료, 미세먼지 나쁨 등 특이사항에만 시그널 컬러(로즈·앰버)를 적용해 중요 정보가 즉시 눈에 띄도록 개선"
+    ]
+  },
+  {
+    id: "patch-v10.74",
+    version: "v10.74",
+    date: "2026-11-17",
+    title: "홈 상단 1줄 날씨에 미세먼지 등급(좋음/보통/나쁨) 표시 추가",
+    changes: [
+      "홈 상단 한 줄 날씨 바에 현재 기온(최저/최고), 미세먼지 수치와 상태 등급(예: 좋음), 초미세먼지 수치를 한 줄로 간결하게 표시"
+    ]
+  },
+  {
+    id: "patch-v10.73",
+    version: "v10.73",
+    date: "2026-11-17",
+    title: "일정 헤더·서브탭·모달 멤버 버튼 줄바꿈 방지 및 최종 정적 안정성 검증",
+    changes: [
+      "일정 탭 상단 제목과 [+ 일정 추가] 버튼 사이 여백(gap-2) 확보 및 서브탭 라벨 whitespace-nowrap 적용",
+      "일정·식단 모달 내 4열 멤버 선택 버튼에 whitespace-nowrap 적용으로 좁은 화면 줄바꿈 방지"
+    ]
+  },
+  {
+    id: "patch-v10.72",
+    version: "v10.72",
+    date: "2026-11-17",
+    title: "홈 [상시] 루틴 항상 표출 · 멤버 필터(최아리나)·달력 [오늘] 배지 줄바꿈 수정",
+    changes: [
+      "홈 루틴 [자동] 모드에서 현재 시간대 루틴과 함께 [상시] 루틴이 어느 시간대건 항상 함께 표출되도록 개선",
+      "식단·일정 탭 멤버 필터를 모바일 한 줄 가로 스크롤(whitespace-nowrap)로 개선해 [최아리나] 이름 줄바꿈 현상 해결",
+      "월간 일정 달력 셀의 [오늘] 배지 및 주간요약 [조회일]/[오늘] 배지에 whitespace-nowrap 적용으로 줄바꿈 방지"
+    ]
+  },
   {
     id: "patch-v10.71",
     version: "v10.71",
@@ -2766,19 +2847,23 @@ function MainApp() {
     return localStorage.getItem("kim_home_routine_slot_v1") || "auto";
   });
   const [homeTimeModeOverride, setHomeTimeModeOverride] = useState("auto");
-  const [liveHourTick, setLiveHourTick] = useState(() => new Date().getHours());
+  const [liveMinuteTick, setLiveMinuteTick] = useState(() => {
+    const d = new Date();
+    return d.getHours() * 60 + d.getMinutes();
+  });
   useEffect(() => {
-    const syncHour = () => {
-      const h = new Date().getHours();
-      setLiveHourTick((prev) => (prev === h ? prev : h));
+    const syncMinute = () => {
+      const d = new Date();
+      const m = d.getHours() * 60 + d.getMinutes();
+      setLiveMinuteTick((prev) => (prev === m ? prev : m));
     };
-    const timer = setInterval(syncHour, 60000);
-    window.addEventListener("focus", syncHour);
-    document.addEventListener("visibilitychange", syncHour);
+    const timer = setInterval(syncMinute, 30000);
+    window.addEventListener("focus", syncMinute);
+    document.addEventListener("visibilitychange", syncMinute);
     return () => {
       clearInterval(timer);
-      window.removeEventListener("focus", syncHour);
-      document.removeEventListener("visibilitychange", syncHour);
+      window.removeEventListener("focus", syncMinute);
+      document.removeEventListener("visibilitychange", syncMinute);
     };
   }, []);
   const [isHomeEditMode, setIsHomeEditMode] = useState(false);
@@ -2788,7 +2873,7 @@ function MainApp() {
       const raw = localStorage.getItem("kim_routine_time_ranges_v1");
       if (raw) {
         const parsed = JSON.parse(raw);
-        if (parsed && typeof parsed["아침"] === "number") {
+        if (parsed && (typeof parsed["아침"] === "number" || typeof parsed["아침"] === "string")) {
           return { ...DEFAULT_ROUTINE_TIME_RANGES, ...parsed };
         }
       }
@@ -3093,7 +3178,7 @@ function MainApp() {
   const [newRoutineAssignee, setNewRoutineAssignee] = useState("공통");
   const [newRoutineMonthDay, setNewRoutineMonthDay] = useState(1);
   const [newRoutineWeekDay, setNewRoutineWeekDay] = useState("any"); // any | 0..6
-  const [newRoutineTimeSlot, setNewRoutineTimeSlot] = useState("아침");
+  const [newRoutineTimeSlot, setNewRoutineTimeSlot] = useState(() => getCurrentRoutineTimeSlot());
   const [newRoutineIntervalDays, setNewRoutineIntervalDays] = useState(2);
   const [newRoutineNthWeek, setNewRoutineNthWeek] = useState(1);
   const [routineTimeFilter, setRoutineTimeFilter] = useState("전체");
@@ -4335,7 +4420,7 @@ function MainApp() {
             setHomeTimeRanges(d.timeRanges);
             try { localStorage.setItem("kim_home_time_ranges_v1", JSON.stringify(d.timeRanges)); } catch (e) {}
           }
-          if (d?.routineRanges && typeof d.routineRanges["아침"] === "number") {
+          if (d?.routineRanges && (typeof d.routineRanges["아침"] === "number" || typeof d.routineRanges["아침"] === "string")) {
             const mergedR = { ...DEFAULT_ROUTINE_TIME_RANGES, ...d.routineRanges };
             setRoutineTimeRanges(mergedR);
             try { localStorage.setItem("kim_routine_time_ranges_v1", JSON.stringify(mergedR)); } catch (e) {}
@@ -4913,7 +4998,7 @@ function MainApp() {
         try { localStorage.setItem("kim_home_time_ranges_v1", JSON.stringify(payload.homeTimeRanges)); } catch (e) {}
         syncHomeSettingsToCloud(null, payload.homeTimeRanges, null);
       }
-      if (payload.routineTimeRanges && typeof payload.routineTimeRanges["아침"] === "number") {
+      if (payload.routineTimeRanges && (typeof payload.routineTimeRanges["아침"] === "number" || typeof payload.routineTimeRanges["아침"] === "string")) {
         const normR = { ...DEFAULT_ROUTINE_TIME_RANGES, ...payload.routineTimeRanges };
         setRoutineTimeRanges(normR);
         try { localStorage.setItem("kim_routine_time_ranges_v1", JSON.stringify(normR)); } catch (e) {}
@@ -8634,16 +8719,22 @@ ${validText}
 
         {activeTab === "home" && (
           <>
-            <div className="mt-2 flex items-center justify-between gap-1.5 bg-sky-50/70 border border-sky-200/80 rounded-2xl px-3 py-1.5">
-              <span className="text-[11px] font-bold text-sky-950 truncate">
+            <div
+              className={`mt-2 flex items-center justify-between gap-1.5 border rounded-2xl px-3 py-1.5 ${
+                weatherInfo?.dust?.label && weatherInfo.dust.label.includes("나쁨")
+                  ? "bg-rose-50 border-rose-200 text-rose-900"
+                  : "bg-stone-50 border-stone-200 text-stone-800"
+              }`}
+            >
+              <span className="text-[11px] font-bold truncate">
                 {weatherInfo
-                  ? `${weatherInfo.emoji} 현재 ${weatherInfo.temp}°C (최고 ${weatherInfo.max}° / 최저 ${weatherInfo.min}°) · 미세${weatherInfo.pm10} · 초미세${weatherInfo.pm25}`
+                  ? `${weatherInfo.emoji} ${weatherInfo.temp}°C (${weatherInfo.min}°/${weatherInfo.max}°) · 미세 ${weatherInfo.pm10}(${weatherInfo.dust?.label || "-"}) · 초 ${weatherInfo.pm25}`
                   : "🌤️ 서울 중구 날씨 불러오는 중..."}
               </span>
               <button
                 type="button"
                 onClick={fetchSeoulJungGuWeather}
-                className="px-2 py-0.5 rounded-lg bg-white border border-sky-300 text-[10px] font-extrabold text-sky-800 shrink-0"
+                className="px-2 py-0.5 rounded-lg bg-white border border-stone-200 text-[10px] font-extrabold text-stone-600 shrink-0"
               >
                 ↻
               </button>
@@ -8652,16 +8743,16 @@ ${validText}
             {pinnedNotices.length > 0 && (
               <div
                 onClick={() => setActiveTab("notices")}
-                className="mt-2 bg-indigo-50/90 hover:bg-indigo-100/80 border border-indigo-200 rounded-xl px-3 py-2 cursor-pointer flex items-start justify-between gap-2 transition"
+                className="mt-2 bg-white hover:bg-stone-50 border border-stone-200 rounded-xl px-3 py-2 cursor-pointer flex items-start justify-between gap-2 transition"
               >
                 <div className="flex items-start gap-1.5 min-w-0">
-                  <Pin className="w-3.5 h-3.5 text-indigo-600 shrink-0 mt-0.5" />
+                  <Pin className="w-3.5 h-3.5 text-stone-500 shrink-0 mt-0.5" />
                   <div className="text-xs leading-snug break-keep">
-                    <span className="font-extrabold text-indigo-900 mr-1">[가족공지]</span>
-                    <span className="font-semibold text-indigo-800">{pinnedNotices[0].title}</span>
+                    <span className="font-extrabold text-stone-900 mr-1">[가족공지]</span>
+                    <span className="font-semibold text-stone-700">{pinnedNotices[0].title}</span>
                   </div>
                 </div>
-                <span className="text-[10px] font-bold text-indigo-600 shrink-0 mt-0.5">
+                <span className="text-[10px] font-bold text-stone-500 shrink-0 mt-0.5">
                   전체보기 &gt;
                 </span>
               </div>
@@ -8675,23 +8766,23 @@ ${validText}
       ========================================== */}
       {activeTab === "home" && (() => {
         const activeHomeTimeMode =
-          homeTimeModeOverride === "auto" ? getAutoHomeTimeMode(homeTimeRanges, liveHourTick) : homeTimeModeOverride;
+          homeTimeModeOverride === "auto" ? getAutoHomeTimeMode(homeTimeRanges, Math.floor(liveMinuteTick / 60)) : homeTimeModeOverride;
         const modeMeta =
           activeHomeTimeMode === "morning"
             ? {
                 label: "🌅 오전",
-                bgClass: "bg-gradient-to-b from-amber-50/80 via-sky-50/40 to-transparent",
+                bgClass: "bg-stone-50/40",
                 rangeLabel: `${String(homeTimeRanges.morningStart).padStart(2, "0")}:00 ~ ${String(homeTimeRanges.afternoonStart).padStart(2, "0")}:00`
               }
             : activeHomeTimeMode === "afternoon"
             ? {
                 label: "🌆 오후",
-                bgClass: "bg-gradient-to-b from-orange-50/70 via-emerald-50/40 to-transparent",
+                bgClass: "bg-stone-50/40",
                 rangeLabel: `${String(homeTimeRanges.afternoonStart).padStart(2, "0")}:00 ~ ${String(homeTimeRanges.nightStart).padStart(2, "0")}:00`
               }
             : {
                 label: "🌙 밤",
-                bgClass: "bg-gradient-to-b from-slate-200/70 via-indigo-50/60 to-transparent",
+                bgClass: "bg-stone-50/40",
                 rangeLabel: `${String(homeTimeRanges.nightStart).padStart(2, "0")}:00 ~ 익일 ${String(homeTimeRanges.morningStart).padStart(2, "0")}:00`
               };
 
@@ -8749,8 +8840,8 @@ ${validText}
           daily: {
             title: "🍽️ 오늘의 식단",
             actionLabel: `${todayMealsList.length}건 >`,
-            actionColor: "text-amber-700",
-            borderHover: "hover:border-amber-300",
+            actionColor: "text-stone-500",
+            borderHover: "hover:border-stone-400",
             sub: <span className="text-stone-500">{firstMealPreview}</span>,
             onClick: () => {
               setSelectedDate(todayKey);
@@ -8760,20 +8851,20 @@ ${validText}
           weekly: {
             title: "📊 주간요약",
             actionLabel: "열기 >",
-            actionColor: "text-indigo-700",
-            borderHover: "hover:border-indigo-300",
+            actionColor: "text-stone-500",
+            borderHover: "hover:border-stone-400",
             sub: <span className="text-stone-500">조회일 ±3일 식단 흐름</span>,
             onClick: () => setActiveTab("weekly")
           },
           fridge: {
             title: "❄️ 냉장고",
             actionLabel: "열기 >",
-            actionColor: "text-orange-600",
-            borderHover: "hover:border-orange-300",
+            actionColor: expiringItems.length > 0 ? "text-rose-600" : "text-stone-500",
+            borderHover: expiringItems.length > 0 ? "hover:border-rose-300" : "hover:border-stone-400",
             sub: (
               <>
                 보유 {fridge.length} ·{" "}
-                <span className={expiringItems.length > 0 ? "text-rose-600 font-black" : "text-emerald-700"}>
+                <span className={expiringItems.length > 0 ? "text-rose-600 font-black" : "text-stone-500"}>
                   임박 {expiringItems.length}건
                 </span>
               </>
@@ -8783,11 +8874,11 @@ ${validText}
           shopping: {
             title: "🛒 장보기",
             actionLabel: "열기 >",
-            actionColor: "text-emerald-700",
-            borderHover: "hover:border-emerald-300",
+            actionColor: "text-stone-500",
+            borderHover: "hover:border-stone-400",
             sub: (
               <>
-                남은 품목 <span className="text-emerald-700 font-black">{shoppingList.filter((s) => !s.checked).length}건</span>
+                남은 품목 <span className="text-stone-900 font-black">{shoppingList.filter((s) => !s.checked).length}건</span>
               </>
             ),
             onClick: () => setActiveTab("shopping")
@@ -8795,12 +8886,12 @@ ${validText}
           monthly_cal: {
             title: "📅 월간 식단",
             actionLabel: "달력 >",
-            actionColor: "text-amber-700",
-            borderHover: "hover:border-amber-300",
+            actionColor: "text-stone-500",
+            borderHover: "hover:border-stone-400",
             sub: (
               <>
                 {currentMonth.slice(5)}월 기록{" "}
-                <span className="text-amber-800 font-black">
+                <span className="text-stone-900 font-black">
                   {meals.filter((m) => String(m.date || "").startsWith(currentMonth)).length}끼
                 </span>
               </>
@@ -8813,8 +8904,8 @@ ${validText}
           monthly_exp: {
             title: `💰 ${currentMonth.slice(5)}월 식비`,
             actionLabel: "가계부 >",
-            actionColor: "text-amber-700",
-            borderHover: "hover:border-amber-300",
+            actionColor: "text-stone-500",
+            borderHover: "hover:border-stone-400",
             sub: <span className="font-black text-stone-900">{monthlyExpenseSummary.total.toLocaleString()}원</span>,
             onClick: () => {
               setActiveTab("monthly");
@@ -8824,38 +8915,38 @@ ${validText}
           baby: {
             title: "👶 육아수첩",
             actionLabel: "열기 >",
-            actionColor: "text-sky-700",
-            borderHover: "hover:border-sky-300",
+            actionColor: "text-stone-500",
+            borderHover: "hover:border-stone-400",
             sub: <span className="text-stone-500">시목 · 시율 발달/접종</span>,
             onClick: () => setActiveTab("baby")
           },
           recipes: {
             title: "📖 레시피북",
             actionLabel: "열기 >",
-            actionColor: "text-rose-700",
-            borderHover: "hover:border-rose-300",
+            actionColor: "text-stone-500",
+            borderHover: "hover:border-stone-400",
             sub: <span className="text-stone-500">저장된 요리 {recipes.length}건</span>,
             onClick: () => setActiveTab("recipes")
           },
           notices: {
             title: "📌 가족공지",
             actionLabel: "열기 >",
-            actionColor: "text-indigo-700",
-            borderHover: "hover:border-indigo-300",
+            actionColor: "text-stone-500",
+            borderHover: "hover:border-stone-400",
             sub: <span className="text-stone-500">미완료 {notices.filter((n) => !n.done).length}건</span>,
             onClick: () => setActiveTab("notices")
           },
           ai: {
             title: "✨ AI추천",
             actionLabel: "열기 >",
-            actionColor: "text-purple-700",
-            borderHover: "hover:border-purple-300",
+            actionColor: "text-stone-500",
+            borderHover: "hover:border-stone-400",
             sub: <span className="text-stone-500">냉장고 파먹기 &amp; 플레이팅</span>,
             onClick: () => setActiveTab("ai")
           }
         };
 
-        const curSlot = getCurrentRoutineTimeSlot(routineTimeRanges, liveHourTick);
+        const curSlot = getCurrentRoutineTimeSlot(routineTimeRanges, liveMinuteTick);
         const wkndNow = isWeekendNow();
         const activeRoutines = familyRoutines.filter((r) => !isRoutineDoneNow(r));
         const slotFilteredRoutines =
@@ -8866,12 +8957,16 @@ ${validText}
                 const s = r.timeSlot || "상시";
                 if (wkndNow && s === "하원후") return false;
                 if (!wkndNow && s === "오후") return false;
-                return s === curSlot;
+                return s === curSlot || s === "상시";
               })
             : activeRoutines.filter((r) => (r.timeSlot || "상시") === homeRoutineSlotFilter);
-        const visibleRoutineList = slotFilteredRoutines.filter((r) =>
-          matchesRoutineTarget(r, homeRoutineTargetFilter)
-        );
+        const visibleRoutineList = slotFilteredRoutines
+          .filter((r) => matchesRoutineTarget(r, homeRoutineTargetFilter))
+          .sort((a, b) => {
+            const aCur = (a.timeSlot || "상시") === curSlot ? 0 : 1;
+            const bCur = (b.timeSlot || "상시") === curSlot ? 0 : 1;
+            return aCur - bCur;
+          });
 
         const scheduleTodoSize = blockSizes.schedule_todo || "normal";
         const previewLimit = scheduleTodoSize === "compact" ? 2 : scheduleTodoSize === "large" ? 5 : 3;
@@ -8889,9 +8984,9 @@ ${validText}
           if (blockId === "schedule_todo") {
             return (
               <div key="schedule_todo" className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                <div className={`bg-rose-50/80 border border-rose-200 rounded-2xl ${blockPadClass("schedule_todo")} space-y-1.5`}>
+                <div className={`bg-white border border-stone-200 rounded-2xl shadow-sm ${blockPadClass("schedule_todo")} space-y-1.5`}>
                   <div className="flex items-center justify-between gap-1">
-                    <span className="text-xs font-black text-rose-950">
+                    <span className="text-xs font-black text-stone-900">
                       🗓️ 3일 내 일정 ({imminentSchedulesWithin3Days.length}건)
                     </span>
                     <button
@@ -8900,40 +8995,54 @@ ${validText}
                         setScheduleSubTab("calendar");
                         setActiveTab("schedule");
                       }}
-                      className="text-[10px] font-extrabold text-rose-700"
+                      className="text-[10px] font-extrabold text-stone-500"
                     >
                       전체 &gt;
                     </button>
                   </div>
                   {imminentSchedulesWithin3Days.length === 0 ? (
-                    <div className="text-[11px] font-bold text-rose-700/80 bg-white/80 rounded-xl px-2.5 py-1.5">
+                    <div className="text-[11px] font-bold text-stone-500 bg-stone-50 rounded-xl px-2.5 py-1.5">
                       3일 이내 예정된 일정이 없습니다.
                     </div>
                   ) : (
                     <div className="space-y-1">
-                      {imminentSchedulesWithin3Days.slice(0, previewLimit).map((ev) => (
-                        <button
-                          key={ev.id}
-                          type="button"
-                          onClick={() => {
-                            setScheduleSubTab("calendar");
-                            setActiveTab("schedule");
-                          }}
-                          className="w-full px-2.5 py-1.5 rounded-xl bg-white border border-rose-100 flex items-center justify-between gap-2 text-left"
-                        >
-                          <span className="text-[11px] font-extrabold text-stone-800 truncate">{ev.title}</span>
-                          <span className="px-1.5 py-0.5 rounded bg-rose-600 text-white text-[10px] font-black shrink-0">
-                            {ev.calc.dDayText}
-                          </span>
-                        </button>
-                      ))}
+                      {imminentSchedulesWithin3Days.slice(0, previewLimit).map((ev) => {
+                        const isTodayEv = ev.calc.daysUntil <= 0;
+                        const isTomorrowEv = ev.calc.daysUntil === 1;
+                        return (
+                          <button
+                            key={ev.id}
+                            type="button"
+                            onClick={() => {
+                              setScheduleSubTab("calendar");
+                              setActiveTab("schedule");
+                            }}
+                            className={`w-full px-2.5 py-1.5 rounded-xl border flex items-center justify-between gap-2 text-left ${
+                              isTodayEv ? "bg-rose-50/70 border-rose-200" : "bg-stone-50/70 border-stone-200"
+                            }`}
+                          >
+                            <span className="text-[11px] font-extrabold text-stone-800 truncate">{ev.title}</span>
+                            <span
+                              className={`px-1.5 py-0.5 rounded text-[10px] font-black shrink-0 ${
+                                isTodayEv
+                                  ? "bg-rose-600 text-white"
+                                  : isTomorrowEv
+                                  ? "bg-amber-500 text-white"
+                                  : "bg-stone-200 text-stone-700"
+                              }`}
+                            >
+                              {ev.calc.dDayText}
+                            </span>
+                          </button>
+                        );
+                      })}
                     </div>
                   )}
                 </div>
 
-                <div className={`bg-amber-50/80 border border-amber-200 rounded-2xl ${blockPadClass("schedule_todo")} space-y-1.5`}>
+                <div className={`bg-white border border-stone-200 rounded-2xl shadow-sm ${blockPadClass("schedule_todo")} space-y-1.5`}>
                   <div className="flex items-center justify-between gap-1">
-                    <span className="text-xs font-black text-amber-950">
+                    <span className="text-xs font-black text-stone-900">
                       ✅ 남은 할 일 ({globalTodoBadgeStats.activeCount}건)
                     </span>
                     <button
@@ -8942,31 +9051,40 @@ ${validText}
                         setScheduleSubTab("todo");
                         setActiveTab("schedule");
                       }}
-                      className="text-[10px] font-extrabold text-amber-800"
+                      className="text-[10px] font-extrabold text-stone-500"
                     >
                       전체 &gt;
                     </button>
                   </div>
                   {previewTodos.length === 0 ? (
-                    <div className="text-[11px] font-bold text-emerald-800 bg-white/80 rounded-xl px-2.5 py-1.5">
-                      🎉 남은 할 일이 없습니다!
+                    <div className="text-[11px] font-bold text-stone-500 bg-stone-50 rounded-xl px-2.5 py-1.5">
+                      남은 할 일이 없습니다.
                     </div>
                   ) : (
                     <div className="space-y-1">
-                      {previewTodos.map((todo) => (
-                        <button
-                          key={todo.id}
-                          type="button"
-                          onClick={() => handleToggleScheduleDone(todo)}
-                          className="w-full px-2.5 py-1.5 rounded-xl bg-white hover:bg-amber-50 border border-amber-100 flex items-center gap-2 text-left transition active:scale-[0.99]"
-                        >
-                          <span className="w-3.5 h-3.5 rounded border border-amber-400 bg-white shrink-0" />
-                          <span className="text-[11px] font-extrabold text-stone-800 truncate flex-1">{todo.title}</span>
-                          {todo.date && (
-                            <span className="text-[10px] font-bold text-amber-800 shrink-0">{todo.date.slice(5)}</span>
-                          )}
-                        </button>
-                      ))}
+                      {previewTodos.map((todo) => {
+                        const isOverdue = Boolean(todo.date && String(todo.date) <= todayKey);
+                        return (
+                          <button
+                            key={todo.id}
+                            type="button"
+                            onClick={() => handleToggleScheduleDone(todo)}
+                            className={`w-full px-2.5 py-1.5 rounded-xl border flex items-center gap-2 text-left transition active:scale-[0.99] ${
+                              isOverdue
+                                ? "bg-rose-50/60 hover:bg-rose-50 border-rose-200"
+                                : "bg-stone-50/70 hover:bg-stone-100 border-stone-200"
+                            }`}
+                          >
+                            <span className={`w-3.5 h-3.5 rounded border bg-white shrink-0 ${isOverdue ? "border-rose-400" : "border-stone-400"}`} />
+                            <span className="text-[11px] font-extrabold text-stone-800 truncate flex-1">{todo.title}</span>
+                            {todo.date && (
+                              <span className={`text-[10px] font-bold shrink-0 ${isOverdue ? "text-rose-600 font-black" : "text-stone-500"}`}>
+                                {todo.date.slice(5)}
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
                     </div>
                   )}
                 </div>
@@ -8976,9 +9094,9 @@ ${validText}
 
           if (blockId === "routine") {
             return (
-              <div key="routine" className={`bg-indigo-50/70 border border-indigo-200 rounded-2xl ${blockPadClass("routine")} space-y-1.5`}>
+              <div key="routine" className={`bg-white border border-stone-200 rounded-2xl shadow-sm ${blockPadClass("routine")} space-y-1.5`}>
                 <div className="flex items-center justify-between gap-1.5">
-                  <span className="text-xs font-black text-indigo-950 truncate">
+                  <span className="text-xs font-black text-stone-900 truncate">
                     🔄 {homeRoutineSlotFilter === "auto" ? `지금(${curSlot}) 루틴` : homeRoutineSlotFilter === "전체" ? "오늘 남은 루틴" : `${homeRoutineSlotFilter} 루틴`} ({visibleRoutineList.length}건)
                   </span>
                   <div className="flex items-center gap-1 shrink-0">
@@ -8993,7 +9111,7 @@ ${validText}
                             localStorage.setItem("kim_home_routine_target_v1", "전체");
                           } catch (e) {}
                         }}
-                        className="px-2 py-0.5 rounded-lg bg-white border border-indigo-200 text-indigo-700 text-[10px] font-extrabold whitespace-nowrap"
+                        className="px-2 py-0.5 rounded-lg bg-stone-100 border border-stone-200 text-stone-700 text-[10px] font-extrabold whitespace-nowrap"
                       >
                         자동 복귀
                       </button>
@@ -9004,7 +9122,7 @@ ${validText}
                         setScheduleSubTab("routine");
                         setActiveTab("schedule");
                       }}
-                      className="px-2 py-0.5 rounded-lg bg-indigo-600 text-white text-[10px] font-extrabold whitespace-nowrap"
+                      className="px-2 py-0.5 rounded-lg bg-stone-900 text-white text-[10px] font-extrabold whitespace-nowrap"
                     >
                       관리
                     </button>
@@ -9055,8 +9173,8 @@ ${validText}
                       }}
                       className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold whitespace-nowrap border transition shrink-0 ${
                         homeRoutineSlotFilter === opt.id
-                          ? "bg-indigo-600 text-white border-indigo-600"
-                          : "bg-white text-indigo-700 border-indigo-200"
+                          ? "bg-stone-900 text-white border-stone-900"
+                          : "bg-stone-50 text-stone-600 border-stone-200"
                       }`}
                     >
                       {opt.label}
@@ -9081,12 +9199,12 @@ ${validText}
                       return (
                         <div
                           key={rt.id}
-                          className="w-full p-2 rounded-xl bg-white border border-indigo-100 flex items-start gap-2 text-left"
+                          className="w-full p-2 rounded-xl bg-stone-50/70 border border-stone-200 flex items-start gap-2 text-left"
                         >
                           <button
                             type="button"
                             onClick={() => handleToggleRoutine(rt.id)}
-                            className="w-4 h-4 mt-0.5 rounded border border-indigo-300 bg-white hover:bg-indigo-50 shrink-0"
+                            className="w-4 h-4 mt-0.5 rounded border border-stone-400 bg-white hover:bg-stone-100 shrink-0"
                             title="전체 완료"
                           />
                           <div className="min-w-0 flex-1">
@@ -9101,8 +9219,8 @@ ${validText}
                                         onClick={() => handleToggleRoutineSubStep(rt.id, sIdx, steps.length)}
                                         className={`px-2 py-0.5 rounded-full text-[11px] font-extrabold border transition active:scale-95 ${
                                           sDone
-                                            ? "bg-emerald-100 border-emerald-300 text-emerald-800 line-through"
-                                            : "bg-indigo-50/70 border-indigo-200 text-stone-800 hover:bg-indigo-100"
+                                            ? "bg-emerald-50 border-emerald-300 text-emerald-800 line-through"
+                                            : "bg-white border-stone-200 text-stone-800 hover:bg-stone-100"
                                         }`}
                                       >
                                         {sDone ? "✓ " : `${sIdx + 1}. `}{st}
@@ -9569,19 +9687,19 @@ ${validText}
               const morningMeals = todayMealsList.filter((m) => m.slot === "아침" || m.slot === "점심" || m.slot === "오전간식");
               const morningRoutineLeft = activeRoutines.filter((r) => (r.timeSlot || "상시") === "아침" || (r.timeSlot || "상시") === "상시").length;
               return (
-                <div className="bg-gradient-to-r from-amber-100/90 via-amber-50 to-sky-50 border border-amber-200 rounded-2xl p-3 space-y-1.5 shadow-sm">
+                <div className="bg-white border border-stone-200 rounded-2xl p-3 space-y-1.5 shadow-sm">
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-xs font-black text-amber-950">🌅 좋은 아침 · 등원/오전 브리핑</span>
-                    <span className="px-2 py-0.5 rounded-full bg-white/80 text-amber-900 text-[10px] font-extrabold">{modeMeta.rangeLabel}</span>
+                    <span className="text-xs font-black text-stone-900">🌅 좋은 아침 · 등원/오전 브리핑</span>
+                    <span className="px-2 py-0.5 rounded-full bg-stone-100 text-stone-600 text-[10px] font-extrabold">{modeMeta.rangeLabel}</span>
                   </div>
-                  <div className="flex items-center justify-between gap-2 text-[11px] font-bold text-stone-700">
+                  <div className="flex items-center justify-between gap-2 text-[11px] font-bold text-stone-600">
                     <span className="truncate">
                       {morningMeals[0] ? `🍽️ ${morningMeals[0].slot}: ${morningMeals[0].menu}` : "🍽️ 오늘 아침·점심 식단을 기록해 보세요"}
                     </span>
                     <button
                       type="button"
                       onClick={() => { setSelectedDate(todayKey); setActiveTab("daily"); }}
-                      className="px-2 py-0.5 rounded-lg bg-amber-600 text-white text-[10px] font-extrabold shrink-0"
+                      className="px-2 py-0.5 rounded-lg bg-stone-900 text-white text-[10px] font-extrabold shrink-0"
                     >
                       식단 ({morningRoutineLeft > 0 ? `루틴 ${morningRoutineLeft}` : "확인"})
                     </button>
@@ -9593,10 +9711,10 @@ ${validText}
             {activeHomeTimeMode === "afternoon" && (() => {
               const dinnerMeal = todayMealsList.find((m) => m.slot === "저녁");
               return (
-                <div className="bg-gradient-to-r from-emerald-50 via-teal-50/70 to-orange-50/70 border border-emerald-200 rounded-2xl p-3 space-y-1.5 shadow-sm">
+                <div className="bg-white border border-stone-200 rounded-2xl p-3 space-y-1.5 shadow-sm">
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-xs font-black text-emerald-950">🌆 오후 · 저녁 준비 &amp; 냉장고 파먹기</span>
-                    <span className="px-2 py-0.5 rounded-full bg-white/80 text-emerald-800 text-[10px] font-extrabold">{modeMeta.rangeLabel}</span>
+                    <span className="text-xs font-black text-stone-900">🌆 오후 · 저녁 준비 &amp; 냉장고 파먹기</span>
+                    <span className="px-2 py-0.5 rounded-full bg-stone-100 text-stone-600 text-[10px] font-extrabold">{modeMeta.rangeLabel}</span>
                   </div>
                   <div className="flex flex-wrap items-center gap-1">
                     {expiringItems.length > 0 ? (
@@ -9605,18 +9723,18 @@ ${validText}
                           key={it.id}
                           type="button"
                           onClick={() => setActiveTab("fridge")}
-                          className="px-2 py-0.5 rounded-full bg-rose-100 text-rose-900 border border-rose-200 text-[10px] font-extrabold"
+                          className="px-2 py-0.5 rounded-full bg-rose-50 text-rose-700 border border-rose-200 text-[10px] font-extrabold"
                         >
                           ❄️ {it.name} ({it.diff < 0 ? "만료" : `D-${it.diff}`})
                         </button>
                       ))
                     ) : (
-                      <span className="text-[11px] font-bold text-emerald-800">✅ 임박한 냉장고 재료가 없습니다</span>
+                      <span className="text-[11px] font-bold text-stone-500">임박한 냉장고 재료가 없습니다</span>
                     )}
                     <button
                       type="button"
                       onClick={() => setActiveTab(dinnerMeal ? "daily" : "ai")}
-                      className="ml-auto px-2 py-0.5 rounded-lg bg-emerald-600 text-white text-[10px] font-extrabold"
+                      className="ml-auto px-2 py-0.5 rounded-lg bg-stone-900 text-white text-[10px] font-extrabold"
                     >
                       {dinnerMeal ? `🍽️ 저녁: ${dinnerMeal.menu}` : "✨ AI 저녁 추천"}
                     </button>
@@ -9751,10 +9869,10 @@ ${validText}
 
 
 
-          <div className="grid grid-cols-5 gap-1">
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 sm:grid sm:grid-cols-5 sm:gap-1">
             <button
               onClick={() => setSelectedMember("전체")}
-              className={`py-2 rounded-xl text-[11px] font-extrabold border transition flex items-center justify-center gap-0.5 ${
+              className={`px-2.5 py-2 rounded-xl text-[11px] font-extrabold border transition flex items-center justify-center gap-1 whitespace-nowrap shrink-0 ${
                 selectedMember === "전체"
                   ? "bg-stone-900 text-white border-stone-900 shadow-sm"
                   : "bg-white text-stone-600 border-stone-200"
@@ -9767,7 +9885,7 @@ ${validText}
               <button
                 key={m.id}
                 onClick={() => setSelectedMember(m.id)}
-                className={`py-2 rounded-xl text-[11px] font-extrabold border transition flex items-center justify-center gap-0.5 ${
+                className={`px-2.5 py-2 rounded-xl text-[11px] font-extrabold border transition flex items-center justify-center gap-1 whitespace-nowrap shrink-0 ${
                   selectedMember === m.id
                     ? "bg-stone-900 text-white border-stone-900 shadow-sm"
                     : "bg-white text-stone-600 border-stone-200"
@@ -10028,10 +10146,10 @@ ${validText}
                       <span className="text-xs font-black text-stone-900 flex items-center gap-1.5">
                         <span>{d.slice(5)} ({getDayName(d)})</span>
                         {d === selectedDate && (
-                          <span className="px-1.5 py-0.5 rounded bg-stone-900 text-white text-[9px] font-black">조회일</span>
+                          <span className="px-1.5 py-0.5 rounded bg-stone-900 text-white text-[9px] font-black whitespace-nowrap shrink-0">조회일</span>
                         )}
                         {d === getTodayStr() && (
-                          <span className="px-1.5 py-0.5 rounded bg-emerald-600 text-white text-[9px] font-black">오늘</span>
+                          <span className="px-1.5 py-0.5 rounded bg-emerald-600 text-white text-[9px] font-black whitespace-nowrap shrink-0">오늘</span>
                         )}
                       </span>
                       <button
@@ -10369,11 +10487,11 @@ ${validText}
       ========================================== */}
       {activeTab === "schedule" && (
         <div className="p-4 space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
+          <div className="flex items-center justify-between gap-2">
+            <div className="min-w-0">
               <h2 className="text-sm font-black text-stone-900 flex items-center gap-1.5">
-                <CalendarDays className="w-4 h-4 text-pink-600" />
-                <span>우리 가족 월간 일정표</span>
+                <CalendarDays className="w-4 h-4 text-pink-600 shrink-0" />
+                <span className="truncate">우리 가족 월간 일정표</span>
               </h2>
               <p className="text-[11px] text-stone-500">
                 월간 달력 · 주간 일정 요약 · 전체 To-Do 체크리스트 · 기념일 D-Day
@@ -10413,7 +10531,7 @@ ${validText}
                   : "text-stone-500 hover:text-stone-800"
               }`}
             >
-              <span>📅 달력·일정</span>
+              <span className="whitespace-nowrap">📅 달력·일정</span>
               {imminentSchedulesWithin3Days.length > 0 && (
                 <span className="px-1.5 py-0.5 rounded-full bg-rose-600 text-white text-[9px] font-black leading-none">
                   {imminentSchedulesWithin3Days.length}
@@ -10429,7 +10547,7 @@ ${validText}
                   : "text-stone-500 hover:text-stone-800"
               }`}
             >
-              <span>✅ 할 일</span>
+              <span className="whitespace-nowrap">✅ 할 일</span>
               {globalTodoBadgeStats.activeCount > 0 && (
                 <span className="px-1.5 py-0.5 rounded-full bg-amber-500 text-white text-[9px] font-black leading-none">
                   {globalTodoBadgeStats.activeCount}
@@ -10445,7 +10563,7 @@ ${validText}
                   : "text-stone-500 hover:text-stone-800"
               }`}
             >
-              <span>🔄 반복 루틴</span>
+              <span className="whitespace-nowrap">🔄 반복 루틴</span>
               {familyRoutines.filter((r) => !isRoutineDoneNow(r)).length > 0 && (
                 <span className="px-1.5 py-0.5 rounded-full bg-indigo-600 text-white text-[9px] font-black leading-none">
                   {familyRoutines.filter((r) => !isRoutineDoneNow(r)).length}
@@ -10454,28 +10572,30 @@ ${validText}
             </button>
           </div>
 
-          <div className="grid grid-cols-5 gap-1">
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 sm:grid sm:grid-cols-5 sm:gap-1">
             <button
               onClick={() => setScheduleMemberFilter("전체")}
-              className={`py-2 rounded-xl text-[11px] font-extrabold border transition ${
+              className={`px-2.5 py-2 rounded-xl text-[11px] font-extrabold border transition flex items-center justify-center gap-1 whitespace-nowrap shrink-0 ${
                 scheduleMemberFilter === "전체"
                   ? "bg-stone-900 text-white border-stone-900"
                   : "bg-white text-stone-600 border-stone-200"
               }`}
             >
-              👨‍👩‍👧‍👦 전체
+              <span>👨‍👩‍👧‍👦</span>
+              <span>전체</span>
             </button>
             {FAMILY_MEMBERS.map((m) => (
               <button
                 key={m.id}
                 onClick={() => setScheduleMemberFilter(m.id)}
-                className={`py-2 rounded-xl text-[11px] font-extrabold border transition ${
+                className={`px-2.5 py-2 rounded-xl text-[11px] font-extrabold border transition flex items-center justify-center gap-1 whitespace-nowrap shrink-0 ${
                   scheduleMemberFilter === m.id
                     ? "bg-stone-900 text-white border-stone-900"
                     : "bg-white text-stone-600 border-stone-200"
                 }`}
               >
-                <span className="inline-flex items-center gap-1"><MemberAvatar member={m} size="sm" /><span>{m.name}</span></span>
+                <MemberAvatar member={m} size="sm" />
+                <span>{m.name}</span>
               </button>
             ))}
           </div>
@@ -10582,10 +10702,10 @@ ${validText}
                         : "bg-stone-50 text-stone-700 border-stone-200 hover:bg-stone-100"
                     }`}
                   >
-                    <div className="flex items-center justify-between w-full">
-                      <span className="text-[10px] font-black">{i + 1}</span>
+                    <div className="flex items-center justify-between gap-0.5 w-full">
+                      <span className="text-[10px] font-black shrink-0">{i + 1}</span>
                       {isToday && (
-                        <span className="text-[8px] font-extrabold px-1 rounded bg-amber-400 text-stone-900">
+                        <span className="text-[8px] font-extrabold px-1 rounded bg-amber-400 text-stone-900 whitespace-nowrap shrink-0 leading-tight">
                           오늘
                         </span>
                       )}
@@ -10914,7 +11034,7 @@ ${validText}
                   </span>
                 </h3>
                 <p className="text-[10px] text-stone-500 font-semibold mt-0.5">
-                  현재({isWeekendNow() ? "주말" : "평일"}): <span className="text-indigo-700 font-extrabold">{getCurrentRoutineTimeSlot(routineTimeRanges)}</span> · 자정·월요일 자동 리셋
+                  현재({isWeekendNow() ? "주말" : "평일"}): <span className="text-indigo-700 font-extrabold">{getCurrentRoutineTimeSlot(routineTimeRanges, liveMinuteTick)}</span> · 자정·월요일 자동 리셋
                 </p>
               </div>
               <button
@@ -10956,18 +11076,20 @@ ${validText}
                       <span className="font-semibold text-indigo-700">
                         {ROUTINE_WEEKDAY_SLOTS.map((s, idx) => {
                           const nxt = ROUTINE_WEEKDAY_SLOTS[(idx + 1) % ROUTINE_WEEKDAY_SLOTS.length];
-                          return `${s} ${String(routineTimeRanges[s]).padStart(2, "0")}~${String(routineTimeRanges[nxt]).padStart(2, "0")}시`;
+                          return `${s} ${formatMinutesHHMM(toTimeMinutes(routineTimeRanges[s]))}~${formatMinutesHHMM(toTimeMinutes(routineTimeRanges[nxt]))}`;
                         }).join(" · ")}
                       </span>
                     </div>
-                    <div className="grid grid-cols-3 sm:grid-cols-5 gap-1.5">
+                    <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5">
                       {ROUTINE_WEEKDAY_SLOTS.map((slot) => (
                         <label key={`wd-${slot}`} className="block">
                           <span className="text-[10px] font-bold text-indigo-900 block mb-0.5">{slot} 시작</span>
-                          <select
-                            value={routineTimeRanges[slot] ?? DEFAULT_ROUTINE_TIME_RANGES[slot]}
+                          <input
+                            type="time"
+                            value={formatMinutesHHMM(toTimeMinutes(routineTimeRanges[slot], toTimeMinutes(DEFAULT_ROUTINE_TIME_RANGES[slot]) / 60))}
                             onChange={(e) => {
-                              const val = Number(e.target.value);
+                              const val = e.target.value;
+                              if (!val) return;
                               setRoutineTimeRanges((prev) => {
                                 const next = { ...prev, [slot]: val };
                                 try { localStorage.setItem("kim_routine_time_ranges_v1", JSON.stringify(next)); } catch (err) {}
@@ -10976,13 +11098,7 @@ ${validText}
                               });
                             }}
                             className="w-full px-2 py-1 rounded-lg border border-indigo-200 bg-white text-[11px] font-black text-stone-800"
-                          >
-                            {Array.from({ length: 24 }, (_, hr) => (
-                              <option key={hr} value={hr}>
-                                {String(hr).padStart(2, "0")}시
-                              </option>
-                            ))}
-                          </select>
+                          />
                         </label>
                       ))}
                     </div>
@@ -10994,7 +11110,7 @@ ${validText}
                       <span className="font-semibold text-teal-700">
                         {ROUTINE_WEEKEND_SLOTS.map((s, idx) => {
                           const nxt = ROUTINE_WEEKEND_SLOTS[(idx + 1) % ROUTINE_WEEKEND_SLOTS.length];
-                          return `${s} ${String(routineTimeRanges[s]).padStart(2, "0")}~${String(routineTimeRanges[nxt]).padStart(2, "0")}시`;
+                          return `${s} ${formatMinutesHHMM(toTimeMinutes(routineTimeRanges[s]))}~${formatMinutesHHMM(toTimeMinutes(routineTimeRanges[nxt]))}`;
                         }).join(" · ")}
                       </span>
                     </div>
@@ -11002,10 +11118,12 @@ ${validText}
                       {ROUTINE_WEEKEND_SLOTS.map((slot) => (
                         <label key={`we-${slot}`} className="block">
                           <span className="text-[10px] font-bold text-teal-900 block mb-0.5">{slot} 시작</span>
-                          <select
-                            value={routineTimeRanges[slot] ?? DEFAULT_ROUTINE_TIME_RANGES[slot]}
+                          <input
+                            type="time"
+                            value={formatMinutesHHMM(toTimeMinutes(routineTimeRanges[slot], toTimeMinutes(DEFAULT_ROUTINE_TIME_RANGES[slot]) / 60))}
                             onChange={(e) => {
-                              const val = Number(e.target.value);
+                              const val = e.target.value;
+                              if (!val) return;
                               setRoutineTimeRanges((prev) => {
                                 const next = { ...prev, [slot]: val };
                                 try { localStorage.setItem("kim_routine_time_ranges_v1", JSON.stringify(next)); } catch (err) {}
@@ -11014,20 +11132,14 @@ ${validText}
                               });
                             }}
                             className="w-full px-2 py-1 rounded-lg border border-teal-200 bg-white text-[11px] font-black text-stone-800"
-                          >
-                            {Array.from({ length: 24 }, (_, hr) => (
-                              <option key={hr} value={hr}>
-                                {String(hr).padStart(2, "0")}시
-                              </option>
-                            ))}
-                          </select>
+                          />
                         </label>
                       ))}
                     </div>
                   </div>
                 </div>
-                {(new Set(ROUTINE_WEEKDAY_SLOTS.map((s) => routineTimeRanges[s])).size < ROUTINE_WEEKDAY_SLOTS.length ||
-                  new Set(ROUTINE_WEEKEND_SLOTS.map((s) => routineTimeRanges[s])).size < ROUTINE_WEEKEND_SLOTS.length) && (
+                {(new Set(ROUTINE_WEEKDAY_SLOTS.map((s) => toTimeMinutes(routineTimeRanges[s]))).size < ROUTINE_WEEKDAY_SLOTS.length ||
+                  new Set(ROUTINE_WEEKEND_SLOTS.map((s) => toTimeMinutes(routineTimeRanges[s]))).size < ROUTINE_WEEKEND_SLOTS.length) && (
                   <div className="text-[10px] font-extrabold text-rose-600">
                     ⚠️ 같은 요일 그룹 내 시작 시각이 중복된 시간대가 있습니다.
                   </div>
@@ -14724,7 +14836,7 @@ ${validText}
                           members: sel ? cur.filter((id) => id !== m.id) : [...cur, m.id]
                         });
                       }}
-                      className={`py-1.5 rounded-xl text-xs font-extrabold border ${
+                      className={`py-1.5 rounded-xl text-xs font-extrabold border whitespace-nowrap flex items-center justify-center ${
                         sel
                           ? "bg-stone-900 text-white border-stone-900"
                           : "bg-stone-50 text-stone-500 border-stone-200"
@@ -15484,7 +15596,7 @@ ${validText}
                           members: sel ? cur.filter((id) => id !== m.id) : [...cur, m.id]
                         });
                       }}
-                      className={`py-1.5 rounded-xl text-xs font-extrabold border ${
+                      className={`py-1.5 rounded-xl text-xs font-extrabold border whitespace-nowrap flex items-center justify-center ${
                         sel
                           ? "bg-stone-900 text-white border-stone-900"
                           : "bg-stone-50 text-stone-500 border-stone-200"
