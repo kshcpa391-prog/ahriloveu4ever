@@ -1034,11 +1034,33 @@ const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.65) =>
     img.src = dataUrl;
   });
 
-const APP_CODE_VERSION = "v10.60";
-const APP_BUILD_DATE = "2026-11-17 03:08";
+const APP_CODE_VERSION = "v10.62";
+const APP_BUILD_DATE = "2026-11-17 03:20";
 const EDITOR_INVITE_CODE = "0402";
 
 const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v10.62",
+    version: "v10.62",
+    date: "2026-11-17",
+    title: "일정·성장기록 저장 안정성 강화 · 홈 레이아웃 스키마 보정 · 편집 모드 자동 종료",
+    changes: [
+      "일정 저장(handleSaveSchedule) 시 Firestore 오류를 숨기지 않고 오류 알림 및 동기화 상태 표시로 안정성 개선",
+      "성장기록 저장 시 수치 미입력 안내 토스트 추가",
+      "저장된 홈 레이아웃(localStorage) 불러오기 시 신규 메뉴·블록 키 누락 자동 보정 및 다른 탭 이동 시 홈 편집 모드 자동 종료"
+    ]
+  },
+  {
+    id: "patch-v10.61",
+    version: "v10.61",
+    date: "2026-11-17",
+    title: "밤 중복 UI 제거 · 스마트 등록 [👶 성장기록] 추가 · 시간대 검증 & Escape 닫기 고도화",
+    changes: [
+      "홈 밤 모드에서 하단 일정·루틴 카드와 중복되던 [🌙 오늘 하루 마감 · 내일 미리보기] 상단 카드 제거",
+      "스마트 빠른 등록(+) 메뉴에 [👶 성장기록] 추가(육아수첩 성장기록 서브탭 이동 및 키 입력창 자동 포커스)",
+      "스마트 등록 메뉴 Escape 키·탭 전환 시 자동 닫힘 및 홈 시간대 시작 시각 중복 경고 보완"
+    ]
+  },
   {
     id: "patch-v10.60",
     version: "v10.60",
@@ -2584,6 +2606,18 @@ function MainApp() {
   const [scheduleSubTab, setScheduleSubTab] = useState("calendar");
   const [fridgeConflictData, setFridgeConflictData] = useState(null);
   const [isQuickFabOpen, setIsQuickFabOpen] = useState(false);
+  useEffect(() => {
+    setIsQuickFabOpen(false);
+    if (activeTab !== "home") setIsHomeEditMode(false);
+  }, [activeTab]);
+  useEffect(() => {
+    if (!isQuickFabOpen) return;
+    const onEsc = (e) => {
+      if (e.key === "Escape") setIsQuickFabOpen(false);
+    };
+    window.addEventListener("keydown", onEsc);
+    return () => window.removeEventListener("keydown", onEsc);
+  }, [isQuickFabOpen]);
   const [homeRoutineSlotFilter, setHomeRoutineSlotFilter] = useState(() => {
     return localStorage.getItem("kim_home_routine_slot_v1") || "auto";
   });
@@ -2604,7 +2638,22 @@ function MainApp() {
       const raw = localStorage.getItem("kim_home_layout_v1");
       if (raw) {
         const parsed = JSON.parse(raw);
-        if (parsed && parsed.morning && parsed.afternoon && parsed.night) return parsed;
+        if (parsed && parsed.morning && parsed.afternoon && parsed.night) {
+          const normalized = {};
+          ["morning", "afternoon", "night"].forEach((mode) => {
+            const def = DEFAULT_HOME_LAYOUT[mode];
+            const cur = parsed[mode] || {};
+            const savedBlocks = Array.isArray(cur.blocks) ? cur.blocks.filter((b) => def.blocks.includes(b)) : [];
+            const savedMenus = Array.isArray(cur.menuOrder) ? cur.menuOrder.filter((m) => DEFAULT_HOME_MENU_ORDER.includes(m)) : [];
+            normalized[mode] = {
+              blocks: [...savedBlocks, ...def.blocks.filter((b) => !savedBlocks.includes(b))],
+              hiddenBlocks: Array.isArray(cur.hiddenBlocks) ? cur.hiddenBlocks : [],
+              menuOrder: [...savedMenus, ...DEFAULT_HOME_MENU_ORDER.filter((m) => !savedMenus.includes(m))],
+              hiddenMenus: Array.isArray(cur.hiddenMenus) ? cur.hiddenMenus : []
+            };
+          });
+          return normalized;
+        }
       }
     } catch (e) {}
     return DEFAULT_HOME_LAYOUT;
@@ -4781,7 +4830,10 @@ function MainApp() {
 
   const handleAddGrowthLog = async () => {
     if (!requireEditorAccess()) return;
-    if (!growthForm.height && !growthForm.weight && !growthForm.head) return;
+    if (!growthForm.height && !growthForm.weight && !growthForm.head) {
+      showToast("키, 몸무게, 머리둘레 중 하나 이상을 입력해 주세요.");
+      return;
+    }
     const id = `gr-${selectedChildId}-${Date.now()}`;
     const payload = {
       id,
@@ -4889,7 +4941,11 @@ function MainApp() {
     if (user && db) {
       try {
         await setDoc(getDocRef("family_schedules_v4", id), payload);
-      } catch (e) {}
+      } catch (e) {
+        setSyncErrorMsg(e?.message || "일정 서버 저장 오류");
+        showToast("⚠️ 일정 서버 저장 실패: 네트워크 상태를 확인해 주세요.");
+        return;
+      }
     }
     showToast(editingSchedule ? "일정이 수정되었습니다." : "새 가족 일정이 등록되었습니다.");
   };
@@ -8815,6 +8871,13 @@ ${validText}
                   <div className="text-[10px] font-semibold text-stone-500">
                     현재 적용: 오전 {String(homeTimeRanges.morningStart).padStart(2, "0")}시 · 오후 {String(homeTimeRanges.afternoonStart).padStart(2, "0")}시 · 밤 {String(homeTimeRanges.nightStart).padStart(2, "0")}시~익일 {String(homeTimeRanges.morningStart).padStart(2, "0")}시
                   </div>
+                  {(homeTimeRanges.morningStart === homeTimeRanges.afternoonStart ||
+                    homeTimeRanges.afternoonStart === homeTimeRanges.nightStart ||
+                    homeTimeRanges.nightStart === homeTimeRanges.morningStart) && (
+                    <div className="text-[10px] font-extrabold text-rose-600">
+                      ⚠️ 오전·오후·밤 시작 시각은 서로 다르게 설정해 주세요.
+                    </div>
+                  )}
                 </div>
 
                 <div className="space-y-1">
@@ -8980,31 +9043,7 @@ ${validText}
               );
             })()}
 
-            {activeHomeTimeMode === "night" && (() => {
-              const tomorrowDate = new Date(todayKey + "T00:00:00");
-              tomorrowDate.setDate(tomorrowDate.getDate() + 1);
-              const tomorrowStr = formatDate(tomorrowDate);
-              const tomorrowSchedules = schedules.filter((s) => !s.done && String(s.date || "").slice(0, 10) === tomorrowStr);
-              const doneRoutineCount = familyRoutines.filter((r) => isRoutineDoneNow(r)).length;
-              return (
-                <div className="bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 text-white border border-indigo-800 rounded-2xl p-3 space-y-1.5 shadow-md">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-xs font-black text-amber-300">🌙 오늘 하루 마감 · 내일 미리보기</span>
-                    <span className="px-2 py-0.5 rounded-full bg-white/10 text-indigo-200 text-[10px] font-extrabold">{modeMeta.rangeLabel}</span>
-                  </div>
-                  <div className="flex items-center justify-between gap-2 text-[11px] font-bold text-stone-200">
-                    <span className="truncate">
-                      {tomorrowSchedules[0]
-                        ? `🗓️ 내일(${tomorrowStr.slice(5)}) ${tomorrowSchedules[0].title}${tomorrowSchedules.length > 1 ? ` 외 ${tomorrowSchedules.length - 1}건` : ""}`
-                        : `✅ 내일(${tomorrowStr.slice(5)}) 예정된 일정 없음`}
-                    </span>
-                    <span className="px-2 py-0.5 rounded-lg bg-indigo-500/40 text-indigo-100 text-[10px] font-black shrink-0">
-                      루틴 {doneRoutineCount}/{familyRoutines.length}
-                    </span>
-                  </div>
-                </div>
-              );
-            })()}
+
 
             {blockOrder.map((blockId) => renderHomeBlock(blockId))}
           </div>
@@ -13196,6 +13235,7 @@ ${validText}
                       className="px-2.5 py-2 rounded-xl border border-stone-200 text-xs font-bold"
                     />
                     <input
+                      id="baby-growth-height-input"
                       type="number"
                       step="0.1"
                       placeholder="키 (cm)"
@@ -13546,6 +13586,15 @@ ${validText}
                 onClick: () => {
                   setExportScope("all");
                   setIsInventoryExportOpen(true);
+                }
+              },
+              {
+                label: "👶 성장기록",
+                color: "bg-white text-stone-900 border-sky-200 hover:bg-sky-50",
+                onClick: () => {
+                  setActiveTab("baby");
+                  setBabySubTab("growth");
+                  setTimeout(() => document.getElementById("baby-growth-height-input")?.focus(), 200);
                 }
               },
               {
