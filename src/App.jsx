@@ -265,7 +265,30 @@ const extractJsonArray = (rawText) => {
   return null;
 };
 
-async function callOpenAiEngine({ openaiKey, promptText, imagePart = null, temperature = 0.5 }) {
+const extractJsonObject = (rawText) => {
+  if (!rawText) return null;
+  const cleaned = String(rawText)
+    .replace(/```json/gi, "")
+    .replace(/```/g, "")
+    .trim();
+  try {
+    const parsed = JSON.parse(cleaned);
+    if (parsed && !Array.isArray(parsed) && typeof parsed === "object") return parsed;
+    if (Array.isArray(parsed)) return { items: parsed };
+  } catch {}
+  const startIdx = cleaned.indexOf("{");
+  const endIdx = cleaned.lastIndexOf("}");
+  if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
+    try {
+      return JSON.parse(cleaned.slice(startIdx, endIdx + 1));
+    } catch (e) {
+      console.warn("JSON object parse error:", e);
+    }
+  }
+  return null;
+};
+
+async function callOpenAiEngine({ openaiKey, promptText, imagePart = null, temperature = 0.5, expectObject = false }) {
   const cleanKey = String(openaiKey || "").trim();
   if (!cleanKey) throw new Error("OpenAI API 키가 비어 있습니다.");
 
@@ -281,8 +304,9 @@ async function callOpenAiEngine({ openaiKey, promptText, imagePart = null, tempe
   }
 
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 25000);
+  const timer = setTimeout(() => controller.abort(), 30000);
   try {
+    const modelName = imagePart ? "gpt-4o" : "gpt-4o-mini";
     const res = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -291,13 +315,14 @@ async function callOpenAiEngine({ openaiKey, promptText, imagePart = null, tempe
       },
       signal: controller.signal,
       body: JSON.stringify({
-        model: "gpt-4o-mini",
+        model: modelName,
         temperature,
         messages: [
           {
             role: "system",
-            content:
-              "You are an expert Korean culinary & OCR AI. Output ONLY a valid JSON array. No markdown fences."
+            content: expectObject
+              ? "You are an expert Korean OCR & culinary AI. Output ONLY a valid JSON object. No markdown fences."
+              : "You are an expert Korean culinary & OCR AI. Output ONLY a valid JSON array. No markdown fences."
           },
           {
             role: "user",
@@ -311,8 +336,8 @@ async function callOpenAiEngine({ openaiKey, promptText, imagePart = null, tempe
       throw new Error(`[GPT ${res.status}] ${data?.error?.message || "OpenAI 호출 오류"}`);
     }
     const text = data?.choices?.[0]?.message?.content || "";
-    const parsed = extractJsonArray(text);
-    if (!parsed) throw new Error("[GPT] 응답을 JSON 배열로 변환하지 못했습니다.");
+    const parsed = expectObject ? extractJsonObject(text) : extractJsonArray(text);
+    if (!parsed) throw new Error("[GPT] 응답을 JSON으로 변환하지 못했습니다.");
     return parsed;
   } finally {
     clearTimeout(timer);
@@ -326,6 +351,7 @@ async function callReliableAiEngine({
   promptText,
   imagePart = null,
   temperature = 0.5,
+  expectObject = false,
   onProviderUsed = null
 }) {
   const effectiveGeminiKey = String(apiKey || EMBEDDED_GEMINI_KEY || "").trim();
@@ -350,18 +376,23 @@ async function callReliableAiEngine({
       });
     }
 
+    const genConfig = {
+      temperature,
+      responseMimeType: "application/json"
+    };
+    if (imagePart) {
+      genConfig.mediaResolution = "MEDIA_RESOLUTION_HIGH";
+    }
+
     const geminiBody = JSON.stringify({
       contents: [{ role: "user", parts }],
-      generationConfig: {
-        temperature,
-        responseMimeType: "application/json"
-      }
+      generationConfig: genConfig
     });
 
     const trySingleModel = async (modelId) => {
       const cleanModel = String(modelId).replace(/^models\//, "");
       const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 20000);
+      const timer = setTimeout(() => controller.abort(), 25000);
       try {
         const res = await fetch(
           `https://generativelanguage.googleapis.com/v1beta/models/${cleanModel}:generateContent`,
@@ -378,7 +409,7 @@ async function callReliableAiEngine({
         const data = await res.json();
         if (res.ok) {
           const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
-          const parsed = extractJsonArray(text);
+          const parsed = expectObject ? extractJsonObject(text) : extractJsonArray(text);
           if (parsed) return { ok: true, data: parsed };
           return { ok: false, error: `[${cleanModel}] 응답을 JSON으로 파싱하지 못했습니다.` };
         }
@@ -394,7 +425,7 @@ async function callReliableAiEngine({
       }
     };
 
-    const primaryRes = await trySingleModel("gemini-3.8-flash");
+    const primaryRes = await trySingleModel("gemini-2.5-flash");
     if (primaryRes.ok) return primaryRes.data;
 
     const rawPrimary = primaryRes.rawMsg || "";
@@ -404,6 +435,8 @@ async function callReliableAiEngine({
       !rawPrimary.includes("API key not valid") &&
       !rawPrimary.includes("expired")
     ) {
+      const fallbackRes = await trySingleModel("gemini-2.0-flash");
+      if (fallbackRes.ok) return fallbackRes.data;
       try {
         const listRes = await fetch("https://generativelanguage.googleapis.com/v1beta/models", {
           headers: { "x-goog-api-key": effectiveGeminiKey }
@@ -417,7 +450,8 @@ async function callReliableAiEngine({
                 m.supportedGenerationMethods.includes("generateContent") &&
                 m.name &&
                 m.name.includes("flash") &&
-                !m.name.includes("3.8-flash") &&
+                !m.name.includes("2.5-flash") &&
+                !m.name.includes("2.0-flash") &&
                 !m.name.includes("thinking") &&
                 !m.name.includes("image")
             )
@@ -439,23 +473,44 @@ async function callReliableAiEngine({
       openaiKey: effectiveOpenaiKey,
       promptText,
       imagePart,
-      temperature
+      temperature,
+      expectObject
     });
 
   // 엔진 선택 정책에 따른 실행 및 자동 페일오버
   if (aiProvider === "openai") {
     const res = await runOpenAi();
-    if (onProviderUsed) onProviderUsed("OpenAI GPT");
+    if (onProviderUsed) onProviderUsed("OpenAI GPT-4o");
     return res;
   }
   if (aiProvider === "gemini") {
     const res = await runGemini();
-    if (onProviderUsed) onProviderUsed("Gemini");
+    if (onProviderUsed) onProviderUsed("Gemini 2.5");
     return res;
   }
 
-  // auto 모드: OpenAI 키가 있으면 GPT 우선 -> 실패 시 Gemini / 없으면 Gemini -> GPT
+  // auto 모드: 이미지 OCR은 한국어 판독이 강한 Gemini 우선 -> 실패 시 GPT-4o / 일반 텍스트는 기존 순서
   const errors = [];
+  if (imagePart && effectiveGeminiKey) {
+    try {
+      const res = await runGemini();
+      if (onProviderUsed) onProviderUsed("Gemini 2.5");
+      return res;
+    } catch (e) {
+      errors.push(e.message);
+    }
+    if (effectiveOpenaiKey) {
+      try {
+        const res = await runOpenAi();
+        if (onProviderUsed) onProviderUsed("OpenAI GPT-4o");
+        return res;
+      } catch (e) {
+        errors.push(e.message);
+      }
+    }
+    throw new Error(`AI 호출 오류: ${errors.join(" / ")} (⚙️설정에서 API 키를 확인해 주세요)`);
+  }
+
   if (effectiveOpenaiKey) {
     try {
       const res = await runOpenAi();
@@ -550,7 +605,7 @@ const getDustGrade = (pm10, pm25) => {
   return levels[maxLevel];
 };
 
-const fileToBase64 = (file, { maxSide = 720, quality = 0.65 } = {}) =>
+const fileToBase64 = (file, { maxSide = 720, quality = 0.65, enhanceContrast = false } = {}) =>
   new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = (event) => {
@@ -571,11 +626,25 @@ const fileToBase64 = (file, { maxSide = 720, quality = 0.65 } = {}) =>
         canvas.height = h;
         const ctx = canvas.getContext("2d");
         ctx.drawImage(img, 0, 0, w, h);
-        const dataUrl = canvas.toDataURL("image/jpeg", quality);
+        const previewDataUrl = canvas.toDataURL("image/jpeg", quality);
+        let aiDataUrl = previewDataUrl;
+        if (enhanceContrast) {
+          try {
+            const ocrCanvas = document.createElement("canvas");
+            ocrCanvas.width = w;
+            ocrCanvas.height = h;
+            const ocrCtx = ocrCanvas.getContext("2d");
+            if ("filter" in ocrCtx) {
+              ocrCtx.filter = "grayscale(1) contrast(1.42) brightness(1.04)";
+            }
+            ocrCtx.drawImage(img, 0, 0, w, h);
+            aiDataUrl = ocrCanvas.toDataURL("image/jpeg", quality);
+          } catch {}
+        }
         resolve({
-          base64: dataUrl.split(",")[1],
+          base64: aiDataUrl.split(",")[1],
           mimeType: "image/jpeg",
-          previewUrl: dataUrl
+          previewUrl: previewDataUrl
         });
       };
       img.onerror = reject;
@@ -632,11 +701,23 @@ const STORAGE_LOCATIONS = ["냉장실", "냉동실", "실온·팬트리"];
 const FRIDGE_CATEGORIES = ["채소/과일", "육류/수산", "유제품/계란", "유아식/이유식 재료", "반찬/김치", "밀키트", "양념/소스", "기타"];
 const SCHEDULE_CATEGORIES = ["기념일/생일", "할일(To-Do)", "육아/병원", "가족행사/경조사"];
 
-const APP_CODE_VERSION = "v10.1";
-const APP_BUILD_DATE = "2026-11-16 12:45";
+const APP_CODE_VERSION = "v10.2";
+const APP_BUILD_DATE = "2026-11-16 13:00";
 const EDITOR_INVITE_CODE = "0402";
 
 const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v10.2",
+    version: "v10.2",
+    date: "2026-11-16",
+    title: "영수증 OCR 환각(감자·브로콜리) 방지 — 2단계 원문 추출 · 고대비 전처리 · 최신 비전 모델 적용",
+    changes: [
+      "영수증 스캔 시 존재하지 않는 모델명(gemini-3.8-flash) 및 gpt-4o-mini 저정밀 판독을 gemini-2.5-flash(MEDIA_RESOLUTION_HIGH) / gpt-4o로 개선",
+      "영수증 AI 전달 이미지에 흑백 고대비(contrast 1.42) 전처리를 적용해 흐린 감열지 글자 판독력 향상",
+      "AI가 먼저 영수증 원문 줄(rawLines)을 한 줄씩 받아 적은 뒤 품목을 추출하는 2단계 구조로 변경해 없는 품목(감자·브로콜리 등) 추측 방지",
+      "영수증 모달 내 [AI 사용 엔진] 및 [원문 줄 보기] 토글 추가 + 결제금액(receiptTotal) 자동 입력 보강"
+    ]
+  },
   {
     id: "patch-v10.1",
     version: "v10.1",
@@ -1800,6 +1881,9 @@ function MainApp() {
   const [receiptPreviewUrl, setReceiptPreviewUrl] = useState("");
   const [receiptTotalAmount, setReceiptTotalAmount] = useState("");
   const [receiptExcludedAmount, setReceiptExcludedAmount] = useState("0");
+  const [receiptRawLines, setReceiptRawLines] = useState([]);
+  const [receiptEngineUsed, setReceiptEngineUsed] = useState("");
+  const [showReceiptRawLines, setShowReceiptRawLines] = useState(false);
   const [lastReceiptImagePart, setLastReceiptImagePart] = useState(null);
   const [isReceiptScanning, setIsReceiptScanning] = useState(false);
   const [scannedReceiptItems, setScannedReceiptItems] = useState([]);
@@ -4511,40 +4595,65 @@ ${validText}
     setReceiptErrorMsg("");
     setIsReceiptScanning(true);
     try {
-      const promptText = `당신은 한국 마트 영수증 회계·OCR 정밀 검증 전문가입니다.
-영수증 상단의 [상품명 | 단가 | 수량 | 금액] 표와 하단의 [결제대상금액(또는 카드결제/합계)]을 1원 단위까지 정확히 대조하여 순수 JSON 배열만 출력하세요.
+      const promptText = `당신은 한국 마트 영수증 정밀 OCR 전문가입니다.
+이미지에 인쇄된 글자만 100% 그대로 판독하세요. 이미지에 없는 품목(예: 감자, 브로콜리, 사과, 미나리 등)이나 임의 가격(1490 등)을 절대 추측해 지어내지 마세요.
 
-절대 규칙:
-1. 01*부터 마지막 번호(예: 07*)까지 번호당 정확히 1개 항목만 생성하세요. 같은 번호나 같은 상품(예: 두부)을 2번 중복 출력하지 마세요.
-2. 각 줄의 왼쪽 상품명 바로 같은 가로줄 오른쪽 끝의 [금액]만 읽고, 바로 아래 줄에 "에누리(쿠폰)" 등 음수(-금액)가 있을 때만 그 금액을 빼세요. (예: 07*풀무원_소가부침두 1,440 -> price: 1440. 위쪽 05*양파의 8,990을 절대 가져오지 마세요!)
-3. "재사용봉투", "종량제봉투", "쇼핑백" 등 비식품은 출력 목록에서 빼되, 그 합계 금액을 excludedTotal에 적으세요.
-4. 영수증 하단의 총 실결제 금액(예: 결제대상금액 20,580)을 receiptTotal에 적고, (출력 품목들의 price 합 + excludedTotal === receiptTotal)이 되는지 반드시 검산한 뒤 출력하세요.
-5. location은 ["냉장실", "냉동실", "실온·팬트리"] 중 하나, category는 ["채소/과일", "육류/수산", "유제품/계란", "유아식/이유식 재료", "반찬/김치", "밀키트", "양념/소스", "기타"] 중 하나로 고르세요.
-6. 마크다운 코드블록 없이 순수 JSON 배열만 출력:
-[{"lineNo":"01","rawLine":"01*건고사리35G 6,990","name":"건고사리","location":"실온·팬트리","category":"채소/과일","quantity":35,"unit":"g","price":6990,"receiptTotal":20580,"excludedTotal":490}]`;
+작업 순서 (반드시 준수):
+1단계(rawLines): 영수증 본문의 상품 줄(예: "01*건고사리35G 6,990 1 6,990", "에누리(쿠폰) -4,000")과 하단 합계 줄("결제대상금액 20,580" 또는 "카드결제 20,580")을 이미지에 보이는 글자 그대로 한 줄씩 받아 적으세요.
+2단계(items): 오직 1단계 rawLines에 실제로 존재하는 상품 줄만 items 배열로 변환하세요.
+- 01, 02, 03... 줄 번호당 정확히 1개 항목만 생성하세요. 같은 상품(예: 두부)을 2번 중복 출력하지 마세요.
+- 각 상품 줄의 오른쪽 끝 금액에서 바로 아래 줄에 있는 에누리/쿠폰(-금액)만 차감하여 price에 적으세요.
+- "재사용봉투", "종량제봉투", "쇼핑백" 등 비식품은 items에서 빼고 그 합계를 excludedTotal에 적으세요.
+- 영수증 하단의 실제 총 결제금액(예: 결제대상금액 20,580)을 receiptTotal에 적으세요.
+- location은 ["냉장실", "냉동실", "실온·팬트리"] 중 하나, category는 ["채소/과일", "육류/수산", "유제품/계란", "유아식/이유식 재료", "반찬/김치", "밀키트", "양념/소스", "기타"] 중 하나입니다.
 
-      const parsedArray = await callReliableAiEngine({
+마크다운 코드블록 없이 아래 순수 JSON 객체만 출력하세요:
+{
+  "rawLines": ["01*건고사리35G 6,990 1 6,990", "결제대상금액 20,580"],
+  "receiptTotal": 20580,
+  "excludedTotal": 490,
+  "items": [
+    {"lineNo":"01","rawName":"건고사리35G","name":"건고사리","location":"실온·팬트리","category":"채소/과일","quantity":35,"unit":"g","price":6990}
+  ]
+}`;
+
+      const parsedObj = await callReliableAiEngine({
         apiKey: geminiApiKey,
         openaiApiKey,
         aiProvider,
         promptText,
         imagePart,
-        temperature: 0.0
+        temperature: 0.0,
+        expectObject: true,
+        onProviderUsed: (eng) => setReceiptEngineUsed(eng)
       });
 
-      const seenLineNos = new Set();
-      let detectedTotal = "";
-      let detectedExcluded = "0";
+      const rawLinesArr = Array.isArray(parsedObj?.rawLines) ? parsedObj.rawLines.map((s) => String(s)) : [];
+      setReceiptRawLines(rawLinesArr);
 
-      const normalized = toSafeArray(parsedArray)
+      const itemsSource = Array.isArray(parsedObj?.items)
+        ? parsedObj.items
+        : Array.isArray(parsedObj)
+        ? parsedObj
+        : [];
+
+      const seenLineNos = new Set();
+      let detectedTotal = parsedObj?.receiptTotal && Number(parsedObj.receiptTotal) > 0
+        ? String(Number(parsedObj.receiptTotal))
+        : "";
+      let detectedExcluded = parsedObj?.excludedTotal !== undefined && Number(parsedObj.excludedTotal) >= 0
+        ? String(Number(parsedObj.excludedTotal))
+        : "0";
+
+      const normalized = toSafeArray(itemsSource)
         .filter((it) => {
           const ln = String(it?.lineNo || "").trim();
           if (ln && seenLineNos.has(ln)) return false;
           if (ln) seenLineNos.add(ln);
-          if (it?.receiptTotal && Number(it.receiptTotal) > 0) {
+          if (!detectedTotal && it?.receiptTotal && Number(it.receiptTotal) > 0) {
             detectedTotal = String(Number(it.receiptTotal));
           }
-          if (it?.excludedTotal !== undefined && Number(it.excludedTotal) >= 0) {
+          if (detectedExcluded === "0" && it?.excludedTotal !== undefined && Number(it.excludedTotal) > 0) {
             detectedExcluded = String(Number(it.excludedTotal));
           }
           return true;
@@ -4582,7 +4691,11 @@ ${validText}
     const file = e.target.files?.[0];
     if (!file) return;
     try {
-      const { base64, mimeType, previewUrl } = await fileToBase64(file, { maxSide: 2200, quality: 0.92 });
+      const { base64, mimeType, previewUrl } = await fileToBase64(file, {
+        maxSide: 2200,
+        quality: 0.92,
+        enhanceContrast: true
+      });
       setReceiptPreviewUrl(previewUrl);
       const imgPart = { base64, mimeType };
       setLastReceiptImagePart(imgPart);
@@ -9715,9 +9828,16 @@ ${validText}
                   return (
                     <div className="p-3 rounded-2xl bg-stone-50 border border-stone-200 space-y-2 text-xs">
                       <div className="flex items-center justify-between gap-2">
-                        <span className="font-black text-stone-800">
-                          🧾 합계 대사 검증 ({scannedReceiptItems.length}건)
-                        </span>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="font-black text-stone-800">
+                            🧾 합계 대사 검증 ({scannedReceiptItems.length}건)
+                          </span>
+                          {receiptEngineUsed && (
+                            <span className="px-1.5 py-0.5 rounded bg-stone-200/80 text-[10px] font-bold text-stone-600">
+                              🤖 {receiptEngineUsed}
+                            </span>
+                          )}
+                        </div>
                         <div className="flex items-center gap-1.5">
                           <button
                             onClick={() =>
@@ -9786,6 +9906,21 @@ ${validText}
                           {diff === 0
                             ? "✅ 품목 합계 + 봉투 등 = 영수증 결제금액 100% 일치!"
                             : `⚠️ 차이 ${diff > 0 ? `+${diff.toLocaleString()}` : diff.toLocaleString()}원 (품목·금액을 확인해 주세요)`}
+                        </div>
+                      )}
+                      {receiptRawLines.length > 0 && (
+                        <div className="pt-1">
+                          <button
+                            onClick={() => setShowReceiptRawLines((v) => !v)}
+                            className="text-[11px] font-bold text-stone-500 hover:text-stone-800 underline"
+                          >
+                            {showReceiptRawLines ? "▲ AI가 읽은 원문 줄 접기" : `▼ AI가 읽은 원문 줄 보기 (${receiptRawLines.length}줄)`}
+                          </button>
+                          {showReceiptRawLines && (
+                            <pre className="mt-1.5 p-2 rounded-xl bg-white border border-stone-200 text-[10px] text-stone-600 whitespace-pre-wrap break-all max-h-32 overflow-y-auto">
+                              {receiptRawLines.join("\n")}
+                            </pre>
+                          )}
                         </div>
                       )}
                     </div>
