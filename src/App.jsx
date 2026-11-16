@@ -868,11 +868,22 @@ const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.65) =>
     img.src = dataUrl;
   });
 
-const APP_CODE_VERSION = "v10.17";
-const APP_BUILD_DATE = "2026-11-16 15:18";
+const APP_CODE_VERSION = "v10.18";
+const APP_BUILD_DATE = "2026-11-16 15:30";
 const EDITOR_INVITE_CODE = "0402";
 
 const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v10.18",
+    version: "v10.18",
+    date: "2026-11-16",
+    title: "모바일 칩 길게 눌러 이동 시 화면 스크롤 잠금 (Non-Passive Touch Lock)",
+    changes: [
+      "냉장고 시각적 뷰에서 재료를 0.25초 길게 누르면 진동·들림 효과와 함께 이동 모드로 전환",
+      "이동 모드 활성 시 non-passive touchmove 차단 및 body 스크롤 잠금으로 핸드폰 스크롤 동시 발생 완전 해결",
+      "길게 누르기 시 브라우저 텍스트 선택/컨텍스트 메뉴 팝업 방지(-webkit-touch-callout: none)"
+    ]
+  },
   {
     id: "patch-v10.17",
     version: "v10.17",
@@ -2072,6 +2083,29 @@ function MainApp() {
   const [dragOverZone, setDragOverZone] = useState("");
   const chipTouchRef = useRef(null);
   const dragOverZoneRef = useRef("");
+  const justDraggedRef = useRef(false);
+
+  // [v10.18] 길게 눌러 칩 드래그 중일 때 모바일 브라우저 스크롤 완전 차단 (non-passive)
+  const isChipDragging = Boolean(draggingChip);
+  useEffect(() => {
+    if (!isChipDragging) return;
+    const prevOverflow = document.body.style.overflow;
+    const prevTouchAction = document.body.style.touchAction;
+    const prevOverscroll = document.documentElement.style.overscrollBehavior;
+    document.body.style.overflow = "hidden";
+    document.body.style.touchAction = "none";
+    document.documentElement.style.overscrollBehavior = "none";
+    const blockTouchScroll = (ev) => {
+      if (ev.cancelable) ev.preventDefault();
+    };
+    window.addEventListener("touchmove", blockTouchScroll, { passive: false });
+    return () => {
+      window.removeEventListener("touchmove", blockTouchScroll);
+      document.body.style.overflow = prevOverflow;
+      document.body.style.touchAction = prevTouchAction;
+      document.documentElement.style.overscrollBehavior = prevOverscroll;
+    };
+  }, [isChipDragging]);
   const [visualExpiringOnly, setVisualExpiringOnly] = useState(false);
 
   // [신규 v10.8] 가족 레시피북 상태
@@ -8634,38 +8668,60 @@ ${validText}
                             onDragStart={(e) => {
                               e.dataTransfer?.setData("text/plain", it.id);
                             }}
+                            onContextMenu={(e) => e.preventDefault()}
+                            style={{
+                              WebkitTouchCallout: "none",
+                              touchAction: draggingChip?.item?.id === it.id ? "none" : "pan-y"
+                            }}
                             onTouchStart={(e) => {
                               const t = e.touches?.[0];
                               if (!t) return;
+                              if (chipTouchRef.current?.timer) clearTimeout(chipTouchRef.current.timer);
+                              const startX = t.clientX;
+                              const startY = t.clientY;
+                              const timer = setTimeout(() => {
+                                const st = chipTouchRef.current;
+                                if (!st || st.item?.id !== it.id) return;
+                                st.dragging = true;
+                                if (typeof navigator !== "undefined" && navigator.vibrate) {
+                                  try { navigator.vibrate(18); } catch {}
+                                }
+                                setDraggingChip({ item: it, x: startX, y: startY });
+                              }, 250);
                               chipTouchRef.current = {
                                 item: it,
-                                startX: t.clientX,
-                                startY: t.clientY,
-                                dragging: false
+                                startX,
+                                startY,
+                                dragging: false,
+                                timer
                               };
                             }}
                             onTouchMove={(e) => {
                               const st = chipTouchRef.current;
                               const t = e.touches?.[0];
                               if (!st || !t) return;
-                              const dist = Math.hypot(t.clientX - st.startX, t.clientY - st.startY);
-                              if (!st.dragging && dist > 12) {
-                                st.dragging = true;
+                              if (!st.dragging) {
+                                const dist = Math.hypot(t.clientX - st.startX, t.clientY - st.startY);
+                                if (dist > 8) {
+                                  if (st.timer) clearTimeout(st.timer);
+                                  chipTouchRef.current = null;
+                                }
+                                return;
                               }
-                              if (st.dragging) {
-                                if (e.cancelable) e.preventDefault();
-                                setDraggingChip({ item: st.item, x: t.clientX, y: t.clientY });
-                                const el = document.elementFromPoint(t.clientX, t.clientY);
-                                const zoneEl = el?.closest?.("[data-shelf-zone]");
-                                const hoveredZone = zoneEl?.getAttribute?.("data-shelf-zone") || "";
-                                dragOverZoneRef.current = hoveredZone;
-                                setDragOverZone(hoveredZone);
-                              }
+                              setDraggingChip({ item: st.item, x: t.clientX, y: t.clientY });
+                              const el = document.elementFromPoint(t.clientX, t.clientY);
+                              const zoneEl = el?.closest?.("[data-shelf-zone]");
+                              const hoveredZone = zoneEl?.getAttribute?.("data-shelf-zone") || "";
+                              dragOverZoneRef.current = hoveredZone;
+                              setDragOverZone(hoveredZone);
                             }}
                             onTouchEnd={() => {
                               const st = chipTouchRef.current;
+                              if (st?.timer) clearTimeout(st.timer);
                               chipTouchRef.current = null;
                               if (st?.dragging) {
+                                justDraggedRef.current = true;
+                                setTimeout(() => { justDraggedRef.current = false; }, 180);
                                 const targetZ = dragOverZoneRef.current || dragOverZone;
                                 dragOverZoneRef.current = "";
                                 setDraggingChip(null);
@@ -8675,8 +8731,16 @@ ${validText}
                                 }
                               }
                             }}
+                            onTouchCancel={() => {
+                              const st = chipTouchRef.current;
+                              if (st?.timer) clearTimeout(st.timer);
+                              chipTouchRef.current = null;
+                              dragOverZoneRef.current = "";
+                              setDraggingChip(null);
+                              setDragOverZone("");
+                            }}
                             onClick={() => {
-                              if (!chipTouchRef.current?.dragging) setQuickFridgeItem(it);
+                              if (!chipTouchRef.current?.dragging && !justDraggedRef.current) setQuickFridgeItem(it);
                             }}
                             className={`px-2 py-1 rounded-lg border text-[10px] font-extrabold flex items-center gap-1 transition active:scale-95 select-none ${
                               isUrgent
@@ -8706,7 +8770,7 @@ ${validText}
             return (
               <div className="space-y-3">
                 <div className="text-[11px] font-bold text-stone-500 bg-stone-100 px-2.5 py-1.5 rounded-xl flex items-center justify-between gap-2">
-                  <span className="truncate">👆 탭: 수량·소진 / ✋ 끌기: 칸 이동</span>
+                  <span className="truncate">👆 탭: 수량·소진 / ✋ 길게 눌러 끌기: 칸 이동</span>
                   <button
                     onClick={() => setVisualExpiringOnly((v) => !v)}
                     className={`px-2 py-0.5 rounded-lg text-[10px] font-extrabold border shrink-0 whitespace-nowrap ${
