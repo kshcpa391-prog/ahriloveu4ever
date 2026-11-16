@@ -701,11 +701,24 @@ const STORAGE_LOCATIONS = ["냉장실", "냉동실", "실온·팬트리"];
 const FRIDGE_CATEGORIES = ["채소/과일", "육류/수산", "유제품/계란", "유아식/이유식 재료", "반찬/김치", "밀키트", "양념/소스", "기타"];
 const SCHEDULE_CATEGORIES = ["기념일/생일", "할일(To-Do)", "육아/병원", "가족행사/경조사"];
 
-const APP_CODE_VERSION = "v10.3";
-const APP_BUILD_DATE = "2026-11-16 13:16";
+const APP_CODE_VERSION = "v10.4";
+const APP_BUILD_DATE = "2026-11-16 13:55";
 const EDITOR_INVITE_CODE = "0402";
 
 const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v10.4",
+    version: "v10.4",
+    date: "2026-11-16",
+    title: "안정화 종합 패치 (영수증 트랜잭션/중복방지 · 자가진단 · 식단 동시수정 · 해시 자동백업 · <option> 수정)",
+    changes: [
+      "영수증 일괄 입고를 operationId 기반 단일 Firestore 트랜잭션으로 전환해 중복 등록·부분 저장 방지 및 합계 불일치/미확인 경고 추가",
+      "⚙️설정 [AI 연결 자가진단]의 구형 모델명(gemini-3.8-flash)을 gemini-2.5-flash로 수정",
+      "식단 수정(handleSaveMeal)에 updatedAt 다중 기기 충돌 감지 적용, 재고 수량 조정 시 서버 최종 수량을 화면에 정확히 반영",
+      "자동 백업이 전체 데이터 내용 해시(FNV-1a)와 1MiB 크기 제한을 감시하도록 개선하고, 다 먹음 처리의 불필요한 v3 식단 삭제 제거",
+      "식단표 스캔 모달 <option> 내 JSX 태그를 순수 텍스트로 수정하고 한 그릇 요리 영양 구성 검증 강화"
+    ]
+  },
   {
     id: "patch-v10.3",
     version: "v10.3",
@@ -1894,6 +1907,9 @@ function MainApp() {
   const [receiptRawLines, setReceiptRawLines] = useState([]);
   const [receiptEngineUsed, setReceiptEngineUsed] = useState("");
   const [showReceiptRawLines, setShowReceiptRawLines] = useState(false);
+  const [receiptOperationId, setReceiptOperationId] = useState("");
+  const [isSavingReceipt, setIsSavingReceipt] = useState(false);
+  const [receiptSaveError, setReceiptSaveError] = useState("");
   const [lastReceiptImagePart, setLastReceiptImagePart] = useState(null);
   const [isReceiptScanning, setIsReceiptScanning] = useState(false);
   const [scannedReceiptItems, setScannedReceiptItems] = useState([]);
@@ -2259,7 +2275,7 @@ function MainApp() {
     if (testGeminiKey) {
       try {
         const res = await fetch(
-          "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent",
+          "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
           {
             method: "POST",
             headers: {
@@ -2273,7 +2289,7 @@ function MainApp() {
         );
         const data = await res.json();
         if (res.ok && data?.candidates) {
-          reportLines.push("✅ [Gemini] 연결 성공! (gemini-3.8-flash 정상 작동)");
+          reportLines.push("✅ [Gemini] 연결 성공! (gemini-2.5-flash 정상 작동)");
           pushAiLog("Gemini", "자가진단", true, "정상 연결");
         } else {
           const msg = data?.error?.message || `HTTP ${res.status}`;
@@ -2640,12 +2656,30 @@ function MainApp() {
     return Object.values(merged);
   }, [fridgeMap, deletedIds]);
 
-  // 하루 2번(오전 AM / 오후 PM) + 실제 내용 변경 감지 자동 클라우드 스냅샷 백업 엔진
+  // 하루 2번(오전 AM / 오후 PM) + 전체 컬렉션 내용 해시(FNV-1a) 변경 감지 자동 클라우드 스냅샷 백업 엔진
   useEffect(() => {
     if (!isEditorUnlocked || !user || !db || meals.length === 0) return;
     const currentSlot = getTwiceDailySlotKey();
-    const totalFridgeQty = fridge.reduce((acc, f) => acc + (Number(f.quantity) || 0), 0);
-    const dataSig = `${meals.length}:${fridge.length}:${totalFridgeQty}:${expenses.length}:${schedules.length}:${babyGrowthLogs.length}:${babyMedicalNotes.length}`;
+    const backupDataObj = {
+      meals,
+      fridge,
+      expenses,
+      shoppingList,
+      notices,
+      schedules,
+      patchNotes,
+      wasteEvents,
+      babyChecks,
+      babyGrowthLogs,
+      babyMedicalNotes
+    };
+    const serialized = JSON.stringify(backupDataObj);
+    let h = 2166136261;
+    for (let i = 0; i < serialized.length; i++) {
+      h ^= serialized.charCodeAt(i);
+      h = Math.imul(h, 16777619);
+    }
+    const dataSig = `${(h >>> 0).toString(16)}_${serialized.length}`;
     const lastSig = (() => {
       try { return localStorage.getItem("kim_last_backup_sig_v1") || ""; } catch (e) { return ""; }
     })();
@@ -2653,32 +2687,29 @@ function MainApp() {
 
     const timer = setTimeout(async () => {
       try {
+        const byteSize = new Blob([serialized]).size;
+        if (byteSize > 900000) {
+          console.warn("Auto snapshot skipped: payload exceeds 900KB Firestore safety limit", byteSize);
+          showToast("⚠️ 자동 백업 용량이 900KB를 초과해 설정에서 JSON 파일 백업을 권장합니다.");
+          return;
+        }
         const snapshotPayload = {
           slot: currentSlot,
           createdAt: new Date().toISOString(),
+          dataHash: dataSig,
+          byteSize,
           counts: {
             meals: meals.length,
             fridge: fridge.length,
+            expenses: expenses.length,
             schedules: schedules.length
           },
-          data: {
-            meals,
-            fridge,
-            expenses,
-            shoppingList,
-            notices,
-            schedules,
-            patchNotes,
-            wasteEvents,
-            babyChecks,
-            babyGrowthLogs,
-            babyMedicalNotes
-          }
+          data: backupDataObj
         };
         await setDoc(getDocRef("family_backups_v4", currentSlot), snapshotPayload);
         await setDoc(
           getDocRef("family_meta_v4", "backup_status"),
-          { lastSlot: currentSlot, updatedAt: new Date().toISOString(), email: backupEmail },
+          { lastSlot: currentSlot, dataHash: dataSig, updatedAt: new Date().toISOString(), email: backupEmail },
           { merge: true }
         );
         setLastAutoBackupSlot(currentSlot);
@@ -2686,11 +2717,27 @@ function MainApp() {
         try { localStorage.setItem("kim_last_backup_sig_v1", dataSig); } catch (e) {}
       } catch (e) {
         console.warn("Auto snapshot warning:", e);
+        setSyncErrorMsg(`자동 백업 오류: ${e.message}`);
       }
     }, 3500);
 
     return () => clearTimeout(timer);
-  }, [user, meals.length, fridge.length, schedules.length, lastAutoBackupSlot]);
+  }, [
+    user,
+    isEditorUnlocked,
+    meals,
+    fridge,
+    expenses,
+    shoppingList,
+    notices,
+    schedules,
+    wasteEvents,
+    babyChecks,
+    babyGrowthLogs,
+    babyMedicalNotes,
+    lastAutoBackupSlot,
+    backupEmail
+  ]);
 
   // 상단 바 접기/펼치기 및 틀고정 토글 핸들러
   const handleToggleHeaderCollapse = () => {
@@ -3691,15 +3738,16 @@ ${validText}
   const checkMealCompleteness = (mealName, components, ingredients = []) => {
     const oneBowlKeywords = ["덮밥", "비빔밥", "볶음밥", "파스타", "국수", "칼국수", "우동", "라면", "카레", "리조또", "죽", "솥밥", "전골", "찌개", "정식", "도시락", "김밥", "샌드위치", "토스트"];
     const nameStr = String(mealName || "");
-    const hasEnoughIngredients = toSafeArray(ingredients).length >= 2;
-    if (oneBowlKeywords.some((kw) => nameStr.includes(kw)) && (components.length >= 1 || hasEnoughIngredients)) {
+    const ingList = toSafeArray(ingredients);
+    const hasEnoughIngredients = ingList.length >= 2;
+    if (oneBowlKeywords.some((kw) => nameStr.includes(kw)) && hasEnoughIngredients) {
       return { ok: true, reason: "" };
     }
     const roles = new Set(toSafeArray(components).map((c) => String(c.role || "").toLowerCase()));
     if (components.length >= 2 && (roles.has("staple") || roles.has("main"))) {
       return { ok: true, reason: "" };
     }
-    return { ok: false, reason: "구성요소·재료가 부족한 단일 요리입니다. 재추천을 권장합니다." };
+    return { ok: false, reason: "구성요소·단백질/채소 재료가 부족한 단일 요리입니다. 재추천을 권장합니다." };
   };
 
   const normalizeAiPlanItems = (rawList, requestedPairs, targetMode, validFridge) => {
@@ -4176,10 +4224,16 @@ ${validText}
         pass: addMonthsToDateStr("2026-01-31", 1, 0) === "2026-02-28"
       },
       {
-        name: "완성형 식단 판별 (한그릇 vs 단일채소)",
+        name: "완성형 식단 판별 (한그릇 재료검증 vs 단일채소)",
         pass:
-          checkMealCompleteness("소고기 덮밥", []).ok === true &&
+          checkMealCompleteness("소고기 덮밥", [], [{ name: "소고기" }, { name: "양파" }]).ok === true &&
+          checkMealCompleteness("계란 볶음밥", [], [{ name: "밥" }]).ok === false &&
           checkMealCompleteness("시금치 나물", [{ role: "vegetable", name: "시금치 나물" }]).ok === false
+      },
+      {
+        name: "실제 영수증 합계 대사 (홈플러스 20,580원 사례)",
+        pass:
+          (6990 + 2490 + 1190 + (8990 - 4000) + (3990 - 1000) + 1440) + 490 === 20580
       },
       {
         name: "유사 품목 오매칭 방지 (소고기 vs 양념소고기·국거리)",
@@ -4615,6 +4669,8 @@ ${validText}
 
   const runReceiptOcrWithImagePart = async (imagePart) => {
     setReceiptErrorMsg("");
+    setReceiptSaveError("");
+    setReceiptOperationId(`rcpt-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`);
     setIsReceiptScanning(true);
     try {
       const promptText = `당신은 한국 마트 영수증 정밀 OCR 전문가입니다.
@@ -4828,6 +4884,8 @@ ${validText}
     let errMsg = "";
     try {
       const ref = getDocRef("family_fridge_v4", item.id);
+      let finalServerQty = optimisticNext;
+      let finalUpdatedAt = new Date().toISOString();
       await runTransaction(db, async (tx) => {
         const snap = await tx.get(ref);
         if (!snap.exists()) {
@@ -4838,8 +4896,13 @@ ${validText}
         if (!Number.isFinite(next) || next < 0) {
           throw new Error("재고가 부족하여 차감할 수 없습니다.");
         }
-        tx.update(ref, { quantity: next, updatedAt: new Date().toISOString() });
+        finalServerQty = next;
+        tx.update(ref, { quantity: next, updatedAt: finalUpdatedAt });
       });
+      setFridgeMap((prev) => ({
+        ...prev,
+        local: { ...(prev.local || {}), [item.id]: { ...item, quantity: finalServerQty, updatedAt: finalUpdatedAt } }
+      }));
       ok = true;
     } catch (e) {
       errMsg = e.message;
@@ -5075,7 +5138,6 @@ ${validText}
       try {
         await deleteDoc(getDocRef("family_fridge_v3", item.id));
         await deleteDoc(getDocRef("family_fridge_v4", item.id));
-        await deleteDoc(getDocRef("family_meals_v3", item.id));
       } catch (e) {}
     }
 
@@ -5162,10 +5224,30 @@ ${validText}
     let ok = false;
     let errMsg = "";
     try {
-      const batch = writeBatch(db);
-      batch.set(getDocRef("family_meals_v3", id), payload);
-      batch.set(getDocRef("family_meals_v4", id), payload);
-      await batch.commit();
+      if (editingMeal?.updatedAt) {
+        let mealConflict = false;
+        await runTransaction(db, async (tx) => {
+          const snap = await tx.get(getDocRef("family_meals_v4", id));
+          if (snap.exists() && snap.data().updatedAt && snap.data().updatedAt !== editingMeal.updatedAt) {
+            mealConflict = true;
+            return;
+          }
+          tx.set(getDocRef("family_meals_v3", id), payload);
+          tx.set(getDocRef("family_meals_v4", id), payload);
+        });
+        if (mealConflict) {
+          showToast("⚠️ 다른 기기에서 먼저 수정된 식단입니다. 최신 내용을 확인 후 다시 수정해 주세요.");
+          setIsMealModalOpen(false);
+          setEditingMeal(null);
+          ok = true;
+          return;
+        }
+      } else {
+        const batch = writeBatch(db);
+        batch.set(getDocRef("family_meals_v3", id), payload);
+        batch.set(getDocRef("family_meals_v4", id), payload);
+        await batch.commit();
+      }
 
       setMealsMap((prev) => ({
         ...prev,
@@ -9558,7 +9640,7 @@ ${validText}
                   <option value="전체">👨‍👩‍👧‍👦 온가족</option>
                   {FAMILY_MEMBERS.map((m) => (
                     <option key={m.id} value={m.id}>
-                      <span className="inline-flex items-center gap-1"><MemberAvatar member={m} size="sm" /><span>{m.name}</span></span>
+                      {m.emoji} {m.name}
                     </option>
                   ))}
                 </select>
@@ -9930,6 +10012,11 @@ ${validText}
                             : `⚠️ 차이 ${diff > 0 ? `+${diff.toLocaleString()}` : diff.toLocaleString()}원 (품목·금액을 확인해 주세요)`}
                         </div>
                       )}
+                      {recTotal === 0 && (
+                        <div className="px-2.5 py-1.5 rounded-xl bg-amber-50 border border-amber-200 text-[11px] font-bold text-amber-900 text-center">
+                          ⚠️ 영수증 결제금액 미확인 — 총액을 입력하면 100% 대사 검증됩니다
+                        </div>
+                      )}
                       {receiptRawLines.length > 0 && (
                         <div className="pt-1">
                           <button
@@ -9945,26 +10032,75 @@ ${validText}
                           )}
                         </div>
                       )}
+                      {receiptSaveError && (
+                        <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-[11px] font-bold text-rose-800">
+                          ⚠️ 저장 실패: {receiptSaveError} (입력 내역과 이미지는 유지되었습니다)
+                        </div>
+                      )}
                     </div>
                   );
                 })()}
                 <button
+                  disabled={isSavingReceipt}
                   onClick={async () => {
                     if (!requireEditorAccess()) return;
-                    let failCount = 0;
-                    for (const it of scannedReceiptItems) {
-                      const fId = `f-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-                      const newItem = { ...it, id: fId, purchaseDate: selectedDate };
-                      setFridgeMap((prev) => ({
-                        ...prev,
-                        local: { ...(prev.local || {}), [fId]: newItem }
-                      }));
-                      if (user && db) {
-                        try {
-                          await setDoc(getDocRef("family_fridge_v3", fId), newItem);
-                          await setDoc(getDocRef("family_fridge_v4", fId), newItem);
+                    if (isSavingReceipt) return;
+                    const validItems = scannedReceiptItems.filter((it) => String(it?.name || "").trim());
+                    if (validItems.length === 0) {
+                      setReceiptSaveError("입고할 유효한 품목명이 없습니다.");
+                      return;
+                    }
+                    if (!user || !db) {
+                      setReceiptSaveError("서버 연결 대기 중입니다. 잠시 후 다시 시도해 주세요.");
+                      return;
+                    }
+                    const itemsSum = validItems.reduce((acc, x) => acc + (Number(x.price) || 0), 0);
+                    const exclSum = Number(receiptExcludedAmount) || 0;
+                    const recTotal = Number(receiptTotalAmount) || 0;
+                    if (recTotal === 0) {
+                      const okNoTotal = window.confirm(
+                        `영수증 결제금액이 입력되지 않아 합계 대사가 미완료 상태입니다.\n품목 합계 ${itemsSum.toLocaleString()}원으로 그대로 입고할까요?`
+                      );
+                      if (!okNoTotal) return;
+                    } else if (itemsSum + exclSum !== recTotal) {
+                      const diffVal = itemsSum + exclSum - recTotal;
+                      const okDiff = window.confirm(
+                        `품목 합계+봉투(${(itemsSum + exclSum).toLocaleString()}원)와 영수증 결제금액(${recTotal.toLocaleString()}원)이 ${diffVal > 0 ? `+${diffVal.toLocaleString()}` : diffVal.toLocaleString()}원 차이납니다.\n그래도 입고할까요?`
+                      );
+                      if (!okDiff) return;
+                    }
+
+                    const opId = receiptOperationId || `rcpt-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+                    setReceiptSaveError("");
+                    setIsSavingReceipt(true);
+                    beginWrite();
+                    let ok = false;
+                    let errMsg = "";
+                    try {
+                      const opRef = getDocRef("family_cooking_operations_v7", opId);
+                      let alreadyImported = false;
+                      const createdLocal = {};
+
+                      await runTransaction(db, async (tx) => {
+                        const existingOp = await tx.get(opRef);
+                        if (existingOp.exists()) {
+                          alreadyImported = true;
+                          return;
+                        }
+                        const nowIso = new Date().toISOString();
+                        validItems.forEach((it, idx) => {
+                          const fId = `f-${opId}-${idx}`;
+                          const newItem = {
+                            ...it,
+                            id: fId,
+                            name: String(it.name).trim(),
+                            purchaseDate: selectedDate,
+                            updatedAt: nowIso
+                          };
+                          createdLocal[fId] = newItem;
+                          tx.set(getDocRef("family_fridge_v4", fId), newItem);
                           const expId = `exp-${fId}`;
-                          await setDoc(getDocRef("family_expenses_v4", expId), {
+                          tx.set(getDocRef("family_expenses_v4", expId), {
                             id: expId,
                             title: newItem.name,
                             category: newItem.category || "기타",
@@ -9972,23 +10108,48 @@ ${validText}
                             date: selectedDate,
                             type: "장보기/식재료"
                           });
-                        } catch (e) {
-                          failCount += 1;
-                        }
+                        });
+                        tx.set(opRef, {
+                          id: opId,
+                          type: "receipt_import",
+                          count: validItems.length,
+                          receiptTotal: recTotal,
+                          createdAt: nowIso
+                        });
+                      });
+
+                      ok = true;
+                      if (alreadyImported) {
+                        showToast("이미 등록 완료된 영수증입니다 (중복 입고 차단됨).");
+                        setScannedReceiptItems([]);
+                        setReceiptPreviewUrl("");
+                        setIsReceiptModalOpen(false);
+                      } else {
+                        setFridgeMap((prev) => ({
+                          ...prev,
+                          local: { ...(prev.local || {}), ...createdLocal }
+                        }));
+                        setScannedReceiptItems([]);
+                        setReceiptPreviewUrl("");
+                        setLastReceiptImagePart(null);
+                        setReceiptRawLines([]);
+                        setIsReceiptModalOpen(false);
+                        showToast(`✅ 영수증 ${validItems.length}건이 냉장고와 식비 가계부에 원자적으로 입고되었습니다!`);
                       }
-                    }
-                    setScannedReceiptItems([]);
-                    setReceiptPreviewUrl("");
-                    setIsReceiptModalOpen(false);
-                    if (failCount > 0) {
-                      showToast(`⚠️ ${failCount}건 서버 저장에 실패했습니다. 네트워크 상태를 확인해 주세요.`);
-                    } else {
-                      showToast("영수증 품목이 냉장고와 식비 가계부에 일괄 등록되었습니다!");
+                    } catch (e) {
+                      errMsg = e.message || "서버 저장 오류";
+                      setReceiptSaveError(errMsg);
+                      showToast(`⚠️ 영수증 입고 실패(전체 취소됨): ${errMsg}`);
+                    } finally {
+                      endWrite(ok, errMsg);
+                      setIsSavingReceipt(false);
                     }
                   }}
-                  className="w-full py-2.5 rounded-xl bg-stone-900 text-white text-xs font-extrabold"
+                  className={`w-full py-2.5 rounded-xl text-white text-xs font-extrabold ${
+                    isSavingReceipt ? "bg-stone-400 cursor-not-allowed" : "bg-stone-900 hover:bg-stone-800"
+                  }`}
                 >
-                  냉장고 및 식비 가계부에 일괄 입고하기
+                  {isSavingReceipt ? "트랜잭션 안전 저장 중..." : "냉장고 및 식비 가계부에 일괄 입고하기"}
                 </button>
               </div>
             )}
