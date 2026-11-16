@@ -868,11 +868,23 @@ const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.65) =>
     img.src = dataUrl;
   });
 
-const APP_CODE_VERSION = "v10.24";
-const APP_BUILD_DATE = "2026-11-16 20:22";
+const APP_CODE_VERSION = "v10.25";
+const APP_BUILD_DATE = "2026-11-16 20:26";
 const EDITOR_INVITE_CODE = "0402";
 
 const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v10.25",
+    version: "v10.25",
+    date: "2026-11-16",
+    title: "레시피 재료 '+' 파싱/정규식 무결성 수정 · 카드 원터치 장보기 · 레시피 상단 저장",
+    changes: [
+      "레시피 재료 분리 정규식(\n 이스케이프) 및 handleSaveRecipe '+' 구분자 파싱 오류 수정",
+      "레시피 모달 내 [🛒 부족 재료 일괄 장보기] 버튼이 handleAddMissingRecipeIngredientsToShopping과 정확히 연동되도록 수정",
+      "레시피북 카드 화면에서도 각 재료가 냉장고 보유(✓)인지 부족(🛒)인지 표시하고 탭 시 바로 장보기에 추가",
+      "레시피 등록/수정 모달 상단에도 고정(sticky) [💾 저장] 버튼 배치"
+    ]
+  },
   {
     id: "patch-v10.24",
     version: "v10.24",
@@ -6176,8 +6188,7 @@ ${validText}
     const clean = String(rawChip || "").trim();
     if (!clean) return;
     const existing = String(recipeForm.ingredientsText || "")
-      .split(/\s*(?:\+|,|
-)\s*/)
+      .split(/\s*(?:\+|,|\n)\s*/)
       .map((s) => s.trim())
       .filter(Boolean);
     if (!existing.includes(clean)) {
@@ -6377,7 +6388,7 @@ ${validText}
     const nowIso = new Date().toISOString();
     const id = editingRecipe?.id || `rcp-${Date.now()}`;
     const ingredients = String(recipeForm.ingredientsText || "")
-      .split(/[,\n]+/)
+      .split(/[+,\n]+/)
       .map((s) => s.trim())
       .filter(Boolean)
       .map((chunk) => {
@@ -10558,8 +10569,35 @@ ${validText}
                     </div>
 
                     {r.ingredientsText && (
-                      <div className="text-[11px] font-semibold text-stone-600 bg-stone-50 p-2 rounded-xl">
-                        🥕 재료: {r.ingredientsText}
+                      <div className="bg-stone-50 p-2 rounded-xl space-y-1">
+                        <div className="text-[10px] font-bold text-stone-500">🥕 재료 (부족한 재료 탭 → 바로 장보기 추가)</div>
+                        <div className="flex flex-wrap gap-1">
+                          {String(r.ingredientsText)
+                            .split(/[+,\n]+/)
+                            .map((s) => s.trim())
+                            .filter(Boolean)
+                            .map((tok, tIdx) => {
+                              const tokName = tok.replace(/\s+\d+(?:\.\d+)?(?:g|kg|ml|L|개|팩|봉|모|캔|단|알|마리|조각|컵|T|t)?$/i, "").trim();
+                              const inFridge = Boolean(tokName && matchFridgeItemExactFirst(tokName, fridge));
+                              return inFridge ? (
+                                <span
+                                  key={`${tok}-${tIdx}`}
+                                  className="px-2 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-800 text-[10px] font-bold"
+                                >
+                                  ✓ {tok}
+                                </span>
+                              ) : (
+                                <button
+                                  key={`${tok}-${tIdx}`}
+                                  type="button"
+                                  onClick={() => handleQuickAddSingleIngredientToShopping(tok, r.title)}
+                                  className="px-2 py-0.5 rounded-full bg-white hover:bg-emerald-50 border border-stone-200 text-stone-700 text-[10px] font-bold active:scale-95 transition"
+                                >
+                                  {tok} 🛒
+                                </button>
+                              );
+                            })}
+                        </div>
                       </div>
                     )}
 
@@ -13416,19 +13454,29 @@ ${validText}
           onClick={() => setIsRecipeModalOpen(false)}
         >
           <div
-            className="bg-white w-full max-w-md max-h-[88vh] overflow-y-auto rounded-3xl p-4 space-y-3 shadow-2xl"
+            className="bg-white w-full max-w-md max-h-[88vh] overflow-y-auto rounded-3xl p-4 pt-0 space-y-3 shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between">
+            <div className="sticky top-0 bg-white z-10 pt-4 pb-2.5 border-b border-stone-100 flex items-center justify-between gap-2">
               <h3 className="text-sm font-black text-stone-900">
                 📖 {editingRecipe ? "가족 레시피 수정" : "새 가족 레시피 등록"}
               </h3>
-              <button
-                onClick={() => setIsRecipeModalOpen(false)}
-                className="p-1.5 rounded-xl bg-stone-100 text-stone-600"
-              >
-                <X className="w-4 h-4" />
-              </button>
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={handleSaveRecipe}
+                  className="px-3 py-1.5 rounded-xl bg-stone-900 text-white text-xs font-extrabold"
+                >
+                  💾 저장
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsRecipeModalOpen(false)}
+                  className="p-1.5 rounded-xl bg-stone-100 text-stone-600"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
             </div>
 
             <div className="grid grid-cols-3 gap-2">
@@ -13485,7 +13533,10 @@ ${validText}
                 {String(recipeForm.ingredientsText || "").trim() && (
                   <button
                     type="button"
-                    onClick={() => handleAddMissingIngredientsToShopping(recipeForm.ingredientsText)}
+                    onClick={() => handleAddMissingRecipeIngredientsToShopping({
+                      title: recipeForm.title || "새 레시피",
+                      ingredients: String(recipeForm.ingredientsText || "").split(/[+,\n]+/).map((s) => s.trim()).filter(Boolean)
+                    })}
                     className="text-[10px] font-extrabold text-emerald-700 hover:text-emerald-800"
                   >
                     🛒 부족 재료 일괄 장보기
@@ -13521,8 +13572,7 @@ ${validText}
               {String(recipeForm.ingredientsText || "").trim() && (
                 <div className="flex flex-wrap gap-1">
                   {String(recipeForm.ingredientsText)
-                    .split(/\s*(?:\+|,|
-)\s*/)
+                    .split(/\s*(?:\+|,|\n)\s*/)
                     .map((s) => s.trim())
                     .filter(Boolean)
                     .map((chip, cIdx) => (
@@ -13543,8 +13593,7 @@ ${validText}
                           type="button"
                           onClick={() => {
                             const parts = String(recipeForm.ingredientsText)
-                              .split(/\s*(?:\+|,|
-)\s*/)
+                              .split(/\s*(?:\+|,|\n)\s*/)
                               .map((s) => s.trim())
                               .filter(Boolean);
                             parts.splice(cIdx, 1);
