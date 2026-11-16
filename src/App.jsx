@@ -985,11 +985,22 @@ const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.65) =>
     img.src = dataUrl;
   });
 
-const APP_CODE_VERSION = "v10.53";
-const APP_BUILD_DATE = "2026-11-16 22:12";
+const APP_CODE_VERSION = "v10.54";
+const APP_BUILD_DATE = "2026-11-16 22:14";
 const EDITOR_INVITE_CODE = "0402";
 
 const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v10.54",
+    version: "v10.54",
+    date: "2026-11-16",
+    title: "플로팅(+) 버튼 레시피북·현재시간 끼니 자동 선택 & 탭 전환 시 상단 스크롤 초기화",
+    changes: [
+      "레시피북 탭에서 우측 하단 (+) 플로팅 버튼 클릭 시 새 레시피 등록 창이 열리도록 연결",
+      "홈·식단 탭에서 (+) 버튼 클릭 시 현재 시각(아침·점심·오후간식·저녁·야식)에 맞는 끼니가 자동 선택되도록 개선",
+      "하단 네비게이션 탭 전환 시 이전 탭의 스크롤 위치가 남지 않고 맨 위로 이동하도록 보완"
+    ]
+  },
   {
     id: "patch-v10.53",
     version: "v10.53",
@@ -12842,14 +12853,19 @@ ${validText}
             setIsScheduleModalOpen(true);
           } else if (activeTab === "notices") {
             setIsNoticeModalOpen(true);
+          } else if (activeTab === "recipes") {
+            openNewRecipeModal();
           } else if (activeTab === "shopping") {
             window.scrollTo({ top: 0, behavior: "smooth" });
             showToast("상단 입력창에서 장보기 품목을 바로 추가해 보세요!");
           } else {
+            const h = new Date().getHours();
+            const smartSlot =
+              h >= 5 && h < 10 ? "아침" : h >= 10 && h < 14 ? "점심" : h >= 14 && h < 17 ? "오후간식" : h >= 17 && h < 21 ? "저녁" : "야식";
             setEditingMeal(null);
             setMealForm({
-              date: selectedDate,
-              slot: "아침",
+              date: activeTab === "home" ? getTodayStr() : selectedDate,
+              slot: smartSlot,
               menu: "",
               members: selectedMember === "전체" ? ["수혁", "아리나", "시목", "시율"] : [selectedMember],
               ingredients: [],
@@ -12946,6 +12962,7 @@ ${validText}
               onClick={() => {
                 setActiveTab(item.id);
                 setIsMoreNavOpen(false);
+                window.scrollTo({ top: 0, behavior: "instant" });
               }}
               className={`flex flex-col items-center justify-center py-1.5 rounded-xl transition ${
                 active ? "text-stone-900 font-black bg-amber-50/80" : "text-stone-400 font-semibold"
