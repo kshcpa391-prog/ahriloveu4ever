@@ -697,6 +697,7 @@ const MEAL_SLOTS = [
 const STORAGE_LOCATIONS = ["냉장실", "냉동실", "실온·팬트리"];
 const FRIDGE_CATEGORIES = ["채소/과일", "육류/수산", "유제품/계란", "유아식/이유식 재료", "반찬/김치", "밀키트", "양념/소스", "기타"];
 const SCHEDULE_CATEGORIES = ["기념일/생일", "할일(To-Do)", "육아/병원", "가족행사/경조사"];
+const RECIPE_CATEGORIES = ["메인반찬", "국·찌개", "한그릇·면·밥", "유아식·이유식", "간식·디저트", "샐러드·가벼운식", "기타"];
 
 const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.65) =>
   new Promise((resolve) => {
@@ -734,11 +735,23 @@ const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.65) =>
     img.src = dataUrl;
   });
 
-const APP_CODE_VERSION = "v10.9";
-const APP_BUILD_DATE = "2026-11-16 14:25";
+const APP_CODE_VERSION = "v10.10";
+const APP_BUILD_DATE = "2026-11-16 14:35";
 const EDITOR_INVITE_CODE = "0402";
 
 const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v10.10",
+    version: "v10.10",
+    date: "2026-11-16",
+    title: "레시피북 카테고리·요약 리스트·사진 클릭 확대(라이트박스) 추가 & 카톡 장보기 파싱 버그 수정",
+    changes: [
+      "가족 레시피북에 카테고리(메인반찬·국/찌개·한그릇·유아식·간식·샐러드·기타) 필터 및 등록 필드 추가",
+      "레시피북 상단에 [📋 요약 리스트 | 🖼️ 상세 카드] 전환 뷰 추가 — 전체 레시피를 한눈에 요약 조회",
+      "레시피 카드 사진을 컴팩트 썸네일(h-24)로 축소하고, 클릭 시 전체 화면 확대 모달(라이트박스) 지원",
+      "장보기 [카톡·음성 1초 파싱]에서 미정의 함수(hasAnyAiKey) 및 promptText 키 누락으로 발생하던 오류 수정"
+    ]
+  },
   {
     id: "patch-v10.9",
     version: "v10.9",
@@ -1849,11 +1862,15 @@ function MainApp() {
   // [신규 v10.8] 가족 레시피북 상태
   const [recipes, setRecipes] = useState([]);
   const [recipeSearch, setRecipeSearch] = useState("");
+  const [recipeCatFilter, setRecipeCatFilter] = useState("전체");
   const [recipeDiffFilter, setRecipeDiffFilter] = useState("전체");
+  const [recipeViewMode, setRecipeViewMode] = useState("cards"); // cards | summary
+  const [zoomedRecipePhoto, setZoomedRecipePhoto] = useState(null);
   const [isRecipeModalOpen, setIsRecipeModalOpen] = useState(false);
   const [editingRecipe, setEditingRecipe] = useState(null);
   const [recipeForm, setRecipeForm] = useState({
     title: "",
+    category: "메인반찬",
     photoDataUrl: "",
     ingredientsText: "",
     cookTime: "20분",
@@ -5654,12 +5671,14 @@ ${validText}
     setIsQuickParsingShopping(true);
     let parsedItems = [];
     try {
-      if (hasAnyAiKey()) {
+      if (geminiApiKey || openaiApiKey) {
         try {
           const aiRes = await callReliableAiEngine({
-            taskName: "카톡 장보기 파싱",
+            apiKey: geminiApiKey,
+            openaiApiKey,
+            aiProvider,
             expectObject: true,
-            prompt: `다음 한국어 장보기 메모/카톡 문장에서 구매할 품목만 추출해 JSON 객체로 응답하세요.\n문장: "${raw}"\n형식: {"items":[{"name":"품목명","quantity":"수량(예:1망,2모,1L,1개)","category":"채소/과일|육류/수산|유제품/계란|유아식/이유식 재료|반찬/김치|밀키트|양념/소스|기타"}]}`
+            promptText: `다음 한국어 장보기 메모/카톡 문장에서 구매할 품목만 추출해 JSON 객체로 응답하세요.\n문장: "${raw}"\n형식: {"items":[{"name":"품목명","quantity":"수량(예:1망,2모,1L,1개)","category":"채소/과일|육류/수산|유제품/계란|유아식/이유식 재료|반찬/김치|밀키트|양념/소스|기타"}]}`
           });
           if (Array.isArray(aiRes?.items) && aiRes.items.length > 0) {
             parsedItems = aiRes.items
@@ -5729,6 +5748,7 @@ ${validText}
     setEditingRecipe(null);
     setRecipeForm({
       title: prefill?.title || "",
+      category: prefill?.category || "메인반찬",
       photoDataUrl: prefill?.photoDataUrl || "",
       ingredientsText: prefill?.ingredientsText || "",
       cookTime: prefill?.cookTime || "20분",
@@ -5761,6 +5781,7 @@ ${validText}
     const payload = {
       id,
       title: recipeForm.title.trim(),
+      category: recipeForm.category || "메인반찬",
       photoDataUrl: recipeForm.photoDataUrl || "",
       ingredientsText: recipeForm.ingredientsText || "",
       ingredients,
@@ -9389,14 +9410,27 @@ ${validText}
       {/* ==========================================
           탭 8-2: 📖 가족 레시피북
       ========================================== */}
-      {activeTab === "recipes" && (
+      {activeTab === "recipes" && (() => {
+        const filteredRecipes = recipes.filter((r) => {
+          const q = recipeSearch.trim().toLowerCase();
+          const matchQ =
+            !q ||
+            String(r.title || "").toLowerCase().includes(q) ||
+            String(r.ingredientsText || "").toLowerCase().includes(q) ||
+            String(r.memo || "").toLowerCase().includes(q);
+          const matchCat = recipeCatFilter === "전체" || (r.category || "기타") === recipeCatFilter;
+          const matchDiff = recipeDiffFilter === "전체" || r.difficulty === recipeDiffFilter;
+          return matchQ && matchCat && matchDiff;
+        });
+
+        return (
         <div className="p-4 space-y-3.5">
           <div className="bg-gradient-to-br from-rose-50 via-white to-amber-50 p-4 rounded-2xl border border-rose-200 shadow-sm space-y-2.5">
             <div className="flex items-center justify-between gap-2">
               <div>
-                <h2 className="text-sm font-black text-stone-900">📖 우리 가족 레시피북</h2>
+                <h2 className="text-sm font-black text-stone-900">📖 우리 가족 레시피북 ({filteredRecipes.length})</h2>
                 <p className="text-[11px] font-semibold text-stone-500">
-                  완성 사진 · 실제 재료량 · 가족 선호도 · 플레이팅 코치 연동
+                  카테고리 · 요약 리스트 · 사진 클릭 확대 · 플레이팅 연동
                 </p>
               </div>
               <button
@@ -9438,136 +9472,255 @@ ${validText}
                 <option value="어려움">어려움</option>
               </select>
             </div>
+
+            <div className="flex gap-1.5 overflow-x-auto pb-0.5">
+              {["전체", ...RECIPE_CATEGORIES].map((cat) => (
+                <button
+                  key={cat}
+                  onClick={() => setRecipeCatFilter(cat)}
+                  className={`px-2.5 py-1 rounded-full text-[11px] font-bold shrink-0 border ${
+                    recipeCatFilter === cat
+                      ? "bg-rose-600 text-white border-rose-600"
+                      : "bg-white text-stone-600 border-stone-200"
+                  }`}
+                >
+                  {cat}
+                </button>
+              ))}
+            </div>
+
+            <div className="flex items-center gap-1 bg-stone-100 p-1 rounded-xl">
+              <button
+                onClick={() => setRecipeViewMode("cards")}
+                className={`flex-1 py-1.5 rounded-lg text-xs font-extrabold transition ${
+                  recipeViewMode === "cards" ? "bg-white text-stone-900 shadow-sm" : "text-stone-500"
+                }`}
+              >
+                🖼️ 상세 카드 보기
+              </button>
+              <button
+                onClick={() => setRecipeViewMode("summary")}
+                className={`flex-1 py-1.5 rounded-lg text-xs font-extrabold transition ${
+                  recipeViewMode === "summary" ? "bg-white text-stone-900 shadow-sm" : "text-stone-500"
+                }`}
+              >
+                📋 전체 요약 리스트
+              </button>
+            </div>
           </div>
 
-          {recipes.length === 0 ? (
+          {filteredRecipes.length === 0 ? (
             <div className="bg-white p-6 rounded-2xl border border-stone-200 text-center space-y-2">
               <div className="text-xs font-bold text-stone-500">
-                아직 저장된 가족 레시피가 없습니다.
+                조건에 맞는 가족 레시피가 없습니다.
               </div>
               <div className="text-[11px] text-stone-400">
                 직접 등록하거나 AI추천 → 플레이팅 코치 결과를 바로 저장해 보세요!
               </div>
             </div>
-          ) : (
-            <div className="space-y-3">
-              {recipes
-                .filter((r) => {
-                  const q = recipeSearch.trim().toLowerCase();
-                  const matchQ =
-                    !q ||
-                    String(r.title || "").toLowerCase().includes(q) ||
-                    String(r.ingredientsText || "").toLowerCase().includes(q) ||
-                    String(r.memo || "").toLowerCase().includes(q);
-                  const matchDiff = recipeDiffFilter === "전체" || r.difficulty === recipeDiffFilter;
-                  return matchQ && matchDiff;
-                })
-                .map((r) => (
-                  <div key={r.id} className="bg-white rounded-2xl border border-stone-200 shadow-sm overflow-hidden">
-                    {r.photoDataUrl && !String(r.photoDataUrl).includes("undefined") && (
-                      <div className="relative">
+          ) : recipeViewMode === "summary" ? (
+            <div className="bg-white rounded-2xl border border-stone-200 shadow-sm divide-y divide-stone-100 overflow-hidden">
+              {filteredRecipes.map((r) => {
+                const validPhoto = r.photoDataUrl && !String(r.photoDataUrl).includes("undefined");
+                const ratingsVals = Object.values(r.ratings || {}).filter((v) => Number(v) > 0);
+                const avgRating = ratingsVals.length > 0
+                  ? (ratingsVals.reduce((a, b) => a + Number(b), 0) / ratingsVals.length).toFixed(1)
+                  : null;
+                return (
+                  <div key={r.id} className="p-3 flex items-center justify-between gap-2.5 hover:bg-stone-50/70">
+                    <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                      {validPhoto ? (
                         <img
                           src={r.photoDataUrl}
                           alt={r.title}
-                          className={`w-full h-44 object-cover ${!isEditorUnlocked ? "blur-md" : ""}`}
+                          onClick={() => {
+                            if (!isEditorUnlocked) {
+                              requireEditorAccess();
+                              return;
+                            }
+                            setZoomedRecipePhoto({ title: r.title, url: r.photoDataUrl });
+                          }}
+                          className={`w-11 h-11 rounded-xl object-cover border border-stone-200 shrink-0 cursor-pointer ${!isEditorUnlocked ? "blur-sm" : ""}`}
+                          title="클릭하여 사진 크게 보기"
                         />
-                        {!isEditorUnlocked && (
-                          <div className="absolute inset-0 flex items-center justify-center bg-black/30">
-                            <span className="px-3 py-1.5 rounded-xl bg-white/90 text-xs font-black text-stone-900">
-                              🔒 가족 전용 사진 (코드 입력 필요)
-                            </span>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                    <div className="p-3.5 space-y-2">
-                      <div className="flex items-start justify-between gap-2">
-                        <div>
-                          <div className="text-sm font-black text-stone-900">{r.title}</div>
-                          <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-                            <span className="px-2 py-0.5 rounded-md bg-stone-100 text-stone-700 text-[10px] font-bold">
-                              ⏱️ {r.cookTime || "20분"}
-                            </span>
-                            <span className="px-2 py-0.5 rounded-md bg-amber-50 text-amber-800 text-[10px] font-bold">
-                              난이도: {r.difficulty || "쉬움"}
-                            </span>
-                            {r.platingCoach && (
-                              <span className="px-2 py-0.5 rounded-md bg-rose-50 text-rose-700 text-[10px] font-bold">
-                                🎨 플레이팅 연동
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <button
-                            onClick={() => {
-                              if (!requireEditorAccess()) return;
-                              setEditingRecipe(r);
-                              setRecipeForm({
-                                title: r.title || "",
-                                photoDataUrl: r.photoDataUrl || "",
-                                ingredientsText: r.ingredientsText || "",
-                                cookTime: r.cookTime || "20분",
-                                difficulty: r.difficulty || "쉬움",
-                                ratings: r.ratings || { 수혁: 5, 아리나: 5, 시목: 0, 시율: 0 },
-                                memo: r.memo || "",
-                                platingCoach: r.platingCoach || null
-                              });
-                              setIsRecipeModalOpen(true);
-                            }}
-                            className="p-1.5 rounded-lg hover:bg-stone-100 text-stone-500"
-                          >
-                            <Edit2 className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            onClick={() => handleDeleteRecipe(r.id)}
-                            className="p-1.5 rounded-lg hover:bg-red-50 text-stone-400 hover:text-red-500"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </div>
-
-                      {r.ingredientsText && (
-                        <div className="text-[11px] font-semibold text-stone-600 bg-stone-50 p-2 rounded-xl">
-                          🥕 재료: {r.ingredientsText}
+                      ) : (
+                        <div className="w-11 h-11 rounded-xl bg-rose-50 border border-rose-100 flex items-center justify-center text-base shrink-0">
+                          🍽️
                         </div>
                       )}
-
-                      <div className="flex flex-wrap gap-1.5 text-[10px] font-bold">
-                        {["수혁", "아리나", "시목", "시율"].map((mName) => {
-                          const score = Number(r.ratings?.[mName] || 0);
-                          return score > 0 ? (
-                            <span key={mName} className="px-2 py-0.5 rounded-full bg-amber-50 border border-amber-200 text-amber-900">
-                              {mName} {"⭐".repeat(score)}
-                            </span>
-                          ) : null;
-                        })}
-                      </div>
-
-                      {r.memo && <div className="text-[11px] text-stone-600 whitespace-pre-line">{r.memo}</div>}
-
-                      <div className="grid grid-cols-2 gap-2 pt-1">
-                        <button
-                          onClick={() => handleApplyRecipeToMeal(r)}
-                          className="py-2 rounded-xl bg-stone-900 text-white text-[11px] font-extrabold"
-                        >
-                          🍽️ 오늘 식단으로 재현
-                        </button>
-                        <button
-                          onClick={() => handleAddMissingRecipeIngredientsToShopping(r)}
-                          className="py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-[11px] font-extrabold"
-                        >
-                          🛒 부족 재료 장보기
-                        </button>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="px-1.5 py-0.5 rounded bg-rose-50 text-rose-700 text-[9px] font-extrabold shrink-0">
+                            {r.category || "기타"}
+                          </span>
+                          <span className="text-xs font-black text-stone-900 truncate">{r.title}</span>
+                        </div>
+                        <div className="text-[10px] text-stone-500 font-semibold mt-0.5 truncate">
+                          ⏱️ {r.cookTime || "20분"} · {r.difficulty || "쉬움"}
+                          {avgRating ? ` · ⭐ ${avgRating}` : ""}
+                          {r.ingredientsText ? ` · ${r.ingredientsText}` : ""}
+                        </div>
                       </div>
                     </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        onClick={() => handleApplyRecipeToMeal(r)}
+                        className="px-2 py-1.5 rounded-lg bg-stone-900 text-white text-[10px] font-extrabold"
+                        title="오늘 식단으로 재현"
+                      >
+                        재현
+                      </button>
+                      <button
+                        onClick={() => {
+                          if (!requireEditorAccess()) return;
+                          setEditingRecipe(r);
+                          setRecipeForm({
+                            title: r.title || "",
+                            category: r.category || "메인반찬",
+                            photoDataUrl: r.photoDataUrl || "",
+                            ingredientsText: r.ingredientsText || "",
+                            cookTime: r.cookTime || "20분",
+                            difficulty: r.difficulty || "쉬움",
+                            ratings: r.ratings || { 수혁: 5, 아리나: 5, 시목: 0, 시율: 0 },
+                            memo: r.memo || "",
+                            platingCoach: r.platingCoach || null
+                          });
+                          setIsRecipeModalOpen(true);
+                        }}
+                        className="p-1.5 rounded-lg hover:bg-stone-100 text-stone-500"
+                      >
+                        <Edit2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </div>
-                ))}
+                );
+              })}
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {filteredRecipes.map((r) => {
+                const validPhoto = r.photoDataUrl && !String(r.photoDataUrl).includes("undefined");
+                return (
+                  <div key={r.id} className="bg-white rounded-2xl border border-stone-200 shadow-sm overflow-hidden p-3.5 space-y-2.5">
+                    <div className="flex items-start gap-3">
+                      {validPhoto && (
+                        <div
+                          onClick={() => {
+                            if (!isEditorUnlocked) {
+                              requireEditorAccess();
+                              return;
+                            }
+                            setZoomedRecipePhoto({ title: r.title, url: r.photoDataUrl });
+                          }}
+                          className="relative w-24 h-24 rounded-xl overflow-hidden border border-stone-200 shrink-0 cursor-pointer group bg-stone-100"
+                          title="클릭하여 사진 크게 보기"
+                        >
+                          <img
+                            src={r.photoDataUrl}
+                            alt={r.title}
+                            className={`w-full h-full object-cover ${!isEditorUnlocked ? "blur-md" : "group-hover:scale-105 transition"}`}
+                          />
+                          <span className="absolute bottom-1 right-1 px-1.5 py-0.5 rounded bg-black/60 text-white text-[9px] font-bold">
+                            {isEditorUnlocked ? "🔍 확대" : "🔒"}
+                          </span>
+                        </div>
+                      )}
+                      <div className="flex-1 min-w-0 space-y-1.5">
+                        <div className="flex items-start justify-between gap-1">
+                          <div className="min-w-0">
+                            <span className="inline-block px-2 py-0.5 rounded-md bg-rose-50 text-rose-700 text-[10px] font-extrabold mb-1">
+                              {r.category || "기타"}
+                            </span>
+                            <div className="text-sm font-black text-stone-900 break-keep">{r.title}</div>
+                          </div>
+                          <div className="flex items-center gap-0.5 shrink-0">
+                            <button
+                              onClick={() => {
+                                if (!requireEditorAccess()) return;
+                                setEditingRecipe(r);
+                                setRecipeForm({
+                                  title: r.title || "",
+                                  category: r.category || "메인반찬",
+                                  photoDataUrl: r.photoDataUrl || "",
+                                  ingredientsText: r.ingredientsText || "",
+                                  cookTime: r.cookTime || "20분",
+                                  difficulty: r.difficulty || "쉬움",
+                                  ratings: r.ratings || { 수혁: 5, 아리나: 5, 시목: 0, 시율: 0 },
+                                  memo: r.memo || "",
+                                  platingCoach: r.platingCoach || null
+                                });
+                                setIsRecipeModalOpen(true);
+                              }}
+                              className="p-1.5 rounded-lg hover:bg-stone-100 text-stone-500"
+                            >
+                              <Edit2 className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteRecipe(r.id)}
+                              className="p-1.5 rounded-lg hover:bg-red-50 text-stone-400 hover:text-red-500"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="px-2 py-0.5 rounded-md bg-stone-100 text-stone-700 text-[10px] font-bold">
+                            ⏱️ {r.cookTime || "20분"}
+                          </span>
+                          <span className="px-2 py-0.5 rounded-md bg-amber-50 text-amber-800 text-[10px] font-bold">
+                            난이도: {r.difficulty || "쉬움"}
+                          </span>
+                          {r.platingCoach && (
+                            <span className="px-2 py-0.5 rounded-md bg-rose-50 text-rose-700 text-[10px] font-bold">
+                              🎨 플레이팅 연동
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {r.ingredientsText && (
+                      <div className="text-[11px] font-semibold text-stone-600 bg-stone-50 p-2 rounded-xl">
+                        🥕 재료: {r.ingredientsText}
+                      </div>
+                    )}
+
+                    <div className="flex flex-wrap gap-1.5 text-[10px] font-bold">
+                      {["수혁", "아리나", "시목", "시율"].map((mName) => {
+                        const score = Number(r.ratings?.[mName] || 0);
+                        return score > 0 ? (
+                          <span key={mName} className="px-2 py-0.5 rounded-full bg-amber-50 border border-amber-200 text-amber-900">
+                            {mName} {"⭐".repeat(score)}
+                          </span>
+                        ) : null;
+                      })}
+                    </div>
+
+                    {r.memo && <div className="text-[11px] text-stone-600 whitespace-pre-line">{r.memo}</div>}
+
+                    <div className="grid grid-cols-2 gap-2 pt-1">
+                      <button
+                        onClick={() => handleApplyRecipeToMeal(r)}
+                        className="py-2 rounded-xl bg-stone-900 text-white text-[11px] font-extrabold"
+                      >
+                        🍽️ 오늘 식단으로 재현
+                      </button>
+                      <button
+                        onClick={() => handleAddMissingRecipeIngredientsToShopping(r)}
+                        className="py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-[11px] font-extrabold"
+                      >
+                        🛒 부족 재료 장보기
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
-      )}
+        );
+      })()}
 
       {/* ==========================================
           탭 9: 👶 육아수첩 (월령별 발달 · 예방접종/영유아검진 · 성장 기록 · 진료/열 체크)
@@ -10200,14 +10353,14 @@ ${validText}
           ref={moreNavBtnRef}
           onClick={() => setIsMoreNavOpen((v) => !v)}
           className={`flex flex-col items-center justify-center py-1.5 rounded-xl transition ${
-            ["weekly", "monthly", "shopping", "notices", "ai"].includes(activeTab) || isMoreNavOpen
+            ["weekly", "monthly", "shopping", "notices", "ai", "recipes"].includes(activeTab) || isMoreNavOpen
               ? "text-stone-900 font-black bg-amber-50/80"
               : "text-stone-400 font-semibold"
           }`}
         >
           <LayoutGrid
             className={`w-4 h-4 ${
-              ["weekly", "monthly", "shopping", "notices", "ai"].includes(activeTab) || isMoreNavOpen
+              ["weekly", "monthly", "shopping", "notices", "ai", "recipes"].includes(activeTab) || isMoreNavOpen
                 ? "text-amber-600"
                 : ""
             }`}
@@ -12324,13 +12477,24 @@ ${validText}
               </button>
             </div>
 
-            <input
-              type="text"
-              value={recipeForm.title}
-              onChange={(e) => setRecipeForm({ ...recipeForm, title: e.target.value })}
-              placeholder="요리명 (예: 소고기 무국)"
-              className="w-full px-3 py-2 rounded-xl border border-stone-200 text-xs font-bold"
-            />
+            <div className="grid grid-cols-3 gap-2">
+              <input
+                type="text"
+                value={recipeForm.title}
+                onChange={(e) => setRecipeForm({ ...recipeForm, title: e.target.value })}
+                placeholder="요리명 (예: 소고기 무국)"
+                className="col-span-2 px-3 py-2 rounded-xl border border-stone-200 text-xs font-bold"
+              />
+              <select
+                value={recipeForm.category || "메인반찬"}
+                onChange={(e) => setRecipeForm({ ...recipeForm, category: e.target.value })}
+                className="px-2 py-2 rounded-xl border border-stone-200 text-xs font-bold bg-stone-50"
+              >
+                {RECIPE_CATEGORIES.map((c) => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </select>
+            </div>
 
             <div className="space-y-1.5">
               <input
@@ -12421,6 +12585,29 @@ ${validText}
               💾 가족 레시피북에 저장
             </button>
           </div>
+        </div>
+      )}
+      {zoomedRecipePhoto && (
+        <div
+          className="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex flex-col items-center justify-center p-4"
+          onClick={() => setZoomedRecipePhoto(null)}
+        >
+          <div className="w-full max-w-md flex items-center justify-between text-white mb-2 px-1">
+            <span className="text-sm font-black truncate">{zoomedRecipePhoto.title}</span>
+            <button
+              onClick={() => setZoomedRecipePhoto(null)}
+              className="p-1.5 rounded-full bg-white/15 hover:bg-white/25 text-white"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+          <img
+            src={zoomedRecipePhoto.url}
+            alt={zoomedRecipePhoto.title}
+            className="max-w-full max-h-[78vh] rounded-2xl object-contain shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          />
+          <span className="text-[11px] text-white/70 mt-2">바깥 영역을 누르면 닫힙니다</span>
         </div>
       )}
     </div>
