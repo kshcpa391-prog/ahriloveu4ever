@@ -868,11 +868,32 @@ const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.65) =>
     img.src = dataUrl;
   });
 
-const APP_CODE_VERSION = "v10.21";
-const APP_BUILD_DATE = "2026-11-16 15:46";
+const APP_CODE_VERSION = "v10.23";
+const APP_BUILD_DATE = "2026-11-16 16:03";
 const EDITOR_INVITE_CODE = "0402";
 
 const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v10.23",
+    version: "v10.23",
+    date: "2026-11-16",
+    title: "레시피북 정렬(최신순·별점순·조리시간순) & 식단 내보내기 레시피북 자동 반영",
+    changes: [
+      "가족 레시피북에 최신순·가족 별점순·짧은 조리시간순 정렬 드롭다운 추가",
+      "식단·재고 내보내기 AI 요청문 생성 시 가족 레시피북의 고평점 인기 메뉴(최대 5종)를 자동 참고 문구로 포함"
+    ]
+  },
+  {
+    id: "patch-v10.22",
+    version: "v10.22",
+    date: "2026-11-16",
+    title: "요리 차감 v3/v4 동시 트랜잭션 & 냉장고 실시간 검색·임박 배지 즉시 처리",
+    changes: [
+      "레시피/식단 요리 완료 시 재고 차감 트랜잭션이 v4·v3 컬렉션을 함께 읽고 원자적 차감하도록 보완",
+      "냉장고 탭에 실시간 재료 검색창(fridgeSearch)을 추가해 리스트 뷰·시각적 뷰 모두 즉시 필터링 지원",
+      "상단 소비기한 임박/경과 알약을 탭하면 바로 수량 조절·다 먹음·폐기 시트가 열리도록 개선"
+    ]
+  },
   {
     id: "patch-v10.21",
     version: "v10.21",
@@ -2111,6 +2132,7 @@ function MainApp() {
   const [quickShoppingText, setQuickShoppingText] = useState("");
   const [isQuickParsingShopping, setIsQuickParsingShopping] = useState(false);
   const [fridgeViewMode, setFridgeViewMode] = useState("list"); // visual | list
+  const [fridgeSearch, setFridgeSearch] = useState("");
   const [quickFridgeItem, setQuickFridgeItem] = useState(null);
   const [draggingChip, setDraggingChip] = useState(null); // { item, x, y }
   const [dragOverZone, setDragOverZone] = useState("");
@@ -2146,6 +2168,7 @@ function MainApp() {
   const [recipeSearch, setRecipeSearch] = useState("");
   const [recipeCatFilter, setRecipeCatFilter] = useState("전체");
   const [recipeDiffFilter, setRecipeDiffFilter] = useState("전체");
+  const [recipeSort, setRecipeSort] = useState("latest"); // latest | rating | time
   const [recipeViewMode, setRecipeViewMode] = useState("cards"); // cards | summary
   const [zoomedRecipePhoto, setZoomedRecipePhoto] = useState(null);
   const [isRecipeModalOpen, setIsRecipeModalOpen] = useState(false);
@@ -4950,7 +4973,7 @@ ${validText}
       if (!exportIncludeAiPrompt) return [];
       const simokM = getChildAgeStats("2025-08-03").months;
       const siyulM = getChildAgeStats("2026-11-06").months;
-      return buildPersonalizedAiPrompt({
+      const baseLines = buildPersonalizedAiPrompt({
         exportScope,
         exportMealMember,
         exportMealGoal,
@@ -4958,6 +4981,23 @@ ${validText}
         simokM,
         siyulM
       });
+      if (exportScope !== "fridge_only" && recipes.length > 0) {
+        const topRecipes = [...recipes]
+          .sort((a, b) => (Number(b.suhyukRating || 0) + Number(b.arinaRating || 0)) - (Number(a.suhyukRating || 0) + Number(a.arinaRating || 0)))
+          .slice(0, 5)
+          .map((r) => r.title)
+          .filter(Boolean);
+        if (topRecipes.length > 0) {
+          const dividerIdx = baseLines.findIndex((l) => String(l).startsWith("---"));
+          const recipeLine = `3) 우리 가족 레시피북 인기 메뉴(${topRecipes.join(", ")})도 보유 재료와 어울리면 식단에 우선 활용해 주세요.`;
+          if (dividerIdx >= 0) {
+            baseLines.splice(dividerIdx, 0, recipeLine);
+          } else {
+            baseLines.push(recipeLine);
+          }
+        }
+      }
+      return baseLines;
     };
 
     const prefix = buildAiPromptPrefix();
@@ -5793,20 +5833,25 @@ ${validText}
           }
           const snapshots = [];
           for (const entry of toDeduct) {
-            const ref = getDocRef("family_fridge_v4", entry.item.id);
-            const snap = await tx.get(ref);
-            if (!snap.exists()) {
+            const refV4 = getDocRef("family_fridge_v4", entry.item.id);
+            const refV3 = getDocRef("family_fridge_v3", entry.item.id);
+            const snapV4 = await tx.get(refV4);
+            const snapV3 = await tx.get(refV3);
+            if (!snapV4.exists() && !snapV3.exists()) {
               throw new Error(`'${entry.item.name}' 재고를 찾을 수 없습니다.`);
             }
-            const cur = Number(snap.data().quantity || 0);
+            const baseSnap = snapV4.exists() ? snapV4 : snapV3;
+            const cur = Number(baseSnap.data().quantity || 0);
             const next = cur - entry.deductQty;
             if (!Number.isFinite(next) || next < 0) {
               throw new Error(`'${entry.item.name}' 재고가 부족합니다 (현재고 ${cur}).`);
             }
-            snapshots.push({ ref, next });
+            if (snapV4.exists()) snapshots.push({ ref: refV4, next });
+            if (snapV3.exists()) snapshots.push({ ref: refV3, next });
           }
+          const nowIso = new Date().toISOString();
           for (const s of snapshots) {
-            tx.update(s.ref, { quantity: s.next, updatedAt: new Date().toISOString() });
+            tx.update(s.ref, { quantity: s.next, updatedAt: nowIso });
           }
           tx.set(opRef, {
             id: opId,
@@ -8583,12 +8628,14 @@ ${validText}
               </div>
               <div className="flex flex-wrap gap-1.5">
                 {expiringItems.map((item) => (
-                  <span
+                  <button
                     key={item.id}
-                    className="px-2.5 py-1 rounded-full text-[11px] font-extrabold bg-white text-orange-800 border border-orange-200"
+                    type="button"
+                    onClick={() => setQuickFridgeItem(item)}
+                    className="px-2.5 py-1 rounded-full text-[11px] font-extrabold bg-white hover:bg-orange-100 text-orange-800 border border-orange-200 active:scale-95 transition"
                   >
                     {item.name} ({item.diff < 0 ? `${Math.abs(item.diff)}일 지남` : `D-${item.diff}`})
-                  </span>
+                  </button>
                 ))}
               </div>
             </div>
@@ -8663,6 +8710,25 @@ ${validText}
             ))}
           </div>
 
+          <div className="relative">
+            <input
+              type="text"
+              value={fridgeSearch}
+              onChange={(e) => setFridgeSearch(e.target.value)}
+              placeholder="🔍 냉장고 재료 검색 (예: 양파, 우유, 소고기...)"
+              className="w-full px-3 py-2 pr-8 rounded-xl border border-stone-200 bg-white text-xs font-semibold text-stone-800 placeholder:text-stone-400"
+            />
+            {fridgeSearch && (
+              <button
+                type="button"
+                onClick={() => setFridgeSearch("")}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-700 text-xs font-black"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+
           {fridge.length === 0 ? (
             <div className="bg-white p-6 rounded-2xl border border-stone-200 text-center space-y-2">
               <div className="text-xs font-bold text-stone-500">
@@ -8676,11 +8742,13 @@ ${validText}
               </button>
             </div>
           ) : fridgeViewMode === "visual" ? (() => {
+            const qFridge = fridgeSearch.trim().toLowerCase();
             const filteredFridge = fridge.filter(
               (i) =>
                 matchesFridgeLocFilter(i.location, fridgeLocFilter) &&
                 (fridgeCatFilter === "전체" || i.category === fridgeCatFilter) &&
-                (!visualExpiringOnly || getDaysDiff(i.expiryDate) <= 3)
+                (!visualExpiringOnly || getDaysDiff(i.expiryDate) <= 3) &&
+                (!qFridge || String(i.name || "").toLowerCase().includes(qFridge) || String(i.category || "").toLowerCase().includes(qFridge))
             );
             const itemsByZone = {};
             FRIDGE_SHELF_ZONES.forEach((z) => {
@@ -8928,11 +8996,14 @@ ${validText}
           })() : (
             <div className="space-y-2">
               {fridge
-                .filter(
-                  (i) =>
+                .filter((i) => {
+                  const qFridge = fridgeSearch.trim().toLowerCase();
+                  return (
                     matchesFridgeLocFilter(i.location, fridgeLocFilter) &&
-                    (fridgeCatFilter === "전체" || i.category === fridgeCatFilter)
-                )
+                    (fridgeCatFilter === "전체" || i.category === fridgeCatFilter) &&
+                    (!qFridge || String(i.name || "").toLowerCase().includes(qFridge) || String(i.category || "").toLowerCase().includes(qFridge))
+                  );
+                })
                 .map((item) => {
                   const diff = getDaysDiff(item.expiryDate);
                   return (
@@ -10132,17 +10203,31 @@ ${validText}
           탭 8-2: 📖 가족 레시피북
       ========================================== */}
       {activeTab === "recipes" && (() => {
-        const filteredRecipes = recipes.filter((r) => {
-          const q = recipeSearch.trim().toLowerCase();
-          const matchQ =
-            !q ||
-            String(r.title || "").toLowerCase().includes(q) ||
-            String(r.ingredientsText || "").toLowerCase().includes(q) ||
-            String(r.memo || "").toLowerCase().includes(q);
-          const matchCat = recipeCatFilter === "전체" || (r.category || "기타") === recipeCatFilter;
-          const matchDiff = recipeDiffFilter === "전체" || r.difficulty === recipeDiffFilter;
-          return matchQ && matchCat && matchDiff;
-        });
+        const filteredRecipes = recipes
+          .filter((r) => {
+            const q = recipeSearch.trim().toLowerCase();
+            const matchQ =
+              !q ||
+              String(r.title || "").toLowerCase().includes(q) ||
+              String(r.ingredientsText || "").toLowerCase().includes(q) ||
+              String(r.memo || "").toLowerCase().includes(q);
+            const matchCat = recipeCatFilter === "전체" || (r.category || "기타") === recipeCatFilter;
+            const matchDiff = recipeDiffFilter === "전체" || r.difficulty === recipeDiffFilter;
+            return matchQ && matchCat && matchDiff;
+          })
+          .sort((a, b) => {
+            if (recipeSort === "rating") {
+              return (
+                Number(b.suhyukRating || 0) +
+                Number(b.arinaRating || 0) -
+                (Number(a.suhyukRating || 0) + Number(a.arinaRating || 0))
+              );
+            }
+            if (recipeSort === "time") {
+              return Number(a.cookMinutes || 999) - Number(b.cookMinutes || 999);
+            }
+            return 0;
+          });
 
         return (
         <div className="p-4 space-y-3.5">
@@ -10191,6 +10276,15 @@ ${validText}
                 <option value="쉬움">쉬움</option>
                 <option value="보통">보통</option>
                 <option value="어려움">어려움</option>
+              </select>
+              <select
+                value={recipeSort}
+                onChange={(e) => setRecipeSort(e.target.value)}
+                className="px-2 py-2 rounded-xl border border-stone-200 bg-white text-xs font-bold"
+              >
+                <option value="latest">최신순</option>
+                <option value="rating">별점순</option>
+                <option value="time">조리시간순</option>
               </select>
             </div>
 
