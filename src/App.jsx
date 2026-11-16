@@ -2462,6 +2462,8 @@ const computeFridgeProjectedUsage = (fridgeList, mealsList, baseDateStr, addDays
 function MainApp() {
   const [user, setUser] = useState(null);
   const [activeTab, setActiveTab] = useState("home");
+  const [scheduleSubTab, setScheduleSubTab] = useState("calendar");
+  const [fridgeConflictData, setFridgeConflictData] = useState(null);
   const [selectedDate, setSelectedDate] = useState(() => getTodayStr());
   const [selectedMember, setSelectedMember] = useState("전체");
 
@@ -2727,7 +2729,7 @@ function MainApp() {
     };
   }, []);
 
-  const syncRoutinesToCloud = async (nextList) => {
+  const syncRoutinesToCloud = async (nextList, op = null) => {
     try {
       localStorage.setItem("kim_family_routines_v1", JSON.stringify(nextList));
     } catch (e) {}
@@ -2736,11 +2738,28 @@ function MainApp() {
       let ok = false;
       let errMsg = "";
       try {
-        await setDoc(
-          getDocRef("family_meta_v4", "daily_routines"),
-          { items: nextList, initialized: true, updatedAt: new Date().toISOString() },
-          { merge: true }
-        );
+        await runTransaction(db, async (tx) => {
+          const ref = getDocRef("family_meta_v4", "daily_routines");
+          const snap = await tx.get(ref);
+          const serverItems =
+            snap.exists() && Array.isArray(snap.data().items) ? snap.data().items : null;
+          let merged = nextList;
+          if (serverItems && op) {
+            if (op.type === "upsert" && op.item) {
+              const exists = serverItems.some((r) => r.id === op.item.id);
+              merged = exists
+                ? serverItems.map((r) => (r.id === op.item.id ? op.item : r))
+                : [op.item, ...serverItems];
+            } else if (op.type === "delete" && op.id) {
+              merged = serverItems.filter((r) => r.id !== op.id);
+            }
+          }
+          tx.set(
+            ref,
+            { items: merged, initialized: true, updatedAt: new Date().toISOString() },
+            { merge: true }
+          );
+        });
         ok = true;
       } catch (e) {
         errMsg = e?.message || "루틴 동기화 오류";
@@ -2801,7 +2820,8 @@ function MainApp() {
       return { ...r, lastDoneKey: already ? "" : targetKey };
     });
     setFamilyRoutines(nextList);
-    syncRoutinesToCloud(nextList);
+    const updatedItem = nextList.find((r) => r.id === rtId);
+    syncRoutinesToCloud(nextList, updatedItem ? { type: "upsert", item: updatedItem } : null);
   };
 
   const handleStartEditRoutine = (rt) => {
@@ -2817,7 +2837,10 @@ function MainApp() {
       rt.weekDay !== undefined && rt.weekDay !== null ? String(rt.weekDay) : "any"
     );
     setNewRoutineAssignee(rt.assignee || "공통");
-    document.getElementById("routine-board-section")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    setScheduleSubTab("routine");
+    setTimeout(() => {
+      document.getElementById("routine-board-section")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 80);
   };
 
   const handleCancelEditRoutine = () => {
@@ -2872,7 +2895,8 @@ function MainApp() {
       setFamilyRoutines(nextList);
       setEditingRoutineId(null);
       setNewRoutineTitle("");
-      syncRoutinesToCloud(nextList);
+      const editedItem = nextList.find((r) => r.id === editingRoutineId);
+      syncRoutinesToCloud(nextList, editedItem ? { type: "upsert", item: editedItem } : null);
       showToast(`✏️ '${title}' 루틴이 수정되었습니다!`);
       return;
     }
@@ -2891,7 +2915,7 @@ function MainApp() {
     const nextList = [nextItem, ...familyRoutines];
     setFamilyRoutines(nextList);
     setNewRoutineTitle("");
-    syncRoutinesToCloud(nextList);
+    syncRoutinesToCloud(nextList, { type: "upsert", item: nextItem });
     showToast(`🔄 '${title}' 루틴이 추가되었습니다!`);
   };
 
@@ -2899,7 +2923,7 @@ function MainApp() {
     if (!requireEditorAccess()) return;
     const nextList = familyRoutines.filter((r) => r.id !== rtId);
     setFamilyRoutines(nextList);
-    syncRoutinesToCloud(nextList);
+    syncRoutinesToCloud(nextList, { type: "delete", id: rtId });
   };
 
   const handleClearCompletedTodos = async () => {
@@ -3069,6 +3093,7 @@ function MainApp() {
       recordExpense: true,
       shelfZone: ""
     });
+    setFridgeConflictData(null);
     setIsFridgeModalOpen(true);
   };
   const handleOpenAddFridgeForZone = (zoneName) => {
@@ -3085,6 +3110,7 @@ function MainApp() {
       recordExpense: true,
       shelfZone: zoneName
     });
+    setFridgeConflictData(null);
     setIsFridgeModalOpen(true);
   };
   const [editingFridge, setEditingFridge] = useState(null);
@@ -6384,18 +6410,25 @@ ${validText}
   // ==========================================
   // 10. 냉장고·식단·장보기·공지사항 핸들러
   // ==========================================
-  const handleSaveFridge = async () => {
+  const handleSaveFridge = async (overrideUpdatedAt = null) => {
     if (!requireEditorAccess()) return;
     if (!fridgeForm.name.trim()) return;
+    const rawQtyStr = String(fridgeForm.quantity ?? "").trim();
+    const parsedQty = rawQtyStr === "" ? 1 : Number(rawQtyStr);
+    if (!Number.isFinite(parsedQty) || parsedQty < 0) {
+      showToast("⚠️ 수량은 0 이상의 숫자로 입력해 주세요.");
+      return;
+    }
     const id = editingFridge ? editingFridge.id : `f-${Date.now()}`;
     const priceNum = Number(fridgeForm.price) || 0;
+    const baseUpdatedAt = typeof overrideUpdatedAt === "string" ? overrideUpdatedAt : editingFridge?.updatedAt;
 
     const payload = {
       id,
       name: fridgeForm.name.trim(),
       location: fridgeForm.location,
       category: fridgeForm.category,
-      quantity: Number(fridgeForm.quantity) || 1,
+      quantity: parsedQty,
       unit: fridgeForm.unit || "개",
       expiryDate: fridgeForm.expiryDate || getTodayStr(),
       expiryIsTemp: editingFridge ? Boolean(editingFridge.expiryIsTemp && !isExpiryManuallyEdited) : !isExpiryManuallyEdited,
@@ -6413,22 +6446,23 @@ ${validText}
     let ok = false;
     let errMsg = "";
     try {
-      if (editingFridge?.updatedAt) {
+      if (baseUpdatedAt) {
         let conflictFound = false;
+        let serverSnapData = null;
         await runTransaction(db, async (tx) => {
           const snap = await tx.get(getDocRef("family_fridge_v4", id));
-          if (snap.exists() && snap.data().updatedAt && snap.data().updatedAt !== editingFridge.updatedAt) {
+          if (snap.exists() && snap.data().updatedAt && snap.data().updatedAt !== baseUpdatedAt) {
             conflictFound = true;
+            serverSnapData = snap.data();
             return;
           }
           tx.set(getDocRef("family_fridge_v3", id), payload);
           tx.set(getDocRef("family_fridge_v4", id), payload);
         });
         if (conflictFound) {
-          showToast("⚠️ 다른 기기에서 먼저 수정된 재고입니다. 최신 내용을 확인 후 다시 수정해 주세요.");
-          setIsFridgeModalOpen(false);
-          setEditingFridge(null);
-          ok = true;
+          setFridgeConflictData({ serverItem: serverSnapData, localPayload: payload });
+          errMsg = "재고 수정 충돌";
+          showToast("⚠️ 다른 기기에서 먼저 수정된 재고입니다. 아래에서 비교 후 선택해 주세요.");
           return;
         }
       } else {
@@ -6453,6 +6487,7 @@ ${validText}
         ...prev,
         local: { ...(prev.local || {}), [id]: payload }
       }));
+      setFridgeConflictData(null);
       setIsFridgeModalOpen(false);
       setEditingFridge(null);
       ok = true;
@@ -8045,7 +8080,7 @@ ${validText}
           </div>
         </div>
 
-        {activeTab === "home" && !isHeaderCollapsed && (
+        {activeTab === "home" && (
           <div className="relative h-36 sm:h-40 rounded-2xl overflow-hidden mb-2 border border-stone-200 shadow-sm bg-gradient-to-r from-amber-100 via-stone-100 to-rose-100">
             <img
               src={HERO_FAMILY_FALLBACK}
@@ -8063,140 +8098,52 @@ ${validText}
 
         <div className="flex items-center justify-between gap-1">
           <h1 className="text-sm font-black tracking-tight text-stone-900 whitespace-nowrap">
-            우리 가족 식탁 🍽️
+            {activeTab === "home" ? "우리 가족 홈 ♡" : "우리 가족 식탁 🍽️"}
           </h1>
 
-          <div className="flex items-center gap-1 shrink-0">
-            <button
-              onClick={handleToggleHeaderPin}
-              className={`px-2 py-1 rounded-lg text-[10px] font-extrabold border flex items-center gap-0.5 transition ${
-                isHeaderPinned
-                  ? "bg-amber-100 text-amber-900 border-amber-300"
-                  : "bg-stone-100 text-stone-600 border-stone-200"
-              }`}
-              title="상단 바 틀고정 설정/해제"
-            >
-              {isHeaderPinned ? (
-                <>
-                  <Pin className="w-3 h-3 text-amber-700" />
-                  <span>틀고정중</span>
-                </>
-              ) : (
-                <>
-                  <PinOff className="w-3 h-3 text-stone-500" />
-                  <span>고정해제됨</span>
-                </>
-              )}
-            </button>
-
-            {activeTab === "home" && (
-            <button
-              onClick={handleToggleHeaderCollapse}
-              className="px-2 py-1 rounded-lg bg-stone-900 text-white text-[10px] font-extrabold flex items-center gap-0.5"
-              title="상단 메뉴 바 접기/펼치기"
-            >
-              <span>{isHeaderCollapsed ? "펼치기" : "접기"}</span>
-              {isHeaderCollapsed ? (
-                <ChevronDown className="w-3 h-3" />
-              ) : (
-                <ChevronUp className="w-3 h-3" />
-              )}
-            </button>
-            )}
-          </div>
-        </div>
-
-        {activeTab === "home" && !isHeaderCollapsed && (
-          <>
-            <div className="mt-2 flex items-center justify-between gap-1.5 bg-stone-50 border border-stone-200/90 rounded-2xl px-2.5 py-1.5">
-              <div className="flex items-center gap-1.5 flex-nowrap overflow-x-auto min-w-0">
-                <button
-                  onClick={() => setIsTopAlertsExpanded((v) => !v)}
-                  className="inline-flex items-center gap-1 text-xs font-bold text-stone-800 whitespace-nowrap shrink-0"
-                >
-                  <span>{weatherInfo ? `${weatherInfo.emoji} ${weatherInfo.temp}°C` : "🌤️ 날씨"}</span>
-                  {weatherInfo && (
-                    <span className="text-[11px] font-semibold text-stone-500">
-                      · 미세{weatherInfo.pm10}
-                    </span>
-                  )}
-                </button>
-                {imminentSchedulesWithin3Days.length > 0 && (
-                  <button
-                    onClick={() => setActiveTab("schedule")}
-                    className="px-2 py-0.5 rounded-full bg-rose-50 border border-rose-200 text-rose-800 text-[11px] font-extrabold whitespace-nowrap shrink-0"
-                  >
-                    일정 {imminentSchedulesWithin3Days.length}
-                  </button>
-                )}
-                {globalTodoBadgeStats.activeCount > 0 && (
-                  <button
-                    onClick={() => {
-                      setActiveTab("schedule");
-                      setTimeout(() => {
-                        document.getElementById("schedule-todo-section")?.scrollIntoView({ behavior: "smooth", block: "start" });
-                      }, 120);
-                    }}
-                    className={`px-2 py-0.5 rounded-full border text-[11px] font-extrabold whitespace-nowrap shrink-0 ${
-                      globalTodoBadgeStats.urgentCount > 0
-                        ? "bg-rose-600 border-rose-600 text-white"
-                        : "bg-amber-50 border-amber-300 text-amber-900"
-                    }`}
-                  >
-                    할일 {globalTodoBadgeStats.activeCount}
-                  </button>
-                )}
-              </div>
+          {activeTab !== "home" && (
+            <div className="flex items-center gap-1 shrink-0">
               <button
-                type="button"
-                onClick={() => setIsTopAlertsExpanded((v) => !v)}
-                className="text-[10px] font-extrabold text-stone-500 whitespace-nowrap shrink-0"
+                onClick={handleToggleHeaderPin}
+                className={`px-2 py-1 rounded-lg text-[10px] font-extrabold border flex items-center gap-0.5 transition ${
+                  isHeaderPinned
+                    ? "bg-amber-100 text-amber-900 border-amber-300"
+                    : "bg-stone-100 text-stone-600 border-stone-200"
+                }`}
+                title="상단 바 틀고정 설정/해제"
               >
-                {isTopAlertsExpanded ? "접기 ▲" : "상세 ▼"}
+                {isHeaderPinned ? (
+                  <>
+                    <Pin className="w-3 h-3 text-amber-700" />
+                    <span>틀고정중</span>
+                  </>
+                ) : (
+                  <>
+                    <PinOff className="w-3 h-3 text-stone-500" />
+                    <span>고정해제됨</span>
+                  </>
+                )}
               </button>
             </div>
+          )}
+        </div>
 
-            {isTopAlertsExpanded && weatherInfo && (
-              <div className="mt-2 bg-sky-50/70 border border-sky-200/80 rounded-2xl px-3 py-2 text-[11px] text-sky-950 flex items-center justify-between">
-                <span>
-                  {weatherInfo.emoji} 현재 {weatherInfo.temp}°C (최고 {weatherInfo.max}° / 최저 {weatherInfo.min}°) · 미세먼지 {weatherInfo.pm10} · 초미세 {weatherInfo.pm25}
-                </span>
-                <button
-                  onClick={fetchSeoulJungGuWeather}
-                  className="px-2 py-0.5 rounded-lg bg-white border border-sky-300 text-[10px] font-extrabold text-sky-800 shrink-0"
-                >
-                  새로고침 ↻
-                </button>
-              </div>
-            )}
-
-            {imminentSchedulesWithin3Days.length > 0 && (
-              <div
-                onClick={() => setActiveTab("schedule")}
-                className="mt-2 bg-rose-50 hover:bg-rose-100/80 border border-rose-200 rounded-xl px-3 py-2 cursor-pointer transition space-y-1"
+        {activeTab === "home" && (
+          <>
+            <div className="mt-2 flex items-center justify-between gap-1.5 bg-sky-50/70 border border-sky-200/80 rounded-2xl px-3 py-1.5">
+              <span className="text-[11px] font-bold text-sky-950 truncate">
+                {weatherInfo
+                  ? `${weatherInfo.emoji} 현재 ${weatherInfo.temp}°C (최고 ${weatherInfo.max}° / 최저 ${weatherInfo.min}°) · 미세${weatherInfo.pm10} · 초미세${weatherInfo.pm25}`
+                  : "🌤️ 서울 중구 날씨 불러오는 중..."}
+              </span>
+              <button
+                type="button"
+                onClick={fetchSeoulJungGuWeather}
+                className="px-2 py-0.5 rounded-lg bg-white border border-sky-300 text-[10px] font-extrabold text-sky-800 shrink-0"
               >
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-black text-rose-900 flex items-center gap-1">
-                    <Clock className="w-3.5 h-3.5 text-rose-600" />
-                    <span>3일 이내 가족 일정 ({imminentSchedulesWithin3Days.length}건)</span>
-                  </span>
-                  <span className="text-[10px] font-extrabold text-rose-600">일정표 열기 &gt;</span>
-                </div>
-                <div className="flex flex-wrap gap-1.5">
-                  {imminentSchedulesWithin3Days.map((ev) => (
-                    <span
-                      key={ev.id}
-                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-white border border-rose-200 text-[11px] font-extrabold text-rose-900"
-                    >
-                      <span>{ev.title}</span>
-                      <span className="px-1.5 py-0.2 rounded bg-rose-600 text-white text-[10px] font-black">
-                        {ev.calc.dDayText}
-                      </span>
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
+                ↻
+              </button>
+            </div>
 
             {pinnedNotices.length > 0 && (
               <div
@@ -8224,7 +8171,7 @@ ${validText}
       ========================================== */}
       {activeTab === "home" && (
         <div className="p-3 space-y-2.5">
-          {/* 1. 지금 시간대 루틴 카드 (콤팩트) */}
+          {/* 1. 오늘 한눈에 보드: 일정 · 할 일 · 지금 루틴 동시 표시 */}
           {(() => {
             const curSlot = getCurrentRoutineTimeSlot();
             const activeRoutines = familyRoutines.filter((r) => !isRoutineDoneNow(r));
@@ -8233,86 +8180,169 @@ ${validText}
               return s === curSlot || s === "상시";
             });
             const visibleList = showAllTodayRoutinesOnMain ? activeRoutines : slotMatched;
+            const previewTodos = schedules
+              .filter((s) => s.category === "할일(To-Do)" && !s.done)
+              .sort((a, b) => String(a.date || "9999-99-99").localeCompare(String(b.date || "9999-99-99")))
+              .slice(0, 3);
             return (
-              <div className="bg-indigo-50/70 border border-indigo-200 rounded-2xl p-2.5 space-y-1.5">
-                <div className="flex items-center justify-between gap-1.5">
-                  <span className="text-xs font-black text-indigo-950 truncate">
-                    🔄 {showAllTodayRoutinesOnMain ? "오늘 남은 루틴" : `지금(${curSlot}) 루틴`} ({visibleList.length}건)
-                  </span>
-                  <div className="flex items-center gap-1 shrink-0">
-                    <button
-                      type="button"
-                      onClick={() => setIsMainRoutineCollapsed((v) => !v)}
-                      className="px-2 py-0.5 rounded-lg bg-white border border-indigo-200 text-[10px] font-extrabold text-indigo-700 whitespace-nowrap"
-                    >
-                      {isMainRoutineCollapsed ? "펼치기 ▾" : "접기 ▴"}
-                    </button>
-                    {!isMainRoutineCollapsed && activeRoutines.length > 0 && (
+              <div className="space-y-2">
+                {/* 1-1. 다가오는 일정 + 할 일 미리보기 */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <div className="bg-rose-50/80 border border-rose-200 rounded-2xl p-2.5 space-y-1.5">
+                    <div className="flex items-center justify-between gap-1">
+                      <span className="text-xs font-black text-rose-950">
+                        🗓️ 3일 내 일정 ({imminentSchedulesWithin3Days.length}건)
+                      </span>
                       <button
                         type="button"
-                        onClick={() => setShowAllTodayRoutinesOnMain((v) => !v)}
-                        className="px-2 py-0.5 rounded-lg bg-white border border-indigo-200 text-[10px] font-extrabold text-indigo-700 whitespace-nowrap"
+                        onClick={() => {
+                          setScheduleSubTab("calendar");
+                          setActiveTab("schedule");
+                        }}
+                        className="text-[10px] font-extrabold text-rose-700"
                       >
-                        {showAllTodayRoutinesOnMain ? `${curSlot}만` : `전체(${activeRoutines.length})`}
+                        전체 &gt;
                       </button>
+                    </div>
+                    {imminentSchedulesWithin3Days.length === 0 ? (
+                      <div className="text-[11px] font-bold text-rose-700/80 bg-white/80 rounded-xl px-2.5 py-1.5">
+                        3일 이내 예정된 일정이 없습니다.
+                      </div>
+                    ) : (
+                      <div className="space-y-1">
+                        {imminentSchedulesWithin3Days.slice(0, 3).map((ev) => (
+                          <button
+                            key={ev.id}
+                            type="button"
+                            onClick={() => {
+                              setScheduleSubTab("calendar");
+                              setActiveTab("schedule");
+                            }}
+                            className="w-full px-2.5 py-1.5 rounded-xl bg-white border border-rose-100 flex items-center justify-between gap-2 text-left"
+                          >
+                            <span className="text-[11px] font-extrabold text-stone-800 truncate">{ev.title}</span>
+                            <span className="px-1.5 py-0.5 rounded bg-rose-600 text-white text-[10px] font-black shrink-0">
+                              {ev.calc.dDayText}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
                     )}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setActiveTab("schedule");
-                        setTimeout(() => {
-                          document.getElementById("routine-board-section")?.scrollIntoView({ behavior: "smooth", block: "start" });
-                        }, 120);
-                      }}
-                      className="px-2 py-0.5 rounded-lg bg-indigo-600 text-white text-[10px] font-extrabold whitespace-nowrap"
-                    >
-                      관리
-                    </button>
+                  </div>
+
+                  <div className="bg-amber-50/80 border border-amber-200 rounded-2xl p-2.5 space-y-1.5">
+                    <div className="flex items-center justify-between gap-1">
+                      <span className="text-xs font-black text-amber-950">
+                        ✅ 남은 할 일 ({globalTodoBadgeStats.activeCount}건)
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setScheduleSubTab("todo");
+                          setActiveTab("schedule");
+                        }}
+                        className="text-[10px] font-extrabold text-amber-800"
+                      >
+                        전체 &gt;
+                      </button>
+                    </div>
+                    {previewTodos.length === 0 ? (
+                      <div className="text-[11px] font-bold text-emerald-800 bg-white/80 rounded-xl px-2.5 py-1.5">
+                        🎉 남은 할 일이 없습니다!
+                      </div>
+                    ) : (
+                      <div className="space-y-1">
+                        {previewTodos.map((todo) => (
+                          <button
+                            key={todo.id}
+                            type="button"
+                            onClick={() => handleToggleScheduleDone(todo)}
+                            className="w-full px-2.5 py-1.5 rounded-xl bg-white hover:bg-amber-50 border border-amber-100 flex items-center gap-2 text-left transition active:scale-[0.99]"
+                          >
+                            <span className="w-3.5 h-3.5 rounded border border-amber-400 bg-white shrink-0" />
+                            <span className="text-[11px] font-extrabold text-stone-800 truncate flex-1">{todo.title}</span>
+                            {todo.date && (
+                              <span className="text-[10px] font-bold text-amber-800 shrink-0">{todo.date.slice(5)}</span>
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
-                {!isMainRoutineCollapsed && (activeRoutines.length === 0 ? (
-                  <div className="text-[11px] font-bold text-emerald-800 bg-white/90 rounded-xl px-2.5 py-1.5">
-                    🎉 오늘 예정된 모든 루틴을 완료했습니다!
-                  </div>
-                ) : visibleList.length === 0 ? (
-                  <div className="text-[11px] font-bold text-indigo-700 bg-white/80 rounded-xl px-2.5 py-1.5">
-                    ✅ {curSlot} 시간대 루틴을 모두 완료했습니다!
-                  </div>
-                ) : (
-                  <div className="space-y-1">
-                    {visibleList.map((rt) => {
-                      const nextInfo = getRoutineNextDateInfo(rt, currentDayKey);
-                      return (
+
+                {/* 1-2. 지금 시간대 루틴 카드 */}
+                <div className="bg-indigo-50/70 border border-indigo-200 rounded-2xl p-2.5 space-y-1.5">
+                  <div className="flex items-center justify-between gap-1.5">
+                    <span className="text-xs font-black text-indigo-950 truncate">
+                      🔄 {showAllTodayRoutinesOnMain ? "오늘 남은 루틴" : `지금(${curSlot}) 루틴`} ({visibleList.length}건)
+                    </span>
+                    <div className="flex items-center gap-1 shrink-0">
+                      {activeRoutines.length > 0 && (
                         <button
-                          key={rt.id}
                           type="button"
-                          onClick={() => handleToggleRoutine(rt.id)}
-                          className="w-full p-2 rounded-xl bg-white hover:bg-indigo-50/50 border border-indigo-100 flex items-start gap-2 text-left transition active:scale-[0.99]"
+                          onClick={() => setShowAllTodayRoutinesOnMain((v) => !v)}
+                          className="px-2 py-0.5 rounded-lg bg-white border border-indigo-200 text-[10px] font-extrabold text-indigo-700 whitespace-nowrap"
                         >
-                          <span className="w-4 h-4 mt-0.5 rounded border border-indigo-300 bg-white shrink-0" />
-                          <div className="min-w-0 flex-1">
-                            <div className="text-xs font-extrabold text-stone-900 whitespace-normal break-words leading-snug">
-                              {rt.title}
-                            </div>
-                            <div className="flex flex-wrap items-center gap-1 mt-0.5">
-                              <span className="px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-800 text-[9px] font-black">
-                                {rt.timeSlot || "상시"}
-                              </span>
-                              <span className="px-1.5 py-0.5 rounded bg-stone-100 text-stone-600 text-[9px] font-bold">
-                                {rt.assignee || "공통"}
-                              </span>
-                              {nextInfo && (
-                                <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 text-[9px] font-bold">
-                                  {nextInfo.dateLabel}
-                                </span>
-                              )}
-                            </div>
-                          </div>
+                          {showAllTodayRoutinesOnMain ? `${curSlot}만` : `전체(${activeRoutines.length})`}
                         </button>
-                      );
-                    })}
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setScheduleSubTab("routine");
+                          setActiveTab("schedule");
+                        }}
+                        className="px-2 py-0.5 rounded-lg bg-indigo-600 text-white text-[10px] font-extrabold whitespace-nowrap"
+                      >
+                        관리
+                      </button>
+                    </div>
                   </div>
-                ))}
+                  {activeRoutines.length === 0 ? (
+                    <div className="text-[11px] font-bold text-emerald-800 bg-white/90 rounded-xl px-2.5 py-1.5">
+                      🎉 오늘 예정된 모든 루틴을 완료했습니다!
+                    </div>
+                  ) : visibleList.length === 0 ? (
+                    <div className="text-[11px] font-bold text-indigo-700 bg-white/80 rounded-xl px-2.5 py-1.5">
+                      ✅ {curSlot} 시간대 루틴을 모두 완료했습니다!
+                    </div>
+                  ) : (
+                    <div className="space-y-1">
+                      {visibleList.map((rt) => {
+                        const nextInfo = getRoutineNextDateInfo(rt, currentDayKey);
+                        return (
+                          <button
+                            key={rt.id}
+                            type="button"
+                            onClick={() => handleToggleRoutine(rt.id)}
+                            className="w-full p-2 rounded-xl bg-white hover:bg-indigo-50/50 border border-indigo-100 flex items-start gap-2 text-left transition active:scale-[0.99]"
+                          >
+                            <span className="w-4 h-4 mt-0.5 rounded border border-indigo-300 bg-white shrink-0" />
+                            <div className="min-w-0 flex-1">
+                              <div className="text-xs font-extrabold text-stone-900 whitespace-normal break-words leading-snug">
+                                {rt.title}
+                              </div>
+                              <div className="flex flex-wrap items-center gap-1 mt-0.5">
+                                <span className="px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-800 text-[9px] font-black">
+                                  {rt.timeSlot || "상시"}
+                                </span>
+                                <span className="px-1.5 py-0.5 rounded bg-stone-100 text-stone-600 text-[9px] font-bold">
+                                  {rt.assignee || "공통"}
+                                </span>
+                                {nextInfo && (
+                                  <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 text-[9px] font-bold">
+                                    {nextInfo.dateLabel}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
               </div>
             );
           })()}
@@ -8382,19 +8412,17 @@ ${validText}
                 <button
                   type="button"
                   onClick={() => {
-                    setActiveTab("schedule");
-                    setTimeout(() => {
-                      document.getElementById("schedule-todo-section")?.scrollIntoView({ behavior: "smooth", block: "start" });
-                    }, 120);
+                    setActiveTab("monthly");
+                    setMonthlySubTab("calendar");
                   }}
-                  className="bg-white border border-stone-200 hover:border-rose-300 rounded-2xl p-2.5 text-left shadow-sm space-y-0.5 transition"
+                  className="bg-white border border-stone-200 hover:border-amber-300 rounded-2xl p-2.5 text-left shadow-sm space-y-0.5 transition"
                 >
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-black text-stone-900">✅ 할 일·일정</span>
-                    <span className="text-[10px] font-extrabold text-rose-600">이동 &gt;</span>
+                    <span className="text-xs font-black text-stone-900">📅 월간 식단</span>
+                    <span className="text-[10px] font-extrabold text-amber-700">달력 &gt;</span>
                   </div>
                   <div className="text-[11px] font-bold text-stone-600 truncate">
-                    할 일 <span className={globalTodoBadgeStats.urgentCount > 0 ? "text-rose-600 font-black" : "text-amber-700 font-black"}>{globalTodoBadgeStats.activeCount}건</span> · 일정 {imminentSchedulesWithin3Days.length}건
+                    {currentMonth.slice(5)}월 기록 <span className="text-amber-800 font-black">{meals.filter((m) => String(m.date || "").startsWith(currentMonth)).length}끼</span>
                   </div>
                 </button>
 
@@ -8633,7 +8661,7 @@ ${validText}
                   menu: "",
                   members:
                     selectedMember === "전체"
-                      ? ["수혁", "아리나", "시목", "시율"]
+                      ? ["수혁", "아리나"]
                       : [selectedMember],
                   ingredients: [],
                   note: "",
@@ -8803,10 +8831,13 @@ ${validText}
                     const today = getTodayStr();
                     setSelectedDate(today);
                     setCurrentMonth(today.slice(0, 7));
+                    setTimeout(() => {
+                      document.getElementById(`weekly-day-${today}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+                    }, 120);
                   }}
                   className="px-2 py-0.5 rounded-lg bg-emerald-50 text-emerald-700 text-[10px] font-extrabold"
                 >
-                  이번주
+                  오늘로
                 </button>
                 <button
                   onClick={() => {
@@ -8858,7 +8889,7 @@ ${validText}
                     (selectedMember === "전체" || toSafeArray(m.members).includes(selectedMember))
                 );
                 return (
-                  <div key={d} className="p-3">
+                  <div key={d} id={`weekly-day-${d}`} className={`p-3 ${d === getTodayStr() ? "bg-emerald-50/40" : ""}`}>
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-xs font-black text-stone-900">
                         {d.slice(5)} ({getDayName(d)})
@@ -9232,6 +9263,57 @@ ${validText}
             </button>
           </div>
 
+          <div className="grid grid-cols-3 gap-1.5 bg-stone-100 p-1 rounded-2xl">
+            <button
+              type="button"
+              onClick={() => setScheduleSubTab("calendar")}
+              className={`py-2 px-2 rounded-xl text-[11px] font-black flex items-center justify-center gap-1 transition ${
+                scheduleSubTab === "calendar"
+                  ? "bg-white text-stone-900 shadow-sm"
+                  : "text-stone-500 hover:text-stone-800"
+              }`}
+            >
+              <span>📅 달력·일정</span>
+              {imminentSchedulesWithin3Days.length > 0 && (
+                <span className="px-1.5 py-0.5 rounded-full bg-rose-600 text-white text-[9px] font-black leading-none">
+                  {imminentSchedulesWithin3Days.length}
+                </span>
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={() => setScheduleSubTab("todo")}
+              className={`py-2 px-2 rounded-xl text-[11px] font-black flex items-center justify-center gap-1 transition ${
+                scheduleSubTab === "todo"
+                  ? "bg-white text-stone-900 shadow-sm"
+                  : "text-stone-500 hover:text-stone-800"
+              }`}
+            >
+              <span>✅ 할 일</span>
+              {globalTodoBadgeStats.activeCount > 0 && (
+                <span className="px-1.5 py-0.5 rounded-full bg-amber-500 text-white text-[9px] font-black leading-none">
+                  {globalTodoBadgeStats.activeCount}
+                </span>
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={() => setScheduleSubTab("routine")}
+              className={`py-2 px-2 rounded-xl text-[11px] font-black flex items-center justify-center gap-1 transition ${
+                scheduleSubTab === "routine"
+                  ? "bg-white text-stone-900 shadow-sm"
+                  : "text-stone-500 hover:text-stone-800"
+              }`}
+            >
+              <span>🔄 반복 루틴</span>
+              {familyRoutines.filter((r) => !isRoutineDoneNow(r)).length > 0 && (
+                <span className="px-1.5 py-0.5 rounded-full bg-indigo-600 text-white text-[9px] font-black leading-none">
+                  {familyRoutines.filter((r) => !isRoutineDoneNow(r)).length}
+                </span>
+              )}
+            </button>
+          </div>
+
           <div className="grid grid-cols-5 gap-1">
             <button
               onClick={() => setScheduleMemberFilter("전체")}
@@ -9258,6 +9340,8 @@ ${validText}
             ))}
           </div>
 
+          {scheduleSubTab === "calendar" && (
+            <>
           {/* [1순위 최상단 배치] 월간 가족 일정 캘린더 */}
           <div className="bg-white p-3.5 rounded-2xl border border-stone-200 shadow-sm space-y-3">
             <div className="flex items-center justify-between">
@@ -9675,7 +9759,11 @@ ${validText}
             )}
           </div>
 
+            </>
+          )}
+
           {/* 🔄 자정/주간 자동 리셋 데일리·위클리 육아/집안일 루틴 */}
+          {scheduleSubTab === "routine" && (
           <div id="routine-board-section" className="bg-white p-4 rounded-2xl border border-indigo-200 shadow-sm space-y-3">
             <div className="flex items-center justify-between gap-2">
               <div>
@@ -9955,9 +10043,12 @@ ${validText}
             )}
           </div>
 
+          )}
+
           {/* ==========================================
               [신규 요청사항 1 완벽 반영] To-Do List 전체를 체크리스트처럼 표시하는 화면
           ========================================== */}
+          {scheduleSubTab === "todo" && (
           <div id="schedule-todo-section" className="bg-white p-4 rounded-2xl border border-stone-200 shadow-sm space-y-3">
             <div className="space-y-2">
               <div className="flex items-center justify-between gap-2">
@@ -10158,7 +10249,10 @@ ${validText}
             )}
           </div>
 
+          )}
+
           {/* [5순위 최하단 배치] 우리 가족 D-Day & 기념일 카운트다운 보드 */}
+          {scheduleSubTab === "calendar" && (
           <div className="bg-gradient-to-br from-stone-900 via-stone-800 to-stone-900 text-white p-4 rounded-2xl shadow-md space-y-2.5">
             <div className="flex items-center justify-between">
               <div className="text-xs font-black text-amber-300 flex items-center gap-1.5">
@@ -10213,6 +10307,7 @@ ${validText}
               ))}
             </div>
           </div>
+          )}
         </div>
       )}
 
@@ -10816,7 +10911,8 @@ ${validText}
                                 recordExpense: true,
                                 shelfZone: item.shelfZone || ""
                               });
-                              setIsFridgeModalOpen(true);
+                              setFridgeConflictData(null);
+    setIsFridgeModalOpen(true);
                             }}
                             className="p-1.5 rounded-lg hover:bg-stone-100 text-stone-500"
                           >
@@ -12839,11 +12935,21 @@ ${validText}
           if (activeTab === "fridge") {
             openAddFridgeModal();
           } else if (activeTab === "schedule") {
+            if (scheduleSubTab === "routine") {
+              window.scrollTo({ top: 0, behavior: "smooth" });
+              showToast("상단 입력창에서 반복 루틴을 바로 추가해 보세요!");
+              return;
+            }
             setEditingSchedule(null);
             setScheduleForm({
               title: "",
               date: scheduleSelectedDate || getTodayStr(),
-              category: scheduleCatFilter === "전체" ? "할일(To-Do)" : scheduleCatFilter,
+              category:
+                scheduleCatFilter !== "전체"
+                  ? scheduleCatFilter
+                  : scheduleSubTab === "calendar"
+                  ? "병원/행사"
+                  : "할일(To-Do)",
               members: scheduleMemberFilter === "전체" ? ["수혁", "아리나", "시목", "시율"] : [scheduleMemberFilter],
               isAnnual: false,
               showDday: false,
@@ -12867,7 +12973,7 @@ ${validText}
               date: activeTab === "home" ? getTodayStr() : selectedDate,
               slot: smartSlot,
               menu: "",
-              members: selectedMember === "전체" ? ["수혁", "아리나", "시목", "시율"] : [selectedMember],
+              members: selectedMember === "전체" ? ["수혁", "아리나"] : [selectedMember],
               ingredients: [],
               note: "",
               sourceType: "집밥/온가족식",
@@ -14290,7 +14396,7 @@ ${validText}
               <h3 className="text-sm font-black">
                 {editingFridge ? "냉장고 재료 수정" : "냉장고 재료 추가"}
               </h3>
-              <button onClick={() => setIsFridgeModalOpen(false)}>
+              <button onClick={() => { setFridgeConflictData(null); setIsFridgeModalOpen(false); }}>
                 <X className="w-5 h-5 text-stone-400" />
               </button>
             </div>
@@ -14428,15 +14534,65 @@ ${validText}
               </div>
             </div>
 
+            {fridgeConflictData && (
+              <div className="bg-amber-50 border border-amber-300 rounded-2xl p-3 space-y-2">
+                <div className="text-[11px] font-black text-amber-900">
+                  ⚠️ 다른 기기에서 먼저 수정된 재고입니다
+                </div>
+                <div className="space-y-1 text-[10px] font-bold">
+                  <div className="bg-white/90 rounded-lg px-2 py-1 border border-amber-200 text-stone-700">
+                    서버 최신값: {fridgeConflictData.serverItem?.name} · {fridgeConflictData.serverItem?.quantity}{fridgeConflictData.serverItem?.unit} · {fridgeConflictData.serverItem?.location}
+                  </div>
+                  <div className="bg-white/90 rounded-lg px-2 py-1 border border-rose-200 text-rose-800">
+                    내 수정값: {fridgeConflictData.localPayload?.name} · {fridgeConflictData.localPayload?.quantity}{fridgeConflictData.localPayload?.unit} · {fridgeConflictData.localPayload?.location}
+                  </div>
+                </div>
+                <div className="flex gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const srv = fridgeConflictData.serverItem;
+                      if (srv) {
+                        setEditingFridge(srv);
+                        setFridgeForm({
+                          name: srv.name || "",
+                          location: srv.location || "냉장실",
+                          category: srv.category || "채소/과일",
+                          quantity: srv.quantity ?? 1,
+                          unit: srv.unit || "개",
+                          expiryDate: srv.expiryDate || getTodayStr(),
+                          price: srv.price || "",
+                          purchaseDate: srv.purchaseDate || selectedDate,
+                          shelfZone: srv.shelfZone || ""
+                        });
+                      }
+                      setFridgeConflictData(null);
+                      showToast("서버 최신값을 불러왔습니다.");
+                    }}
+                    className="flex-1 py-1.5 rounded-xl bg-white border border-amber-300 text-amber-900 text-[10px] font-extrabold"
+                  >
+                    서버값 불러오기
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleSaveFridge(fridgeConflictData.serverItem?.updatedAt || "")}
+                    className="flex-1 py-1.5 rounded-xl bg-amber-600 text-white text-[10px] font-extrabold"
+                  >
+                    내 수정값으로 저장
+                  </button>
+                </div>
+              </div>
+            )}
+
             <div className="flex gap-2 pt-2">
               <button
-                onClick={() => setIsFridgeModalOpen(false)}
+                onClick={() => { setFridgeConflictData(null); setIsFridgeModalOpen(false); }}
                 className="flex-1 py-2.5 rounded-xl bg-stone-100 text-stone-600 text-xs font-extrabold"
               >
                 취소
               </button>
               <button
-                onClick={handleSaveFridge}
+                onClick={() => handleSaveFridge()}
                 className="flex-1 py-2.5 rounded-xl bg-stone-900 text-white text-xs font-extrabold"
               >
                 저장하기
