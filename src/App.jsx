@@ -883,11 +883,21 @@ const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.65) =>
     img.src = dataUrl;
   });
 
-const APP_CODE_VERSION = "v10.40";
-const APP_BUILD_DATE = "2026-11-16 20:56";
+const APP_CODE_VERSION = "v10.41";
+const APP_BUILD_DATE = "2026-11-16 20:58";
 const EDITOR_INVITE_CODE = "0402";
 
 const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v10.41",
+    version: "v10.41",
+    date: "2026-11-16",
+    title: "초기화 전 변수 참조(Cannot access 'Fs' before initialization) TDZ 오류 즉시 수정",
+    changes: [
+      "knownIngredientList useMemo가 fridge 선언보다 위에 위치해 발생하던 Temporal Dead Zone(초기화 전 참조) 크래시 해결",
+      "fridge useMemo 선언 이후로 knownIngredientList 배치 순서 이동 및 전체 useEffect/useMemo 의존성 선후관계 재검증"
+    ]
+  },
   {
     id: "patch-v10.40",
     version: "v10.40",
@@ -3486,6 +3496,19 @@ function MainApp() {
     return Array.from(seen.values());
   }, [favoriteSingleMenus, recipes, recentSingleMenuChips, meals]);
 
+  const fridge = useMemo(() => {
+    const merged = {};
+    ["local", "restored", "src_0", "src_1"].forEach((key) => {
+      const sourceObj = fridgeMap[key] || {};
+      Object.values(sourceObj).forEach((f) => {
+        if (f && f.id && !deletedIds.includes(f.id)) {
+          merged[f.id] = f;
+        }
+      });
+    });
+    return Object.values(merged);
+  }, [fridgeMap, deletedIds]);
+
   const knownIngredientList = useMemo(() => {
     const map = new Map();
     const upsert = (name, category = "", unit = "") => {
@@ -3513,19 +3536,6 @@ function MainApp() {
     });
     return Array.from(map.values());
   }, [fridge, shoppingList, recipes]);
-
-  const fridge = useMemo(() => {
-    const merged = {};
-    ["local", "restored", "src_0", "src_1"].forEach((key) => {
-      const sourceObj = fridgeMap[key] || {};
-      Object.values(sourceObj).forEach((f) => {
-        if (f && f.id && !deletedIds.includes(f.id)) {
-          merged[f.id] = f;
-        }
-      });
-    });
-    return Object.values(merged);
-  }, [fridgeMap, deletedIds]);
 
   // 하루 2번(오전 AM / 오후 PM) + 전체 컬렉션 내용 해시(FNV-1a) 변경 감지 자동 클라우드 스냅샷 백업 엔진
   useEffect(() => {
