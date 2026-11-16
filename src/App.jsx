@@ -868,11 +868,23 @@ const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.65) =>
     img.src = dataUrl;
   });
 
-const APP_CODE_VERSION = "v10.23";
-const APP_BUILD_DATE = "2026-11-16 16:03";
+const APP_CODE_VERSION = "v10.24";
+const APP_BUILD_DATE = "2026-11-16 20:22";
 const EDITOR_INVITE_CODE = "0402";
 
 const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v10.24",
+    version: "v10.24",
+    date: "2026-11-16",
+    title: "드롭 후 스크롤 즉각 복구 · 식단 상단 저장 · 레시피 재료(+/장보기) · 영수증 11개 수량 점검",
+    changes: [
+      "냉장고 칩 드롭 직후 body overflow 토글 제거 및 동기식 터치 리스너 해제로 스크롤 잠깐 멈춤 현상 해결",
+      "식단 기록 모달 상단에 고정(sticky) [💾 저장] 버튼 배치로 스크롤 없이 즉시 저장 가능",
+      "레시피북 모달에서 재료를 하나씩 입력하면 '+'로 자동 연결되고 각 재료별 [🛒 장보기 추가] 원터치 지원",
+      "영수증 스캔 시 수량(quantity) 11 오인식 방지 프롬프트·수량/단위 직접 수정칸·10개 이상 주의 배지 및 v3/v4 동시 저장 적용"
+    ]
+  },
   {
     id: "patch-v10.23",
     version: "v10.23",
@@ -2140,27 +2152,23 @@ function MainApp() {
   const dragOverZoneRef = useRef("");
   const justDraggedRef = useRef(false);
 
-  // [v10.18] 길게 눌러 칩 드래그 중일 때 모바일 브라우저 스크롤 완전 차단 (non-passive)
-  const isChipDragging = Boolean(draggingChip);
-  useEffect(() => {
-    if (!isChipDragging) return;
-    const prevOverflow = document.body.style.overflow;
-    const prevTouchAction = document.body.style.touchAction;
-    const prevOverscroll = document.documentElement.style.overscrollBehavior;
-    document.body.style.overflow = "hidden";
-    document.body.style.touchAction = "none";
-    document.documentElement.style.overscrollBehavior = "none";
-    const blockTouchScroll = (ev) => {
+  // [v10.24] 드롭 직후 스크롤 멈춤 방지를 위해 body overflow 토글 제거 & 동기식 리스너 제어
+  const touchMoveBlockerRef = useRef(null);
+  const enableChipTouchScrollLock = () => {
+    if (touchMoveBlockerRef.current) return;
+    const fn = (ev) => {
       if (ev.cancelable) ev.preventDefault();
     };
-    window.addEventListener("touchmove", blockTouchScroll, { passive: false });
-    return () => {
-      window.removeEventListener("touchmove", blockTouchScroll);
-      document.body.style.overflow = prevOverflow;
-      document.body.style.touchAction = prevTouchAction;
-      document.documentElement.style.overscrollBehavior = prevOverscroll;
-    };
-  }, [isChipDragging]);
+    touchMoveBlockerRef.current = fn;
+    window.addEventListener("touchmove", fn, { passive: false });
+  };
+  const disableChipTouchScrollLock = () => {
+    if (touchMoveBlockerRef.current) {
+      window.removeEventListener("touchmove", touchMoveBlockerRef.current);
+      touchMoveBlockerRef.current = null;
+    }
+  };
+  useEffect(() => () => disableChipTouchScrollLock(), []);
   const [visualExpiringOnly, setVisualExpiringOnly] = useState(false);
 
   // [신규 v10.8] 가족 레시피북 상태
@@ -2172,6 +2180,7 @@ function MainApp() {
   const [recipeViewMode, setRecipeViewMode] = useState("cards"); // cards | summary
   const [zoomedRecipePhoto, setZoomedRecipePhoto] = useState(null);
   const [isRecipeModalOpen, setIsRecipeModalOpen] = useState(false);
+  const [recipeIngredientInput, setRecipeIngredientInput] = useState("");
   const [editingRecipe, setEditingRecipe] = useState(null);
   const [recipeForm, setRecipeForm] = useState({
     title: "",
@@ -5383,6 +5392,7 @@ ${validText}
 2단계(items): 오직 1단계 rawLines에 실제로 존재하는 상품 줄만 items 배열로 변환하세요.
 - 01, 02, 03... 줄 번호당 정확히 1개 항목만 생성하세요. 같은 상품(예: 두부)을 2번 중복 출력하지 마세요.
 - 각 상품 줄의 오른쪽 끝 금액에서 바로 아래 줄에 있는 에누리/쿠폰(-금액)만 차감하여 price에 적으세요.
+- 수량(quantity)은 영수증의 수량 칸 숫자(보통 1~5개)만 정확히 숫자로 적으세요. 줄번호("01"), "1+1", 가격, 중량 숫자를 합쳐 11로 오인식하지 마세요. 불확실하면 quantity는 1로 적으세요.
 - "재사용봉투", "종량제봉투", "쇼핑백" 등 비식품은 items에서 빼고 그 합계를 excludedTotal에 적으세요.
 - 영수증 하단의 실제 총 결제금액(예: 결제대상금액 20,580)을 receiptTotal에 적으세요.
 - location은 ["냉장실", "냉동실", "실온·팬트리"] 중 하나, category는 ["채소/과일", "육류/수산", "유제품/계란", "유아식/이유식 재료", "반찬/김치", "밀키트", "양념/소스", "기타"] 중 하나입니다.
@@ -6160,6 +6170,55 @@ ${validText}
     } finally {
       setIsQuickParsingShopping(false);
     }
+  };
+
+  const appendRecipeIngredientChip = (rawChip) => {
+    const clean = String(rawChip || "").trim();
+    if (!clean) return;
+    const existing = String(recipeForm.ingredientsText || "")
+      .split(/\s*(?:\+|,|
+)\s*/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (!existing.includes(clean)) {
+      existing.push(clean);
+    }
+    setRecipeForm((prev) => ({ ...prev, ingredientsText: existing.join(" + ") }));
+  };
+
+  const handleQuickAddSingleIngredientToShopping = async (rawToken, recipeTitle = "") => {
+    if (!requireEditorAccess()) return;
+    const clean = String(rawToken || "").trim();
+    if (!clean) return;
+    const m = clean.match(/^(.+?)\s+(\d+(?:\.\d+)?(?:g|kg|ml|L|개|팩|봉|모|캔|단|알|마리|조각|컵|T|t)?)$/i);
+    const itemName = (m ? m[1] : clean).trim();
+    const itemQty = m ? m[2].trim() : "1개";
+    const exists = shoppingList.some(
+      (s) => String(s.name || "").trim().toLowerCase() === itemName.toLowerCase()
+    );
+    if (exists) {
+      showToast(`'${itemName}'은(는) 이미 장보기 목록에 있습니다.`);
+      return;
+    }
+    const id = `sh-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`;
+    const payload = {
+      id,
+      name: itemName,
+      quantity: itemQty,
+      category: "기타",
+      urgent: false,
+      checked: false,
+      memo: recipeTitle ? `레시피(${recipeTitle})` : "레시피북 추가"
+    };
+    setShoppingList((prev) => [payload, ...prev]);
+    if (user && db) {
+      try {
+        await setDoc(getDocRef("family_shopping_v4", id), payload);
+      } catch (e) {
+        setSyncErrorMsg(e?.message || "장보기 추가 오류");
+      }
+    }
+    showToast(`🛒 '${itemName} (${itemQty})' 장보기에 추가됨!`);
   };
 
   const openCropModalWithUrl = (srcUrl) => {
@@ -8836,6 +8895,7 @@ ${validText}
                                 const st = chipTouchRef.current;
                                 if (!st || st.item?.id !== it.id) return;
                                 st.dragging = true;
+                                enableChipTouchScrollLock();
                                 if (typeof navigator !== "undefined" && navigator.vibrate) {
                                   try { navigator.vibrate(18); } catch {}
                                 }
@@ -8869,6 +8929,7 @@ ${validText}
                               setDragOverZone(hoveredZone);
                             }}
                             onTouchEnd={() => {
+                              disableChipTouchScrollLock();
                               const st = chipTouchRef.current;
                               if (st?.timer) clearTimeout(st.timer);
                               chipTouchRef.current = null;
@@ -8885,6 +8946,7 @@ ${validText}
                               }
                             }}
                             onTouchCancel={() => {
+                              disableChipTouchScrollLock();
                               const st = chipTouchRef.current;
                               if (st?.timer) clearTimeout(st.timer);
                               chipTouchRef.current = null;
@@ -11773,6 +11835,40 @@ ${validText}
                         }}
                         className="font-bold bg-white px-2 py-1 rounded border border-stone-200 w-full text-xs"
                       />
+                      <div className="flex items-center gap-1 mt-1">
+                        <span className="text-[10px] font-bold text-stone-400 shrink-0">수량</span>
+                        <input
+                          type="number"
+                          min="0"
+                          step="any"
+                          value={it.quantity}
+                          onChange={(e) => {
+                            const copy = [...scannedReceiptItems];
+                            copy[idx].quantity = Math.max(0, Number(e.target.value) || 0);
+                            setScannedReceiptItems(copy);
+                          }}
+                          className={`w-14 px-1.5 py-0.5 rounded border text-[11px] font-extrabold text-center bg-white ${
+                            it.unit === "개" && Number(it.quantity) >= 10
+                              ? "border-amber-400 bg-amber-50 text-amber-800"
+                              : "border-stone-200 text-stone-700"
+                          }`}
+                        />
+                        <input
+                          type="text"
+                          value={it.unit || "개"}
+                          onChange={(e) => {
+                            const copy = [...scannedReceiptItems];
+                            copy[idx].unit = e.target.value;
+                            setScannedReceiptItems(copy);
+                          }}
+                          className="w-10 px-1 py-0.5 rounded border border-stone-200 text-[11px] font-bold text-center bg-white text-stone-600"
+                        />
+                        {it.unit === "개" && Number(it.quantity) >= 10 && (
+                          <span className="text-[9px] font-black text-amber-700 whitespace-nowrap">
+                            ⚠️ 수량 확인
+                          </span>
+                        )}
+                      </div>
                     </div>
                     <input
                       type="number"
@@ -11968,6 +12064,7 @@ ${validText}
                           };
                           createdLocal[fId] = newItem;
                           tx.set(getDocRef("family_fridge_v4", fId), newItem);
+                          tx.set(getDocRef("family_fridge_v3", fId), newItem);
                           const expId = `exp-${fId}`;
                           tx.set(getDocRef("family_expenses_v4", expId), {
                             id: expId,
@@ -12029,14 +12126,27 @@ ${validText}
       {/* 기존 모달들 (식단, 냉장고, 장보기입고, 공지, AI퀵로그) */}
       {isMealModalOpen && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-sm w-full p-5 space-y-3.5 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between">
+          <div className="bg-white rounded-3xl max-w-sm w-full p-5 pt-0 space-y-3.5 max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-white z-10 pt-4 pb-2.5 border-b border-stone-100 flex items-center justify-between gap-2">
               <h3 className="text-sm font-black">
                 {editingMeal ? "식단 수정하기" : "새 식단 기록하기"}
               </h3>
-              <button onClick={() => setIsMealModalOpen(false)}>
-                <X className="w-5 h-5 text-stone-400" />
-              </button>
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={handleSaveMeal}
+                  className="px-3 py-1.5 rounded-xl bg-stone-900 text-white text-xs font-extrabold"
+                >
+                  💾 저장
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsMealModalOpen(false)}
+                  className="p-1.5 rounded-xl bg-stone-100 text-stone-500"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
             </div>
 
             <div className="grid grid-cols-2 gap-2">
@@ -13369,13 +13479,93 @@ ${validText}
               )}
             </div>
 
-            <textarea
-              rows={2}
-              value={recipeForm.ingredientsText}
-              onChange={(e) => setRecipeForm({ ...recipeForm, ingredientsText: e.target.value })}
-              placeholder="사용 재료 및 실제 수량 (예: 소고기 250g, 무 200g, 대파 1단)"
-              className="w-full px-3 py-2 rounded-xl border border-stone-200 text-xs resize-none"
-            />
+            <div className="space-y-2 bg-stone-50 p-3 rounded-2xl border border-stone-200">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-black text-stone-700">🥕 재료 하나씩 입력 (+ 자동 연결)</span>
+                {String(recipeForm.ingredientsText || "").trim() && (
+                  <button
+                    type="button"
+                    onClick={() => handleAddMissingIngredientsToShopping(recipeForm.ingredientsText)}
+                    className="text-[10px] font-extrabold text-emerald-700 hover:text-emerald-800"
+                  >
+                    🛒 부족 재료 일괄 장보기
+                  </button>
+                )}
+              </div>
+              <div className="flex items-center gap-1.5">
+                <input
+                  type="text"
+                  value={recipeIngredientInput}
+                  onChange={(e) => setRecipeIngredientInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      appendRecipeIngredientChip(recipeIngredientInput);
+                      setRecipeIngredientInput("");
+                    }
+                  }}
+                  placeholder="재료 1개 입력 후 + (예: 소고기 250g)"
+                  className="flex-1 px-3 py-2 rounded-xl border border-stone-200 text-xs font-bold bg-white"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    appendRecipeIngredientChip(recipeIngredientInput);
+                    setRecipeIngredientInput("");
+                  }}
+                  className="px-3 py-2 rounded-xl bg-stone-900 text-white text-xs font-extrabold shrink-0"
+                >
+                  + 추가
+                </button>
+              </div>
+              {String(recipeForm.ingredientsText || "").trim() && (
+                <div className="flex flex-wrap gap-1">
+                  {String(recipeForm.ingredientsText)
+                    .split(/\s*(?:\+|,|
+)\s*/)
+                    .map((s) => s.trim())
+                    .filter(Boolean)
+                    .map((chip, cIdx) => (
+                      <span
+                        key={`${chip}-${cIdx}`}
+                        className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-white text-stone-800 border border-stone-200 text-[11px] font-bold"
+                      >
+                        <span>{chip}</span>
+                        <button
+                          type="button"
+                          onClick={() => handleQuickAddSingleIngredientToShopping(chip, recipeForm.title)}
+                          title="이 재료 바로 장보기 추가"
+                          className="text-emerald-600 hover:text-emerald-800 font-black"
+                        >
+                          🛒
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const parts = String(recipeForm.ingredientsText)
+                              .split(/\s*(?:\+|,|
+)\s*/)
+                              .map((s) => s.trim())
+                              .filter(Boolean);
+                            parts.splice(cIdx, 1);
+                            setRecipeForm({ ...recipeForm, ingredientsText: parts.join(" + ") });
+                          }}
+                          className="text-stone-400 hover:text-rose-600 font-black"
+                        >
+                          ×
+                        </button>
+                      </span>
+                    ))}
+                </div>
+              )}
+              <input
+                type="text"
+                value={recipeForm.ingredientsText}
+                onChange={(e) => setRecipeForm({ ...recipeForm, ingredientsText: e.target.value })}
+                placeholder="최종 연결된 재료 (예: 소고기 250g + 무 200g + 대파 1단)"
+                className="w-full px-3 py-1.5 rounded-xl border border-stone-200 text-[11px] font-semibold bg-white text-stone-600"
+              />
+            </div>
 
             <div className="grid grid-cols-2 gap-2">
               <input
