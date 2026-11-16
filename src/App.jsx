@@ -804,11 +804,22 @@ const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.65) =>
     img.src = dataUrl;
   });
 
-const APP_CODE_VERSION = "v10.11";
-const APP_BUILD_DATE = "2026-11-16 14:40";
+const APP_CODE_VERSION = "v10.12";
+const APP_BUILD_DATE = "2026-11-16 14:45";
 const EDITOR_INVITE_CODE = "0402";
 
 const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v10.12",
+    version: "v10.12",
+    date: "2026-11-16",
+    title: "냉장고 리스트 뷰 기본 우선 표시 · 컴팩트 카드 가독성 개선 및 '다 먹음' 버튼 간소화",
+    changes: [
+      "냉장고 탭 진입 시 [📋 리스트 뷰]가 기본으로 먼저 보이도록 순서 및 초기값 변경",
+      "재료 카드 여백 축소(컴팩트 레이아웃) 및 버튼·보관위치 탭 줄바꿈(whitespace-nowrap) 방지",
+      "[다 먹음 (식비유지)] 버튼 문구를 [다 먹음]으로 간결하게 변경"
+    ]
+  },
   {
     id: "patch-v10.11",
     version: "v10.11",
@@ -1937,7 +1948,7 @@ function MainApp() {
   const [shoppingList, setShoppingList] = useState([]);
   const [quickShoppingText, setQuickShoppingText] = useState("");
   const [isQuickParsingShopping, setIsQuickParsingShopping] = useState(false);
-  const [fridgeViewMode, setFridgeViewMode] = useState("visual"); // visual | list
+  const [fridgeViewMode, setFridgeViewMode] = useState("list"); // visual | list
 
   // [신규 v10.8] 가족 레시피북 상태
   const [recipes, setRecipes] = useState([]);
@@ -8265,12 +8276,12 @@ ${validText}
           )}
 
           <div className="flex items-center justify-between gap-2">
-            <div className="flex gap-1 bg-stone-200 p-1 rounded-xl">
+            <div className="flex gap-1 bg-stone-200 p-1 rounded-xl overflow-x-auto">
               {["전체", ...STORAGE_LOCATIONS].map((loc) => (
                 <button
                   key={loc}
                   onClick={() => setFridgeLocFilter(loc)}
-                  className={`px-2.5 py-1 rounded-lg text-xs font-extrabold transition ${
+                  className={`px-2 py-1 rounded-lg text-[11px] font-extrabold whitespace-nowrap transition ${
                     fridgeLocFilter === loc
                       ? "bg-white text-stone-900 shadow-sm"
                       : "text-stone-600"
@@ -8290,20 +8301,20 @@ ${validText}
 
           <div className="flex items-center justify-between gap-2 bg-stone-100 p-1 rounded-xl">
             <button
+              onClick={() => setFridgeViewMode("list")}
+              className={`flex-1 py-1.5 rounded-lg text-xs font-extrabold transition ${
+                fridgeViewMode === "list" ? "bg-white text-stone-900 shadow-sm" : "text-stone-500"
+              }`}
+            >
+              📋 리스트 뷰
+            </button>
+            <button
               onClick={() => setFridgeViewMode("visual")}
               className={`flex-1 py-1.5 rounded-lg text-xs font-extrabold transition ${
                 fridgeViewMode === "visual" ? "bg-white text-stone-900 shadow-sm" : "text-stone-500"
               }`}
             >
               🗂️ 냉장고 시각적 구성 뷰
-            </button>
-            <button
-              onClick={() => setFridgeViewMode("list")}
-              className={`flex-1 py-1.5 rounded-lg text-xs font-extrabold transition ${
-                fridgeViewMode === "list" ? "bg-white text-stone-900 shadow-sm" : "text-stone-500"
-              }`}
-            >
-              📋 기존 리스트 뷰
             </button>
           </div>
 
@@ -8416,7 +8427,7 @@ ${validText}
               </div>
             </div>
           ) : (
-            <div className="space-y-2.5">
+            <div className="space-y-2">
               {fridge
                 .filter(
                   (i) =>
@@ -8428,44 +8439,45 @@ ${validText}
                   return (
                     <div
                       key={item.id}
-                      className="bg-white p-3.5 rounded-2xl border border-stone-200 shadow-sm space-y-2.5"
+                      className="bg-white p-2.5 rounded-2xl border border-stone-200 shadow-sm space-y-1.5"
                     >
-                      <div className="flex items-start justify-between gap-2">
-                        <div>
-                          <div className="flex flex-wrap items-center gap-1 mb-1">
-                            <span className="px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-stone-100 text-stone-700">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-1 mb-0.5">
+                            <span className="px-1.5 py-0.5 rounded text-[10px] font-extrabold bg-stone-100 text-stone-700 whitespace-nowrap">
                               {item.location}
                             </span>
-                            <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-50 text-emerald-700">
+                            <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 whitespace-nowrap">
                               {item.category}
                             </span>
                             <span
-                              className={`px-2 py-0.5 rounded-md text-[10px] font-extrabold ${
+                              className={`px-1.5 py-0.5 rounded text-[10px] font-extrabold whitespace-nowrap ${
                                 diff <= 3
                                   ? "bg-red-100 text-red-700"
                                   : "bg-stone-100 text-stone-500"
                               }`}
                             >
-                              소비기한 {item.expiryDate} (
-                              {diff < 0 ? `${Math.abs(diff)}일 지남` : `D-${diff}`})
+                              {item.expiryDate} ({diff < 0 ? `${Math.abs(diff)}일 지남` : `D-${diff}`})
                             </span>
                           </div>
-                          <div className="text-sm font-black text-stone-900">{item.name}</div>
-                          {Number(item.price) > 0 && (
-                            <div className="text-[11px] font-bold text-stone-500 mt-0.5">
-                              구입가: {Number(item.price).toLocaleString()}원 ({item.purchaseDate})
-                            </div>
-                          )}
+                          <div className="flex items-baseline gap-2 flex-wrap">
+                            <span className="text-sm font-black text-stone-900">{item.name}</span>
+                            {Number(item.price) > 0 && (
+                              <span className="text-[10px] font-bold text-stone-400">
+                                {Number(item.price).toLocaleString()}원
+                              </span>
+                            )}
+                          </div>
                         </div>
 
-                        <div className="flex items-center gap-1.5 bg-stone-100 px-2 py-1 rounded-xl shrink-0">
+                        <div className="flex items-center gap-1 bg-stone-100 px-1.5 py-0.5 rounded-xl shrink-0">
                           <button
                             onClick={() => handleAdjustQuantity(item, -1)}
                             className="w-6 h-6 rounded-lg bg-white font-black text-stone-700 shadow-sm"
                           >
                             -
                           </button>
-                          <span className="text-xs font-black px-1.5">
+                          <span className="text-xs font-black px-1 whitespace-nowrap">
                             {item.quantity}
                             {item.unit}
                           </span>
@@ -8478,23 +8490,23 @@ ${validText}
                         </div>
                       </div>
 
-                      <div className="flex items-center justify-between pt-2 border-t border-stone-100 gap-1.5">
-                        <div className="flex items-center gap-1.5">
+                      <div className="flex items-center justify-between pt-1.5 border-t border-stone-100 gap-1">
+                        <div className="flex items-center gap-1 flex-nowrap">
                           <button
                             onClick={() => handleConsumeFridgeItem(item, false)}
-                            className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-extrabold flex items-center gap-1"
+                            className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-extrabold flex items-center gap-1 whitespace-nowrap"
                           >
-                            <Check className="w-3 h-3" /> 다 먹음 (식비유지)
+                            <Check className="w-3 h-3 shrink-0" /> 다 먹음
                           </button>
                           <button
                             onClick={() => handleConsumeFridgeItem(item, true)}
-                            className="px-2 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 text-[10px] font-extrabold"
+                            className="px-2 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 text-[11px] font-extrabold whitespace-nowrap"
                           >
                             + 장보기
                           </button>
                           <button
                             onClick={() => handleWasteFridgeItem(item)}
-                            className="px-2 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-800 border border-rose-200 text-[10px] font-extrabold"
+                            className="px-2 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-800 border border-rose-200 text-[11px] font-extrabold whitespace-nowrap"
                             title="폐기 처리 및 손실 기록"
                           >
                             🗑️ 폐기
