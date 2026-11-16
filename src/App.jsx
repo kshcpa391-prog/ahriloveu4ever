@@ -698,11 +698,58 @@ const STORAGE_LOCATIONS = ["냉장실", "냉동실", "실온·팬트리"];
 const FRIDGE_CATEGORIES = ["채소/과일", "육류/수산", "유제품/계란", "유아식/이유식 재료", "반찬/김치", "밀키트", "양념/소스", "기타"];
 const SCHEDULE_CATEGORIES = ["기념일/생일", "할일(To-Do)", "육아/병원", "가족행사/경조사"];
 
-const APP_CODE_VERSION = "v10.8";
-const APP_BUILD_DATE = "2026-11-16 14:20";
+const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.65) =>
+  new Promise((resolve) => {
+    if (!dataUrl || typeof dataUrl !== "string" || dataUrl.includes("undefined")) {
+      resolve("");
+      return;
+    }
+    if (dataUrl.length <= 280000 && dataUrl.startsWith("data:image/")) {
+      resolve(dataUrl);
+      return;
+    }
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const canvas = document.createElement("canvas");
+        let w = img.width;
+        let h = img.height;
+        if (w > h && w > maxSide) {
+          h = Math.round((h * maxSide) / w);
+          w = maxSide;
+        } else if (h >= w && h > maxSide) {
+          w = Math.round((w * maxSide) / h);
+          h = maxSide;
+        }
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL("image/jpeg", quality));
+      } catch {
+        resolve(dataUrl.length <= 750000 ? dataUrl : "");
+      }
+    };
+    img.onerror = () => resolve("");
+    img.src = dataUrl;
+  });
+
+const APP_CODE_VERSION = "v10.9";
+const APP_BUILD_DATE = "2026-11-16 14:25";
 const EDITOR_INVITE_CODE = "0402";
 
 const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v10.9",
+    version: "v10.9",
+    date: "2026-11-16",
+    title: "레시피북 사진 깨짐(undefined) 수정 · 자동 압축 저장 및 원스크린 브리핑 카드 제거",
+    changes: [
+      "레시피북 사진 업로드 시 fileToBase64 반환 필드(previewUrl) 매핑 오류로 이미지가 깨지던 현상 수정",
+      "플레이팅 코치 연동 사진 및 직접 업로드 사진을 720px·JPEG 65%로 자동 압축해 Firestore 1MB 문서 제한 내에서 무료(Spark) 저장되도록 개선",
+      "일별 식단 상단 [모닝·이브닝 원스크린 브리핑 카드] 제거"
+    ]
+  },
   {
     id: "patch-v10.8",
     version: "v10.8",
@@ -1797,7 +1844,6 @@ function MainApp() {
   const [shoppingList, setShoppingList] = useState([]);
   const [quickShoppingText, setQuickShoppingText] = useState("");
   const [isQuickParsingShopping, setIsQuickParsingShopping] = useState(false);
-  const [isBriefingExpanded, setIsBriefingExpanded] = useState(true);
   const [fridgeViewMode, setFridgeViewMode] = useState("visual"); // visual | list
 
   // [신규 v10.8] 가족 레시피북 상태
@@ -5665,9 +5711,14 @@ ${validText}
     const file = e.target.files?.[0];
     if (!file) return;
     try {
-      const part = await fileToBase64(file, { maxDim: 800, quality: 0.72 });
-      const dataUrl = `data:${part.mimeType};base64,${part.data}`;
-      setRecipeForm((prev) => ({ ...prev, photoDataUrl: dataUrl }));
+      const { previewUrl, base64, mimeType } = await fileToBase64(file, { maxSide: 720, quality: 0.65 });
+      const rawUrl = previewUrl || (base64 ? `data:${mimeType || "image/jpeg"};base64,${base64}` : "");
+      const safeUrl = await compressDataUrlForFirestore(rawUrl, 720, 0.65);
+      if (!safeUrl) {
+        showToast("⚠️ 이미지 용량이 너무 크거나 읽을 수 없습니다. 다른 사진을 선택해 주세요.");
+        return;
+      }
+      setRecipeForm((prev) => ({ ...prev, photoDataUrl: safeUrl }));
     } catch (err) {
       showToast("⚠️ 사진 처리 중 오류가 발생했습니다.");
     }
@@ -5752,12 +5803,14 @@ ${validText}
     showToast("레시피가 삭제되었습니다.");
   };
 
-  const handleSendPlatingToRecipeBook = () => {
+  const handleSendPlatingToRecipeBook = async () => {
     if (!requireEditorAccess()) return;
     if (!platingResult) return;
+    const rawPhoto = platingPreviewUrl || platingExampleImageUrl || "";
+    const compressedPhoto = rawPhoto ? await compressDataUrlForFirestore(rawPhoto, 720, 0.65) : "";
     openNewRecipeModal({
       title: platingResult.dishName || "플레이팅 요리",
-      photoDataUrl: platingPreviewUrl || platingExampleImageUrl || "",
+      photoDataUrl: compressedPhoto,
       memo: [
         platingResult.summary ? `[플레이팅 코치] ${platingResult.summary}` : "",
         platingResult.plateAndGarnish ? `추천 그릇·가니쉬: ${platingResult.plateAndGarnish}` : ""
@@ -6545,105 +6598,6 @@ ${validText}
       ========================================== */}
       {activeTab === "daily" && (
         <div className="p-4 space-y-3.5">
-          {(() => {
-            const hourNow = new Date().getHours();
-            const isEvening = hourNow >= 17 || hourNow < 5;
-            const briefingTitle = isEvening ? "🌙 이브닝 원스크린 브리핑" : "☀️ 모닝 원스크린 브리핑";
-            const targetDay = selectedDate || getTodayStr();
-            const simokMealToday = meals.find(
-              (m) => m.date === targetDay && m.slot === "점심" && toSafeArray(m.members).includes("시목")
-            );
-            const shindangRow = SHINDANG_NOV_DATA.find((r) => r.date === targetDay);
-            const simokLunchText = simokMealToday?.menu || shindangRow?.lunch || "등록된 점심 식단 없음";
-
-            const siyulNextCheck = BABY_VACCINES_AND_CHECKUPS.map((item) => {
-              const dueDate = addMonthsToDateStr("2026-11-06", item.addMonths, item.addDays);
-              const diff = getDaysDiff(dueDate);
-              return { ...item, dueDate, diff, done: Boolean(babyChecks[`시율__${item.id}`]?.done) };
-            })
-              .filter((item) => !item.done)
-              .sort((a, b) => a.diff - b.diff)[0];
-
-            return (
-              <div className="rounded-2xl border border-amber-200 bg-gradient-to-br from-amber-50/90 via-white to-sky-50/70 p-3.5 shadow-sm space-y-2.5">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-xs font-black text-stone-900">{briefingTitle}</span>
-                    <span className="px-1.5 py-0.5 rounded-md bg-white border border-amber-200 text-[10px] font-bold text-amber-800">
-                      {targetDay}
-                    </span>
-                  </div>
-                  <button
-                    onClick={() => setIsBriefingExpanded((v) => !v)}
-                    className="text-[10px] font-extrabold text-stone-500 hover:text-stone-800 px-2 py-0.5 rounded-lg bg-white/80 border border-stone-200"
-                  >
-                    {isBriefingExpanded ? "접기 ▲" : "펼치기 ▼"}
-                  </button>
-                </div>
-
-                {isBriefingExpanded && (
-                  <div className="grid grid-cols-1 gap-2 text-[11px]">
-                    <div className="flex items-center justify-between gap-2 bg-white/90 px-2.5 py-1.5 rounded-xl border border-stone-200/80">
-                      <span className="font-bold text-stone-700 truncate">
-                        {weatherInfo
-                          ? `${weatherInfo.emoji} 서울 중구 ${weatherInfo.temp}°C (${weatherInfo.min}°/${weatherInfo.max}°) · ${weatherInfo.dust?.label || "대기"}`
-                          : "🌤️ 날씨 정보 불러오는 중..."}
-                      </span>
-                      {weatherInfo && (
-                        <span className="text-[10px] font-extrabold text-sky-700 shrink-0">
-                          미세 {weatherInfo.pm10}
-                        </span>
-                      )}
-                    </div>
-
-                    <div
-                      onClick={() => setActiveTab("fridge")}
-                      className="cursor-pointer bg-white/90 hover:bg-orange-50/60 px-2.5 py-1.5 rounded-xl border border-orange-200/80 flex items-center justify-between gap-2"
-                    >
-                      <span className="font-bold text-orange-900 truncate">
-                        🧊 D-3 임박 재료:{" "}
-                        {expiringItems.length > 0
-                          ? expiringItems
-                              .slice(0, 3)
-                              .map((it) => `${it.name}(${it.diff < 0 ? "만료" : `D-${it.diff}`})`)
-                              .join(", ") + (expiringItems.length > 3 ? ` 외 ${expiringItems.length - 3}건` : "")
-                          : "없음 (여유)"}
-                      </span>
-                      <span className="text-[10px] font-extrabold text-orange-700 shrink-0">냉장고 &gt;</span>
-                    </div>
-
-                    <div className="bg-white/90 px-2.5 py-1.5 rounded-xl border border-amber-200/80">
-                      <span className="font-extrabold text-amber-900">🏫 시목이 점심(저녁 중복방지): </span>
-                      <span className="text-stone-700 font-semibold">{simokLunchText}</span>
-                    </div>
-
-                    {siyulNextCheck && (
-                      <div
-                        onClick={() => {
-                          setSelectedChildId("시율");
-                          setBabySubTab("vaccines");
-                          setActiveTab("baby");
-                        }}
-                        className="cursor-pointer bg-white/90 hover:bg-rose-50/60 px-2.5 py-1.5 rounded-xl border border-rose-200/80 flex items-center justify-between gap-2"
-                      >
-                        <span className="font-bold text-rose-900 truncate">
-                          💉 시율이 다음 {siyulNextCheck.type}: {siyulNextCheck.title} (
-                          {siyulNextCheck.diff === 0
-                            ? "D-Day"
-                            : siyulNextCheck.diff > 0
-                            ? `D-${siyulNextCheck.diff}`
-                            : `${Math.abs(siyulNextCheck.diff)}일 지남`}
-                          )
-                        </span>
-                        <span className="text-[10px] font-extrabold text-rose-700 shrink-0">육아수첩 &gt;</span>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            );
-          })()}
-
           <button
             onClick={() => {
               setScanTargetMonth(selectedDate.slice(0, 7));
@@ -9510,7 +9464,7 @@ ${validText}
                 })
                 .map((r) => (
                   <div key={r.id} className="bg-white rounded-2xl border border-stone-200 shadow-sm overflow-hidden">
-                    {r.photoDataUrl && (
+                    {r.photoDataUrl && !String(r.photoDataUrl).includes("undefined") && (
                       <div className="relative">
                         <img
                           src={r.photoDataUrl}
