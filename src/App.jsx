@@ -135,29 +135,40 @@ const getIsoWeekKey = (dateStr = getTodayStr()) => {
 const ROUTINE_TIME_SLOTS = ["아침", "점심", "하원후", "오후", "저녁", "자기전", "상시"];
 const WEEKDAY_KO = ["일", "월", "화", "수", "목", "금", "토"];
 
-const getCurrentRoutineTimeSlot = () => {
-  const now = new Date();
-  const mins = now.getHours() * 60 + now.getMinutes();
-  if (mins >= 300 && mins < 660) return "아침"; // 05:00 ~ 10:59
-  if (mins >= 660 && mins < 900) return "점심"; // 11:00 ~ 14:59
-  if (mins >= 900 && mins < 1020) return "하원후"; // 15:00 ~ 16:59
-  if (mins >= 1020 && mins < 1080) return "오후"; // 17:00 ~ 17:59
-  if (mins >= 1080 && mins < 1230) return "저녁"; // 18:00 ~ 20:29
-  return "자기전"; // 20:30 ~ 04:59
-};
-
-const DEFAULT_HOME_TIME_RANGES = {
-  morningStart: 5,
-  afternoonStart: 11,
-  nightStart: 20
-};
-
 const isHourInRange = (h, start, end) => {
   const s = ((Number(start) || 0) % 24 + 24) % 24;
   const e = ((Number(end) || 0) % 24 + 24) % 24;
   if (s === e) return false;
   if (s < e) return h >= s && h < e;
   return h >= s || h < e;
+};
+
+const DEFAULT_ROUTINE_TIME_RANGES = {
+  아침: 5,
+  점심: 11,
+  하원후: 15,
+  오후: 17,
+  저녁: 18,
+  자기전: 20
+};
+
+const ROUTINE_ORDERED_SLOTS = ["아침", "점심", "하원후", "오후", "저녁", "자기전"];
+
+const getCurrentRoutineTimeSlot = (ranges = DEFAULT_ROUTINE_TIME_RANGES) => {
+  const h = new Date().getHours();
+  const r = { ...DEFAULT_ROUTINE_TIME_RANGES, ...(ranges || {}) };
+  for (let i = 0; i < ROUTINE_ORDERED_SLOTS.length; i++) {
+    const slot = ROUTINE_ORDERED_SLOTS[i];
+    const nextSlot = ROUTINE_ORDERED_SLOTS[(i + 1) % ROUTINE_ORDERED_SLOTS.length];
+    if (isHourInRange(h, r[slot], r[nextSlot])) return slot;
+  }
+  return "자기전";
+};
+
+const DEFAULT_HOME_TIME_RANGES = {
+  morningStart: 5,
+  afternoonStart: 11,
+  nightStart: 20
 };
 
 const getAutoHomeTimeMode = (ranges = DEFAULT_HOME_TIME_RANGES) => {
@@ -1040,11 +1051,31 @@ const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.65) =>
     img.src = dataUrl;
   });
 
-const APP_CODE_VERSION = "v10.64";
-const APP_BUILD_DATE = "2026-11-17 03:25";
+const APP_CODE_VERSION = "v10.66";
+const APP_BUILD_DATE = "2026-11-17 03:31";
 const EDITOR_INVITE_CODE = "0402";
 
 const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v10.66",
+    version: "v10.66",
+    date: "2026-11-17",
+    title: "전체 JSON 백업·복원 범위 확장(루틴·홈 구성·시간대) & 루틴 시간대 중복 경고 보완",
+    changes: [
+      "전체 DB JSON 백업·복원에 familyRoutines(반복 루틴) 및 홈 레이아웃·시간대 기준 시각 설정 포함",
+      "루틴 시간대 설정 시 시작 시각이 중복되면 안내 경고 문구가 표시되도록 안전장치 추가"
+    ]
+  },
+  {
+    id: "patch-v10.65",
+    version: "v10.65",
+    date: "2026-11-17",
+    title: "일정·반복루틴 시간대 기준 시각 사용자 편집 및 실시간 클라우드 동기화",
+    changes: [
+      "일정 → [🔄 반복 루틴] 상단에 [⏰ 시간대 기준] 설정을 추가해 아침·점심·하원후·오후·저녁·자기전 시작 시각(0~23시)을 직접 지정 가능",
+      "지정한 루틴 시간대 기준은 홈 화면 [자동(현재)] 루틴 표출과 실시간 연동되며 Firestore(family_meta_v4/home_layout)에 부부 기기 간 동기화"
+    ]
+  },
   {
     id: "patch-v10.64",
     version: "v10.64",
@@ -2649,11 +2680,24 @@ function MainApp() {
   });
   const [homeTimeModeOverride, setHomeTimeModeOverride] = useState("auto");
   const [isHomeEditMode, setIsHomeEditMode] = useState(false);
+  const [isRoutineRangeEditOpen, setIsRoutineRangeEditOpen] = useState(false);
+  const [routineTimeRanges, setRoutineTimeRanges] = useState(() => {
+    try {
+      const raw = localStorage.getItem("kim_routine_time_ranges_v1");
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed["아침"] === "number") {
+          return { ...DEFAULT_ROUTINE_TIME_RANGES, ...parsed };
+        }
+      }
+    } catch (e) {}
+    return DEFAULT_ROUTINE_TIME_RANGES;
+  });
   const homeDragRef = useRef(null);
   const homeDragOverRef = useRef("");
   const [homeDragOverKey, setHomeDragOverKey] = useState("");
 
-  const syncHomeSettingsToCloud = async (nextLayout, nextRanges) => {
+  const syncHomeSettingsToCloud = async (nextLayout, nextRanges, nextRoutineRanges = null) => {
     if (!user || !db || !isEditorUnlocked) return;
     try {
       await setDoc(
@@ -2661,6 +2705,7 @@ function MainApp() {
         {
           ...(nextLayout ? { layout: nextLayout } : {}),
           ...(nextRanges ? { timeRanges: nextRanges } : {}),
+          ...(nextRoutineRanges ? { routineRanges: nextRoutineRanges } : {}),
           updatedAt: new Date().toISOString()
         },
         { merge: true }
@@ -4125,6 +4170,11 @@ function MainApp() {
             setHomeTimeRanges(d.timeRanges);
             try { localStorage.setItem("kim_home_time_ranges_v1", JSON.stringify(d.timeRanges)); } catch (e) {}
           }
+          if (d?.routineRanges && typeof d.routineRanges["아침"] === "number") {
+            const mergedR = { ...DEFAULT_ROUTINE_TIME_RANGES, ...d.routineRanges };
+            setRoutineTimeRanges(mergedR);
+            try { localStorage.setItem("kim_routine_time_ranges_v1", JSON.stringify(mergedR)); } catch (e) {}
+          }
         },
         () => {}
       )
@@ -4559,7 +4609,11 @@ function MainApp() {
         wasteEvents,
         babyChecks,
         babyGrowthLogs,
-        babyMedicalNotes
+        babyMedicalNotes,
+        familyRoutines,
+        homeLayoutConfig,
+        homeTimeRanges,
+        routineTimeRanges
       }
     };
     return JSON.stringify(fullSnapshot, null, 2);
@@ -4682,6 +4736,23 @@ function MainApp() {
       if (Array.isArray(payload.familyRoutines)) {
         setFamilyRoutines(payload.familyRoutines);
         syncRoutinesToCloud(payload.familyRoutines);
+      }
+      if (payload.homeLayoutConfig && typeof payload.homeLayoutConfig === "object") {
+        const norm = normalizeHomeLayout(payload.homeLayoutConfig);
+        setHomeLayoutConfig(norm);
+        try { localStorage.setItem("kim_home_layout_v1", JSON.stringify(norm)); } catch (e) {}
+        syncHomeSettingsToCloud(norm, null, null);
+      }
+      if (payload.homeTimeRanges && typeof payload.homeTimeRanges.morningStart === "number") {
+        setHomeTimeRanges(payload.homeTimeRanges);
+        try { localStorage.setItem("kim_home_time_ranges_v1", JSON.stringify(payload.homeTimeRanges)); } catch (e) {}
+        syncHomeSettingsToCloud(null, payload.homeTimeRanges, null);
+      }
+      if (payload.routineTimeRanges && typeof payload.routineTimeRanges["아침"] === "number") {
+        const normR = { ...DEFAULT_ROUTINE_TIME_RANGES, ...payload.routineTimeRanges };
+        setRoutineTimeRanges(normR);
+        try { localStorage.setItem("kim_routine_time_ranges_v1", JSON.stringify(normR)); } catch (e) {}
+        syncHomeSettingsToCloud(null, null, normR);
       }
       if (Array.isArray(payload.notices)) setNotices(payload.notices);
       if (Array.isArray(payload.schedules)) setSchedules(payload.schedules);
@@ -8619,7 +8690,7 @@ ${validText}
           }
         };
 
-        const curSlot = getCurrentRoutineTimeSlot();
+        const curSlot = getCurrentRoutineTimeSlot(routineTimeRanges);
         const activeRoutines = familyRoutines.filter((r) => !isRoutineDoneNow(r));
         const visibleRoutineList =
           homeRoutineSlotFilter === "전체"
@@ -10588,10 +10659,80 @@ ${validText}
                   </span>
                 </h3>
                 <p className="text-[10px] text-stone-500 font-semibold mt-0.5">
-                  매일 자정(00:00) · 매주 월요일에 자동으로 미완료 상태로 리셋됩니다
+                  현재 자동 시간대: <span className="text-indigo-700 font-extrabold">{getCurrentRoutineTimeSlot(routineTimeRanges)}</span> · 매일 자정(00:00)·매주 월요일 자동 리셋
                 </p>
               </div>
+              <button
+                type="button"
+                onClick={() => setIsRoutineRangeEditOpen((v) => !v)}
+                className={`px-2 py-1 rounded-lg text-[10px] font-extrabold border whitespace-nowrap shrink-0 ${
+                  isRoutineRangeEditOpen
+                    ? "bg-indigo-600 text-white border-indigo-600"
+                    : "bg-indigo-50 text-indigo-800 border-indigo-200"
+                }`}
+              >
+                {isRoutineRangeEditOpen ? "닫기 ▴" : "⏰ 시간대 설정"}
+              </button>
             </div>
+
+            {isRoutineRangeEditOpen && (
+              <div className="bg-indigo-50/70 border border-indigo-200 rounded-xl p-2.5 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-extrabold text-indigo-950">
+                    루틴 시간대 시작 시각 설정 (홈 자동 표출 연동)
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setRoutineTimeRanges(DEFAULT_ROUTINE_TIME_RANGES);
+                      try { localStorage.setItem("kim_routine_time_ranges_v1", JSON.stringify(DEFAULT_ROUTINE_TIME_RANGES)); } catch (e) {}
+                      syncHomeSettingsToCloud(null, null, DEFAULT_ROUTINE_TIME_RANGES);
+                      showToast("루틴 시간대를 기본값으로 초기화했습니다.");
+                    }}
+                    className="text-[10px] font-extrabold text-indigo-700 underline"
+                  >
+                    기본값 초기화
+                  </button>
+                </div>
+                <div className="grid grid-cols-3 gap-1.5">
+                  {ROUTINE_ORDERED_SLOTS.map((slot) => (
+                    <label key={slot} className="block">
+                      <span className="text-[10px] font-bold text-indigo-900 block mb-0.5">{slot} 시작</span>
+                      <select
+                        value={routineTimeRanges[slot] ?? DEFAULT_ROUTINE_TIME_RANGES[slot]}
+                        onChange={(e) => {
+                          const val = Number(e.target.value);
+                          setRoutineTimeRanges((prev) => {
+                            const next = { ...prev, [slot]: val };
+                            try { localStorage.setItem("kim_routine_time_ranges_v1", JSON.stringify(next)); } catch (err) {}
+                            syncHomeSettingsToCloud(null, null, next);
+                            return next;
+                          });
+                        }}
+                        className="w-full px-2 py-1 rounded-lg border border-indigo-200 bg-white text-[11px] font-black text-stone-800"
+                      >
+                        {Array.from({ length: 24 }, (_, hr) => (
+                          <option key={hr} value={hr}>
+                            {String(hr).padStart(2, "0")}시
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  ))}
+                </div>
+                <div className="text-[10px] font-semibold text-indigo-800">
+                  {ROUTINE_ORDERED_SLOTS.map((s, idx) => {
+                    const nxt = ROUTINE_ORDERED_SLOTS[(idx + 1) % ROUTINE_ORDERED_SLOTS.length];
+                    return `${s} ${String(routineTimeRanges[s]).padStart(2, "0")}~${String(routineTimeRanges[nxt]).padStart(2, "0")}시`;
+                  }).join(" · ")}
+                </div>
+                {new Set(ROUTINE_ORDERED_SLOTS.map((s) => routineTimeRanges[s])).size < ROUTINE_ORDERED_SLOTS.length && (
+                  <div className="text-[10px] font-extrabold text-rose-600">
+                    ⚠️ 시작 시각이 같은 시간대가 있습니다. 서로 다르게 설정해 주세요.
+                  </div>
+                )}
+              </div>
+            )}
 
             <div className="flex flex-wrap gap-1.5">
               <input
