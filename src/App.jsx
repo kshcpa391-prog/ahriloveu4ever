@@ -632,11 +632,22 @@ const STORAGE_LOCATIONS = ["냉장실", "냉동실", "실온·팬트리"];
 const FRIDGE_CATEGORIES = ["채소/과일", "육류/수산", "유제품/계란", "유아식/이유식 재료", "반찬/김치", "밀키트", "양념/소스", "기타"];
 const SCHEDULE_CATEGORIES = ["기념일/생일", "할일(To-Do)", "육아/병원", "가족행사/경조사"];
 
-const APP_CODE_VERSION = "v10.0";
-const APP_BUILD_DATE = "2026-11-16 11:00";
+const APP_CODE_VERSION = "v10.1";
+const APP_BUILD_DATE = "2026-11-16 12:45";
 const EDITOR_INVITE_CODE = "0402";
 
 const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v10.1",
+    version: "v10.1",
+    date: "2026-11-16",
+    title: "영수증 OCR 정확도 강화(중복·단가밀림 방지) + 영수증 합계 대사(일치/차이) 검증 기능 추가",
+    changes: [
+      "각 영수증 줄(01~마지막)의 원문(rawLine)과 단가·할인·실결제금액을 1:1 고정 대조해 두부 중복 및 8,990원 오인식 방지",
+      "인식된 품목 합계 + 비식품(봉투 등) vs 영수증 결제대상금액을 자동 대사해 ✅일치 / ⚠️차이금액 표시",
+      "영수증 모달 내 [결제금액 직접 수정], [+ 품목 추가], [🔄 재스캔] 버튼 추가"
+    ]
+  },
   {
     id: "patch-v10.0",
     version: "v10.0",
@@ -1787,6 +1798,9 @@ function MainApp() {
   // 마트 영수증 실제 이미지 스캐너 상태
   const [isReceiptModalOpen, setIsReceiptModalOpen] = useState(false);
   const [receiptPreviewUrl, setReceiptPreviewUrl] = useState("");
+  const [receiptTotalAmount, setReceiptTotalAmount] = useState("");
+  const [receiptExcludedAmount, setReceiptExcludedAmount] = useState("0");
+  const [lastReceiptImagePart, setLastReceiptImagePart] = useState(null);
   const [isReceiptScanning, setIsReceiptScanning] = useState(false);
   const [scannedReceiptItems, setScannedReceiptItems] = useState([]);
   const [receiptErrorMsg, setReceiptErrorMsg] = useState("");
@@ -4493,59 +4507,87 @@ ${validText}
     showToast(`총 ${entries.length}끼 식단이 달력에 일괄 입력되었습니다!`);
   };
 
-  const handleReceiptImageUpload = async (e) => {
-    if (!requireEditorAccess()) return;
-    const file = e.target.files?.[0];
-    if (!file) return;
-
+  const runReceiptOcrWithImagePart = async (imagePart) => {
     setReceiptErrorMsg("");
     setIsReceiptScanning(true);
     try {
-      const { base64, mimeType, previewUrl } = await fileToBase64(file, { maxSide: 2200, quality: 0.92 });
-      setReceiptPreviewUrl(previewUrl);
+      const promptText = `당신은 한국 마트 영수증 회계·OCR 정밀 검증 전문가입니다.
+영수증 상단의 [상품명 | 단가 | 수량 | 금액] 표와 하단의 [결제대상금액(또는 카드결제/합계)]을 1원 단위까지 정확히 대조하여 순수 JSON 배열만 출력하세요.
 
-      const promptText = `당신은 한국 마트 영수증 정밀 OCR 전문가입니다.
-영수증의 상품 목록 맨 첫 줄(01*)부터 마지막 상품(예: 07*, 면세/합계 직전)까지 단 한 줄도 빠짐없이 순서대로 읽으세요.
-
-핵심 규칙:
-1. 각 상품 줄의 앞 번호(lineNo: "01", "02", ...)와 같은 가로줄 오른쪽 끝의 [금액]을 1:1로 정확히 매칭하세요. 절대로 위아래 줄의 금액을 섞지 마세요.
-2. 바로 아래 줄에 "에누리(쿠폰)" 또는 할인(-금액)이 있으면, 그 위 상품의 금액에서 빼서 실결제 금액(price)으로 적으세요. (예: 8,990원 아래 -4,000원 -> price: 4990)
-3. "재사용봉투", "종량제봉투", "쇼핑백" 등 비식품은 제외하세요. (단, "풀무원_소가부침두"처럼 줄 끝이 살짝 잘린 식품도 빠뜨리지 말고 "소가부침두부"처럼 정확히 포함하세요.)
-4. location은 ["냉장실", "냉동실", "실온·팬트리"] 중 하나, category는 ["채소/과일", "육류/수산", "유제품/계란", "유아식/이유식 재료", "반찬/김치", "밀키트", "양념/소스", "기타"] 중 하나로 고르세요.
-5. 마크다운 코드블록 없이 순수 JSON 배열만 출력:
-[{"lineNo":"01","name":"건고사리","location":"실온·팬트리","category":"채소/과일","quantity":35,"unit":"g","price":6990}]`;
+절대 규칙:
+1. 01*부터 마지막 번호(예: 07*)까지 번호당 정확히 1개 항목만 생성하세요. 같은 번호나 같은 상품(예: 두부)을 2번 중복 출력하지 마세요.
+2. 각 줄의 왼쪽 상품명 바로 같은 가로줄 오른쪽 끝의 [금액]만 읽고, 바로 아래 줄에 "에누리(쿠폰)" 등 음수(-금액)가 있을 때만 그 금액을 빼세요. (예: 07*풀무원_소가부침두 1,440 -> price: 1440. 위쪽 05*양파의 8,990을 절대 가져오지 마세요!)
+3. "재사용봉투", "종량제봉투", "쇼핑백" 등 비식품은 출력 목록에서 빼되, 그 합계 금액을 excludedTotal에 적으세요.
+4. 영수증 하단의 총 실결제 금액(예: 결제대상금액 20,580)을 receiptTotal에 적고, (출력 품목들의 price 합 + excludedTotal === receiptTotal)이 되는지 반드시 검산한 뒤 출력하세요.
+5. location은 ["냉장실", "냉동실", "실온·팬트리"] 중 하나, category는 ["채소/과일", "육류/수산", "유제품/계란", "유아식/이유식 재료", "반찬/김치", "밀키트", "양념/소스", "기타"] 중 하나로 고르세요.
+6. 마크다운 코드블록 없이 순수 JSON 배열만 출력:
+[{"lineNo":"01","rawLine":"01*건고사리35G 6,990","name":"건고사리","location":"실온·팬트리","category":"채소/과일","quantity":35,"unit":"g","price":6990,"receiptTotal":20580,"excludedTotal":490}]`;
 
       const parsedArray = await callReliableAiEngine({
         apiKey: geminiApiKey,
         openaiApiKey,
         aiProvider,
         promptText,
-        imagePart: { base64, mimeType },
-        temperature: 0.05
+        imagePart,
+        temperature: 0.0
       });
 
-      const normalized = toSafeArray(parsedArray).map((it) => {
-        const loc = STORAGE_LOCATIONS.includes(it.location) ? it.location : "냉장실";
-        const cat = FRIDGE_CATEGORIES.includes(it.category) ? it.category : "기타";
-        return {
-          name: String(it.name || "").trim(),
-          location: loc,
-          category: cat,
-          quantity: Number(it.quantity) > 0 ? Number(it.quantity) : 1,
-          unit: String(it.unit || "개").trim() || "개",
-          expiryDate: it.expiryDate || getDefaultExpiryForLocation(loc),
-          expiryIsTemp: !it.expiryDate,
-          price: Math.max(0, Number(it.price) || 0)
-        };
-      }).filter((it) => it.name);
+      const seenLineNos = new Set();
+      let detectedTotal = "";
+      let detectedExcluded = "0";
 
+      const normalized = toSafeArray(parsedArray)
+        .filter((it) => {
+          const ln = String(it?.lineNo || "").trim();
+          if (ln && seenLineNos.has(ln)) return false;
+          if (ln) seenLineNos.add(ln);
+          if (it?.receiptTotal && Number(it.receiptTotal) > 0) {
+            detectedTotal = String(Number(it.receiptTotal));
+          }
+          if (it?.excludedTotal !== undefined && Number(it.excludedTotal) >= 0) {
+            detectedExcluded = String(Number(it.excludedTotal));
+          }
+          return true;
+        })
+        .map((it) => {
+          const loc = STORAGE_LOCATIONS.includes(it.location) ? it.location : "냉장실";
+          const cat = FRIDGE_CATEGORIES.includes(it.category) ? it.category : "기타";
+          return {
+            name: String(it.name || "").trim(),
+            location: loc,
+            category: cat,
+            quantity: Number(it.quantity) > 0 ? Number(it.quantity) : 1,
+            unit: String(it.unit || "개").trim() || "개",
+            expiryDate: it.expiryDate || getDefaultExpiryForLocation(loc),
+            expiryIsTemp: !it.expiryDate,
+            price: Math.max(0, Number(it.price) || 0)
+          };
+        })
+        .filter((it) => it.name && !it.name.includes("봉투"));
+
+      setReceiptTotalAmount(detectedTotal);
+      setReceiptExcludedAmount(detectedExcluded);
       setScannedReceiptItems(normalized);
-      showToast(`영수증에서 총 ${parsedArray.length}개 품목을 빠르게 읽어왔습니다!`);
+      showToast(`영수증에서 총 ${normalized.length}개 품목을 읽어왔습니다!`);
     } catch (err) {
       console.error(err);
       setReceiptErrorMsg(err.message);
     } finally {
       setIsReceiptScanning(false);
+    }
+  };
+
+  const handleReceiptImageUpload = async (e) => {
+    if (!requireEditorAccess()) return;
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const { base64, mimeType, previewUrl } = await fileToBase64(file, { maxSide: 2200, quality: 0.92 });
+      setReceiptPreviewUrl(previewUrl);
+      const imgPart = { base64, mimeType };
+      setLastReceiptImagePart(imgPart);
+      await runReceiptOcrWithImagePart(imgPart);
+    } finally {
       if (receiptFileInputRef.current) receiptFileInputRef.current.value = "";
     }
   };
@@ -9665,12 +9707,90 @@ ${validText}
                     </button>
                   </div>
                 ))}
-                <div className="flex items-center justify-between px-1 text-xs font-extrabold text-stone-700">
-                  <span>인식 품목 {scannedReceiptItems.length}건</span>
-                  <span className="text-emerald-700">
-                    합계 {scannedReceiptItems.reduce((acc, x) => acc + (Number(x.price) || 0), 0).toLocaleString()}원
-                  </span>
-                </div>
+                {(() => {
+                  const itemsSum = scannedReceiptItems.reduce((acc, x) => acc + (Number(x.price) || 0), 0);
+                  const exclSum = Number(receiptExcludedAmount) || 0;
+                  const recTotal = Number(receiptTotalAmount) || 0;
+                  const diff = recTotal > 0 ? itemsSum + exclSum - recTotal : null;
+                  return (
+                    <div className="p-3 rounded-2xl bg-stone-50 border border-stone-200 space-y-2 text-xs">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-black text-stone-800">
+                          🧾 합계 대사 검증 ({scannedReceiptItems.length}건)
+                        </span>
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            onClick={() =>
+                              setScannedReceiptItems((prev) => [
+                                ...prev,
+                                {
+                                  name: "",
+                                  location: "냉장실",
+                                  category: "기타",
+                                  quantity: 1,
+                                  unit: "개",
+                                  expiryDate: getDefaultExpiryForLocation("냉장실"),
+                                  expiryIsTemp: true,
+                                  price: 0
+                                }
+                              ])
+                            }
+                            className="px-2 py-1 rounded-lg bg-white border border-stone-200 text-[11px] font-extrabold text-stone-700"
+                          >
+                            + 추가
+                          </button>
+                          {lastReceiptImagePart && (
+                            <button
+                              onClick={() => runReceiptOcrWithImagePart(lastReceiptImagePart)}
+                              disabled={isReceiptScanning}
+                              className="px-2 py-1 rounded-lg bg-amber-100 border border-amber-300 text-[11px] font-extrabold text-amber-900"
+                            >
+                              🔄 재스캔
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-1.5 text-[11px]">
+                        <div className="bg-white p-2 rounded-xl border border-stone-200 flex items-center justify-between">
+                          <span className="text-stone-500 font-bold">품목 합계</span>
+                          <span className="font-black text-stone-900">{itemsSum.toLocaleString()}원</span>
+                        </div>
+                        <div className="bg-white p-2 rounded-xl border border-stone-200 flex items-center justify-between gap-1">
+                          <span className="text-stone-500 font-bold shrink-0">봉투 등</span>
+                          <input
+                            type="number"
+                            value={receiptExcludedAmount}
+                            onChange={(e) => setReceiptExcludedAmount(e.target.value)}
+                            className="w-16 text-right font-black text-stone-700 bg-transparent outline-none"
+                          />
+                        </div>
+                      </div>
+                      <div className="bg-white p-2 rounded-xl border border-stone-200 flex items-center justify-between gap-2 text-[11px]">
+                        <span className="text-stone-500 font-bold">영수증 결제금액</span>
+                        <input
+                          type="number"
+                          placeholder="영수증 총액 입력"
+                          value={receiptTotalAmount}
+                          onChange={(e) => setReceiptTotalAmount(e.target.value)}
+                          className="w-24 text-right font-black text-emerald-700 border-b border-stone-200 outline-none"
+                        />
+                      </div>
+                      {diff !== null && (
+                        <div
+                          className={`px-2.5 py-1.5 rounded-xl text-[11px] font-black text-center ${
+                            diff === 0
+                              ? "bg-emerald-100 text-emerald-800 border border-emerald-200"
+                              : "bg-rose-100 text-rose-800 border border-rose-200"
+                          }`}
+                        >
+                          {diff === 0
+                            ? "✅ 품목 합계 + 봉투 등 = 영수증 결제금액 100% 일치!"
+                            : `⚠️ 차이 ${diff > 0 ? `+${diff.toLocaleString()}` : diff.toLocaleString()}원 (품목·금액을 확인해 주세요)`}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
                 <button
                   onClick={async () => {
                     if (!requireEditorAccess()) return;
