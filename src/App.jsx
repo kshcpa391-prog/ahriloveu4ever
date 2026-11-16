@@ -984,11 +984,21 @@ const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.65) =>
     img.src = dataUrl;
   });
 
-const APP_CODE_VERSION = "v10.47";
-const APP_BUILD_DATE = "2026-11-16 21:36";
+const APP_CODE_VERSION = "v10.48";
+const APP_BUILD_DATE = "2026-11-16 21:41";
 const EDITOR_INVITE_CODE = "0402";
 
 const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v10.48",
+    version: "v10.48",
+    date: "2026-11-16",
+    title: "임박 재료 구출 [아낀 식비 저금통] & 가계부 원장 최신순 정렬 고도화",
+    changes: [
+      "소비기한 3일 이하 임박 재료를 버리지 않고 '다 먹음' 처리 시 해당 원가를 [🎉 임박 재료 구출 저금통]으로 자동 누적해 가계부에 표시",
+      "가계부 지출 원장 목록을 최신 구매일순으로 정렬해 방금 기록한 장보기 지출을 맨 위에서 바로 확인 가능"
+    ]
+  },
   {
     id: "patch-v10.47",
     version: "v10.47",
@@ -6736,6 +6746,23 @@ ${validText}
       }
     }
 
+    if (getDaysDiff(item.expiryDate) <= 3 && Number(item.price) > 0) {
+      const resId = `res-${Date.now()}`;
+      const rescuedEv = {
+        id: resId,
+        type: "rescued",
+        itemName: item.name,
+        savedAmount: Number(item.price) || 0,
+        date: getTodayStr()
+      };
+      setWasteEvents((prev) => [rescuedEv, ...prev]);
+      if (user && db) {
+        try {
+          await setDoc(getDocRef("family_inventory_events_v7", resId), rescuedEv);
+        } catch (e) {}
+      }
+    }
+
     if (addToShopping) {
       const alreadyInShop = shoppingList.some(
         (s) => String(s.name || "").trim().toLowerCase() === String(item.name || "").trim().toLowerCase()
@@ -7656,7 +7683,9 @@ ${validText}
         date: f.purchaseDate || `${monthPrefix}-10`
       }));
 
-    const combinedLedger = [...ledgerItems, ...unrecordedFridgeAsLedger];
+    const combinedLedger = [...ledgerItems, ...unrecordedFridgeAsLedger].sort((a, b) =>
+      String(b.date || "").localeCompare(String(a.date || ""))
+    );
     const diningItems = meals.filter(
       (m) => String(m.date || "").startsWith(monthPrefix) && Number(m.cost) > 0
     );
@@ -7664,8 +7693,14 @@ ${validText}
     const groceryTotal = combinedLedger.reduce((acc, cur) => acc + (Number(cur.amount) || 0), 0);
     const diningTotal = diningItems.reduce((acc, cur) => acc + (Number(cur.cost) || 0), 0);
     const total = groceryTotal + diningTotal;
-    const monthWasteItems = wasteEvents.filter((w) => String(w.date || "").startsWith(monthPrefix));
+    const monthWasteItems = wasteEvents.filter(
+      (w) => String(w.date || "").startsWith(monthPrefix) && w.type !== "rescued"
+    );
     const wasteTotal = monthWasteItems.reduce((acc, cur) => acc + (Number(cur.estimatedLoss) || 0), 0);
+    const monthRescuedItems = wasteEvents.filter(
+      (w) => String(w.date || "").startsWith(monthPrefix) && w.type === "rescued"
+    );
+    const rescuedTotal = monthRescuedItems.reduce((acc, cur) => acc + (Number(cur.savedAmount) || 0), 0);
 
     const [cy, cm] = monthPrefix.split("-").map((n) => Number(n) || 0);
     const prevDate = new Date(cy || 2026, (cm || 1) - 2, 1);
@@ -7709,6 +7744,8 @@ ${validText}
       total,
       wasteTotal,
       wasteCount: monthWasteItems.length,
+      rescuedTotal,
+      rescuedCount: monthRescuedItems.length,
       wasteRate,
       prevMonthPrefix,
       prevMonthTotal,
@@ -8988,6 +9025,17 @@ ${validText}
                         </div>
                       </div>
                     ))}
+                  </div>
+                )}
+
+                {monthlyExpenseSummary.rescuedCount > 0 && (
+                  <div className="mt-2.5 pt-2 border-t border-stone-700 flex items-center justify-between text-[11px]">
+                    <span className="text-emerald-300 font-bold">
+                      🎉 임박 재료 구출 저금통 ({monthlyExpenseSummary.rescuedCount}건)
+                    </span>
+                    <span className="font-black text-emerald-300">
+                      +{monthlyExpenseSummary.rescuedTotal.toLocaleString()}원 아낌
+                    </span>
                   </div>
                 )}
 
