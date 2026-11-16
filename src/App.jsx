@@ -985,11 +985,33 @@ const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.65) =>
     img.src = dataUrl;
   });
 
-const APP_CODE_VERSION = "v10.51";
-const APP_BUILD_DATE = "2026-11-16 21:55";
+const APP_CODE_VERSION = "v10.53";
+const APP_BUILD_DATE = "2026-11-16 22:12";
 const EDITOR_INVITE_CODE = "0402";
 
 const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v10.53",
+    version: "v10.53",
+    date: "2026-11-16",
+    title: "식단 탭 슬림화(빈 끼니 1줄 압축 · 중복 배너 제거 · 1스크린 가독성) & 전체 화면 다듬기",
+    changes: [
+      "식단 탭에서 비어 있는 끼니(아침·간식·야식 등)는 얇은 1줄 바([아이콘 끼니 · 비어있음 + 추가])로 압축해 스크롤 길이 대폭 축소",
+      "식단 탭 중간의 중복 가족일정 배너를 제거하고 상단 날짜·7일 달력·멤버 필터 여백을 슬림화해 한눈에 식단 파악 가능",
+      "식단 기록이 있는 카드도 콤팩트 패딩(p-2.5)과 자연스러운 줄바꿈으로 가독성 향상"
+    ]
+  },
+  {
+    id: "patch-v10.52",
+    version: "v10.52",
+    date: "2026-11-16",
+    title: "홈 화면 1스크린 압축 · 오늘의 식단 2열 카드화 · 기본 펼침 & 전체 바로가기 통일",
+    changes: [
+      "홈 상단 바(날씨·일정·공지) 기본 상태를 펼침(kim_header_collapsed_v2)으로 초기화",
+      "상단 [🧭 전체 바로가기] 아코디언을 제거하고 홈 하단과 동일한 2열 카드 양식으로 10개 주요 메뉴(오늘의 식단·주간요약·냉장고·장보기·할일·식비·육아수첩·레시피북·가족공지·AI추천) 통일",
+      "오늘의 식단 카드를 냉장고/장보기와 동일한 콤팩트 2열 카드로 축소해 스크롤을 최소화하고 한눈에 들어오도록 개선"
+    ]
+  },
   {
     id: "patch-v10.51",
     version: "v10.51",
@@ -2434,7 +2456,7 @@ function MainApp() {
 
   // 상단 바 펼치기/접기 및 틀고정(Sticky) 해제 상태
   const [isHeaderCollapsed, setIsHeaderCollapsed] = useState(() => {
-    return localStorage.getItem("kim_header_collapsed") === "true";
+    return localStorage.getItem("kim_header_collapsed_v2") === "true";
   });
   const [isHeaderPinned, setIsHeaderPinned] = useState(() => {
     return localStorage.getItem("kim_header_pinned") === "true";
@@ -4088,7 +4110,7 @@ function MainApp() {
   const handleToggleHeaderCollapse = () => {
     const next = !isHeaderCollapsed;
     setIsHeaderCollapsed(next);
-    localStorage.setItem("kim_header_collapsed", String(next));
+    localStorage.setItem("kim_header_collapsed_v2", String(next));
   };
 
   const handleToggleHeaderPin = () => {
@@ -8073,9 +8095,8 @@ ${validText}
           </div>
         </div>
 
-        {!isHeaderCollapsed && (
+        {activeTab === "home" && !isHeaderCollapsed && (
           <>
-            {/* 핵심 1줄 요약 바 (단일 행 가로 스크롤 지원) + 상세 펼치기 */}
             <div className="mt-2 flex items-center justify-between gap-1.5 bg-stone-50 border border-stone-200/90 rounded-2xl px-2.5 py-1.5">
               <div className="flex items-center gap-1.5 flex-nowrap overflow-x-auto min-w-0">
                 <button
@@ -8114,122 +8135,31 @@ ${validText}
                     할일 {globalTodoBadgeStats.activeCount}
                   </button>
                 )}
-                {pinnedNotices.length > 0 && (
-                  <button
-                    onClick={() => setActiveTab("notices")}
-                    className="px-2 py-0.5 rounded-full bg-amber-50 border border-amber-200 text-amber-900 text-[11px] font-extrabold whitespace-nowrap shrink-0"
-                  >
-                    공지 {pinnedNotices.length}
-                  </button>
-                )}
               </div>
               <button
+                type="button"
                 onClick={() => setIsTopAlertsExpanded((v) => !v)}
-                className="px-2.5 py-1 rounded-xl bg-white border border-stone-200 text-[11px] font-extrabold text-stone-700 shrink-0 whitespace-nowrap"
+                className="text-[10px] font-extrabold text-stone-500 whitespace-nowrap shrink-0"
               >
-                {isTopAlertsExpanded ? "요약 ▲" : "상세 ▼"}
+                {isTopAlertsExpanded ? "접기 ▲" : "상세 ▼"}
               </button>
             </div>
 
-            {isTopAlertsExpanded && (
-              <>
-            {/* 서울 중구 실시간 날씨 · 주간예보 · 미세먼지 바 (접기 시 함께 접힘) */}
-            {weatherInfo ? (
-              <div className="mt-2 bg-sky-50/80 border border-sky-200/80 rounded-2xl px-3 py-2 space-y-2">
-                <div className="flex items-center justify-between gap-2">
-                  <button
-                    onClick={() => setIsWeeklyWeatherOpen((prev) => !prev)}
-                    className="flex items-center gap-2 min-w-0 text-left flex-1"
-                    title="눌러서 주간 날씨 펼치기/접기"
-                  >
-                    <span className="text-lg shrink-0">{weatherInfo.emoji}</span>
-                    <div className="min-w-0 flex-1">
-                      <div className="text-xs font-black text-stone-900 truncate flex items-center gap-1">
-                        <span>
-                          {weatherInfo.location} {weatherInfo.temp}°C
-                        </span>
-                        <span className="text-[10px] font-bold text-stone-500">
-                          ({weatherInfo.min}°/{weatherInfo.max}°)
-                        </span>
-                        <span className="text-[9px] font-extrabold text-sky-700 bg-sky-100 px-1.5 py-0.2 rounded-full">
-                          주간 {isWeeklyWeatherOpen ? "▲" : "▼"}
-                        </span>
-                      </div>
-                      <div className="text-[10px] font-semibold text-stone-600 truncate">
-                        {weatherInfo.tip}
-                      </div>
-                    </div>
-                  </button>
-                  <button
-                    onClick={() => {
-                      fetchSeoulJungGuWeather();
-                      showToast("서울 중구 날씨·주간예보·미세먼지를 새로고침했습니다.");
-                    }}
-                    className={`px-2 py-1 rounded-xl border text-[10px] font-extrabold shrink-0 text-right ${weatherInfo.dust.badgeClass}`}
-                    title="눌러서 날씨·미세먼지 새로고침"
-                  >
-                    <div>
-                      {weatherInfo.dust.emoji} 미세 {weatherInfo.pm10} · 초미세 {weatherInfo.pm25}
-                    </div>
-                    <div className="text-[9px] opacity-85">
-                      {weatherInfo.dust.label} · {weatherInfo.updatedTime} ↻
-                    </div>
-                  </button>
-                </div>
-
-                {isWeeklyWeatherOpen && Array.isArray(weatherInfo.weekly) && weatherInfo.weekly.length > 0 && (
-                  <div className="pt-2 border-t border-sky-200/70">
-                    <div className="grid grid-cols-7 gap-1">
-                      {weatherInfo.weekly.map((day, idx) => (
-                        <div
-                          key={day.date}
-                          className={`rounded-xl py-1.5 px-0.5 text-center border ${
-                            idx === 0
-                              ? "bg-white border-sky-300 shadow-sm"
-                              : "bg-white/60 border-sky-100"
-                          }`}
-                        >
-                          <div className={`text-[9px] font-black ${idx === 0 ? "text-sky-700" : "text-stone-500"}`}>
-                            {day.dayName}
-                          </div>
-                          <div className="text-sm my-0.5 leading-none">{day.emoji}</div>
-                          <div className="text-[9px] font-extrabold text-stone-800 leading-tight">
-                            <span className="text-rose-600">{day.max}°</span>
-                            <span className="text-stone-400">/</span>
-                            <span className="text-blue-600">{day.min}°</span>
-                          </div>
-                          {day.rainProb > 0 && (
-                            <div className="text-[8px] font-bold text-sky-600 mt-0.5">
-                              💧{day.rainProb}%
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                    <div className="text-[9px] text-stone-400 text-right mt-1">
-                      Open-Meteo 실시간 연동 (15분마다 자동 갱신)
-                    </div>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div className="mt-2 bg-sky-50/70 border border-sky-200/80 rounded-2xl px-3 py-2 flex items-center justify-between text-[11px] font-bold text-sky-900">
+            {isTopAlertsExpanded && weatherInfo && (
+              <div className="mt-2 bg-sky-50/70 border border-sky-200/80 rounded-2xl px-3 py-2 text-[11px] text-sky-950 flex items-center justify-between">
                 <span>
-                  {isWeatherLoading
-                    ? "🌤️ 서울 중구 실시간 날씨·미세먼지 불러오는 중..."
-                    : `⚠️ ${weatherError || "날씨 정보를 불러오지 못했습니다."}`}
+                  {weatherInfo.emoji} 현재 {weatherInfo.temp}°C (최고 {weatherInfo.max}° / 최저 {weatherInfo.min}°) · 미세먼지 {weatherInfo.pm10} · 초미세 {weatherInfo.pm25}
                 </span>
                 <button
                   onClick={fetchSeoulJungGuWeather}
-                  className="px-2 py-0.5 rounded-lg bg-white border border-sky-300 text-[10px] font-extrabold text-sky-800"
+                  className="px-2 py-0.5 rounded-lg bg-white border border-sky-300 text-[10px] font-extrabold text-sky-800 shrink-0"
                 >
                   새로고침 ↻
                 </button>
               </div>
             )}
 
-
-            {imminentSchedulesWithin3Days.length > 0 && activeTab !== "schedule" && (
+            {imminentSchedulesWithin3Days.length > 0 && (
               <div
                 onClick={() => setActiveTab("schedule")}
                 className="mt-2 bg-rose-50 hover:bg-rose-100/80 border border-rose-200 rounded-xl px-3 py-2 cursor-pointer transition space-y-1"
@@ -8237,7 +8167,7 @@ ${validText}
                 <div className="flex items-center justify-between">
                   <span className="text-[11px] font-black text-rose-900 flex items-center gap-1">
                     <Clock className="w-3.5 h-3.5 text-rose-600" />
-                    <span>3일 이내 도래하는 가족 일정 ({imminentSchedulesWithin3Days.length}건)</span>
+                    <span>3일 이내 가족 일정 ({imminentSchedulesWithin3Days.length}건)</span>
                   </span>
                   <span className="text-[10px] font-extrabold text-rose-600">일정표 열기 &gt;</span>
                 </div>
@@ -8257,7 +8187,7 @@ ${validText}
               </div>
             )}
 
-            {pinnedNotices.length > 0 && activeTab !== "notices" && (
+            {pinnedNotices.length > 0 && (
               <div
                 onClick={() => setActiveTab("notices")}
                 className="mt-2 bg-indigo-50/90 hover:bg-indigo-100/80 border border-indigo-200 rounded-xl px-3 py-2 cursor-pointer flex items-start justify-between gap-2 transition"
@@ -8274,69 +8204,6 @@ ${validText}
                 </span>
               </div>
             )}
-
-              </>
-            )}
-
-            <div className="mt-2 flex items-center justify-between gap-2">
-              <button
-                onClick={() => setIsQuickMenuExpanded((v) => !v)}
-                className="w-full py-1.5 px-3 rounded-xl bg-stone-100 hover:bg-stone-200/80 border border-stone-200 text-xs font-extrabold text-stone-700 flex items-center justify-between"
-              >
-                <span>🧭 전체 바로가기 (10개 메뉴)</span>
-                <span>{isQuickMenuExpanded ? "접기 ▲" : "펼치기 ▼"}</span>
-              </button>
-            </div>
-
-            {isQuickMenuExpanded && (
-            <div className="grid grid-cols-3 gap-1.5 mt-1.5 bg-stone-100 p-1.5 rounded-2xl">
-              {[
-                { id: "daily", label: "일별식단", icon: "🍽️" },
-                { id: "weekly", label: "주간요약", icon: "📊" },
-                { id: "monthly", label: "월간·식비", icon: "💰" },
-                {
-                  id: "schedule",
-                  label: "일정",
-                  icon: "🗓️",
-                  badge: imminentSchedulesWithin3Days.length
-                },
-                { id: "baby", label: "육아수첩", icon: "👶" },
-                { id: "fridge", label: "냉장고", icon: "❄️" },
-                {
-                  id: "shopping",
-                  label: "장보기",
-                  icon: "🛒",
-                  badge: shoppingList.filter((s) => !s.checked).length
-                },
-                {
-                  id: "notices",
-                  label: "가족공지",
-                  icon: "📌",
-                  badge: notices.filter((n) => !n.done).length
-                },
-                { id: "ai", label: "AI추천", icon: "✨" },
-                { id: "recipes", label: "레시피북", icon: "📖" }
-              ].map((t) => (
-                <button
-                  key={t.id}
-                  onClick={() => setActiveTab(t.id)}
-                  className={`relative h-9 px-1.5 rounded-xl text-[11px] font-extrabold whitespace-nowrap transition flex items-center justify-center gap-1 ${
-                    activeTab === t.id
-                      ? "bg-stone-900 text-white shadow-sm"
-                      : "bg-white text-stone-700 hover:bg-stone-50 border border-stone-200/80"
-                  }`}
-                >
-                  <span className="text-xs leading-none">{t.icon}</span>
-                  <span className="tracking-tight leading-none">{t.label}</span>
-                  {t.badge > 0 && (
-                    <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 text-[9px] rounded-full bg-orange-500 text-white font-black flex items-center justify-center shadow-sm">
-                      {t.badge}
-                    </span>
-                  )}
-                </button>
-              ))}
-            </div>
-            )}
           </>
         )}
       </header>
@@ -8345,8 +8212,8 @@ ${validText}
           탭 0: 🏠 홈 (대시보드 & 바로가기 허브)
       ========================================== */}
       {activeTab === "home" && (
-        <div className="p-4 space-y-3">
-          {/* 1. 지금 시간대 루틴 카드 */}
+        <div className="p-3 space-y-2.5">
+          {/* 1. 지금 시간대 루틴 카드 (콤팩트) */}
           {(() => {
             const curSlot = getCurrentRoutineTimeSlot();
             const activeRoutines = familyRoutines.filter((r) => !isRoutineDoneNow(r));
@@ -8356,10 +8223,10 @@ ${validText}
             });
             const visibleList = showAllTodayRoutinesOnMain ? activeRoutines : slotMatched;
             return (
-              <div className="bg-indigo-50/70 border border-indigo-200 rounded-2xl p-3 space-y-2">
-                <div className="flex items-center justify-between gap-2">
+              <div className="bg-indigo-50/70 border border-indigo-200 rounded-2xl p-2.5 space-y-1.5">
+                <div className="flex items-center justify-between gap-1.5">
                   <span className="text-xs font-black text-indigo-950 truncate">
-                    🔄 {showAllTodayRoutinesOnMain ? "오늘 남은 루틴 전체" : `지금(${curSlot}) 루틴`} ({visibleList.length}건)
+                    🔄 {showAllTodayRoutinesOnMain ? "오늘 남은 루틴" : `지금(${curSlot}) 루틴`} ({visibleList.length}건)
                   </span>
                   <div className="flex items-center gap-1 shrink-0">
                     <button
@@ -8393,15 +8260,15 @@ ${validText}
                   </div>
                 </div>
                 {!isMainRoutineCollapsed && (activeRoutines.length === 0 ? (
-                  <div className="text-[11px] font-bold text-emerald-800 bg-white/90 rounded-xl px-3 py-2">
+                  <div className="text-[11px] font-bold text-emerald-800 bg-white/90 rounded-xl px-2.5 py-1.5">
                     🎉 오늘 예정된 모든 루틴을 완료했습니다!
                   </div>
                 ) : visibleList.length === 0 ? (
-                  <div className="text-[11px] font-bold text-indigo-700 bg-white/80 rounded-xl px-3 py-2">
+                  <div className="text-[11px] font-bold text-indigo-700 bg-white/80 rounded-xl px-2.5 py-1.5">
                     ✅ {curSlot} 시간대 루틴을 모두 완료했습니다!
                   </div>
                 ) : (
-                  <div className="space-y-1.5">
+                  <div className="space-y-1">
                     {visibleList.map((rt) => {
                       const nextInfo = getRoutineNextDateInfo(rt, currentDayKey);
                       return (
@@ -8439,144 +8306,156 @@ ${validText}
             );
           })()}
 
-          {/* 2. 오늘의 식단 바로가기 카드 */}
+          {/* 2. 통일된 2열 바로가기 그리드 (10개 핵심 메뉴 한눈에) */}
           {(() => {
             const todayKey = getTodayStr();
             const todayMealsList = meals.filter((m) => m.date === todayKey);
+            const firstMealPreview = todayMealsList[0] ? `${todayMealsList[0].slot}: ${todayMealsList[0].menu}` : "아직 기록 없음";
             return (
-              <div
-                onClick={() => {
-                  setSelectedDate(todayKey);
-                  setActiveTab("daily");
-                }}
-                className="bg-white border border-stone-200 rounded-2xl p-3.5 shadow-sm cursor-pointer hover:border-amber-300 transition space-y-2"
-              >
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-black text-stone-900">🍽️ 오늘의 식단 ({todayKey.slice(5)})</span>
-                  <span className="text-[11px] font-extrabold text-amber-700">식단표 열기 &gt;</span>
-                </div>
-                {todayMealsList.length === 0 ? (
-                  <div className="text-[11px] text-stone-400 font-semibold">
-                    아직 오늘 기록된 식단이 없습니다. 탭해서 바로 기록해 보세요!
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedDate(todayKey);
+                    setActiveTab("daily");
+                  }}
+                  className="bg-white border border-stone-200 hover:border-amber-300 rounded-2xl p-2.5 text-left shadow-sm space-y-0.5 transition"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-black text-stone-900">🍽️ 오늘의 식단</span>
+                    <span className="text-[10px] font-extrabold text-amber-700">{todayMealsList.length}건 &gt;</span>
                   </div>
-                ) : (
-                  <div className="flex flex-wrap gap-1.5">
-                    {todayMealsList.slice(0, 4).map((m) => (
-                      <span key={m.id} className="px-2 py-1 rounded-lg bg-amber-50 border border-amber-200 text-[11px] font-bold text-amber-950">
-                        {m.slot}: {m.menu}
-                      </span>
-                    ))}
+                  <div className="text-[11px] font-bold text-stone-500 truncate">{firstMealPreview}</div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("weekly")}
+                  className="bg-white border border-stone-200 hover:border-indigo-300 rounded-2xl p-2.5 text-left shadow-sm space-y-0.5 transition"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-black text-stone-900">📊 주간요약</span>
+                    <span className="text-[10px] font-extrabold text-indigo-700">열기 &gt;</span>
                   </div>
-                )}
+                  <div className="text-[11px] font-bold text-stone-500 truncate">이번 주 식단·영양 흐름</div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("fridge")}
+                  className="bg-white border border-stone-200 hover:border-orange-300 rounded-2xl p-2.5 text-left shadow-sm space-y-0.5 transition"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-black text-stone-900">❄️ 냉장고</span>
+                    <span className="text-[10px] font-extrabold text-orange-600">열기 &gt;</span>
+                  </div>
+                  <div className="text-[11px] font-bold text-stone-600 truncate">
+                    보유 {fridge.length} · <span className={expiringItems.length > 0 ? "text-rose-600 font-black" : "text-emerald-700"}>임박 {expiringItems.length}건</span>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("shopping")}
+                  className="bg-white border border-stone-200 hover:border-emerald-300 rounded-2xl p-2.5 text-left shadow-sm space-y-0.5 transition"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-black text-stone-900">🛒 장보기</span>
+                    <span className="text-[10px] font-extrabold text-emerald-700">열기 &gt;</span>
+                  </div>
+                  <div className="text-[11px] font-bold text-stone-600 truncate">
+                    남은 품목 <span className="text-emerald-700 font-black">{shoppingList.filter((s) => !s.checked).length}건</span>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveTab("schedule");
+                    setTimeout(() => {
+                      document.getElementById("schedule-todo-section")?.scrollIntoView({ behavior: "smooth", block: "start" });
+                    }, 120);
+                  }}
+                  className="bg-white border border-stone-200 hover:border-rose-300 rounded-2xl p-2.5 text-left shadow-sm space-y-0.5 transition"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-black text-stone-900">✅ 할 일·일정</span>
+                    <span className="text-[10px] font-extrabold text-rose-600">이동 &gt;</span>
+                  </div>
+                  <div className="text-[11px] font-bold text-stone-600 truncate">
+                    할 일 <span className={globalTodoBadgeStats.urgentCount > 0 ? "text-rose-600 font-black" : "text-amber-700 font-black"}>{globalTodoBadgeStats.activeCount}건</span> · 일정 {imminentSchedulesWithin3Days.length}건
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveTab("monthly");
+                    setMonthlySubTab("expense");
+                  }}
+                  className="bg-white border border-stone-200 hover:border-amber-300 rounded-2xl p-2.5 text-left shadow-sm space-y-0.5 transition"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-black text-stone-900">💰 {currentMonth.slice(5)}월 식비</span>
+                    <span className="text-[10px] font-extrabold text-amber-700">가계부 &gt;</span>
+                  </div>
+                  <div className="text-[11px] font-black text-stone-900 truncate">
+                    {monthlyExpenseSummary.total.toLocaleString()}원
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("baby")}
+                  className="bg-white border border-stone-200 hover:border-sky-300 rounded-2xl p-2.5 text-left shadow-sm space-y-0.5 transition"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-black text-stone-900">👶 육아수첩</span>
+                    <span className="text-[10px] font-extrabold text-sky-700">열기 &gt;</span>
+                  </div>
+                  <div className="text-[11px] font-bold text-stone-500 truncate">시목 · 시율 발달/접종</div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("recipes")}
+                  className="bg-white border border-stone-200 hover:border-rose-300 rounded-2xl p-2.5 text-left shadow-sm space-y-0.5 transition"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-black text-stone-900">📖 레시피북</span>
+                    <span className="text-[10px] font-extrabold text-rose-700">열기 &gt;</span>
+                  </div>
+                  <div className="text-[11px] font-bold text-stone-500 truncate">저장된 요리 {recipes.length}건</div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("notices")}
+                  className="bg-white border border-stone-200 hover:border-indigo-300 rounded-2xl p-2.5 text-left shadow-sm space-y-0.5 transition"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-black text-stone-900">📌 가족공지</span>
+                    <span className="text-[10px] font-extrabold text-indigo-700">열기 &gt;</span>
+                  </div>
+                  <div className="text-[11px] font-bold text-stone-500 truncate">
+                    미완료 {notices.filter((n) => !n.done).length}건
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("ai")}
+                  className="bg-white border border-stone-200 hover:border-purple-300 rounded-2xl p-2.5 text-left shadow-sm space-y-0.5 transition"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-black text-stone-900">✨ AI추천</span>
+                    <span className="text-[10px] font-extrabold text-purple-700">열기 &gt;</span>
+                  </div>
+                  <div className="text-[11px] font-bold text-stone-500 truncate">냉장고 파먹기 &amp; 플레이팅</div>
+                </button>
               </div>
             );
           })()}
-
-          {/* 3. 냉장고 임박 & 장보기 2분할 바로가기 */}
-          <div className="grid grid-cols-2 gap-2.5">
-            <button
-              type="button"
-              onClick={() => setActiveTab("fridge")}
-              className="bg-white border border-stone-200 hover:border-orange-300 rounded-2xl p-3 text-left shadow-sm space-y-1 transition"
-            >
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-black text-stone-900">❄️ 냉장고</span>
-                <span className="text-[10px] font-extrabold text-orange-600">열기 &gt;</span>
-              </div>
-              <div className="text-[11px] font-bold text-stone-600">
-                보유 {fridge.length}개 ·{" "}
-                <span className={expiringItems.length > 0 ? "text-rose-600 font-black" : "text-emerald-700"}>
-                  임박 {expiringItems.length}건
-                </span>
-              </div>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setActiveTab("shopping")}
-              className="bg-white border border-stone-200 hover:border-emerald-300 rounded-2xl p-3 text-left shadow-sm space-y-1 transition"
-            >
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-black text-stone-900">🛒 장보기</span>
-                <span className="text-[10px] font-extrabold text-emerald-700">열기 &gt;</span>
-              </div>
-              <div className="text-[11px] font-bold text-stone-600">
-                남은 품목{" "}
-                <span className="text-emerald-700 font-black">
-                  {shoppingList.filter((s) => !s.checked).length}건
-                </span>
-              </div>
-            </button>
-          </div>
-
-          {/* 4. To-Do 할일 & 이번 달 식비 2분할 바로가기 */}
-          <div className="grid grid-cols-2 gap-2.5">
-            <button
-              type="button"
-              onClick={() => {
-                setActiveTab("schedule");
-                setTimeout(() => {
-                  document.getElementById("schedule-todo-section")?.scrollIntoView({ behavior: "smooth", block: "start" });
-                }, 120);
-              }}
-              className="bg-white border border-stone-200 hover:border-rose-300 rounded-2xl p-3 text-left shadow-sm space-y-1 transition"
-            >
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-black text-stone-900">✅ 할 일(To-Do)</span>
-                <span className="text-[10px] font-extrabold text-rose-600">이동 &gt;</span>
-              </div>
-              <div className="text-[11px] font-bold text-stone-600">
-                남은 할 일{" "}
-                <span className={globalTodoBadgeStats.urgentCount > 0 ? "text-rose-600 font-black" : "text-amber-700 font-black"}>
-                  {globalTodoBadgeStats.activeCount}건
-                </span>
-              </div>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                setActiveTab("monthly");
-                setMonthlySubTab("expense");
-              }}
-              className="bg-white border border-stone-200 hover:border-amber-300 rounded-2xl p-3 text-left shadow-sm space-y-1 transition"
-            >
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-black text-stone-900">💰 {currentMonth.slice(5)}월 식비</span>
-                <span className="text-[10px] font-extrabold text-amber-700">가계부 &gt;</span>
-              </div>
-              <div className="text-[11px] font-black text-stone-900">
-                {monthlyExpenseSummary.total.toLocaleString()}원
-              </div>
-            </button>
-          </div>
-
-          {/* 5. 육아수첩 & 가족 레시피북 바로가기 */}
-          <div className="grid grid-cols-2 gap-2.5">
-            <button
-              type="button"
-              onClick={() => setActiveTab("baby")}
-              className="bg-white border border-stone-200 hover:border-sky-300 rounded-2xl p-3 text-left shadow-sm space-y-1 transition"
-            >
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-black text-stone-900">👶 육아수첩</span>
-                <span className="text-[10px] font-extrabold text-sky-700">열기 &gt;</span>
-              </div>
-              <div className="text-[11px] font-bold text-stone-500">시목 · 시율 발달/접종</div>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setActiveTab("recipes")}
-              className="bg-white border border-stone-200 hover:border-rose-300 rounded-2xl p-3 text-left shadow-sm space-y-1 transition"
-            >
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-black text-stone-900">📖 레시피북</span>
-                <span className="text-[10px] font-extrabold text-rose-700">열기 &gt;</span>
-              </div>
-              <div className="text-[11px] font-bold text-stone-500">저장된 요리 {recipes.length}건</div>
-            </button>
-          </div>
         </div>
       )}
 
@@ -8584,25 +8463,28 @@ ${validText}
           탭 1: 일별 식단
       ========================================== */}
       {activeTab === "daily" && (
-        <div className="p-4 space-y-3.5">
-          <button
-            onClick={() => {
-              setScanTargetMonth(selectedDate.slice(0, 7));
-              setIsDaycareModalOpen(true);
-            }}
-            className="w-full py-2 px-3 rounded-xl bg-amber-50/90 border border-amber-200 hover:bg-amber-100 transition flex items-center justify-between gap-2"
-          >
-            <div className="flex items-center gap-2 min-w-0">
-              <Camera className="w-4 h-4 text-amber-600 shrink-0" />
-              <span className="text-xs font-extrabold text-amber-900 truncate">
-                식단표 AI 스캔 (어린이집·손글씨)
-              </span>
-            </div>
-            <span className="text-[11px] font-bold text-amber-700 shrink-0">열기 &gt;</span>
-          </button>
+        <div className="p-3 space-y-2.5">
+          <div className="grid grid-cols-2 gap-1.5">
+            <button
+              onClick={() => {
+                setScanTargetMonth(selectedDate.slice(0, 7));
+                setIsDaycareModalOpen(true);
+              }}
+              className="py-1.5 px-2.5 rounded-xl bg-amber-50/90 border border-amber-200 hover:bg-amber-100 transition flex items-center justify-center gap-1.5"
+            >
+              <Camera className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+              <span className="text-[11px] font-extrabold text-amber-900 whitespace-nowrap">식단표 AI 스캔</span>
+            </button>
+            <button
+              onClick={() => setIsInventoryExportOpen(true)}
+              className="py-1.5 px-2.5 rounded-xl bg-stone-100 border border-stone-200 hover:bg-stone-200/80 transition flex items-center justify-center gap-1"
+            >
+              <span className="text-[11px] font-extrabold text-stone-800 whitespace-nowrap">📤 식단·재고 내보내기</span>
+            </button>
+          </div>
 
-          <div className="bg-white p-3 rounded-2xl border border-stone-200 shadow-sm">
-            <div className="flex items-center justify-between mb-2.5">
+          <div className="bg-white p-2.5 rounded-2xl border border-stone-200 shadow-sm">
+            <div className="flex items-center justify-between mb-2">
               <button
                 onClick={() => {
                   const d = new Date(selectedDate + "T00:00:00");
@@ -8694,29 +8576,7 @@ ${validText}
             </div>
           </div>
 
-          {getSchedulesForDate(selectedDate).length > 0 && (
-            <div
-              onClick={() => {
-                setScheduleSelectedDate(selectedDate);
-                setScheduleMonth(selectedDate.slice(0, 7));
-                setActiveTab("schedule");
-              }}
-              className="bg-pink-50 border border-pink-200 rounded-2xl p-3 cursor-pointer flex items-center justify-between"
-            >
-              <div className="space-y-0.5">
-                <div className="text-[11px] font-black text-pink-900 flex items-center gap-1">
-                  <Cake className="w-3.5 h-3.5 text-pink-600" />
-                  <span>{selectedDate} 가족 일정 · 기념일</span>
-                </div>
-                {getSchedulesForDate(selectedDate).map((ev) => (
-                  <div key={ev.id} className="text-xs font-bold text-pink-800">
-                    • {ev.title} {ev.memo ? `(${ev.memo})` : ""}
-                  </div>
-                ))}
-              </div>
-              <span className="text-[10px] font-extrabold text-pink-600 shrink-0">일정탭 &gt;</span>
-            </div>
-          )}
+
 
           <div className="grid grid-cols-5 gap-1">
             <button
@@ -8746,7 +8606,7 @@ ${validText}
             ))}
           </div>
 
-          <div className="space-y-3">
+          <div className="space-y-2">
             {MEAL_SLOTS.map((slot) => {
               const slotMeals = meals.filter(
                 (m) =>
@@ -8754,50 +8614,65 @@ ${validText}
                   m.slot === slot.id &&
                   (selectedMember === "전체" || toSafeArray(m.members).includes(selectedMember))
               );
+              const openAddSlotMeal = () => {
+                setEditingMeal(null);
+                setMealForm({
+                  date: selectedDate,
+                  slot: slot.id,
+                  menu: "",
+                  members:
+                    selectedMember === "전체"
+                      ? ["수혁", "아리나", "시목", "시율"]
+                      : [selectedMember],
+                  ingredients: [],
+                  note: "",
+                  sourceType: "집밥/온가족식",
+                  cost: ""
+                });
+                setIsMealModalOpen(true);
+              };
+
+              if (slotMeals.length === 0) {
+                return (
+                  <div
+                    key={slot.id}
+                    className="bg-white/80 rounded-xl border border-stone-200/80 px-3 py-2 flex items-center justify-between gap-2"
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="text-sm">{slot.icon}</span>
+                      <span className="text-xs font-black text-stone-700">{slot.label}</span>
+                      <span className="text-[10px] text-stone-400">{slot.time}</span>
+                    </div>
+                    <button
+                      onClick={openAddSlotMeal}
+                      className="px-2.5 py-1 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 text-[11px] font-extrabold flex items-center gap-0.5 shrink-0"
+                    >
+                      <Plus className="w-3 h-3" /> 추가
+                    </button>
+                  </div>
+                );
+              }
 
               return (
                 <div
                   key={slot.id}
-                  className="bg-white rounded-2xl border border-stone-200 p-3.5 shadow-sm"
+                  className="bg-white rounded-2xl border border-stone-200 p-2.5 shadow-sm"
                 >
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                      <span className="text-lg">{slot.icon}</span>
-                      <div>
-                        <span className="text-sm font-black text-stone-900">{slot.label}</span>
-                        <span className="text-[11px] text-stone-400 ml-2">{slot.time}</span>
-                      </div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-base">{slot.icon}</span>
+                      <span className="text-xs font-black text-stone-900">{slot.label}</span>
+                      <span className="text-[10px] text-stone-400">{slot.time}</span>
                     </div>
                     <button
-                      onClick={() => {
-                        setEditingMeal(null);
-                        setMealForm({
-                          date: selectedDate,
-                          slot: slot.id,
-                          menu: "",
-                          members:
-                            selectedMember === "전체"
-                              ? ["수혁", "아리나", "시목", "시율"]
-                              : [selectedMember],
-                          ingredients: [],
-                          note: "",
-                          sourceType: "집밥/온가족식",
-                          cost: ""
-                        });
-                        setIsMealModalOpen(true);
-                      }}
-                      className="px-2.5 py-1 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-xs font-extrabold flex items-center gap-1"
+                      onClick={openAddSlotMeal}
+                      className="px-2 py-0.5 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 text-[11px] font-extrabold flex items-center gap-0.5"
                     >
-                      <Plus className="w-3.5 h-3.5" /> 추가
+                      <Plus className="w-3 h-3" /> 추가
                     </button>
                   </div>
 
-                  {slotMeals.length === 0 ? (
-                    <div className="text-xs text-stone-400 py-2 text-center bg-stone-50 rounded-xl border border-dashed border-stone-200">
-                      기록된 {slot.label} 메뉴가 없습니다.
-                    </div>
-                  ) : (
-                    <div className="space-y-2">
+                    <div className="space-y-1.5">
                       {slotMeals.map((m) => {
                         const safeMems = toSafeArray(m.members);
                         const safeIngs = toSafeArray(m.ingredients);
@@ -8873,7 +8748,6 @@ ${validText}
                         );
                       })}
                     </div>
-                  )}
                 </div>
               );
             })}
