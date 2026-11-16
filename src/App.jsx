@@ -694,7 +694,13 @@ const MEAL_SLOTS = [
   { id: "야식", label: "야식", shortLabel: "야식", icon: "🦉", time: "21:00 이후" }
 ];
 
-const STORAGE_LOCATIONS = ["냉장실", "냉동실", "실온·팬트리"];
+const STORAGE_LOCATIONS = ["냉장실", "메인 냉동실", "별도 냉동고", "실온·팬트리"];
+const matchesFridgeLocFilter = (itemLoc, filterLoc) => {
+  if (filterLoc === "전체") return true;
+  if (filterLoc === "냉동실") return String(itemLoc || "").includes("냉동");
+  if (filterLoc === "메인 냉동실") return itemLoc === "메인 냉동실" || itemLoc === "냉동실";
+  return itemLoc === filterLoc;
+};
 const FRIDGE_CATEGORIES = ["채소/과일", "육류/수산", "유제품/계란", "유아식/이유식 재료", "반찬/김치", "밀키트", "양념/소스", "기타"];
 const SCHEDULE_CATEGORIES = ["기념일/생일", "할일(To-Do)", "육아/병원", "가족행사/경조사"];
 const RECIPE_CATEGORIES = ["메인반찬", "국·찌개", "한그릇·면·밥", "유아식·이유식", "간식·디저트", "샐러드·가벼운식", "기타"];
@@ -702,8 +708,7 @@ const FRIDGE_SHELF_ZONES = [
   "냉장 1단(상단)",
   "냉장 2단(중단)",
   "냉장 3단(하단)",
-  "채소칸 좌",
-  "채소칸 우",
+  "채소칸",
   "하부냉동 1칸",
   "하부냉동 2칸",
   "하부냉동 3칸",
@@ -730,6 +735,9 @@ const getFridgeCategoryIcon = (cat) => {
 };
 
 const resolveItemShelfZone = (item) => {
+  if (item?.shelfZone === "채소칸 좌" || item?.shelfZone === "채소칸 우") {
+    return "채소칸";
+  }
   if (item?.shelfZone && FRIDGE_SHELF_ZONES.includes(item.shelfZone)) {
     return item.shelfZone;
   }
@@ -738,12 +746,17 @@ const resolveItemShelfZone = (item) => {
   if (loc.includes("실온") || loc.includes("팬트리") || loc.includes("상온")) {
     return "팬트리";
   }
+  if (loc === "별도 냉동고") {
+    if (cat === "밀키트") return "전용냉동 2칸";
+    if (cat === "육류/수산") return "전용냉동 1칸";
+    return "전용냉동 3칸";
+  }
   if (loc.includes("냉동")) {
     if (cat === "밀키트") return "하부냉동 2칸";
     if (cat === "육류/수산") return "하부냉동 1칸";
     return "하부냉동 3칸";
   }
-  if (cat === "채소/과일") return "채소칸 좌";
+  if (cat === "채소/과일") return "채소칸";
   if (cat === "유제품/계란" || cat === "유아식/이유식 재료") return "냉장 1단(상단)";
   if (cat === "반찬/김치") return "냉장 2단(중단)";
   return "냉장 3단(하단)";
@@ -855,11 +868,32 @@ const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.65) =>
     img.src = dataUrl;
   });
 
-const APP_CODE_VERSION = "v10.13";
-const APP_BUILD_DATE = "2026-11-16 14:55";
+const APP_CODE_VERSION = "v10.15";
+const APP_BUILD_DATE = "2026-11-16 15:08";
 const EDITOR_INVITE_CODE = "0402";
 
 const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v10.15",
+    version: "v10.15",
+    date: "2026-11-16",
+    title: "리스트 뷰에서 메인 냉동실·별도 냉동고를 '냉동실'로 통합 묶음 표시",
+    changes: [
+      "리스트 뷰 상단 보관위치 필터와 카드 배지에서 메인 냉동실·별도 냉동고를 [냉동실] 하나로 묶어 표시",
+      "시각적 냉장고 뷰에서는 기존처럼 메인 냉동고(하부 4칸)와 별도 냉동고(4칸)를 분리해 관리 가능"
+    ]
+  },
+  {
+    id: "patch-v10.14",
+    version: "v10.14",
+    date: "2026-11-16",
+    title: "메인 냉동실/별도 냉동고 분리 · 채소칸 통합 · 재료 칩 드래그 이동(모바일/PC) 지원",
+    changes: [
+      "보관 위치에 [메인 냉동실]과 [별도 냉동고]를 분리하여 등록·필터링 지원 (기존 '냉동실' 데이터 호환 유지)",
+      "상부 냉장실의 채소칸 좌/우를 하나의 통합 [🥬 채소칸]으로 합쳐 13칸 구조로 단순화",
+      "시각적 냉장고 뷰에서 재료 칩을 손가락(터치)이나 마우스로 끌어 원하는 칸에 바로 옮기는 드래그 앤 드롭 추가"
+    ]
+  },
   {
     id: "patch-v10.13",
     version: "v10.13",
@@ -2012,6 +2046,9 @@ function MainApp() {
   const [isQuickParsingShopping, setIsQuickParsingShopping] = useState(false);
   const [fridgeViewMode, setFridgeViewMode] = useState("list"); // visual | list
   const [quickFridgeItem, setQuickFridgeItem] = useState(null);
+  const [draggingChip, setDraggingChip] = useState(null); // { item, x, y }
+  const [dragOverZone, setDragOverZone] = useState("");
+  const chipTouchRef = useRef(null);
 
   // [신규 v10.8] 가족 레시피북 상태
   const [recipes, setRecipes] = useState([]);
@@ -2137,7 +2174,7 @@ function MainApp() {
 
   const getDefaultExpiryForLocation = (loc) => {
     const todayStr = getTodayStr();
-    return loc === "냉동실"
+    return String(loc || "").includes("냉동")
       ? addMonthsToDateStr(todayStr, 1, 0)
       : addMonthsToDateStr(todayStr, 0, 7);
   };
@@ -5244,7 +5281,7 @@ ${validText}
           return true;
         })
         .map((it) => {
-          const loc = STORAGE_LOCATIONS.includes(it.location) ? it.location : "냉장실";
+          const loc = STORAGE_LOCATIONS.includes(it.location) ? it.location : String(it.location || "").includes("냉동") ? "메인 냉동실" : "냉장실";
           const cat = FRIDGE_CATEGORIES.includes(it.category) ? it.category : "기타";
           return {
             name: String(it.name || "").trim(),
@@ -5429,8 +5466,10 @@ ${validText}
     const nextLocation =
       newZone === "팬트리"
         ? "실온·팬트리"
-        : newZone.includes("냉동")
-        ? "냉동실"
+        : newZone.startsWith("전용냉동")
+        ? "별도 냉동고"
+        : newZone.startsWith("하부냉동")
+        ? "메인 냉동실"
         : "냉장실";
     const updated = {
       ...item,
@@ -8373,19 +8412,29 @@ ${validText}
 
           <div className="flex items-center justify-between gap-2">
             <div className="flex gap-1 bg-stone-200 p-1 rounded-xl overflow-x-auto">
-              {["전체", ...STORAGE_LOCATIONS].map((loc) => (
-                <button
-                  key={loc}
-                  onClick={() => setFridgeLocFilter(loc)}
-                  className={`px-2 py-1 rounded-lg text-[11px] font-extrabold whitespace-nowrap transition ${
-                    fridgeLocFilter === loc
-                      ? "bg-white text-stone-900 shadow-sm"
-                      : "text-stone-600"
-                  }`}
-                >
-                  {loc}
-                </button>
-              ))}
+              {(fridgeViewMode === "list"
+                ? ["전체", "냉장실", "냉동실", "실온·팬트리"]
+                : ["전체", ...STORAGE_LOCATIONS]
+              ).map((loc) => {
+                const isActive =
+                  fridgeLocFilter === loc ||
+                  (fridgeViewMode === "list" &&
+                    loc === "냉동실" &&
+                    (fridgeLocFilter === "메인 냉동실" || fridgeLocFilter === "별도 냉동고"));
+                return (
+                  <button
+                    key={loc}
+                    onClick={() => setFridgeLocFilter(loc)}
+                    className={`px-2 py-1 rounded-lg text-[11px] font-extrabold whitespace-nowrap transition ${
+                      isActive
+                        ? "bg-white text-stone-900 shadow-sm"
+                        : "text-stone-600"
+                    }`}
+                  >
+                    {loc}
+                  </button>
+                );
+              })}
             </div>
             <button
               onClick={openAddFridgeModal}
@@ -8445,7 +8494,7 @@ ${validText}
           ) : fridgeViewMode === "visual" ? (() => {
             const filteredFridge = fridge.filter(
               (i) =>
-                (fridgeLocFilter === "전체" || i.location === fridgeLocFilter) &&
+                matchesFridgeLocFilter(i.location, fridgeLocFilter) &&
                 (fridgeCatFilter === "전체" || i.category === fridgeCatFilter)
             );
             const itemsByZone = {};
@@ -8460,8 +8509,31 @@ ${validText}
 
             const renderShelfBox = (zoneName, labelOverride = null, toneClass = "bg-white border-sky-200") => {
               const zItems = itemsByZone[zoneName] || [];
+              const isDropTarget = dragOverZone === zoneName;
               return (
-                <div key={zoneName} className={`rounded-xl border p-2 space-y-1.5 ${toneClass}`}>
+                <div
+                  key={zoneName}
+                  data-shelf-zone={zoneName}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    if (dragOverZone !== zoneName) setDragOverZone(zoneName);
+                  }}
+                  onDragLeave={() => {
+                    if (dragOverZone === zoneName) setDragOverZone("");
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    setDragOverZone("");
+                    const itemId = e.dataTransfer?.getData("text/plain");
+                    const dragged = fridge.find((f) => f.id === itemId);
+                    if (dragged && resolveItemShelfZone(dragged) !== zoneName) {
+                      handleMoveFridgeShelfZone(dragged, zoneName);
+                    }
+                  }}
+                  className={`rounded-xl border p-2 space-y-1.5 transition ${toneClass} ${
+                    isDropTarget ? "ring-2 ring-amber-500 bg-amber-50/70" : ""
+                  }`}
+                >
                   <div className="flex items-center justify-between gap-1">
                     <span className="text-[10px] font-black text-stone-700 truncate">
                       {labelOverride || zoneName}
@@ -8471,7 +8543,9 @@ ${validText}
                     </span>
                   </div>
                   {zItems.length === 0 ? (
-                    <div className="text-[10px] text-stone-300 text-center py-1.5">비어 있음</div>
+                    <div className="text-[10px] text-stone-300 text-center py-1.5">
+                      {isDropTarget ? "여기에 놓기" : "비어 있음"}
+                    </div>
                   ) : (
                     <div className="flex flex-wrap gap-1">
                       {zItems.map((it) => {
@@ -8480,8 +8554,53 @@ ${validText}
                         return (
                           <button
                             key={it.id}
-                            onClick={() => setQuickFridgeItem(it)}
-                            className={`px-2 py-1 rounded-lg border text-[10px] font-extrabold flex items-center gap-1 transition active:scale-95 ${
+                            draggable
+                            onDragStart={(e) => {
+                              e.dataTransfer?.setData("text/plain", it.id);
+                            }}
+                            onTouchStart={(e) => {
+                              const t = e.touches?.[0];
+                              if (!t) return;
+                              chipTouchRef.current = {
+                                item: it,
+                                startX: t.clientX,
+                                startY: t.clientY,
+                                dragging: false
+                              };
+                            }}
+                            onTouchMove={(e) => {
+                              const st = chipTouchRef.current;
+                              const t = e.touches?.[0];
+                              if (!st || !t) return;
+                              const dist = Math.hypot(t.clientX - st.startX, t.clientY - st.startY);
+                              if (!st.dragging && dist > 12) {
+                                st.dragging = true;
+                              }
+                              if (st.dragging) {
+                                if (e.cancelable) e.preventDefault();
+                                setDraggingChip({ item: st.item, x: t.clientX, y: t.clientY });
+                                const el = document.elementFromPoint(t.clientX, t.clientY);
+                                const zoneEl = el?.closest?.("[data-shelf-zone]");
+                                const hoveredZone = zoneEl?.getAttribute?.("data-shelf-zone") || "";
+                                setDragOverZone(hoveredZone);
+                              }
+                            }}
+                            onTouchEnd={() => {
+                              const st = chipTouchRef.current;
+                              chipTouchRef.current = null;
+                              if (st?.dragging) {
+                                const targetZ = dragOverZone;
+                                setDraggingChip(null);
+                                setDragOverZone("");
+                                if (targetZ && resolveItemShelfZone(st.item) !== targetZ) {
+                                  handleMoveFridgeShelfZone(st.item, targetZ);
+                                }
+                              }
+                            }}
+                            onClick={() => {
+                              if (!chipTouchRef.current?.dragging) setQuickFridgeItem(it);
+                            }}
+                            className={`px-2 py-1 rounded-lg border text-[10px] font-extrabold flex items-center gap-1 transition active:scale-95 select-none ${
                               isUrgent
                                 ? "bg-rose-50 border-rose-300 text-rose-900"
                                 : "bg-stone-50 hover:bg-amber-50 border-stone-200 text-stone-800"
@@ -8509,11 +8628,11 @@ ${validText}
             return (
               <div className="space-y-3">
                 <div className="text-[11px] font-bold text-stone-500 bg-stone-100 px-3 py-1.5 rounded-xl flex items-center justify-between">
-                  <span>👆 재료 칩을 누르면 수량 조절 · 칸 이동 · 다 먹음 처리</span>
+                  <span>👆 탭: 수량·소진 / ✋ 끌기(드래그): 다른 칸으로 바로 이동</span>
                 </div>
 
                 {/* 1. 4도어 상냉장 · 하냉동 */}
-                {(fridgeLocFilter === "전체" || fridgeLocFilter === "냉장실" || fridgeLocFilter === "냉동실") && (
+                {(fridgeLocFilter === "전체" || fridgeLocFilter === "냉장실" || fridgeLocFilter === "메인 냉동실" || fridgeLocFilter === "냉동실") && (
                   <div className="rounded-2xl border-2 border-sky-200 bg-sky-50/40 p-2.5 space-y-2">
                     <div className="text-xs font-black text-sky-950 flex items-center justify-between px-0.5">
                       <span>🧊 4도어 메인 냉장고 (상냉장 · 하냉동)</span>
@@ -8525,14 +8644,11 @@ ${validText}
                         {renderShelfBox("냉장 1단(상단)", "1단 · 상단 (유제품·계란·유아식)", "bg-white border-sky-200")}
                         {renderShelfBox("냉장 2단(중단)", "2단 · 중단 (반찬·김치)", "bg-white border-sky-200")}
                         {renderShelfBox("냉장 3단(하단)", "3단 · 하단 (육류·소스·기타)", "bg-white border-sky-200")}
-                        <div className="grid grid-cols-2 gap-1.5">
-                          {renderShelfBox("채소칸 좌", "🥬 채소칸 (좌)", "bg-emerald-50/70 border-emerald-200")}
-                          {renderShelfBox("채소칸 우", "🍎 채소칸 (우)", "bg-emerald-50/70 border-emerald-200")}
-                        </div>
+                        {renderShelfBox("채소칸", "🥬 채소칸 (통합)", "bg-emerald-50/70 border-emerald-200")}
                       </div>
                     )}
 
-                    {(fridgeLocFilter === "전체" || fridgeLocFilter === "냉동실") && (
+                    {(fridgeLocFilter === "전체" || fridgeLocFilter === "메인 냉동실" || fridgeLocFilter === "냉동실") && (
                       <div className="space-y-1.5 pt-1 border-t border-sky-200/80">
                         <div className="text-[10px] font-extrabold text-indigo-800 px-0.5">🧊 하부 냉동고 (4칸)</div>
                         <div className="grid grid-cols-2 gap-1.5">
@@ -8547,7 +8663,7 @@ ${validText}
                 )}
 
                 {/* 2. 별도 4칸짜리 전용 냉동고 */}
-                {(fridgeLocFilter === "전체" || fridgeLocFilter === "냉동실") && (
+                {(fridgeLocFilter === "전체" || fridgeLocFilter === "별도 냉동고" || fridgeLocFilter === "냉동실") && (
                   <div className="rounded-2xl border-2 border-indigo-200 bg-indigo-50/40 p-2.5 space-y-1.5">
                     <div className="text-xs font-black text-indigo-950 px-0.5">
                       ❄️ 별도 냉동고 (4칸)
@@ -8577,7 +8693,7 @@ ${validText}
               {fridge
                 .filter(
                   (i) =>
-                    (fridgeLocFilter === "전체" || i.location === fridgeLocFilter) &&
+                    matchesFridgeLocFilter(i.location, fridgeLocFilter) &&
                     (fridgeCatFilter === "전체" || i.category === fridgeCatFilter)
                 )
                 .map((item) => {
@@ -8591,7 +8707,7 @@ ${validText}
                         <div className="min-w-0 flex-1">
                           <div className="flex flex-wrap items-center gap-1 mb-0.5">
                             <span className="px-1.5 py-0.5 rounded text-[10px] font-extrabold bg-stone-100 text-stone-700 whitespace-nowrap">
-                              {item.location}
+                              {String(item.location || "").includes("냉동") ? "냉동실" : item.location}
                             </span>
                             <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 whitespace-nowrap">
                               {item.category}
@@ -13234,6 +13350,17 @@ ${validText}
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {draggingChip && (
+        <div
+          style={{ left: draggingChip.x, top: draggingChip.y }}
+          className="fixed -translate-x-1/2 -translate-y-1/2 z-[70] pointer-events-none px-3 py-1.5 rounded-xl bg-stone-900 text-white text-xs font-black shadow-2xl flex items-center gap-1.5 opacity-95"
+        >
+          <span>{getFridgeCategoryIcon(draggingChip.item.category)}</span>
+          <span>{draggingChip.item.name}</span>
+          <span className="text-amber-300">{draggingChip.item.quantity}{draggingChip.item.unit}</span>
         </div>
       )}
 
