@@ -188,18 +188,24 @@ const DEFAULT_HOME_LAYOUT = {
     blocks: ["routine", "schedule_todo", "menu_grid"],
     hiddenBlocks: [],
     hiddenMenus: [],
+    blockSizes: {},
+    menuSizes: {},
     menuOrder: [...DEFAULT_HOME_MENU_ORDER]
   },
   afternoon: {
     blocks: ["menu_grid", "routine", "schedule_todo"],
     hiddenBlocks: [],
     hiddenMenus: [],
+    blockSizes: {},
+    menuSizes: {},
     menuOrder: ["daily", "fridge", "shopping", "ai", "weekly", "monthly_cal", "monthly_exp", "baby", "recipes", "notices"]
   },
   night: {
     blocks: ["schedule_todo", "routine", "menu_grid"],
     hiddenBlocks: [],
     hiddenMenus: [],
+    blockSizes: {},
+    menuSizes: {},
     menuOrder: ["weekly", "monthly_exp", "daily", "fridge", "shopping", "monthly_cal", "baby", "recipes", "notices", "ai"]
   }
 };
@@ -1034,11 +1040,31 @@ const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.65) =>
     img.src = dataUrl;
   });
 
-const APP_CODE_VERSION = "v10.62";
-const APP_BUILD_DATE = "2026-11-17 03:20";
+const APP_CODE_VERSION = "v10.64";
+const APP_BUILD_DATE = "2026-11-17 03:25";
 const EDITOR_INVITE_CODE = "0402";
 
 const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v10.64",
+    version: "v10.64",
+    date: "2026-11-17",
+    title: "홈 레이아웃·시간대 설정 부부 클라우드 실시간 동기화 & 모바일 터치 드래그 정밀도 개선",
+    changes: [
+      "홈 화면 배치·크기·시간대 기준 시각 설정을 Firestore(family_meta_v4/home_layout)에 실시간 동기화해 부부 기기 간 동일 화면 유지",
+      "모바일 빠른 터치 드래그 시 Ref 기반 드롭 대상 추적으로 누락 방지 및 touchCancel 상태 정리 보완"
+    ]
+  },
+  {
+    id: "patch-v10.63",
+    version: "v10.63",
+    date: "2026-11-17",
+    title: "홈 편집 드래그 앤 드롭(PC·모바일 터치) 순서 변경 & 항목별 크기 조절 지원",
+    changes: [
+      "홈 편집 모드에서 주요 영역(일정·할일/루틴/바로가기)과 10개 바로가기 카드를 ⋮⋮ 핸들로 드래그(모바일 터치 & PC 마우스)해 순서 재배치 가능",
+      "주요 영역별 여백·표시 건수 크기(작게/보통/크게) 및 바로가기 카드별 너비·크기(반폭/전체폭/크게) 개별 조절 지원"
+    ]
+  },
   {
     id: "patch-v10.62",
     version: "v10.62",
@@ -2623,6 +2649,26 @@ function MainApp() {
   });
   const [homeTimeModeOverride, setHomeTimeModeOverride] = useState("auto");
   const [isHomeEditMode, setIsHomeEditMode] = useState(false);
+  const homeDragRef = useRef(null);
+  const homeDragOverRef = useRef("");
+  const [homeDragOverKey, setHomeDragOverKey] = useState("");
+
+  const syncHomeSettingsToCloud = async (nextLayout, nextRanges) => {
+    if (!user || !db || !isEditorUnlocked) return;
+    try {
+      await setDoc(
+        getDocRef("family_meta_v4", "home_layout"),
+        {
+          ...(nextLayout ? { layout: nextLayout } : {}),
+          ...(nextRanges ? { timeRanges: nextRanges } : {}),
+          updatedAt: new Date().toISOString()
+        },
+        { merge: true }
+      );
+    } catch (e) {
+      setSyncErrorMsg(e?.message || "홈 설정 동기화 오류");
+    }
+  };
   const [homeTimeRanges, setHomeTimeRanges] = useState(() => {
     try {
       const raw = localStorage.getItem("kim_home_time_ranges_v1");
@@ -2633,28 +2679,30 @@ function MainApp() {
     } catch (e) {}
     return DEFAULT_HOME_TIME_RANGES;
   });
+  const normalizeHomeLayout = (parsed) => {
+    if (!parsed || !parsed.morning || !parsed.afternoon || !parsed.night) return DEFAULT_HOME_LAYOUT;
+    const normalized = {};
+    ["morning", "afternoon", "night"].forEach((mode) => {
+      const def = DEFAULT_HOME_LAYOUT[mode];
+      const cur = parsed[mode] || {};
+      const savedBlocks = Array.isArray(cur.blocks) ? cur.blocks.filter((b) => def.blocks.includes(b)) : [];
+      const savedMenus = Array.isArray(cur.menuOrder) ? cur.menuOrder.filter((m) => DEFAULT_HOME_MENU_ORDER.includes(m)) : [];
+      normalized[mode] = {
+        blocks: [...savedBlocks, ...def.blocks.filter((b) => !savedBlocks.includes(b))],
+        hiddenBlocks: Array.isArray(cur.hiddenBlocks) ? cur.hiddenBlocks : [],
+        menuOrder: [...savedMenus, ...DEFAULT_HOME_MENU_ORDER.filter((m) => !savedMenus.includes(m))],
+        hiddenMenus: Array.isArray(cur.hiddenMenus) ? cur.hiddenMenus : [],
+        blockSizes: cur.blockSizes && typeof cur.blockSizes === "object" ? cur.blockSizes : {},
+        menuSizes: cur.menuSizes && typeof cur.menuSizes === "object" ? cur.menuSizes : {}
+      };
+    });
+    return normalized;
+  };
+
   const [homeLayoutConfig, setHomeLayoutConfig] = useState(() => {
     try {
       const raw = localStorage.getItem("kim_home_layout_v1");
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (parsed && parsed.morning && parsed.afternoon && parsed.night) {
-          const normalized = {};
-          ["morning", "afternoon", "night"].forEach((mode) => {
-            const def = DEFAULT_HOME_LAYOUT[mode];
-            const cur = parsed[mode] || {};
-            const savedBlocks = Array.isArray(cur.blocks) ? cur.blocks.filter((b) => def.blocks.includes(b)) : [];
-            const savedMenus = Array.isArray(cur.menuOrder) ? cur.menuOrder.filter((m) => DEFAULT_HOME_MENU_ORDER.includes(m)) : [];
-            normalized[mode] = {
-              blocks: [...savedBlocks, ...def.blocks.filter((b) => !savedBlocks.includes(b))],
-              hiddenBlocks: Array.isArray(cur.hiddenBlocks) ? cur.hiddenBlocks : [],
-              menuOrder: [...savedMenus, ...DEFAULT_HOME_MENU_ORDER.filter((m) => !savedMenus.includes(m))],
-              hiddenMenus: Array.isArray(cur.hiddenMenus) ? cur.hiddenMenus : []
-            };
-          });
-          return normalized;
-        }
-      }
+      if (raw) return normalizeHomeLayout(JSON.parse(raw));
     } catch (e) {}
     return DEFAULT_HOME_LAYOUT;
   });
@@ -4059,6 +4107,26 @@ function MainApp() {
           setShoppingList(loaded);
         },
         (err) => setSyncErrorMsg(err?.message || "장보기 동기화 오류")
+      )
+    );
+
+    unsubscribers.push(
+      onSnapshot(
+        getDocRef("family_meta_v4", "home_layout"),
+        (snap) => {
+          if (!snap.exists()) return;
+          const d = snap.data();
+          if (d?.layout) {
+            const norm = normalizeHomeLayout(d.layout);
+            setHomeLayoutConfig(norm);
+            try { localStorage.setItem("kim_home_layout_v1", JSON.stringify(norm)); } catch (e) {}
+          }
+          if (d?.timeRanges && typeof d.timeRanges.morningStart === "number") {
+            setHomeTimeRanges(d.timeRanges);
+            try { localStorage.setItem("kim_home_time_ranges_v1", JSON.stringify(d.timeRanges)); } catch (e) {}
+          }
+        },
+        () => {}
       )
     );
 
@@ -8396,6 +8464,19 @@ ${validText}
         const hiddenBlocks = Array.isArray(curModeLayout.hiddenBlocks) ? curModeLayout.hiddenBlocks : [];
         const menuOrder = Array.isArray(curModeLayout.menuOrder) ? curModeLayout.menuOrder : DEFAULT_HOME_MENU_ORDER;
         const hiddenMenus = Array.isArray(curModeLayout.hiddenMenus) ? curModeLayout.hiddenMenus : [];
+        const blockSizes = curModeLayout.blockSizes || {};
+        const menuSizes = curModeLayout.menuSizes || {};
+
+        const reorderById = (arr, fromId, toId) => {
+          if (!fromId || !toId || fromId === toId) return arr;
+          const fromIdx = arr.indexOf(fromId);
+          const toIdx = arr.indexOf(toId);
+          if (fromIdx < 0 || toIdx < 0) return arr;
+          const copy = [...arr];
+          const [moved] = copy.splice(fromIdx, 1);
+          copy.splice(toIdx, 0, moved);
+          return copy;
+        };
 
         const saveHomeLayout = (updater) => {
           setHomeLayoutConfig((prev) => {
@@ -8405,6 +8486,7 @@ ${validText}
             try {
               localStorage.setItem("kim_home_layout_v1", JSON.stringify(nextAll));
             } catch (e) {}
+            syncHomeSettingsToCloud(nextAll, null);
             return nextAll;
           });
         };
@@ -8549,17 +8631,23 @@ ${validText}
               })
             : activeRoutines.filter((r) => (r.timeSlot || "상시") === homeRoutineSlotFilter);
 
+        const scheduleTodoSize = blockSizes.schedule_todo || "normal";
+        const previewLimit = scheduleTodoSize === "compact" ? 2 : scheduleTodoSize === "large" ? 5 : 3;
+        const blockPadClass = (bId) => {
+          const sz = blockSizes[bId] || "normal";
+          return sz === "compact" ? "p-2" : sz === "large" ? "p-3.5" : "p-2.5";
+        };
         const previewTodos = schedules
           .filter((s) => s.category === "할일(To-Do)" && !s.done)
           .sort((a, b) => String(a.date || "9999-99-99").localeCompare(String(b.date || "9999-99-99")))
-          .slice(0, 3);
+          .slice(0, previewLimit);
 
         const renderHomeBlock = (blockId) => {
           if (hiddenBlocks.includes(blockId)) return null;
           if (blockId === "schedule_todo") {
             return (
               <div key="schedule_todo" className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                <div className="bg-rose-50/80 border border-rose-200 rounded-2xl p-2.5 space-y-1.5">
+                <div className={`bg-rose-50/80 border border-rose-200 rounded-2xl ${blockPadClass("schedule_todo")} space-y-1.5`}>
                   <div className="flex items-center justify-between gap-1">
                     <span className="text-xs font-black text-rose-950">
                       🗓️ 3일 내 일정 ({imminentSchedulesWithin3Days.length}건)
@@ -8581,7 +8669,7 @@ ${validText}
                     </div>
                   ) : (
                     <div className="space-y-1">
-                      {imminentSchedulesWithin3Days.slice(0, 3).map((ev) => (
+                      {imminentSchedulesWithin3Days.slice(0, previewLimit).map((ev) => (
                         <button
                           key={ev.id}
                           type="button"
@@ -8601,7 +8689,7 @@ ${validText}
                   )}
                 </div>
 
-                <div className="bg-amber-50/80 border border-amber-200 rounded-2xl p-2.5 space-y-1.5">
+                <div className={`bg-amber-50/80 border border-amber-200 rounded-2xl ${blockPadClass("schedule_todo")} space-y-1.5`}>
                   <div className="flex items-center justify-between gap-1">
                     <span className="text-xs font-black text-amber-950">
                       ✅ 남은 할 일 ({globalTodoBadgeStats.activeCount}건)
@@ -8646,7 +8734,7 @@ ${validText}
 
           if (blockId === "routine") {
             return (
-              <div key="routine" className="bg-indigo-50/70 border border-indigo-200 rounded-2xl p-2.5 space-y-1.5">
+              <div key="routine" className={`bg-indigo-50/70 border border-indigo-200 rounded-2xl ${blockPadClass("routine")} space-y-1.5`}>
                 <div className="flex items-center justify-between gap-1.5">
                   <span className="text-xs font-black text-indigo-950 truncate">
                     🔄 {homeRoutineSlotFilter === "auto" ? `지금(${curSlot}) 루틴` : homeRoutineSlotFilter === "전체" ? "오늘 남은 루틴" : `${homeRoutineSlotFilter} 루틴`} ({visibleRoutineList.length}건)
@@ -8739,16 +8827,24 @@ ${validText}
 
           if (blockId === "menu_grid") {
             const visibleMenuIds = menuOrder.filter((id) => MENU_DEFS[id] && !hiddenMenus.includes(id));
+            const gridPad = blockSizes.menu_grid === "compact" ? "gap-1.5" : blockSizes.menu_grid === "large" ? "gap-2.5" : "gap-2";
             return (
-              <div key="menu_grid" className="grid grid-cols-2 gap-2">
+              <div key="menu_grid" className={`grid grid-cols-2 ${gridPad}`}>
                 {visibleMenuIds.map((id) => {
                   const item = MENU_DEFS[id];
+                  const mSize = menuSizes[id] || "half";
+                  const sizeCls =
+                    mSize === "tall"
+                      ? "col-span-2 p-3.5"
+                      : mSize === "full"
+                      ? "col-span-2 p-2.5"
+                      : "p-2.5";
                   return (
                     <button
                       key={id}
                       type="button"
                       onClick={item.onClick}
-                      className={`bg-white border border-stone-200 ${item.borderHover} rounded-2xl p-2.5 text-left shadow-sm space-y-0.5 transition`}
+                      className={`bg-white border border-stone-200 ${item.borderHover} rounded-2xl ${sizeCls} text-left shadow-sm space-y-0.5 transition`}
                     >
                       <div className="flex items-center justify-between">
                         <span className="text-xs font-black text-stone-900">{item.title}</span>
@@ -8830,6 +8926,7 @@ ${validText}
                         try {
                           localStorage.setItem("kim_home_time_ranges_v1", JSON.stringify(DEFAULT_HOME_TIME_RANGES));
                         } catch (e) {}
+                        syncHomeSettingsToCloud(null, DEFAULT_HOME_TIME_RANGES);
                         showToast("시간대 기준 시각을 기본값(05/11/20시)으로 되돌렸습니다.");
                       }}
                       className="text-[10px] font-extrabold text-stone-500 underline"
@@ -8854,6 +8951,7 @@ ${validText}
                               try {
                                 localStorage.setItem("kim_home_time_ranges_v1", JSON.stringify(next));
                               } catch (err) {}
+                              syncHomeSettingsToCloud(null, next);
                               return next;
                             });
                           }}
@@ -8881,15 +8979,94 @@ ${validText}
                 </div>
 
                 <div className="space-y-1">
-                  <div className="text-[10px] font-extrabold text-stone-500">1) 주요 영역 순서 · 표시</div>
+                  <div className="text-[10px] font-extrabold text-stone-500">1) 주요 영역 순서(⋮⋮ 드래그 / ▲▼) · 크기 · 표시</div>
                   {blockOrder.map((bId, idx) => {
                     const isHidden = hiddenBlocks.includes(bId);
+                    const bSize = blockSizes[bId] || "normal";
+                    const nextBlockSize = bSize === "compact" ? "normal" : bSize === "normal" ? "large" : "compact";
+                    const bSizeLabel = bSize === "compact" ? "작게" : bSize === "large" ? "크게" : "보통";
+                    const isOver = homeDragOverKey === `block:${bId}`;
                     return (
-                      <div key={bId} className="flex items-center justify-between gap-1.5 bg-stone-50 border border-stone-200 rounded-xl px-2.5 py-1.5">
-                        <span className={`text-[11px] font-extrabold truncate ${isHidden ? "text-stone-400 line-through" : "text-stone-800"}`}>
-                          {BLOCK_LABELS[bId]}
-                        </span>
+                      <div
+                        key={bId}
+                        data-home-block-id={bId}
+                        draggable
+                        onDragStart={() => { homeDragRef.current = { type: "block", id: bId }; }}
+                        onDragOver={(e) => {
+                          e.preventDefault();
+                          if (homeDragRef.current?.type === "block") setHomeDragOverKey(`block:${bId}`);
+                        }}
+                        onDragLeave={() => { if (homeDragOverKey === `block:${bId}`) setHomeDragOverKey(""); }}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          const src = homeDragRef.current;
+                          homeDragRef.current = null;
+                          setHomeDragOverKey("");
+                          if (src?.type === "block" && src.id !== bId) {
+                            saveHomeLayout((cur) => ({ ...cur, blocks: reorderById(blockOrder, src.id, bId) }));
+                          }
+                        }}
+                        className={`flex items-center justify-between gap-1.5 rounded-xl px-2.5 py-1.5 border transition ${
+                          isOver ? "bg-amber-50 border-amber-400 ring-2 ring-amber-200" : "bg-stone-50 border-stone-200"
+                        }`}
+                      >
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <span
+                            style={{ touchAction: "none" }}
+                            onTouchStart={() => {
+                              homeDragRef.current = { type: "block", id: bId };
+                              homeDragOverRef.current = "";
+                            }}
+                            onTouchMove={(e) => {
+                              const t = e.touches?.[0];
+                              if (!t) return;
+                              const el = document.elementFromPoint(t.clientX, t.clientY)?.closest?.("[data-home-block-id]");
+                              const targetId = el?.getAttribute?.("data-home-block-id") || "";
+                              if (targetId) {
+                                const key = `block:${targetId}`;
+                                homeDragOverRef.current = key;
+                                setHomeDragOverKey(key);
+                              }
+                            }}
+                            onTouchEnd={() => {
+                              const src = homeDragRef.current;
+                              const overKey = homeDragOverRef.current || homeDragOverKey;
+                              const targetId = overKey.startsWith("block:") ? overKey.slice(6) : "";
+                              homeDragRef.current = null;
+                              homeDragOverRef.current = "";
+                              setHomeDragOverKey("");
+                              if (src?.type === "block" && targetId && src.id !== targetId) {
+                                saveHomeLayout((cur) => ({ ...cur, blocks: reorderById(blockOrder, src.id, targetId) }));
+                              }
+                            }}
+                            onTouchCancel={() => {
+                              homeDragRef.current = null;
+                              homeDragOverRef.current = "";
+                              setHomeDragOverKey("");
+                            }}
+                            className="px-1 py-0.5 text-stone-400 hover:text-stone-700 cursor-grab select-none text-xs font-black shrink-0"
+                            title="끌어서 순서 변경"
+                          >
+                            ⋮⋮
+                          </span>
+                          <span className={`text-[11px] font-extrabold truncate ${isHidden ? "text-stone-400 line-through" : "text-stone-800"}`}>
+                            {BLOCK_LABELS[bId]}
+                          </span>
+                        </div>
                         <div className="flex items-center gap-1 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              saveHomeLayout((cur) => ({
+                                ...cur,
+                                blockSizes: { ...(cur.blockSizes || {}), [bId]: nextBlockSize }
+                              }))
+                            }
+                            className="px-1.5 py-0.5 rounded bg-sky-50 border border-sky-200 text-sky-800 text-[10px] font-extrabold"
+                            title="영역 크기 전환"
+                          >
+                            {bSizeLabel}
+                          </button>
                           <button
                             type="button"
                             disabled={idx === 0}
@@ -8929,18 +9106,97 @@ ${validText}
                 </div>
 
                 <div className="space-y-1">
-                  <div className="text-[10px] font-extrabold text-stone-500">2) 바로가기 카드 순서 · 표시</div>
+                  <div className="text-[10px] font-extrabold text-stone-500">2) 바로가기 카드 순서(⋮⋮ 드래그 / ▲▼) · 크기 · 표시</div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-1">
                     {menuOrder.map((mId, idx) => {
                       const def = MENU_DEFS[mId];
                       if (!def) return null;
                       const isHidden = hiddenMenus.includes(mId);
+                      const mSize = menuSizes[mId] || "half";
+                      const nextMenuSize = mSize === "half" ? "full" : mSize === "full" ? "tall" : "half";
+                      const mSizeLabel = mSize === "tall" ? "크게" : mSize === "full" ? "전체폭" : "반폭";
+                      const isOver = homeDragOverKey === `menu:${mId}`;
                       return (
-                        <div key={mId} className="flex items-center justify-between gap-1 bg-stone-50 border border-stone-200 rounded-xl px-2 py-1">
-                          <span className={`text-[11px] font-extrabold truncate ${isHidden ? "text-stone-400 line-through" : "text-stone-800"}`}>
-                            {def.title}
-                          </span>
+                        <div
+                          key={mId}
+                          data-home-menu-id={mId}
+                          draggable
+                          onDragStart={() => { homeDragRef.current = { type: "menu", id: mId }; }}
+                          onDragOver={(e) => {
+                            e.preventDefault();
+                            if (homeDragRef.current?.type === "menu") setHomeDragOverKey(`menu:${mId}`);
+                          }}
+                          onDragLeave={() => { if (homeDragOverKey === `menu:${mId}`) setHomeDragOverKey(""); }}
+                          onDrop={(e) => {
+                            e.preventDefault();
+                            const src = homeDragRef.current;
+                            homeDragRef.current = null;
+                            setHomeDragOverKey("");
+                            if (src?.type === "menu" && src.id !== mId) {
+                              saveHomeLayout((cur) => ({ ...cur, menuOrder: reorderById(menuOrder, src.id, mId) }));
+                            }
+                          }}
+                          className={`flex items-center justify-between gap-1 rounded-xl px-2 py-1 border transition ${
+                            isOver ? "bg-amber-50 border-amber-400 ring-2 ring-amber-200" : "bg-stone-50 border-stone-200"
+                          }`}
+                        >
+                          <div className="flex items-center gap-1 min-w-0">
+                            <span
+                              style={{ touchAction: "none" }}
+                              onTouchStart={() => {
+                                homeDragRef.current = { type: "menu", id: mId };
+                                homeDragOverRef.current = "";
+                              }}
+                              onTouchMove={(e) => {
+                                const t = e.touches?.[0];
+                                if (!t) return;
+                                const el = document.elementFromPoint(t.clientX, t.clientY)?.closest?.("[data-home-menu-id]");
+                                const targetId = el?.getAttribute?.("data-home-menu-id") || "";
+                                if (targetId) {
+                                  const key = `menu:${targetId}`;
+                                  homeDragOverRef.current = key;
+                                  setHomeDragOverKey(key);
+                                }
+                              }}
+                              onTouchEnd={() => {
+                                const src = homeDragRef.current;
+                                const overKey = homeDragOverRef.current || homeDragOverKey;
+                                const targetId = overKey.startsWith("menu:") ? overKey.slice(5) : "";
+                                homeDragRef.current = null;
+                                homeDragOverRef.current = "";
+                                setHomeDragOverKey("");
+                                if (src?.type === "menu" && targetId && src.id !== targetId) {
+                                  saveHomeLayout((cur) => ({ ...cur, menuOrder: reorderById(menuOrder, src.id, targetId) }));
+                                }
+                              }}
+                              onTouchCancel={() => {
+                                homeDragRef.current = null;
+                                homeDragOverRef.current = "";
+                                setHomeDragOverKey("");
+                              }}
+                              className="px-0.5 text-stone-400 hover:text-stone-700 cursor-grab select-none text-[11px] font-black shrink-0"
+                              title="끌어서 순서 변경"
+                            >
+                              ⋮⋮
+                            </span>
+                            <span className={`text-[11px] font-extrabold truncate ${isHidden ? "text-stone-400 line-through" : "text-stone-800"}`}>
+                              {def.title}
+                            </span>
+                          </div>
                           <div className="flex items-center gap-0.5 shrink-0">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                saveHomeLayout((cur) => ({
+                                  ...cur,
+                                  menuSizes: { ...(cur.menuSizes || {}), [mId]: nextMenuSize }
+                                }))
+                              }
+                              className="px-1.5 py-0.5 rounded bg-sky-50 border border-sky-200 text-sky-800 text-[9px] font-extrabold"
+                              title="카드 크기 전환 (반폭/전체폭/크게)"
+                            >
+                              {mSizeLabel}
+                            </button>
                             <button
                               type="button"
                               disabled={idx === 0}
