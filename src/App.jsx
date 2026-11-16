@@ -632,11 +632,21 @@ const STORAGE_LOCATIONS = ["냉장실", "냉동실", "실온·팬트리"];
 const FRIDGE_CATEGORIES = ["채소/과일", "육류/수산", "유제품/계란", "유아식/이유식 재료", "반찬/김치", "밀키트", "양념/소스", "기타"];
 const SCHEDULE_CATEGORIES = ["기념일/생일", "할일(To-Do)", "육아/병원", "가족행사/경조사"];
 
-const APP_CODE_VERSION = "v9.9";
-const APP_BUILD_DATE = "2026-11-16 10:55";
+const APP_CODE_VERSION = "v10.0";
+const APP_BUILD_DATE = "2026-11-16 11:00";
 const EDITOR_INVITE_CODE = "0402";
 
 const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v10.0",
+    version: "v10.0",
+    date: "2026-11-16",
+    title: "영수증 OCR 행 밀림·누락 방지(줄번호 1:1 매핑 · 2200px 고화질 · 합계 검증 및 행 삭제/추가)",
+    changes: [
+      "영수증 스캔 해상도를 2200px(0.92)로 추가 상향하고, 01·02·03... 번호별 1:1 행 매핑으로 금액 밀림 및 하단 품목(대파·부침두부 등) 누락 방지",
+      "스캔 결과 팝업에서 합계 금액 실시간 표시 및 개별 행 삭제(×)·수량 수정 지원"
+    ]
+  },
   {
     id: "patch-v9.9",
     version: "v9.9",
@@ -4137,7 +4147,7 @@ ${validText}
     setPlatingResult(null);
     setPlatingExampleImageUrl("");
     try {
-      const { base64, mimeType, previewUrl } = await fileToBase64(file, { maxSide: 1800, quality: 0.88 });
+      const { base64, mimeType, previewUrl } = await fileToBase64(file, { maxSide: 2200, quality: 0.92 });
       setPlatingPreviewUrl(previewUrl);
       setPlatingImagePart({ base64, mimeType });
     } catch (err) {
@@ -4321,7 +4331,7 @@ ${validText}
     setIsMenuScanning(true);
 
     try {
-      const { base64, mimeType, previewUrl } = await fileToBase64(file, { maxSide: 1800, quality: 0.88 });
+      const { base64, mimeType, previewUrl } = await fileToBase64(file, { maxSide: 2200, quality: 0.92 });
       setScanPreviewUrl(previewUrl);
 
       const weekMappingHint = `월(MON)=${weekDates[0]}, 화(TUE)=${weekDates[1]}, 수(WED)=${weekDates[2]}, 목(THU)=${weekDates[3]}, 금(FRI)=${weekDates[4]}, 토(SAT)=${weekDates[5]}, 일(SUN)=${weekDates[6]}`;
@@ -4491,19 +4501,19 @@ ${validText}
     setReceiptErrorMsg("");
     setIsReceiptScanning(true);
     try {
-      const { base64, mimeType, previewUrl } = await fileToBase64(file, { maxSide: 1800, quality: 0.88 });
+      const { base64, mimeType, previewUrl } = await fileToBase64(file, { maxSide: 2200, quality: 0.92 });
       setReceiptPreviewUrl(previewUrl);
 
-      const promptText = `당신은 한국 마트(홈플러스·이마트·하나로마트 등) 영수증 정밀 OCR 전문가입니다.
-영수증 이미지에 적힌 실제 식재료 상품명, 수량·단위, 실결제 금액만 정확히 읽어 순수 JSON 배열로 출력하세요.
+      const promptText = `당신은 한국 마트 영수증 정밀 OCR 전문가입니다.
+영수증의 상품 목록 맨 첫 줄(01*)부터 마지막 상품(예: 07*, 면세/합계 직전)까지 단 한 줄도 빠짐없이 순서대로 읽으세요.
 
-규칙:
-1. 영수증에 인쇄된 글자 그대로(예: "건고사리", "청양고추", "숙주나물", "양파", "대파", "소가부침두부") 읽고, 앞의 번호(01*, 02*)나 불필요한 접두어는 제거하세요. 절대 없는 "사과" 같은 단어를 지어내지 마세요.
-2. "재사용봉투", "종량제봉투", "쇼핑백" 등 비식품은 제외하세요.
-3. 상품 바로 아래 줄에 "에누리(쿠폰)", "할인" 등 음수(-금액)가 있으면 해당 상품 금액에서 차감한 실결제 금액(price)을 계산하세요.
+핵심 규칙:
+1. 각 상품 줄의 앞 번호(lineNo: "01", "02", ...)와 같은 가로줄 오른쪽 끝의 [금액]을 1:1로 정확히 매칭하세요. 절대로 위아래 줄의 금액을 섞지 마세요.
+2. 바로 아래 줄에 "에누리(쿠폰)" 또는 할인(-금액)이 있으면, 그 위 상품의 금액에서 빼서 실결제 금액(price)으로 적으세요. (예: 8,990원 아래 -4,000원 -> price: 4990)
+3. "재사용봉투", "종량제봉투", "쇼핑백" 등 비식품은 제외하세요. (단, "풀무원_소가부침두"처럼 줄 끝이 살짝 잘린 식품도 빠뜨리지 말고 "소가부침두부"처럼 정확히 포함하세요.)
 4. location은 ["냉장실", "냉동실", "실온·팬트리"] 중 하나, category는 ["채소/과일", "육류/수산", "유제품/계란", "유아식/이유식 재료", "반찬/김치", "밀키트", "양념/소스", "기타"] 중 하나로 고르세요.
 5. 마크다운 코드블록 없이 순수 JSON 배열만 출력:
-[{"name":"양파","location":"실온·팬트리","category":"채소/과일","quantity":3,"unit":"kg","price":4990}]`;
+[{"lineNo":"01","name":"건고사리","location":"실온·팬트리","category":"채소/과일","quantity":35,"unit":"g","price":6990}]`;
 
       const parsedArray = await callReliableAiEngine({
         apiKey: geminiApiKey,
@@ -9644,10 +9654,23 @@ ${validText}
                         copy[idx].price = Number(e.target.value);
                         setScannedReceiptItems(copy);
                       }}
-                      className="w-24 font-extrabold text-emerald-700 bg-white px-2 py-1 rounded border border-stone-200 text-xs text-right"
+                      className="w-20 font-extrabold text-emerald-700 bg-white px-2 py-1 rounded border border-stone-200 text-xs text-right"
                     />
+                    <button
+                      onClick={() => setScannedReceiptItems((prev) => prev.filter((_, i) => i !== idx))}
+                      className="w-7 h-7 flex items-center justify-center rounded-lg text-stone-400 hover:text-rose-600 shrink-0"
+                      title="품목 제외"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
                   </div>
                 ))}
+                <div className="flex items-center justify-between px-1 text-xs font-extrabold text-stone-700">
+                  <span>인식 품목 {scannedReceiptItems.length}건</span>
+                  <span className="text-emerald-700">
+                    합계 {scannedReceiptItems.reduce((acc, x) => acc + (Number(x.price) || 0), 0).toLocaleString()}원
+                  </span>
+                </div>
                 <button
                   onClick={async () => {
                     if (!requireEditorAccess()) return;
