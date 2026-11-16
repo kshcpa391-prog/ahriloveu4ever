@@ -274,7 +274,8 @@ async function callOpenAiEngine({ openaiKey, promptText, imagePart = null, tempe
     userContent.push({
       type: "image_url",
       image_url: {
-        url: `data:${imagePart.mimeType};base64,${imagePart.base64}`
+        url: `data:${imagePart.mimeType};base64,${imagePart.base64}`,
+        detail: "high"
       }
     });
   }
@@ -549,14 +550,14 @@ const getDustGrade = (pm10, pm25) => {
   return levels[maxLevel];
 };
 
-const fileToBase64 = (file) =>
+const fileToBase64 = (file, { maxSide = 720, quality = 0.65 } = {}) =>
   new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = (event) => {
       const img = new Image();
       img.onload = () => {
         const canvas = document.createElement("canvas");
-        const MAX_SIDE = 720;
+        const MAX_SIDE = maxSide;
         let w = img.width;
         let h = img.height;
         if (w > h && w > MAX_SIDE) {
@@ -570,7 +571,7 @@ const fileToBase64 = (file) =>
         canvas.height = h;
         const ctx = canvas.getContext("2d");
         ctx.drawImage(img, 0, 0, w, h);
-        const dataUrl = canvas.toDataURL("image/jpeg", 0.65);
+        const dataUrl = canvas.toDataURL("image/jpeg", quality);
         resolve({
           base64: dataUrl.split(",")[1],
           mimeType: "image/jpeg",
@@ -631,11 +632,21 @@ const STORAGE_LOCATIONS = ["냉장실", "냉동실", "실온·팬트리"];
 const FRIDGE_CATEGORIES = ["채소/과일", "육류/수산", "유제품/계란", "유아식/이유식 재료", "반찬/김치", "밀키트", "양념/소스", "기타"];
 const SCHEDULE_CATEGORIES = ["기념일/생일", "할일(To-Do)", "육아/병원", "가족행사/경조사"];
 
-const APP_CODE_VERSION = "v9.8";
-const APP_BUILD_DATE = "2026-11-16 08:25";
+const APP_CODE_VERSION = "v9.9";
+const APP_BUILD_DATE = "2026-11-16 10:55";
 const EDITOR_INVITE_CODE = "0402";
 
 const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v9.9",
+    version: "v9.9",
+    date: "2026-11-16",
+    title: "영수증·식단표 AI 스캔 고해상도(1800px · high detail) 및 에누리 할인 자동 반영 개선",
+    changes: [
+      "영수증·식단표 스캔 시 이미지 압축 해상도를 720px(저화질)에서 1800px 고화질(0.88)로 상향하고 OpenAI Vision detail: 'high' 적용",
+      "에누리·쿠폰 할인(-금액) 차감 반영, 봉투 등 비식품 제외, 실제 수량/단위·보관위치·임시 소비기한 자동 분류"
+    ]
+  },
   {
     id: "patch-v9.7",
     version: "v9.7",
@@ -4126,7 +4137,7 @@ ${validText}
     setPlatingResult(null);
     setPlatingExampleImageUrl("");
     try {
-      const { base64, mimeType, previewUrl } = await fileToBase64(file);
+      const { base64, mimeType, previewUrl } = await fileToBase64(file, { maxSide: 1800, quality: 0.88 });
       setPlatingPreviewUrl(previewUrl);
       setPlatingImagePart({ base64, mimeType });
     } catch (err) {
@@ -4310,7 +4321,7 @@ ${validText}
     setIsMenuScanning(true);
 
     try {
-      const { base64, mimeType, previewUrl } = await fileToBase64(file);
+      const { base64, mimeType, previewUrl } = await fileToBase64(file, { maxSide: 1800, quality: 0.88 });
       setScanPreviewUrl(previewUrl);
 
       const weekMappingHint = `월(MON)=${weekDates[0]}, 화(TUE)=${weekDates[1]}, 수(WED)=${weekDates[2]}, 목(THU)=${weekDates[3]}, 금(FRI)=${weekDates[4]}, 토(SAT)=${weekDates[5]}, 일(SUN)=${weekDates[6]}`;
@@ -4480,11 +4491,19 @@ ${validText}
     setReceiptErrorMsg("");
     setIsReceiptScanning(true);
     try {
-      const { base64, mimeType, previewUrl } = await fileToBase64(file);
+      const { base64, mimeType, previewUrl } = await fileToBase64(file, { maxSide: 1800, quality: 0.88 });
       setReceiptPreviewUrl(previewUrl);
 
-      const promptText = `영수증 이미지에서 품목명, 수량, 결제 금액을 읽어 순수 JSON 배열로만 출력하세요 (소비기한은 ${selectedDate} 기준 산정):
-[{"name":"품목명","location":"냉장실","category":"채소/과일","quantity":1,"unit":"개","expiryDate":"2026-11-24","price":5000}]`;
+      const promptText = `당신은 한국 마트(홈플러스·이마트·하나로마트 등) 영수증 정밀 OCR 전문가입니다.
+영수증 이미지에 적힌 실제 식재료 상품명, 수량·단위, 실결제 금액만 정확히 읽어 순수 JSON 배열로 출력하세요.
+
+규칙:
+1. 영수증에 인쇄된 글자 그대로(예: "건고사리", "청양고추", "숙주나물", "양파", "대파", "소가부침두부") 읽고, 앞의 번호(01*, 02*)나 불필요한 접두어는 제거하세요. 절대 없는 "사과" 같은 단어를 지어내지 마세요.
+2. "재사용봉투", "종량제봉투", "쇼핑백" 등 비식품은 제외하세요.
+3. 상품 바로 아래 줄에 "에누리(쿠폰)", "할인" 등 음수(-금액)가 있으면 해당 상품 금액에서 차감한 실결제 금액(price)을 계산하세요.
+4. location은 ["냉장실", "냉동실", "실온·팬트리"] 중 하나, category는 ["채소/과일", "육류/수산", "유제품/계란", "유아식/이유식 재료", "반찬/김치", "밀키트", "양념/소스", "기타"] 중 하나로 고르세요.
+5. 마크다운 코드블록 없이 순수 JSON 배열만 출력:
+[{"name":"양파","location":"실온·팬트리","category":"채소/과일","quantity":3,"unit":"kg","price":4990}]`;
 
       const parsedArray = await callReliableAiEngine({
         apiKey: geminiApiKey,
@@ -4492,10 +4511,25 @@ ${validText}
         aiProvider,
         promptText,
         imagePart: { base64, mimeType },
-        temperature: 0.1
+        temperature: 0.05
       });
 
-      setScannedReceiptItems(parsedArray);
+      const normalized = toSafeArray(parsedArray).map((it) => {
+        const loc = STORAGE_LOCATIONS.includes(it.location) ? it.location : "냉장실";
+        const cat = FRIDGE_CATEGORIES.includes(it.category) ? it.category : "기타";
+        return {
+          name: String(it.name || "").trim(),
+          location: loc,
+          category: cat,
+          quantity: Number(it.quantity) > 0 ? Number(it.quantity) : 1,
+          unit: String(it.unit || "개").trim() || "개",
+          expiryDate: it.expiryDate || getDefaultExpiryForLocation(loc),
+          expiryIsTemp: !it.expiryDate,
+          price: Math.max(0, Number(it.price) || 0)
+        };
+      }).filter((it) => it.name);
+
+      setScannedReceiptItems(normalized);
       showToast(`영수증에서 총 ${parsedArray.length}개 품목을 빠르게 읽어왔습니다!`);
     } catch (err) {
       console.error(err);
