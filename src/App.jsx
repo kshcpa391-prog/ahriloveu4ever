@@ -146,6 +146,47 @@ const getCurrentRoutineTimeSlot = () => {
   return "자기전"; // 20:30 ~ 04:59
 };
 
+const getAutoHomeTimeMode = () => {
+  const h = new Date().getHours();
+  if (h >= 5 && h < 11) return "morning";
+  if (h >= 11 && h < 19) return "afternoon";
+  return "night";
+};
+
+const DEFAULT_HOME_MENU_ORDER = [
+  "daily",
+  "weekly",
+  "fridge",
+  "shopping",
+  "monthly_cal",
+  "monthly_exp",
+  "baby",
+  "recipes",
+  "notices",
+  "ai"
+];
+
+const DEFAULT_HOME_LAYOUT = {
+  morning: {
+    blocks: ["routine", "schedule_todo", "menu_grid"],
+    hiddenBlocks: [],
+    hiddenMenus: [],
+    menuOrder: [...DEFAULT_HOME_MENU_ORDER]
+  },
+  afternoon: {
+    blocks: ["menu_grid", "routine", "schedule_todo"],
+    hiddenBlocks: [],
+    hiddenMenus: [],
+    menuOrder: ["daily", "fridge", "shopping", "ai", "weekly", "monthly_cal", "monthly_exp", "baby", "recipes", "notices"]
+  },
+  night: {
+    blocks: ["schedule_todo", "routine", "menu_grid"],
+    hiddenBlocks: [],
+    hiddenMenus: [],
+    menuOrder: ["weekly", "monthly_exp", "daily", "fridge", "shopping", "monthly_cal", "baby", "recipes", "notices", "ai"]
+  }
+};
+
 const getNthWeekdayDateStr = (year, month1Based, nthWeek, weekDay) => {
   const lastDay = new Date(year, month1Based, 0).getDate();
   if (Number(nthWeek) === -1) {
@@ -976,11 +1017,23 @@ const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.65) =>
     img.src = dataUrl;
   });
 
-const APP_CODE_VERSION = "v10.58";
-const APP_BUILD_DATE = "2026-11-16 22:56";
+const APP_CODE_VERSION = "v10.59";
+const APP_BUILD_DATE = "2026-11-17 02:55";
 const EDITOR_INVITE_CODE = "0402";
 
 const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v10.59",
+    version: "v10.59",
+    date: "2026-11-17",
+    title: "스마트 빠른 등록(+) 메뉴 · 시간대 적응형 & 사용자 편집 홈 · 주간요약 ±3일 개편",
+    changes: [
+      "우측 하단 (+) 버튼을 하단 바·콘텐츠와 겹치지 않는 스마트 빠른 등록 메뉴(식단·일정·할일·냉장고·레시피)로 업그레이드",
+      "홈 루틴 카드에서 표출할 시간대(자동/아침/점심/하원후/오후/저녁/자기전/상시/전체)를 직접 선택·저장 가능",
+      "홈 화면 시간대별(🌅 오전·🌆 오후·🌙 밤) 자동/수동 전환 및 [✏️ 홈 편집]으로 블록·바로가기 순서·표시 여부 커스터마이징 지원",
+      "주간요약 조회 범위를 조회일 기준 과거 3일 · 조회일 · 이후 3일(±3일)로 개편하고 조회일·오늘 배지 표시"
+    ]
+  },
   {
     id: "patch-v10.58",
     version: "v10.58",
@@ -2502,6 +2555,22 @@ function MainApp() {
   const [activeTab, setActiveTab] = useState("home");
   const [scheduleSubTab, setScheduleSubTab] = useState("calendar");
   const [fridgeConflictData, setFridgeConflictData] = useState(null);
+  const [isQuickFabOpen, setIsQuickFabOpen] = useState(false);
+  const [homeRoutineSlotFilter, setHomeRoutineSlotFilter] = useState(() => {
+    return localStorage.getItem("kim_home_routine_slot_v1") || "auto";
+  });
+  const [homeTimeModeOverride, setHomeTimeModeOverride] = useState("auto");
+  const [isHomeEditMode, setIsHomeEditMode] = useState(false);
+  const [homeLayoutConfig, setHomeLayoutConfig] = useState(() => {
+    try {
+      const raw = localStorage.getItem("kim_home_layout_v1");
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && parsed.morning && parsed.afternoon && parsed.night) return parsed;
+      }
+    } catch (e) {}
+    return DEFAULT_HOME_LAYOUT;
+  });
   const [selectedDate, setSelectedDate] = useState(() => getTodayStr());
   const [selectedMember, setSelectedMember] = useState("전체");
 
@@ -4298,7 +4367,17 @@ function MainApp() {
     }
   };
 
-  const weekDates = useMemo(() => getWeekDatesFromBase(selectedDate), [selectedDate]);
+  const weekDates = useMemo(() => {
+    const base = new Date(selectedDate + "T00:00:00");
+    if (Number.isNaN(base.getTime())) return getWeekDatesFromBase(selectedDate);
+    const res = [];
+    for (let offset = -3; offset <= 3; offset++) {
+      const d = new Date(base);
+      d.setDate(base.getDate() + offset);
+      res.push(formatDate(d));
+    }
+    return res;
+  }, [selectedDate]);
   const scheduleWeekDates = useMemo(
     () => getWeekDatesFromBase(scheduleSelectedDate),
     [scheduleSelectedDate]
@@ -8196,334 +8275,551 @@ ${validText}
       {/* ==========================================
           탭 0: 🏠 홈 (대시보드 & 바로가기 허브)
       ========================================== */}
-      {activeTab === "home" && (
-        <div className="p-3 space-y-2.5">
-          {/* 1. 오늘 한눈에 보드: 일정 · 할 일 · 지금 루틴 동시 표시 */}
-          {(() => {
-            const curSlot = getCurrentRoutineTimeSlot();
-            const activeRoutines = familyRoutines.filter((r) => !isRoutineDoneNow(r));
-            const slotMatched = activeRoutines.filter((r) => {
-              const s = r.timeSlot || "상시";
-              return s === curSlot || s === "상시";
-            });
-            const visibleList = showAllTodayRoutinesOnMain ? activeRoutines : slotMatched;
-            const previewTodos = schedules
-              .filter((s) => s.category === "할일(To-Do)" && !s.done)
-              .sort((a, b) => String(a.date || "9999-99-99").localeCompare(String(b.date || "9999-99-99")))
-              .slice(0, 3);
+      {activeTab === "home" && (() => {
+        const activeHomeTimeMode =
+          homeTimeModeOverride === "auto" ? getAutoHomeTimeMode() : homeTimeModeOverride;
+        const modeMeta =
+          activeHomeTimeMode === "morning"
+            ? { label: "🌅 오전", bgClass: "bg-gradient-to-b from-amber-50/60 to-transparent" }
+            : activeHomeTimeMode === "afternoon"
+            ? { label: "🌆 오후", bgClass: "bg-gradient-to-b from-orange-50/50 to-transparent" }
+            : { label: "🌙 밤", bgClass: "bg-gradient-to-b from-indigo-50/70 to-transparent" };
+
+        const curModeLayout = homeLayoutConfig?.[activeHomeTimeMode] || DEFAULT_HOME_LAYOUT[activeHomeTimeMode];
+        const blockOrder = Array.isArray(curModeLayout.blocks) ? curModeLayout.blocks : DEFAULT_HOME_LAYOUT[activeHomeTimeMode].blocks;
+        const hiddenBlocks = Array.isArray(curModeLayout.hiddenBlocks) ? curModeLayout.hiddenBlocks : [];
+        const menuOrder = Array.isArray(curModeLayout.menuOrder) ? curModeLayout.menuOrder : DEFAULT_HOME_MENU_ORDER;
+        const hiddenMenus = Array.isArray(curModeLayout.hiddenMenus) ? curModeLayout.hiddenMenus : [];
+
+        const saveHomeLayout = (updater) => {
+          setHomeLayoutConfig((prev) => {
+            const base = prev?.[activeHomeTimeMode] || DEFAULT_HOME_LAYOUT[activeHomeTimeMode];
+            const nextMode = updater(base);
+            const nextAll = { ...prev, [activeHomeTimeMode]: nextMode };
+            try {
+              localStorage.setItem("kim_home_layout_v1", JSON.stringify(nextAll));
+            } catch (e) {}
+            return nextAll;
+          });
+        };
+
+        const moveArrayItem = (arr, idx, dir) => {
+          const target = idx + dir;
+          if (target < 0 || target >= arr.length) return arr;
+          const copy = [...arr];
+          [copy[idx], copy[target]] = [copy[target], copy[idx]];
+          return copy;
+        };
+
+        const BLOCK_LABELS = {
+          schedule_todo: "🗓️ 3일 내 일정 · ✅ 남은 할 일",
+          routine: "🔄 시간대별 가족 루틴",
+          menu_grid: "🧭 핵심 메뉴 바로가기"
+        };
+
+        const todayKey = getTodayStr();
+        const todayMealsList = meals.filter((m) => m.date === todayKey);
+        const firstMealPreview = todayMealsList[0] ? `${todayMealsList[0].slot}: ${todayMealsList[0].menu}` : "아직 기록 없음";
+
+        const MENU_DEFS = {
+          daily: {
+            title: "🍽️ 오늘의 식단",
+            actionLabel: `${todayMealsList.length}건 >`,
+            actionColor: "text-amber-700",
+            borderHover: "hover:border-amber-300",
+            sub: <span className="text-stone-500">{firstMealPreview}</span>,
+            onClick: () => {
+              setSelectedDate(todayKey);
+              setActiveTab("daily");
+            }
+          },
+          weekly: {
+            title: "📊 주간요약",
+            actionLabel: "열기 >",
+            actionColor: "text-indigo-700",
+            borderHover: "hover:border-indigo-300",
+            sub: <span className="text-stone-500">조회일 ±3일 식단 흐름</span>,
+            onClick: () => setActiveTab("weekly")
+          },
+          fridge: {
+            title: "❄️ 냉장고",
+            actionLabel: "열기 >",
+            actionColor: "text-orange-600",
+            borderHover: "hover:border-orange-300",
+            sub: (
+              <>
+                보유 {fridge.length} ·{" "}
+                <span className={expiringItems.length > 0 ? "text-rose-600 font-black" : "text-emerald-700"}>
+                  임박 {expiringItems.length}건
+                </span>
+              </>
+            ),
+            onClick: () => setActiveTab("fridge")
+          },
+          shopping: {
+            title: "🛒 장보기",
+            actionLabel: "열기 >",
+            actionColor: "text-emerald-700",
+            borderHover: "hover:border-emerald-300",
+            sub: (
+              <>
+                남은 품목 <span className="text-emerald-700 font-black">{shoppingList.filter((s) => !s.checked).length}건</span>
+              </>
+            ),
+            onClick: () => setActiveTab("shopping")
+          },
+          monthly_cal: {
+            title: "📅 월간 식단",
+            actionLabel: "달력 >",
+            actionColor: "text-amber-700",
+            borderHover: "hover:border-amber-300",
+            sub: (
+              <>
+                {currentMonth.slice(5)}월 기록{" "}
+                <span className="text-amber-800 font-black">
+                  {meals.filter((m) => String(m.date || "").startsWith(currentMonth)).length}끼
+                </span>
+              </>
+            ),
+            onClick: () => {
+              setActiveTab("monthly");
+              setMonthlySubTab("calendar");
+            }
+          },
+          monthly_exp: {
+            title: `💰 ${currentMonth.slice(5)}월 식비`,
+            actionLabel: "가계부 >",
+            actionColor: "text-amber-700",
+            borderHover: "hover:border-amber-300",
+            sub: <span className="font-black text-stone-900">{monthlyExpenseSummary.total.toLocaleString()}원</span>,
+            onClick: () => {
+              setActiveTab("monthly");
+              setMonthlySubTab("expense");
+            }
+          },
+          baby: {
+            title: "👶 육아수첩",
+            actionLabel: "열기 >",
+            actionColor: "text-sky-700",
+            borderHover: "hover:border-sky-300",
+            sub: <span className="text-stone-500">시목 · 시율 발달/접종</span>,
+            onClick: () => setActiveTab("baby")
+          },
+          recipes: {
+            title: "📖 레시피북",
+            actionLabel: "열기 >",
+            actionColor: "text-rose-700",
+            borderHover: "hover:border-rose-300",
+            sub: <span className="text-stone-500">저장된 요리 {recipes.length}건</span>,
+            onClick: () => setActiveTab("recipes")
+          },
+          notices: {
+            title: "📌 가족공지",
+            actionLabel: "열기 >",
+            actionColor: "text-indigo-700",
+            borderHover: "hover:border-indigo-300",
+            sub: <span className="text-stone-500">미완료 {notices.filter((n) => !n.done).length}건</span>,
+            onClick: () => setActiveTab("notices")
+          },
+          ai: {
+            title: "✨ AI추천",
+            actionLabel: "열기 >",
+            actionColor: "text-purple-700",
+            borderHover: "hover:border-purple-300",
+            sub: <span className="text-stone-500">냉장고 파먹기 &amp; 플레이팅</span>,
+            onClick: () => setActiveTab("ai")
+          }
+        };
+
+        const curSlot = getCurrentRoutineTimeSlot();
+        const activeRoutines = familyRoutines.filter((r) => !isRoutineDoneNow(r));
+        const visibleRoutineList =
+          homeRoutineSlotFilter === "전체"
+            ? activeRoutines
+            : homeRoutineSlotFilter === "auto"
+            ? activeRoutines.filter((r) => {
+                const s = r.timeSlot || "상시";
+                return s === curSlot || s === "상시";
+              })
+            : activeRoutines.filter((r) => (r.timeSlot || "상시") === homeRoutineSlotFilter);
+
+        const previewTodos = schedules
+          .filter((s) => s.category === "할일(To-Do)" && !s.done)
+          .sort((a, b) => String(a.date || "9999-99-99").localeCompare(String(b.date || "9999-99-99")))
+          .slice(0, 3);
+
+        const renderHomeBlock = (blockId) => {
+          if (hiddenBlocks.includes(blockId)) return null;
+          if (blockId === "schedule_todo") {
             return (
-              <div className="space-y-2">
-                {/* 1-1. 다가오는 일정 + 할 일 미리보기 */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  <div className="bg-rose-50/80 border border-rose-200 rounded-2xl p-2.5 space-y-1.5">
-                    <div className="flex items-center justify-between gap-1">
-                      <span className="text-xs font-black text-rose-950">
-                        🗓️ 3일 내 일정 ({imminentSchedulesWithin3Days.length}건)
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setScheduleSubTab("calendar");
-                          setActiveTab("schedule");
-                        }}
-                        className="text-[10px] font-extrabold text-rose-700"
-                      >
-                        전체 &gt;
-                      </button>
-                    </div>
-                    {imminentSchedulesWithin3Days.length === 0 ? (
-                      <div className="text-[11px] font-bold text-rose-700/80 bg-white/80 rounded-xl px-2.5 py-1.5">
-                        3일 이내 예정된 일정이 없습니다.
-                      </div>
-                    ) : (
-                      <div className="space-y-1">
-                        {imminentSchedulesWithin3Days.slice(0, 3).map((ev) => (
-                          <button
-                            key={ev.id}
-                            type="button"
-                            onClick={() => {
-                              setScheduleSubTab("calendar");
-                              setActiveTab("schedule");
-                            }}
-                            className="w-full px-2.5 py-1.5 rounded-xl bg-white border border-rose-100 flex items-center justify-between gap-2 text-left"
-                          >
-                            <span className="text-[11px] font-extrabold text-stone-800 truncate">{ev.title}</span>
-                            <span className="px-1.5 py-0.5 rounded bg-rose-600 text-white text-[10px] font-black shrink-0">
-                              {ev.calc.dDayText}
-                            </span>
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="bg-amber-50/80 border border-amber-200 rounded-2xl p-2.5 space-y-1.5">
-                    <div className="flex items-center justify-between gap-1">
-                      <span className="text-xs font-black text-amber-950">
-                        ✅ 남은 할 일 ({globalTodoBadgeStats.activeCount}건)
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setScheduleSubTab("todo");
-                          setActiveTab("schedule");
-                        }}
-                        className="text-[10px] font-extrabold text-amber-800"
-                      >
-                        전체 &gt;
-                      </button>
-                    </div>
-                    {previewTodos.length === 0 ? (
-                      <div className="text-[11px] font-bold text-emerald-800 bg-white/80 rounded-xl px-2.5 py-1.5">
-                        🎉 남은 할 일이 없습니다!
-                      </div>
-                    ) : (
-                      <div className="space-y-1">
-                        {previewTodos.map((todo) => (
-                          <button
-                            key={todo.id}
-                            type="button"
-                            onClick={() => handleToggleScheduleDone(todo)}
-                            className="w-full px-2.5 py-1.5 rounded-xl bg-white hover:bg-amber-50 border border-amber-100 flex items-center gap-2 text-left transition active:scale-[0.99]"
-                          >
-                            <span className="w-3.5 h-3.5 rounded border border-amber-400 bg-white shrink-0" />
-                            <span className="text-[11px] font-extrabold text-stone-800 truncate flex-1">{todo.title}</span>
-                            {todo.date && (
-                              <span className="text-[10px] font-bold text-amber-800 shrink-0">{todo.date.slice(5)}</span>
-                            )}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* 1-2. 지금 시간대 루틴 카드 */}
-                <div className="bg-indigo-50/70 border border-indigo-200 rounded-2xl p-2.5 space-y-1.5">
-                  <div className="flex items-center justify-between gap-1.5">
-                    <span className="text-xs font-black text-indigo-950 truncate">
-                      🔄 {showAllTodayRoutinesOnMain ? "오늘 남은 루틴" : `지금(${curSlot}) 루틴`} ({visibleList.length}건)
+              <div key="schedule_todo" className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div className="bg-rose-50/80 border border-rose-200 rounded-2xl p-2.5 space-y-1.5">
+                  <div className="flex items-center justify-between gap-1">
+                    <span className="text-xs font-black text-rose-950">
+                      🗓️ 3일 내 일정 ({imminentSchedulesWithin3Days.length}건)
                     </span>
-                    <div className="flex items-center gap-1 shrink-0">
-                      {activeRoutines.length > 0 && (
-                        <button
-                          type="button"
-                          onClick={() => setShowAllTodayRoutinesOnMain((v) => !v)}
-                          className="px-2 py-0.5 rounded-lg bg-white border border-indigo-200 text-[10px] font-extrabold text-indigo-700 whitespace-nowrap"
-                        >
-                          {showAllTodayRoutinesOnMain ? `${curSlot}만` : `전체(${activeRoutines.length})`}
-                        </button>
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setScheduleSubTab("routine");
-                          setActiveTab("schedule");
-                        }}
-                        className="px-2 py-0.5 rounded-lg bg-indigo-600 text-white text-[10px] font-extrabold whitespace-nowrap"
-                      >
-                        관리
-                      </button>
-                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setScheduleSubTab("calendar");
+                        setActiveTab("schedule");
+                      }}
+                      className="text-[10px] font-extrabold text-rose-700"
+                    >
+                      전체 &gt;
+                    </button>
                   </div>
-                  {activeRoutines.length === 0 ? (
-                    <div className="text-[11px] font-bold text-emerald-800 bg-white/90 rounded-xl px-2.5 py-1.5">
-                      🎉 오늘 예정된 모든 루틴을 완료했습니다!
-                    </div>
-                  ) : visibleList.length === 0 ? (
-                    <div className="text-[11px] font-bold text-indigo-700 bg-white/80 rounded-xl px-2.5 py-1.5">
-                      ✅ {curSlot} 시간대 루틴을 모두 완료했습니다!
+                  {imminentSchedulesWithin3Days.length === 0 ? (
+                    <div className="text-[11px] font-bold text-rose-700/80 bg-white/80 rounded-xl px-2.5 py-1.5">
+                      3일 이내 예정된 일정이 없습니다.
                     </div>
                   ) : (
                     <div className="space-y-1">
-                      {visibleList.map((rt) => {
-                        const nextInfo = getRoutineNextDateInfo(rt, currentDayKey);
-                        return (
-                          <button
-                            key={rt.id}
-                            type="button"
-                            onClick={() => handleToggleRoutine(rt.id)}
-                            className="w-full p-2 rounded-xl bg-white hover:bg-indigo-50/50 border border-indigo-100 flex items-start gap-2 text-left transition active:scale-[0.99]"
-                          >
-                            <span className="w-4 h-4 mt-0.5 rounded border border-indigo-300 bg-white shrink-0" />
-                            <div className="min-w-0 flex-1">
-                              <div className="text-xs font-extrabold text-stone-900 whitespace-normal break-words leading-snug">
-                                {rt.title}
-                              </div>
-                              <div className="flex flex-wrap items-center gap-1 mt-0.5">
-                                <span className="px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-800 text-[9px] font-black">
-                                  {rt.timeSlot || "상시"}
-                                </span>
-                                <span className="px-1.5 py-0.5 rounded bg-stone-100 text-stone-600 text-[9px] font-bold">
-                                  {rt.assignee || "공통"}
-                                </span>
-                                {nextInfo && (
-                                  <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 text-[9px] font-bold">
-                                    {nextInfo.dateLabel}
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                          </button>
-                        );
-                      })}
+                      {imminentSchedulesWithin3Days.slice(0, 3).map((ev) => (
+                        <button
+                          key={ev.id}
+                          type="button"
+                          onClick={() => {
+                            setScheduleSubTab("calendar");
+                            setActiveTab("schedule");
+                          }}
+                          className="w-full px-2.5 py-1.5 rounded-xl bg-white border border-rose-100 flex items-center justify-between gap-2 text-left"
+                        >
+                          <span className="text-[11px] font-extrabold text-stone-800 truncate">{ev.title}</span>
+                          <span className="px-1.5 py-0.5 rounded bg-rose-600 text-white text-[10px] font-black shrink-0">
+                            {ev.calc.dDayText}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="bg-amber-50/80 border border-amber-200 rounded-2xl p-2.5 space-y-1.5">
+                  <div className="flex items-center justify-between gap-1">
+                    <span className="text-xs font-black text-amber-950">
+                      ✅ 남은 할 일 ({globalTodoBadgeStats.activeCount}건)
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setScheduleSubTab("todo");
+                        setActiveTab("schedule");
+                      }}
+                      className="text-[10px] font-extrabold text-amber-800"
+                    >
+                      전체 &gt;
+                    </button>
+                  </div>
+                  {previewTodos.length === 0 ? (
+                    <div className="text-[11px] font-bold text-emerald-800 bg-white/80 rounded-xl px-2.5 py-1.5">
+                      🎉 남은 할 일이 없습니다!
+                    </div>
+                  ) : (
+                    <div className="space-y-1">
+                      {previewTodos.map((todo) => (
+                        <button
+                          key={todo.id}
+                          type="button"
+                          onClick={() => handleToggleScheduleDone(todo)}
+                          className="w-full px-2.5 py-1.5 rounded-xl bg-white hover:bg-amber-50 border border-amber-100 flex items-center gap-2 text-left transition active:scale-[0.99]"
+                        >
+                          <span className="w-3.5 h-3.5 rounded border border-amber-400 bg-white shrink-0" />
+                          <span className="text-[11px] font-extrabold text-stone-800 truncate flex-1">{todo.title}</span>
+                          {todo.date && (
+                            <span className="text-[10px] font-bold text-amber-800 shrink-0">{todo.date.slice(5)}</span>
+                          )}
+                        </button>
+                      ))}
                     </div>
                   )}
                 </div>
               </div>
             );
-          })()}
+          }
 
-          {/* 2. 통일된 2열 바로가기 그리드 (10개 핵심 메뉴 한눈에) */}
-          {(() => {
-            const todayKey = getTodayStr();
-            const todayMealsList = meals.filter((m) => m.date === todayKey);
-            const firstMealPreview = todayMealsList[0] ? `${todayMealsList[0].slot}: ${todayMealsList[0].menu}` : "아직 기록 없음";
+          if (blockId === "routine") {
             return (
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSelectedDate(todayKey);
-                    setActiveTab("daily");
-                  }}
-                  className="bg-white border border-stone-200 hover:border-amber-300 rounded-2xl p-2.5 text-left shadow-sm space-y-0.5 transition"
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-black text-stone-900">🍽️ 오늘의 식단</span>
-                    <span className="text-[10px] font-extrabold text-amber-700">{todayMealsList.length}건 &gt;</span>
-                  </div>
-                  <div className="text-[11px] font-bold text-stone-500 truncate">{firstMealPreview}</div>
-                </button>
+              <div key="routine" className="bg-indigo-50/70 border border-indigo-200 rounded-2xl p-2.5 space-y-1.5">
+                <div className="flex items-center justify-between gap-1.5">
+                  <span className="text-xs font-black text-indigo-950 truncate">
+                    🔄 {homeRoutineSlotFilter === "auto" ? `지금(${curSlot}) 루틴` : homeRoutineSlotFilter === "전체" ? "오늘 남은 루틴" : `${homeRoutineSlotFilter} 루틴`} ({visibleRoutineList.length}건)
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setScheduleSubTab("routine");
+                      setActiveTab("schedule");
+                    }}
+                    className="px-2 py-0.5 rounded-lg bg-indigo-600 text-white text-[10px] font-extrabold whitespace-nowrap shrink-0"
+                  >
+                    관리
+                  </button>
+                </div>
 
-                <button
-                  type="button"
-                  onClick={() => setActiveTab("weekly")}
-                  className="bg-white border border-stone-200 hover:border-indigo-300 rounded-2xl p-2.5 text-left shadow-sm space-y-0.5 transition"
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-black text-stone-900">📊 주간요약</span>
-                    <span className="text-[10px] font-extrabold text-indigo-700">열기 &gt;</span>
-                  </div>
-                  <div className="text-[11px] font-bold text-stone-500 truncate">이번 주 식단·영양 흐름</div>
-                </button>
+                {/* 표출 시간대 직접 선택 바 */}
+                <div className="flex items-center gap-1 overflow-x-auto pb-0.5">
+                  {[
+                    { id: "auto", label: `자동(${curSlot})` },
+                    ...ROUTINE_TIME_SLOTS.map((s) => ({ id: s, label: s })),
+                    { id: "전체", label: `전체(${activeRoutines.length})` }
+                  ].map((opt) => (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      onClick={() => {
+                        setHomeRoutineSlotFilter(opt.id);
+                        try {
+                          localStorage.setItem("kim_home_routine_slot_v1", opt.id);
+                        } catch (e) {}
+                      }}
+                      className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold whitespace-nowrap border transition shrink-0 ${
+                        homeRoutineSlotFilter === opt.id
+                          ? "bg-indigo-600 text-white border-indigo-600"
+                          : "bg-white text-indigo-700 border-indigo-200"
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
 
-                <button
-                  type="button"
-                  onClick={() => setActiveTab("fridge")}
-                  className="bg-white border border-stone-200 hover:border-orange-300 rounded-2xl p-2.5 text-left shadow-sm space-y-0.5 transition"
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-black text-stone-900">❄️ 냉장고</span>
-                    <span className="text-[10px] font-extrabold text-orange-600">열기 &gt;</span>
+                {activeRoutines.length === 0 ? (
+                  <div className="text-[11px] font-bold text-emerald-800 bg-white/90 rounded-xl px-2.5 py-1.5">
+                    🎉 오늘 예정된 모든 루틴을 완료했습니다!
                   </div>
-                  <div className="text-[11px] font-bold text-stone-600 truncate">
-                    보유 {fridge.length} · <span className={expiringItems.length > 0 ? "text-rose-600 font-black" : "text-emerald-700"}>임박 {expiringItems.length}건</span>
+                ) : visibleRoutineList.length === 0 ? (
+                  <div className="text-[11px] font-bold text-indigo-700 bg-white/80 rounded-xl px-2.5 py-1.5">
+                    ✅ 선택한 시간대 루틴을 모두 완료했습니다!
                   </div>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setActiveTab("shopping")}
-                  className="bg-white border border-stone-200 hover:border-emerald-300 rounded-2xl p-2.5 text-left shadow-sm space-y-0.5 transition"
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-black text-stone-900">🛒 장보기</span>
-                    <span className="text-[10px] font-extrabold text-emerald-700">열기 &gt;</span>
+                ) : (
+                  <div className="space-y-1">
+                    {visibleRoutineList.map((rt) => {
+                      const nextInfo = getRoutineNextDateInfo(rt, currentDayKey);
+                      return (
+                        <button
+                          key={rt.id}
+                          type="button"
+                          onClick={() => handleToggleRoutine(rt.id)}
+                          className="w-full p-2 rounded-xl bg-white hover:bg-indigo-50/50 border border-indigo-100 flex items-start gap-2 text-left transition active:scale-[0.99]"
+                        >
+                          <span className="w-4 h-4 mt-0.5 rounded border border-indigo-300 bg-white shrink-0" />
+                          <div className="min-w-0 flex-1">
+                            <div className="text-xs font-extrabold text-stone-900 whitespace-normal break-words leading-snug">
+                              {rt.title}
+                            </div>
+                            <div className="flex flex-wrap items-center gap-1 mt-0.5">
+                              <span className="px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-800 text-[9px] font-black">
+                                {rt.timeSlot || "상시"}
+                              </span>
+                              <span className="px-1.5 py-0.5 rounded bg-stone-100 text-stone-600 text-[9px] font-bold">
+                                {rt.assignee || "공통"}
+                              </span>
+                              {nextInfo && (
+                                <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 text-[9px] font-bold">
+                                  {nextInfo.dateLabel}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })}
                   </div>
-                  <div className="text-[11px] font-bold text-stone-600 truncate">
-                    남은 품목 <span className="text-emerald-700 font-black">{shoppingList.filter((s) => !s.checked).length}건</span>
-                  </div>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setActiveTab("monthly");
-                    setMonthlySubTab("calendar");
-                  }}
-                  className="bg-white border border-stone-200 hover:border-amber-300 rounded-2xl p-2.5 text-left shadow-sm space-y-0.5 transition"
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-black text-stone-900">📅 월간 식단</span>
-                    <span className="text-[10px] font-extrabold text-amber-700">달력 &gt;</span>
-                  </div>
-                  <div className="text-[11px] font-bold text-stone-600 truncate">
-                    {currentMonth.slice(5)}월 기록 <span className="text-amber-800 font-black">{meals.filter((m) => String(m.date || "").startsWith(currentMonth)).length}끼</span>
-                  </div>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setActiveTab("monthly");
-                    setMonthlySubTab("expense");
-                  }}
-                  className="bg-white border border-stone-200 hover:border-amber-300 rounded-2xl p-2.5 text-left shadow-sm space-y-0.5 transition"
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-black text-stone-900">💰 {currentMonth.slice(5)}월 식비</span>
-                    <span className="text-[10px] font-extrabold text-amber-700">가계부 &gt;</span>
-                  </div>
-                  <div className="text-[11px] font-black text-stone-900 truncate">
-                    {monthlyExpenseSummary.total.toLocaleString()}원
-                  </div>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setActiveTab("baby")}
-                  className="bg-white border border-stone-200 hover:border-sky-300 rounded-2xl p-2.5 text-left shadow-sm space-y-0.5 transition"
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-black text-stone-900">👶 육아수첩</span>
-                    <span className="text-[10px] font-extrabold text-sky-700">열기 &gt;</span>
-                  </div>
-                  <div className="text-[11px] font-bold text-stone-500 truncate">시목 · 시율 발달/접종</div>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setActiveTab("recipes")}
-                  className="bg-white border border-stone-200 hover:border-rose-300 rounded-2xl p-2.5 text-left shadow-sm space-y-0.5 transition"
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-black text-stone-900">📖 레시피북</span>
-                    <span className="text-[10px] font-extrabold text-rose-700">열기 &gt;</span>
-                  </div>
-                  <div className="text-[11px] font-bold text-stone-500 truncate">저장된 요리 {recipes.length}건</div>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setActiveTab("notices")}
-                  className="bg-white border border-stone-200 hover:border-indigo-300 rounded-2xl p-2.5 text-left shadow-sm space-y-0.5 transition"
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-black text-stone-900">📌 가족공지</span>
-                    <span className="text-[10px] font-extrabold text-indigo-700">열기 &gt;</span>
-                  </div>
-                  <div className="text-[11px] font-bold text-stone-500 truncate">
-                    미완료 {notices.filter((n) => !n.done).length}건
-                  </div>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setActiveTab("ai")}
-                  className="bg-white border border-stone-200 hover:border-purple-300 rounded-2xl p-2.5 text-left shadow-sm space-y-0.5 transition"
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-black text-stone-900">✨ AI추천</span>
-                    <span className="text-[10px] font-extrabold text-purple-700">열기 &gt;</span>
-                  </div>
-                  <div className="text-[11px] font-bold text-stone-500 truncate">냉장고 파먹기 &amp; 플레이팅</div>
-                </button>
+                )}
               </div>
             );
-          })()}
-        </div>
-      )}
+          }
+
+          if (blockId === "menu_grid") {
+            const visibleMenuIds = menuOrder.filter((id) => MENU_DEFS[id] && !hiddenMenus.includes(id));
+            return (
+              <div key="menu_grid" className="grid grid-cols-2 gap-2">
+                {visibleMenuIds.map((id) => {
+                  const item = MENU_DEFS[id];
+                  return (
+                    <button
+                      key={id}
+                      type="button"
+                      onClick={item.onClick}
+                      className={`bg-white border border-stone-200 ${item.borderHover} rounded-2xl p-2.5 text-left shadow-sm space-y-0.5 transition`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-black text-stone-900">{item.title}</span>
+                        <span className={`text-[10px] font-extrabold ${item.actionColor}`}>{item.actionLabel}</span>
+                      </div>
+                      <div className="text-[11px] font-bold text-stone-600 truncate">{item.sub}</div>
+                    </button>
+                  );
+                })}
+              </div>
+            );
+          }
+          return null;
+        };
+
+        return (
+          <div className={`p-3 space-y-2.5 rounded-b-3xl ${modeMeta.bgClass}`}>
+            {/* 시간대 적응형 모드 전환 & 홈 화면 편집 바 */}
+            <div className="flex items-center justify-between gap-1.5">
+              <div className="flex items-center gap-1 overflow-x-auto">
+                {[
+                  { id: "auto", label: `자동(${modeMeta.label})` },
+                  { id: "morning", label: "🌅 오전" },
+                  { id: "afternoon", label: "🌆 오후" },
+                  { id: "night", label: "🌙 밤" }
+                ].map((m) => (
+                  <button
+                    key={m.id}
+                    type="button"
+                    onClick={() => setHomeTimeModeOverride(m.id)}
+                    className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold border whitespace-nowrap transition shrink-0 ${
+                      homeTimeModeOverride === m.id
+                        ? "bg-stone-900 text-white border-stone-900"
+                        : "bg-white text-stone-600 border-stone-200"
+                    }`}
+                  >
+                    {m.label}
+                  </button>
+                ))}
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsHomeEditMode((v) => !v)}
+                className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold border whitespace-nowrap shrink-0 transition ${
+                  isHomeEditMode
+                    ? "bg-emerald-600 text-white border-emerald-600"
+                    : "bg-white text-stone-700 border-stone-200"
+                }`}
+              >
+                {isHomeEditMode ? "✅ 편집 완료" : "✏️ 홈 편집"}
+              </button>
+            </div>
+
+            {isHomeEditMode && (
+              <div className="bg-white border border-stone-300 rounded-2xl p-3 shadow-sm space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-black text-stone-900">
+                    🛠️ {modeMeta.label} 홈 화면 구성 편집
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      saveHomeLayout(() => ({ ...DEFAULT_HOME_LAYOUT[activeHomeTimeMode] }));
+                      showToast(`${modeMeta.label} 기본 구성으로 초기화했습니다.`);
+                    }}
+                    className="px-2 py-0.5 rounded-lg bg-stone-100 text-stone-600 text-[10px] font-extrabold"
+                  >
+                    기본값 초기화
+                  </button>
+                </div>
+
+                <div className="space-y-1">
+                  <div className="text-[10px] font-extrabold text-stone-500">1) 주요 영역 순서 · 표시</div>
+                  {blockOrder.map((bId, idx) => {
+                    const isHidden = hiddenBlocks.includes(bId);
+                    return (
+                      <div key={bId} className="flex items-center justify-between gap-1.5 bg-stone-50 border border-stone-200 rounded-xl px-2.5 py-1.5">
+                        <span className={`text-[11px] font-extrabold truncate ${isHidden ? "text-stone-400 line-through" : "text-stone-800"}`}>
+                          {BLOCK_LABELS[bId]}
+                        </span>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button
+                            type="button"
+                            disabled={idx === 0}
+                            onClick={() => saveHomeLayout((cur) => ({ ...cur, blocks: moveArrayItem(blockOrder, idx, -1) }))}
+                            className="px-1.5 py-0.5 rounded bg-white border border-stone-200 text-[10px] font-black disabled:opacity-30"
+                          >
+                            ▲
+                          </button>
+                          <button
+                            type="button"
+                            disabled={idx === blockOrder.length - 1}
+                            onClick={() => saveHomeLayout((cur) => ({ ...cur, blocks: moveArrayItem(blockOrder, idx, 1) }))}
+                            className="px-1.5 py-0.5 rounded bg-white border border-stone-200 text-[10px] font-black disabled:opacity-30"
+                          >
+                            ▼
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              saveHomeLayout((cur) => ({
+                                ...cur,
+                                hiddenBlocks: isHidden
+                                  ? hiddenBlocks.filter((x) => x !== bId)
+                                  : [...hiddenBlocks, bId]
+                              }))
+                            }
+                            className={`px-2 py-0.5 rounded text-[10px] font-extrabold ${
+                              isHidden ? "bg-stone-200 text-stone-600" : "bg-emerald-100 text-emerald-800"
+                            }`}
+                          >
+                            {isHidden ? "숨김" : "표시"}
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div className="space-y-1">
+                  <div className="text-[10px] font-extrabold text-stone-500">2) 바로가기 카드 순서 · 표시</div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-1">
+                    {menuOrder.map((mId, idx) => {
+                      const def = MENU_DEFS[mId];
+                      if (!def) return null;
+                      const isHidden = hiddenMenus.includes(mId);
+                      return (
+                        <div key={mId} className="flex items-center justify-between gap-1 bg-stone-50 border border-stone-200 rounded-xl px-2 py-1">
+                          <span className={`text-[11px] font-extrabold truncate ${isHidden ? "text-stone-400 line-through" : "text-stone-800"}`}>
+                            {def.title}
+                          </span>
+                          <div className="flex items-center gap-0.5 shrink-0">
+                            <button
+                              type="button"
+                              disabled={idx === 0}
+                              onClick={() => saveHomeLayout((cur) => ({ ...cur, menuOrder: moveArrayItem(menuOrder, idx, -1) }))}
+                              className="px-1 py-0.5 rounded bg-white border border-stone-200 text-[9px] font-black disabled:opacity-30"
+                            >
+                              ▲
+                            </button>
+                            <button
+                              type="button"
+                              disabled={idx === menuOrder.length - 1}
+                              onClick={() => saveHomeLayout((cur) => ({ ...cur, menuOrder: moveArrayItem(menuOrder, idx, 1) }))}
+                              className="px-1 py-0.5 rounded bg-white border border-stone-200 text-[9px] font-black disabled:opacity-30"
+                            >
+                              ▼
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                saveHomeLayout((cur) => ({
+                                  ...cur,
+                                  hiddenMenus: isHidden
+                                    ? hiddenMenus.filter((x) => x !== mId)
+                                    : [...hiddenMenus, mId]
+                                }))
+                              }
+                              className={`px-1.5 py-0.5 rounded text-[9px] font-extrabold ${
+                                isHidden ? "bg-stone-200 text-stone-600" : "bg-emerald-100 text-emerald-800"
+                              }`}
+                            >
+                              {isHidden ? "숨김" : "표시"}
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {blockOrder.map((blockId) => renderHomeBlock(blockId))}
+          </div>
+        );
+      })()}
 
       {/* ==========================================
           탭 1: 일별 식단
@@ -8918,8 +9214,14 @@ ${validText}
                 return (
                   <div key={d} id={`weekly-day-${d}`} className={`p-3 ${d === getTodayStr() ? "bg-emerald-50/40" : ""}`}>
                     <div className="flex items-center justify-between mb-2">
-                      <span className="text-xs font-black text-stone-900">
-                        {d.slice(5)} ({getDayName(d)})
+                      <span className="text-xs font-black text-stone-900 flex items-center gap-1.5">
+                        <span>{d.slice(5)} ({getDayName(d)})</span>
+                        {d === selectedDate && (
+                          <span className="px-1.5 py-0.5 rounded bg-stone-900 text-white text-[9px] font-black">조회일</span>
+                        )}
+                        {d === getTodayStr() && (
+                          <span className="px-1.5 py-0.5 rounded bg-emerald-600 text-white text-[9px] font-black">오늘</span>
+                        )}
                       </span>
                       <button
                         onClick={() => {
@@ -12959,64 +13261,112 @@ ${validText}
         );
       })()}
 
-      {/* 빠른 추가 플로팅 버튼 (FAB) */}
+      {/* 스마트 빠른 등록 플로팅 메뉴 & FAB */}
+      {isQuickFabOpen && (
+        <>
+          <div
+            onClick={() => setIsQuickFabOpen(false)}
+            className="fixed inset-0 bg-black/25 z-30"
+            aria-hidden="true"
+          />
+          <div
+            style={{ bottom: "calc(8.35rem + env(safe-area-inset-bottom))" }}
+            className="fixed right-4 z-40 flex flex-col items-end gap-2"
+          >
+            {[
+              {
+                label: "🍽️ 식단 기록",
+                color: "bg-white text-stone-900 border-amber-200 hover:bg-amber-50",
+                onClick: () => {
+                  const h = new Date().getHours();
+                  const smartSlot =
+                    h >= 5 && h < 10 ? "아침" : h >= 10 && h < 14 ? "점심" : h >= 14 && h < 17 ? "오후간식" : h >= 17 && h < 21 ? "저녁" : "야식";
+                  setEditingMeal(null);
+                  setMealForm({
+                    date: activeTab === "home" ? getTodayStr() : selectedDate,
+                    slot: smartSlot,
+                    menu: "",
+                    members: selectedMember === "전체" ? ["수혁", "아리나"] : [selectedMember],
+                    ingredients: [],
+                    note: "",
+                    sourceType: "집밥/온가족식",
+                    cost: ""
+                  });
+                  setIsMealModalOpen(true);
+                }
+              },
+              {
+                label: "🗓️ 일정 추가",
+                color: "bg-white text-stone-900 border-rose-200 hover:bg-rose-50",
+                onClick: () => {
+                  setEditingSchedule(null);
+                  setScheduleForm({
+                    title: "",
+                    date: scheduleSelectedDate || getTodayStr(),
+                    category: "병원/행사",
+                    members: scheduleMemberFilter === "전체" ? ["수혁", "아리나", "시목", "시율"] : [scheduleMemberFilter],
+                    isAnnual: false,
+                    showDday: false,
+                    hasOriginYear: false,
+                    memo: ""
+                  });
+                  setIsScheduleModalOpen(true);
+                }
+              },
+              {
+                label: "✅ 할 일 추가",
+                color: "bg-white text-stone-900 border-amber-200 hover:bg-amber-50",
+                onClick: () => {
+                  setEditingSchedule(null);
+                  setScheduleForm({
+                    title: "",
+                    date: getTodayStr(),
+                    category: "할일(To-Do)",
+                    members: scheduleMemberFilter === "전체" ? ["수혁", "아리나", "시목", "시율"] : [scheduleMemberFilter],
+                    isAnnual: false,
+                    showDday: false,
+                    hasOriginYear: false,
+                    memo: ""
+                  });
+                  setIsScheduleModalOpen(true);
+                }
+              },
+              {
+                label: "❄️ 냉장고 입고",
+                color: "bg-white text-stone-900 border-sky-200 hover:bg-sky-50",
+                onClick: () => openAddFridgeModal()
+              },
+              {
+                label: "📖 레시피 등록",
+                color: "bg-white text-stone-900 border-purple-200 hover:bg-purple-50",
+                onClick: () => openNewRecipeModal()
+              }
+            ].map((act) => (
+              <button
+                key={act.label}
+                type="button"
+                onClick={() => {
+                  setIsQuickFabOpen(false);
+                  act.onClick();
+                }}
+                className={`px-3.5 py-2 rounded-2xl border shadow-lg text-xs font-black whitespace-nowrap transition active:scale-95 ${act.color}`}
+              >
+                {act.label}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+
       <button
-        onClick={() => {
-          if (activeTab === "fridge") {
-            openAddFridgeModal();
-          } else if (activeTab === "schedule") {
-            if (scheduleSubTab === "routine") {
-              document.getElementById("routine-board-section")?.scrollIntoView({ behavior: "smooth", block: "start" });
-              setTimeout(() => document.getElementById("routine-title-input")?.focus(), 180);
-              showToast("입력창에서 반복 루틴을 바로 추가해 보세요!");
-              return;
-            }
-            setEditingSchedule(null);
-            setScheduleForm({
-              title: "",
-              date: scheduleSelectedDate || getTodayStr(),
-              category:
-                scheduleCatFilter !== "전체"
-                  ? scheduleCatFilter
-                  : scheduleSubTab === "calendar"
-                  ? "병원/행사"
-                  : "할일(To-Do)",
-              members: scheduleMemberFilter === "전체" ? ["수혁", "아리나", "시목", "시율"] : [scheduleMemberFilter],
-              isAnnual: false,
-              showDday: false,
-              hasOriginYear: false,
-              memo: ""
-            });
-            setIsScheduleModalOpen(true);
-          } else if (activeTab === "notices") {
-            setIsNoticeModalOpen(true);
-          } else if (activeTab === "recipes") {
-            openNewRecipeModal();
-          } else if (activeTab === "shopping") {
-            window.scrollTo({ top: 0, behavior: "smooth" });
-            showToast("상단 입력창에서 장보기 품목을 바로 추가해 보세요!");
-          } else {
-            const h = new Date().getHours();
-            const smartSlot =
-              h >= 5 && h < 10 ? "아침" : h >= 10 && h < 14 ? "점심" : h >= 14 && h < 17 ? "오후간식" : h >= 17 && h < 21 ? "저녁" : "야식";
-            setEditingMeal(null);
-            setMealForm({
-              date: activeTab === "home" ? getTodayStr() : selectedDate,
-              slot: smartSlot,
-              menu: "",
-              members: selectedMember === "전체" ? ["수혁", "아리나"] : [selectedMember],
-              ingredients: [],
-              note: "",
-              sourceType: "집밥/온가족식",
-              cost: ""
-            });
-            setIsMealModalOpen(true);
-          }
-        }}
+        type="button"
+        onClick={() => setIsQuickFabOpen((v) => !v)}
         style={{ bottom: "calc(4.75rem + env(safe-area-inset-bottom))" }}
-        className="fixed right-4 z-30 w-12 h-12 rounded-full bg-stone-900 hover:bg-amber-600 text-white shadow-xl flex items-center justify-center transition active:scale-95"
-        title="빠른 추가"
-        aria-label="빠른 추가"
+        className={`fixed right-4 z-40 w-12 h-12 rounded-full text-white shadow-xl flex items-center justify-center transition active:scale-95 ${
+          isQuickFabOpen ? "bg-rose-600 rotate-45" : "bg-stone-900 hover:bg-amber-600"
+        }`}
+        title="스마트 빠른 등록"
+        aria-label="스마트 빠른 등록"
       >
         <Plus className="w-6 h-6" />
       </button>
