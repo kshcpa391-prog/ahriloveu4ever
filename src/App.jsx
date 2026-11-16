@@ -984,11 +984,20 @@ const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.65) =>
     img.src = dataUrl;
   });
 
-const APP_CODE_VERSION = "v10.48";
-const APP_BUILD_DATE = "2026-11-16 21:41";
+const APP_CODE_VERSION = "v10.49";
+const APP_BUILD_DATE = "2026-11-16 21:44";
 const EDITOR_INVITE_CODE = "0402";
 
 const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v10.49",
+    version: "v10.49",
+    date: "2026-11-16",
+    title: "Vercel 빌드(JSX 닫힘 태그 중복 </button>) 오류 즉시 수정",
+    changes: [
+      "메인 루틴 카드 접기/펼치기 버튼 영역(8302~8303라인)의 중복 </button> 태그 제거로 Vite/Vercel 빌드 오류 해결"
+    ]
+  },
   {
     id: "patch-v10.48",
     version: "v10.48",
@@ -8299,7 +8308,6 @@ ${validText}
                       className="px-2 py-0.5 rounded-lg bg-white border border-indigo-200 text-[10px] font-extrabold text-indigo-700 whitespace-nowrap"
                     >
                       {showAllTodayRoutinesOnMain ? `${curSlot}만 보기` : `오늘 전체 (${activeRoutines.length})`}
-                    </button>
                     </button>
                     )}
                     <button
