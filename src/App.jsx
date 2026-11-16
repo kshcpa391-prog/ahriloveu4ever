@@ -147,22 +147,39 @@ const DEFAULT_ROUTINE_TIME_RANGES = {
   아침: 5,
   점심: 11,
   하원후: 15,
-  오후: 17,
+  오후: 12,
   저녁: 18,
   자기전: 20
 };
 
+const ROUTINE_WEEKDAY_SLOTS = ["아침", "점심", "하원후", "저녁", "자기전"];
+const ROUTINE_WEEKEND_SLOTS = ["아침", "오후", "저녁", "자기전"];
 const ROUTINE_ORDERED_SLOTS = ["아침", "점심", "하원후", "오후", "저녁", "자기전"];
 
+const isWeekendNow = () => [0, 6].includes(new Date().getDay());
+
 const getCurrentRoutineTimeSlot = (ranges = DEFAULT_ROUTINE_TIME_RANGES) => {
-  const h = new Date().getHours();
+  const now = new Date();
+  const h = now.getHours();
+  const isWknd = [0, 6].includes(now.getDay());
+  const slots = isWknd ? ROUTINE_WEEKEND_SLOTS : ROUTINE_WEEKDAY_SLOTS;
   const r = { ...DEFAULT_ROUTINE_TIME_RANGES, ...(ranges || {}) };
-  for (let i = 0; i < ROUTINE_ORDERED_SLOTS.length; i++) {
-    const slot = ROUTINE_ORDERED_SLOTS[i];
-    const nextSlot = ROUTINE_ORDERED_SLOTS[(i + 1) % ROUTINE_ORDERED_SLOTS.length];
+  for (let i = 0; i < slots.length; i++) {
+    const slot = slots[i];
+    const nextSlot = slots[(i + 1) % slots.length];
     if (isHourInRange(h, r[slot], r[nextSlot])) return slot;
   }
   return "자기전";
+};
+
+const parseRoutineSteps = (title) => {
+  const raw = String(title || "").trim();
+  if (!raw) return [];
+  const parts = raw
+    .split(/\s*(?:>|→|,)\s*/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+  return parts.length >= 2 ? parts : [];
 };
 
 const DEFAULT_HOME_TIME_RANGES = {
@@ -1051,11 +1068,32 @@ const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.65) =>
     img.src = dataUrl;
   });
 
-const APP_CODE_VERSION = "v10.66";
-const APP_BUILD_DATE = "2026-11-17 03:31";
+const APP_CODE_VERSION = "v10.68";
+const APP_BUILD_DATE = "2026-11-17 03:46";
 const EDITOR_INVITE_CODE = "0402";
 
 const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v10.68",
+    version: "v10.68",
+    date: "2026-11-17",
+    title: "루틴 부분 체크 역토글·수정 시 단계 인덱스 정합성 보완",
+    changes: [
+      "전체 완료된 루틴에서 특정 단계 칩만 눌러 취소할 때 나머지 단계 체크 상태가 유지되도록 보완",
+      "루틴 제목(단계 구성) 수정 시 이전 단계 체크 인덱스가 남지 않도록 자동 정합성 초기화"
+    ]
+  },
+  {
+    id: "patch-v10.67",
+    version: "v10.67",
+    date: "2026-11-17",
+    title: "루틴 단계 쉼표(,) 자동 배지·개별 체크 · 평일/주말 시간대 분리 · 남은 건수 줄바꿈 수정",
+    changes: [
+      "루틴 제목을 쉼표(,) 또는 > 로 구분해 입력하면 ①→②→③ 단계 알약 배지로 표시되고 각 단계를 개별 체크(모두 체크 시 자동 완료) 가능",
+      "평일(월~금)은 [아침·점심·하원후·저녁·자기전](오후 제외), 주말(토·일)은 [아침·오후(12시 기본)·저녁·자기전](하원후 제외)으로 자동 분리·설정",
+      "반복 루틴 상단 [남은 N건] 배지 줄바꿈 현상(whitespace-nowrap) 수정"
+    ]
+  },
   {
     id: "patch-v10.66",
     version: "v10.66",
@@ -3097,17 +3135,70 @@ function MainApp() {
     const nextList = familyRoutines.map((r) => {
       if (r.id !== rtId) return r;
       targetTitle = r.title || "루틴";
+      const steps = parseRoutineSteps(r.title);
       if (r.cycle === "interval") {
         const info = getIntervalRoutineInfo(r, todayKey);
         wasDone = Boolean(info?.done);
-        return { ...r, lastDoneKey: wasDone ? "" : todayKey };
+        return {
+          ...r,
+          lastDoneKey: wasDone ? "" : todayKey,
+          ...(steps.length >= 2 ? { stepDoneKey: todayKey, stepDoneIndices: wasDone ? [] : steps.map((_, idx) => idx) } : {})
+        };
       }
       const targetKey = getRoutineResetKey(r, todayKey);
       wasDone = r.lastDoneKey === targetKey;
-      return { ...r, lastDoneKey: wasDone ? "" : targetKey };
+      return {
+        ...r,
+        lastDoneKey: wasDone ? "" : targetKey,
+        ...(steps.length >= 2 ? { stepDoneKey: targetKey, stepDoneIndices: wasDone ? [] : steps.map((_, idx) => idx) } : {})
+      };
     });
     setFamilyRoutines(nextList);
     showToast(wasDone ? `↩️ '${targetTitle}' 완료를 취소했습니다.` : `✅ '${targetTitle}' 루틴 완료!`);
+    const updatedItem = nextList.find((r) => r.id === rtId);
+    syncRoutinesToCloud(nextList, updatedItem ? { type: "upsert", item: updatedItem } : null);
+  };
+
+  const getRoutineSubStepDoneSet = (rt) => {
+    if (!rt) return new Set();
+    const targetKey = rt.cycle === "interval" ? currentDayKey : getRoutineResetKey(rt, currentDayKey);
+    if (rt.stepDoneKey === targetKey && Array.isArray(rt.stepDoneIndices)) {
+      return new Set(rt.stepDoneIndices);
+    }
+    return new Set();
+  };
+
+  const handleToggleRoutineSubStep = (rtId, stepIdx, totalSteps) => {
+    if (!requireEditorAccess()) return;
+    const todayKey = getTodayStr();
+    if (todayKey !== currentDayKey) setCurrentDayKey(todayKey);
+    let completedAll = false;
+    let targetTitle = "";
+    const nextList = familyRoutines.map((r) => {
+      if (r.id !== rtId) return r;
+      targetTitle = r.title || "루틴";
+      const targetKey = r.cycle === "interval" ? todayKey : getRoutineResetKey(r, todayKey);
+      const curSet =
+        r.stepDoneKey === targetKey && Array.isArray(r.stepDoneIndices) && r.stepDoneIndices.length > 0
+          ? new Set(r.stepDoneIndices)
+          : r.lastDoneKey === targetKey
+          ? new Set(Array.from({ length: totalSteps }, (_, idx) => idx))
+          : new Set();
+      if (curSet.has(stepIdx)) curSet.delete(stepIdx);
+      else curSet.add(stepIdx);
+      const nextIndices = Array.from(curSet).sort((a, b) => a - b);
+      completedAll = totalSteps > 0 && nextIndices.length >= totalSteps;
+      return {
+        ...r,
+        stepDoneKey: targetKey,
+        stepDoneIndices: nextIndices,
+        lastDoneKey: completedAll ? targetKey : r.lastDoneKey === targetKey ? "" : r.lastDoneKey
+      };
+    });
+    setFamilyRoutines(nextList);
+    if (completedAll) {
+      showToast(`🎉 '${targetTitle}' 모든 단계 완료!`);
+    }
     const updatedItem = nextList.find((r) => r.id === rtId);
     syncRoutinesToCloud(nextList, updatedItem ? { type: "upsert", item: updatedItem } : null);
   };
@@ -3177,7 +3268,8 @@ function MainApp() {
           ...(cycleVal === "monthly_weekday" ? { nthWeek: nthVal, weekDay: wdVal } : {}),
           ...(cycleVal === "weekly" && wdVal !== null ? { weekDay: wdVal } : {}),
           assignee: newRoutineAssignee || "공통",
-          lastDoneKey: r.lastDoneKey || ""
+          lastDoneKey: r.lastDoneKey || "",
+          ...(r.title === title && r.stepDoneKey ? { stepDoneKey: r.stepDoneKey, stepDoneIndices: r.stepDoneIndices || [] } : {})
         };
       });
       setFamilyRoutines(nextList);
@@ -8691,6 +8783,7 @@ ${validText}
         };
 
         const curSlot = getCurrentRoutineTimeSlot(routineTimeRanges);
+        const wkndNow = isWeekendNow();
         const activeRoutines = familyRoutines.filter((r) => !isRoutineDoneNow(r));
         const visibleRoutineList =
           homeRoutineSlotFilter === "전체"
@@ -8698,6 +8791,8 @@ ${validText}
             : homeRoutineSlotFilter === "auto"
             ? activeRoutines.filter((r) => {
                 const s = r.timeSlot || "상시";
+                if (wkndNow && s === "하원후") return false;
+                if (!wkndNow && s === "오후") return false;
                 return s === curSlot || s === "상시";
               })
             : activeRoutines.filter((r) => (r.timeSlot || "상시") === homeRoutineSlotFilter);
@@ -8861,25 +8956,65 @@ ${validText}
                   <div className="space-y-1">
                     {visibleRoutineList.map((rt) => {
                       const nextInfo = getRoutineNextDateInfo(rt, currentDayKey);
+                      const steps = parseRoutineSteps(rt.title);
+                      const stepDoneSet = getRoutineSubStepDoneSet(rt);
                       return (
-                        <button
+                        <div
                           key={rt.id}
-                          type="button"
-                          onClick={() => handleToggleRoutine(rt.id)}
-                          className="w-full p-2 rounded-xl bg-white hover:bg-indigo-50/50 border border-indigo-100 flex items-start gap-2 text-left transition active:scale-[0.99]"
+                          className="w-full p-2 rounded-xl bg-white border border-indigo-100 flex items-start gap-2 text-left"
                         >
-                          <span className="w-4 h-4 mt-0.5 rounded border border-indigo-300 bg-white shrink-0" />
+                          <button
+                            type="button"
+                            onClick={() => handleToggleRoutine(rt.id)}
+                            className="w-4 h-4 mt-0.5 rounded border border-indigo-300 bg-white hover:bg-indigo-50 shrink-0"
+                            title="전체 완료"
+                          />
                           <div className="min-w-0 flex-1">
-                            <div className="text-xs font-extrabold text-stone-900 whitespace-normal break-words leading-snug">
-                              {rt.title}
-                            </div>
-                            <div className="flex flex-wrap items-center gap-1 mt-0.5">
+                            {steps.length >= 2 ? (
+                              <div className="flex flex-wrap items-center gap-1">
+                                {steps.map((st, sIdx) => {
+                                  const sDone = stepDoneSet.has(sIdx);
+                                  return (
+                                    <React.Fragment key={sIdx}>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleToggleRoutineSubStep(rt.id, sIdx, steps.length)}
+                                        className={`px-2 py-0.5 rounded-full text-[11px] font-extrabold border transition active:scale-95 ${
+                                          sDone
+                                            ? "bg-emerald-100 border-emerald-300 text-emerald-800 line-through"
+                                            : "bg-indigo-50/70 border-indigo-200 text-stone-800 hover:bg-indigo-100"
+                                        }`}
+                                      >
+                                        {sDone ? "✓ " : `${sIdx + 1}. `}{st}
+                                      </button>
+                                      {sIdx < steps.length - 1 && (
+                                        <span className="text-[10px] font-black text-indigo-300">→</span>
+                                      )}
+                                    </React.Fragment>
+                                  );
+                                })}
+                              </div>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => handleToggleRoutine(rt.id)}
+                                className="text-left text-xs font-extrabold text-stone-900 whitespace-normal break-words leading-snug w-full"
+                              >
+                                {rt.title}
+                              </button>
+                            )}
+                            <div className="flex flex-wrap items-center gap-1 mt-1">
                               <span className="px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-800 text-[9px] font-black">
                                 {rt.timeSlot || "상시"}
                               </span>
                               <span className="px-1.5 py-0.5 rounded bg-stone-100 text-stone-600 text-[9px] font-bold">
                                 {rt.assignee || "공통"}
                               </span>
+                              {steps.length >= 2 && (
+                                <span className="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 text-[9px] font-black">
+                                  진행 {stepDoneSet.size}/{steps.length}
+                                </span>
+                              )}
                               {nextInfo && (
                                 <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 text-[9px] font-bold">
                                   {nextInfo.dateLabel}
@@ -8887,7 +9022,7 @@ ${validText}
                               )}
                             </div>
                           </div>
-                        </button>
+                        </div>
                       );
                     })}
                   </div>
@@ -10652,14 +10787,14 @@ ${validText}
           <div id="routine-board-section" className="bg-white p-4 rounded-2xl border border-indigo-200 shadow-sm space-y-3">
             <div className="flex items-center justify-between gap-2">
               <div>
-                <h3 className="text-xs font-black text-stone-900 flex items-center gap-1.5">
-                  <span>🔄 데일리·위클리 육아/집안일 루틴</span>
-                  <span className="px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-800 text-[10px] font-black">
+                <h3 className="text-xs font-black text-stone-900 flex flex-wrap items-center gap-1.5">
+                  <span className="whitespace-nowrap">🔄 데일리·위클리 육아/집안일 루틴</span>
+                  <span className="px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-800 text-[10px] font-black whitespace-nowrap shrink-0">
                     남은 {familyRoutines.filter((r) => !isRoutineDoneNow(r)).length}건
                   </span>
                 </h3>
                 <p className="text-[10px] text-stone-500 font-semibold mt-0.5">
-                  현재 자동 시간대: <span className="text-indigo-700 font-extrabold">{getCurrentRoutineTimeSlot(routineTimeRanges)}</span> · 매일 자정(00:00)·매주 월요일 자동 리셋
+                  현재({isWeekendNow() ? "주말" : "평일"}): <span className="text-indigo-700 font-extrabold">{getCurrentRoutineTimeSlot(routineTimeRanges)}</span> · 자정·월요일 자동 리셋
                 </p>
               </div>
               <button
@@ -10694,41 +10829,87 @@ ${validText}
                     기본값 초기화
                   </button>
                 </div>
-                <div className="grid grid-cols-3 gap-1.5">
-                  {ROUTINE_ORDERED_SLOTS.map((slot) => (
-                    <label key={slot} className="block">
-                      <span className="text-[10px] font-bold text-indigo-900 block mb-0.5">{slot} 시작</span>
-                      <select
-                        value={routineTimeRanges[slot] ?? DEFAULT_ROUTINE_TIME_RANGES[slot]}
-                        onChange={(e) => {
-                          const val = Number(e.target.value);
-                          setRoutineTimeRanges((prev) => {
-                            const next = { ...prev, [slot]: val };
-                            try { localStorage.setItem("kim_routine_time_ranges_v1", JSON.stringify(next)); } catch (err) {}
-                            syncHomeSettingsToCloud(null, null, next);
-                            return next;
-                          });
-                        }}
-                        className="w-full px-2 py-1 rounded-lg border border-indigo-200 bg-white text-[11px] font-black text-stone-800"
-                      >
-                        {Array.from({ length: 24 }, (_, hr) => (
-                          <option key={hr} value={hr}>
-                            {String(hr).padStart(2, "0")}시
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                  ))}
+                <div className="space-y-2">
+                  <div>
+                    <div className="text-[10px] font-extrabold text-indigo-900 mb-1">
+                      평일 (월~금 · 오후 제외):{" "}
+                      <span className="font-semibold text-indigo-700">
+                        {ROUTINE_WEEKDAY_SLOTS.map((s, idx) => {
+                          const nxt = ROUTINE_WEEKDAY_SLOTS[(idx + 1) % ROUTINE_WEEKDAY_SLOTS.length];
+                          return `${s} ${String(routineTimeRanges[s]).padStart(2, "0")}~${String(routineTimeRanges[nxt]).padStart(2, "0")}시`;
+                        }).join(" · ")}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-3 sm:grid-cols-5 gap-1.5">
+                      {ROUTINE_WEEKDAY_SLOTS.map((slot) => (
+                        <label key={`wd-${slot}`} className="block">
+                          <span className="text-[10px] font-bold text-indigo-900 block mb-0.5">{slot} 시작</span>
+                          <select
+                            value={routineTimeRanges[slot] ?? DEFAULT_ROUTINE_TIME_RANGES[slot]}
+                            onChange={(e) => {
+                              const val = Number(e.target.value);
+                              setRoutineTimeRanges((prev) => {
+                                const next = { ...prev, [slot]: val };
+                                try { localStorage.setItem("kim_routine_time_ranges_v1", JSON.stringify(next)); } catch (err) {}
+                                syncHomeSettingsToCloud(null, null, next);
+                                return next;
+                              });
+                            }}
+                            className="w-full px-2 py-1 rounded-lg border border-indigo-200 bg-white text-[11px] font-black text-stone-800"
+                          >
+                            {Array.from({ length: 24 }, (_, hr) => (
+                              <option key={hr} value={hr}>
+                                {String(hr).padStart(2, "0")}시
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="text-[10px] font-extrabold text-teal-900 mb-1">
+                      주말 (토·일 · 하원후 제외):{" "}
+                      <span className="font-semibold text-teal-700">
+                        {ROUTINE_WEEKEND_SLOTS.map((s, idx) => {
+                          const nxt = ROUTINE_WEEKEND_SLOTS[(idx + 1) % ROUTINE_WEEKEND_SLOTS.length];
+                          return `${s} ${String(routineTimeRanges[s]).padStart(2, "0")}~${String(routineTimeRanges[nxt]).padStart(2, "0")}시`;
+                        }).join(" · ")}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+                      {ROUTINE_WEEKEND_SLOTS.map((slot) => (
+                        <label key={`we-${slot}`} className="block">
+                          <span className="text-[10px] font-bold text-teal-900 block mb-0.5">{slot} 시작</span>
+                          <select
+                            value={routineTimeRanges[slot] ?? DEFAULT_ROUTINE_TIME_RANGES[slot]}
+                            onChange={(e) => {
+                              const val = Number(e.target.value);
+                              setRoutineTimeRanges((prev) => {
+                                const next = { ...prev, [slot]: val };
+                                try { localStorage.setItem("kim_routine_time_ranges_v1", JSON.stringify(next)); } catch (err) {}
+                                syncHomeSettingsToCloud(null, null, next);
+                                return next;
+                              });
+                            }}
+                            className="w-full px-2 py-1 rounded-lg border border-teal-200 bg-white text-[11px] font-black text-stone-800"
+                          >
+                            {Array.from({ length: 24 }, (_, hr) => (
+                              <option key={hr} value={hr}>
+                                {String(hr).padStart(2, "0")}시
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
                 </div>
-                <div className="text-[10px] font-semibold text-indigo-800">
-                  {ROUTINE_ORDERED_SLOTS.map((s, idx) => {
-                    const nxt = ROUTINE_ORDERED_SLOTS[(idx + 1) % ROUTINE_ORDERED_SLOTS.length];
-                    return `${s} ${String(routineTimeRanges[s]).padStart(2, "0")}~${String(routineTimeRanges[nxt]).padStart(2, "0")}시`;
-                  }).join(" · ")}
-                </div>
-                {new Set(ROUTINE_ORDERED_SLOTS.map((s) => routineTimeRanges[s])).size < ROUTINE_ORDERED_SLOTS.length && (
+                {(new Set(ROUTINE_WEEKDAY_SLOTS.map((s) => routineTimeRanges[s])).size < ROUTINE_WEEKDAY_SLOTS.length ||
+                  new Set(ROUTINE_WEEKEND_SLOTS.map((s) => routineTimeRanges[s])).size < ROUTINE_WEEKEND_SLOTS.length) && (
                   <div className="text-[10px] font-extrabold text-rose-600">
-                    ⚠️ 시작 시각이 같은 시간대가 있습니다. 서로 다르게 설정해 주세요.
+                    ⚠️ 같은 요일 그룹 내 시작 시각이 중복된 시간대가 있습니다.
                   </div>
                 )}
               </div>
@@ -10746,7 +10927,7 @@ ${validText}
                     handleAddRoutine();
                   }
                 }}
-                placeholder="반복 루틴 추가 (예: 시목이 목욕하기)"
+                placeholder="루틴 입력 (쉼표 , 로 순서 구분: 약먹기, 양치, 잠옷)"
                 className="w-full px-3 py-1.5 rounded-xl border border-stone-200 text-xs font-bold"
               />
               <select
@@ -10897,25 +11078,66 @@ ${validText}
                           doneNow ? "bg-stone-50 border-stone-200 opacity-65" : "bg-indigo-50/40 border-indigo-200"
                         }`}
                       >
-                        <button
-                          type="button"
-                          onClick={() => handleToggleRoutine(rt.id)}
-                          className="flex items-start gap-2.5 flex-1 text-left min-w-0"
-                        >
-                          <span
+                        <div className="flex items-start gap-2.5 flex-1 text-left min-w-0">
+                          <button
+                            type="button"
+                            onClick={() => handleToggleRoutine(rt.id)}
                             className={`w-5 h-5 mt-0.5 rounded-lg border flex items-center justify-center shrink-0 ${
                               doneNow
                                 ? "bg-indigo-600 border-indigo-600 text-white"
                                 : "bg-white border-indigo-300"
                             }`}
+                            title="전체 완료"
                           >
                             {doneNow && <Check className="w-3.5 h-3.5" />}
-                          </span>
+                          </button>
                           <div className="min-w-0 flex-1">
-                            <div className={`text-xs font-extrabold whitespace-normal break-words leading-snug ${doneNow ? "line-through text-stone-400" : "text-stone-900"}`}>
-                              {rt.title}
-                            </div>
+                            {(() => {
+                              const steps = parseRoutineSteps(rt.title);
+                              const stepDoneSet = getRoutineSubStepDoneSet(rt);
+                              if (steps.length >= 2) {
+                                return (
+                                  <div className="flex flex-wrap items-center gap-1">
+                                    {steps.map((st, sIdx) => {
+                                      const sDone = doneNow || stepDoneSet.has(sIdx);
+                                      return (
+                                        <React.Fragment key={sIdx}>
+                                          <button
+                                            type="button"
+                                            onClick={() => handleToggleRoutineSubStep(rt.id, sIdx, steps.length)}
+                                            className={`px-2 py-0.5 rounded-full text-[11px] font-extrabold border transition active:scale-95 ${
+                                              sDone
+                                                ? "bg-emerald-100 border-emerald-300 text-emerald-800 line-through"
+                                                : "bg-white border-indigo-200 text-stone-800 hover:bg-indigo-50"
+                                            }`}
+                                          >
+                                            {sDone ? "✓ " : `${sIdx + 1}. `}{st}
+                                          </button>
+                                          {sIdx < steps.length - 1 && (
+                                            <span className="text-[10px] font-black text-indigo-300">→</span>
+                                          )}
+                                        </React.Fragment>
+                                      );
+                                    })}
+                                  </div>
+                                );
+                              }
+                              return (
+                                <button
+                                  type="button"
+                                  onClick={() => handleToggleRoutine(rt.id)}
+                                  className={`text-left text-xs font-extrabold whitespace-normal break-words leading-snug w-full ${doneNow ? "line-through text-stone-400" : "text-stone-900"}`}
+                                >
+                                  {rt.title}
+                                </button>
+                              );
+                            })()}
                             <div className="flex flex-wrap items-center gap-1 mt-1">
+                              {parseRoutineSteps(rt.title).length >= 2 && (
+                                <span className="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 text-[9px] font-black">
+                                  진행 {doneNow ? parseRoutineSteps(rt.title).length : getRoutineSubStepDoneSet(rt).size}/{parseRoutineSteps(rt.title).length}
+                                </span>
+                              )}
                               <span className="px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-800 text-[9px] font-black">
                                 {rt.timeSlot || "상시"}
                               </span>
@@ -10973,7 +11195,7 @@ ${validText}
                               </span>
                             </div>
                           </div>
-                        </button>
+                        </div>
                         <div className="flex items-center gap-0.5 shrink-0">
                           <button
                             type="button"
