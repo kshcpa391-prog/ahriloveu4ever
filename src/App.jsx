@@ -1116,11 +1116,33 @@ const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.65) =>
     img.src = dataUrl;
   });
 
-const APP_CODE_VERSION = "v10.76";
-const APP_BUILD_DATE = "2026-11-17 08:08";
+const APP_CODE_VERSION = "v10.78";
+const APP_BUILD_DATE = "2026-11-17 08:19";
 const EDITOR_INVITE_CODE = "0402";
 
 const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v10.78",
+    version: "v10.78",
+    date: "2026-11-17",
+    title: "루틴 모달 실시간 단계 미리보기 · 일정 상단 멤버 필터-루틴 연동 · Escape 닫기 보완",
+    changes: [
+      "루틴 등록·수정 모달에서 쉼표(,)로 입력한 단계를 저장 전 원형 숫자 배지로 실시간 미리보기 지원",
+      "일정 탭 최상단 가족 멤버 필터(전체·수혁·아리나·시목·시율) 선택 시 [반복 루틴] 대상 필터도 함께 연동되도록 개선",
+      "루틴 모달 열림 상태에서 Escape 키로 즉시 닫기 지원"
+    ]
+  },
+  {
+    id: "patch-v10.77",
+    version: "v10.77",
+    date: "2026-11-17",
+    title: "루틴 전용 등록/수정 모달(식단 추가 양식) · 원형 숫자 배지 · 무채색+시그널 디자인 전 탭 확산",
+    changes: [
+      "복잡했던 반복루틴 인라인 입력 폼을 제거하고 [+ 루틴 추가] 버튼으로 깔끔한 전용 모달(시간대·대상·주기 칩 선택)을 열도록 개편",
+      "루틴 단계 배지의 숫자를 [1.] 텍스트 대신 원형 테두리 숫자 배지(완료 시 초록 ✓)로 업그레이드",
+      "홈 화면의 [무채색 베이스 + 특이사항만 시그널 컬러] 디자인을 일정·루틴·장보기 등 다른 탭에도 일관되게 확산 적용"
+    ]
+  },
   {
     id: "patch-v10.76",
     version: "v10.76",
@@ -2836,13 +2858,16 @@ function MainApp() {
     if (activeTab !== "home") setIsHomeEditMode(false);
   }, [activeTab]);
   useEffect(() => {
-    if (!isQuickFabOpen) return;
+    if (!isQuickFabOpen && !isRoutineModalOpen) return;
     const onEsc = (e) => {
-      if (e.key === "Escape") setIsQuickFabOpen(false);
+      if (e.key === "Escape") {
+        setIsQuickFabOpen(false);
+        setIsRoutineModalOpen(false);
+      }
     };
     window.addEventListener("keydown", onEsc);
     return () => window.removeEventListener("keydown", onEsc);
-  }, [isQuickFabOpen]);
+  }, [isQuickFabOpen, isRoutineModalOpen]);
   const [homeRoutineSlotFilter, setHomeRoutineSlotFilter] = useState(() => {
     return localStorage.getItem("kim_home_routine_slot_v1") || "auto";
   });
@@ -3191,6 +3216,7 @@ function MainApp() {
     }
   });
   const [editingRoutineId, setEditingRoutineId] = useState(null);
+  const [isRoutineModalOpen, setIsRoutineModalOpen] = useState(false);
   const [showAllTodayRoutinesOnMain, setShowAllTodayRoutinesOnMain] = useState(false);
   const [isMainRoutineCollapsed, setIsMainRoutineCollapsed] = useState(false);
   const [currentDayKey, setCurrentDayKey] = useState(() => getTodayStr());
@@ -3373,15 +3399,27 @@ function MainApp() {
       rt.weekDay !== undefined && rt.weekDay !== null ? String(rt.weekDay) : "any"
     );
     setNewRoutineAssignee(rt.assignee || "공통");
-    setScheduleSubTab("routine");
-    setTimeout(() => {
-      document.getElementById("routine-board-section")?.scrollIntoView({ behavior: "smooth", block: "start" });
-    }, 80);
+    setIsRoutineModalOpen(true);
+  };
+
+  const openNewRoutineModal = () => {
+    if (!requireEditorAccess()) return;
+    setEditingRoutineId(null);
+    setNewRoutineTitle("");
+    setNewRoutineTimeSlot(getCurrentRoutineTimeSlot(routineTimeRanges, liveMinuteTick));
+    setNewRoutineCycle("daily");
+    setNewRoutineIntervalDays(2);
+    setNewRoutineMonthDay(1);
+    setNewRoutineWeekDay("any");
+    setNewRoutineNthWeek(1);
+    setNewRoutineAssignee(routineTargetFilter !== "전체" ? routineTargetFilter : "공통");
+    setIsRoutineModalOpen(true);
   };
 
   const handleCancelEditRoutine = () => {
     setEditingRoutineId(null);
     setNewRoutineTitle("");
+    setIsRoutineModalOpen(false);
   };
 
   const handleAddRoutine = () => {
@@ -3433,6 +3471,7 @@ function MainApp() {
       setFamilyRoutines(nextList);
       setEditingRoutineId(null);
       setNewRoutineTitle("");
+      setIsRoutineModalOpen(false);
       const editedItem = nextList.find((r) => r.id === editingRoutineId);
       syncRoutinesToCloud(nextList, editedItem ? { type: "upsert", item: editedItem } : null);
       showToast(`✏️ '${title}' 루틴이 수정되었습니다!`);
@@ -3453,6 +3492,7 @@ function MainApp() {
     const nextList = [nextItem, ...familyRoutines];
     setFamilyRoutines(nextList);
     setNewRoutineTitle("");
+    setIsRoutineModalOpen(false);
     syncRoutinesToCloud(nextList, { type: "upsert", item: nextItem });
     showToast(`🔄 '${title}' 루틴이 추가되었습니다!`);
   };
@@ -9217,13 +9257,22 @@ ${validText}
                                       <button
                                         type="button"
                                         onClick={() => handleToggleRoutineSubStep(rt.id, sIdx, steps.length)}
-                                        className={`px-2 py-0.5 rounded-full text-[11px] font-extrabold border transition active:scale-95 ${
+                                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-extrabold border transition active:scale-95 ${
                                           sDone
-                                            ? "bg-emerald-50 border-emerald-300 text-emerald-800 line-through"
+                                            ? "bg-emerald-50 border-emerald-300 text-emerald-800"
                                             : "bg-white border-stone-200 text-stone-800 hover:bg-stone-100"
                                         }`}
                                       >
-                                        {sDone ? "✓ " : `${sIdx + 1}. `}{st}
+                                        <span
+                                          className={`inline-flex items-center justify-center w-4 h-4 rounded-full border text-[9px] font-black shrink-0 ${
+                                            sDone
+                                              ? "bg-emerald-600 border-emerald-600 text-white"
+                                              : "border-stone-400 text-stone-700 bg-white"
+                                          }`}
+                                        >
+                                          {sDone ? "✓" : sIdx + 1}
+                                        </span>
+                                        <span className={sDone ? "line-through" : ""}>{st}</span>
                                       </button>
                                       {sIdx < steps.length - 1 && (
                                         <span className="text-[10px] font-black text-indigo-300">→</span>
@@ -10574,7 +10623,10 @@ ${validText}
 
           <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 sm:grid sm:grid-cols-5 sm:gap-1">
             <button
-              onClick={() => setScheduleMemberFilter("전체")}
+              onClick={() => {
+                setScheduleMemberFilter("전체");
+                setRoutineTargetFilter("전체");
+              }}
               className={`px-2.5 py-2 rounded-xl text-[11px] font-extrabold border transition flex items-center justify-center gap-1 whitespace-nowrap shrink-0 ${
                 scheduleMemberFilter === "전체"
                   ? "bg-stone-900 text-white border-stone-900"
@@ -10587,7 +10639,10 @@ ${validText}
             {FAMILY_MEMBERS.map((m) => (
               <button
                 key={m.id}
-                onClick={() => setScheduleMemberFilter(m.id)}
+                onClick={() => {
+                  setScheduleMemberFilter(m.id);
+                  setRoutineTargetFilter(m.id);
+                }}
                 className={`px-2.5 py-2 rounded-xl text-[11px] font-extrabold border transition flex items-center justify-center gap-1 whitespace-nowrap shrink-0 ${
                   scheduleMemberFilter === m.id
                     ? "bg-stone-900 text-white border-stone-900"
@@ -11024,30 +11079,39 @@ ${validText}
 
           {/* 🔄 자정/주간 자동 리셋 데일리·위클리 육아/집안일 루틴 */}
           {scheduleSubTab === "routine" && (
-          <div id="routine-board-section" className="bg-white p-4 rounded-2xl border border-indigo-200 shadow-sm space-y-3">
+          <div id="routine-board-section" className="bg-white p-4 rounded-2xl border border-stone-200 shadow-sm space-y-3">
             <div className="flex items-center justify-between gap-2">
-              <div>
+              <div className="min-w-0">
                 <h3 className="text-xs font-black text-stone-900 flex flex-wrap items-center gap-1.5">
-                  <span className="whitespace-nowrap">🔄 데일리·위클리 육아/집안일 루틴</span>
-                  <span className="px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-800 text-[10px] font-black whitespace-nowrap shrink-0">
+                  <span className="whitespace-nowrap">🔄 반복 루틴</span>
+                  <span className="px-2 py-0.5 rounded-full bg-stone-100 text-stone-800 text-[10px] font-black whitespace-nowrap shrink-0">
                     남은 {familyRoutines.filter((r) => !isRoutineDoneNow(r)).length}건
                   </span>
                 </h3>
                 <p className="text-[10px] text-stone-500 font-semibold mt-0.5">
-                  현재({isWeekendNow() ? "주말" : "평일"}): <span className="text-indigo-700 font-extrabold">{getCurrentRoutineTimeSlot(routineTimeRanges, liveMinuteTick)}</span> · 자정·월요일 자동 리셋
+                  현재({isWeekendNow() ? "주말" : "평일"}): <span className="text-stone-900 font-extrabold">{getCurrentRoutineTimeSlot(routineTimeRanges, liveMinuteTick)}</span> · 자정·월요일 자동 리셋
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={() => setIsRoutineRangeEditOpen((v) => !v)}
-                className={`px-2 py-1 rounded-lg text-[10px] font-extrabold border whitespace-nowrap shrink-0 ${
-                  isRoutineRangeEditOpen
-                    ? "bg-indigo-600 text-white border-indigo-600"
-                    : "bg-indigo-50 text-indigo-800 border-indigo-200"
-                }`}
-              >
-                {isRoutineRangeEditOpen ? "닫기 ▴" : "⏰ 시간대 설정"}
-              </button>
+              <div className="flex items-center gap-1 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setIsRoutineRangeEditOpen((v) => !v)}
+                  className={`px-2 py-1.5 rounded-xl text-[10px] font-extrabold border whitespace-nowrap ${
+                    isRoutineRangeEditOpen
+                      ? "bg-stone-900 text-white border-stone-900"
+                      : "bg-stone-50 text-stone-700 border-stone-200"
+                  }`}
+                >
+                  {isRoutineRangeEditOpen ? "닫기 ▴" : "⏰ 시간대"}
+                </button>
+                <button
+                  type="button"
+                  onClick={openNewRoutineModal}
+                  className="px-2.5 py-1.5 rounded-xl bg-stone-900 text-white text-[11px] font-extrabold whitespace-nowrap flex items-center gap-1"
+                >
+                  <Plus className="w-3.5 h-3.5" /> 루틴 추가
+                </button>
+              </div>
             </div>
 
             {isRoutineRangeEditOpen && (
@@ -11147,118 +11211,6 @@ ${validText}
               </div>
             )}
 
-            <div className="flex flex-wrap gap-1.5">
-              <input
-                id="routine-title-input"
-                type="text"
-                value={newRoutineTitle}
-                onChange={(e) => setNewRoutineTitle(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    handleAddRoutine();
-                  }
-                }}
-                placeholder="루틴 입력 (쉼표 , 로 순서 구분: 약먹기, 양치, 잠옷)"
-                className="w-full px-3 py-1.5 rounded-xl border border-stone-200 text-xs font-bold"
-              />
-              <select
-                value={newRoutineTimeSlot}
-                onChange={(e) => setNewRoutineTimeSlot(e.target.value)}
-                className="px-2 py-1.5 rounded-xl border border-indigo-200 bg-indigo-50 text-[11px] font-extrabold text-indigo-900"
-              >
-                {ROUTINE_TIME_SLOTS.map((ts) => (
-                  <option key={ts} value={ts}>{ts}</option>
-                ))}
-              </select>
-              <select
-                value={newRoutineCycle}
-                onChange={(e) => setNewRoutineCycle(e.target.value)}
-                className="px-2 py-1.5 rounded-xl border border-stone-200 bg-stone-50 text-[11px] font-extrabold"
-              >
-                <option value="daily">매일</option>
-                <option value="interval">N일마다</option>
-                <option value="weekly">매주</option>
-                <option value="monthly">매월 일자</option>
-                <option value="monthly_weekday">매월 N주차 요일</option>
-              </select>
-              {newRoutineCycle === "interval" && (
-                <select
-                  value={newRoutineIntervalDays}
-                  onChange={(e) => setNewRoutineIntervalDays(Number(e.target.value))}
-                  className="px-2 py-1.5 rounded-xl border border-teal-300 bg-teal-50 text-[11px] font-extrabold text-teal-900"
-                >
-                  {[2, 3, 4, 5, 6, 7, 10, 14].map((d) => (
-                    <option key={d} value={d}>{d}일마다</option>
-                  ))}
-                </select>
-              )}
-              {newRoutineCycle === "monthly" && (
-                <select
-                  value={newRoutineMonthDay}
-                  onChange={(e) => setNewRoutineMonthDay(Number(e.target.value))}
-                  className="px-2 py-1.5 rounded-xl border border-amber-300 bg-amber-50 text-[11px] font-extrabold text-amber-900"
-                >
-                  {Array.from({ length: 31 }, (_, idx) => idx + 1).map((dayNum) => (
-                    <option key={dayNum} value={dayNum}>매월 {dayNum}일</option>
-                  ))}
-                </select>
-              )}
-              {newRoutineCycle === "monthly_weekday" && (
-                <select
-                  value={newRoutineNthWeek}
-                  onChange={(e) => setNewRoutineNthWeek(Number(e.target.value))}
-                  className="px-2 py-1.5 rounded-xl border border-amber-300 bg-amber-50 text-[11px] font-extrabold text-amber-900"
-                >
-                  <option value={1}>첫째 주</option>
-                  <option value={2}>둘째 주</option>
-                  <option value={3}>셋째 주</option>
-                  <option value={4}>넷째 주</option>
-                  <option value={-1}>마지막 주</option>
-                </select>
-              )}
-              {(newRoutineCycle === "weekly" || newRoutineCycle === "monthly_weekday") && (
-                <select
-                  value={newRoutineWeekDay}
-                  onChange={(e) => setNewRoutineWeekDay(e.target.value)}
-                  className="px-2 py-1.5 rounded-xl border border-purple-300 bg-purple-50 text-[11px] font-extrabold text-purple-900"
-                >
-                  {newRoutineCycle === "weekly" && <option value="any">요일 무관</option>}
-                  {["일", "월", "화", "수", "목", "금", "토"].map((dLabel, dIdx) => (
-                    <option key={dIdx} value={String(dIdx)}>{dLabel}요일</option>
-                  ))}
-                </select>
-              )}
-              <select
-                value={newRoutineAssignee}
-                onChange={(e) => setNewRoutineAssignee(e.target.value)}
-                className="px-2 py-1.5 rounded-xl border border-stone-200 bg-stone-50 text-[11px] font-extrabold"
-              >
-                <option value="공통">👨‍👩‍👧‍👦 공통</option>
-                <option value="시목">👦 시목</option>
-                <option value="시율">👶 시율</option>
-                <option value="시목·시율">👦👶 시목·시율</option>
-                <option value="수혁">👨 수혁</option>
-                <option value="아리나">👩 아리나</option>
-              </select>
-              <button
-                type="button"
-                onClick={handleAddRoutine}
-                className="px-3 py-1.5 rounded-xl bg-indigo-600 text-white text-xs font-extrabold shrink-0"
-              >
-                {editingRoutineId ? "💾 수정 저장" : "+ 추가"}
-              </button>
-              {editingRoutineId && (
-                <button
-                  type="button"
-                  onClick={handleCancelEditRoutine}
-                  className="px-2.5 py-1.5 rounded-xl bg-stone-200 text-stone-700 text-xs font-extrabold shrink-0"
-                >
-                  취소
-                </button>
-              )}
-            </div>
-
             <div className="flex gap-1 overflow-x-auto">
               {[
                 { id: "전체", label: "전체" },
@@ -11291,7 +11243,7 @@ ${validText}
                   onClick={() => setRoutineTimeFilter(ts)}
                   className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold border shrink-0 ${
                     routineTimeFilter === ts
-                      ? "bg-indigo-600 text-white border-indigo-600"
+                      ? "bg-stone-900 text-white border-stone-900"
                       : "bg-stone-50 text-stone-600 border-stone-200"
                   }`}
                 >
@@ -11334,7 +11286,7 @@ ${validText}
                       <div
                         key={rt.id}
                         className={`p-2.5 rounded-xl border flex items-start justify-between gap-2 transition ${
-                          doneNow ? "bg-stone-50 border-stone-200 opacity-65" : "bg-indigo-50/40 border-indigo-200"
+                          doneNow ? "bg-stone-50 border-stone-200 opacity-65" : "bg-stone-50/70 border-stone-200"
                         }`}
                       >
                         <div className="flex items-start gap-2.5 flex-1 text-left min-w-0">
@@ -11364,13 +11316,22 @@ ${validText}
                                           <button
                                             type="button"
                                             onClick={() => handleToggleRoutineSubStep(rt.id, sIdx, steps.length)}
-                                            className={`px-2 py-0.5 rounded-full text-[11px] font-extrabold border transition active:scale-95 ${
+                                            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-extrabold border transition active:scale-95 ${
                                               sDone
-                                                ? "bg-emerald-100 border-emerald-300 text-emerald-800 line-through"
-                                                : "bg-white border-indigo-200 text-stone-800 hover:bg-indigo-50"
+                                                ? "bg-emerald-50 border-emerald-300 text-emerald-800"
+                                                : "bg-white border-stone-200 text-stone-800 hover:bg-stone-100"
                                             }`}
                                           >
-                                            {sDone ? "✓ " : `${sIdx + 1}. `}{st}
+                                            <span
+                                              className={`inline-flex items-center justify-center w-4 h-4 rounded-full border text-[9px] font-black shrink-0 ${
+                                                sDone
+                                                  ? "bg-emerald-600 border-emerald-600 text-white"
+                                                  : "border-stone-400 text-stone-700 bg-white"
+                                              }`}
+                                            >
+                                              {sDone ? "✓" : sIdx + 1}
+                                            </span>
+                                            <span className={sDone ? "line-through" : ""}>{st}</span>
                                           </button>
                                           {sIdx < steps.length - 1 && (
                                             <span className="text-[10px] font-black text-indigo-300">→</span>
@@ -12378,22 +12339,22 @@ ${validText}
       ========================================== */}
       {activeTab === "shopping" && (
         <div className="p-4 space-y-4">
-          <div className="bg-gradient-to-br from-emerald-50 to-teal-50/70 p-3.5 rounded-2xl border border-emerald-200 shadow-sm space-y-2">
+          <div className="bg-white p-3.5 rounded-2xl border border-stone-200 shadow-sm space-y-2">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-black text-emerald-950">⚡ 카톡 · 음성 장보기 문장 1초 파싱</span>
-              <span className="text-[10px] font-bold text-emerald-700">AI + 즉시 분리</span>
+              <span className="text-xs font-black text-stone-900">⚡ 카톡 · 음성 장보기 문장 1초 파싱</span>
+              <span className="text-[10px] font-bold text-stone-500">AI + 즉시 분리</span>
             </div>
             <textarea
               rows={2}
               value={quickShoppingText}
               onChange={(e) => setQuickShoppingText(e.target.value)}
               placeholder="예: 양파 1망, 부침두부 2모, 우유 1L 사와"
-              className="w-full p-2.5 rounded-xl border border-emerald-200 bg-white text-xs font-semibold text-stone-800 resize-none focus:outline-none focus:ring-2 focus:ring-emerald-400"
+              className="w-full p-2.5 rounded-xl border border-stone-200 bg-stone-50 text-xs font-semibold text-stone-800 resize-none focus:outline-none focus:ring-2 focus:ring-stone-400"
             />
             <button
               onClick={handleQuickParseShopping}
               disabled={isQuickParsingShopping}
-              className="w-full py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold flex items-center justify-center gap-1.5"
+              className="w-full py-2 rounded-xl bg-stone-900 hover:bg-stone-800 text-white text-xs font-extrabold flex items-center justify-center gap-1.5"
             >
               {isQuickParsingShopping ? "파싱 중..." : "⚡ 문장 분석해서 장보기에 바로 담기"}
             </button>
@@ -14423,6 +14384,11 @@ ${validText}
                 }
               },
               {
+                label: "🔄 루틴 추가",
+                color: "bg-white text-stone-900 border-stone-200 hover:bg-stone-50",
+                onClick: () => openNewRoutineModal()
+              },
+              {
                 label: "✅ 할 일 추가",
                 color: "bg-white text-stone-900 border-amber-200 hover:bg-amber-50",
                 onClick: () => {
@@ -14754,6 +14720,194 @@ ${validText}
       {/* ==========================================
           모달: 가족 일정 추가·수정
       ========================================== */}
+      {isRoutineModalOpen && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-sm w-full p-5 space-y-3 max-h-[88vh] overflow-y-auto">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-black text-stone-900">
+                {editingRoutineId ? "🔄 반복 루틴 수정" : "🔄 새 반복 루틴 추가"}
+              </h3>
+              <button type="button" onClick={handleCancelEditRoutine}>
+                <X className="w-5 h-5 text-stone-400" />
+              </button>
+            </div>
+
+            <div>
+              <label className="text-[10px] font-extrabold text-stone-500 block mb-1">
+                루틴 내용 (쉼표 , 로 여러 단계 구분 가능)
+              </label>
+              <input
+                type="text"
+                autoFocus
+                value={newRoutineTitle}
+                onChange={(e) => setNewRoutineTitle(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    handleAddRoutine();
+                  }
+                }}
+                placeholder="예: 약먹기, 양치, 코뽑기, 잠옷"
+                className="w-full px-3 py-2.5 rounded-xl border border-stone-200 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-stone-400"
+              />
+              {parseRoutineSteps(newRoutineTitle).length >= 2 && (
+                <div className="mt-1.5 flex flex-wrap items-center gap-1 bg-stone-50 border border-stone-200 rounded-xl p-2">
+                  {parseRoutineSteps(newRoutineTitle).map((st, idx, arr) => (
+                    <React.Fragment key={idx}>
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white border border-stone-200 text-[10px] font-extrabold text-stone-800">
+                        <span className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full border border-stone-400 text-[8px] font-black">
+                          {idx + 1}
+                        </span>
+                        <span>{st}</span>
+                      </span>
+                      {idx < arr.length - 1 && <span className="text-[10px] font-black text-stone-300">→</span>}
+                    </React.Fragment>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div>
+              <label className="text-[10px] font-extrabold text-stone-500 block mb-1">대상</label>
+              <div className="flex flex-wrap gap-1.5">
+                {[
+                  { id: "공통", label: "👨‍👩‍👧‍👦 공통" },
+                  { id: "시목", label: "👦 시목" },
+                  { id: "시율", label: "👶 시율" },
+                  { id: "시목·시율", label: "👦👶 시목·시율" },
+                  { id: "수혁", label: "👨 수혁" },
+                  { id: "아리나", label: "👩 아리나" }
+                ].map((opt) => (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    onClick={() => setNewRoutineAssignee(opt.id)}
+                    className={`px-2.5 py-1.5 rounded-xl text-[11px] font-extrabold border transition whitespace-nowrap ${
+                      newRoutineAssignee === opt.id
+                        ? "bg-stone-900 text-white border-stone-900"
+                        : "bg-stone-50 text-stone-600 border-stone-200"
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <label className="text-[10px] font-extrabold text-stone-500 block mb-1">시간대</label>
+              <div className="flex flex-wrap gap-1.5">
+                {ROUTINE_TIME_SLOTS.map((ts) => (
+                  <button
+                    key={ts}
+                    type="button"
+                    onClick={() => setNewRoutineTimeSlot(ts)}
+                    className={`px-2.5 py-1.5 rounded-xl text-[11px] font-extrabold border transition whitespace-nowrap ${
+                      newRoutineTimeSlot === ts
+                        ? "bg-stone-900 text-white border-stone-900"
+                        : "bg-stone-50 text-stone-600 border-stone-200"
+                    }`}
+                  >
+                    {ts}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-extrabold text-stone-500 block">반복 주기</label>
+              <div className="flex flex-wrap gap-1.5">
+                {[
+                  { id: "daily", label: "매일" },
+                  { id: "interval", label: "N일마다" },
+                  { id: "weekly", label: "매주" },
+                  { id: "monthly", label: "매월 일자" },
+                  { id: "monthly_weekday", label: "매월 N주차" }
+                ].map((c) => (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() => setNewRoutineCycle(c.id)}
+                    className={`px-2.5 py-1.5 rounded-xl text-[11px] font-extrabold border transition whitespace-nowrap ${
+                      newRoutineCycle === c.id
+                        ? "bg-stone-900 text-white border-stone-900"
+                        : "bg-stone-50 text-stone-600 border-stone-200"
+                    }`}
+                  >
+                    {c.label}
+                  </button>
+                ))}
+              </div>
+
+              {newRoutineCycle === "interval" && (
+                <select
+                  value={newRoutineIntervalDays}
+                  onChange={(e) => setNewRoutineIntervalDays(Number(e.target.value))}
+                  className="w-full px-3 py-2 rounded-xl border border-stone-200 bg-stone-50 text-xs font-extrabold text-stone-800"
+                >
+                  {[2, 3, 4, 5, 6, 7, 10, 14].map((d) => (
+                    <option key={d} value={d}>{d}일마다</option>
+                  ))}
+                </select>
+              )}
+              {newRoutineCycle === "monthly" && (
+                <select
+                  value={newRoutineMonthDay}
+                  onChange={(e) => setNewRoutineMonthDay(Number(e.target.value))}
+                  className="w-full px-3 py-2 rounded-xl border border-stone-200 bg-stone-50 text-xs font-extrabold text-stone-800"
+                >
+                  {Array.from({ length: 31 }, (_, idx) => idx + 1).map((dayNum) => (
+                    <option key={dayNum} value={dayNum}>매월 {dayNum}일</option>
+                  ))}
+                </select>
+              )}
+              {newRoutineCycle === "monthly_weekday" && (
+                <select
+                  value={newRoutineNthWeek}
+                  onChange={(e) => setNewRoutineNthWeek(Number(e.target.value))}
+                  className="w-full px-3 py-2 rounded-xl border border-stone-200 bg-stone-50 text-xs font-extrabold text-stone-800"
+                >
+                  <option value={1}>첫째 주</option>
+                  <option value={2}>둘째 주</option>
+                  <option value={3}>셋째 주</option>
+                  <option value={4}>넷째 주</option>
+                  <option value={-1}>마지막 주</option>
+                </select>
+              )}
+              {(newRoutineCycle === "weekly" || newRoutineCycle === "monthly_weekday") && (
+                <select
+                  value={newRoutineWeekDay}
+                  onChange={(e) => setNewRoutineWeekDay(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-stone-200 bg-stone-50 text-xs font-extrabold text-stone-800"
+                >
+                  {newRoutineCycle === "weekly" && <option value="any">요일 무관</option>}
+                  {["일", "월", "화", "수", "목", "금", "토"].map((dLabel, dIdx) => (
+                    <option key={dIdx} value={String(dIdx)}>{dLabel}요일</option>
+                  ))}
+                </select>
+              )}
+            </div>
+
+            <div className="flex gap-2 pt-2">
+              <button
+                type="button"
+                onClick={handleCancelEditRoutine}
+                className="flex-1 py-2.5 rounded-xl bg-stone-100 text-stone-600 text-xs font-extrabold"
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                onClick={handleAddRoutine}
+                className="flex-1 py-2.5 rounded-xl bg-stone-900 text-white text-xs font-extrabold"
+              >
+                {editingRoutineId ? "수정 저장" : "저장하기"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {isScheduleModalOpen && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-sm w-full p-5 space-y-3.5 max-h-[90vh] overflow-y-auto">
