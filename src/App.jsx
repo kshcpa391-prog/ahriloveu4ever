@@ -140,11 +140,94 @@ const getIsoWeekKey = (dateStr = getTodayStr()) => {
   return `${tmp.getUTCFullYear()}-W${String(weekNo).padStart(2, "0")}`;
 };
 
+const ROUTINE_TIME_SLOTS = ["아침", "점심", "하원후", "오후", "저녁", "자기전", "상시"];
+const WEEKDAY_KO = ["일", "월", "화", "수", "목", "금", "토"];
+
+const getCurrentRoutineTimeSlot = () => {
+  const now = new Date();
+  const mins = now.getHours() * 60 + now.getMinutes();
+  if (mins >= 300 && mins < 660) return "아침"; // 05:00 ~ 10:59
+  if (mins >= 660 && mins < 900) return "점심"; // 11:00 ~ 14:59
+  if (mins >= 900 && mins < 1020) return "하원후"; // 15:00 ~ 16:59
+  if (mins >= 1020 && mins < 1080) return "오후"; // 17:00 ~ 17:59
+  if (mins >= 1080 && mins < 1230) return "저녁"; // 18:00 ~ 20:29
+  return "자기전"; // 20:30 ~ 04:59
+};
+
+const getNthWeekdayDateStr = (year, month1Based, nthWeek, weekDay) => {
+  const lastDay = new Date(year, month1Based, 0).getDate();
+  if (Number(nthWeek) === -1) {
+    for (let d = lastDay; d >= 1; d--) {
+      if (new Date(year, month1Based - 1, d).getDay() === Number(weekDay)) {
+        return `${year}-${String(month1Based).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+      }
+    }
+  }
+  let count = 0;
+  for (let d = 1; d <= lastDay; d++) {
+    if (new Date(year, month1Based - 1, d).getDay() === Number(weekDay)) {
+      count += 1;
+      if (count === Number(nthWeek)) {
+        return `${year}-${String(month1Based).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+      }
+    }
+  }
+  return `${year}-${String(month1Based).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+};
+
+const getRoutineNextDateInfo = (rt, dayStr = getTodayStr()) => {
+  if (!rt) return null;
+  const base = new Date(String(dayStr).slice(0, 10) + "T00:00:00");
+  if (Number.isNaN(base.getTime())) return null;
+  const fmt = (dObj) => {
+    const mm = dObj.getMonth() + 1;
+    const dd = dObj.getDate();
+    const wk = WEEKDAY_KO[dObj.getDay()];
+    return `${mm}/${dd}(${wk})`;
+  };
+  if (rt.cycle === "weekly" && rt.weekDay !== undefined && rt.weekDay !== null) {
+    const targetDow = Number(rt.weekDay);
+    const curDow = base.getDay();
+    const delta = (targetDow - curDow + 7) % 7;
+    const target = new Date(base);
+    target.setDate(base.getDate() + delta);
+    return { dateLabel: fmt(target), diff: delta };
+  }
+  if (rt.cycle === "monthly") {
+    const y = base.getFullYear();
+    const m = base.getMonth() + 1;
+    const lastDay = new Date(y, m, 0).getDate();
+    const targetDay = Math.min(Math.max(1, Number(rt.monthDay) || 1), lastDay);
+    const target = new Date(y, m - 1, targetDay);
+    const diff = Math.round((target - base) / 86400000);
+    return { dateLabel: fmt(target), diff };
+  }
+  if (rt.cycle === "monthly_weekday") {
+    const y = base.getFullYear();
+    const m = base.getMonth() + 1;
+    const nth = Number(rt.nthWeek) || 1;
+    const wd = Number(rt.weekDay ?? 6);
+    let targetStr = getNthWeekdayDateStr(y, m, nth, wd);
+    let target = new Date(targetStr + "T00:00:00");
+    let diff = Math.round((target - base) / 86400000);
+    if (diff < 0) {
+      const ny = m === 12 ? y + 1 : y;
+      const nm = m === 12 ? 1 : m + 1;
+      targetStr = getNthWeekdayDateStr(ny, nm, nth, wd);
+      target = new Date(targetStr + "T00:00:00");
+      diff = Math.round((target - base) / 86400000);
+    }
+    return { dateLabel: fmt(target), diff };
+  }
+  return null;
+};
+
 const INITIAL_FAMILY_ROUTINES = [
-  { id: "rt-1", title: "시목이 어린이집 가방·낮잠이불 챙기기", cycle: "daily", assignee: "공통", lastDoneKey: "" },
-  { id: "rt-2", title: "젖병·유축기 열탕 및 소독", cycle: "daily", assignee: "공통", lastDoneKey: "" },
-  { id: "rt-3", title: "시목·시율 유산균 & 비타민D", cycle: "daily", assignee: "공통", lastDoneKey: "" },
-  { id: "rt-4", title: "재활용·음식물 분리수거", cycle: "weekly", assignee: "수혁", lastDoneKey: "" }
+  { id: "rt-1", title: "시목이 어린이집 가방·낮잠이불 챙기기", cycle: "daily", timeSlot: "아침", assignee: "공통", lastDoneKey: "" },
+  { id: "rt-2", title: "젖병·유축기 열탕 및 소독", cycle: "daily", timeSlot: "저녁", assignee: "공통", lastDoneKey: "" },
+  { id: "rt-3", title: "시목·시율 유산균 & 비타민D", cycle: "daily", timeSlot: "아침", assignee: "공통", lastDoneKey: "" },
+  { id: "rt-4", title: "시목이 목욕하기", cycle: "interval", intervalDays: 2, timeSlot: "저녁", assignee: "공통", lastDoneKey: "" },
+  { id: "rt-5", title: "재활용·음식물 분리수거", cycle: "weekly", weekDay: 2, timeSlot: "저녁", assignee: "수혁", lastDoneKey: "" }
 ];
 
 const getTwiceDailySlotKey = () => {
@@ -901,11 +984,34 @@ const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.65) =>
     img.src = dataUrl;
   });
 
-const APP_CODE_VERSION = "v10.45";
-const APP_BUILD_DATE = "2026-11-16 21:20";
+const APP_CODE_VERSION = "v10.47";
+const APP_BUILD_DATE = "2026-11-16 21:36";
 const EDITOR_INVITE_CODE = "0402";
 
 const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v10.47",
+    version: "v10.47",
+    date: "2026-11-16",
+    title: "자동백업(루틴·즐겨찾기) 보완 · To-Do 완료 일괄 비우기 · 모바일 가독성 전면 개선",
+    changes: [
+      "1일 2회 자동 클라우드 백업(autoBackup)에 familyRoutines 및 mealFavorites 포함",
+      "To-Do 체크리스트에 [🧹 완료됨 비우기] 일괄 정리(writeBatch) 버튼 및 메인 루틴 카드 접기/펼치기 토글 추가",
+      "To-Do 상단 [전체|진행중|완료됨] 버튼 글자 줄바꿈 방지(whitespace-nowrap) 및 빠른 추가 바 2줄 배치로 우측 '+ 추가' 잘림 해결",
+      "주간 일정 요약 내 긴 일정 제목도 말줄임(truncate) 대신 자연스러운 줄바꿈 적용"
+    ]
+  },
+  {
+    id: "patch-v10.46",
+    version: "v10.46",
+    date: "2026-11-16",
+    title: "메인 시간대별 루틴 위젯 · N일마다(격일 목욕) · 매월 N주차 요일/날짜 자동계산 · 줄바꿈",
+    changes: [
+      "첫 화면(식단 탭) 상단에 현재 시간대(아침·점심·하원후·오후·저녁·자기전) 맞춤 [🔄 지금 시간대 루틴] 위젯 추가 및 원터치 체크",
+      "루틴 주기에 [N일마다](격일 목욕 등 2~14일) 및 [매월 N주차 요일](예: 매월 2번째 토요일) 추가 + 주간·월간 다음 도래 날짜 자동 계산",
+      "루틴 제목 한 줄 말줄임(truncate) 제거 및 자동 줄바꿈 적용으로 긴 루틴 전체 표시"
+    ]
+  },
   {
     id: "patch-v10.45",
     version: "v10.45",
@@ -2526,6 +2632,12 @@ function MainApp() {
   const [newRoutineAssignee, setNewRoutineAssignee] = useState("공통");
   const [newRoutineMonthDay, setNewRoutineMonthDay] = useState(1);
   const [newRoutineWeekDay, setNewRoutineWeekDay] = useState("any"); // any | 0..6
+  const [newRoutineTimeSlot, setNewRoutineTimeSlot] = useState("아침");
+  const [newRoutineIntervalDays, setNewRoutineIntervalDays] = useState(2);
+  const [newRoutineNthWeek, setNewRoutineNthWeek] = useState(1);
+  const [routineTimeFilter, setRoutineTimeFilter] = useState("전체");
+  const [showAllTodayRoutinesOnMain, setShowAllTodayRoutinesOnMain] = useState(false);
+  const [isMainRoutineCollapsed, setIsMainRoutineCollapsed] = useState(false);
   const [currentDayKey, setCurrentDayKey] = useState(() => getTodayStr());
   useEffect(() => {
     const syncDayKey = () => {
@@ -2567,21 +2679,35 @@ function MainApp() {
   const getRoutineResetKey = (rt, dayStr = currentDayKey) => {
     if (!rt) return dayStr;
     if (rt.cycle === "weekly") return getIsoWeekKey(dayStr);
-    if (rt.cycle === "monthly") return String(dayStr).slice(0, 7);
+    if (rt.cycle === "monthly" || rt.cycle === "monthly_weekday") return String(dayStr).slice(0, 7);
     return dayStr;
   };
 
   const getMonthlyRoutineDueInfo = (rt, dayStr = currentDayKey) => {
-    if (!rt || rt.cycle !== "monthly") return null;
-    const [y, m, d] = String(dayStr).slice(0, 10).split("-").map((n) => Number(n) || 1);
-    const lastDay = new Date(y, m, 0).getDate();
-    const targetDay = Math.min(Math.max(1, Number(rt.monthDay) || 1), lastDay);
-    const diff = targetDay - d;
-    return { targetDay, diff };
+    if (!rt || (rt.cycle !== "monthly" && rt.cycle !== "monthly_weekday")) return null;
+    const info = getRoutineNextDateInfo(rt, dayStr);
+    return info ? { targetDay: rt.monthDay || 1, diff: info.diff, dateLabel: info.dateLabel } : null;
+  };
+
+  const getIntervalRoutineInfo = (rt, dayStr = currentDayKey) => {
+    if (!rt || rt.cycle !== "interval") return null;
+    const intervalDays = Math.max(2, Number(rt.intervalDays) || 2);
+    if (!rt.lastDoneKey) return { done: false, daysLeft: 0, intervalDays };
+    const lastD = new Date(String(rt.lastDoneKey).slice(0, 10) + "T00:00:00");
+    const curD = new Date(String(dayStr).slice(0, 10) + "T00:00:00");
+    if (Number.isNaN(lastD.getTime()) || Number.isNaN(curD.getTime())) {
+      return { done: false, daysLeft: 0, intervalDays };
+    }
+    const elapsed = Math.floor((curD - lastD) / 86400000);
+    const done = elapsed >= 0 && elapsed < intervalDays;
+    return { done, daysLeft: Math.max(0, intervalDays - elapsed), intervalDays };
   };
 
   const isRoutineDoneNow = (rt) => {
     if (!rt) return false;
+    if (rt.cycle === "interval") {
+      return Boolean(getIntervalRoutineInfo(rt, currentDayKey)?.done);
+    }
     return rt.lastDoneKey === getRoutineResetKey(rt, currentDayKey);
   };
 
@@ -2591,6 +2717,10 @@ function MainApp() {
     if (todayKey !== currentDayKey) setCurrentDayKey(todayKey);
     const nextList = familyRoutines.map((r) => {
       if (r.id !== rtId) return r;
+      if (r.cycle === "interval") {
+        const info = getIntervalRoutineInfo(r, todayKey);
+        return { ...r, lastDoneKey: info?.done ? "" : todayKey };
+      }
       const targetKey = getRoutineResetKey(r, todayKey);
       const already = r.lastDoneKey === targetKey;
       return { ...r, lastDoneKey: already ? "" : targetKey };
@@ -2603,25 +2733,38 @@ function MainApp() {
     if (!requireEditorAccess()) return;
     const title = newRoutineTitle.trim();
     if (!title) return;
-    const cycleVal = ["daily", "weekly", "monthly"].includes(newRoutineCycle) ? newRoutineCycle : "daily";
+    const cycleVal = ["daily", "interval", "weekly", "monthly", "monthly_weekday"].includes(newRoutineCycle)
+      ? newRoutineCycle
+      : "daily";
     const mDayVal = cycleVal === "monthly" ? Math.min(31, Math.max(1, Number(newRoutineMonthDay) || 1)) : null;
+    const iDaysVal = cycleVal === "interval" ? Math.min(30, Math.max(2, Number(newRoutineIntervalDays) || 2)) : null;
+    const nthVal = cycleVal === "monthly_weekday" ? Number(newRoutineNthWeek) || 1 : null;
+    const wdVal =
+      cycleVal === "weekly" && newRoutineWeekDay !== "any"
+        ? Number(newRoutineWeekDay)
+        : cycleVal === "monthly_weekday"
+        ? Number(newRoutineWeekDay === "any" ? 6 : newRoutineWeekDay)
+        : null;
     if (
       familyRoutines.some(
         (r) =>
           String(r.title || "").trim().toLowerCase() === title.toLowerCase() &&
           r.cycle === cycleVal &&
-          (cycleVal !== "monthly" || Number(r.monthDay || 1) === mDayVal)
+          (r.timeSlot || "상시") === newRoutineTimeSlot
       )
     ) {
-      showToast("이미 같은 이름과 주기의 루틴이 등록되어 있습니다.");
+      showToast("이미 같은 이름·시간대·주기의 루틴이 등록되어 있습니다.");
       return;
     }
     const nextItem = {
       id: `rt-${Date.now()}`,
       title,
       cycle: cycleVal,
+      timeSlot: newRoutineTimeSlot || "상시",
+      ...(cycleVal === "interval" ? { intervalDays: iDaysVal } : {}),
       ...(cycleVal === "monthly" ? { monthDay: mDayVal } : {}),
-      ...(cycleVal === "weekly" && newRoutineWeekDay !== "any" ? { weekDay: Number(newRoutineWeekDay) } : {}),
+      ...(cycleVal === "monthly_weekday" ? { nthWeek: nthVal, weekDay: wdVal } : {}),
+      ...(cycleVal === "weekly" && wdVal !== null ? { weekDay: wdVal } : {}),
       assignee: newRoutineAssignee || "공통",
       lastDoneKey: ""
     };
@@ -2637,6 +2780,45 @@ function MainApp() {
     const nextList = familyRoutines.filter((r) => r.id !== rtId);
     setFamilyRoutines(nextList);
     syncRoutinesToCloud(nextList);
+  };
+
+  const handleClearCompletedTodos = async () => {
+    if (!requireEditorAccess()) return;
+    const completedTodos = allTodoChecklistItems.filter((s) => s.done && s.category === "할일(To-Do)");
+    if (completedTodos.length === 0) {
+      showToast("정리할 완료된 할 일(To-Do)이 없습니다.");
+      return;
+    }
+    const delIds = completedTodos.map((s) => s.id);
+    const delSet = new Set(delIds);
+    setSchedules((prev) => prev.filter((s) => !delSet.has(s.id)));
+    if (user && db) {
+      beginWrite();
+      let ok = false;
+      let errMsg = "";
+      try {
+        for (let i = 0; i < completedTodos.length; i += 200) {
+          const chunk = completedTodos.slice(i, i + 200);
+          const batch = writeBatch(db);
+          chunk.forEach((it) => {
+            batch.delete(getDocRef("family_schedules_v4", it.id));
+          });
+          batch.set(
+            getDocRef("family_meta_v4", "deleted_tracker"),
+            { ids: arrayUnion(...chunk.map((c) => c.id)) },
+            { merge: true }
+          );
+          await batch.commit();
+        }
+        ok = true;
+      } catch (e) {
+        errMsg = e?.message || "완료된 To-Do 일괄 정리 오류";
+        setSyncErrorMsg(errMsg);
+      } finally {
+        endWrite(ok, errMsg);
+      }
+    }
+    showToast(`🧹 완료된 할 일 ${completedTodos.length}건을 비웠습니다.`);
   };
   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
   const [editingSchedule, setEditingSchedule] = useState(null);
@@ -3738,6 +3920,8 @@ function MainApp() {
       expenses,
       shoppingList,
       recipesMeta: recipes.map(({ photoDataUrl, ...rest }) => rest),
+      familyRoutines,
+      mealFavorites: { combos: favoriteMealCombos, singles: favoriteSingleMenus },
       notices,
       schedules,
       patchNotes,
@@ -8046,6 +8230,92 @@ ${validText}
       ========================================== */}
       {activeTab === "daily" && (
         <div className="p-4 space-y-3.5">
+          {(() => {
+            const curSlot = getCurrentRoutineTimeSlot();
+            const activeRoutines = familyRoutines.filter((r) => !isRoutineDoneNow(r));
+            const slotMatched = activeRoutines.filter((r) => {
+              const s = r.timeSlot || "상시";
+              return s === curSlot || s === "상시";
+            });
+            const visibleList = showAllTodayRoutinesOnMain ? activeRoutines : slotMatched;
+            if (activeRoutines.length === 0) return null;
+            return (
+              <div className="bg-indigo-50/70 border border-indigo-200 rounded-2xl p-3 space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <span className="text-xs font-black text-indigo-950 truncate">
+                      🔄 {showAllTodayRoutinesOnMain ? "오늘 남은 루틴 전체" : `지금(${curSlot}) 루틴`} ({visibleList.length}건)
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => setIsMainRoutineCollapsed((v) => !v)}
+                      className="px-2 py-0.5 rounded-lg bg-white border border-indigo-200 text-[10px] font-extrabold text-indigo-700 whitespace-nowrap"
+                    >
+                      {isMainRoutineCollapsed ? "펼치기 ▾" : "접기 ▴"}
+                    </button>
+                    {!isMainRoutineCollapsed && (
+                    <button
+                      type="button"
+                      onClick={() => setShowAllTodayRoutinesOnMain((v) => !v)}
+                      className="px-2 py-0.5 rounded-lg bg-white border border-indigo-200 text-[10px] font-extrabold text-indigo-700 whitespace-nowrap"
+                    >
+                      {showAllTodayRoutinesOnMain ? `${curSlot}만 보기` : `오늘 전체 (${activeRoutines.length})`}
+                    </button>
+                    </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab("schedule")}
+                      className="px-2 py-0.5 rounded-lg bg-indigo-600 text-white text-[10px] font-extrabold whitespace-nowrap"
+                    >
+                      관리
+                    </button>
+                  </div>
+                </div>
+                {!isMainRoutineCollapsed && (visibleList.length === 0 ? (
+                  <div className="text-[11px] font-bold text-indigo-700 bg-white/80 rounded-xl px-3 py-2">
+                    ✅ {curSlot} 시간대 루틴을 모두 완료했습니다!
+                  </div>
+                ) : (
+                  <div className="space-y-1.5">
+                    {visibleList.map((rt) => {
+                      const nextInfo = getRoutineNextDateInfo(rt, currentDayKey);
+                      return (
+                        <button
+                          key={rt.id}
+                          type="button"
+                          onClick={() => handleToggleRoutine(rt.id)}
+                          className="w-full p-2 rounded-xl bg-white hover:bg-indigo-50/50 border border-indigo-100 flex items-start gap-2 text-left transition active:scale-[0.99]"
+                        >
+                          <span className="w-4 h-4 mt-0.5 rounded border border-indigo-300 bg-white shrink-0" />
+                          <div className="min-w-0 flex-1">
+                            <div className="text-xs font-extrabold text-stone-900 whitespace-normal break-words leading-snug">
+                              {rt.title}
+                            </div>
+                            <div className="flex flex-wrap items-center gap-1 mt-0.5">
+                              <span className="px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-800 text-[9px] font-black">
+                                {rt.timeSlot || "상시"}
+                              </span>
+                              <span className="px-1.5 py-0.5 rounded bg-stone-100 text-stone-600 text-[9px] font-bold">
+                                {rt.assignee || "공통"}
+                              </span>
+                              {nextInfo && (
+                                <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 text-[9px] font-bold">
+                                  {nextInfo.dateLabel}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
           <button
             onClick={() => {
               setScanTargetMonth(selectedDate.slice(0, 7));
@@ -9208,7 +9478,7 @@ ${validText}
                                   </button>
                                 )}
                                 <span
-                                  className={`font-bold truncate ${
+                                  className={`font-bold whitespace-normal break-words leading-snug ${
                                     ev.done ? "line-through text-stone-400" : "text-stone-800"
                                   }`}
                                 >
@@ -9267,18 +9537,40 @@ ${validText}
                     handleAddRoutine();
                   }
                 }}
-                placeholder="반복 루틴 추가 (예: 가습기 물 갈기)"
-                className="flex-1 min-w-[140px] px-3 py-1.5 rounded-xl border border-stone-200 text-xs font-bold"
+                placeholder="반복 루틴 추가 (예: 시목이 목욕하기)"
+                className="w-full px-3 py-1.5 rounded-xl border border-stone-200 text-xs font-bold"
               />
+              <select
+                value={newRoutineTimeSlot}
+                onChange={(e) => setNewRoutineTimeSlot(e.target.value)}
+                className="px-2 py-1.5 rounded-xl border border-indigo-200 bg-indigo-50 text-[11px] font-extrabold text-indigo-900"
+              >
+                {ROUTINE_TIME_SLOTS.map((ts) => (
+                  <option key={ts} value={ts}>{ts}</option>
+                ))}
+              </select>
               <select
                 value={newRoutineCycle}
                 onChange={(e) => setNewRoutineCycle(e.target.value)}
                 className="px-2 py-1.5 rounded-xl border border-stone-200 bg-stone-50 text-[11px] font-extrabold"
               >
                 <option value="daily">매일</option>
+                <option value="interval">N일마다</option>
                 <option value="weekly">매주</option>
                 <option value="monthly">매월 일자</option>
+                <option value="monthly_weekday">매월 N주차 요일</option>
               </select>
+              {newRoutineCycle === "interval" && (
+                <select
+                  value={newRoutineIntervalDays}
+                  onChange={(e) => setNewRoutineIntervalDays(Number(e.target.value))}
+                  className="px-2 py-1.5 rounded-xl border border-teal-300 bg-teal-50 text-[11px] font-extrabold text-teal-900"
+                >
+                  {[2, 3, 4, 5, 6, 7, 10, 14].map((d) => (
+                    <option key={d} value={d}>{d}일마다</option>
+                  ))}
+                </select>
+              )}
               {newRoutineCycle === "monthly" && (
                 <select
                   value={newRoutineMonthDay}
@@ -9290,15 +9582,28 @@ ${validText}
                   ))}
                 </select>
               )}
-              {newRoutineCycle === "weekly" && (
+              {newRoutineCycle === "monthly_weekday" && (
+                <select
+                  value={newRoutineNthWeek}
+                  onChange={(e) => setNewRoutineNthWeek(Number(e.target.value))}
+                  className="px-2 py-1.5 rounded-xl border border-amber-300 bg-amber-50 text-[11px] font-extrabold text-amber-900"
+                >
+                  <option value={1}>첫째 주</option>
+                  <option value={2}>둘째 주</option>
+                  <option value={3}>셋째 주</option>
+                  <option value={4}>넷째 주</option>
+                  <option value={-1}>마지막 주</option>
+                </select>
+              )}
+              {(newRoutineCycle === "weekly" || newRoutineCycle === "monthly_weekday") && (
                 <select
                   value={newRoutineWeekDay}
                   onChange={(e) => setNewRoutineWeekDay(e.target.value)}
                   className="px-2 py-1.5 rounded-xl border border-purple-300 bg-purple-50 text-[11px] font-extrabold text-purple-900"
                 >
-                  <option value="any">매주 (요일 무관)</option>
+                  {newRoutineCycle === "weekly" && <option value="any">요일 무관</option>}
                   {["일", "월", "화", "수", "목", "금", "토"].map((dLabel, dIdx) => (
-                    <option key={dIdx} value={String(dIdx)}>매주 {dLabel}요일</option>
+                    <option key={dIdx} value={String(dIdx)}>{dLabel}요일</option>
                   ))}
                 </select>
               )}
@@ -9320,6 +9625,23 @@ ${validText}
               </button>
             </div>
 
+            <div className="flex gap-1 overflow-x-auto pb-0.5">
+              {["전체", ...ROUTINE_TIME_SLOTS].map((ts) => (
+                <button
+                  key={ts}
+                  type="button"
+                  onClick={() => setRoutineTimeFilter(ts)}
+                  className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold border shrink-0 ${
+                    routineTimeFilter === ts
+                      ? "bg-indigo-600 text-white border-indigo-600"
+                      : "bg-stone-50 text-stone-600 border-stone-200"
+                  }`}
+                >
+                  {ts}
+                </button>
+              ))}
+            </div>
+
             {familyRoutines.length === 0 ? (
               <div className="text-center py-3 text-xs text-stone-400">
                 등록된 루틴이 없습니다. 위에서 매일/매주 반복 루틴을 추가해 보세요.
@@ -9327,12 +9649,18 @@ ${validText}
             ) : (
               <div className="space-y-1.5">
                 {[...familyRoutines]
+                  .filter((rt) => routineTimeFilter === "전체" || (rt.timeSlot || "상시") === routineTimeFilter)
                   .sort((a, b) => {
                     const aDone = Number(isRoutineDoneNow(a));
                     const bDone = Number(isRoutineDoneNow(b));
                     if (aDone !== bDone) return aDone - bDone;
+                    const slotIdx = (r) => {
+                      const idx = ROUTINE_TIME_SLOTS.indexOf(r.timeSlot || "상시");
+                      return idx === -1 ? 99 : idx;
+                    };
+                    if (slotIdx(a) !== slotIdx(b)) return slotIdx(a) - slotIdx(b);
                     const urgency = (r) => {
-                      if (r.cycle === "monthly") {
+                      if (r.cycle === "monthly" || r.cycle === "monthly_weekday") {
                         const info = getMonthlyRoutineDueInfo(r);
                         return info && info.diff > 3 ? 1 : 0;
                       }
@@ -9342,20 +9670,22 @@ ${validText}
                   })
                   .map((rt) => {
                     const doneNow = isRoutineDoneNow(rt);
+                    const nextDateInfo = getRoutineNextDateInfo(rt, currentDayKey);
+                    const intervalInfo = getIntervalRoutineInfo(rt, currentDayKey);
                     return (
                       <div
                         key={rt.id}
-                        className={`p-2.5 rounded-xl border flex items-center justify-between gap-2 transition ${
+                        className={`p-2.5 rounded-xl border flex items-start justify-between gap-2 transition ${
                           doneNow ? "bg-stone-50 border-stone-200 opacity-65" : "bg-indigo-50/40 border-indigo-200"
                         }`}
                       >
                         <button
                           type="button"
                           onClick={() => handleToggleRoutine(rt.id)}
-                          className="flex items-center gap-2.5 flex-1 text-left min-w-0"
+                          className="flex items-start gap-2.5 flex-1 text-left min-w-0"
                         >
                           <span
-                            className={`w-5 h-5 rounded-lg border flex items-center justify-center shrink-0 ${
+                            className={`w-5 h-5 mt-0.5 rounded-lg border flex items-center justify-center shrink-0 ${
                               doneNow
                                 ? "bg-indigo-600 border-indigo-600 text-white"
                                 : "bg-white border-indigo-300"
@@ -9364,39 +9694,59 @@ ${validText}
                             {doneNow && <Check className="w-3.5 h-3.5" />}
                           </span>
                           <div className="min-w-0 flex-1">
-                            <div className={`text-xs font-extrabold truncate ${doneNow ? "line-through text-stone-400" : "text-stone-900"}`}>
+                            <div className={`text-xs font-extrabold whitespace-normal break-words leading-snug ${doneNow ? "line-through text-stone-400" : "text-stone-900"}`}>
                               {rt.title}
                             </div>
-                            <div className="flex items-center gap-1 mt-0.5">
+                            <div className="flex flex-wrap items-center gap-1 mt-1">
+                              <span className="px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-800 text-[9px] font-black">
+                                {rt.timeSlot || "상시"}
+                              </span>
                               {(() => {
-                                if (rt.cycle === "monthly") {
+                                if (rt.cycle === "interval" && intervalInfo) {
+                                  return (
+                                    <span className={`px-1.5 py-0.5 rounded text-[9px] font-black ${
+                                      !doneNow ? "bg-teal-100 text-teal-900" : "bg-stone-200 text-stone-600"
+                                    }`}>
+                                      {intervalInfo.intervalDays}일마다{doneNow ? ` · D-${intervalInfo.daysLeft}` : " · 오늘 할 날"}
+                                    </span>
+                                  );
+                                }
+                                if (rt.cycle === "monthly" || rt.cycle === "monthly_weekday") {
                                   const info = getMonthlyRoutineDueInfo(rt);
+                                  const nthText = Number(rt.nthWeek) === -1 ? "마지막 주" : `${rt.nthWeek || 1}번째 주`;
+                                  const wdText = WEEKDAY_KO[Number(rt.weekDay ?? 6)] || "토";
+                                  const prefix = rt.cycle === "monthly_weekday" ? `매월 ${nthText} ${wdText}` : `매월 ${rt.monthDay || 1}일`;
                                   const dLabel = !info
                                     ? ""
                                     : info.diff === 0
-                                    ? " · 오늘 예정"
+                                    ? ` · ${info.dateLabel} 오늘`
                                     : info.diff < 0
-                                    ? ` · ${Math.abs(info.diff)}일 지남`
-                                    : ` · D-${info.diff}`;
+                                    ? ` · ${info.dateLabel} (${Math.abs(info.diff)}일 지남)`
+                                    : ` · ${info.dateLabel} (D-${info.diff})`;
                                   return (
                                     <span className={`px-1.5 py-0.5 rounded text-[9px] font-black ${
                                       !doneNow && info && info.diff <= 0
                                         ? "bg-rose-100 text-rose-800"
                                         : "bg-amber-100 text-amber-900"
                                     }`}>
-                                      매월 {rt.monthDay || 1}일{doneNow ? " (이번달 완료)" : dLabel}
+                                      {prefix}{doneNow ? " (이번달 완료)" : dLabel}
+                                    </span>
+                                  );
+                                }
+                                if (rt.cycle === "weekly") {
+                                  const wkLabel =
+                                    rt.weekDay !== undefined && rt.weekDay !== null
+                                      ? `매주 ${WEEKDAY_KO[Number(rt.weekDay)] || ""}요일${nextDateInfo ? ` · ${nextDateInfo.dateLabel}` : ""}`
+                                      : "매주 리셋";
+                                  return (
+                                    <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-purple-100 text-purple-800">
+                                      {wkLabel}
                                     </span>
                                   );
                                 }
                                 return (
-                                  <span className={`px-1.5 py-0.5 rounded text-[9px] font-black ${
-                                    rt.cycle === "weekly" ? "bg-purple-100 text-purple-800" : "bg-sky-100 text-sky-800"
-                                  }`}>
-                                    {rt.cycle === "weekly"
-                                      ? rt.weekDay !== undefined && rt.weekDay !== null
-                                        ? `매주 ${["일", "월", "화", "수", "목", "금", "토"][Number(rt.weekDay)] || ""}요일`
-                                        : "매주 리셋"
-                                      : "매일 자정 리셋"}
+                                  <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-sky-100 text-sky-800">
+                                    매일 자정 리셋
                                   </span>
                                 );
                               })()}
@@ -9425,34 +9775,45 @@ ${validText}
               [신규 요청사항 1 완벽 반영] To-Do List 전체를 체크리스트처럼 표시하는 화면
           ========================================== */}
           <div id="schedule-todo-section" className="bg-white p-4 rounded-2xl border border-stone-200 shadow-sm space-y-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-1.5">
-                <ListTodo className="w-4 h-4 text-emerald-600" />
-                <div>
-                  <h3 className="text-xs font-black text-stone-900">
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <ListTodo className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <h3 className="text-xs font-black text-stone-900 leading-snug">
                     ✅ 전체 To-Do 체크리스트 ({todoStats.activeCount}건 남음 / 완료 {todoStats.doneCount}건)
                   </h3>
                 </div>
               </div>
 
-              <div className="flex gap-1 bg-stone-100 p-0.5 rounded-lg">
-                {[
-                  { id: "all", label: "전체" },
-                  { id: "active", label: "진행중" },
-                  { id: "completed", label: "완료됨" }
-                ].map((tab) => (
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <div className="flex gap-1 bg-stone-100 p-0.5 rounded-lg shrink-0">
+                  {[
+                    { id: "all", label: "전체" },
+                    { id: "active", label: "진행중" },
+                    { id: "completed", label: "완료됨" }
+                  ].map((tab) => (
+                    <button
+                      key={tab.id}
+                      onClick={() => setTodoStatusFilter(tab.id)}
+                      className={`px-2.5 py-1 rounded-md text-[10px] font-extrabold whitespace-nowrap transition ${
+                        todoStatusFilter === tab.id
+                          ? "bg-stone-900 text-white"
+                          : "text-stone-500 hover:text-stone-800"
+                      }`}
+                    >
+                      {tab.label}
+                    </button>
+                  ))}
+                </div>
+                {todoStats.doneCount > 0 && (
                   <button
-                    key={tab.id}
-                    onClick={() => setTodoStatusFilter(tab.id)}
-                    className={`px-2 py-0.5 rounded-md text-[10px] font-extrabold transition ${
-                      todoStatusFilter === tab.id
-                        ? "bg-stone-900 text-white"
-                        : "text-stone-500 hover:text-stone-800"
-                    }`}
+                    type="button"
+                    onClick={handleClearCompletedTodos}
+                    className="px-2.5 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 border border-rose-200 text-[10px] font-extrabold text-rose-700 whitespace-nowrap"
                   >
-                    {tab.label}
+                    🧹 완료됨 비우기
                   </button>
-                ))}
+                )}
               </div>
             </div>
 
@@ -9485,13 +9846,7 @@ ${validText}
             )}
 
             {/* 체크리스트 인라인 빠른 할 일 추가 바 */}
-            <div className="flex items-center gap-1.5 bg-stone-50 p-2 rounded-xl border border-stone-200">
-              <input
-                type="date"
-                value={quickTodoDate}
-                onChange={(e) => setQuickTodoDate(e.target.value)}
-                className="px-2 py-1.5 rounded-lg border border-stone-200 text-[11px] font-bold bg-white w-[112px] shrink-0"
-              />
+            <div className="bg-stone-50 p-2 rounded-xl border border-stone-200 space-y-1.5">
               <input
                 type="text"
                 placeholder="할 일 빠른 입력 (예: 시목이 상담, 예방접종)"
@@ -9500,14 +9855,22 @@ ${validText}
                 onKeyDown={(e) => {
                   if (e.key === "Enter") handleQuickAddTodo();
                 }}
-                className="flex-1 px-2.5 py-1.5 rounded-lg border border-stone-200 text-xs font-bold bg-white min-w-0"
+                className="w-full px-2.5 py-1.5 rounded-lg border border-stone-200 text-xs font-bold bg-white"
               />
-              <button
-                onClick={handleQuickAddTodo}
-                className="px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold shrink-0"
-              >
-                + 추가
-              </button>
+              <div className="flex items-center justify-between gap-1.5">
+                <input
+                  type="date"
+                  value={quickTodoDate}
+                  onChange={(e) => setQuickTodoDate(e.target.value)}
+                  className="px-2 py-1.5 rounded-lg border border-stone-200 text-[11px] font-bold bg-white flex-1"
+                />
+                <button
+                  onClick={handleQuickAddTodo}
+                  className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold whitespace-nowrap shrink-0"
+                >
+                  + 추가
+                </button>
+              </div>
             </div>
 
             {/* 전체 체크리스트 목록 */}
