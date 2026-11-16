@@ -868,11 +868,23 @@ const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.65) =>
     img.src = dataUrl;
   });
 
-const APP_CODE_VERSION = "v10.20";
-const APP_BUILD_DATE = "2026-11-16 15:38";
+const APP_CODE_VERSION = "v10.21";
+const APP_BUILD_DATE = "2026-11-16 15:46";
 const EDITOR_INVITE_CODE = "0402";
 
 const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v10.21",
+    version: "v10.21",
+    date: "2026-11-16",
+    title: "장보기 일괄 비우기·중복 방지 & 냉장고 칸별 빠른 추가·전체 동기화 오류 감지",
+    changes: [
+      "장보기 목록에 [🧹 체크 완료 N건 비우기] 일괄 삭제(writeBatch) 버튼 추가",
+      "카톡·음성 1초 장보기 파싱 시 이미 목록에 있는 품목 중복 추가 방지",
+      "시각적 냉장고 각 칸 헤더에 [+] 버튼을 추가해 해당 칸·보관위치가 자동 선택된 상태로 바로 재료 등록 가능",
+      "가계부·폐기·육아·일정 실시간 스냅샷 리스너의 빈 오류 콜백을 상단 syncErrorMsg 알림으로 통일"
+    ]
+  },
   {
     id: "patch-v10.20",
     version: "v10.20",
@@ -2277,6 +2289,22 @@ function MainApp() {
     });
     setIsFridgeModalOpen(true);
   };
+  const handleOpenAddFridgeForZone = (zoneName) => {
+    setEditingFridge(null);
+    setFridgeForm({
+      name: "",
+      location: shelfZoneToLocation(zoneName),
+      category: "채소/과일",
+      quantity: 1,
+      unit: "개",
+      expiryDate: getOffsetDateStr(selectedDate, 7),
+      price: "",
+      purchaseDate: selectedDate,
+      recordExpense: true,
+      shelfZone: zoneName
+    });
+    setIsFridgeModalOpen(true);
+  };
   const [editingFridge, setEditingFridge] = useState(null);
   const [fridgeForm, setFridgeForm] = useState({
     name: "",
@@ -2938,7 +2966,7 @@ function MainApp() {
         (snap) => {
           setExpenses(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
         },
-        () => {}
+        (err) => setSyncErrorMsg(err?.message || "가계부 동기화 오류")
       )
     );
 
@@ -2948,7 +2976,7 @@ function MainApp() {
         (snap) => {
           setWasteEvents(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
         },
-        () => {}
+        (err) => setSyncErrorMsg(err?.message || "폐기 기록 동기화 오류")
       )
     );
 
@@ -2962,7 +2990,7 @@ function MainApp() {
           });
           setBabyChecks(obj);
         },
-        () => {}
+        (err) => setSyncErrorMsg(err?.message || "육아 체크 동기화 오류")
       )
     );
 
@@ -2974,7 +3002,7 @@ function MainApp() {
           list.sort((a, b) => String(b.date).localeCompare(String(a.date)));
           setBabyGrowthLogs(list);
         },
-        () => {}
+        (err) => setSyncErrorMsg(err?.message || "성장 기록 동기화 오류")
       )
     );
 
@@ -2986,7 +3014,7 @@ function MainApp() {
           list.sort((a, b) => String(b.date).localeCompare(String(a.date)));
           setBabyMedicalNotes(list);
         },
-        () => {}
+        (err) => setSyncErrorMsg(err?.message || "진료 메모 동기화 오류")
       )
     );
 
@@ -3055,7 +3083,7 @@ function MainApp() {
           ];
           setSchedules(mergedList);
         },
-        () => {}
+        (err) => setSyncErrorMsg(err?.message || "일정 동기화 오류")
       )
     );
 
@@ -6037,7 +6065,28 @@ ${validText}
         return;
       }
 
-      const newPayloads = parsedItems.map((it, idx) => ({
+      const existingNames = new Set(
+        shoppingList.map((s) => String(s.name || "").trim().toLowerCase()).filter(Boolean)
+      );
+      const uniqueItems = [];
+      let skippedCount = 0;
+      parsedItems.forEach((it) => {
+        const key = String(it.name || "").trim().toLowerCase();
+        if (!key || existingNames.has(key)) {
+          skippedCount += 1;
+        } else {
+          existingNames.add(key);
+          uniqueItems.push(it);
+        }
+      });
+
+      if (uniqueItems.length === 0) {
+        setQuickShoppingText("");
+        showToast("이미 장보기 목록에 모두 등록되어 있습니다.");
+        return;
+      }
+
+      const newPayloads = uniqueItems.map((it, idx) => ({
         id: `sh-${Date.now()}-${idx}`,
         name: it.name,
         quantity: it.quantity || "1개",
@@ -6056,7 +6105,11 @@ ${validText}
         await batch.commit();
       }
       setQuickShoppingText("");
-      showToast(`⚡ ${newPayloads.length}건이 장보기 목록에 추가되었습니다!`);
+      showToast(
+        skippedCount > 0
+          ? `⚡ ${newPayloads.length}건 추가 완료 (중복 ${skippedCount}건 제외)`
+          : `⚡ ${newPayloads.length}건이 장보기 목록에 추가되었습니다!`
+      );
     } catch (e) {
       showToast("⚠️ 장보기 파싱 저장 중 오류가 발생했습니다.");
     } finally {
@@ -6392,6 +6445,27 @@ ${validText}
       try {
         await deleteDoc(getDocRef("family_shopping_v4", id));
       } catch (e) {}
+    }
+  };
+
+  const handleClearCheckedShopping = async () => {
+    if (!requireEditorAccess()) return;
+    const checkedItems = shoppingList.filter((s) => s.checked);
+    if (checkedItems.length === 0) return;
+    const checkedIds = new Set(checkedItems.map((s) => s.id));
+    setShoppingList((prev) => prev.filter((s) => !checkedIds.has(s.id)));
+    if (user && db) {
+      beginWrite();
+      try {
+        const batch = writeBatch(db);
+        checkedItems.forEach((s) => batch.delete(getDocRef("family_shopping_v4", s.id)));
+        await batch.commit();
+        showToast(`🧹 체크 완료된 장보기 ${checkedItems.length}건을 비웠습니다.`);
+      } catch (e) {
+        setSyncErrorMsg(e?.message || "장보기 일괄 삭제 오류");
+      } finally {
+        endWrite();
+      }
     }
   };
 
@@ -8649,9 +8723,19 @@ ${validText}
                     <span className="text-[10px] font-black text-stone-700 truncate">
                       {labelOverride || zoneName}
                     </span>
-                    <span className="text-[9px] font-extrabold text-stone-400 shrink-0">
-                      {zItems.length}
-                    </span>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <span className="text-[9px] font-extrabold text-stone-400">
+                        {zItems.length}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => handleOpenAddFridgeForZone(zoneName)}
+                        title={`${labelOverride || zoneName}에 재료 추가`}
+                        className="w-4 h-4 rounded bg-stone-100 hover:bg-stone-200 text-stone-600 text-[10px] font-black flex items-center justify-center leading-none"
+                      >
+                        +
+                      </button>
+                    </div>
                   </div>
                   {zItems.length === 0 ? (
                     <div className="text-[10px] text-stone-300 text-center py-1.5">
@@ -9055,6 +9139,20 @@ ${validText}
               + 장보기 체크리스트에 등록
             </button>
           </div>
+
+          {shoppingList.some((s) => s.checked) && (
+            <div className="flex items-center justify-between bg-stone-100 px-3 py-2 rounded-xl">
+              <span className="text-[11px] font-bold text-stone-600">
+                체크 완료 {shoppingList.filter((s) => s.checked).length}건
+              </span>
+              <button
+                onClick={handleClearCheckedShopping}
+                className="px-2.5 py-1 rounded-lg bg-white border border-stone-200 text-[11px] font-extrabold text-rose-600 hover:bg-rose-50"
+              >
+                🧹 체크 완료 비우기
+              </button>
+            </div>
+          )}
 
           <div className="space-y-2">
             {shoppingList.map((item) => (
