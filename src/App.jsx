@@ -1116,11 +1116,20 @@ const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.65) =>
     img.src = dataUrl;
   });
 
-const APP_CODE_VERSION = "v10.78";
-const APP_BUILD_DATE = "2026-11-17 08:19";
+const APP_CODE_VERSION = "v10.79";
+const APP_BUILD_DATE = "2026-11-17 08:21";
 const EDITOR_INVITE_CODE = "0402";
 
 const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v10.79",
+    version: "v10.79",
+    date: "2026-11-17",
+    title: "TDZ(Cannot access 'Ui' before initialization) 런타임 오류 즉시 수정",
+    changes: [
+      "useEffect([isQuickFabOpen, isRoutineModalOpen])가 isRoutineModalOpen 선언(3219행)보다 먼저 평가되던 위치를 선언 이후로 이동해 런타임 초기화 오류 완전 해결"
+    ]
+  },
   {
     id: "patch-v10.78",
     version: "v10.78",
@@ -2857,17 +2866,7 @@ function MainApp() {
     setIsQuickFabOpen(false);
     if (activeTab !== "home") setIsHomeEditMode(false);
   }, [activeTab]);
-  useEffect(() => {
-    if (!isQuickFabOpen && !isRoutineModalOpen) return;
-    const onEsc = (e) => {
-      if (e.key === "Escape") {
-        setIsQuickFabOpen(false);
-        setIsRoutineModalOpen(false);
-      }
-    };
-    window.addEventListener("keydown", onEsc);
-    return () => window.removeEventListener("keydown", onEsc);
-  }, [isQuickFabOpen, isRoutineModalOpen]);
+
   const [homeRoutineSlotFilter, setHomeRoutineSlotFilter] = useState(() => {
     return localStorage.getItem("kim_home_routine_slot_v1") || "auto";
   });
@@ -3217,6 +3216,17 @@ function MainApp() {
   });
   const [editingRoutineId, setEditingRoutineId] = useState(null);
   const [isRoutineModalOpen, setIsRoutineModalOpen] = useState(false);
+  useEffect(() => {
+    if (!isQuickFabOpen && !isRoutineModalOpen) return;
+    const onEsc = (e) => {
+      if (e.key === "Escape") {
+        setIsQuickFabOpen(false);
+        setIsRoutineModalOpen(false);
+      }
+    };
+    window.addEventListener("keydown", onEsc);
+    return () => window.removeEventListener("keydown", onEsc);
+  }, [isQuickFabOpen, isRoutineModalOpen]);
   const [showAllTodayRoutinesOnMain, setShowAllTodayRoutinesOnMain] = useState(false);
   const [isMainRoutineCollapsed, setIsMainRoutineCollapsed] = useState(false);
   const [currentDayKey, setCurrentDayKey] = useState(() => getTodayStr());
