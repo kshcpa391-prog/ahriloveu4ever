@@ -868,11 +868,23 @@ const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.65) =>
     img.src = dataUrl;
   });
 
-const APP_CODE_VERSION = "v10.16";
-const APP_BUILD_DATE = "2026-11-16 15:12";
+const APP_CODE_VERSION = "v10.17";
+const APP_BUILD_DATE = "2026-11-16 15:18";
 const EDITOR_INVITE_CODE = "0402";
 
 const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v10.17",
+    version: "v10.17",
+    date: "2026-11-16",
+    title: "안정화 및 고도화 종합 패치 (터치 드래그 정밀도 · v3/v4 동기화 · 레시피 메타 자동백업 · 임박 필터)",
+    changes: [
+      "시각적 냉장고 뷰에서 빠른 손가락 드래그 시에도 목표 칸이 100% 정확히 인식되도록 Ref 기반 즉시 추적 적용",
+      "보관 칸 이동(handleMoveFridgeShelfZone) 시 v4·v3 동시 배치 저장 및 상단 동기화 상태 배지 연동",
+      "1일 2회 자동 클라우드 백업에 레시피북 텍스트 메타(recipesMeta) 포함 (사진 용량 제외로 900KB 제한 안전 준수)",
+      "Visual Fridge View에 [⚠️ 임박만] 토글 및 숫자 수량 표기 일괄 정규화, 핵심 로직 자가진단 테스트(12종) 확장"
+    ]
+  },
   {
     id: "patch-v10.16",
     version: "v10.16",
@@ -2059,6 +2071,8 @@ function MainApp() {
   const [draggingChip, setDraggingChip] = useState(null); // { item, x, y }
   const [dragOverZone, setDragOverZone] = useState("");
   const chipTouchRef = useRef(null);
+  const dragOverZoneRef = useRef("");
+  const [visualExpiringOnly, setVisualExpiringOnly] = useState(false);
 
   // [신규 v10.8] 가족 레시피북 상태
   const [recipes, setRecipes] = useState([]);
@@ -2858,7 +2872,7 @@ function MainApp() {
           });
           setFridgeMap((prev) => ({ ...prev, [`src_${idx}`]: loaded }));
         },
-        () => {}
+        (err) => setSyncErrorMsg(err?.message || "재고 동기화 오류")
       );
       unsubscribers.push(unsub);
     });
@@ -2929,7 +2943,7 @@ function MainApp() {
           list.sort((a, b) => String(b.updatedAt || b.createdAt || "").localeCompare(String(a.updatedAt || a.createdAt || "")));
           setRecipes(list);
         },
-        () => {}
+        (err) => setSyncErrorMsg(err?.message || "레시피 동기화 오류")
       )
     );
 
@@ -3109,6 +3123,7 @@ function MainApp() {
       fridge,
       expenses,
       shoppingList,
+      recipesMeta: recipes.map(({ photoDataUrl, ...rest }) => rest),
       notices,
       schedules,
       patchNotes,
@@ -4708,6 +4723,36 @@ ${validText}
         })()
       },
       {
+        name: "냉장고 13칸 자동 매핑 및 통합 채소칸 호환",
+        pass:
+          FRIDGE_SHELF_ZONES.length === 13 &&
+          resolveItemShelfZone({ location: "냉장실", category: "채소/과일" }) === "채소칸" &&
+          resolveItemShelfZone({ location: "냉장실", shelfZone: "채소칸 좌" }) === "채소칸" &&
+          resolveItemShelfZone({ location: "별도 냉동고", category: "육류/수산" }) === "전용냉동 1칸"
+      },
+      {
+        name: "리스트 뷰 냉동실 통합 필터 (메인·별도·기존 냉동실)",
+        pass:
+          matchesFridgeLocFilter("메인 냉동실", "냉동실") &&
+          matchesFridgeLocFilter("별도 냉동고", "냉동실") &&
+          matchesFridgeLocFilter("냉동실", "냉동실") &&
+          !matchesFridgeLocFilter("냉장실", "냉동실")
+      },
+      {
+        name: "인별·목표별 AI 내보내기 요청문 맞춤 분기",
+        pass: (() => {
+          const p = buildPersonalizedAiPrompt({
+            exportScope: "all",
+            exportMealMember: "아리나",
+            exportMealGoal: "산후조리/영양보충",
+            exportMealDays: 7,
+            simokM: 15,
+            siyulM: 0
+          }).join("\n");
+          return p.includes("최아리나(성인 여성)") && p.includes("산후조리/영양보충");
+        })()
+      },
+      {
         name: "유사 품목 오매칭 방지 (소고기 vs 양념소고기·국거리)",
         pass:
           matchFridgeItemExactFirst("소고기", [
@@ -5501,13 +5546,23 @@ ${validText}
       ...prev,
       local: { ...(prev.local || {}), [item.id]: updated }
     }));
-    setQuickFridgeItem(updated);
+    setQuickFridgeItem((prev) => (prev && prev.id === item.id ? updated : prev));
     if (user && db) {
+      beginWrite();
+      let ok = false;
+      let errMsg = "";
       try {
-        await setDoc(getDocRef("family_fridge_v4", item.id), updated, { merge: true });
+        const batch = writeBatch(db);
+        batch.set(getDocRef("family_fridge_v4", item.id), updated, { merge: true });
+        batch.set(getDocRef("family_fridge_v3", item.id), updated, { merge: true });
+        await batch.commit();
+        ok = true;
       } catch (e) {
+        errMsg = e.message;
         showToast("⚠️ 보관 칸 저장 실패: 네트워크를 확인해 주세요.");
         return;
+      } finally {
+        endWrite(ok, errMsg);
       }
     }
     showToast(`📦 '${item.name}' → [${newZone}] 이동 완료`);
@@ -8515,7 +8570,8 @@ ${validText}
             const filteredFridge = fridge.filter(
               (i) =>
                 matchesFridgeLocFilter(i.location, fridgeLocFilter) &&
-                (fridgeCatFilter === "전체" || i.category === fridgeCatFilter)
+                (fridgeCatFilter === "전체" || i.category === fridgeCatFilter) &&
+                (!visualExpiringOnly || getDaysDiff(i.expiryDate) <= 3)
             );
             const itemsByZone = {};
             FRIDGE_SHELF_ZONES.forEach((z) => {
@@ -8602,6 +8658,7 @@ ${validText}
                                 const el = document.elementFromPoint(t.clientX, t.clientY);
                                 const zoneEl = el?.closest?.("[data-shelf-zone]");
                                 const hoveredZone = zoneEl?.getAttribute?.("data-shelf-zone") || "";
+                                dragOverZoneRef.current = hoveredZone;
                                 setDragOverZone(hoveredZone);
                               }
                             }}
@@ -8609,7 +8666,8 @@ ${validText}
                               const st = chipTouchRef.current;
                               chipTouchRef.current = null;
                               if (st?.dragging) {
-                                const targetZ = dragOverZone;
+                                const targetZ = dragOverZoneRef.current || dragOverZone;
+                                dragOverZoneRef.current = "";
                                 setDraggingChip(null);
                                 setDragOverZone("");
                                 if (targetZ && resolveItemShelfZone(st.item) !== targetZ) {
@@ -8629,7 +8687,7 @@ ${validText}
                             <span>{getFridgeCategoryIcon(it.category)}</span>
                             <span className="max-w-[84px] truncate">{it.name}</span>
                             <span className="text-stone-500 font-bold">
-                              {it.quantity}{it.unit}
+                              {Number(it.quantity) || 0}{it.unit}
                             </span>
                             {isUrgent && (
                               <span className="text-[9px] font-black text-rose-600">
@@ -8647,8 +8705,18 @@ ${validText}
 
             return (
               <div className="space-y-3">
-                <div className="text-[11px] font-bold text-stone-500 bg-stone-100 px-3 py-1.5 rounded-xl flex items-center justify-between">
-                  <span>👆 탭: 수량·소진 / ✋ 끌기(드래그): 다른 칸으로 바로 이동</span>
+                <div className="text-[11px] font-bold text-stone-500 bg-stone-100 px-2.5 py-1.5 rounded-xl flex items-center justify-between gap-2">
+                  <span className="truncate">👆 탭: 수량·소진 / ✋ 끌기: 칸 이동</span>
+                  <button
+                    onClick={() => setVisualExpiringOnly((v) => !v)}
+                    className={`px-2 py-0.5 rounded-lg text-[10px] font-extrabold border shrink-0 whitespace-nowrap ${
+                      visualExpiringOnly
+                        ? "bg-rose-600 text-white border-rose-600"
+                        : "bg-white text-stone-600 border-stone-200"
+                    }`}
+                  >
+                    {visualExpiringOnly ? "⚠️ 임박만 ON" : "⚠️ 임박만"}
+                  </button>
                 </div>
 
                 {/* 1. 4도어 상냉장 · 하냉동 */}
@@ -13308,7 +13376,7 @@ ${validText}
                   -
                 </button>
                 <span className="text-sm font-black px-2">
-                  {quickFridgeItem.quantity}{quickFridgeItem.unit}
+                  {Number(quickFridgeItem.quantity) || 0}{quickFridgeItem.unit}
                 </span>
                 <button
                   onClick={() => {
@@ -13380,7 +13448,7 @@ ${validText}
         >
           <span>{getFridgeCategoryIcon(draggingChip.item.category)}</span>
           <span>{draggingChip.item.name}</span>
-          <span className="text-amber-300">{draggingChip.item.quantity}{draggingChip.item.unit}</span>
+          <span className="text-amber-300">{Number(draggingChip.item.quantity) || 0}{draggingChip.item.unit}</span>
         </div>
       )}
 
