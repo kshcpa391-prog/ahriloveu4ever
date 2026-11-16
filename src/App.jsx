@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import {
+  Home,
   Utensils,
   Calendar,
   Package,
@@ -984,11 +985,32 @@ const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.65) =>
     img.src = dataUrl;
   });
 
-const APP_CODE_VERSION = "v10.49";
-const APP_BUILD_DATE = "2026-11-16 21:44";
+const APP_CODE_VERSION = "v10.51";
+const APP_BUILD_DATE = "2026-11-16 21:55";
 const EDITOR_INVITE_CODE = "0402";
 
 const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v10.51",
+    version: "v10.51",
+    date: "2026-11-16",
+    title: "하단 6탭 [🏠 홈] 화면 신설 · 탭별 정보 분리 · 홈에서 각 기능 바로가기 연결",
+    changes: [
+      "하단 네비게이션을 6개([🏠 홈 | 🍽️ 식단 | 🗓️ 일정 | 👶 육아 | ❄️ 냉장고 | ☰ 더보기])로 확장하고 [🏠 홈]을 기본 첫 화면으로 설정",
+      "상단 날씨·일정·공지·루틴 요약을 [🏠 홈]에 모아 보여주고 카드 탭 시 해당 탭/섹션으로 바로 이동하도록 연결",
+      "[🍽️ 식단] 탭 등 하위 탭 진입 시 상단 요약 배너를 숨겨 각 탭 본연의 화면이 깔끔하게 보이도록 분리"
+    ]
+  },
+  {
+    id: "patch-v10.50",
+    version: "v10.50",
+    date: "2026-11-16",
+    title: "루틴 수정(✏️) 기능 추가 (제목·시간대·반복주기·담당자 바로 수정)",
+    changes: [
+      "각 루틴 카드 우측에 수정(✏️) 버튼을 추가해 기존 루틴의 제목, 시간대(예: 상시→아침), 반복주기, 담당자를 삭제 없이 바로 수정 가능",
+      "수정 시 기존 완료 기록(lastDoneKey)을 유지하며 상단 입력창이 [💾 수정 저장 / 취소] 모드로 전환"
+    ]
+  },
   {
     id: "patch-v10.49",
     version: "v10.49",
@@ -2406,7 +2428,7 @@ const computeFridgeProjectedUsage = (fridgeList, mealsList, baseDateStr, addDays
 
 function MainApp() {
   const [user, setUser] = useState(null);
-  const [activeTab, setActiveTab] = useState("daily");
+  const [activeTab, setActiveTab] = useState("home");
   const [selectedDate, setSelectedDate] = useState(() => getTodayStr());
   const [selectedMember, setSelectedMember] = useState("전체");
 
@@ -2655,6 +2677,7 @@ function MainApp() {
   const [newRoutineIntervalDays, setNewRoutineIntervalDays] = useState(2);
   const [newRoutineNthWeek, setNewRoutineNthWeek] = useState(1);
   const [routineTimeFilter, setRoutineTimeFilter] = useState("전체");
+  const [editingRoutineId, setEditingRoutineId] = useState(null);
   const [showAllTodayRoutinesOnMain, setShowAllTodayRoutinesOnMain] = useState(false);
   const [isMainRoutineCollapsed, setIsMainRoutineCollapsed] = useState(false);
   const [currentDayKey, setCurrentDayKey] = useState(() => getTodayStr());
@@ -2748,6 +2771,27 @@ function MainApp() {
     syncRoutinesToCloud(nextList);
   };
 
+  const handleStartEditRoutine = (rt) => {
+    if (!requireEditorAccess() || !rt) return;
+    setEditingRoutineId(rt.id);
+    setNewRoutineTitle(rt.title || "");
+    setNewRoutineTimeSlot(rt.timeSlot || "상시");
+    setNewRoutineCycle(rt.cycle || "daily");
+    setNewRoutineIntervalDays(Number(rt.intervalDays) || 2);
+    setNewRoutineMonthDay(Number(rt.monthDay) || 1);
+    setNewRoutineNthWeek(Number(rt.nthWeek) || 1);
+    setNewRoutineWeekDay(
+      rt.weekDay !== undefined && rt.weekDay !== null ? String(rt.weekDay) : "any"
+    );
+    setNewRoutineAssignee(rt.assignee || "공통");
+    document.getElementById("routine-board-section")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
+  const handleCancelEditRoutine = () => {
+    setEditingRoutineId(null);
+    setNewRoutineTitle("");
+  };
+
   const handleAddRoutine = () => {
     if (!requireEditorAccess()) return;
     const title = newRoutineTitle.trim();
@@ -2767,12 +2811,36 @@ function MainApp() {
     if (
       familyRoutines.some(
         (r) =>
+          r.id !== editingRoutineId &&
           String(r.title || "").trim().toLowerCase() === title.toLowerCase() &&
           r.cycle === cycleVal &&
           (r.timeSlot || "상시") === newRoutineTimeSlot
       )
     ) {
       showToast("이미 같은 이름·시간대·주기의 루틴이 등록되어 있습니다.");
+      return;
+    }
+    if (editingRoutineId) {
+      const nextList = familyRoutines.map((r) => {
+        if (r.id !== editingRoutineId) return r;
+        return {
+          id: r.id,
+          title,
+          cycle: cycleVal,
+          timeSlot: newRoutineTimeSlot || "상시",
+          ...(cycleVal === "interval" ? { intervalDays: iDaysVal } : {}),
+          ...(cycleVal === "monthly" ? { monthDay: mDayVal } : {}),
+          ...(cycleVal === "monthly_weekday" ? { nthWeek: nthVal, weekDay: wdVal } : {}),
+          ...(cycleVal === "weekly" && wdVal !== null ? { weekDay: wdVal } : {}),
+          assignee: newRoutineAssignee || "공통",
+          lastDoneKey: r.lastDoneKey || ""
+        };
+      });
+      setFamilyRoutines(nextList);
+      setEditingRoutineId(null);
+      setNewRoutineTitle("");
+      syncRoutinesToCloud(nextList);
+      showToast(`✏️ '${title}' 루틴이 수정되었습니다!`);
       return;
     }
     const nextItem = {
@@ -7944,7 +8012,7 @@ ${validText}
           </div>
         </div>
 
-        {!isHeaderCollapsed && (
+        {activeTab === "home" && !isHeaderCollapsed && (
           <div className="relative h-36 sm:h-40 rounded-2xl overflow-hidden mb-2 border border-stone-200 shadow-sm bg-gradient-to-r from-amber-100 via-stone-100 to-rose-100">
             <img
               src={HERO_FAMILY_FALLBACK}
@@ -7988,6 +8056,7 @@ ${validText}
               )}
             </button>
 
+            {activeTab === "home" && (
             <button
               onClick={handleToggleHeaderCollapse}
               className="px-2 py-1 rounded-lg bg-stone-900 text-white text-[10px] font-extrabold flex items-center gap-0.5"
@@ -8000,6 +8069,7 @@ ${validText}
                 <ChevronUp className="w-3 h-3" />
               )}
             </button>
+            )}
           </div>
         </div>
 
@@ -8272,10 +8342,11 @@ ${validText}
       </header>
 
       {/* ==========================================
-          탭 1: 일별 식단
+          탭 0: 🏠 홈 (대시보드 & 바로가기 허브)
       ========================================== */}
-      {activeTab === "daily" && (
-        <div className="p-4 space-y-3.5">
+      {activeTab === "home" && (
+        <div className="p-4 space-y-3">
+          {/* 1. 지금 시간대 루틴 카드 */}
           {(() => {
             const curSlot = getCurrentRoutineTimeSlot();
             const activeRoutines = familyRoutines.filter((r) => !isRoutineDoneNow(r));
@@ -8284,15 +8355,12 @@ ${validText}
               return s === curSlot || s === "상시";
             });
             const visibleList = showAllTodayRoutinesOnMain ? activeRoutines : slotMatched;
-            if (activeRoutines.length === 0) return null;
             return (
               <div className="bg-indigo-50/70 border border-indigo-200 rounded-2xl p-3 space-y-2">
                 <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-1.5 min-w-0">
-                    <span className="text-xs font-black text-indigo-950 truncate">
-                      🔄 {showAllTodayRoutinesOnMain ? "오늘 남은 루틴 전체" : `지금(${curSlot}) 루틴`} ({visibleList.length}건)
-                    </span>
-                  </div>
+                  <span className="text-xs font-black text-indigo-950 truncate">
+                    🔄 {showAllTodayRoutinesOnMain ? "오늘 남은 루틴 전체" : `지금(${curSlot}) 루틴`} ({visibleList.length}건)
+                  </span>
                   <div className="flex items-center gap-1 shrink-0">
                     <button
                       type="button"
@@ -8301,25 +8369,34 @@ ${validText}
                     >
                       {isMainRoutineCollapsed ? "펼치기 ▾" : "접기 ▴"}
                     </button>
-                    {!isMainRoutineCollapsed && (
-                    <button
-                      type="button"
-                      onClick={() => setShowAllTodayRoutinesOnMain((v) => !v)}
-                      className="px-2 py-0.5 rounded-lg bg-white border border-indigo-200 text-[10px] font-extrabold text-indigo-700 whitespace-nowrap"
-                    >
-                      {showAllTodayRoutinesOnMain ? `${curSlot}만 보기` : `오늘 전체 (${activeRoutines.length})`}
-                    </button>
+                    {!isMainRoutineCollapsed && activeRoutines.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setShowAllTodayRoutinesOnMain((v) => !v)}
+                        className="px-2 py-0.5 rounded-lg bg-white border border-indigo-200 text-[10px] font-extrabold text-indigo-700 whitespace-nowrap"
+                      >
+                        {showAllTodayRoutinesOnMain ? `${curSlot}만` : `전체(${activeRoutines.length})`}
+                      </button>
                     )}
                     <button
                       type="button"
-                      onClick={() => setActiveTab("schedule")}
+                      onClick={() => {
+                        setActiveTab("schedule");
+                        setTimeout(() => {
+                          document.getElementById("routine-board-section")?.scrollIntoView({ behavior: "smooth", block: "start" });
+                        }, 120);
+                      }}
                       className="px-2 py-0.5 rounded-lg bg-indigo-600 text-white text-[10px] font-extrabold whitespace-nowrap"
                     >
                       관리
                     </button>
                   </div>
                 </div>
-                {!isMainRoutineCollapsed && (visibleList.length === 0 ? (
+                {!isMainRoutineCollapsed && (activeRoutines.length === 0 ? (
+                  <div className="text-[11px] font-bold text-emerald-800 bg-white/90 rounded-xl px-3 py-2">
+                    🎉 오늘 예정된 모든 루틴을 완료했습니다!
+                  </div>
+                ) : visibleList.length === 0 ? (
                   <div className="text-[11px] font-bold text-indigo-700 bg-white/80 rounded-xl px-3 py-2">
                     ✅ {curSlot} 시간대 루틴을 모두 완료했습니다!
                   </div>
@@ -8361,6 +8438,153 @@ ${validText}
               </div>
             );
           })()}
+
+          {/* 2. 오늘의 식단 바로가기 카드 */}
+          {(() => {
+            const todayKey = getTodayStr();
+            const todayMealsList = meals.filter((m) => m.date === todayKey);
+            return (
+              <div
+                onClick={() => {
+                  setSelectedDate(todayKey);
+                  setActiveTab("daily");
+                }}
+                className="bg-white border border-stone-200 rounded-2xl p-3.5 shadow-sm cursor-pointer hover:border-amber-300 transition space-y-2"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-black text-stone-900">🍽️ 오늘의 식단 ({todayKey.slice(5)})</span>
+                  <span className="text-[11px] font-extrabold text-amber-700">식단표 열기 &gt;</span>
+                </div>
+                {todayMealsList.length === 0 ? (
+                  <div className="text-[11px] text-stone-400 font-semibold">
+                    아직 오늘 기록된 식단이 없습니다. 탭해서 바로 기록해 보세요!
+                  </div>
+                ) : (
+                  <div className="flex flex-wrap gap-1.5">
+                    {todayMealsList.slice(0, 4).map((m) => (
+                      <span key={m.id} className="px-2 py-1 rounded-lg bg-amber-50 border border-amber-200 text-[11px] font-bold text-amber-950">
+                        {m.slot}: {m.menu}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+
+          {/* 3. 냉장고 임박 & 장보기 2분할 바로가기 */}
+          <div className="grid grid-cols-2 gap-2.5">
+            <button
+              type="button"
+              onClick={() => setActiveTab("fridge")}
+              className="bg-white border border-stone-200 hover:border-orange-300 rounded-2xl p-3 text-left shadow-sm space-y-1 transition"
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-black text-stone-900">❄️ 냉장고</span>
+                <span className="text-[10px] font-extrabold text-orange-600">열기 &gt;</span>
+              </div>
+              <div className="text-[11px] font-bold text-stone-600">
+                보유 {fridge.length}개 ·{" "}
+                <span className={expiringItems.length > 0 ? "text-rose-600 font-black" : "text-emerald-700"}>
+                  임박 {expiringItems.length}건
+                </span>
+              </div>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab("shopping")}
+              className="bg-white border border-stone-200 hover:border-emerald-300 rounded-2xl p-3 text-left shadow-sm space-y-1 transition"
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-black text-stone-900">🛒 장보기</span>
+                <span className="text-[10px] font-extrabold text-emerald-700">열기 &gt;</span>
+              </div>
+              <div className="text-[11px] font-bold text-stone-600">
+                남은 품목{" "}
+                <span className="text-emerald-700 font-black">
+                  {shoppingList.filter((s) => !s.checked).length}건
+                </span>
+              </div>
+            </button>
+          </div>
+
+          {/* 4. To-Do 할일 & 이번 달 식비 2분할 바로가기 */}
+          <div className="grid grid-cols-2 gap-2.5">
+            <button
+              type="button"
+              onClick={() => {
+                setActiveTab("schedule");
+                setTimeout(() => {
+                  document.getElementById("schedule-todo-section")?.scrollIntoView({ behavior: "smooth", block: "start" });
+                }, 120);
+              }}
+              className="bg-white border border-stone-200 hover:border-rose-300 rounded-2xl p-3 text-left shadow-sm space-y-1 transition"
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-black text-stone-900">✅ 할 일(To-Do)</span>
+                <span className="text-[10px] font-extrabold text-rose-600">이동 &gt;</span>
+              </div>
+              <div className="text-[11px] font-bold text-stone-600">
+                남은 할 일{" "}
+                <span className={globalTodoBadgeStats.urgentCount > 0 ? "text-rose-600 font-black" : "text-amber-700 font-black"}>
+                  {globalTodoBadgeStats.activeCount}건
+                </span>
+              </div>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setActiveTab("monthly");
+                setMonthlySubTab("expense");
+              }}
+              className="bg-white border border-stone-200 hover:border-amber-300 rounded-2xl p-3 text-left shadow-sm space-y-1 transition"
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-black text-stone-900">💰 {currentMonth.slice(5)}월 식비</span>
+                <span className="text-[10px] font-extrabold text-amber-700">가계부 &gt;</span>
+              </div>
+              <div className="text-[11px] font-black text-stone-900">
+                {monthlyExpenseSummary.total.toLocaleString()}원
+              </div>
+            </button>
+          </div>
+
+          {/* 5. 육아수첩 & 가족 레시피북 바로가기 */}
+          <div className="grid grid-cols-2 gap-2.5">
+            <button
+              type="button"
+              onClick={() => setActiveTab("baby")}
+              className="bg-white border border-stone-200 hover:border-sky-300 rounded-2xl p-3 text-left shadow-sm space-y-1 transition"
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-black text-stone-900">👶 육아수첩</span>
+                <span className="text-[10px] font-extrabold text-sky-700">열기 &gt;</span>
+              </div>
+              <div className="text-[11px] font-bold text-stone-500">시목 · 시율 발달/접종</div>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab("recipes")}
+              className="bg-white border border-stone-200 hover:border-rose-300 rounded-2xl p-3 text-left shadow-sm space-y-1 transition"
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-black text-stone-900">📖 레시피북</span>
+                <span className="text-[10px] font-extrabold text-rose-700">열기 &gt;</span>
+              </div>
+              <div className="text-[11px] font-bold text-stone-500">저장된 요리 {recipes.length}건</div>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ==========================================
+          탭 1: 일별 식단
+      ========================================== */}
+      {activeTab === "daily" && (
+        <div className="p-4 space-y-3.5">
           <button
             onClick={() => {
               setScanTargetMonth(selectedDate.slice(0, 7));
@@ -9567,7 +9791,7 @@ ${validText}
           </div>
 
           {/* 🔄 자정/주간 자동 리셋 데일리·위클리 육아/집안일 루틴 */}
-          <div className="bg-white p-4 rounded-2xl border border-indigo-200 shadow-sm space-y-3">
+          <div id="routine-board-section" className="bg-white p-4 rounded-2xl border border-indigo-200 shadow-sm space-y-3">
             <div className="flex items-center justify-between gap-2">
               <div>
                 <h3 className="text-xs font-black text-stone-900 flex items-center gap-1.5">
@@ -9677,8 +9901,17 @@ ${validText}
                 onClick={handleAddRoutine}
                 className="px-3 py-1.5 rounded-xl bg-indigo-600 text-white text-xs font-extrabold shrink-0"
               >
-                + 추가
+                {editingRoutineId ? "💾 수정 저장" : "+ 추가"}
               </button>
+              {editingRoutineId && (
+                <button
+                  type="button"
+                  onClick={handleCancelEditRoutine}
+                  className="px-2.5 py-1.5 rounded-xl bg-stone-200 text-stone-700 text-xs font-extrabold shrink-0"
+                >
+                  취소
+                </button>
+              )}
             </div>
 
             <div className="flex gap-1 overflow-x-auto pb-0.5">
@@ -9812,14 +10045,24 @@ ${validText}
                             </div>
                           </div>
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteRoutine(rt.id)}
-                          className="p-1 text-stone-400 hover:text-rose-600 shrink-0"
-                          title="루틴 삭제"
-                        >
-                          <X className="w-3.5 h-3.5" />
-                        </button>
+                        <div className="flex items-center gap-0.5 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => handleStartEditRoutine(rt)}
+                            className="p-1 text-stone-400 hover:text-indigo-600"
+                            title="루틴 수정"
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteRoutine(rt.id)}
+                            className="p-1 text-stone-400 hover:text-rose-600"
+                            title="루틴 삭제"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </div>
                     );
                   })}
@@ -12812,9 +13055,10 @@ ${validText}
         </div>
       )}
 
-      {/* 하단 네비게이션 (5개 핵심 메뉴) */}
-      <nav style={{ paddingBottom: "calc(0.375rem + env(safe-area-inset-bottom))" }} className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md bg-white/95 backdrop-blur border-t border-stone-200 px-2 pt-1.5 grid grid-cols-5 gap-1 z-30">
+      {/* 하단 네비게이션 (6개 핵심 메뉴) */}
+      <nav style={{ paddingBottom: "calc(0.375rem + env(safe-area-inset-bottom))" }} className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md bg-white/95 backdrop-blur border-t border-stone-200 px-1.5 pt-1.5 grid grid-cols-6 gap-0.5 z-30">
         {[
+          { id: "home", label: "홈", icon: Home },
           { id: "daily", label: "식단", icon: Utensils },
           { id: "schedule", label: "일정", icon: CalendarDays },
           { id: "baby", label: "육아", icon: Baby },
