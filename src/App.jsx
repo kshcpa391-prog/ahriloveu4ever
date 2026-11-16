@@ -2,11 +2,9 @@ import React, { useState, useEffect, useMemo, useRef } from "react";
 import {
   Home,
   Utensils,
-  Calendar,
   Package,
   Sparkles,
   ShoppingCart,
-  Bell,
   Plus,
   Trash2,
   Edit2,
@@ -14,8 +12,6 @@ import {
   X,
   ChevronLeft,
   ChevronRight,
-  ChevronUp,
-  ChevronDown,
   Camera,
   Receipt,
   Settings,
@@ -29,11 +25,8 @@ import {
   Database,
   Upload,
   Zap,
-  Heart,
-  Cake,
   CalendarDays,
   Star,
-  Clock,
   FileJson,
   RotateCcw,
   Mail,
@@ -42,9 +35,7 @@ import {
   ListTodo,
   CalendarRange,
   Baby,
-  LayoutGrid,
-  Activity,
-  Stethoscope
+  LayoutGrid
 } from "lucide-react";
 import { initializeApp, getApps, getApp } from "firebase/app";
 import {
@@ -985,11 +976,58 @@ const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.65) =>
     img.src = dataUrl;
   });
 
-const APP_CODE_VERSION = "v10.54";
-const APP_BUILD_DATE = "2026-11-16 22:14";
+const APP_CODE_VERSION = "v10.58";
+const APP_BUILD_DATE = "2026-11-16 22:56";
 const EDITOR_INVITE_CODE = "0402";
 
 const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v10.58",
+    version: "v10.58",
+    date: "2026-11-16",
+    title: "할일·루틴 낙관적 업데이트 롤백 보완 · 루틴 토글 토스트 · 냉장고 0개(소진) 구분 표시",
+    changes: [
+      "할 일(To-Do) 빠른 추가·완료 토글 시 Firestore 저장 실패하면 로컬 상태를 원복하고 오류 안내 표시",
+      "홈·일정 탭에서 루틴 1탭 완료/취소 시 즉시 토스트 알림 제공",
+      "시각적 냉장고 칩에서 수량 0개(소진) 품목을 흐린 취소선 스타일로 구분 표시"
+    ]
+  },
+  {
+    id: "patch-v10.57",
+    version: "v10.57",
+    date: "2026-11-16",
+    title: "미사용 아이콘 임포트 정리 · 홈 할 일 1탭 완료 토스트 피드백 강화",
+    changes: [
+      "미사용 lucide-react 아이콘 임포트 9종 제거로 ESLint/Vite 빌드 경고·오류 요인 제거",
+      "홈 및 일정 탭에서 할 일(To-Do) 체크 시 즉시 완료/되돌림 토스트 피드백 제공"
+    ]
+  },
+  {
+    id: "patch-v10.56",
+    version: "v10.56",
+    date: "2026-11-16",
+    title: "홈 상단 1줄 상태바 압축 · 중복 메뉴(할 일·일정→월간 식단) 제거 · 일정 서브탭 FAB 고도화",
+    changes: [
+      "홈 맨 위 상태바에서 중복된 월간 지출 배지를 제거하고 [연결됨 · 패치노트 · 편집가능 · 설정]을 한 줄로 압축",
+      "홈 2열 바로가기 그리드의 중복 [할 일·일정] 카드를 [📅 월간 식단]으로 교체해 한 화면 내 중복 메뉴 제거",
+      "일정 탭 서브탭(달력·할 일·반복 루틴)에 맞춰 우측 하단 (+) 플로팅 버튼이 일정 추가 또는 루틴 입력창 포커스로 지능형 분기",
+      "미사용 상태 변수 정리로 빌드 안정성 및 정적 검증 완료"
+    ]
+  },
+  {
+    id: "patch-v10.55",
+    version: "v10.55",
+    date: "2026-11-16",
+    title: "P0 데이터 무결성 보완 · 일정 3분할 서브탭 · 홈 한눈에 보드(일정/할일/루틴 동시 표시)",
+    changes: [
+      "냉장고 재고 수량 0 입력 허용 및 수정 충돌 시 서버 최신값·내 수정값 비교 선택 모달 유지",
+      "반복 루틴 동기화를 Firestore 트랜잭션 기반 개별 항목 병합으로 개선해 동시 수정 덮어쓰기 방지",
+      "새 식단 추가 시 전체 보기 기본 식사 대상을 어른 2명(수혁·아리나)으로 변경",
+      "주간 요약 [이번주] 버튼을 [오늘로]로 개선해 오늘 날짜 카드로 자동 스크롤 이동",
+      "일정 탭을 [📅 달력·일정 | ✅ 할 일 | 🔄 반복 루틴] 3개 서브탭(미완료·임박 건수 배지 포함)으로 분리",
+      "홈 상단 제목을 [우리 가족 홈 ♡]으로 변경하고 1줄 날씨·3일 내 일정·남은 할 일(1탭 체크)·지금 루틴을 동시에 표시"
+    ]
+  },
   {
     id: "patch-v10.54",
     version: "v10.54",
@@ -2467,10 +2505,7 @@ function MainApp() {
   const [selectedDate, setSelectedDate] = useState(() => getTodayStr());
   const [selectedMember, setSelectedMember] = useState("전체");
 
-  // 상단 바 펼치기/접기 및 틀고정(Sticky) 해제 상태
-  const [isHeaderCollapsed, setIsHeaderCollapsed] = useState(() => {
-    return localStorage.getItem("kim_header_collapsed_v2") === "true";
-  });
+  // 상단 바 틀고정(Sticky) 해제 상태
   const [isHeaderPinned, setIsHeaderPinned] = useState(() => {
     return localStorage.getItem("kim_header_pinned") === "true";
   });
@@ -2485,7 +2520,6 @@ function MainApp() {
   // 패치노트 기록 및 모달 상태
   const [patchNotes, setPatchNotes] = useState(INITIAL_PATCH_NOTES);
   const [isPatchModalOpen, setIsPatchModalOpen] = useState(false);
-  const [isTopAlertsExpanded, setIsTopAlertsExpanded] = useState(false);
   const [isQuickMenuExpanded, setIsQuickMenuExpanded] = useState(false);
   const [isMoreNavOpen, setIsMoreNavOpen] = useState(false);
   const [isOnline, setIsOnline] = useState(() =>
@@ -2809,17 +2843,22 @@ function MainApp() {
     if (!requireEditorAccess()) return;
     const todayKey = getTodayStr();
     if (todayKey !== currentDayKey) setCurrentDayKey(todayKey);
+    let wasDone = false;
+    let targetTitle = "";
     const nextList = familyRoutines.map((r) => {
       if (r.id !== rtId) return r;
+      targetTitle = r.title || "루틴";
       if (r.cycle === "interval") {
         const info = getIntervalRoutineInfo(r, todayKey);
-        return { ...r, lastDoneKey: info?.done ? "" : todayKey };
+        wasDone = Boolean(info?.done);
+        return { ...r, lastDoneKey: wasDone ? "" : todayKey };
       }
       const targetKey = getRoutineResetKey(r, todayKey);
-      const already = r.lastDoneKey === targetKey;
-      return { ...r, lastDoneKey: already ? "" : targetKey };
+      wasDone = r.lastDoneKey === targetKey;
+      return { ...r, lastDoneKey: wasDone ? "" : targetKey };
     });
     setFamilyRoutines(nextList);
+    showToast(wasDone ? `↩️ '${targetTitle}' 완료를 취소했습니다.` : `✅ '${targetTitle}' 루틴 완료!`);
     const updatedItem = nextList.find((r) => r.id === rtId);
     syncRoutinesToCloud(nextList, updatedItem ? { type: "upsert", item: updatedItem } : null);
   };
@@ -4143,13 +4182,7 @@ function MainApp() {
     backupEmail
   ]);
 
-  // 상단 바 접기/펼치기 및 틀고정 토글 핸들러
-  const handleToggleHeaderCollapse = () => {
-    const next = !isHeaderCollapsed;
-    setIsHeaderCollapsed(next);
-    localStorage.setItem("kim_header_collapsed_v2", String(next));
-  };
-
+  // 상단 바 틀고정 토글 핸들러
   const handleToggleHeaderPin = () => {
     const next = !isHeaderPinned;
     setIsHeaderPinned(next);
@@ -4773,7 +4806,12 @@ function MainApp() {
     if (user && db) {
       try {
         await setDoc(getDocRef("family_schedules_v4", id), payload);
-      } catch (e) {}
+      } catch (e) {
+        setSchedules((prev) => prev.filter((s) => s.id !== id));
+        setSyncErrorMsg(e?.message || "할 일 등록 동기화 오류");
+        showToast("⚠️ 할 일 저장 실패: 네트워크 상태를 확인해 주세요.");
+        return;
+      }
     }
     showToast("To-Do 체크리스트에 새 할 일이 추가되었습니다!");
   };
@@ -4782,11 +4820,14 @@ function MainApp() {
     if (!requireEditorAccess()) return;
     const updated = { ...item, done: !item.done };
     setSchedules((prev) => prev.map((s) => (s.id === item.id ? updated : s)));
+    showToast(updated.done ? `✅ '${item.title}' 완료!` : `↩️ '${item.title}' 진행중으로 변경`);
     if (user && db) {
       try {
         await setDoc(getDocRef("family_schedules_v4", item.id), updated);
       } catch (e) {
+        setSchedules((prev) => prev.map((s) => (s.id === item.id ? item : s)));
         setSyncErrorMsg(e?.message || "일정 완료 상태 동기화 오류");
+        showToast("⚠️ 상태 변경 저장 실패: 이전 상태로 되돌렸습니다.");
       }
     }
   };
@@ -8009,57 +8050,41 @@ ${validText}
           </div>
         )}
 
-        <div className="space-y-1.5 mb-2">
-          <div className="flex items-center justify-between gap-1.5">
-            <div className="flex items-center gap-1.5 flex-wrap">
-              <span
-                className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold border whitespace-nowrap ${
-                  syncStatus === "offline" || syncStatus === "error"
-                    ? "bg-rose-50 text-rose-700 border-rose-200"
-                    : syncStatus === "saving" || syncStatus === "connecting"
-                    ? "bg-amber-50 text-amber-800 border-amber-200"
-                    : "bg-emerald-50 text-emerald-700 border-emerald-200"
-                }`}
-              >
-                <Zap className="w-3 h-3 shrink-0" />
-                <span>
-                  {syncStatus === "offline"
-                    ? "오프라인"
-                    : syncStatus === "error"
-                    ? "저장 오류"
-                    : syncStatus === "saving"
-                    ? "저장 중"
-                    : syncStatus === "connecting"
-                    ? "연결 중"
-                    : "연결됨"}
-                </span>
-              </span>
-              <button
-                onClick={() => setIsPatchModalOpen(true)}
-                className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-stone-100 hover:bg-stone-200 text-stone-700 border border-stone-200 inline-flex items-center gap-1 whitespace-nowrap"
-                title="패치노트 기록 및 히스토리"
-              >
-                <ClipboardList className="w-3 h-3 text-stone-600 shrink-0" />
-                <span>패치노트 {APP_CODE_VERSION}</span>
-              </button>
-            </div>
-            <button
-              onClick={() => {
-                setTempKeyInput(geminiApiKey);
-                setTempOpenaiKeyInput(openaiApiKey);
-                setIsSettingsOpen(true);
-              }}
-              className="p-1.5 rounded-full bg-stone-100 hover:bg-stone-200 text-stone-600 shrink-0"
-              title="백업 및 설정"
+        <div className="mb-2 flex items-center justify-between gap-1">
+          <div className="flex items-center gap-1 min-w-0 overflow-x-auto">
+            <span
+              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold border whitespace-nowrap shrink-0 ${
+                syncStatus === "offline" || syncStatus === "error"
+                  ? "bg-rose-50 text-rose-700 border-rose-200"
+                  : syncStatus === "saving" || syncStatus === "connecting"
+                  ? "bg-amber-50 text-amber-800 border-amber-200"
+                  : "bg-emerald-50 text-emerald-700 border-emerald-200"
+              }`}
             >
-              <Settings className="w-3.5 h-3.5" />
+              <Zap className="w-3 h-3 shrink-0" />
+              <span>
+                {syncStatus === "offline"
+                  ? "오프라인"
+                  : syncStatus === "error"
+                  ? "저장 오류"
+                  : syncStatus === "saving"
+                  ? "저장 중"
+                  : syncStatus === "connecting"
+                  ? "연결 중"
+                  : "연결됨"}
+              </span>
+            </span>
+            <button
+              onClick={() => setIsPatchModalOpen(true)}
+              className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-stone-100 hover:bg-stone-200 text-stone-700 border border-stone-200 inline-flex items-center gap-1 whitespace-nowrap shrink-0"
+              title="패치노트 기록 및 히스토리"
+            >
+              <ClipboardList className="w-3 h-3 text-stone-600 shrink-0" />
+              <span>패치노트 {APP_CODE_VERSION}</span>
             </button>
-          </div>
-
-          <div className="flex items-center gap-1.5 flex-wrap">
             <button
               onClick={() => setIsEditorUnlockModalOpen(true)}
-              className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold border inline-flex items-center gap-1 whitespace-nowrap ${
+              className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold border inline-flex items-center gap-1 whitespace-nowrap shrink-0 ${
                 isEditorUnlocked
                   ? "bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border-emerald-200"
                   : "bg-amber-50 hover:bg-amber-100 text-amber-800 border-amber-200"
@@ -8068,16 +8093,18 @@ ${validText}
             >
               <span>{isEditorUnlocked ? "✏️ 편집가능" : "🔒 열람전용"}</span>
             </button>
-            <button
-              onClick={() => {
-                setActiveTab("monthly");
-                setMonthlySubTab("expense");
-              }}
-              className="px-2.5 py-0.5 rounded-full bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-900 text-[11px] font-extrabold inline-flex items-center gap-1 whitespace-nowrap"
-            >
-              <span>💰 {currentMonth.slice(5)}월 {monthlyExpenseSummary.total.toLocaleString()}원</span>
-            </button>
           </div>
+          <button
+            onClick={() => {
+              setTempKeyInput(geminiApiKey);
+              setTempOpenaiKeyInput(openaiApiKey);
+              setIsSettingsOpen(true);
+            }}
+            className="p-1.5 rounded-full bg-stone-100 hover:bg-stone-200 text-stone-600 shrink-0"
+            title="백업 및 설정"
+          >
+            <Settings className="w-3.5 h-3.5" />
+          </button>
         </div>
 
         {activeTab === "home" && (
@@ -9781,6 +9808,7 @@ ${validText}
 
             <div className="flex flex-wrap gap-1.5">
               <input
+                id="routine-title-input"
                 type="text"
                 value={newRoutineTitle}
                 onChange={(e) => setNewRoutineTitle(e.target.value)}
@@ -10645,15 +10673,17 @@ ${validText}
                             className={`px-2 py-1 rounded-lg border text-[10px] font-extrabold flex items-center gap-1 transition active:scale-95 select-none ${
                               bulkMoveMode && selectedBulkFridgeIds.includes(it.id)
                                 ? "bg-indigo-600 border-indigo-700 text-white ring-2 ring-indigo-300"
+                                : Number(it.quantity) === 0
+                                ? "bg-stone-100/80 border-stone-200/80 text-stone-400"
                                 : isUrgent
                                 ? "bg-rose-50 border-rose-300 text-rose-900"
                                 : "bg-stone-50 hover:bg-amber-50 border-stone-200 text-stone-800"
                             }`}
                           >
                             <span>{getFridgeCategoryIcon(it.category)}</span>
-                            <span className="max-w-[84px] truncate">{it.name}</span>
-                            <span className="text-stone-500 font-bold">
-                              {Number(it.quantity) || 0}{it.unit}
+                            <span className={`max-w-[84px] truncate ${Number(it.quantity) === 0 ? "line-through" : ""}`}>{it.name}</span>
+                            <span className={`font-bold ${Number(it.quantity) === 0 ? "text-stone-400" : "text-stone-500"}`}>
+                              {Number(it.quantity) === 0 ? "소진" : `${Number(it.quantity) || 0}${it.unit}`}
                             </span>
                             {isUrgent && (
                               <span className="text-[9px] font-black text-rose-600">
@@ -12936,8 +12966,9 @@ ${validText}
             openAddFridgeModal();
           } else if (activeTab === "schedule") {
             if (scheduleSubTab === "routine") {
-              window.scrollTo({ top: 0, behavior: "smooth" });
-              showToast("상단 입력창에서 반복 루틴을 바로 추가해 보세요!");
+              document.getElementById("routine-board-section")?.scrollIntoView({ behavior: "smooth", block: "start" });
+              setTimeout(() => document.getElementById("routine-title-input")?.focus(), 180);
+              showToast("입력창에서 반복 루틴을 바로 추가해 보세요!");
               return;
             }
             setEditingSchedule(null);
