@@ -868,11 +868,21 @@ const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.65) =>
     img.src = dataUrl;
   });
 
-const APP_CODE_VERSION = "v10.15";
-const APP_BUILD_DATE = "2026-11-16 15:08";
+const APP_CODE_VERSION = "v10.16";
+const APP_BUILD_DATE = "2026-11-16 15:12";
 const EDITOR_INVITE_CODE = "0402";
 
 const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v10.16",
+    version: "v10.16",
+    date: "2026-11-16",
+    title: "재고 수량 문자열('01') 및 v3/v4 불일치 차감 오류 수정",
+    changes: [
+      "냉장고 수량 표시 및 불러오기 시 문자열('01' 등)을 숫자(Number)로 정규화하여 표기 오류 방지",
+      "수량 +/- 조절 시 v4·v3 컬렉션 불일치를 방지하고 v3에만 있던 항목도 안전하게 동기화 차감"
+    ]
+  },
   {
     id: "patch-v10.15",
     version: "v10.15",
@@ -2840,10 +2850,10 @@ function MainApp() {
             const raw = d.data();
             if (Array.isArray(raw.fridge)) {
               raw.fridge.forEach((f) => {
-                if (f && f.id) loaded[f.id] = f;
+                if (f && f.id) loaded[f.id] = { ...f, quantity: Number(f.quantity) || 0 };
               });
             } else if (raw.name && (raw.location || raw.category || raw.expiryDate !== undefined)) {
-              loaded[d.id] = { ...raw, id: d.id };
+              loaded[d.id] = { ...raw, id: d.id, quantity: Number(raw.quantity) || 0 };
             }
           });
           setFridgeMap((prev) => ({ ...prev, [`src_${idx}`]: loaded }));
@@ -5428,21 +5438,31 @@ ${validText}
     let ok = false;
     let errMsg = "";
     try {
-      const ref = getDocRef("family_fridge_v4", item.id);
+      const refV4 = getDocRef("family_fridge_v4", item.id);
+      const refV3 = getDocRef("family_fridge_v3", item.id);
       let finalServerQty = optimisticNext;
       let finalUpdatedAt = new Date().toISOString();
       await runTransaction(db, async (tx) => {
-        const snap = await tx.get(ref);
-        if (!snap.exists()) {
+        const snapV4 = await tx.get(refV4);
+        const snapV3 = await tx.get(refV3);
+        if (!snapV4.exists() && !snapV3.exists()) {
           throw new Error("이미 삭제되었거나 존재하지 않는 재고입니다.");
         }
-        const serverQty = Number(snap.data().quantity || 0);
-        const next = serverQty + delta;
+        const rawQty = snapV4.exists() ? snapV4.data().quantity : snapV3.data().quantity;
+        const serverQty = Number(rawQty || 0);
+        const next = Math.round((serverQty + delta) * 100) / 100;
         if (!Number.isFinite(next) || next < 0) {
-          throw new Error("재고가 부족하여 차감할 수 없습니다.");
+          throw new Error("재고가 0이라 더 차감할 수 없습니다. [다 먹음]을 눌러주세요.");
         }
         finalServerQty = next;
-        tx.update(ref, { quantity: next, updatedAt: finalUpdatedAt });
+        if (snapV4.exists()) {
+          tx.update(refV4, { quantity: next, updatedAt: finalUpdatedAt });
+        } else {
+          tx.set(refV4, { ...item, quantity: next, updatedAt: finalUpdatedAt });
+        }
+        if (snapV3.exists()) {
+          tx.update(refV3, { quantity: next, updatedAt: finalUpdatedAt });
+        }
       });
       setFridgeMap((prev) => ({
         ...prev,
@@ -8740,7 +8760,7 @@ ${validText}
                             -
                           </button>
                           <span className="text-xs font-black px-1 whitespace-nowrap">
-                            {item.quantity}
+                            {Number(item.quantity) || 0}
                             {item.unit}
                           </span>
                           <button
