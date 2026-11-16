@@ -146,10 +146,27 @@ const getCurrentRoutineTimeSlot = () => {
   return "자기전"; // 20:30 ~ 04:59
 };
 
-const getAutoHomeTimeMode = () => {
+const DEFAULT_HOME_TIME_RANGES = {
+  morningStart: 5,
+  afternoonStart: 11,
+  nightStart: 20
+};
+
+const isHourInRange = (h, start, end) => {
+  const s = ((Number(start) || 0) % 24 + 24) % 24;
+  const e = ((Number(end) || 0) % 24 + 24) % 24;
+  if (s === e) return false;
+  if (s < e) return h >= s && h < e;
+  return h >= s || h < e;
+};
+
+const getAutoHomeTimeMode = (ranges = DEFAULT_HOME_TIME_RANGES) => {
   const h = new Date().getHours();
-  if (h >= 5 && h < 11) return "morning";
-  if (h >= 11 && h < 19) return "afternoon";
+  const mS = ranges?.morningStart ?? 5;
+  const aS = ranges?.afternoonStart ?? 11;
+  const nS = ranges?.nightStart ?? 20;
+  if (isHourInRange(h, mS, aS)) return "morning";
+  if (isHourInRange(h, aS, nS)) return "afternoon";
   return "night";
 };
 
@@ -1017,11 +1034,22 @@ const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.65) =>
     img.src = dataUrl;
   });
 
-const APP_CODE_VERSION = "v10.59";
-const APP_BUILD_DATE = "2026-11-17 02:55";
+const APP_CODE_VERSION = "v10.60";
+const APP_BUILD_DATE = "2026-11-17 03:08";
 const EDITOR_INVITE_CODE = "0402";
 
 const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v10.60",
+    version: "v10.60",
+    date: "2026-11-17",
+    title: "스마트 등록 메뉴 확장(장보기·영수증·내보내기) · 시간대별 전용 UI · 시간대 기준 시각 편집",
+    changes: [
+      "스마트 빠른 등록(+) 메뉴에 [🛒 장보기 추가], [🧾 영수증 AI 스캔], [📤 식단·재료 내보내기] 3종 추가",
+      "홈 편집 모드에서 오전·오후·밤 시작 시각(0~23시, 예: 밤 20시~익일 05시)을 직접 설정 가능",
+      "시간대별 홈 UI 차별화: 오전(등원·날씨·아침점심 브리핑), 오후(임박 재료 D-day·저녁 준비), 밤(야간 톤 하루 마감·내일 D-1 일정)"
+    ]
+  },
   {
     id: "patch-v10.59",
     version: "v10.59",
@@ -2561,6 +2589,16 @@ function MainApp() {
   });
   const [homeTimeModeOverride, setHomeTimeModeOverride] = useState("auto");
   const [isHomeEditMode, setIsHomeEditMode] = useState(false);
+  const [homeTimeRanges, setHomeTimeRanges] = useState(() => {
+    try {
+      const raw = localStorage.getItem("kim_home_time_ranges_v1");
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed.morningStart === "number") return parsed;
+      }
+    } catch (e) {}
+    return DEFAULT_HOME_TIME_RANGES;
+  });
   const [homeLayoutConfig, setHomeLayoutConfig] = useState(() => {
     try {
       const raw = localStorage.getItem("kim_home_layout_v1");
@@ -8277,13 +8315,25 @@ ${validText}
       ========================================== */}
       {activeTab === "home" && (() => {
         const activeHomeTimeMode =
-          homeTimeModeOverride === "auto" ? getAutoHomeTimeMode() : homeTimeModeOverride;
+          homeTimeModeOverride === "auto" ? getAutoHomeTimeMode(homeTimeRanges) : homeTimeModeOverride;
         const modeMeta =
           activeHomeTimeMode === "morning"
-            ? { label: "🌅 오전", bgClass: "bg-gradient-to-b from-amber-50/60 to-transparent" }
+            ? {
+                label: "🌅 오전",
+                bgClass: "bg-gradient-to-b from-amber-50/80 via-sky-50/40 to-transparent",
+                rangeLabel: `${String(homeTimeRanges.morningStart).padStart(2, "0")}:00 ~ ${String(homeTimeRanges.afternoonStart).padStart(2, "0")}:00`
+              }
             : activeHomeTimeMode === "afternoon"
-            ? { label: "🌆 오후", bgClass: "bg-gradient-to-b from-orange-50/50 to-transparent" }
-            : { label: "🌙 밤", bgClass: "bg-gradient-to-b from-indigo-50/70 to-transparent" };
+            ? {
+                label: "🌆 오후",
+                bgClass: "bg-gradient-to-b from-orange-50/70 via-emerald-50/40 to-transparent",
+                rangeLabel: `${String(homeTimeRanges.afternoonStart).padStart(2, "0")}:00 ~ ${String(homeTimeRanges.nightStart).padStart(2, "0")}:00`
+              }
+            : {
+                label: "🌙 밤",
+                bgClass: "bg-gradient-to-b from-slate-200/70 via-indigo-50/60 to-transparent",
+                rangeLabel: `${String(homeTimeRanges.nightStart).padStart(2, "0")}:00 ~ 익일 ${String(homeTimeRanges.morningStart).padStart(2, "0")}:00`
+              };
 
         const curModeLayout = homeLayoutConfig?.[activeHomeTimeMode] || DEFAULT_HOME_LAYOUT[activeHomeTimeMode];
         const blockOrder = Array.isArray(curModeLayout.blocks) ? curModeLayout.blocks : DEFAULT_HOME_LAYOUT[activeHomeTimeMode].blocks;
@@ -8714,6 +8764,59 @@ ${validText}
                   </button>
                 </div>
 
+                <div className="bg-stone-50 border border-stone-200 rounded-xl p-2.5 space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-extrabold text-stone-600">0) 시간대 기준 시각 설정</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setHomeTimeRanges(DEFAULT_HOME_TIME_RANGES);
+                        try {
+                          localStorage.setItem("kim_home_time_ranges_v1", JSON.stringify(DEFAULT_HOME_TIME_RANGES));
+                        } catch (e) {}
+                        showToast("시간대 기준 시각을 기본값(05/11/20시)으로 되돌렸습니다.");
+                      }}
+                      className="text-[10px] font-extrabold text-stone-500 underline"
+                    >
+                      시각 초기화
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-3 gap-1.5">
+                    {[
+                      { key: "morningStart", label: "🌅 오전 시작" },
+                      { key: "afternoonStart", label: "🌆 오후 시작" },
+                      { key: "nightStart", label: "🌙 밤 시작" }
+                    ].map((f) => (
+                      <label key={f.key} className="block">
+                        <span className="text-[10px] font-bold text-stone-500 block mb-0.5">{f.label}</span>
+                        <select
+                          value={homeTimeRanges[f.key]}
+                          onChange={(e) => {
+                            const val = Number(e.target.value);
+                            setHomeTimeRanges((prev) => {
+                              const next = { ...prev, [f.key]: val };
+                              try {
+                                localStorage.setItem("kim_home_time_ranges_v1", JSON.stringify(next));
+                              } catch (err) {}
+                              return next;
+                            });
+                          }}
+                          className="w-full px-2 py-1 rounded-lg border border-stone-200 bg-white text-[11px] font-black text-stone-800"
+                        >
+                          {Array.from({ length: 24 }, (_, hr) => (
+                            <option key={hr} value={hr}>
+                              {String(hr).padStart(2, "0")}시
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    ))}
+                  </div>
+                  <div className="text-[10px] font-semibold text-stone-500">
+                    현재 적용: 오전 {String(homeTimeRanges.morningStart).padStart(2, "0")}시 · 오후 {String(homeTimeRanges.afternoonStart).padStart(2, "0")}시 · 밤 {String(homeTimeRanges.nightStart).padStart(2, "0")}시~익일 {String(homeTimeRanges.morningStart).padStart(2, "0")}시
+                  </div>
+                </div>
+
                 <div className="space-y-1">
                   <div className="text-[10px] font-extrabold text-stone-500">1) 주요 영역 순서 · 표시</div>
                   {blockOrder.map((bId, idx) => {
@@ -8815,6 +8918,93 @@ ${validText}
                 </div>
               </div>
             )}
+
+            {/* 시간대별 전용 히어로 브리핑 카드 */}
+            {activeHomeTimeMode === "morning" && (() => {
+              const morningMeals = todayMealsList.filter((m) => m.slot === "아침" || m.slot === "점심" || m.slot === "오전간식");
+              const morningRoutineLeft = activeRoutines.filter((r) => (r.timeSlot || "상시") === "아침" || (r.timeSlot || "상시") === "상시").length;
+              return (
+                <div className="bg-gradient-to-r from-amber-100/90 via-amber-50 to-sky-50 border border-amber-200 rounded-2xl p-3 space-y-1.5 shadow-sm">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-black text-amber-950">🌅 좋은 아침 · 등원/오전 브리핑</span>
+                    <span className="px-2 py-0.5 rounded-full bg-white/80 text-amber-900 text-[10px] font-extrabold">{modeMeta.rangeLabel}</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-2 text-[11px] font-bold text-stone-700">
+                    <span className="truncate">
+                      {morningMeals[0] ? `🍽️ ${morningMeals[0].slot}: ${morningMeals[0].menu}` : "🍽️ 오늘 아침·점심 식단을 기록해 보세요"}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => { setSelectedDate(todayKey); setActiveTab("daily"); }}
+                      className="px-2 py-0.5 rounded-lg bg-amber-600 text-white text-[10px] font-extrabold shrink-0"
+                    >
+                      식단 ({morningRoutineLeft > 0 ? `루틴 ${morningRoutineLeft}` : "확인"})
+                    </button>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {activeHomeTimeMode === "afternoon" && (() => {
+              const dinnerMeal = todayMealsList.find((m) => m.slot === "저녁");
+              return (
+                <div className="bg-gradient-to-r from-emerald-50 via-teal-50/70 to-orange-50/70 border border-emerald-200 rounded-2xl p-3 space-y-1.5 shadow-sm">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-black text-emerald-950">🌆 오후 · 저녁 준비 &amp; 냉장고 파먹기</span>
+                    <span className="px-2 py-0.5 rounded-full bg-white/80 text-emerald-800 text-[10px] font-extrabold">{modeMeta.rangeLabel}</span>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-1">
+                    {expiringItems.length > 0 ? (
+                      expiringItems.slice(0, 3).map((it) => (
+                        <button
+                          key={it.id}
+                          type="button"
+                          onClick={() => setActiveTab("fridge")}
+                          className="px-2 py-0.5 rounded-full bg-rose-100 text-rose-900 border border-rose-200 text-[10px] font-extrabold"
+                        >
+                          ❄️ {it.name} ({it.diff < 0 ? "만료" : `D-${it.diff}`})
+                        </button>
+                      ))
+                    ) : (
+                      <span className="text-[11px] font-bold text-emerald-800">✅ 임박한 냉장고 재료가 없습니다</span>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab(dinnerMeal ? "daily" : "ai")}
+                      className="ml-auto px-2 py-0.5 rounded-lg bg-emerald-600 text-white text-[10px] font-extrabold"
+                    >
+                      {dinnerMeal ? `🍽️ 저녁: ${dinnerMeal.menu}` : "✨ AI 저녁 추천"}
+                    </button>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {activeHomeTimeMode === "night" && (() => {
+              const tomorrowDate = new Date(todayKey + "T00:00:00");
+              tomorrowDate.setDate(tomorrowDate.getDate() + 1);
+              const tomorrowStr = formatDate(tomorrowDate);
+              const tomorrowSchedules = schedules.filter((s) => !s.done && String(s.date || "").slice(0, 10) === tomorrowStr);
+              const doneRoutineCount = familyRoutines.filter((r) => isRoutineDoneNow(r)).length;
+              return (
+                <div className="bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 text-white border border-indigo-800 rounded-2xl p-3 space-y-1.5 shadow-md">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-black text-amber-300">🌙 오늘 하루 마감 · 내일 미리보기</span>
+                    <span className="px-2 py-0.5 rounded-full bg-white/10 text-indigo-200 text-[10px] font-extrabold">{modeMeta.rangeLabel}</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-2 text-[11px] font-bold text-stone-200">
+                    <span className="truncate">
+                      {tomorrowSchedules[0]
+                        ? `🗓️ 내일(${tomorrowStr.slice(5)}) ${tomorrowSchedules[0].title}${tomorrowSchedules.length > 1 ? ` 외 ${tomorrowSchedules.length - 1}건` : ""}`
+                        : `✅ 내일(${tomorrowStr.slice(5)}) 예정된 일정 없음`}
+                    </span>
+                    <span className="px-2 py-0.5 rounded-lg bg-indigo-500/40 text-indigo-100 text-[10px] font-black shrink-0">
+                      루틴 {doneRoutineCount}/{familyRoutines.length}
+                    </span>
+                  </div>
+                </div>
+              );
+            })()}
 
             {blockOrder.map((blockId) => renderHomeBlock(blockId))}
           </div>
@@ -11300,6 +11490,7 @@ ${validText}
 
             <div className="grid grid-cols-3 gap-2">
               <input
+                id="shopping-item-input"
                 type="text"
                 placeholder="품목명 (예: 우유, 대파, 기저귀)"
                 value={shoppingForm.name}
@@ -13271,7 +13462,7 @@ ${validText}
           />
           <div
             style={{ bottom: "calc(8.35rem + env(safe-area-inset-bottom))" }}
-            className="fixed right-4 z-40 flex flex-col items-end gap-2"
+            className="fixed right-4 z-40 flex flex-col items-end gap-1.5 max-h-[65vh] overflow-y-auto pr-0.5"
           >
             {[
               {
@@ -13335,6 +13526,27 @@ ${validText}
                 label: "❄️ 냉장고 입고",
                 color: "bg-white text-stone-900 border-sky-200 hover:bg-sky-50",
                 onClick: () => openAddFridgeModal()
+              },
+              {
+                label: "🛒 장보기 추가",
+                color: "bg-white text-stone-900 border-emerald-200 hover:bg-emerald-50",
+                onClick: () => {
+                  setActiveTab("shopping");
+                  setTimeout(() => document.getElementById("shopping-item-input")?.focus(), 180);
+                }
+              },
+              {
+                label: "🧾 영수증 AI 스캔",
+                color: "bg-white text-stone-900 border-teal-200 hover:bg-teal-50",
+                onClick: () => setIsReceiptModalOpen(true)
+              },
+              {
+                label: "📤 식단·재료 내보내기",
+                color: "bg-white text-stone-900 border-stone-300 hover:bg-stone-100",
+                onClick: () => {
+                  setExportScope("all");
+                  setIsInventoryExportOpen(true);
+                }
               },
               {
                 label: "📖 레시피 등록",
