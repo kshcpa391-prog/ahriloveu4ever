@@ -425,7 +425,7 @@ async function callReliableAiEngine({
       }
     };
 
-    const primaryRes = await trySingleModel("gemini-2.5-flash");
+    const primaryRes = await trySingleModel("gemini-3.8-flash");
     if (primaryRes.ok) return primaryRes.data;
 
     const rawPrimary = primaryRes.rawMsg || "";
@@ -435,8 +435,6 @@ async function callReliableAiEngine({
       !rawPrimary.includes("API key not valid") &&
       !rawPrimary.includes("expired")
     ) {
-      const fallbackRes = await trySingleModel("gemini-2.0-flash");
-      if (fallbackRes.ok) return fallbackRes.data;
       try {
         const listRes = await fetch("https://generativelanguage.googleapis.com/v1beta/models", {
           headers: { "x-goog-api-key": effectiveGeminiKey }
@@ -450,8 +448,7 @@ async function callReliableAiEngine({
                 m.supportedGenerationMethods.includes("generateContent") &&
                 m.name &&
                 m.name.includes("flash") &&
-                !m.name.includes("2.5-flash") &&
-                !m.name.includes("2.0-flash") &&
+                !m.name.includes("3.8-flash") &&
                 !m.name.includes("thinking") &&
                 !m.name.includes("image")
             )
@@ -485,7 +482,7 @@ async function callReliableAiEngine({
   }
   if (aiProvider === "gemini") {
     const res = await runGemini();
-    if (onProviderUsed) onProviderUsed("Gemini 2.5");
+    if (onProviderUsed) onProviderUsed("Gemini 3.8");
     return res;
   }
 
@@ -494,7 +491,7 @@ async function callReliableAiEngine({
   if (imagePart && effectiveGeminiKey) {
     try {
       const res = await runGemini();
-      if (onProviderUsed) onProviderUsed("Gemini 2.5");
+      if (onProviderUsed) onProviderUsed("Gemini 3.8");
       return res;
     } catch (e) {
       errors.push(e.message);
@@ -701,11 +698,32 @@ const STORAGE_LOCATIONS = ["냉장실", "냉동실", "실온·팬트리"];
 const FRIDGE_CATEGORIES = ["채소/과일", "육류/수산", "유제품/계란", "유아식/이유식 재료", "반찬/김치", "밀키트", "양념/소스", "기타"];
 const SCHEDULE_CATEGORIES = ["기념일/생일", "할일(To-Do)", "육아/병원", "가족행사/경조사"];
 
-const APP_CODE_VERSION = "v10.4";
-const APP_BUILD_DATE = "2026-11-16 13:55";
+const APP_CODE_VERSION = "v10.6";
+const APP_BUILD_DATE = "2026-11-16 14:00";
 const EDITOR_INVITE_CODE = "0402";
 
 const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v10.6",
+    version: "v10.6",
+    date: "2026-11-16",
+    title: "최근 1주일 일별·인별 식단 + 냉장·냉동·실온 재고 통합 내보내기(드롭다운 선택) 추가",
+    changes: [
+      "내보내기 모달에 [내보내기 항목 드롭다운(1주일 식단+전체 재고 통합 / 1주일 식단만 / 전체 재고만)] 추가",
+      "식단 대상자 드롭다운(가족 전체 인별 / 김수혁 / 최아리나 / 김시목 / 김시율) 및 보관위치 드롭다운(전체 / 냉장실 / 냉동실 / 실온·팬트리) 지원",
+      "주간요약 탭 상단에도 [📤 식단·재고 내보내기] 바로가기 버튼 추가"
+    ]
+  },
+  {
+    id: "patch-v10.5",
+    version: "v10.5",
+    date: "2026-11-16",
+    title: "Gemini 유료 API 키 최신 모델(gemini-3.8-flash) 복원 및 자가진단 폴백 보강",
+    changes: [
+      "Google API 정책 변경(gemini-2.5-flash 신규 종료)에 맞춰 기본 모델 및 자가진단 모델을 gemini-3.8-flash로 복원",
+      "gemini-3.8-flash 실패 시 listModels 자동 탐색으로 유료 키에서 사용 가능한 최신 Flash 모델을 즉시 연결"
+    ]
+  },
   {
     id: "patch-v10.4",
     version: "v10.4",
@@ -1872,6 +1890,9 @@ function MainApp() {
   const [isInventoryExportOpen, setIsInventoryExportOpen] = useState(false);
   const [exportIncludePrice, setExportIncludePrice] = useState(false);
   const [exportIncludeZeroOrExpired, setExportIncludeZeroOrExpired] = useState(false);
+  const [exportScope, setExportScope] = useState("all"); // all | meals_only | fridge_only
+  const [exportMealMember, setExportMealMember] = useState("전체"); // 전체 | 수혁 | 아리나 | 시목 | 시율
+  const [exportFridgeLoc, setExportFridgeLoc] = useState("전체"); // 전체 | 냉장실 | 냉동실 | 실온·팬트리
   const [quickLogRecipe, setQuickLogRecipe] = useState(null);
   const [quickLogDate, setQuickLogDate] = useState(() => getTodayStr());
   const [quickLogSlot, setQuickLogSlot] = useState("저녁");
@@ -2275,7 +2296,7 @@ function MainApp() {
     if (testGeminiKey) {
       try {
         const res = await fetch(
-          "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
+          "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent",
           {
             method: "POST",
             headers: {
@@ -2289,8 +2310,8 @@ function MainApp() {
         );
         const data = await res.json();
         if (res.ok && data?.candidates) {
-          reportLines.push("✅ [Gemini] 연결 성공! (gemini-2.5-flash 정상 작동)");
-          pushAiLog("Gemini", "자가진단", true, "정상 연결");
+          reportLines.push("✅ [Gemini] 연결 성공! (gemini-3.8-flash 정상 작동)");
+          pushAiLog("Gemini", "자가진단", true, "gemini-3.8-flash 정상 연결");
         } else {
           const msg = data?.error?.message || `HTTP ${res.status}`;
           reportLines.push(`❌ [Gemini] 거절: ${msg}`);
@@ -4249,6 +4270,51 @@ ${validText}
     showToast(`🧪 로직 자가진단: ${passed}/${cases.length} 통과`);
   };
 
+  const buildRecentWeekMealsLines = () => {
+    const baseStr = getTodayStr();
+    const dates7 = Array.from({ length: 7 }, (_, i) => addMonthsToDateStr(baseStr, 0, i - 6));
+    const slotOrder = ["아침", "오전간식", "점심", "오후간식", "저녁", "야식"];
+    const targetLabel =
+      exportMealMember === "전체"
+        ? "가족 전체(인별)"
+        : FAMILY_MEMBERS.find((f) => f.id === exportMealMember)?.name || exportMealMember;
+
+    const out = [
+      `📅 최근 1주일 일별 식단 (${dates7[0]} ~ ${dates7[6]} | 대상: ${targetLabel})`,
+      ""
+    ];
+
+    let totalMealsCount = 0;
+    for (const dStr of dates7) {
+      const dayMeals = meals
+        .filter(
+          (m) =>
+            m.date === dStr &&
+            (exportMealMember === "전체" || toSafeArray(m.members).includes(exportMealMember))
+        )
+        .sort((a, b) => slotOrder.indexOf(a.slot) - slotOrder.indexOf(b.slot));
+
+      out.push(`[${dStr} (${getDayName(dStr)})]`);
+      if (dayMeals.length === 0) {
+        out.push("- 기록된 식단 없음");
+      } else {
+        for (const m of dayMeals) {
+          totalMealsCount += 1;
+          const memNames = toSafeArray(m.members)
+            .map((id) => FAMILY_MEMBERS.find((f) => f.id === id)?.name || id)
+            .join("·");
+          const cleanMenu = String(m.menu || "").trim();
+          out.push(`- ${m.slot} | [${memNames || "가족"}] ${cleanMenu}`);
+        }
+      }
+      out.push("");
+    }
+    if (totalMealsCount === 0) {
+      out.push("(선택한 조건의 최근 7일 식단 기록이 없습니다.)", "");
+    }
+    return out;
+  };
+
   const buildInventoryExportText = () => {
     const todayStr = getTodayStr();
     const filtered = fridge.filter((f) => {
@@ -4264,7 +4330,10 @@ ${validText}
       return "기타 보관";
     };
 
-    const locOrder = ["냉장실", "냉동실", "실온·팬트리", "기타 보관"];
+    const locOrder =
+      exportFridgeLoc === "전체"
+        ? ["냉장실", "냉동실", "실온·팬트리", "기타 보관"]
+        : [exportFridgeLoc];
     const groups = locOrder
       .map((loc) => {
         const items = filtered
@@ -4310,8 +4379,23 @@ ${validText}
       lines.push("");
     }
 
-    lines.push("※ 외부 AI 평가용 텍스트입니다. 수량 및 소비기한은 사용자가 확인한 기록을 기준으로 합니다.");
-    return lines.join("\n");
+    const fridgeLines = [
+      ...lines,
+      "※ 수량 및 소비기한은 사용자가 확인한 기록을 기준으로 합니다."
+    ];
+
+    if (exportScope === "meals_only") {
+      return buildRecentWeekMealsLines().join("\n");
+    }
+    if (exportScope === "all") {
+      return [
+        ...buildRecentWeekMealsLines(),
+        "========================================",
+        "",
+        ...fridgeLines
+      ].join("\n");
+    }
+    return fridgeLines.join("\n");
   };
 
   const handlePlatingImageSelect = async (e) => {
@@ -6323,6 +6407,15 @@ ${validText}
               <h2 className="text-sm font-black text-stone-900 truncate">
                 📊 주간 식단 ({weekDates[0].slice(5)} ~ {weekDates[6].slice(5)})
               </h2>
+              <button
+                onClick={() => {
+                  setExportScope("all");
+                  setIsInventoryExportOpen(true);
+                }}
+                className="px-2 py-1 rounded-lg bg-amber-100 hover:bg-amber-200 text-amber-900 text-[10px] font-extrabold shrink-0"
+              >
+                📤 식단·재고 내보내기
+              </button>
               <div className="flex items-center gap-1 shrink-0">
                 <button
                   onClick={() => {
@@ -7436,7 +7529,7 @@ ${validText}
             onClick={() => setIsInventoryExportOpen(true)}
             className="w-full py-2.5 px-3 rounded-2xl bg-stone-100 hover:bg-stone-200/80 border border-stone-200 text-stone-800 text-xs font-extrabold flex items-center justify-between"
           >
-            <span>📤 전체 재고 내보내기 (냉장·냉동·실온 텍스트 추출)</span>
+            <span>📤 1주일 식단 · 전체 재고 내보내기 (드롭다운 선택)</span>
             <span className="text-stone-500">열기 &gt;</span>
           </button>
           {expiringItems.length > 0 && (
@@ -8323,7 +8416,7 @@ ${validText}
               <div>
                 <h2 className="text-sm font-black text-stone-900 flex items-center gap-1.5">
                   <Sparkles className="w-4 h-4 text-amber-500" />
-                  <span>Gemini 2.5 AI 실시간 맞춤 셰프</span>
+                  <span>Gemini 3.8 AI 실시간 맞춤 셰프</span>
                 </h2>
                 <p className="text-[11px] text-stone-500 mt-0.5">
                   선택한 냉장고 재료들의 실제 맛 궁합과 조리법을 AI가 설계합니다.
@@ -11217,7 +11310,7 @@ ${validText}
             <div className="bg-white rounded-3xl max-w-md w-full p-5 space-y-3.5 max-h-[90vh] flex flex-col">
               <div className="flex items-center justify-between">
                 <h3 className="text-sm font-black text-stone-900">
-                  📤 전체 재고 텍스트 내보내기
+                  📤 식단 · 전체 재고 통합 내보내기
                 </h3>
                 <button
                   onClick={() => setIsInventoryExportOpen(false)}
@@ -11225,6 +11318,64 @@ ${validText}
                 >
                   <X className="w-4 h-4" />
                 </button>
+              </div>
+
+              <div className="space-y-2 bg-stone-50 p-3 rounded-2xl border border-stone-200 text-xs">
+                <div>
+                  <label className="text-[10px] font-extrabold text-stone-500 block mb-1">
+                    내보낼 항목 선택
+                  </label>
+                  <select
+                    value={exportScope}
+                    onChange={(e) => setExportScope(e.target.value)}
+                    className="w-full px-2.5 py-2 rounded-xl border border-stone-200 bg-white font-extrabold text-stone-900 text-xs"
+                  >
+                    <option value="all">🍱 최근 1주일 식단 + 냉장·냉동·실온 전체 재고</option>
+                    <option value="meals_only">📅 최근 1주일 일별 식단만</option>
+                    <option value="fridge_only">❄️ 냉장·냉동·실온 전체 재고만</option>
+                  </select>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  {exportScope !== "fridge_only" && (
+                    <div>
+                      <label className="text-[10px] font-extrabold text-stone-500 block mb-1">
+                        식단 대상자 (인별)
+                      </label>
+                      <select
+                        value={exportMealMember}
+                        onChange={(e) => setExportMealMember(e.target.value)}
+                        className="w-full px-2 py-1.5 rounded-xl border border-stone-200 bg-white font-bold text-xs"
+                      >
+                        <option value="전체">👨‍👩‍👧‍👦 가족 전체(인별)</option>
+                        {FAMILY_MEMBERS.map((m) => (
+                          <option key={m.id} value={m.id}>
+                            {m.emoji} {m.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                  {exportScope !== "meals_only" && (
+                    <div className={exportScope === "fridge_only" ? "col-span-2" : ""}>
+                      <label className="text-[10px] font-extrabold text-stone-500 block mb-1">
+                        재고 보관 위치
+                      </label>
+                      <select
+                        value={exportFridgeLoc}
+                        onChange={(e) => setExportFridgeLoc(e.target.value)}
+                        className="w-full px-2 py-1.5 rounded-xl border border-stone-200 bg-white font-bold text-xs"
+                      >
+                        <option value="전체">전체 (냉장·냉동·실온)</option>
+                        {STORAGE_LOCATIONS.map((loc) => (
+                          <option key={loc} value={loc}>
+                            {loc}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                </div>
               </div>
 
               <div className="flex items-center gap-3 flex-wrap text-xs font-bold text-stone-700">
