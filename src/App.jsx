@@ -1116,11 +1116,30 @@ const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.65) =>
     img.src = dataUrl;
   });
 
-const APP_CODE_VERSION = "v10.84";
-const APP_BUILD_DATE = "2026-11-17 10:13";
+const APP_CODE_VERSION = "v10.86";
+const APP_BUILD_DATE = "2026-11-17 10:26";
 const EDITOR_INVITE_CODE = "0402";
 
 const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v10.86",
+    version: "v10.86",
+    date: "2026-11-17",
+    title: "홈 식단 카드 [안 1: 현재·다음 끼니 + 미정 알림] 적용 & 통합 식단 비용 표시",
+    changes: [
+      "홈 [🍽️ 식단 · 주간] 카드에서 불필요한 [N건] 카운트 대신 현재 시각 기준 끼니(아침/점심/저녁) 메뉴와 미기록·저녁 미정 알림을 표시",
+      "통합 식단 탭의 각 끼니 칸에 지출 비용(>0원)이 기록된 경우 금액을 함께 표시해 가독성 향상"
+    ]
+  },
+  {
+    id: "patch-v10.85",
+    version: "v10.85",
+    date: "2026-11-17",
+    title: "홈 식단 버튼 클릭 시 오늘 식단 카드로 바로 스크롤 이동",
+    changes: [
+      "홈 상단 브리핑 [식단 (확인)] 및 바로가기 [🍽️ 식단 · 주간] 클릭 시 통합 식단 탭의 오늘 날짜 카드(#weekly-day-today)로 즉시 스크롤 이동"
+    ]
+  },
   {
     id: "patch-v10.84",
     version: "v10.84",
@@ -8947,7 +8966,13 @@ ${validText}
 
         const todayKey = getTodayStr();
         const todayMealsList = meals.filter((m) => m.date === todayKey);
-        const firstMealPreview = todayMealsList[0] ? `${todayMealsList[0].slot}: ${todayMealsList[0].menu}` : "아직 기록 없음";
+        const curHrForMeal = Math.floor(liveMinuteTick / 60);
+        const targetMealSlot = curHrForMeal < 10 ? "아침" : curHrForMeal < 15 ? "점심" : "저녁";
+        const targetMealObj = todayMealsList.find((m) => m.slot === targetMealSlot) || todayMealsList[0];
+        const isDinnerPending = curHrForMeal >= 15 && !todayMealsList.some((m) => m.slot === "저녁");
+        const mealPreviewText = targetMealObj
+          ? `${targetMealObj.slot}: ${String(targetMealObj.menu || "").replace(/\[.*?\]\s*/, "")}`
+          : `${targetMealSlot} 미기록 · 눌러서 등록`;
         const curSlot = getCurrentRoutineTimeSlot(routineTimeRanges, liveMinuteTick);
         const wkndNow = isWeekendNow();
         const activeRoutines = familyRoutines.filter((r) => !isRoutineDoneNow(r));
@@ -8955,13 +8980,16 @@ ${validText}
         const MENU_DEFS = {
           daily: {
             title: "🍽️ 식단 · 주간",
-            actionLabel: `${todayMealsList.length}건 >`,
-            actionColor: "text-stone-500",
+            actionLabel: isDinnerPending ? "저녁 미정 >" : "오늘 >",
+            actionColor: isDinnerPending ? "text-amber-700" : "text-stone-500",
             borderHover: "hover:border-stone-400",
-            sub: <span className="text-stone-500">{firstMealPreview}</span>,
+            sub: <span className={targetMealObj ? "text-stone-600" : "text-stone-400"}>{mealPreviewText}</span>,
             onClick: () => {
               setSelectedDate(todayKey);
               setActiveTab("daily");
+              setTimeout(() => {
+                document.getElementById(`weekly-day-${todayKey}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+              }, 160);
             }
           },
           routine_tab: {
@@ -9863,7 +9891,13 @@ ${validText}
                     </span>
                     <button
                       type="button"
-                      onClick={() => { setSelectedDate(todayKey); setActiveTab("daily"); }}
+                      onClick={() => {
+                        setSelectedDate(todayKey);
+                        setActiveTab("daily");
+                        setTimeout(() => {
+                          document.getElementById(`weekly-day-${todayKey}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+                        }, 160);
+                      }}
                       className="px-2 py-0.5 rounded-lg bg-stone-900 text-white text-[10px] font-extrabold shrink-0"
                     >
                       식단 ({morningRoutineLeft > 0 ? `루틴 ${morningRoutineLeft}` : "확인"})
@@ -10179,7 +10213,12 @@ ${validText}
                                       }
                                     }}
                                   >
-                                    {String(it.menu || "").replace(/\[.*?\]\s*/, "")}
+                                    <span>{String(it.menu || "").replace(/\[.*?\]\s*/, "")}</span>
+                                    {Number(it.cost) > 0 && (
+                                      <span className="ml-1 text-[10px] font-bold text-stone-500">
+                                        ({Number(it.cost).toLocaleString()}원)
+                                      </span>
+                                    )}
                                   </div>
                                 ))}
                               </div>
