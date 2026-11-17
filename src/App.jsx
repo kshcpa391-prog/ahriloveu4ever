@@ -261,7 +261,7 @@ const DEFAULT_HOME_MENU_ORDER = [
 
 const DEFAULT_HOME_LAYOUT = {
   morning: {
-    blocks: ["routine", "schedule_todo", "menu_grid"],
+    blocks: ["action_feed", "menu_grid"],
     hiddenBlocks: [],
     hiddenMenus: [],
     blockSizes: {},
@@ -269,7 +269,7 @@ const DEFAULT_HOME_LAYOUT = {
     menuOrder: [...DEFAULT_HOME_MENU_ORDER]
   },
   afternoon: {
-    blocks: ["menu_grid", "routine", "schedule_todo"],
+    blocks: ["menu_grid", "action_feed"],
     hiddenBlocks: [],
     hiddenMenus: [],
     blockSizes: {},
@@ -277,7 +277,7 @@ const DEFAULT_HOME_LAYOUT = {
     menuOrder: ["daily", "fridge", "shopping", "ai", "routine_tab", "monthly_cal", "monthly_exp", "baby", "recipes", "notices"]
   },
   night: {
-    blocks: ["schedule_todo", "routine", "menu_grid"],
+    blocks: ["action_feed", "menu_grid"],
     hiddenBlocks: [],
     hiddenMenus: [],
     blockSizes: {},
@@ -1116,11 +1116,31 @@ const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.65) =>
     img.src = dataUrl;
   });
 
-const APP_CODE_VERSION = "v10.82";
-const APP_BUILD_DATE = "2026-11-17 09:58";
+const APP_CODE_VERSION = "v10.84";
+const APP_BUILD_DATE = "2026-11-17 10:13";
 const EDITOR_INVITE_CODE = "0402";
 
 const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v10.84",
+    version: "v10.84",
+    date: "2026-11-17",
+    title: "행동 피드 내 1탭 [+ 일정]·[+ 할 일] 바로 등록 & 기존 블록 크기 설정 마이그레이션",
+    changes: [
+      "홈 통합 행동 피드(안 A)의 [3일 내 일정]·[남은 할 일] 우측에 [+ 추가] 버튼을 추가해 탭 이동 없이 즉시 일정·할 일 등록 가능",
+      "기존 저장된 routine/schedule_todo 블록 크기 설정도 action_feed로 자동 이관되도록 보완"
+    ]
+  },
+  {
+    id: "patch-v10.83",
+    version: "v10.83",
+    date: "2026-11-17",
+    title: "홈 [안 A: 통합 행동 피드(일정·루틴·할일 1카드)] 적용 & 전체 무결성 검증",
+    changes: [
+      "홈 화면의 [3일 내 일정 · 지금 루틴 · 남은 할 일] 3개 분리 카드를 얇은 구분선(divide-y) 기반의 [오늘의 행동 피드] 1개 통합 카드로 압축해 가독성·스크롤 효율 극대화",
+      "기존 저장된 홈 레이아웃(routine/schedule_todo)도 action_feed로 자동 마이그레이션해 오류 없이 순서·크기 편집 가능"
+    ]
+  },
   {
     id: "patch-v10.82",
     version: "v10.82",
@@ -2972,14 +2992,27 @@ function MainApp() {
     ["morning", "afternoon", "night"].forEach((mode) => {
       const def = DEFAULT_HOME_LAYOUT[mode];
       const cur = parsed[mode] || {};
-      const savedBlocks = Array.isArray(cur.blocks) ? cur.blocks.filter((b) => def.blocks.includes(b)) : [];
+      const mappedBlocks = Array.isArray(cur.blocks)
+        ? cur.blocks.map((b) => (b === "routine" || b === "schedule_todo" ? "action_feed" : b))
+        : [];
+      const savedBlocks = mappedBlocks.filter((b, i) => def.blocks.includes(b) && mappedBlocks.indexOf(b) === i);
       const savedMenus = Array.isArray(cur.menuOrder) ? cur.menuOrder.filter((m) => DEFAULT_HOME_MENU_ORDER.includes(m)) : [];
       normalized[mode] = {
         blocks: [...savedBlocks, ...def.blocks.filter((b) => !savedBlocks.includes(b))],
         hiddenBlocks: Array.isArray(cur.hiddenBlocks) ? cur.hiddenBlocks : [],
         menuOrder: [...savedMenus, ...DEFAULT_HOME_MENU_ORDER.filter((m) => !savedMenus.includes(m))],
         hiddenMenus: Array.isArray(cur.hiddenMenus) ? cur.hiddenMenus : [],
-        blockSizes: cur.blockSizes && typeof cur.blockSizes === "object" ? cur.blockSizes : {},
+        blockSizes:
+          cur.blockSizes && typeof cur.blockSizes === "object"
+            ? {
+                ...cur.blockSizes,
+                ...(cur.blockSizes.action_feed
+                  ? {}
+                  : cur.blockSizes.routine || cur.blockSizes.schedule_todo
+                  ? { action_feed: cur.blockSizes.routine || cur.blockSizes.schedule_todo }
+                  : {})
+              }
+            : {},
         menuSizes: cur.menuSizes && typeof cur.menuSizes === "object" ? cur.menuSizes : {}
       };
     });
@@ -8908,8 +8941,7 @@ ${validText}
         };
 
         const BLOCK_LABELS = {
-          schedule_todo: "🗓️ 3일 내 일정 · ✅ 남은 할 일",
-          routine: "🔄 시간대별 가족 루틴",
+          action_feed: "⚡ 오늘의 행동 피드 (일정·루틴·할일)",
           menu_grid: "🧭 핵심 메뉴 바로가기"
         };
 
@@ -9052,8 +9084,8 @@ ${validText}
             return aCur - bCur;
           });
 
-        const scheduleTodoSize = blockSizes.schedule_todo || "normal";
-        const previewLimit = scheduleTodoSize === "compact" ? 2 : scheduleTodoSize === "large" ? 5 : 3;
+        const actionFeedSize = blockSizes.action_feed || "normal";
+        const previewLimit = actionFeedSize === "compact" ? 2 : actionFeedSize === "large" ? 5 : 3;
         const blockPadClass = (bId) => {
           const sz = blockSizes[bId] || "normal";
           return sz === "compact" ? "p-2" : sz === "large" ? "p-3.5" : "p-2.5";
@@ -9065,27 +9097,51 @@ ${validText}
 
         const renderHomeBlock = (blockId) => {
           if (hiddenBlocks.includes(blockId)) return null;
-          if (blockId === "schedule_todo") {
+          if (blockId === "action_feed") {
+            const padCls = blockPadClass("action_feed");
             return (
-              <div key="schedule_todo" className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                <div className={`bg-white border border-stone-200 rounded-2xl shadow-sm ${blockPadClass("schedule_todo")} space-y-1.5`}>
+              <div key="action_feed" className="bg-white border border-stone-200 rounded-2xl shadow-sm divide-y divide-stone-200 overflow-hidden">
+                {/* 1) 3일 내 일정 */}
+                <div className={`${padCls} space-y-1.5`}>
                   <div className="flex items-center justify-between gap-1">
                     <span className="text-xs font-black text-stone-900">
                       🗓️ 3일 내 일정 ({imminentSchedulesWithin3Days.length}건)
                     </span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setScheduleSubTab("calendar");
-                        setActiveTab("schedule");
-                      }}
-                      className="text-[10px] font-extrabold text-stone-500"
-                    >
-                      전체 &gt;
-                    </button>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingSchedule(null);
+                          setScheduleForm({
+                            title: "",
+                            date: getTodayStr(),
+                            category: "병원/행사",
+                            members: ["수혁", "아리나", "시목", "시율"],
+                            isAnnual: false,
+                            showDday: false,
+                            hasOriginYear: false,
+                            memo: ""
+                          });
+                          setIsScheduleModalOpen(true);
+                        }}
+                        className="px-1.5 py-0.5 rounded bg-stone-100 hover:bg-stone-200 text-stone-700 text-[10px] font-extrabold"
+                      >
+                        + 추가
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setScheduleSubTab("calendar");
+                          setActiveTab("schedule");
+                        }}
+                        className="text-[10px] font-extrabold text-stone-500"
+                      >
+                        전체 &gt;
+                      </button>
+                    </div>
                   </div>
                   {imminentSchedulesWithin3Days.length === 0 ? (
-                    <div className="text-[11px] font-bold text-stone-500 bg-stone-50 rounded-xl px-2.5 py-1.5">
+                    <div className="text-[11px] font-bold text-stone-400">
                       3일 이내 예정된 일정이 없습니다.
                     </div>
                   ) : (
@@ -9124,24 +9180,226 @@ ${validText}
                   )}
                 </div>
 
-                <div className={`bg-white border border-stone-200 rounded-2xl shadow-sm ${blockPadClass("schedule_todo")} space-y-1.5`}>
+                {/* 2) 지금 시간대 + 상시 루틴 */}
+                <div className={`${padCls} space-y-1.5`}>
+                  <div className="flex items-center justify-between gap-1.5">
+                    <span className="text-xs font-black text-stone-900 truncate">
+                      🔄 {homeRoutineSlotFilter === "auto" ? `지금(${curSlot}) 루틴` : homeRoutineSlotFilter === "전체" ? "오늘 남은 루틴" : `${homeRoutineSlotFilter} 루틴`} ({visibleRoutineList.length}건)
+                    </span>
+                    <div className="flex items-center gap-1 shrink-0">
+                      {(homeRoutineSlotFilter !== "auto" || homeRoutineTargetFilter !== "전체") && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setHomeRoutineSlotFilter("auto");
+                            setHomeRoutineTargetFilter("전체");
+                            try {
+                              localStorage.setItem("kim_home_routine_slot_v1", "auto");
+                              localStorage.setItem("kim_home_routine_target_v1", "전체");
+                            } catch (e) {}
+                          }}
+                          className="px-2 py-0.5 rounded-lg bg-stone-100 border border-stone-200 text-stone-700 text-[10px] font-extrabold whitespace-nowrap"
+                        >
+                          자동 복귀
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setScheduleSubTab("routine");
+                          setActiveTab("schedule");
+                        }}
+                        className="px-2 py-0.5 rounded-lg bg-stone-900 text-white text-[10px] font-extrabold whitespace-nowrap"
+                      >
+                        관리
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-1 overflow-x-auto">
+                    {[
+                      { id: "전체", label: "전체" },
+                      { id: "공통", label: "👨‍👩‍👧‍👦 공통" },
+                      { id: "시목", label: "👦 시목" },
+                      { id: "시율", label: "👶 시율" }
+                    ].map((tgt) => (
+                      <button
+                        key={tgt.id}
+                        type="button"
+                        onClick={() => {
+                          setHomeRoutineTargetFilter(tgt.id);
+                          try { localStorage.setItem("kim_home_routine_target_v1", tgt.id); } catch (e) {}
+                        }}
+                        className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold whitespace-nowrap border transition shrink-0 ${
+                          homeRoutineTargetFilter === tgt.id
+                            ? "bg-stone-900 text-white border-stone-900"
+                            : "bg-white text-stone-600 border-stone-200"
+                        }`}
+                      >
+                        {tgt.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="flex items-center gap-1 overflow-x-auto pb-0.5">
+                    {[
+                      { id: "auto", label: `자동(${curSlot})` },
+                      ...ROUTINE_TIME_SLOTS.map((s) => ({ id: s, label: s })),
+                      { id: "전체", label: `전체(${activeRoutines.length})` }
+                    ].map((opt) => (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        onClick={() => {
+                          setHomeRoutineSlotFilter(opt.id);
+                          try { localStorage.setItem("kim_home_routine_slot_v1", opt.id); } catch (e) {}
+                        }}
+                        className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold whitespace-nowrap border transition shrink-0 ${
+                          homeRoutineSlotFilter === opt.id
+                            ? "bg-stone-900 text-white border-stone-900"
+                            : "bg-stone-50 text-stone-600 border-stone-200"
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {activeRoutines.length === 0 ? (
+                    <div className="text-[11px] font-bold text-emerald-700 bg-stone-50 rounded-xl px-2.5 py-1.5">
+                      🎉 오늘 예정된 모든 루틴을 완료했습니다!
+                    </div>
+                  ) : visibleRoutineList.length === 0 ? (
+                    <div className="text-[11px] font-bold text-stone-500 bg-stone-50 rounded-xl px-2.5 py-1.5">
+                      ✅ 선택한 조건의 루틴을 모두 완료했습니다.
+                    </div>
+                  ) : (
+                    <div className="space-y-1">
+                      {visibleRoutineList.map((rt) => {
+                        const nextInfo = getRoutineNextDateInfo(rt, currentDayKey);
+                        const steps = parseRoutineSteps(rt.title);
+                        const stepDoneSet = getRoutineSubStepDoneSet(rt);
+                        return (
+                          <div
+                            key={rt.id}
+                            className="w-full p-2 rounded-xl bg-stone-50/70 border border-stone-200 flex items-start gap-2 text-left"
+                          >
+                            <button
+                              type="button"
+                              onClick={() => handleToggleRoutine(rt.id)}
+                              className="w-4 h-4 mt-0.5 rounded border border-stone-400 bg-white hover:bg-stone-100 shrink-0"
+                              title="전체 완료"
+                            />
+                            <div className="min-w-0 flex-1">
+                              {steps.length >= 2 ? (
+                                <div className="flex flex-wrap items-center gap-1">
+                                  {steps.map((st, sIdx) => {
+                                    const sDone = stepDoneSet.has(sIdx);
+                                    return (
+                                      <React.Fragment key={sIdx}>
+                                        <button
+                                          type="button"
+                                          onClick={() => handleToggleRoutineSubStep(rt.id, sIdx, steps.length)}
+                                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-extrabold border transition active:scale-95 ${
+                                            sDone
+                                              ? "bg-emerald-50 border-emerald-300 text-emerald-800"
+                                              : "bg-white border-stone-200 text-stone-800 hover:bg-stone-100"
+                                          }`}
+                                        >
+                                          <span
+                                            className={`inline-flex items-center justify-center w-4 h-4 rounded-full border text-[9px] font-black shrink-0 ${
+                                              sDone
+                                                ? "bg-emerald-600 border-emerald-600 text-white"
+                                                : "border-stone-400 text-stone-700 bg-white"
+                                            }`}
+                                          >
+                                            {sDone ? "✓" : sIdx + 1}
+                                          </span>
+                                          <span className={sDone ? "line-through" : ""}>{st}</span>
+                                        </button>
+                                        {sIdx < steps.length - 1 && (
+                                          <span className="text-[10px] font-black text-stone-300">→</span>
+                                        )}
+                                      </React.Fragment>
+                                    );
+                                  })}
+                                </div>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => handleToggleRoutine(rt.id)}
+                                  className="text-left text-xs font-extrabold text-stone-900 whitespace-normal break-words leading-snug w-full"
+                                >
+                                  {rt.title}
+                                </button>
+                              )}
+                              <div className="flex flex-wrap items-center gap-1 mt-1">
+                                <span className="px-1.5 py-0.5 rounded bg-stone-200/70 text-stone-700 text-[9px] font-black">
+                                  {rt.timeSlot || "상시"}
+                                </span>
+                                <span className={`px-1.5 py-0.5 rounded text-[9px] font-black ${getRoutineAssigneeBadgeCls(rt.assignee)}`}>
+                                  {rt.assignee || "공통"}
+                                </span>
+                                {steps.length >= 2 && (
+                                  <span className="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 text-[9px] font-black">
+                                    진행 {stepDoneSet.size}/{steps.length}
+                                  </span>
+                                )}
+                                {nextInfo && (
+                                  <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 text-[9px] font-bold">
+                                    {nextInfo.dateLabel}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                {/* 3) 남은 할 일 */}
+                <div className={`${padCls} space-y-1.5`}>
                   <div className="flex items-center justify-between gap-1">
                     <span className="text-xs font-black text-stone-900">
                       ✅ 남은 할 일 ({globalTodoBadgeStats.activeCount}건)
                     </span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setScheduleSubTab("todo");
-                        setActiveTab("schedule");
-                      }}
-                      className="text-[10px] font-extrabold text-stone-500"
-                    >
-                      전체 &gt;
-                    </button>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingSchedule(null);
+                          setScheduleForm({
+                            title: "",
+                            date: getTodayStr(),
+                            category: "할일(To-Do)",
+                            members: ["수혁", "아리나", "시목", "시율"],
+                            isAnnual: false,
+                            showDday: false,
+                            hasOriginYear: false,
+                            memo: ""
+                          });
+                          setIsScheduleModalOpen(true);
+                        }}
+                        className="px-1.5 py-0.5 rounded bg-stone-100 hover:bg-stone-200 text-stone-700 text-[10px] font-extrabold"
+                      >
+                        + 추가
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setScheduleSubTab("todo");
+                          setActiveTab("schedule");
+                        }}
+                        className="text-[10px] font-extrabold text-stone-500"
+                      >
+                        전체 &gt;
+                      </button>
+                    </div>
                   </div>
                   {previewTodos.length === 0 ? (
-                    <div className="text-[11px] font-bold text-stone-500 bg-stone-50 rounded-xl px-2.5 py-1.5">
+                    <div className="text-[11px] font-bold text-stone-400">
                       남은 할 일이 없습니다.
                     </div>
                   ) : (
@@ -9172,192 +9430,6 @@ ${validText}
                     </div>
                   )}
                 </div>
-              </div>
-            );
-          }
-
-          if (blockId === "routine") {
-            return (
-              <div key="routine" className={`bg-white border border-stone-200 rounded-2xl shadow-sm ${blockPadClass("routine")} space-y-1.5`}>
-                <div className="flex items-center justify-between gap-1.5">
-                  <span className="text-xs font-black text-stone-900 truncate">
-                    🔄 {homeRoutineSlotFilter === "auto" ? `지금(${curSlot}) 루틴` : homeRoutineSlotFilter === "전체" ? "오늘 남은 루틴" : `${homeRoutineSlotFilter} 루틴`} ({visibleRoutineList.length}건)
-                  </span>
-                  <div className="flex items-center gap-1 shrink-0">
-                    {(homeRoutineSlotFilter !== "auto" || homeRoutineTargetFilter !== "전체") && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setHomeRoutineSlotFilter("auto");
-                          setHomeRoutineTargetFilter("전체");
-                          try {
-                            localStorage.setItem("kim_home_routine_slot_v1", "auto");
-                            localStorage.setItem("kim_home_routine_target_v1", "전체");
-                          } catch (e) {}
-                        }}
-                        className="px-2 py-0.5 rounded-lg bg-stone-100 border border-stone-200 text-stone-700 text-[10px] font-extrabold whitespace-nowrap"
-                      >
-                        자동 복귀
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setScheduleSubTab("routine");
-                        setActiveTab("schedule");
-                      }}
-                      className="px-2 py-0.5 rounded-lg bg-stone-900 text-white text-[10px] font-extrabold whitespace-nowrap"
-                    >
-                      관리
-                    </button>
-                  </div>
-                </div>
-
-                {/* 대상별 필터 (전체 · 공통 · 시목 · 시율) */}
-                <div className="flex items-center gap-1 overflow-x-auto">
-                  {[
-                    { id: "전체", label: "전체" },
-                    { id: "공통", label: "👨‍👩‍👧‍👦 공통" },
-                    { id: "시목", label: "👦 시목" },
-                    { id: "시율", label: "👶 시율" }
-                  ].map((tgt) => (
-                    <button
-                      key={tgt.id}
-                      type="button"
-                      onClick={() => {
-                        setHomeRoutineTargetFilter(tgt.id);
-                        try { localStorage.setItem("kim_home_routine_target_v1", tgt.id); } catch (e) {}
-                      }}
-                      className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold whitespace-nowrap border transition shrink-0 ${
-                        homeRoutineTargetFilter === tgt.id
-                          ? "bg-stone-900 text-white border-stone-900"
-                          : "bg-white text-stone-600 border-stone-200"
-                      }`}
-                    >
-                      {tgt.label}
-                    </button>
-                  ))}
-                </div>
-
-                {/* 표출 시간대 직접 선택 바 */}
-                <div className="flex items-center gap-1 overflow-x-auto pb-0.5">
-                  {[
-                    { id: "auto", label: `자동(${curSlot})` },
-                    ...ROUTINE_TIME_SLOTS.map((s) => ({ id: s, label: s })),
-                    { id: "전체", label: `전체(${activeRoutines.length})` }
-                  ].map((opt) => (
-                    <button
-                      key={opt.id}
-                      type="button"
-                      onClick={() => {
-                        setHomeRoutineSlotFilter(opt.id);
-                        try {
-                          localStorage.setItem("kim_home_routine_slot_v1", opt.id);
-                        } catch (e) {}
-                      }}
-                      className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold whitespace-nowrap border transition shrink-0 ${
-                        homeRoutineSlotFilter === opt.id
-                          ? "bg-stone-900 text-white border-stone-900"
-                          : "bg-stone-50 text-stone-600 border-stone-200"
-                      }`}
-                    >
-                      {opt.label}
-                    </button>
-                  ))}
-                </div>
-
-                {activeRoutines.length === 0 ? (
-                  <div className="text-[11px] font-bold text-emerald-800 bg-white/90 rounded-xl px-2.5 py-1.5">
-                    🎉 오늘 예정된 모든 루틴을 완료했습니다!
-                  </div>
-                ) : visibleRoutineList.length === 0 ? (
-                  <div className="text-[11px] font-bold text-indigo-700 bg-white/80 rounded-xl px-2.5 py-1.5">
-                    ✅ 선택한 시간대 루틴을 모두 완료했습니다!
-                  </div>
-                ) : (
-                  <div className="space-y-1">
-                    {visibleRoutineList.map((rt) => {
-                      const nextInfo = getRoutineNextDateInfo(rt, currentDayKey);
-                      const steps = parseRoutineSteps(rt.title);
-                      const stepDoneSet = getRoutineSubStepDoneSet(rt);
-                      return (
-                        <div
-                          key={rt.id}
-                          className="w-full p-2 rounded-xl bg-stone-50/70 border border-stone-200 flex items-start gap-2 text-left"
-                        >
-                          <button
-                            type="button"
-                            onClick={() => handleToggleRoutine(rt.id)}
-                            className="w-4 h-4 mt-0.5 rounded border border-stone-400 bg-white hover:bg-stone-100 shrink-0"
-                            title="전체 완료"
-                          />
-                          <div className="min-w-0 flex-1">
-                            {steps.length >= 2 ? (
-                              <div className="flex flex-wrap items-center gap-1">
-                                {steps.map((st, sIdx) => {
-                                  const sDone = stepDoneSet.has(sIdx);
-                                  return (
-                                    <React.Fragment key={sIdx}>
-                                      <button
-                                        type="button"
-                                        onClick={() => handleToggleRoutineSubStep(rt.id, sIdx, steps.length)}
-                                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-extrabold border transition active:scale-95 ${
-                                          sDone
-                                            ? "bg-emerald-50 border-emerald-300 text-emerald-800"
-                                            : "bg-white border-stone-200 text-stone-800 hover:bg-stone-100"
-                                        }`}
-                                      >
-                                        <span
-                                          className={`inline-flex items-center justify-center w-4 h-4 rounded-full border text-[9px] font-black shrink-0 ${
-                                            sDone
-                                              ? "bg-emerald-600 border-emerald-600 text-white"
-                                              : "border-stone-400 text-stone-700 bg-white"
-                                          }`}
-                                        >
-                                          {sDone ? "✓" : sIdx + 1}
-                                        </span>
-                                        <span className={sDone ? "line-through" : ""}>{st}</span>
-                                      </button>
-                                      {sIdx < steps.length - 1 && (
-                                        <span className="text-[10px] font-black text-indigo-300">→</span>
-                                      )}
-                                    </React.Fragment>
-                                  );
-                                })}
-                              </div>
-                            ) : (
-                              <button
-                                type="button"
-                                onClick={() => handleToggleRoutine(rt.id)}
-                                className="text-left text-xs font-extrabold text-stone-900 whitespace-normal break-words leading-snug w-full"
-                              >
-                                {rt.title}
-                              </button>
-                            )}
-                            <div className="flex flex-wrap items-center gap-1 mt-1">
-                              <span className="px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-800 text-[9px] font-black">
-                                {rt.timeSlot || "상시"}
-                              </span>
-                              <span className={`px-1.5 py-0.5 rounded text-[9px] font-black ${getRoutineAssigneeBadgeCls(rt.assignee)}`}>
-                                {rt.assignee || "공통"}
-                              </span>
-                              {steps.length >= 2 && (
-                                <span className="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 text-[9px] font-black">
-                                  진행 {stepDoneSet.size}/{steps.length}
-                                </span>
-                              )}
-                              {nextInfo && (
-                                <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 text-[9px] font-bold">
-                                  {nextInfo.dateLabel}
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
               </div>
             );
           }
