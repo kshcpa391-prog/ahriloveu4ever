@@ -1212,7 +1212,7 @@ const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.65) =>
     img.src = dataUrl;
   });
 
-const APP_CODE_VERSION = "v11.50";
+const APP_CODE_VERSION = "v11.52";
 
 const formatRoutineTimeLabel = (hhmm) => {
   const m = String(hhmm || "").trim().match(/^(\d{2}):(\d{2})$/);
@@ -1228,7 +1228,7 @@ const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-const APP_BUILD_DATE = "2026-11-17 22:15";
+const APP_BUILD_DATE = "2026-11-17 22:20";
 const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1290,6 +1290,25 @@ const formatTime12Ko = (ms) => {
 };
 
 const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v11.52",
+    version: "v11.52",
+    date: "2026-11-17",
+    title: "수유·활동 상세 입력 모달 개편 ([지금 다 먹었어요!] · 시간 스테퍼 · 모유 위치 · 빠른 메모 태그)",
+    changes: [
+      "신규 기능: 수유/활동 상세 모달에 [지금 다 먹었어요!] 버튼 추가 — 누르는 즉시 현재 시각을 완료 시간으로 반영하고 시작~현재 소요시간(분)을 자동 계산",
+      "편의성 개선: 시작 시간 빠른 조정([-1H/-10분/-1분/+1분/+10분/+1H]), 수유 시간 스테퍼([-5분/-1분/+1분/+5분]), 모유 위치 6종(모름·왼쪽·오른쪽·양쪽·왼→오·오→왼), 빠른 메모 칩(+ 트림 안함·트림 함·유산균 등) 추가"
+    ]
+  },
+  {
+    id: "patch-v11.51",
+    version: "v11.51",
+    date: "2026-11-17",
+    title: "외부 일기(.zip) 파일 선택기 multiple 속성 누락 수정 (다중 선택 정상화)",
+    changes: [
+      "버그 수정: [📥 외부일기(.zip)]의 파일 입력(babytimeZipInputRef)에 빠져 있던 multiple 속성을 추가해 일기·활동 ZIP 모두 여러 파일 동시 선택이 가능하도록 수정"
+    ]
+  },
   {
     id: "patch-v11.50",
     version: "v11.50",
@@ -18158,7 +18177,7 @@ ${validText}
                   <input
                     ref={activityZipInputRef}
                     type="file"
-                    accept=".zip,application/zip"
+                    accept=".zip,application/zip,application/x-zip-compressed"
                     multiple
                     onChange={handleImportBabyTimeActivityZip}
                     className="hidden"
@@ -18850,7 +18869,8 @@ ${validText}
                     <input
                       ref={babytimeZipInputRef}
                       type="file"
-                      accept=".zip,application/zip"
+                      accept=".zip,application/zip,application/x-zip-compressed"
+                      multiple
                       onChange={handleImportBabyTimeZip}
                       className="hidden"
                     />
@@ -22722,204 +22742,368 @@ ${validText}
         </div>
       )}
 
-      {activityEditModal && (
+      {activityEditModal && (() => {
+        const actMeta = BABY_ACTIVITY_TYPES.find((t) => t.id === activityEditModal.type) || BABY_ACTIVITY_TYPES[BABY_ACTIVITY_TYPES.length - 1];
+        const isFeed = ["모유", "분유", "유축수유"].includes(activityEditModal.type);
+        const startMsVal = Number(activityEditModal.startMs) || Date.now();
+        const endMsVal = activityEditModal.endMs ? Number(activityEditModal.endMs) : null;
+        const shiftStartMin = (deltaMin) => {
+          const nextStart = startMsVal + deltaMin * 60000;
+          const nextDate = formatDate(new Date(nextStart));
+          setActivityEditModal((prev) => {
+            const nextDur = prev.endMs
+              ? Math.max(0, Math.round((Number(prev.endMs) - nextStart) / 60000))
+              : Number(prev.durationMin) || 0;
+            return { ...prev, startMs: nextStart, date: nextDate, durationMin: nextDur };
+          });
+        };
+        const adjustDurMin = (deltaMin) => {
+          setActivityEditModal((prev) => {
+            const nextDur = Math.max(0, (Number(prev.durationMin) || 0) + deltaMin);
+            const nextEnd = prev.startMs ? Number(prev.startMs) + nextDur * 60000 : prev.endMs;
+            return { ...prev, durationMin: nextDur, endMs: nextEnd };
+          });
+        };
+        const handleFinishedNow = () => {
+          const nowMs = Date.now();
+          const baseStart = Number(activityEditModal.startMs) || nowMs;
+          const calcMin = Math.max(0, Math.round((nowMs - baseStart) / 60000));
+          setActivityEditModal((prev) => ({
+            ...prev,
+            endMs: nowMs,
+            durationMin: calcMin,
+            inProgress: false
+          }));
+          showToast(`⏱️ 현재 시각(${formatTime12Ko(nowMs)}) 기준 ${calcMin}분으로 반영되었습니다!`);
+        };
+
+        return (
         <div
           className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
           onClick={() => setActivityEditModal(null)}
         >
           <div
-            className="bg-white rounded-3xl max-w-sm w-full p-4 space-y-3 shadow-2xl max-h-[88vh] overflow-y-auto"
+            className="bg-white rounded-3xl max-w-sm w-full overflow-hidden shadow-2xl max-h-[90vh] flex flex-col"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-black text-stone-900">
-                {BABY_ACTIVITY_TYPES.find((t) => t.id === activityEditModal.type)?.emoji} {activityEditModal.type} {activityEditModal.isNew ? "기록" : "수정"}
-              </h3>
-              <button type="button" onClick={() => setActivityEditModal(null)}>
-                <X className="w-5 h-5 text-stone-400" />
-              </button>
-            </div>
-
-            {activityEditModal.type === "기저귀" && (
-              <div className="grid grid-cols-3 gap-1.5">
-                {["소변", "대변", "혼합"].map((sub) => (
+            {/* 활동별 색상 상단 헤더 */}
+            <div className={`${actMeta.bg} text-white px-4 py-3 flex items-center justify-between gap-2`}>
+              <div className="flex items-center gap-2">
+                <button type="button" onClick={() => setActivityEditModal(null)} className="p-0.5 hover:opacity-80">
+                  <X className="w-5 h-5" />
+                </button>
+                <h3 className="text-sm font-black">
+                  {actMeta.emoji} {activityEditModal.type}
+                </h3>
+              </div>
+              <div className="flex items-center gap-2">
+                {!activityEditModal.isNew && (
                   <button
-                    key={sub}
                     type="button"
-                    onClick={() => setActivityEditModal((p) => ({ ...p, subType: sub }))}
-                    className={`py-2 rounded-xl text-xs font-extrabold border ${
-                      activityEditModal.subType === sub
-                        ? "bg-amber-700 text-white border-amber-700"
-                        : "bg-stone-50 text-stone-700 border-stone-200"
-                    }`}
+                    onClick={() => handleDeleteBabyActivity(activityEditModal.id)}
+                    className="p-1 rounded-lg bg-white/15 hover:bg-white/25"
+                    title="삭제"
                   >
-                    {sub}
+                    <Trash2 className="w-4 h-4" />
                   </button>
-                ))}
-              </div>
-            )}
-
-            {activityEditModal.type === "수면" && (
-              <div className="grid grid-cols-2 gap-1.5">
-                {["낮잠", "밤잠"].map((sub) => (
-                  <button
-                    key={sub}
-                    type="button"
-                    onClick={() => setActivityEditModal((p) => ({ ...p, subType: sub }))}
-                    className={`py-2 rounded-xl text-xs font-extrabold border ${
-                      activityEditModal.subType === sub
-                        ? "bg-indigo-600 text-white border-indigo-600"
-                        : "bg-stone-50 text-stone-700 border-stone-200"
-                    }`}
-                  >
-                    {sub}
-                  </button>
-                ))}
-              </div>
-            )}
-
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="text-[10px] font-bold text-stone-500">날짜</label>
-                <input
-                  type="date"
-                  value={activityEditModal.date || getTodayStr()}
-                  onChange={(e) => {
-                    const nd = e.target.value;
-                    const oldT = new Date(activityEditModal.startMs || Date.now());
-                    const hh = String(oldT.getHours()).padStart(2, "0");
-                    const mm = String(oldT.getMinutes()).padStart(2, "0");
-                    const newMs = new Date(`${nd}T${hh}:${mm}:00`).getTime();
-                    setActivityEditModal((p) => ({ ...p, date: nd, startMs: newMs }));
-                  }}
-                  className="w-full px-2.5 py-1.5 rounded-xl border border-stone-200 text-xs font-bold"
-                />
-              </div>
-              <div>
-                <label className="text-[10px] font-bold text-stone-500">소요시간 (분)</label>
-                <input
-                  type="number"
-                  value={activityEditModal.durationMin ?? 0}
-                  onChange={(e) => setActivityEditModal((p) => ({ ...p, durationMin: e.target.value }))}
-                  className="w-full px-2.5 py-1.5 rounded-xl border border-stone-200 text-xs font-bold"
-                />
+                )}
+                <button
+                  type="button"
+                  onClick={handleSaveActivityModal}
+                  className="px-3 py-1 rounded-xl bg-white/20 hover:bg-white/30 text-xs font-black"
+                >
+                  저장
+                </button>
               </div>
             </div>
 
-            {BABY_ACTIVITY_TYPES.find((t) => t.id === activityEditModal.type)?.hasMl && (
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-bold text-stone-500">
-                  용량 ({BABY_ACTIVITY_TYPES.find((t) => t.id === activityEditModal.type)?.unit || "ml"})
-                </label>
-                <input
-                  type="number"
-                  value={activityEditModal.amountMl || ""}
-                  placeholder="예: 40"
-                  onChange={(e) => setActivityEditModal((p) => ({ ...p, amountMl: e.target.value }))}
-                  className="w-full px-3 py-2 rounded-xl border border-stone-200 text-xs font-bold"
-                />
-                <div className="flex flex-wrap gap-1">
-                  {[20, 30, 40, 60, 80, 100, 120].map((v) => (
+            <div className="p-4 space-y-3.5 overflow-y-auto flex-1">
+              {/* 시작 시간 + 빠른 -1H / -10분 / -1분 / +1분 / +10분 / +1H */}
+              <div className="space-y-2 pb-3 border-b border-stone-100">
+                <div className="flex items-center justify-between gap-2">
+                  <input
+                    type="date"
+                    value={activityEditModal.date || getTodayStr()}
+                    onChange={(e) => {
+                      const nd = e.target.value;
+                      const oldT = new Date(startMsVal);
+                      const hh = String(oldT.getHours()).padStart(2, "0");
+                      const mm = String(oldT.getMinutes()).padStart(2, "0");
+                      const newMs = new Date(`${nd}T${hh}:${mm}:00`).getTime();
+                      setActivityEditModal((p) => ({ ...p, date: nd, startMs: newMs }));
+                    }}
+                    className="text-xs font-extrabold text-stone-600 bg-stone-50 px-2 py-1 rounded-lg border border-stone-200"
+                  />
+                  <div className="text-base font-black text-stone-900">
+                    {formatTime12Ko(startMsVal)}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleFinishedNow}
+                    className="text-[11px] font-extrabold text-[#35503C] hover:underline whitespace-nowrap"
+                  >
+                    {endMsVal ? `~ ${formatTime12Ko(endMsVal)}` : "+ 완료 시간"}
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-6 gap-1">
+                  {[
+                    { label: "-1H", min: -60 },
+                    { label: "-10분", min: -10 },
+                    { label: "-1분", min: -1 },
+                    { label: "+1분", min: 1 },
+                    { label: "+10분", min: 10 },
+                    { label: "+1H", min: 60 }
+                  ].map((b) => (
                     <button
-                      key={v}
+                      key={b.label}
                       type="button"
-                      onClick={() => setActivityEditModal((p) => ({ ...p, amountMl: v }))}
-                      className="px-2 py-1 rounded-lg bg-stone-100 hover:bg-stone-200 text-[10px] font-extrabold text-stone-700"
+                      onClick={() => shiftStartMin(b.min)}
+                      className="py-1.5 rounded-full border border-stone-200 bg-stone-50 hover:bg-stone-100 text-[10px] font-extrabold text-stone-700"
                     >
-                      {v}
+                      {b.label}
                     </button>
                   ))}
                 </div>
               </div>
-            )}
 
-            {activityEditModal.type === "모유" && (
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="text-[10px] font-bold text-stone-500">왼쪽 (분)</label>
+              {/* 수유/소요 시간 + [지금 다 먹었어요!] + -5분/-1분/+1분/+5분 */}
+              {(actMeta.timed || Number(activityEditModal.durationMin) > 0) && (
+                <div className="space-y-2.5 pb-3 border-b border-stone-100">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-extrabold text-stone-600">
+                      {isFeed ? "수유 시간" : "소요 시간"}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleFinishedNow}
+                      className="px-3 py-1 rounded-full border border-stone-300 bg-white hover:bg-[#EEF3EE] hover:border-[#5E7A65] text-[11px] font-black text-stone-800 shadow-sm active:scale-95 transition"
+                    >
+                      {isFeed ? "지금 다 먹었어요!" : "지금 끝났어요!"}
+                    </button>
+                  </div>
+                  <div className="flex items-center justify-between gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => adjustDurMin(-5)}
+                      className="flex-1 py-1.5 rounded-full border border-stone-200 bg-stone-50 hover:bg-stone-100 text-[11px] font-extrabold text-stone-700"
+                    >
+                      -5분
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => adjustDurMin(-1)}
+                      className="flex-1 py-1.5 rounded-full border border-stone-200 bg-stone-50 hover:bg-stone-100 text-[11px] font-extrabold text-stone-700"
+                    >
+                      -1분
+                    </button>
+                    <div className="px-2 text-center min-w-[60px]">
+                      <span className="text-lg font-black text-stone-900">{activityEditModal.durationMin ?? 0}</span>
+                      <span className="text-xs font-bold text-stone-500 ml-0.5">분</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => adjustDurMin(1)}
+                      className="flex-1 py-1.5 rounded-full border border-stone-200 bg-stone-50 hover:bg-stone-100 text-[11px] font-extrabold text-stone-700"
+                    >
+                      +1분
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => adjustDurMin(5)}
+                      className="flex-1 py-1.5 rounded-full border border-stone-200 bg-stone-50 hover:bg-stone-100 text-[11px] font-extrabold text-stone-700"
+                    >
+                      +5분
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* 모유 먹인 위치 */}
+              {activityEditModal.type === "모유" && (
+                <div className="space-y-2 pb-3 border-b border-stone-100">
+                  <div className="text-xs font-extrabold text-stone-600">모유 먹인 위치</div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {["모름", "왼쪽", "오른쪽", "양쪽", "왼쪽 후 오른쪽", "오른쪽 후 왼쪽"].map((pos) => {
+                      const curPos = activityEditModal.breastOrder || activityEditModal.subType || "모름";
+                      const activePos = curPos === pos || (pos === "모름" && !curPos);
+                      return (
+                        <button
+                          key={pos}
+                          type="button"
+                          onClick={() => setActivityEditModal((p) => ({ ...p, breastOrder: pos === "모름" ? "" : pos, subType: pos === "모름" ? "" : pos }))}
+                          className={`px-3 py-1.5 rounded-full text-[11px] font-extrabold border transition ${
+                            activePos
+                              ? "bg-stone-800 text-white border-stone-800"
+                              : "bg-white text-stone-700 border-stone-200 hover:bg-stone-50"
+                          }`}
+                        >
+                          {pos.replace(" 후 ", "→")}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 pt-1">
+                    <div>
+                      <label className="text-[10px] font-bold text-stone-400">왼쪽 (분)</label>
+                      <input
+                        type="number"
+                        value={activityEditModal.leftMin ?? 0}
+                        onChange={(e) => setActivityEditModal((p) => ({ ...p, leftMin: e.target.value }))}
+                        className="w-full px-2.5 py-1.5 rounded-xl border border-stone-200 text-xs font-bold"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-stone-400">오른쪽 (분)</label>
+                      <input
+                        type="number"
+                        value={activityEditModal.rightMin ?? 0}
+                        onChange={(e) => setActivityEditModal((p) => ({ ...p, rightMin: e.target.value }))}
+                        className="w-full px-2.5 py-1.5 rounded-xl border border-stone-200 text-xs font-bold"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* 기저귀 / 수면 선택 */}
+              {activityEditModal.type === "기저귀" && (
+                <div className="grid grid-cols-3 gap-1.5">
+                  {["소변", "대변", "혼합"].map((sub) => (
+                    <button
+                      key={sub}
+                      type="button"
+                      onClick={() => setActivityEditModal((p) => ({ ...p, subType: sub }))}
+                      className={`py-2 rounded-xl text-xs font-extrabold border ${
+                        activityEditModal.subType === sub
+                          ? "bg-amber-700 text-white border-amber-700"
+                          : "bg-stone-50 text-stone-700 border-stone-200"
+                      }`}
+                    >
+                      {sub}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {activityEditModal.type === "수면" && (
+                <div className="grid grid-cols-2 gap-1.5">
+                  {["낮잠", "밤잠"].map((sub) => (
+                    <button
+                      key={sub}
+                      type="button"
+                      onClick={() => setActivityEditModal((p) => ({ ...p, subType: sub }))}
+                      className={`py-2 rounded-xl text-xs font-extrabold border ${
+                        activityEditModal.subType === sub
+                          ? "bg-indigo-600 text-white border-indigo-600"
+                          : "bg-stone-50 text-stone-700 border-stone-200"
+                      }`}
+                    >
+                      {sub}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {/* 용량 (ml / g) */}
+              {actMeta.hasMl && (
+                <div className="space-y-1.5 pb-2 border-b border-stone-100">
+                  <label className="text-xs font-extrabold text-stone-600">
+                    용량 ({actMeta.unit || "ml"})
+                  </label>
                   <input
                     type="number"
-                    value={activityEditModal.leftMin ?? 0}
-                    onChange={(e) => setActivityEditModal((p) => ({ ...p, leftMin: e.target.value }))}
-                    className="w-full px-2.5 py-1.5 rounded-xl border border-stone-200 text-xs font-bold"
+                    value={activityEditModal.amountMl || ""}
+                    placeholder="예: 40"
+                    onChange={(e) => setActivityEditModal((p) => ({ ...p, amountMl: e.target.value }))}
+                    className="w-full px-3 py-2 rounded-xl border border-stone-200 text-xs font-bold"
                   />
+                  <div className="flex flex-wrap gap-1">
+                    {[20, 30, 40, 60, 80, 100, 120].map((v) => (
+                      <button
+                        key={v}
+                        type="button"
+                        onClick={() => setActivityEditModal((p) => ({ ...p, amountMl: v }))}
+                        className="px-2.5 py-1 rounded-full bg-stone-100 hover:bg-stone-200 text-[10px] font-extrabold text-stone-700"
+                      >
+                        {v}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-                <div>
-                  <label className="text-[10px] font-bold text-stone-500">오른쪽 (분)</label>
+              )}
+
+              {/* 메모 + 사진 + 빠른 태그 칩 */}
+              <div className="space-y-2">
+                <div className="text-xs font-extrabold text-stone-600">메모</div>
+                <div className="flex items-center gap-2">
                   <input
-                    type="number"
-                    value={activityEditModal.rightMin ?? 0}
-                    onChange={(e) => setActivityEditModal((p) => ({ ...p, rightMin: e.target.value }))}
-                    className="w-full px-2.5 py-1.5 rounded-xl border border-stone-200 text-xs font-bold"
+                    type="text"
+                    value={activityEditModal.memo || ""}
+                    placeholder="메모 입력 (예: 트림 함, 유산균)"
+                    onChange={(e) => setActivityEditModal((p) => ({ ...p, memo: e.target.value }))}
+                    className="flex-1 px-3 py-2 rounded-xl border border-stone-200 text-xs font-bold"
                   />
+                  <input
+                    ref={activityPhotoInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={async (ev) => {
+                      const f = ev.target.files?.[0];
+                      if (ev.target) ev.target.value = "";
+                      if (!f) return;
+                      const compressed = await compressDiaryPhotoToBudget(f, 180000);
+                      if (compressed) setActivityEditModal((p) => ({ ...p, photoUrl: compressed }));
+                    }}
+                    className="hidden"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => activityPhotoInputRef.current?.click()}
+                    className="w-10 h-10 rounded-xl border border-dashed border-stone-300 bg-stone-50 hover:bg-stone-100 flex items-center justify-center shrink-0"
+                    title="사진 첨부"
+                  >
+                    <Camera className="w-4 h-4 text-stone-500" />
+                  </button>
                 </div>
-              </div>
-            )}
-
-            <div>
-              <label className="text-[10px] font-bold text-stone-500">메모 (유산균·체온·특이사항 등)</label>
-              <input
-                type="text"
-                value={activityEditModal.memo || ""}
-                placeholder="메모 입력 (선택)"
-                onChange={(e) => setActivityEditModal((p) => ({ ...p, memo: e.target.value }))}
-                className="w-full px-3 py-2 rounded-xl border border-stone-200 text-xs font-bold"
-              />
-            </div>
-
-            <div>
-              <input
-                ref={activityPhotoInputRef}
-                type="file"
-                accept="image/*"
-                onChange={async (ev) => {
-                  const f = ev.target.files?.[0];
-                  if (ev.target) ev.target.value = "";
-                  if (!f) return;
-                  const compressed = await compressDiaryPhotoToBudget(f, 180000);
-                  if (compressed) setActivityEditModal((p) => ({ ...p, photoUrl: compressed }));
-                }}
-                className="hidden"
-              />
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => activityPhotoInputRef.current?.click()}
-                  className="px-3 py-1.5 rounded-xl bg-stone-100 hover:bg-stone-200 text-[11px] font-extrabold text-stone-700"
-                >
-                  📸 사진 첨부
-                </button>
                 {activityEditModal.photoUrl && (
                   <img
                     src={activityEditModal.photoUrl}
                     alt="미리보기"
-                    className="w-10 h-10 rounded-xl object-cover border border-stone-200"
+                    className="w-16 h-16 rounded-xl object-cover border border-stone-200"
                   />
                 )}
+                <div className="flex flex-wrap gap-1.5">
+                  {["트림 안함", "트림 함", "유산균", "잘 먹음", "게워냄"].map((tag) => (
+                    <button
+                      key={tag}
+                      type="button"
+                      onClick={() =>
+                        setActivityEditModal((p) => ({
+                          ...p,
+                          memo: p.memo ? (p.memo.includes(tag) ? p.memo : `${p.memo} · ${tag}`) : tag
+                        }))
+                      }
+                      className="px-2.5 py-1 rounded-full bg-sky-50 hover:bg-sky-100 border border-sky-200 text-[10px] font-extrabold text-sky-900"
+                    >
+                      + {tag}
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
 
-            <div className="flex items-center gap-2 pt-1">
-              {!activityEditModal.isNew && (
-                <button
-                  type="button"
-                  onClick={() => handleDeleteBabyActivity(activityEditModal.id)}
-                  className="px-3 py-2 rounded-xl bg-rose-50 text-rose-700 text-xs font-extrabold"
-                >
-                  삭제
-                </button>
-              )}
               <button
                 type="button"
                 onClick={handleSaveActivityModal}
-                className="flex-1 py-2 rounded-xl bg-[#5E7A65] hover:bg-[#4E6855] text-white text-xs font-extrabold"
+                className="w-full py-2.5 rounded-2xl bg-[#5E7A65] hover:bg-[#4E6855] text-white text-sm font-black shadow-sm"
               >
-                💾 저장하기
+                저장
               </button>
             </div>
           </div>
         </div>
-      )}
+        );
+      })()}
 
       {diaryImportModal && (
         <div
