@@ -1172,8 +1172,8 @@ const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.65) =>
     img.src = dataUrl;
   });
 
-const APP_CODE_VERSION = "v11.07";
-const APP_BUILD_DATE = "2026-11-17 15:02";
+const APP_CODE_VERSION = "v11.09";
+const APP_BUILD_DATE = "2026-11-17 15:12";
 const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1200,6 +1200,27 @@ const HELPER_CONFIGURABLE_TABS = [
 ];
 
 const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v11.09",
+    version: "v11.09",
+    date: "2026-11-17",
+    title: "육아일기 검색·JSON 백업 포함 · 전체 모달 ESC 닫기 · 타이머 메모리 정리",
+    changes: [
+      "관리자 전용 [📖 육아일기]에 키워드 검색창 추가 및 전체 JSON 백업·복원(관리자)에 육아일기 데이터 포함",
+      "ESC 키로 식단 복사 모달, 일기장 미리보기, 실시간 알림 팝업까지 일괄 닫기 지원",
+      "실시간 알림 팝업 타이머 언마운트 정리(cleanup) 추가로 메모리 누수 방지"
+    ]
+  },
+  {
+    id: "patch-v11.08",
+    version: "v11.08",
+    date: "2026-11-17",
+    title: "육아 메뉴 진입 시 관리자 [📖 일기] / 이외 인원 [🌱 발달] 자동 이동 · 일기 UI 개선",
+    changes: [
+      "하단 [👶 육아] 탭 및 홈 바로가기 클릭 시 관리자는 [📖 일기]로, 이외 인원은 [🌱 발달]로 자동 이동",
+      "관리자 화면에서 [📖 일기] 서브탭을 첫 번째로 배치하고 일기 건수 배지 및 [오늘] 날짜 복귀 버튼 추가"
+    ]
+  },
   {
     id: "patch-v11.07",
     version: "v11.07",
@@ -3564,7 +3585,13 @@ function MainApp() {
   const [editingDiaryEntry, setEditingDiaryEntry] = useState(null);
   const [diaryExportPreviewUrl, setDiaryExportPreviewUrl] = useState("");
   const [diaryExportFilename, setDiaryExportFilename] = useState("육아일기.png");
+  const [diarySearchQuery, setDiarySearchQuery] = useState("");
   const diaryPhotoInputRef = useRef(null);
+  useEffect(() => {
+    return () => {
+      if (activityPopupTimerRef.current) clearTimeout(activityPopupTimerRef.current);
+    };
+  }, []);
   useEffect(() => {
     const t = setTimeout(() => setIsInitialLoading(false), 2000);
     return () => clearTimeout(t);
@@ -3788,18 +3815,29 @@ function MainApp() {
   const [isRoutineModalOpen, setIsRoutineModalOpen] = useState(false);
   const [hideEmptyMealSlots, setHideEmptyMealSlots] = useState(true);
   useEffect(() => {
-    if (!isQuickFabOpen && !isRoutineModalOpen && !isActivityModalOpen && !isEditorUnlockModalOpen) return;
+    if (
+      !isQuickFabOpen &&
+      !isRoutineModalOpen &&
+      !isActivityModalOpen &&
+      !isEditorUnlockModalOpen &&
+      !isMealCopyModalOpen &&
+      !diaryExportPreviewUrl &&
+      !liveActivityPopup
+    ) return;
     const onEsc = (e) => {
       if (e.key === "Escape") {
         setIsQuickFabOpen(false);
         setIsRoutineModalOpen(false);
         setIsActivityModalOpen(false);
         setIsEditorUnlockModalOpen(false);
+        setIsMealCopyModalOpen(false);
+        setDiaryExportPreviewUrl("");
+        setLiveActivityPopup(null);
       }
     };
     window.addEventListener("keydown", onEsc);
     return () => window.removeEventListener("keydown", onEsc);
-  }, [isQuickFabOpen, isRoutineModalOpen, isActivityModalOpen, isEditorUnlockModalOpen]);
+  }, [isQuickFabOpen, isRoutineModalOpen, isActivityModalOpen, isEditorUnlockModalOpen, isMealCopyModalOpen, diaryExportPreviewUrl, liveActivityPopup]);
   const [showAllTodayRoutinesOnMain, setShowAllTodayRoutinesOnMain] = useState(false);
   const [isMainRoutineCollapsed, setIsMainRoutineCollapsed] = useState(false);
   const [currentDayKey, setCurrentDayKey] = useState(() => getTodayStr());
@@ -4601,6 +4639,7 @@ function MainApp() {
     } catch (e) {}
     setAccessRole("guest");
     setIsEditorUnlockModalOpen(false);
+    if (babySubTab === "diary") setBabySubTab("milestones");
     if (!guestAllowedTabs.includes(activeTab)) setActiveTab("home");
     showToast("🔒 로그아웃되어 열람 제한 모드로 전환되었습니다.");
   };
@@ -5810,7 +5849,8 @@ function MainApp() {
         homeLayoutConfig,
         homeTimeRanges,
         routineTimeRanges,
-        routineSlotDefs
+        routineSlotDefs,
+        ...(isAdminUnlocked ? { babyDiaryEntries } : {})
       }
     };
     return JSON.stringify(fullSnapshot, null, 2);
@@ -8766,6 +8806,13 @@ ${validText}
     }
   };
 
+  const openBabyTab = () => {
+    setBabySubTab(isAdminUnlocked ? "diary" : "milestones");
+    setActiveTab("baby");
+    setIsMoreNavOpen(false);
+    window.scrollTo({ top: 0, behavior: "instant" });
+  };
+
   const openDailyTodayAll = () => {
     const today = getTodayStr();
     setSelectedMember("전체");
@@ -10468,7 +10515,7 @@ ${validText}
             actionColor: "text-stone-500",
             borderHover: "hover:border-stone-400",
             sub: <span className="text-stone-500">시목 · 시율 발달/접종</span>,
-            onClick: () => setActiveTab("baby")
+            onClick: openBabyTab
           },
           recipes: {
             title: "📖 레시피북",
@@ -15565,11 +15612,11 @@ ${validText}
             {/* 육아수첩 서브 탭 (육아일기는 관리자 전용) */}
             <div className={`grid ${isAdminUnlocked ? "grid-cols-5" : "grid-cols-4"} gap-1 bg-stone-200 p-1 rounded-2xl`}>
               {[
+                ...(isAdminUnlocked ? [{ id: "diary", label: "📖 일기" }] : []),
                 { id: "milestones", label: "🌱 발달" },
                 { id: "vaccines", label: "💉 접종·검진" },
                 { id: "growth", label: "📏 성장기록" },
-                { id: "medical", label: "🩺 진료·열" },
-                ...(isAdminUnlocked ? [{ id: "diary", label: "📖 일기" }] : [])
+                { id: "medical", label: "🩺 진료·열" }
               ].map((st) => (
                 <button
                   key={st.id}
@@ -16016,9 +16063,12 @@ ${validText}
               ) : (
                 <div className="space-y-3">
                   <div className="bg-white p-3.5 rounded-2xl border border-stone-200 shadow-sm space-y-2.5">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-black text-stone-900">
-                        📖 {activeChild.name} 육아일기 {editingDiaryEntry ? "수정" : "작성"} (관리자 전용)
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs font-black text-stone-900 flex items-center gap-1.5">
+                        <span>📖 {activeChild.name} 육아일기 {editingDiaryEntry ? "수정" : "작성"}</span>
+                        <span className="px-1.5 py-0.5 rounded-full bg-[#EEF3EE] text-[#35503C] text-[10px] font-black">
+                          {babyDiaryEntries.filter((d) => d.childId === activeChild.id).length}편
+                        </span>
                       </span>
                       {editingDiaryEntry && (
                         <button
@@ -16108,16 +16158,51 @@ ${validText}
                     )}
                   </div>
 
-                  {babyDiaryEntries.filter((d) => d.childId === activeChild.id).length === 0 ? (
-                    renderStatusState({
-                      type: "empty",
-                      title: `${activeChild.name}의 첫 육아일기를 남겨보세요`,
-                      description: "사진과 함께 오늘의 소중한 순간을 기록하고 예쁜 일기장 한 장으로 저장할 수 있습니다."
-                    })
-                  ) : (
+                  {babyDiaryEntries.filter((d) => d.childId === activeChild.id).length > 0 && (
+                    <div className="relative">
+                      <input
+                        type="text"
+                        value={diarySearchQuery}
+                        onChange={(e) => setDiarySearchQuery(e.target.value)}
+                        placeholder="🔍 육아일기 검색 (날짜, 제목, 내용...)"
+                        className="w-full px-3 py-2 pr-8 rounded-xl border border-stone-200 bg-white text-xs font-semibold text-stone-800"
+                      />
+                      {diarySearchQuery && (
+                        <button
+                          type="button"
+                          onClick={() => setDiarySearchQuery("")}
+                          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-700 text-xs font-black"
+                        >
+                          ✕
+                        </button>
+                      )}
+                    </div>
+                  )}
+
+                  {(() => {
+                    const q = diarySearchQuery.trim().toLowerCase();
+                    const childDiaries = babyDiaryEntries.filter((d) => {
+                      if (d.childId !== activeChild.id) return false;
+                      if (!q) return true;
+                      return (
+                        String(d.date || "").toLowerCase().includes(q) ||
+                        String(d.title || "").toLowerCase().includes(q) ||
+                        String(d.content || "").toLowerCase().includes(q) ||
+                        String(d.mood || "").toLowerCase().includes(q)
+                      );
+                    });
+                    if (childDiaries.length === 0) {
+                      return renderStatusState({
+                        type: "empty",
+                        title: q ? `'${diarySearchQuery}' 검색 결과가 없습니다` : `${activeChild.name}의 첫 육아일기를 남겨보세요`,
+                        description: q
+                          ? "다른 키워드로 검색하거나 검색어를 지워보세요."
+                          : "사진과 함께 오늘의 소중한 순간을 기록하고 예쁜 일기장 한 장으로 저장할 수 있습니다."
+                      });
+                    }
+                    return (
                     <div className="space-y-2.5">
-                      {babyDiaryEntries
-                        .filter((d) => d.childId === activeChild.id)
+                      {childDiaries
                         .map((entry) => (
                           <div
                             key={entry.id}
@@ -16182,7 +16267,8 @@ ${validText}
                           </div>
                         ))}
                     </div>
-                  )}
+                    );
+                  })()}
                 </div>
               )
             )}
@@ -16429,6 +16515,8 @@ ${validText}
               onClick={() => {
                 if (item.id === "daily") {
                   openDailyTodayAll();
+                } else if (item.id === "baby") {
+                  openBabyTab();
                 } else {
                   setActiveTab(item.id);
                   setIsMoreNavOpen(false);
