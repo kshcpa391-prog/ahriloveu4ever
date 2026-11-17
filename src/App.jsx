@@ -1212,7 +1212,7 @@ const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.65) =>
     img.src = dataUrl;
   });
 
-const APP_CODE_VERSION = "v11.68";
+const APP_CODE_VERSION = "v11.69";
 
 const formatRoutineTimeLabel = (hhmm) => {
   const m = String(hhmm || "").trim().match(/^(\d{2}):(\d{2})$/);
@@ -1290,6 +1290,18 @@ const formatTime12Ko = (ms) => {
 };
 
 const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v11.69",
+    version: "v11.69",
+    date: "2026-11-18",
+    title: "전체 문구 슬림화 · 홈 오늘 수면 시간 합산 · 케어 요약 복사 고도화 & 원탭 서버 재연결",
+    changes: [
+      "시각적 피로도 최소화: 일정·AI추천·육아수첩 빈 화면 및 모달의 장황한 부연 설명을 1줄 핵심 문구로 정돈",
+      "홈 케어 요약 고도화: 홈 화면 [오늘 요약]에 수유·기저귀 외에 오늘 총 수면 시간(시간/분)까지 함께 표시",
+      "육아 케어 요약 복사 고도화: [📋 오늘 요약] 복사 시 총 수면 시간·소변/대변 횟수를 포함하도록 개선",
+      "원탭 서버 재연결: 상단 연결 배지가 오프라인/연결 중/오류일 때 누르면 즉시 서버 재인증을 시도하도록 개선"
+    ]
+  },
   {
     id: "patch-v11.68",
     version: "v11.68",
@@ -12235,13 +12247,24 @@ ${validText}
 
         <div className="mb-2 flex items-center justify-between gap-1">
           <div className="flex items-center gap-1 min-w-0 flex-1 overflow-x-auto">
-            <span
+            <button
+              type="button"
+              onClick={async () => {
+                if (syncStatus === "synced" || !auth) return;
+                showToast("🔄 서버 재연결을 시도합니다...");
+                try {
+                  await signInAnonymously(auth);
+                } catch (e) {
+                  setSyncErrorMsg("서버 재연결 실패: 네트워크를 확인해 주세요.");
+                }
+              }}
+              title={syncStatus === "synced" ? "서버 연결 정상" : "눌러서 서버 재연결 시도"}
               className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-bold border whitespace-nowrap shrink-0 ${
                 syncStatus === "offline" || syncStatus === "error"
-                  ? "bg-rose-50 text-rose-700 border-rose-200"
+                  ? "bg-rose-50 text-rose-700 border-rose-200 cursor-pointer"
                   : syncStatus === "saving" || syncStatus === "connecting"
-                  ? "bg-amber-50 text-amber-800 border-amber-200"
-                  : "bg-emerald-50 text-emerald-700 border-emerald-200"
+                  ? "bg-amber-50 text-amber-800 border-amber-200 cursor-pointer"
+                  : "bg-emerald-50 text-emerald-700 border-emerald-200 cursor-default"
               }`}
             >
               <Zap className="w-3 h-3 shrink-0" />
@@ -12256,7 +12279,7 @@ ${validText}
                   ? "연결 중"
                   : "연결됨"}
               </span>
-            </span>
+            </button>
             <button
               onClick={() => setIsPatchModalOpen(true)}
               className="px-1.5 py-0.5 rounded-full text-[10px] font-extrabold bg-stone-100 hover:bg-stone-200 text-stone-700 border border-stone-200 inline-flex items-center gap-0.5 whitespace-nowrap shrink-0"
@@ -12559,11 +12582,13 @@ ${validText}
                 const fMl = todayActs.filter((a) => a.type === "분유" || a.type === "유축수유").reduce((s, a) => s + (Number(a.amountMl) || 0), 0);
                 const bMin = todayActs.filter((a) => a.type === "모유").reduce((s, a) => s + (Number(a.durationMin) || 0), 0);
                 const dCount = todayActs.filter((a) => a.type === "기저귀").length;
+                const sMin = todayActs.filter((a) => a.type === "수면").reduce((s, a) => s + (Number(a.durationMin) || 0), 0);
+                const sLabel = sMin >= 60 ? `${Math.floor(sMin / 60)}시간${sMin % 60 > 0 ? `${sMin % 60}분` : ""}` : `${sMin}분`;
                 return (
                   <div className="flex items-center justify-between gap-1.5 px-2.5 py-1 rounded-xl bg-[#EEF3EE]/70 border border-[#C9D8CC]/80 text-[10.5px] font-extrabold text-[#35503C]">
-                    <span className="whitespace-nowrap">📅 오늘 요약</span>
+                    <span className="whitespace-nowrap">📅 오늘</span>
                     <span className="truncate">
-                      수유 {fCount}회{fMl > 0 || bMin > 0 ? ` (${fMl > 0 ? `${fMl}ml` : ""}${fMl > 0 && bMin > 0 ? "+" : ""}${bMin > 0 ? `${bMin}분` : ""})` : ""} · 기저귀 {dCount}회
+                      수유 {fCount}회{fMl > 0 || bMin > 0 ? ` (${fMl > 0 ? `${fMl}ml` : ""}${fMl > 0 && bMin > 0 ? "+" : ""}${bMin > 0 ? `${bMin}분` : ""})` : ""} · 기저귀 {dCount}회{sMin > 0 ? ` · 수면 ${sLabel}` : ""}
                     </span>
                   </div>
                 );
@@ -14697,7 +14722,7 @@ ${validText}
                 <span className="truncate">우리 가족 월간 일정표</span>
               </h2>
               <p className="text-[12.5px] text-stone-500">
-                월간 달력 · 주간 일정 요약 · 전체 To-Do 체크리스트 · 기념일 D-Day
+                달력 · 주간 요약 · To-Do · D-Day
               </p>
             </div>
             <button
@@ -17467,7 +17492,7 @@ ${validText}
                     <span>AI 날짜·대상별 맞춤 식단표</span>
                   </h2>
                   <p className="text-[12.5px] text-stone-500 mt-0.5">
-                    원하는 날짜·끼니만 자유롭게 고르고, 성인식·유아식·온가족식을 분리해 완성형 한 끼를 만듭니다.
+                    날짜·끼니와 대상(성인·유아·온가족)을 골라 AI 식단을 추천받으세요.
                   </p>
                 </div>
 
@@ -18986,8 +19011,10 @@ ${validText}
                               const bMin = tList.filter((a) => a.type === "모유").reduce((s, a) => s + (Number(a.durationMin) || 0), 0);
                               const pCnt = tList.filter((a) => a.type === "기저귀" && String(a.subType).includes("소변")).length;
                               const dCnt = tList.filter((a) => a.type === "기저귀" && String(a.subType).includes("대변")).length;
+                              const sMin = tList.filter((a) => a.type === "수면").reduce((s, a) => s + (Number(a.durationMin) || 0), 0);
+                              const sTxt = sMin >= 60 ? `${Math.floor(sMin / 60)}시간 ${sMin % 60}분` : `${sMin}분`;
                               const lastF = sum.lastFeed ? `${formatTime12Ko(sum.lastFeed.startMs)} ${sum.lastFeed.type}` : "-";
-                              const txt = `👶 ${activeChild.name} 오늘 케어 요약 (${todayKey})\n• 수유: ${fCnt}회 (분유·유축 ${fMl}ml / 모유 ${bMin}분)\n• 마지막 수유 시작: ${lastF}\n• 기저귀: 소변 ${pCnt}회 · 대변 ${dCnt}회`;
+                              const txt = `👶 ${activeChild.name} 오늘 케어 요약 (${todayKey})\n• 수유: ${fCnt}회 (분유·유축 ${fMl}ml / 모유 ${bMin}분)\n• 마지막 수유 시작: ${lastF}\n• 기저귀: 소변 ${pCnt}회 · 대변 ${dCnt}회\n• 총 수면: ${sTxt}`;
                               try {
                                 await navigator.clipboard.writeText(txt);
                                 showToast("📋 오늘 케어 요약을 복사했습니다!");
@@ -19022,7 +19049,7 @@ ${validText}
                     renderStatusState({
                       type: "empty",
                       title: `${activeChild.name} 수유·생활 기록이 없습니다`,
-                      description: "상단 아이콘을 눌러 바로 기록하거나 [📥 베이비타임(.zip)]으로 기존 기록을 클라우드에 올릴 수 있습니다."
+                      description: "위 아이콘으로 바로 기록하거나 [📥 베이비타임(.zip)]으로 불러오세요."
                     })
                   ) : (
                     <div className="space-y-2.5">
@@ -20059,7 +20086,7 @@ ${validText}
                         title: q ? `'${diarySearchQuery}' 검색 결과가 없습니다` : `${activeChild.name}의 첫 육아일기를 남겨보세요`,
                         description: q
                           ? "다른 키워드로 검색하거나 검색어를 지워보세요."
-                          : "사진과 함께 오늘의 소중한 순간을 기록하고 예쁜 일기장 한 장으로 저장할 수 있습니다."
+                          : "사진과 함께 오늘의 순간을 기록해 보세요."
                       });
                     }
                     return (
@@ -23975,7 +24002,7 @@ ${validText}
                     {diaryImportModal.date}에 등록된 식단·진료·일정 기록이 없습니다
                   </div>
                   <div className="text-[11.5px] font-semibold text-stone-500">
-                    아래에서 성장 수치(키·몸무게)를 바로 입력해 저장하고 일기에 넣을 수 있어요!
+                    키·몸무게를 바로 입력해 일기에 넣을 수 있어요.
                   </div>
                 </div>
               ) : (
