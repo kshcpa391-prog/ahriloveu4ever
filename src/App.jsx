@@ -1212,7 +1212,7 @@ const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.65) =>
     img.src = dataUrl;
   });
 
-const APP_CODE_VERSION = "v11.47";
+const APP_CODE_VERSION = "v11.50";
 
 const formatRoutineTimeLabel = (hhmm) => {
   const m = String(hhmm || "").trim().match(/^(\d{2}):(\d{2})$/);
@@ -1228,7 +1228,7 @@ const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-const APP_BUILD_DATE = "2026-11-17 21:52";
+const APP_BUILD_DATE = "2026-11-17 22:15";
 const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1254,7 +1254,71 @@ const HELPER_CONFIGURABLE_TABS = [
   { id: "monthly", label: "💰 월간·식비" }
 ];
 
+const BABY_ACTIVITY_TYPES = [
+  { id: "모유", label: "모유", emoji: "🤱", timed: true, isFeed: true, bg: "bg-rose-500", soft: "bg-rose-50 text-rose-700 border-rose-200", text: "text-rose-600" },
+  { id: "분유", label: "분유", emoji: "🍼", timed: true, isFeed: true, hasMl: true, bg: "bg-amber-500", soft: "bg-amber-50 text-amber-800 border-amber-200", text: "text-amber-600" },
+  { id: "유축수유", label: "유축수유", emoji: "💚", timed: true, isFeed: true, hasMl: true, bg: "bg-lime-600", soft: "bg-lime-50 text-lime-800 border-lime-200", text: "text-lime-700" },
+  { id: "이유식", label: "이유식", emoji: "🥣", timed: true, hasMl: true, unit: "g", bg: "bg-teal-500", soft: "bg-teal-50 text-teal-800 border-teal-200", text: "text-teal-600" },
+  { id: "기저귀", label: "기저귀", emoji: "🧷", timed: false, bg: "bg-amber-700", soft: "bg-orange-50 text-amber-900 border-orange-200", text: "text-amber-700" },
+  { id: "수면", label: "수면", emoji: "😴", timed: true, bg: "bg-indigo-500", soft: "bg-indigo-50 text-indigo-800 border-indigo-200", text: "text-indigo-600" },
+  { id: "유축", label: "유축", emoji: "🧴", timed: true, hasMl: true, bg: "bg-pink-500", soft: "bg-pink-50 text-pink-800 border-pink-200", text: "text-pink-600" },
+  { id: "목욕", label: "목욕", emoji: "🛁", timed: false, bg: "bg-sky-500", soft: "bg-sky-50 text-sky-800 border-sky-200", text: "text-sky-600" },
+  { id: "터미타임", label: "터미타임", emoji: "🧸", timed: true, bg: "bg-violet-500", soft: "bg-violet-50 text-violet-800 border-violet-200", text: "text-violet-600" },
+  { id: "투약", label: "투약", emoji: "💊", timed: false, bg: "bg-red-500", soft: "bg-red-50 text-red-800 border-red-200", text: "text-red-600" },
+  { id: "기타", label: "기타", emoji: "📝", timed: false, bg: "bg-stone-600", soft: "bg-stone-100 text-stone-700 border-stone-200", text: "text-stone-700" }
+];
+
+const formatElapsedKo = (msDiff) => {
+  if (!Number.isFinite(msDiff) || msDiff < 0) return "방금";
+  const totalMin = Math.floor(msDiff / 60000);
+  if (totalMin < 1) return "방금 전";
+  if (totalMin < 60) return `${totalMin}분 전`;
+  const h = Math.floor(totalMin / 60);
+  const m = totalMin % 60;
+  if (h < 24) return m > 0 ? `${h}시간 ${m}분 전` : `${h}시간 전`;
+  const d = Math.floor(h / 24);
+  return `${d}일 ${h % 24}시간 전`;
+};
+
+const formatTime12Ko = (ms) => {
+  const d = new Date(ms);
+  const hh = d.getHours();
+  const mm = String(d.getMinutes()).padStart(2, "0");
+  const ampm = hh >= 12 ? "PM" : "AM";
+  const h12 = String(hh % 12 === 0 ? 12 : hh % 12).padStart(2, "0");
+  return `${h12}:${mm} ${ampm}`;
+};
+
 const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v11.50",
+    version: "v11.50",
+    date: "2026-11-17",
+    title: "외부 일기·활동 ZIP 여러 파일 동시 일괄 업로드 지원",
+    changes: [
+      "다중 파일 업로드: [📥 외부일기(.zip)] 및 [📥 베이비타임(.zip)] 파일 선택 시 여러 달치 ZIP 파일을 한 번에 여러 개 선택해 연속 파싱·중복 제거 후 클라우드에 일괄 저장하도록 개선"
+    ]
+  },
+  {
+    id: "patch-v11.49",
+    version: "v11.49",
+    date: "2026-11-17",
+    title: "외부 일기·활동 ZIP 업로드 시 [김시목 / 김시율] 대상 아이 직접 선택 팝업 추가",
+    changes: [
+      "오류 해결: 파일명에 아이 이름이 없거나 현재 탭이 다른 아이로 선택돼 있어도 잘못 연결되지 않도록 [📥 외부일기(.zip)]·[📥 베이비타임(.zip)] 클릭 시 [👦 김시목 / 👶 김시율] 선택 팝업을 먼저 띄워 선택한 아이로 정확히 저장"
+    ]
+  },
+  {
+    id: "patch-v11.48",
+    version: "v11.48",
+    date: "2026-11-17",
+    title: "시율이 수유·기저귀·수면 원탭 타이머 & 베이비타임 Activity(.zip) 클라우드 업로드 신설",
+    changes: [
+      "신규 메뉴 [🍼 수유·생활]: 모유(왼/오 방향전환)·분유·유축수유·이유식·기저귀·수면·유축·목욕·터미타임·투약·기타 원탭 즉시 기록 + 종료 시 한 번 더 눌러 완료하는 실시간 타이머 도입",
+      "색상 구분 & 홈 현황: 모유(로즈)·분유(앰버)·유축수유(라임) 색상 구분 및 홈 화면 [👶 시율 실시간 케어 현황] 3칸 카드(마지막 기저귀·수유+이전 텀·수면) 추가",
+      "외부 데이터 클라우드 업로드: [📥 베이비타임(.zip)]으로 Activity ZIP 업로드 시 HTML/TXT 내 모든 기록과 기저귀 사진까지 자동 압축해 Firebase(family_baby_activities_v1)에 저장"
+    ]
+  },
   {
     id: "patch-v11.47",
     version: "v11.47",
@@ -4066,6 +4130,8 @@ function MainApp() {
   const [pendingDiaryPhotoFile, setPendingDiaryPhotoFile] = useState(null);
   const diaryPhotoInputRef = useRef(null);
   const babytimeZipInputRef = useRef(null);
+  const [zipImportPicker, setZipImportPicker] = useState(null);
+  const zipTargetChildRef = useRef("시율");
   useEffect(() => {
     return () => {
       if (activityPopupTimerRef.current) clearTimeout(activityPopupTimerRef.current);
@@ -4113,10 +4179,23 @@ function MainApp() {
   const [cookingConfirmModal, setCookingConfirmModal] = useState(null);
 
   const [selectedChildId, setSelectedChildId] = useState("시율");
-  const [babySubTab, setBabySubTab] = useState("milestones"); // milestones | vaccines | growth | medical
+  const [babySubTab, setBabySubTab] = useState("activity"); // milestones | vaccines | growth | medical
   const [babyChecks, setBabyChecks] = useState({});
   const [babyGrowthLogs, setBabyGrowthLogs] = useState([]);
   const [babyMedicalNotes, setBabyMedicalNotes] = useState([]);
+  const [babyActivities, setBabyActivities] = useState([]);
+  const [activityEditModal, setActivityEditModal] = useState(null);
+  const [activityDateFilter, setActivityDateFilter] = useState("all");
+  const [activityTimerTick, setActivityTimerTick] = useState(Date.now());
+  const activityZipInputRef = useRef(null);
+  const activityPhotoInputRef = useRef(null);
+
+  useEffect(() => {
+    const hasActive = babyActivities.some((a) => a.inProgress);
+    if (!hasActive) return;
+    const t = setInterval(() => setActivityTimerTick(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [babyActivities]);
   const [growthForm, setGrowthForm] = useState({
     date: getTodayStr(),
     height: "",
@@ -5943,6 +6022,18 @@ function MainApp() {
 
     unsubscribers.push(
       onSnapshot(
+        getColRef("family_baby_activities_v1"),
+        (snap) => {
+          const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+          list.sort((a, b) => (Number(b.startMs) || 0) - (Number(a.startMs) || 0));
+          setBabyActivities(list);
+        },
+        (err) => setSyncErrorMsg(err?.message || "수유·생활 기록 동기화 오류")
+      )
+    );
+
+    unsubscribers.push(
+      onSnapshot(
         getColRef("family_baby_notes_v7"),
         (snap) => {
           const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
@@ -6456,6 +6547,7 @@ function MainApp() {
         babyChecks,
         babyGrowthLogs,
         babyMedicalNotes,
+        babyActivities,
         familyRoutines,
         homeLayoutConfig,
         homeTimeRanges,
@@ -6691,6 +6783,9 @@ function MainApp() {
         });
         (payload.babyGrowthLogs || []).forEach((bg) => {
           if (bg?.id) writePromises.push(setDoc(getDocRef("family_baby_growth_v7", bg.id), bg));
+        });
+        (payload.babyActivities || []).forEach((ba) => {
+          if (ba?.id) writePromises.push(setDoc(getDocRef("family_baby_activities_v1", ba.id), ba));
         });
         (payload.babyMedicalNotes || []).forEach((bm) => {
           if (bm?.id) writePromises.push(setDoc(getDocRef("family_baby_notes_v7", bm.id), bm));
@@ -9814,9 +9909,9 @@ ${validText}
   };
 
   const handleImportBabyTimeZip = async (e) => {
-    const file = e.target.files?.[0];
+    const selectedFiles = Array.from(e.target.files || []);
     if (e.target) e.target.value = "";
-    if (!file) return;
+    if (selectedFiles.length === 0) return;
     if (!isAdminUnlocked) {
       showToast("🔒 육아일기는 관리자만 가져올 수 있습니다.");
       return;
@@ -9826,23 +9921,36 @@ ${validText}
       return;
     }
 
-    setDiaryUploadProgress({ stepText: "📦 일기 ZIP 파일 분석 중...", pct: 10 });
+    setDiaryUploadProgress({ stepText: `📦 일기 ZIP ${selectedFiles.length}개 분석 중...`, pct: 8 });
     beginWrite();
     let ok = false;
     try {
-      const ab = await file.arrayBuffer();
-      const filesMap = await parseZipEntriesInBrowser(ab);
-      const txtKeys = Object.keys(filesMap).filter((k) => k.endsWith(".txt") && !k.toUpperCase().includes("NOTICE"));
-      const ascKey = txtKeys.find((k) => k.includes("_asc")) || txtKeys[0];
-      if (!ascKey) throw new Error("일기 텍스트(.txt)를 찾지 못했습니다.");
-
-      const rawText = new TextDecoder("utf-8").decode(filesMap[ascKey]);
-      const targetChild = file.name.includes("시목") ? "시목" : file.name.includes("시율") ? "시율" : selectedChildId;
-      const blocks = rawText.split(/={5,}/).map((b) => b.trim()).filter(Boolean);
+      const targetChild = zipTargetChildRef.current || selectedChildId || "시율";
+      const seenGrowthKeys = new Set(
+        babyGrowthLogs
+          .filter((g) => g.childId === targetChild)
+          .map((g) => `${g.date}|${g.weight ?? ""}|${g.height ?? ""}`)
+      );
+      const seenDiaryKeys = new Set(
+        babyDiaryEntries
+          .filter((d) => getDiaryEntryChildIds(d).includes(targetChild))
+          .map((d) => `${d.date}|${String(d.content || "").trim()}`)
+      );
 
       let importedDiaryCount = 0;
       let importedGrowthCount = 0;
       let skippedDupCount = 0;
+
+      for (let fIdx = 0; fIdx < selectedFiles.length; fIdx++) {
+        const file = selectedFiles[fIdx];
+        const ab = await file.arrayBuffer();
+        const filesMap = await parseZipEntriesInBrowser(ab);
+        const txtKeys = Object.keys(filesMap).filter((k) => k.endsWith(".txt") && !k.toUpperCase().includes("NOTICE"));
+        const ascKey = txtKeys.find((k) => k.includes("_asc")) || txtKeys[0];
+        if (!ascKey) continue;
+
+        const rawText = new TextDecoder("utf-8").decode(filesMap[ascKey]);
+        const blocks = rawText.split(/={5,}/).map((b) => b.trim()).filter(Boolean);
 
       for (let bIdx = 0; bIdx < blocks.length; bIdx++) {
         const block = blocks[bIdx];
@@ -9872,19 +9980,18 @@ ${validText}
         }
 
         setDiaryUploadProgress({
-          stepText: `☁️ 클라우드 반영 중... (${bIdx + 1}/${blocks.length})`,
-          pct: Math.min(90, Math.round(((bIdx + 1) / Math.max(1, blocks.length)) * 80) + 10)
+          stepText: `☁️ 파일 ${fIdx + 1}/${selectedFiles.length} 반영 중... (${bIdx + 1}/${blocks.length})`,
+          pct: Math.min(92, Math.round((((fIdx + (bIdx + 1) / Math.max(1, blocks.length)) / selectedFiles.length)) * 82) + 10)
         });
 
         if (weightMatch || heightMatch || headMatch) {
           const wVal = weightMatch ? Number(weightMatch[1]) : null;
           const hVal = heightMatch ? Number(heightMatch[1]) : null;
           const hdVal = headMatch ? Number(headMatch[1]) : null;
-          const dupGrowth = babyGrowthLogs.some(
-            (g) => g.childId === targetChild && g.date === entryDate && g.weight === wVal && g.height === hVal
-          );
-          if (!dupGrowth) {
-            const gId = `gr-bt-${targetChild}-${entryDate}-${Date.now()}-${bIdx}`;
+          const gKey = `${entryDate}|${wVal ?? ""}|${hVal ?? ""}`;
+          if (!seenGrowthKeys.has(gKey)) {
+            seenGrowthKeys.add(gKey);
+            const gId = `gr-bt-${targetChild}-${entryDate}-${Date.now()}-${fIdx}-${bIdx}`;
             const gPayload = {
               id: gId,
               childId: targetChild,
@@ -9900,13 +10007,12 @@ ${validText}
         }
 
         if (contentText || imageNames.length > 0) {
-          const dupDiary = babyDiaryEntries.some(
-            (d) => d.date === entryDate && getDiaryEntryChildIds(d).includes(targetChild) && String(d.content || "").trim() === contentText
-          );
-          if (dupDiary) {
+          const dKey = `${entryDate}|${contentText}`;
+          if (seenDiaryKeys.has(dKey)) {
             skippedDupCount += 1;
             continue;
           }
+          seenDiaryKeys.add(dKey);
           const cappedNames = imageNames.slice(0, 4);
           const perPhotoBudget = Math.max(90000, Math.floor(740000 / Math.max(1, cappedNames.length)));
           const finalUrls = [];
@@ -9937,6 +10043,7 @@ ${validText}
           importedDiaryCount += 1;
         }
       }
+      }
 
       if (importedDiaryCount > 0 || importedGrowthCount > 0) {
         recordActivity("육아", "일기가져오기", `${targetChild} · 일기 ${importedDiaryCount}편 · 성장 ${importedGrowthCount}건`, {
@@ -9944,6 +10051,7 @@ ${validText}
           targetChildId: targetChild
         });
       }
+      setSelectedChildId(targetChild);
       showToast(
         `☁️ ${targetChild} 가져오기 완료! 일기 ${importedDiaryCount}편 · 성장 ${importedGrowthCount}건 클라우드 저장` +
           (skippedDupCount > 0 ? ` (중복 ${skippedDupCount}건 제외)` : "")
@@ -9951,6 +10059,420 @@ ${validText}
       ok = true;
     } catch (err) {
       showToast(`❌ 일기 ZIP 가져오기 실패: ${err?.message || "형식 오류"}`);
+    } finally {
+      setDiaryUploadProgress(null);
+      endWrite(ok);
+    }
+  };
+
+  const computeActivitySummaryForChild = (childId) => {
+    const list = babyActivities
+      .filter((a) => a.childId === childId)
+      .slice()
+      .sort((a, b) => (Number(b.startMs) || 0) - (Number(a.startMs) || 0));
+    const feeds = list.filter((a) => ["모유", "분유", "유축수유"].includes(a.type));
+    const lastFeed = feeds[0] || null;
+    const prevFeed = feeds[1] || null;
+    const feedIntervalMs =
+      lastFeed && prevFeed ? Math.max(0, (Number(lastFeed.startMs) || 0) - (Number(prevFeed.startMs) || 0)) : null;
+    const lastDiaper = list.find((a) => a.type === "기저귀") || null;
+    const lastSleep = list.find((a) => a.type === "수면") || null;
+    return { list, lastFeed, feedIntervalMs, lastDiaper, lastSleep };
+  };
+
+  const handleQuickTapBabyActivity = async (typeId) => {
+    if (!requireEditorAccess()) return;
+    if (!user || !db) {
+      showToast("⚠️ 서버 연결 후 기록할 수 있습니다.");
+      return;
+    }
+    const targetChild = selectedChildId || "시율";
+    const meta = BABY_ACTIVITY_TYPES.find((t) => t.id === typeId);
+    if (!meta) return;
+
+    const activeItem = babyActivities.find((a) => a.childId === targetChild && a.type === typeId && a.inProgress);
+    if (activeItem) {
+      await handleStopBabyActivityTimer(activeItem);
+      return;
+    }
+
+    const nowMs = Date.now();
+    const todayStr = formatDate(new Date(nowMs));
+
+    if (typeId === "기저귀") {
+      setActivityEditModal({
+        isNew: true,
+        id: `act-${targetChild}-${nowMs}`,
+        childId: targetChild,
+        type: "기저귀",
+        subType: "소변",
+        date: todayStr,
+        startMs: nowMs,
+        endMs: null,
+        durationMin: 0,
+        amountMl: "",
+        memo: "",
+        photoUrl: "",
+        inProgress: false
+      });
+      return;
+    }
+
+    if (typeId === "투약" || typeId === "기타") {
+      setActivityEditModal({
+        isNew: true,
+        id: `act-${targetChild}-${nowMs}`,
+        childId: targetChild,
+        type: typeId,
+        subType: "",
+        date: todayStr,
+        startMs: nowMs,
+        endMs: null,
+        durationMin: 0,
+        amountMl: "",
+        memo: "",
+        photoUrl: "",
+        inProgress: false
+      });
+      return;
+    }
+
+    if (typeId === "목욕") {
+      const id = `act-${targetChild}-${nowMs}`;
+      const payload = {
+        id,
+        childId: targetChild,
+        type: "목욕",
+        subType: "",
+        date: todayStr,
+        startMs: nowMs,
+        endMs: null,
+        durationMin: 0,
+        inProgress: false,
+        author: actorName || "관리자",
+        updatedAt: new Date().toISOString()
+      };
+      await setDoc(getDocRef("family_baby_activities_v1", id), payload);
+      showToast(`🛁 ${targetChild} 목욕이 즉시 기록되었습니다!`);
+      return;
+    }
+
+    const hr = new Date(nowMs).getHours();
+    const defaultSub =
+      typeId === "수면"
+        ? hr >= 7 && hr < 19
+          ? "낮잠"
+          : "밤잠"
+        : typeId === "모유"
+        ? "왼쪽"
+        : "";
+    const id = `act-${targetChild}-${nowMs}`;
+    const payload = {
+      id,
+      childId: targetChild,
+      type: typeId,
+      subType: defaultSub,
+      date: todayStr,
+      startMs: nowMs,
+      endMs: null,
+      durationMin: 0,
+      leftMin: 0,
+      rightMin: 0,
+      activeSide: typeId === "모유" ? "left" : "",
+      sideStartMs: typeId === "모유" ? nowMs : null,
+      breastOrder: typeId === "모유" ? "왼쪽" : "",
+      amountMl: 0,
+      memo: "",
+      photoUrl: "",
+      inProgress: true,
+      author: actorName || "관리자",
+      updatedAt: new Date().toISOString()
+    };
+    await setDoc(getDocRef("family_baby_activities_v1", id), payload);
+    showToast(`${meta.emoji} ${targetChild} ${typeId} 시작 기록! 종료 시 한 번 더 눌러주세요.`);
+  };
+
+  const handleSwitchBreastSide = async (act, nextSide) => {
+    if (!requireEditorAccess() || !act || !user || !db) return;
+    const nowMs = Date.now();
+    const curSide = act.activeSide || "left";
+    const segStart = Number(act.sideStartMs || act.startMs) || nowMs;
+    const addedMin = Math.max(0, Math.round((nowMs - segStart) / 60000));
+    const nextLeft = (Number(act.leftMin) || 0) + (curSide === "left" ? addedMin : 0);
+    const nextRight = (Number(act.rightMin) || 0) + (curSide === "right" ? addedMin : 0);
+    let order = act.breastOrder || "";
+    if (curSide !== nextSide) {
+      order = nextSide === "right" ? (nextLeft > 0 ? "왼쪽 후 오른쪽" : "오른쪽") : (nextRight > 0 ? "오른쪽 후 왼쪽" : "왼쪽");
+    }
+    const updated = {
+      ...act,
+      leftMin: nextLeft,
+      rightMin: nextRight,
+      activeSide: nextSide,
+      sideStartMs: nowMs,
+      breastOrder: order,
+      subType: order,
+      durationMin: nextLeft + nextRight,
+      updatedAt: new Date().toISOString()
+    };
+    await setDoc(getDocRef("family_baby_activities_v1", act.id), updated);
+    showToast(`🤱 모유 방향 전환: ${nextSide === "left" ? "왼쪽" : "오른쪽"}`);
+  };
+
+  const handleStopBabyActivityTimer = async (act) => {
+    if (!requireEditorAccess() || !act || !user || !db) return;
+    const nowMs = Date.now();
+    const totalMin = Math.max(0, Math.round((nowMs - (Number(act.startMs) || nowMs)) / 60000));
+    let leftMin = Number(act.leftMin) || 0;
+    let rightMin = Number(act.rightMin) || 0;
+    let order = act.breastOrder || act.subType || "";
+    if (act.type === "모유") {
+      const curSide = act.activeSide || "left";
+      const segStart = Number(act.sideStartMs || act.startMs) || nowMs;
+      const added = Math.max(0, Math.round((nowMs - segStart) / 60000));
+      if (curSide === "left") leftMin += added;
+      else rightMin += added;
+      if (leftMin > 0 && rightMin > 0 && !order.includes("후")) {
+        order = curSide === "right" ? "왼쪽 후 오른쪽" : "오른쪽 후 왼쪽";
+      } else if (leftMin > 0 && rightMin === 0) {
+        order = "왼쪽";
+      } else if (rightMin > 0 && leftMin === 0) {
+        order = "오른쪽";
+      }
+    }
+    const completed = {
+      ...act,
+      endMs: nowMs,
+      durationMin: act.type === "모유" ? Math.max(totalMin, leftMin + rightMin) : totalMin,
+      leftMin,
+      rightMin,
+      breastOrder: order,
+      subType: act.type === "모유" ? order : act.subType,
+      inProgress: false,
+      updatedAt: new Date().toISOString()
+    };
+    await setDoc(getDocRef("family_baby_activities_v1", act.id), completed);
+    const meta = BABY_ACTIVITY_TYPES.find((t) => t.id === act.type);
+    if (meta?.hasMl) {
+      setActivityEditModal({ ...completed, isNew: false });
+      showToast(`${meta.emoji} 종료(${completed.durationMin}분) — 용량(ml/g)을 입력해 주세요.`);
+    } else {
+      showToast(`${meta?.emoji || "✅"} ${act.type} 완료 저장 (${completed.durationMin}분)`);
+    }
+  };
+
+  const handleSaveActivityModal = async () => {
+    if (!requireEditorAccess() || !activityEditModal || !user || !db) return;
+    const m = activityEditModal;
+    const payload = {
+      id: m.id,
+      childId: m.childId || selectedChildId || "시율",
+      type: m.type,
+      subType: m.subType || "",
+      date: m.date || formatDate(new Date(m.startMs || Date.now())),
+      startMs: Number(m.startMs) || Date.now(),
+      endMs: m.endMs ? Number(m.endMs) : null,
+      durationMin: Number(m.durationMin) || 0,
+      leftMin: Number(m.leftMin) || 0,
+      rightMin: Number(m.rightMin) || 0,
+      breastOrder: m.breastOrder || "",
+      amountMl: Number(m.amountMl) || 0,
+      memo: (m.memo || "").trim(),
+      photoUrl: m.photoUrl || "",
+      inProgress: Boolean(m.inProgress),
+      author: m.author || actorName || "관리자",
+      updatedAt: new Date().toISOString()
+    };
+    await setDoc(getDocRef("family_baby_activities_v1", payload.id), payload);
+    setActivityEditModal(null);
+    showToast(`✅ ${payload.type} 기록이 저장되었습니다!`);
+  };
+
+  const handleDeleteBabyActivity = async (id) => {
+    if (!requireEditorAccess() || !id || !user || !db) return;
+    await deleteDoc(getDocRef("family_baby_activities_v1", id));
+    setActivityEditModal(null);
+    showToast("기록이 삭제되었습니다.");
+  };
+
+  const parseBabyTimeDateTime = (dtStr) => {
+    const m = String(dtStr || "").trim().match(/^(\d{4}-\d{2}-\d{2})\s+(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+    if (!m) return null;
+    let h = Number(m[2]);
+    const min = Number(m[3]);
+    const ap = m[4].toUpperCase();
+    if (ap === "PM" && h < 12) h += 12;
+    if (ap === "AM" && h === 12) h = 0;
+    const d = new Date(`${m[1]}T${String(h).padStart(2, "0")}:${String(min).padStart(2, "0")}:00`);
+    return { date: m[1], ms: d.getTime() };
+  };
+
+  const handleImportBabyTimeActivityZip = async (e) => {
+    const selectedFiles = Array.from(e.target.files || []);
+    if (e.target) e.target.value = "";
+    if (selectedFiles.length === 0) return;
+    if (!requireEditorAccess() || !user || !db) {
+      showToast("⚠️ 관리자 잠금 해제 및 서버 연결 후 가져올 수 있습니다.");
+      return;
+    }
+    setDiaryUploadProgress({ stepText: `📦 활동 ZIP ${selectedFiles.length}개 분석 중...`, pct: 8 });
+    beginWrite();
+    let ok = false;
+    try {
+      const targetChild = zipTargetChildRef.current || selectedChildId || "시율";
+      const existingKeys = new Set(
+        babyActivities.filter((a) => a.childId === targetChild).map((a) => `${a.startMs}|${a.type}`)
+      );
+      let importedCount = 0;
+      let skippedCount = 0;
+      const toWrite = [];
+
+      for (let fIdx = 0; fIdx < selectedFiles.length; fIdx++) {
+        const file = selectedFiles[fIdx];
+        const ab = await file.arrayBuffer();
+        const filesMap = await parseZipEntriesInBrowser(ab);
+        const htmlKeys = Object.keys(filesMap).filter((k) => k.endsWith(".html"));
+        const ascHtmlKey = htmlKeys.find((k) => k.includes("_asc")) || htmlKeys[0];
+        const txtKeys = Object.keys(filesMap).filter((k) => k.endsWith(".txt") && !k.toUpperCase().includes("NOTICE"));
+        const ascTxtKey = txtKeys.find((k) => k.includes("_asc")) || txtKeys[0];
+
+      let rawSegments = [];
+      if (ascHtmlKey) {
+        const htmlStr = new TextDecoder("utf-8").decode(filesMap[ascHtmlKey]);
+        const parts = htmlStr.split(/<hr\s*\/?>/i).slice(1);
+        rawSegments = parts
+          .map((seg) => {
+            if (!/\d{4}-\d{2}-\d{2}\s+\d{1,2}:\d{2}\s*(?:AM|PM)/i.test(seg)) return null;
+            const imgMatches = [...seg.matchAll(/src=["'](images\/[^"']+)["']/gi)].map((x) => x[1]);
+            const cleanTxt = seg
+              .replace(/<br\s*\/?>/gi, "\n")
+              .replace(/<[^>]+>/g, " ")
+              .replace(/&nbsp;/g, " ")
+              .trim();
+            return { text: cleanTxt, imgs: imgMatches };
+          })
+          .filter(Boolean);
+      } else if (ascTxtKey) {
+        const txtStr = new TextDecoder("utf-8").decode(filesMap[ascTxtKey]);
+        rawSegments = txtStr
+          .split(/={5,}/)
+          .map((s) => ({ text: s.trim(), imgs: [] }))
+          .filter((x) => x.text);
+      } else {
+        continue;
+      }
+
+      for (let idx = 0; idx < rawSegments.length; idx++) {
+        const { text, imgs } = rawSegments[idx];
+        const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
+        if (lines.length === 0) continue;
+
+        const dtParts = lines[0].split("~").map((x) => x.trim());
+        const startParsed = parseBabyTimeDateTime(dtParts[0]);
+        if (!startParsed) continue;
+        const endParsed = dtParts[1] ? parseBabyTimeDateTime(dtParts[1]) : null;
+
+        const kindLine = lines.find((l) => l.startsWith("기록 종류:")) || "";
+        const rawKind = kindLine.replace("기록 종류:", "").trim();
+        let type = "기타";
+        let subType = "";
+        let breastOrder = "";
+        if (rawKind.startsWith("모유")) {
+          type = "모유";
+          const pm = rawKind.match(/\(([^)]+)\)/);
+          if (pm) {
+            subType = pm[1];
+            breastOrder = pm[1];
+          }
+        } else if (rawKind.startsWith("분유")) type = "분유";
+        else if (rawKind.startsWith("유축수유")) type = "유축수유";
+        else if (rawKind.startsWith("유축")) type = "유축";
+        else if (rawKind.startsWith("이유식")) type = "이유식";
+        else if (rawKind.startsWith("기저귀")) type = "기저귀";
+        else if (rawKind === "낮잠" || rawKind === "밤잠" || rawKind.startsWith("수면")) {
+          type = "수면";
+          subType = rawKind === "밤잠" ? "밤잠" : "낮잠";
+        } else if (rawKind.startsWith("목욕")) type = "목욕";
+        else if (rawKind.startsWith("터미타임")) type = "터미타임";
+        else if (rawKind.startsWith("투약")) type = "투약";
+
+        if (existingKeys.has(`${startParsed.ms}|${type}`)) {
+          skippedCount += 1;
+          continue;
+        }
+        existingKeys.add(`${startParsed.ms}|${type}`);
+
+        const durM = text.match(/소요시간:\s*(\d+)/);
+        const leftM = text.match(/모유 왼쪽 시간:\s*(\d+)/);
+        const rightM = text.match(/모유 오른쪽 시간:\s*(\d+)/);
+        const mlM = text.match(/(?:분유|유축수유|유축)\s*총\s*양\(ml\):\s*(\d+)/);
+        const diaperM = text.match(/배변 형태:\s*([^\n]+)/);
+        const memoM = text.match(/메모:\s*([^\n]+)/);
+        const etcM = text.match(/기타 항목:\s*([^\n]+)/);
+
+        if (diaperM) subType = diaperM[1].trim();
+        const memoText = [etcM?.[1]?.trim(), memoM?.[1]?.trim()].filter(Boolean).join(" · ");
+
+        let photoUrl = "";
+        if (imgs.length > 0) {
+          const matchedKey = Object.keys(filesMap).find((k) => k === imgs[0] || k.endsWith(`/${imgs[0]}`));
+          if (matchedKey) {
+            setDiaryUploadProgress({
+              stepText: `📸 기저귀 사진 압축 중... (${idx + 1}/${rawSegments.length})`,
+              pct: Math.min(85, Math.round(((idx + 1) / rawSegments.length) * 70) + 10)
+            });
+            const imgFile = new File([filesMap[matchedKey]], imgs[0], { type: "image/jpeg" });
+            photoUrl = await compressDiaryPhotoToBudget(imgFile, 180000);
+          }
+        }
+
+        const actId = `act-bt-${startParsed.ms}-${fIdx}-${idx}`;
+        toWrite.push({
+          id: actId,
+          childId: targetChild,
+          type,
+          subType,
+          date: startParsed.date,
+          startMs: startParsed.ms,
+          endMs: endParsed ? endParsed.ms : null,
+          durationMin: durM ? Number(durM[1]) : 0,
+          leftMin: leftM ? Number(leftM[1]) : 0,
+          rightMin: rightM ? Number(rightM[1]) : 0,
+          breastOrder,
+          amountMl: mlM ? Number(mlM[1]) : 0,
+          memo: memoText,
+          photoUrl,
+          inProgress: false,
+          author: actorName || "관리자",
+          updatedAt: new Date().toISOString()
+        });
+      }
+      }
+
+      setDiaryUploadProgress({ stepText: `☁️ 클라우드 일괄 저장 중... (${toWrite.length}건)`, pct: 90 });
+      for (let i = 0; i < toWrite.length; i += 400) {
+        const batch = writeBatch(db);
+        toWrite.slice(i, i + 400).forEach((item) => {
+          batch.set(getDocRef("family_baby_activities_v1", item.id), item);
+        });
+        await batch.commit();
+      }
+      importedCount = toWrite.length;
+
+      if (importedCount > 0) {
+        recordActivity("육아", "생활기록가져오기", `${targetChild} · ${importedCount}건 업로드`, {
+          targetSubTab: "activity",
+          targetChildId: targetChild
+        });
+      }
+      setSelectedChildId(targetChild);
+      showToast(
+        `☁️ ${targetChild} 수유·생활 ${importedCount}건 클라우드 저장 완료!` +
+          (skippedCount > 0 ? ` (중복 ${skippedCount}건 제외)` : "")
+      );
+      ok = true;
+    } catch (err) {
+      showToast(`❌ 활동 ZIP 가져오기 실패: ${err?.message || "형식 오류"}`);
     } finally {
       setDiaryUploadProgress(null);
       endWrite(ok);
@@ -11573,6 +12095,56 @@ ${validText}
             )}
           </>
         )}
+        {activeTab === "home" && accessRole !== "guest" && (() => {
+          const sum = computeActivitySummaryForChild("시율");
+          const nowMs = Date.now();
+          const feedMeta = sum.lastFeed ? BABY_ACTIVITY_TYPES.find((t) => t.id === sum.lastFeed.type) : null;
+          return (
+            <div
+              onClick={() => {
+                setSelectedChildId("시율");
+                setBabySubTab("activity");
+                setActiveTab("baby");
+              }}
+              className="mt-2 bg-[#FAF8F3] hover:bg-stone-100/80 border border-[#C9D8CC] rounded-2xl p-2.5 cursor-pointer transition space-y-1.5"
+              title="눌러서 시율이 수유·기저귀·수면 기록으로 이동"
+            >
+              <div className="flex items-center justify-between text-[10px] font-black text-[#35503C]">
+                <span>👶 시율 실시간 케어 현황</span>
+                <span className="text-stone-400 font-bold">기록하기 &gt;</span>
+              </div>
+              <div className="grid grid-cols-3 gap-1.5 text-center">
+                <div className="bg-white rounded-xl py-1.5 px-1 border border-stone-200/80">
+                  <div className="text-[9px] font-bold text-stone-400">마지막 기저귀</div>
+                  <div className="text-[11px] font-black text-amber-800 mt-0.5">
+                    {sum.lastDiaper ? formatElapsedKo(nowMs - sum.lastDiaper.startMs) : "-"}
+                  </div>
+                  <div className="text-[9px] font-bold text-stone-500">
+                    {sum.lastDiaper?.subType || "기록없음"}
+                  </div>
+                </div>
+                <div className="bg-white rounded-xl py-1.5 px-1 border border-stone-200/80">
+                  <div className="text-[9px] font-bold text-stone-400">마지막 수유</div>
+                  <div className={`text-[11px] font-black mt-0.5 ${feedMeta ? feedMeta.text : "text-stone-800"}`}>
+                    {sum.lastFeed ? formatElapsedKo(nowMs - sum.lastFeed.startMs) : "-"}
+                  </div>
+                  <div className="text-[9px] font-bold text-stone-500 truncate">
+                    {sum.lastFeed ? `${sum.lastFeed.type}${sum.feedIntervalMs !== null ? ` · ${Math.floor(sum.feedIntervalMs / 3600000)}h${Math.floor((sum.feedIntervalMs % 3600000) / 60000)}m텀` : ""}` : "기록없음"}
+                  </div>
+                </div>
+                <div className="bg-white rounded-xl py-1.5 px-1 border border-stone-200/80">
+                  <div className="text-[9px] font-bold text-stone-400">마지막 수면</div>
+                  <div className="text-[11px] font-black text-indigo-700 mt-0.5">
+                    {sum.lastSleep ? formatElapsedKo(nowMs - sum.lastSleep.startMs) : "-"}
+                  </div>
+                  <div className="text-[9px] font-bold text-stone-500">
+                    {sum.lastSleep?.subType || "기록없음"}
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
       </header>
 
       {syncErrorMsg && (
@@ -17537,8 +18109,9 @@ ${validText}
             </div>
 
             {/* 육아수첩 서브 탭 (육아일기는 관리자 전용) */}
-            <div className={`grid ${isAdminUnlocked ? "grid-cols-5" : "grid-cols-4"} gap-1 bg-stone-200 p-1 rounded-2xl`}>
+            <div className="flex gap-1 bg-stone-200 p-1 rounded-2xl overflow-x-auto">
               {[
+                { id: "activity", label: "🍼 수유·생활" },
                 ...(isAdminUnlocked ? [{ id: "diary", label: "📖 일기" }] : []),
                 { id: "milestones", label: "🌱 발달" },
                 { id: "vaccines", label: "💉 접종·검진" },
@@ -17558,6 +18131,290 @@ ${validText}
                 </button>
               ))}
             </div>
+
+            {/* 서브탭 0: 🍼 수유·기저귀·수면·생활 원탭 트래커 */}
+            {babySubTab === "activity" && (() => {
+              const sum = computeActivitySummaryForChild(activeChild.id);
+              const nowMs = activityTimerTick || Date.now();
+              const activeTimers = sum.list.filter((a) => a.inProgress);
+              const feedMeta = sum.lastFeed ? BABY_ACTIVITY_TYPES.find((t) => t.id === sum.lastFeed.type) : null;
+              const filteredActs = activityDateFilter === "all"
+                ? sum.list
+                : sum.list.filter((a) => a.date === activityDateFilter);
+
+              const groupedByDate = [];
+              filteredActs.forEach((act) => {
+                const dKey = act.date || formatDate(new Date(act.startMs || nowMs));
+                let grp = groupedByDate.find((g) => g.date === dKey);
+                if (!grp) {
+                  grp = { date: dKey, items: [] };
+                  groupedByDate.push(grp);
+                }
+                grp.items.push(act);
+              });
+
+              return (
+                <div className="space-y-3">
+                  <input
+                    ref={activityZipInputRef}
+                    type="file"
+                    accept=".zip,application/zip"
+                    multiple
+                    onChange={handleImportBabyTimeActivityZip}
+                    className="hidden"
+                  />
+
+                  <div className="bg-white p-3 rounded-2xl border border-stone-200 shadow-sm space-y-2.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs font-black text-stone-900">
+                        🍼 {activeChild.name} 원탭 기록 (시작 / 종료 재탭)
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setZipImportPicker("activity")}
+                        className="px-2 py-1 rounded-xl bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-900 text-[10px] font-extrabold whitespace-nowrap shrink-0"
+                        title="베이비타임 Activity ZIP을 클라우드에 업로드"
+                      >
+                        📥 베이비타임(.zip)
+                      </button>
+                    </div>
+
+                    <div className="flex items-center gap-2.5 overflow-x-auto pb-1">
+                      {BABY_ACTIVITY_TYPES.map((t) => {
+                        const isRunning = activeTimers.some((a) => a.type === t.id);
+                        return (
+                          <button
+                            key={t.id}
+                            type="button"
+                            onClick={() => handleQuickTapBabyActivity(t.id)}
+                            className="flex flex-col items-center gap-1 shrink-0 group"
+                          >
+                            <div
+                              className={`w-11 h-11 rounded-full ${t.bg} text-white flex items-center justify-center text-lg shadow-sm transition active:scale-95 ${
+                                isRunning ? "ring-4 ring-emerald-400 animate-pulse" : "group-hover:opacity-90"
+                              }`}
+                            >
+                              {t.emoji}
+                            </div>
+                            <span className={`text-[10px] font-extrabold whitespace-nowrap ${isRunning ? "text-emerald-700" : "text-stone-700"}`}>
+                              {isRunning ? `${t.label}(진행)` : t.label}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {activeTimers.map((act) => {
+                      const secElapsed = Math.max(0, Math.floor((nowMs - (Number(act.startMs) || nowMs)) / 1000));
+                      const mm = String(Math.floor(secElapsed / 60)).padStart(2, "0");
+                      const ss = String(secElapsed % 60).padStart(2, "0");
+                      const meta = BABY_ACTIVITY_TYPES.find((t) => t.id === act.type);
+                      return (
+                        <div key={act.id} className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-300 space-y-2">
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-1.5 text-xs font-black text-emerald-950">
+                              <span>{meta?.emoji} {act.type} 진행 중</span>
+                              <span className="px-2 py-0.5 rounded-lg bg-emerald-600 text-white font-mono text-[11px]">
+                                {mm}:{ss}
+                              </span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => handleStopBabyActivityTimer(act)}
+                              className="px-2.5 py-1 rounded-xl bg-stone-900 text-white text-[11px] font-extrabold whitespace-nowrap"
+                            >
+                              ⏹️ 종료·저장
+                            </button>
+                          </div>
+                          {act.type === "모유" && (
+                            <div className="grid grid-cols-2 gap-1.5">
+                              {[
+                                { side: "left", label: `◀ 왼쪽 (${act.leftMin || 0}분)` },
+                                { side: "right", label: `오른쪽 (${act.rightMin || 0}분) ▶` }
+                              ].map((b) => (
+                                <button
+                                  key={b.side}
+                                  type="button"
+                                  onClick={() => handleSwitchBreastSide(act, b.side)}
+                                  className={`py-1.5 rounded-lg text-[11px] font-extrabold border ${
+                                    (act.activeSide || "left") === b.side
+                                      ? "bg-rose-500 text-white border-rose-500"
+                                      : "bg-white text-stone-700 border-stone-200"
+                                  }`}
+                                >
+                                  {b.label}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+
+                    <div className="grid grid-cols-3 gap-1.5 pt-1 border-t border-stone-100 text-center">
+                      <div className="bg-[#FAF8F3] rounded-xl py-2 px-1 border border-stone-200">
+                        <div className="text-[10px] font-bold text-stone-400">마지막 기저귀</div>
+                        <div className="text-xs font-black text-amber-800 mt-0.5">
+                          {sum.lastDiaper ? formatElapsedKo(nowMs - sum.lastDiaper.startMs) : "-"}
+                        </div>
+                        <div className="text-[10px] font-bold text-stone-500">
+                          {sum.lastDiaper?.subType || "-"}
+                        </div>
+                      </div>
+                      <div className="bg-[#FAF8F3] rounded-xl py-2 px-1 border border-stone-200">
+                        <div className="text-[10px] font-bold text-stone-400">마지막 수유</div>
+                        <div className={`text-xs font-black mt-0.5 ${feedMeta ? feedMeta.text : "text-stone-800"}`}>
+                          {sum.lastFeed ? `${feedMeta?.emoji || ""} ${formatElapsedKo(nowMs - sum.lastFeed.startMs)}` : "-"}
+                        </div>
+                        <div className="text-[10px] font-bold text-stone-500">
+                          {sum.feedIntervalMs !== null
+                            ? `이전 ${Math.floor(sum.feedIntervalMs / 3600000)}시간 ${Math.floor((sum.feedIntervalMs % 3600000) / 60000)}분 텀`
+                            : sum.lastFeed?.type || "-"}
+                        </div>
+                      </div>
+                      <div className="bg-[#FAF8F3] rounded-xl py-2 px-1 border border-stone-200">
+                        <div className="text-[10px] font-bold text-stone-400">마지막 수면</div>
+                        <div className="text-xs font-black text-indigo-700 mt-0.5">
+                          {sum.lastSleep ? formatElapsedKo(nowMs - sum.lastSleep.startMs) : "-"}
+                        </div>
+                        <div className="text-[10px] font-bold text-stone-500">
+                          {sum.lastSleep?.subType || "-"}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {sum.list.length > 0 && (
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[11px] font-extrabold text-stone-600">
+                        총 {filteredActs.length}건
+                      </span>
+                      <select
+                        value={activityDateFilter}
+                        onChange={(e) => setActivityDateFilter(e.target.value)}
+                        className="px-2.5 py-1 rounded-full border border-stone-200 bg-white text-[11px] font-extrabold text-stone-700"
+                      >
+                        <option value="all">📅 전체 날짜</option>
+                        {[...new Set(sum.list.map((a) => a.date).filter(Boolean))]
+                          .sort((a, b) => b.localeCompare(a))
+                          .map((dStr) => (
+                            <option key={dStr} value={dStr}>
+                              {dStr} ({getDayName(dStr)})
+                            </option>
+                          ))}
+                      </select>
+                    </div>
+                  )}
+
+                  {groupedByDate.length === 0 ? (
+                    renderStatusState({
+                      type: "empty",
+                      title: `${activeChild.name} 수유·생활 기록이 없습니다`,
+                      description: "상단 아이콘을 눌러 바로 기록하거나 [📥 베이비타임(.zip)]으로 기존 기록을 클라우드에 올릴 수 있습니다."
+                    })
+                  ) : (
+                    <div className="space-y-2.5">
+                      {groupedByDate.map((grp) => {
+                        const formulaMl = grp.items.filter((x) => x.type === "분유").reduce((s, x) => s + (Number(x.amountMl) || 0), 0);
+                        const pumpedFeedMl = grp.items.filter((x) => x.type === "유축수유").reduce((s, x) => s + (Number(x.amountMl) || 0), 0);
+                        const breastMin = grp.items.filter((x) => x.type === "모유").reduce((s, x) => s + (Number(x.durationMin) || 0), 0);
+                        const totalFeedMl = formulaMl + pumpedFeedMl;
+                        const peeCnt = grp.items.filter((x) => x.type === "기저귀" && String(x.subType).includes("소변")).length;
+                        const pooCnt = grp.items.filter((x) => x.type === "기저귀" && String(x.subType).includes("대변")).length;
+
+                        return (
+                          <div key={grp.date} className="bg-white rounded-2xl border border-stone-200 shadow-sm overflow-hidden">
+                            <div className="px-3.5 py-2 bg-[#F3EEE4] border-b border-stone-200 flex items-center justify-between gap-2 flex-wrap">
+                              <span className="text-xs font-black text-stone-900">
+                                {grp.date} ({getDayName(grp.date)})
+                              </span>
+                              <div className="flex items-center gap-1.5 text-[10px] font-extrabold flex-wrap">
+                                {totalFeedMl > 0 && (
+                                  <span className="text-stone-800">
+                                    {totalFeedMl}ml(
+                                    <span className="text-amber-700">분{formulaMl}</span>
+                                    {pumpedFeedMl > 0 && <span className="text-lime-700">·유{pumpedFeedMl}</span>}
+                                    )
+                                  </span>
+                                )}
+                                {breastMin > 0 && <span className="text-rose-600">모유 {breastMin}분</span>}
+                                {(peeCnt > 0 || pooCnt > 0) && (
+                                  <span className="text-amber-800">🧷 소{peeCnt}·대{pooCnt}</span>
+                                )}
+                              </div>
+                            </div>
+                            <div className="divide-y divide-stone-100">
+                              {grp.items.map((act) => {
+                                const meta = BABY_ACTIVITY_TYPES.find((t) => t.id === act.type) || BABY_ACTIVITY_TYPES[BABY_ACTIVITY_TYPES.length - 1];
+                                const unit = meta.unit || "ml";
+                                const detailParts = [];
+                                if (act.amountMl > 0) detailParts.push(`${act.amountMl}${unit}`);
+                                if (act.durationMin > 0 || act.type === "모유") detailParts.push(`${act.durationMin || 0}분`);
+                                if (act.type === "모유" && (act.leftMin > 0 || act.rightMin > 0)) {
+                                  detailParts.push(`왼${act.leftMin || 0}·오${act.rightMin || 0}`);
+                                }
+                                if (act.subType && act.type !== "기저귀" && act.type !== "수면") detailParts.push(act.subType);
+
+                                return (
+                                  <div
+                                    key={act.id}
+                                    onClick={() => setActivityEditModal({ ...act, isNew: false })}
+                                    className="px-3.5 py-2.5 flex items-center justify-between gap-2 hover:bg-stone-50 cursor-pointer transition"
+                                  >
+                                    <div className="flex items-center gap-2.5 min-w-0">
+                                      <div className="w-16 shrink-0 text-[10px] font-bold text-stone-500 leading-tight">
+                                        <div>{formatTime12Ko(act.startMs)}</div>
+                                        {act.endMs && <div className="text-stone-400">~ {formatTime12Ko(act.endMs)}</div>}
+                                      </div>
+                                      <div className={`w-7 h-7 rounded-full ${meta.bg} text-white flex items-center justify-center text-xs shrink-0`}>
+                                        {meta.emoji}
+                                      </div>
+                                      <div className="min-w-0">
+                                        <div className={`text-xs font-black ${meta.text} flex items-center gap-1.5 flex-wrap`}>
+                                          <span>
+                                            {act.type === "기저귀" && act.subType
+                                              ? act.subType
+                                              : act.type === "수면" && act.subType
+                                              ? act.subType
+                                              : act.type}
+                                          </span>
+                                          {act.inProgress && (
+                                            <span className="px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 text-[9px]">진행중</span>
+                                          )}
+                                        </div>
+                                        {(detailParts.length > 0 || act.memo) && (
+                                          <div className="text-[11px] font-semibold text-stone-600 truncate">
+                                            {[detailParts.join(", "), act.memo].filter(Boolean).join(" · ")}
+                                          </div>
+                                        )}
+                                      </div>
+                                    </div>
+                                    <div className="flex items-center gap-1.5 shrink-0">
+                                      {act.photoUrl && (
+                                        <img
+                                          src={act.photoUrl}
+                                          alt="활동 사진"
+                                          onClick={(ev) => {
+                                            ev.stopPropagation();
+                                            setDiaryLightboxUrl(act.photoUrl);
+                                          }}
+                                          className="w-8 h-8 rounded-lg object-cover border border-stone-200"
+                                        />
+                                      )}
+                                      <ChevronRight className="w-3.5 h-3.5 text-stone-300" />
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
 
             {/* 서브탭 1: 월령별 발달과정 */}
             {babySubTab === "milestones" && (
@@ -18008,7 +18865,7 @@ ${validText}
                         <button
                           type="button"
                           disabled={Boolean(diaryUploadProgress)}
-                          onClick={() => babytimeZipInputRef.current?.click()}
+                          onClick={() => setZipImportPicker("diary")}
                           className="px-2 py-1 rounded-xl bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-900 text-[10px] font-extrabold whitespace-nowrap shrink-0"
                           title="베이비타임 등 외부 앱에서 내보낸 일기 ZIP 파일을 클라우드에 바로 업로드"
                         >
@@ -21812,6 +22669,255 @@ ${validText}
             onClick={(e) => e.stopPropagation()}
             className="max-w-full max-h-[88vh] rounded-2xl object-contain shadow-2xl"
           />
+        </div>
+      )}
+
+      {zipImportPicker && (
+        <div
+          className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+          onClick={() => setZipImportPicker(null)}
+        >
+          <div
+            className="bg-white rounded-3xl max-w-xs w-full p-4 space-y-3 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-black text-stone-900">
+                {zipImportPicker === "diary" ? "📥 외부 육아일기(.zip) 가져오기" : "📥 베이비타임 활동(.zip) 가져오기"}
+              </h3>
+              <button type="button" onClick={() => setZipImportPicker(null)}>
+                <X className="w-5 h-5 text-stone-400" />
+              </button>
+            </div>
+            <p className="text-xs font-semibold text-stone-600">
+              어느 아이의 기록으로 저장할까요? (ZIP 여러 개 동시 선택 가능)
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+              {[
+                { id: "시목", label: "👦 김시목", sub: "첫째" },
+                { id: "시율", label: "👶 김시율", sub: "둘째" }
+              ].map((ch) => (
+                <button
+                  key={ch.id}
+                  type="button"
+                  onClick={() => {
+                    const mode = zipImportPicker;
+                    zipTargetChildRef.current = ch.id;
+                    setZipImportPicker(null);
+                    if (mode === "diary") babytimeZipInputRef.current?.click();
+                    else activityZipInputRef.current?.click();
+                  }}
+                  className={`p-3 rounded-2xl border text-center transition hover:bg-[#EEF3EE] hover:border-[#5E7A65] ${
+                    selectedChildId === ch.id
+                      ? "bg-[#EEF3EE] border-[#5E7A65]"
+                      : "bg-stone-50 border-stone-200"
+                  }`}
+                >
+                  <div className="text-sm font-black text-stone-900">{ch.label}</div>
+                  <div className="text-[10px] font-bold text-stone-500 mt-0.5">{ch.sub}</div>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activityEditModal && (
+        <div
+          className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+          onClick={() => setActivityEditModal(null)}
+        >
+          <div
+            className="bg-white rounded-3xl max-w-sm w-full p-4 space-y-3 shadow-2xl max-h-[88vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-black text-stone-900">
+                {BABY_ACTIVITY_TYPES.find((t) => t.id === activityEditModal.type)?.emoji} {activityEditModal.type} {activityEditModal.isNew ? "기록" : "수정"}
+              </h3>
+              <button type="button" onClick={() => setActivityEditModal(null)}>
+                <X className="w-5 h-5 text-stone-400" />
+              </button>
+            </div>
+
+            {activityEditModal.type === "기저귀" && (
+              <div className="grid grid-cols-3 gap-1.5">
+                {["소변", "대변", "혼합"].map((sub) => (
+                  <button
+                    key={sub}
+                    type="button"
+                    onClick={() => setActivityEditModal((p) => ({ ...p, subType: sub }))}
+                    className={`py-2 rounded-xl text-xs font-extrabold border ${
+                      activityEditModal.subType === sub
+                        ? "bg-amber-700 text-white border-amber-700"
+                        : "bg-stone-50 text-stone-700 border-stone-200"
+                    }`}
+                  >
+                    {sub}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {activityEditModal.type === "수면" && (
+              <div className="grid grid-cols-2 gap-1.5">
+                {["낮잠", "밤잠"].map((sub) => (
+                  <button
+                    key={sub}
+                    type="button"
+                    onClick={() => setActivityEditModal((p) => ({ ...p, subType: sub }))}
+                    className={`py-2 rounded-xl text-xs font-extrabold border ${
+                      activityEditModal.subType === sub
+                        ? "bg-indigo-600 text-white border-indigo-600"
+                        : "bg-stone-50 text-stone-700 border-stone-200"
+                    }`}
+                  >
+                    {sub}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="text-[10px] font-bold text-stone-500">날짜</label>
+                <input
+                  type="date"
+                  value={activityEditModal.date || getTodayStr()}
+                  onChange={(e) => {
+                    const nd = e.target.value;
+                    const oldT = new Date(activityEditModal.startMs || Date.now());
+                    const hh = String(oldT.getHours()).padStart(2, "0");
+                    const mm = String(oldT.getMinutes()).padStart(2, "0");
+                    const newMs = new Date(`${nd}T${hh}:${mm}:00`).getTime();
+                    setActivityEditModal((p) => ({ ...p, date: nd, startMs: newMs }));
+                  }}
+                  className="w-full px-2.5 py-1.5 rounded-xl border border-stone-200 text-xs font-bold"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] font-bold text-stone-500">소요시간 (분)</label>
+                <input
+                  type="number"
+                  value={activityEditModal.durationMin ?? 0}
+                  onChange={(e) => setActivityEditModal((p) => ({ ...p, durationMin: e.target.value }))}
+                  className="w-full px-2.5 py-1.5 rounded-xl border border-stone-200 text-xs font-bold"
+                />
+              </div>
+            </div>
+
+            {BABY_ACTIVITY_TYPES.find((t) => t.id === activityEditModal.type)?.hasMl && (
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-stone-500">
+                  용량 ({BABY_ACTIVITY_TYPES.find((t) => t.id === activityEditModal.type)?.unit || "ml"})
+                </label>
+                <input
+                  type="number"
+                  value={activityEditModal.amountMl || ""}
+                  placeholder="예: 40"
+                  onChange={(e) => setActivityEditModal((p) => ({ ...p, amountMl: e.target.value }))}
+                  className="w-full px-3 py-2 rounded-xl border border-stone-200 text-xs font-bold"
+                />
+                <div className="flex flex-wrap gap-1">
+                  {[20, 30, 40, 60, 80, 100, 120].map((v) => (
+                    <button
+                      key={v}
+                      type="button"
+                      onClick={() => setActivityEditModal((p) => ({ ...p, amountMl: v }))}
+                      className="px-2 py-1 rounded-lg bg-stone-100 hover:bg-stone-200 text-[10px] font-extrabold text-stone-700"
+                    >
+                      {v}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {activityEditModal.type === "모유" && (
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-[10px] font-bold text-stone-500">왼쪽 (분)</label>
+                  <input
+                    type="number"
+                    value={activityEditModal.leftMin ?? 0}
+                    onChange={(e) => setActivityEditModal((p) => ({ ...p, leftMin: e.target.value }))}
+                    className="w-full px-2.5 py-1.5 rounded-xl border border-stone-200 text-xs font-bold"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-stone-500">오른쪽 (분)</label>
+                  <input
+                    type="number"
+                    value={activityEditModal.rightMin ?? 0}
+                    onChange={(e) => setActivityEditModal((p) => ({ ...p, rightMin: e.target.value }))}
+                    className="w-full px-2.5 py-1.5 rounded-xl border border-stone-200 text-xs font-bold"
+                  />
+                </div>
+              </div>
+            )}
+
+            <div>
+              <label className="text-[10px] font-bold text-stone-500">메모 (유산균·체온·특이사항 등)</label>
+              <input
+                type="text"
+                value={activityEditModal.memo || ""}
+                placeholder="메모 입력 (선택)"
+                onChange={(e) => setActivityEditModal((p) => ({ ...p, memo: e.target.value }))}
+                className="w-full px-3 py-2 rounded-xl border border-stone-200 text-xs font-bold"
+              />
+            </div>
+
+            <div>
+              <input
+                ref={activityPhotoInputRef}
+                type="file"
+                accept="image/*"
+                onChange={async (ev) => {
+                  const f = ev.target.files?.[0];
+                  if (ev.target) ev.target.value = "";
+                  if (!f) return;
+                  const compressed = await compressDiaryPhotoToBudget(f, 180000);
+                  if (compressed) setActivityEditModal((p) => ({ ...p, photoUrl: compressed }));
+                }}
+                className="hidden"
+              />
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => activityPhotoInputRef.current?.click()}
+                  className="px-3 py-1.5 rounded-xl bg-stone-100 hover:bg-stone-200 text-[11px] font-extrabold text-stone-700"
+                >
+                  📸 사진 첨부
+                </button>
+                {activityEditModal.photoUrl && (
+                  <img
+                    src={activityEditModal.photoUrl}
+                    alt="미리보기"
+                    className="w-10 h-10 rounded-xl object-cover border border-stone-200"
+                  />
+                )}
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 pt-1">
+              {!activityEditModal.isNew && (
+                <button
+                  type="button"
+                  onClick={() => handleDeleteBabyActivity(activityEditModal.id)}
+                  className="px-3 py-2 rounded-xl bg-rose-50 text-rose-700 text-xs font-extrabold"
+                >
+                  삭제
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={handleSaveActivityModal}
+                className="flex-1 py-2 rounded-xl bg-[#5E7A65] hover:bg-[#4E6855] text-white text-xs font-extrabold"
+              >
+                💾 저장하기
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
