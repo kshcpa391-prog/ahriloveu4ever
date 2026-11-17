@@ -1212,7 +1212,7 @@ const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.65) =>
     img.src = dataUrl;
   });
 
-const APP_CODE_VERSION = "v11.53";
+const APP_CODE_VERSION = "v11.55";
 
 const formatRoutineTimeLabel = (hhmm) => {
   const m = String(hhmm || "").trim().match(/^(\d{2}):(\d{2})$/);
@@ -1228,7 +1228,7 @@ const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-const APP_BUILD_DATE = "2026-11-17 22:22";
+const APP_BUILD_DATE = "2026-11-17 22:35";
 const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1290,6 +1290,27 @@ const formatTime12Ko = (ms) => {
 };
 
 const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v11.55",
+    version: "v11.55",
+    date: "2026-11-17",
+    title: "홈 실시간 타이머 배지 · 수유/기저귀/수면 필터 · [📋 오늘 요약] 복사 & 3일 접기 시각화 개선",
+    changes: [
+      "시각화 개선: 홈 케어 카드 상단에 진행 중 실시간 타이머(MM:SS) 배지 표시, 일자별 헤더에 총 수면시간 추가 및 기본 최근 3일 표시 + [더 보기/접기]로 긴 타임라인 정돈",
+      "편의성 개선: [전체/🍼 수유/🧷 기저귀/😴 수면] 빠른 필터 칩 및 [📋 오늘 요약] 1탭 클립보드 복사 버튼 추가"
+    ]
+  },
+  {
+    id: "patch-v11.54",
+    version: "v11.54",
+    date: "2026-11-17",
+    title: "홈 탭 5종 바로 기록 버튼 · 시작시간 기준 수유 체크 & 수유·생활 탭 상단 자동 스크롤",
+    changes: [
+      "홈 탭 바로 기록: 홈 화면 [👶 시율 실시간 케어 현황] 카드에 [🤱 모유 / 🧷 기저귀 / 😴 수면 / 🧴 유축 / 💚 유축수유] 1탭 바로 기록 버튼 추가",
+      "수유 시작시간 기준: 마지막 수유 경과 시간과 이전 수유 텀을 시작 시각(startMs) 기준으로 명확히 표시",
+      "자동 스크롤: [🍼 수유·생활] 탭 또는 홈 케어 카드 클릭 시 원탭 기록 영역이 화면 맨 위로 바로 보이도록 자동 이동"
+    ]
+  },
   {
     id: "patch-v11.53",
     version: "v11.53",
@@ -4215,9 +4236,12 @@ function MainApp() {
   const [babyActivities, setBabyActivities] = useState([]);
   const [activityEditModal, setActivityEditModal] = useState(null);
   const [activityDateFilter, setActivityDateFilter] = useState("all");
+  const [activityTypeFilter, setActivityTypeFilter] = useState("all");
+  const [activityShowAllDays, setActivityShowAllDays] = useState(false);
   const [activityTimerTick, setActivityTimerTick] = useState(Date.now());
   const activityZipInputRef = useRef(null);
   const activityPhotoInputRef = useRef(null);
+  const activityTopRef = useRef(null);
 
   useEffect(() => {
     const hasActive = babyActivities.some((a) => a.inProgress);
@@ -10109,13 +10133,13 @@ ${validText}
     return { list, lastFeed, feedIntervalMs, lastDiaper, lastSleep };
   };
 
-  const handleQuickTapBabyActivity = async (typeId) => {
+  const handleQuickTapBabyActivity = async (typeId, childOverride = null) => {
     if (!requireEditorAccess()) return;
     if (!user || !db) {
       showToast("⚠️ 서버 연결 후 기록할 수 있습니다.");
       return;
     }
-    const targetChild = selectedChildId || "시율";
+    const targetChild = childOverride || selectedChildId || "시율";
     const meta = BABY_ACTIVITY_TYPES.find((t) => t.id === typeId);
     if (!meta) return;
 
@@ -12126,21 +12150,35 @@ ${validText}
         )}
         {activeTab === "home" && accessRole !== "guest" && (() => {
           const sum = computeActivitySummaryForChild("시율");
-          const nowMs = Date.now();
+          const nowMs = activityTimerTick || Date.now();
           const feedMeta = sum.lastFeed ? BABY_ACTIVITY_TYPES.find((t) => t.id === sum.lastFeed.type) : null;
+          const homeQuickIds = ["모유", "기저귀", "수면", "유축", "유축수유"];
           return (
             <div
               onClick={() => {
                 setSelectedChildId("시율");
                 setBabySubTab("activity");
                 setActiveTab("baby");
+                setTimeout(() => activityTopRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 120);
               }}
-              className="mt-2 bg-[#FAF8F3] hover:bg-stone-100/80 border border-[#C9D8CC] rounded-2xl p-2.5 cursor-pointer transition space-y-1.5"
+              className="mt-2 bg-[#FAF8F3] hover:bg-stone-100/80 border border-[#C9D8CC] rounded-2xl p-2.5 cursor-pointer transition space-y-2"
               title="눌러서 시율이 수유·기저귀·수면 기록으로 이동"
             >
-              <div className="flex items-center justify-between text-[10px] font-black text-[#35503C]">
-                <span>👶 시율 실시간 케어 현황</span>
-                <span className="text-stone-400 font-bold">기록하기 &gt;</span>
+              <div className="flex items-center justify-between gap-1 text-[10px] font-black text-[#35503C]">
+                <span className="truncate">👶 시율 실시간 케어 현황 (시작시간 기준)</span>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  {(() => {
+                    const running = sum.list.find((a) => a.inProgress);
+                    if (!running) return null;
+                    const sec = Math.max(0, Math.floor((nowMs - (Number(running.startMs) || nowMs)) / 1000));
+                    return (
+                      <span className="px-1.5 py-0.5 rounded-md bg-emerald-600 text-white font-mono text-[9px] animate-pulse">
+                        ⏱️ {running.type} {String(Math.floor(sec / 60)).padStart(2, "0")}:{String(sec % 60).padStart(2, "0")}
+                      </span>
+                    );
+                  })()}
+                  <span className="text-stone-400 font-bold">전체보기 &gt;</span>
+                </div>
               </div>
               <div className="grid grid-cols-3 gap-1.5 text-center">
                 <div className="bg-white rounded-xl py-1.5 px-1 border border-stone-200/80">
@@ -12153,12 +12191,14 @@ ${validText}
                   </div>
                 </div>
                 <div className="bg-white rounded-xl py-1.5 px-1 border border-stone-200/80">
-                  <div className="text-[9px] font-bold text-stone-400">마지막 수유</div>
+                  <div className="text-[9px] font-bold text-stone-400">마지막 수유(시작)</div>
                   <div className={`text-[11px] font-black mt-0.5 ${feedMeta ? feedMeta.text : "text-stone-800"}`}>
                     {sum.lastFeed ? formatElapsedKo(nowMs - sum.lastFeed.startMs) : "-"}
                   </div>
                   <div className="text-[9px] font-bold text-stone-500 truncate">
-                    {sum.lastFeed ? `${sum.lastFeed.type}${sum.feedIntervalMs !== null ? ` · ${Math.floor(sum.feedIntervalMs / 3600000)}h${Math.floor((sum.feedIntervalMs % 3600000) / 60000)}m텀` : ""}` : "기록없음"}
+                    {sum.lastFeed
+                      ? `${formatTime12Ko(sum.lastFeed.startMs)} ${sum.lastFeed.type}${sum.feedIntervalMs !== null ? ` · ${Math.floor(sum.feedIntervalMs / 3600000)}h${Math.floor((sum.feedIntervalMs % 3600000) / 60000)}m` : ""}`
+                      : "기록없음"}
                   </div>
                 </div>
                 <div className="bg-white rounded-xl py-1.5 px-1 border border-stone-200/80">
@@ -12170,6 +12210,34 @@ ${validText}
                     {sum.lastSleep?.subType || "기록없음"}
                   </div>
                 </div>
+              </div>
+              <div className="grid grid-cols-5 gap-1 pt-0.5">
+                {homeQuickIds.map((qId) => {
+                  const tm = BABY_ACTIVITY_TYPES.find((t) => t.id === qId);
+                  if (!tm) return null;
+                  const isRunning = sum.list.some((a) => a.type === qId && a.inProgress);
+                  return (
+                    <button
+                      key={`hq-${qId}`}
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedChildId("시율");
+                        handleQuickTapBabyActivity(qId, "시율");
+                      }}
+                      className={`py-1.5 px-1 rounded-xl border text-[10px] font-extrabold flex flex-col items-center gap-0.5 transition active:scale-95 ${
+                        isRunning
+                          ? "bg-emerald-600 text-white border-emerald-600 animate-pulse"
+                          : "bg-white hover:bg-stone-50 text-stone-800 border-stone-200"
+                      }`}
+                    >
+                      <span className="text-sm leading-none">{tm.emoji}</span>
+                      <span className="truncate w-full text-center leading-tight">
+                        {isRunning ? "종료" : tm.label}
+                      </span>
+                    </button>
+                  );
+                })}
               </div>
             </div>
           );
@@ -18149,7 +18217,12 @@ ${validText}
               ].map((st) => (
                 <button
                   key={st.id}
-                  onClick={() => setBabySubTab(st.id)}
+                  onClick={() => {
+                    setBabySubTab(st.id);
+                    if (st.id === "activity") {
+                      setTimeout(() => activityTopRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 80);
+                    }
+                  }}
                   className={`py-2 px-1 rounded-xl text-[11px] font-extrabold whitespace-nowrap transition ${
                     babySubTab === st.id
                       ? "bg-white text-stone-900 shadow-sm"
@@ -18167,9 +18240,13 @@ ${validText}
               const nowMs = activityTimerTick || Date.now();
               const activeTimers = sum.list.filter((a) => a.inProgress);
               const feedMeta = sum.lastFeed ? BABY_ACTIVITY_TYPES.find((t) => t.id === sum.lastFeed.type) : null;
-              const filteredActs = activityDateFilter === "all"
-                ? sum.list
-                : sum.list.filter((a) => a.date === activityDateFilter);
+              const filteredActs = sum.list.filter((a) => {
+                if (activityDateFilter !== "all" && a.date !== activityDateFilter) return false;
+                if (activityTypeFilter === "feed") return ["모유", "분유", "유축수유"].includes(a.type);
+                if (activityTypeFilter === "diaper") return a.type === "기저귀";
+                if (activityTypeFilter === "sleep") return a.type === "수면";
+                return true;
+              });
 
               const groupedByDate = [];
               filteredActs.forEach((act) => {
@@ -18193,7 +18270,7 @@ ${validText}
                     className="hidden"
                   />
 
-                  <div className="bg-white p-3 rounded-2xl border border-stone-200 shadow-sm space-y-2.5">
+                  <div ref={activityTopRef} className="bg-white p-3 rounded-2xl border border-stone-200 shadow-sm space-y-2.5 scroll-mt-4">
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-xs font-black text-stone-900">
                         🍼 {activeChild.name} 원탭 기록 (시작 / 종료 재탭)
@@ -18291,7 +18368,7 @@ ${validText}
                         </div>
                       </div>
                       <div className="bg-[#FAF8F3] rounded-xl py-2 px-1 border border-stone-200">
-                        <div className="text-[10px] font-bold text-stone-400">마지막 수유</div>
+                        <div className="text-[10px] font-bold text-stone-400">마지막 수유(시작)</div>
                         <div className={`text-xs font-black mt-0.5 ${feedMeta ? feedMeta.text : "text-stone-800"}`}>
                           {sum.lastFeed ? `${feedMeta?.emoji || ""} ${formatElapsedKo(nowMs - sum.lastFeed.startMs)}` : "-"}
                         </div>
@@ -18329,24 +18406,69 @@ ${validText}
                   </div>
 
                   {sum.list.length > 0 && (
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-[11px] font-extrabold text-stone-600">
-                        총 {filteredActs.length}건
-                      </span>
-                      <select
-                        value={activityDateFilter}
-                        onChange={(e) => setActivityDateFilter(e.target.value)}
-                        className="px-2.5 py-1 rounded-full border border-stone-200 bg-white text-[11px] font-extrabold text-stone-700"
-                      >
-                        <option value="all">📅 전체 날짜</option>
-                        {[...new Set(sum.list.map((a) => a.date).filter(Boolean))]
-                          .sort((a, b) => b.localeCompare(a))
-                          .map((dStr) => (
-                            <option key={dStr} value={dStr}>
-                              {dStr} ({getDayName(dStr)})
-                            </option>
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between gap-1.5 flex-wrap">
+                        <div className="flex items-center gap-1">
+                          {[
+                            { id: "all", label: `전체(${sum.list.length})` },
+                            { id: "feed", label: "🍼 수유" },
+                            { id: "diaper", label: "🧷 기저귀" },
+                            { id: "sleep", label: "😴 수면" }
+                          ].map((tf) => (
+                            <button
+                              key={tf.id}
+                              type="button"
+                              onClick={() => setActivityTypeFilter(tf.id)}
+                              className={`px-2 py-1 rounded-full text-[10px] font-extrabold border whitespace-nowrap ${
+                                activityTypeFilter === tf.id
+                                  ? "bg-stone-900 text-white border-stone-900"
+                                  : "bg-white text-stone-600 border-stone-200"
+                              }`}
+                            >
+                              {tf.label}
+                            </button>
                           ))}
-                      </select>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              const todayKey = getTodayStr();
+                              const tList = sum.list.filter((a) => a.date === todayKey);
+                              const fCnt = tList.filter((a) => ["모유", "분유", "유축수유"].includes(a.type)).length;
+                              const fMl = tList.filter((a) => a.type === "분유" || a.type === "유축수유").reduce((s, a) => s + (Number(a.amountMl) || 0), 0);
+                              const bMin = tList.filter((a) => a.type === "모유").reduce((s, a) => s + (Number(a.durationMin) || 0), 0);
+                              const pCnt = tList.filter((a) => a.type === "기저귀" && String(a.subType).includes("소변")).length;
+                              const dCnt = tList.filter((a) => a.type === "기저귀" && String(a.subType).includes("대변")).length;
+                              const lastF = sum.lastFeed ? `${formatTime12Ko(sum.lastFeed.startMs)} ${sum.lastFeed.type}` : "-";
+                              const txt = `👶 ${activeChild.name} 오늘 케어 요약 (${todayKey})\n• 수유: ${fCnt}회 (분유·유축 ${fMl}ml / 모유 ${bMin}분)\n• 마지막 수유 시작: ${lastF}\n• 기저귀: 소변 ${pCnt}회 · 대변 ${dCnt}회`;
+                              try {
+                                await navigator.clipboard.writeText(txt);
+                                showToast("📋 오늘 케어 요약을 복사했습니다!");
+                              } catch (e) {
+                                showToast("⚠️ 복사에 실패했습니다.");
+                              }
+                            }}
+                            className="px-2 py-1 rounded-full bg-[#EEF3EE] hover:bg-[#DFE9E0] border border-[#C9D8CC] text-[#35503C] text-[10px] font-extrabold whitespace-nowrap"
+                          >
+                            📋 오늘 요약
+                          </button>
+                          <select
+                            value={activityDateFilter}
+                            onChange={(e) => setActivityDateFilter(e.target.value)}
+                            className="px-2 py-1 rounded-full border border-stone-200 bg-white text-[10px] font-extrabold text-stone-700"
+                          >
+                            <option value="all">📅 전체</option>
+                            {[...new Set(sum.list.map((a) => a.date).filter(Boolean))]
+                              .sort((a, b) => b.localeCompare(a))
+                              .map((dStr) => (
+                                <option key={dStr} value={dStr}>
+                                  {dStr} ({getDayName(dStr)})
+                                </option>
+                              ))}
+                          </select>
+                        </div>
+                      </div>
                     </div>
                   )}
 
@@ -18358,10 +18480,11 @@ ${validText}
                     })
                   ) : (
                     <div className="space-y-2.5">
-                      {groupedByDate.map((grp) => {
+                      {(activityShowAllDays || activityDateFilter !== "all" ? groupedByDate : groupedByDate.slice(0, 3)).map((grp) => {
                         const formulaMl = grp.items.filter((x) => x.type === "분유").reduce((s, x) => s + (Number(x.amountMl) || 0), 0);
                         const pumpedFeedMl = grp.items.filter((x) => x.type === "유축수유").reduce((s, x) => s + (Number(x.amountMl) || 0), 0);
                         const breastMin = grp.items.filter((x) => x.type === "모유").reduce((s, x) => s + (Number(x.durationMin) || 0), 0);
+                        const sleepMin = grp.items.filter((x) => x.type === "수면").reduce((s, x) => s + (Number(x.durationMin) || 0), 0);
                         const totalFeedMl = formulaMl + pumpedFeedMl;
                         const peeCnt = grp.items.filter((x) => x.type === "기저귀" && String(x.subType).includes("소변")).length;
                         const pooCnt = grp.items.filter((x) => x.type === "기저귀" && String(x.subType).includes("대변")).length;
@@ -18382,6 +18505,9 @@ ${validText}
                                   </span>
                                 )}
                                 {breastMin > 0 && <span className="text-rose-600">모유 {breastMin}분</span>}
+                                {sleepMin > 0 && (
+                                  <span className="text-indigo-600">😴 {Math.floor(sleepMin / 60)}h{sleepMin % 60}m</span>
+                                )}
                                 {(peeCnt > 0 || pooCnt > 0) && (
                                   <span className="text-amber-800">🧷 소{peeCnt}·대{pooCnt}</span>
                                 )}
@@ -18454,6 +18580,17 @@ ${validText}
                           </div>
                         );
                       })}
+                      {groupedByDate.length > 3 && activityDateFilter === "all" && (
+                        <button
+                          type="button"
+                          onClick={() => setActivityShowAllDays((v) => !v)}
+                          className="w-full py-2 rounded-xl bg-white hover:bg-stone-50 border border-stone-200 text-stone-700 text-[11px] font-extrabold"
+                        >
+                          {activityShowAllDays
+                            ? "▲ 최근 3일만 보기"
+                            : `▼ 이전 ${groupedByDate.length - 3}일 기록 더 보기 (전체 ${groupedByDate.length}일)`}
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>
