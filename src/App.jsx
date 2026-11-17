@@ -989,7 +989,7 @@ const matchesFridgeLocFilter = (itemLoc, filterLoc) => {
   if (filterLoc === "메인 냉동실") return itemLoc === "메인 냉동실" || itemLoc === "냉동실";
   return itemLoc === filterLoc;
 };
-const FRIDGE_CATEGORIES = ["채소/과일", "육류/수산", "유제품/계란", "유아식/이유식 재료", "반찬/김치", "밀키트", "양념/소스", "기타"];
+const FRIDGE_CATEGORIES = ["채소/과일", "육류/수산", "유제품/계란", "유아식/이유식 재료", "반찬/김치", "밀키트", "양념/소스", "음료", "기타"];
 const SCHEDULE_CATEGORIES = ["기념일/생일", "할일(To-Do)", "육아/병원", "가족행사/경조사"];
 const RECIPE_CATEGORIES = ["메인반찬", "국·찌개", "한그릇·면·밥", "유아식·이유식", "간식·디저트", "샐러드·가벼운식", "기타"];
 const FRIDGE_SHELF_ZONES = [
@@ -1017,6 +1017,7 @@ const getFridgeCategoryIcon = (cat) => {
     "반찬/김치": "🍱",
     "밀키트": "🥟",
     "양념/소스": "🧂",
+    "음료": "🥤",
     "기타": "📦"
   };
   return map[cat] || "📦";
@@ -1045,7 +1046,7 @@ const resolveItemShelfZone = (item) => {
     return "하부냉동 3칸";
   }
   if (cat === "채소/과일") return "채소칸";
-  if (cat === "유제품/계란" || cat === "유아식/이유식 재료") return "냉장 1단(상단)";
+  if (cat === "유제품/계란" || cat === "유아식/이유식 재료" || cat === "음료") return "냉장 1단(상단)";
   if (cat === "반찬/김치") return "냉장 2단(중단)";
   return "냉장 3단(하단)";
 };
@@ -1171,8 +1172,8 @@ const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.65) =>
     img.src = dataUrl;
   });
 
-const APP_CODE_VERSION = "v11.00";
-const APP_BUILD_DATE = "2026-11-17 14:25";
+const APP_CODE_VERSION = "v11.05";
+const APP_BUILD_DATE = "2026-11-17 14:50";
 const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1199,6 +1200,57 @@ const HELPER_CONFIGURABLE_TABS = [
 ];
 
 const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v11.05",
+    version: "v11.05",
+    date: "2026-11-17",
+    title: "세이지그린 네비게이션 통일 · 냉장고 카테고리 아이콘·반남음 강조 · 최종 점검",
+    changes: [
+      "하단 내비게이션 활성 탭을 아이보리·세이지그린(#EEF3EE/#35503C) 팔레트로 통일해 시각적 일관성 강화",
+      "냉장고 카테고리 필터 및 등록 모달 칩에 직관적인 카테고리 아이콘(🥬🥩🥛🍼🍱🥟🧂🥤📦) 표시",
+      "0.5개 등 1개 미만 소량 잔량 품목에 [🌗 반남음] 배지를 표시해 빠르게 찾아 소진할 수 있도록 개선"
+    ]
+  },
+  {
+    id: "patch-v11.04",
+    version: "v11.04",
+    date: "2026-11-17",
+    title: "재료 카테고리에 [🥤 음료] 추가",
+    changes: [
+      "FRIDGE_CATEGORIES 및 냉장고·장보기·AI 스캔·선반 자동배정에 [🥤 음료] 카테고리 추가"
+    ]
+  },
+  {
+    id: "patch-v11.03",
+    version: "v11.03",
+    date: "2026-11-17",
+    title: "반복 루틴 단계 한 줄 세로 리스트 가독성 개선 · 식단 [빈 끼니 숨기기] 기본 적용",
+    changes: [
+      "긴 루틴 단계(예: 가방싸기(수건&턱받이&물컵&투약의뢰서))가 찌그러지거나 화살표(→)가 줄바꿈되던 문제를 없애고 1줄 1단계 세로 리스트로 깔끔하게 개편",
+      "식단 메뉴 진입 시 [빈 끼니 숨기기]를 기본값(ON)으로 설정하고, 식단이 없는 날에는 1줄 안내가 표시되도록 개선"
+    ]
+  },
+  {
+    id: "patch-v11.02",
+    version: "v11.02",
+    date: "2026-11-17",
+    title: "냉장고 기한 미확인 배지 정밀화 · 소수점(0.5) [-] 차감 보완 · 루틴 새 시간대 줄바꿈 정리",
+    changes: [
+      "소비기한 미입력 품목이 (D-999) 대신 [⏳ 기한 미확인] 배지로 깔끔하게 표시되도록 개선",
+      "0.5개 등 소수점 잔량 상태에서 [-] 버튼 탭 시 오류 없이 0으로 안전하게 차감되도록 보완",
+      "반복 루틴 새 시간대 추가 영역의 [평일] [주말] 버튼도 항상 같은 줄에 나란히 유지되도록 정리"
+    ]
+  },
+  {
+    id: "patch-v11.01",
+    version: "v11.01",
+    date: "2026-11-17",
+    title: "냉장고 [🌗 반만먹음] 및 0.5 소수점 수량 지원 · 루틴 평일/주말 한 줄 정렬",
+    changes: [
+      "냉장고 리스트 카드와 시각적 구성 모달에 [🌗 반만먹음] 버튼을 추가하고 소수점 첫째자리(0.5 등) 수량 차감·입력·표시를 지원",
+      "반복 루틴 시간대 설정에서 [평일]과 [주말] 토글 버튼이 모바일에서도 항상 같은 줄에 나란히 보이도록 레이아웃 개선"
+    ]
+  },
   {
     id: "patch-v11.00",
     version: "v11.00",
@@ -3679,7 +3731,7 @@ function MainApp() {
   });
   const [editingRoutineId, setEditingRoutineId] = useState(null);
   const [isRoutineModalOpen, setIsRoutineModalOpen] = useState(false);
-  const [hideEmptyMealSlots, setHideEmptyMealSlots] = useState(false);
+  const [hideEmptyMealSlots, setHideEmptyMealSlots] = useState(true);
   useEffect(() => {
     if (!isQuickFabOpen && !isRoutineModalOpen && !isActivityModalOpen && !isEditorUnlockModalOpen) return;
     const onEsc = (e) => {
@@ -7820,7 +7872,7 @@ ${validText}
     if (!requireEditorAccess("fridge")) return;
     if (!fridgeForm.name.trim()) return;
     const rawQtyStr = String(fridgeForm.quantity ?? "").trim();
-    const parsedQty = rawQtyStr === "" ? 1 : Number(rawQtyStr);
+    const parsedQty = rawQtyStr === "" ? 1 : Math.round(Number(rawQtyStr) * 10) / 10;
     if (!Number.isFinite(parsedQty) || parsedQty < 0) {
       showToast("⚠️ 수량은 0 이상의 숫자로 입력해 주세요.");
       return;
@@ -7936,7 +7988,7 @@ ${validText}
       return;
     }
     inFlightOpsRef.current.add(adjKey);
-    const optimisticNext = Math.max(0, Number(item.quantity || 0) + delta);
+    const optimisticNext = Math.max(0, Math.round((Number(item.quantity || 0) + delta) * 10) / 10);
     const updated = { ...item, quantity: optimisticNext };
     setFridgeMap((prev) => ({
       ...prev,
@@ -7958,7 +8010,7 @@ ${validText}
         }
         const rawQty = snapV4.exists() ? snapV4.data().quantity : snapV3.data().quantity;
         const serverQty = Number(rawQty || 0);
-        const next = Math.round((serverQty + delta) * 100) / 100;
+        const next = Math.round((serverQty + delta) * 10) / 10;
         if (!Number.isFinite(next) || next < 0) {
           throw new Error("재고가 0이라 더 차감할 수 없습니다. [다 먹음]을 눌러주세요.");
         }
@@ -7997,6 +8049,18 @@ ${validText}
       inFlightOpsRef.current.delete(adjKey);
       endWrite(ok, errMsg);
     }
+  };
+
+  const handleHalfEatFridgeItem = async (item) => {
+    if (!requireEditorAccess("fridge")) return;
+    const cur = Number(item?.quantity || 0);
+    if (cur <= 0) {
+      showToast("남은 재고가 0입니다.");
+      return;
+    }
+    const rawStep = cur <= 1 ? Math.round((cur / 2) * 10) / 10 : 0.5;
+    const step = Math.max(0.1, rawStep);
+    await handleAdjustQuantity(item, -step);
   };
 
   const handleMoveFridgeShelfZone = async (item, newZone) => {
@@ -10263,35 +10327,33 @@ ${validText}
                             />
                             <div className="min-w-0 flex-1">
                               {steps.length >= 2 ? (
-                                <div className="flex flex-wrap items-center gap-1">
+                                <div className="flex flex-col gap-1">
                                   {steps.map((st, sIdx) => {
                                     const sDone = stepDoneSet.has(sIdx);
                                     return (
-                                      <React.Fragment key={sIdx}>
-                                        <button
-                                          type="button"
-                                          onClick={() => handleToggleRoutineSubStep(rt.id, sIdx, steps.length)}
-                                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-extrabold border transition active:scale-95 ${
+                                      <button
+                                        key={sIdx}
+                                        type="button"
+                                        onClick={() => handleToggleRoutineSubStep(rt.id, sIdx, steps.length)}
+                                        className={`w-full flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-[11px] font-extrabold border text-left transition active:scale-[0.99] ${
+                                          sDone
+                                            ? "bg-emerald-50 border-emerald-300 text-emerald-800"
+                                            : "bg-white border-stone-200 text-stone-800 hover:bg-stone-100"
+                                        }`}
+                                      >
+                                        <span
+                                          className={`inline-flex items-center justify-center w-4 h-4 rounded-full border text-[9px] font-black shrink-0 ${
                                             sDone
-                                              ? "bg-emerald-50 border-emerald-300 text-emerald-800"
-                                              : "bg-white border-stone-200 text-stone-800 hover:bg-stone-100"
+                                              ? "bg-emerald-600 border-emerald-600 text-white"
+                                              : "border-stone-400 text-stone-700 bg-white"
                                           }`}
                                         >
-                                          <span
-                                            className={`inline-flex items-center justify-center w-4 h-4 rounded-full border text-[9px] font-black shrink-0 ${
-                                              sDone
-                                                ? "bg-emerald-600 border-emerald-600 text-white"
-                                                : "border-stone-400 text-stone-700 bg-white"
-                                            }`}
-                                          >
-                                            {sDone ? "✓" : sIdx + 1}
-                                          </span>
-                                          <span className={sDone ? "line-through" : ""}>{st}</span>
-                                        </button>
-                                        {sIdx < steps.length - 1 && (
-                                          <span className="text-[10px] font-black text-stone-300">→</span>
-                                        )}
-                                      </React.Fragment>
+                                          {sDone ? "✓" : sIdx + 1}
+                                        </span>
+                                        <span className={`min-w-0 flex-1 break-keep leading-snug ${sDone ? "line-through opacity-75" : ""}`}>
+                                          {st}
+                                        </span>
+                                      </button>
                                     );
                                   })}
                                 </div>
@@ -11153,6 +11215,11 @@ ${validText}
                       </button>
                     </div>
                     <div className="space-y-1.5">
+                      {hideEmptyMealSlots && dayMeals.length === 0 && (
+                        <div className="px-2.5 py-1.5 rounded-xl bg-stone-50/70 border border-dashed border-stone-200 text-[11px] font-bold text-stone-400 text-center">
+                          등록된 식단이 없습니다 · 우측 [+ 식단 추가]로 등록하세요
+                        </div>
+                      )}
                       {MEAL_SLOTS.map((slotMeta) => {
                         const slotId = slotMeta.id;
                         const items = dayMeals.filter((m) => m.slot === slotId);
@@ -12218,108 +12285,115 @@ ${validText}
                     {sortedSlots.map((slot) => (
                       <div
                         key={slot.id}
-                        className="flex flex-wrap items-center gap-1.5 bg-white border border-indigo-100 rounded-xl p-1.5"
+                        className="bg-white border border-indigo-100 rounded-xl p-2 space-y-1.5"
                       >
-                        <input
-                          type="text"
-                          defaultValue={slot.label}
-                          onBlur={(e) => {
-                            const nextLabel = e.target.value.trim();
-                            if (!nextLabel || nextLabel === slot.label) {
-                              e.target.value = slot.label;
-                              return;
-                            }
-                            if (nextLabel === "상시" || routineSlotDefs.some((x) => x.id !== slot.id && x.label === nextLabel)) {
-                              showToast("이미 존재하는 시간대 이름입니다.");
-                              e.target.value = slot.label;
-                              return;
-                            }
-                            if (!requireEditorAccess("schedule")) {
-                              e.target.value = slot.label;
-                              return;
-                            }
-                            const nextDefs = routineSlotDefs.map((x) =>
-                              x.id === slot.id ? { ...x, label: nextLabel } : x
-                            );
-                            persistSlots(nextDefs);
-                            const migratedRoutines = familyRoutines.map((r) =>
-                              r.timeSlot === slot.label ? { ...r, timeSlot: nextLabel } : r
-                            );
-                            setFamilyRoutines(migratedRoutines);
-                            syncRoutinesToCloud(migratedRoutines);
-                            recordActivity("루틴", "시간대 수정", `${slot.label} → ${nextLabel}`);
-                            showToast(`시간대 [${slot.label}] → [${nextLabel}] 변경 완료`);
-                          }}
-                          className="w-20 px-2 py-1 rounded-lg border border-stone-200 text-[11px] font-black text-stone-900 bg-stone-50"
-                          title="시간대 이름 수정"
-                        />
-                        <input
-                          type="time"
-                          value={slot.startTime}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            if (!val || !requireEditorAccess("schedule")) return;
-                            persistSlots(
-                              routineSlotDefs.map((x) => (x.id === slot.id ? { ...x, startTime: val } : x))
-                            );
-                          }}
-                          className="px-2 py-1 rounded-lg border border-indigo-200 bg-white text-[11px] font-black text-stone-800"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (!requireEditorAccess("schedule")) return;
-                            persistSlots(
-                              routineSlotDefs.map((x) => (x.id === slot.id ? { ...x, weekday: !x.weekday } : x))
-                            );
-                          }}
-                          className={`px-2 py-1 rounded-lg text-[10px] font-extrabold border ${
-                            slot.weekday
-                              ? "bg-indigo-600 text-white border-indigo-600"
-                              : "bg-stone-50 text-stone-400 border-stone-200"
-                          }`}
-                        >
-                          평일
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (!requireEditorAccess("schedule")) return;
-                            persistSlots(
-                              routineSlotDefs.map((x) => (x.id === slot.id ? { ...x, weekend: !x.weekend } : x))
-                            );
-                          }}
-                          className={`px-2 py-1 rounded-lg text-[10px] font-extrabold border ${
-                            slot.weekend
-                              ? "bg-teal-600 text-white border-teal-600"
-                              : "bg-stone-50 text-stone-400 border-stone-200"
-                          }`}
-                        >
-                          주말
-                        </button>
-                        <span className="text-[9px] font-extrabold text-stone-400 px-1">
-                          {familyRoutines.filter((r) => (r.timeSlot || "상시") === slot.label).length}건
-                        </span>
-                        {routineSlotDefs.length > 1 && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              if (!requireEditorAccess("schedule")) return;
-                              const nextDefs = routineSlotDefs.filter((x) => x.id !== slot.id);
+                        <div className="flex items-center gap-1.5">
+                          <input
+                            type="text"
+                            defaultValue={slot.label}
+                            onBlur={(e) => {
+                              const nextLabel = e.target.value.trim();
+                              if (!nextLabel || nextLabel === slot.label) {
+                                e.target.value = slot.label;
+                                return;
+                              }
+                              if (nextLabel === "상시" || routineSlotDefs.some((x) => x.id !== slot.id && x.label === nextLabel)) {
+                                showToast("이미 존재하는 시간대 이름입니다.");
+                                e.target.value = slot.label;
+                                return;
+                              }
+                              if (!requireEditorAccess("schedule")) {
+                                e.target.value = slot.label;
+                                return;
+                              }
+                              const nextDefs = routineSlotDefs.map((x) =>
+                                x.id === slot.id ? { ...x, label: nextLabel } : x
+                              );
                               persistSlots(nextDefs);
                               const migratedRoutines = familyRoutines.map((r) =>
-                                r.timeSlot === slot.label ? { ...r, timeSlot: "상시" } : r
+                                r.timeSlot === slot.label ? { ...r, timeSlot: nextLabel } : r
                               );
                               setFamilyRoutines(migratedRoutines);
                               syncRoutinesToCloud(migratedRoutines);
-                              recordActivity("루틴", "시간대 삭제", slot.label);
-                              showToast(`[${slot.label}] 시간대가 삭제되었습니다.`);
+                              recordActivity("루틴", "시간대 수정", `${slot.label} → ${nextLabel}`);
+                              showToast(`시간대 [${slot.label}] → [${nextLabel}] 변경 완료`);
                             }}
-                            className="ml-auto px-2 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 text-[10px] font-extrabold"
-                          >
-                            삭제
-                          </button>
-                        )}
+                            className="w-20 px-2 py-1 rounded-lg border border-stone-200 text-[11px] font-black text-stone-900 bg-stone-50"
+                            title="시간대 이름 수정"
+                          />
+                          <input
+                            type="time"
+                            value={slot.startTime}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              if (!val || !requireEditorAccess("schedule")) return;
+                              persistSlots(
+                                routineSlotDefs.map((x) => (x.id === slot.id ? { ...x, startTime: val } : x))
+                              );
+                            }}
+                            className="flex-1 min-w-0 px-2 py-1 rounded-lg border border-indigo-200 bg-white text-[11px] font-black text-stone-800"
+                          />
+                          {routineSlotDefs.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (!requireEditorAccess("schedule")) return;
+                                const nextDefs = routineSlotDefs.filter((x) => x.id !== slot.id);
+                                persistSlots(nextDefs);
+                                const migratedRoutines = familyRoutines.map((r) =>
+                                  r.timeSlot === slot.label ? { ...r, timeSlot: "상시" } : r
+                                );
+                                setFamilyRoutines(migratedRoutines);
+                                syncRoutinesToCloud(migratedRoutines);
+                                recordActivity("루틴", "시간대 삭제", slot.label);
+                                showToast(`[${slot.label}] 시간대가 삭제되었습니다.`);
+                              }}
+                              className="px-2 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 text-[10px] font-extrabold shrink-0"
+                            >
+                              삭제
+                            </button>
+                          )}
+                        </div>
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-1.5 flex-nowrap shrink-0">
+                            <span className="text-[10px] font-bold text-stone-400">적용:</span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (!requireEditorAccess("schedule")) return;
+                                persistSlots(
+                                  routineSlotDefs.map((x) => (x.id === slot.id ? { ...x, weekday: !x.weekday } : x))
+                                );
+                              }}
+                              className={`px-2.5 py-0.5 rounded-lg text-[10px] font-extrabold border whitespace-nowrap ${
+                                slot.weekday
+                                  ? "bg-indigo-600 text-white border-indigo-600"
+                                  : "bg-stone-50 text-stone-400 border-stone-200"
+                              }`}
+                            >
+                              평일
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (!requireEditorAccess("schedule")) return;
+                                persistSlots(
+                                  routineSlotDefs.map((x) => (x.id === slot.id ? { ...x, weekend: !x.weekend } : x))
+                                );
+                              }}
+                              className={`px-2.5 py-0.5 rounded-lg text-[10px] font-extrabold border whitespace-nowrap ${
+                                slot.weekend
+                                  ? "bg-teal-600 text-white border-teal-600"
+                                  : "bg-stone-50 text-stone-400 border-stone-200"
+                              }`}
+                            >
+                              주말
+                            </button>
+                          </div>
+                          <span className="text-[10px] font-extrabold text-stone-400">
+                            연결 루틴 {familyRoutines.filter((r) => (r.timeSlot || "상시") === slot.label).length}건
+                          </span>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -12367,24 +12441,26 @@ ${validText}
                       onChange={(e) => setNewSlotTimeInput(e.target.value)}
                       className="px-2 py-1.5 rounded-lg border border-indigo-200 bg-white text-[11px] font-black"
                     />
-                    <button
-                      type="button"
-                      onClick={() => setNewSlotWeekday((v) => !v)}
-                      className={`px-2 py-1 rounded-lg text-[10px] font-extrabold border ${
-                        newSlotWeekday ? "bg-indigo-600 text-white border-indigo-600" : "bg-white text-stone-400 border-stone-200"
-                      }`}
-                    >
-                      평일
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setNewSlotWeekend((v) => !v)}
-                      className={`px-2 py-1 rounded-lg text-[10px] font-extrabold border ${
-                        newSlotWeekend ? "bg-teal-600 text-white border-teal-600" : "bg-white text-stone-400 border-stone-200"
-                      }`}
-                    >
-                      주말
-                    </button>
+                    <div className="flex items-center gap-1 flex-nowrap shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => setNewSlotWeekday((v) => !v)}
+                        className={`px-2 py-1 rounded-lg text-[10px] font-extrabold border whitespace-nowrap ${
+                          newSlotWeekday ? "bg-indigo-600 text-white border-indigo-600" : "bg-white text-stone-400 border-stone-200"
+                        }`}
+                      >
+                        평일
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setNewSlotWeekend((v) => !v)}
+                        className={`px-2 py-1 rounded-lg text-[10px] font-extrabold border whitespace-nowrap ${
+                          newSlotWeekend ? "bg-teal-600 text-white border-teal-600" : "bg-white text-stone-400 border-stone-200"
+                        }`}
+                      >
+                        주말
+                      </button>
+                    </div>
                     <button
                       type="button"
                       onClick={() => {
@@ -12525,35 +12601,33 @@ ${validText}
                               const stepDoneSet = getRoutineSubStepDoneSet(rt);
                               if (steps.length >= 2) {
                                 return (
-                                  <div className="flex flex-wrap items-center gap-1">
+                                  <div className="flex flex-col gap-1">
                                     {steps.map((st, sIdx) => {
                                       const sDone = doneNow || stepDoneSet.has(sIdx);
                                       return (
-                                        <React.Fragment key={sIdx}>
-                                          <button
-                                            type="button"
-                                            onClick={() => handleToggleRoutineSubStep(rt.id, sIdx, steps.length)}
-                                            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-extrabold border transition active:scale-95 ${
+                                        <button
+                                          key={sIdx}
+                                          type="button"
+                                          onClick={() => handleToggleRoutineSubStep(rt.id, sIdx, steps.length)}
+                                          className={`w-full flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-[11px] font-extrabold border text-left transition active:scale-[0.99] ${
+                                            sDone
+                                              ? "bg-emerald-50 border-emerald-300 text-emerald-800"
+                                              : "bg-white border-stone-200 text-stone-800 hover:bg-stone-100"
+                                          }`}
+                                        >
+                                          <span
+                                            className={`inline-flex items-center justify-center w-4 h-4 rounded-full border text-[9px] font-black shrink-0 ${
                                               sDone
-                                                ? "bg-emerald-50 border-emerald-300 text-emerald-800"
-                                                : "bg-white border-stone-200 text-stone-800 hover:bg-stone-100"
+                                                ? "bg-emerald-600 border-emerald-600 text-white"
+                                                : "border-stone-400 text-stone-700 bg-white"
                                             }`}
                                           >
-                                            <span
-                                              className={`inline-flex items-center justify-center w-4 h-4 rounded-full border text-[9px] font-black shrink-0 ${
-                                                sDone
-                                                  ? "bg-emerald-600 border-emerald-600 text-white"
-                                                  : "border-stone-400 text-stone-700 bg-white"
-                                              }`}
-                                            >
-                                              {sDone ? "✓" : sIdx + 1}
-                                            </span>
-                                            <span className={sDone ? "line-through" : ""}>{st}</span>
-                                          </button>
-                                          {sIdx < steps.length - 1 && (
-                                            <span className="text-[10px] font-black text-indigo-300">→</span>
-                                          )}
-                                        </React.Fragment>
+                                            {sDone ? "✓" : sIdx + 1}
+                                          </span>
+                                          <span className={`min-w-0 flex-1 break-keep leading-snug ${sDone ? "line-through opacity-75" : ""}`}>
+                                            {st}
+                                          </span>
+                                        </button>
                                       );
                                     })}
                                   </div>
@@ -13043,7 +13117,7 @@ ${validText}
                     : "bg-white text-stone-600 border-stone-200"
                 }`}
               >
-                {cat}
+                {cat === "전체" ? "전체" : `${getFridgeCategoryIcon(cat)} ${cat}`}
               </button>
             ))}
           </div>
@@ -13456,11 +13530,16 @@ ${validText}
                                   : "bg-stone-100 text-stone-500"
                               }`}
                             >
-                              {item.expiryDate} ({diff < 0 ? `${Math.abs(diff)}일 지남` : `D-${diff}`})
+                              {item.expiryDate ? `${item.expiryDate} (${diff < 0 ? `${Math.abs(diff)}일 지남` : diff === 0 ? "오늘 만료" : `D-${diff}`})` : "⏳ 기한 미확인"}
                             </span>
                           </div>
                           <div className="flex items-baseline gap-2 flex-wrap">
                             <span className="text-sm font-black text-stone-900">{item.name}</span>
+                            {Number(item.quantity) > 0 && Number(item.quantity) < 1 && (
+                              <span className="px-1.5 py-0.5 rounded bg-[#EEF3EE] text-[#35503C] border border-[#C9D8CC] text-[9px] font-black">
+                                🌗 반남음
+                              </span>
+                            )}
                             {Number(item.price) > 0 && (
                               <span className="text-[10px] font-bold text-stone-400">
                                 {Number(item.price).toLocaleString()}원
@@ -13471,7 +13550,7 @@ ${validText}
 
                         <div className="flex items-center gap-1 bg-stone-100 px-1.5 py-0.5 rounded-xl shrink-0">
                           <button
-                            onClick={() => handleAdjustQuantity(item, -1)}
+                            onClick={() => handleAdjustQuantity(item, Number(item.quantity) > 0 && Number(item.quantity) < 1 ? -Number(item.quantity) : -1)}
                             className="w-6 h-6 rounded-lg bg-white font-black text-stone-700 shadow-sm"
                           >
                             -
@@ -13491,6 +13570,13 @@ ${validText}
 
                       <div className="flex items-center justify-between pt-1.5 border-t border-stone-100 gap-1">
                         <div className="flex items-center gap-1 flex-nowrap">
+                          <button
+                            onClick={() => handleHalfEatFridgeItem(item)}
+                            className="px-2 py-1 rounded-lg bg-[#EEF3EE] hover:bg-[#DFE9E0] text-[#35503C] border border-[#C9D8CC] text-[11px] font-extrabold whitespace-nowrap"
+                            title="수량 0.5(또는 절반) 차감"
+                          >
+                            🌗 반만먹음
+                          </button>
                           <button
                             onClick={() => handleConsumeFridgeItem(item, false)}
                             className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-extrabold flex items-center gap-1 whitespace-nowrap"
@@ -15787,11 +15873,11 @@ ${validText}
                 window.scrollTo({ top: 0, behavior: "instant" });
               }}
               className={`flex flex-col items-center justify-center py-1.5 rounded-xl transition ${
-                active ? "text-stone-900 font-black bg-amber-50/80" : "text-stone-400 font-semibold"
+                active ? "text-[#35503C] font-black bg-[#EEF3EE]" : "text-stone-400 font-semibold"
               }`}
             >
               <div className="relative">
-                <IconComp className={`w-4 h-4 ${active ? "text-amber-600" : ""}`} />
+                <IconComp className={`w-4 h-4 ${active ? "text-[#5E7A65]" : ""}`} />
                 {item.id === "schedule" && globalTodoBadgeStats.activeCount > 0 && (
                   <span
                     className={`absolute -top-1.5 -right-2.5 min-w-[16px] h-4 px-1 rounded-full text-[9px] font-black text-white flex items-center justify-center leading-none shadow-sm ${
@@ -15813,7 +15899,7 @@ ${validText}
           onClick={() => setIsMoreNavOpen((v) => !v)}
           className={`flex flex-col items-center justify-center py-1.5 rounded-xl transition ${
             ["monthly", "shopping", "notices", "ai", "recipes"].includes(activeTab) || isMoreNavOpen
-              ? "text-stone-900 font-black bg-amber-50/80"
+              ? "text-[#35503C] font-black bg-[#EEF3EE]"
               : "text-stone-400 font-semibold"
           }`}
         >
@@ -15983,17 +16069,17 @@ ${validText}
                 className="w-full px-3 py-2.5 rounded-xl border border-stone-200 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-stone-400"
               />
               {parseRoutineSteps(newRoutineTitle).length >= 2 && (
-                <div className="mt-1.5 flex flex-wrap items-center gap-1 bg-stone-50 border border-stone-200 rounded-xl p-2">
-                  {parseRoutineSteps(newRoutineTitle).map((st, idx, arr) => (
-                    <React.Fragment key={idx}>
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white border border-stone-200 text-[10px] font-extrabold text-stone-800">
-                        <span className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full border border-stone-400 text-[8px] font-black">
-                          {idx + 1}
-                        </span>
-                        <span>{st}</span>
+                <div className="mt-1.5 flex flex-col gap-1 bg-stone-50 border border-stone-200 rounded-xl p-2">
+                  {parseRoutineSteps(newRoutineTitle).map((st, idx) => (
+                    <div
+                      key={idx}
+                      className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-white border border-stone-200 text-[10px] font-extrabold text-stone-800"
+                    >
+                      <span className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full border border-stone-400 text-[8px] font-black shrink-0">
+                        {idx + 1}
                       </span>
-                      {idx < arr.length - 1 && <span className="text-[10px] font-black text-stone-300">→</span>}
-                    </React.Fragment>
+                      <span className="min-w-0 flex-1 break-keep">{st}</span>
+                    </div>
                   ))}
                 </div>
               )}
@@ -17451,7 +17537,10 @@ ${validText}
             <div className="grid grid-cols-2 gap-2">
               <input
                 type="number"
-                placeholder="수량"
+                step="0.1"
+                min="0"
+                inputMode="decimal"
+                placeholder="수량 (0.5 가능)"
                 value={fridgeForm.quantity}
                 onChange={(e) => setFridgeForm({ ...fridgeForm, quantity: e.target.value })}
                 className="px-3 py-2 rounded-xl border border-stone-200 text-xs font-bold"
@@ -19337,7 +19426,17 @@ ${validText}
               </select>
             </div>
 
-            <div className="grid grid-cols-3 gap-1.5 pt-1">
+            <div className="grid grid-cols-2 gap-1.5 pt-1">
+              <button
+                onClick={() => {
+                  const target = quickFridgeItem;
+                  setQuickFridgeItem(null);
+                  handleHalfEatFridgeItem(target);
+                }}
+                className="py-2.5 rounded-xl bg-[#EEF3EE] text-[#35503C] border border-[#C9D8CC] text-xs font-extrabold"
+              >
+                🌗 반만먹음
+              </button>
               <button
                 onClick={() => {
                   const target = quickFridgeItem;
