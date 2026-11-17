@@ -1212,7 +1212,7 @@ const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.65) =>
     img.src = dataUrl;
   });
 
-const APP_CODE_VERSION = "v11.33";
+const APP_CODE_VERSION = "v11.34";
 
 const formatRoutineTimeLabel = (hhmm) => {
   const m = String(hhmm || "").trim().match(/^(\d{2}):(\d{2})$/);
@@ -1255,6 +1255,16 @@ const HELPER_CONFIGURABLE_TABS = [
 ];
 
 const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v11.34",
+    version: "v11.34",
+    date: "2026-11-17",
+    title: "Vercel 배포 빌드 오류(육아일기 카드 중복 </div> 태그) 즉시 수정",
+    changes: [
+      "빌드 수정: 육아일기 카드 상단(17616행)의 중복 닫힘 </div> 태그 1건을 제거해 Vite/Vercel 빌드 오류 완전 해결",
+      "전수 검증: 전체 JSX 태그·프래그먼트 짝 및 미정의 함수 호출·중복 상태 0건 최종 확인"
+    ]
+  },
   {
     id: "patch-v11.33",
     version: "v11.33",
@@ -17610,7 +17620,6 @@ ${validText}
                                   <Trash2 className="w-3.5 h-3.5" />
                                 </button>
                               </div>
-                            </div>
                             </div>
                             {getDiaryEntryChildIds(entry).length >= 2 && (
                               <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-amber-50 border border-amber-200 text-amber-900 text-[10px] font-black">
