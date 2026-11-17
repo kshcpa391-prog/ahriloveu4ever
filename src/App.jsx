@@ -1212,7 +1212,7 @@ const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.65) =>
     img.src = dataUrl;
   });
 
-const APP_CODE_VERSION = "v11.55";
+const APP_CODE_VERSION = "v11.56";
 
 const formatRoutineTimeLabel = (hhmm) => {
   const m = String(hhmm || "").trim().match(/^(\d{2}):(\d{2})$/);
@@ -1228,7 +1228,7 @@ const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-const APP_BUILD_DATE = "2026-11-17 22:35";
+const APP_BUILD_DATE = "2026-11-17 22:38";
 const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1290,6 +1290,15 @@ const formatTime12Ko = (ms) => {
 };
 
 const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v11.56",
+    version: "v11.56",
+    date: "2026-11-17",
+    title: "마지막 수유 경과 표시를 베이비타임 방식(최근 수유 시작~현재 + 직전 수유 시작~현재)으로 통일",
+    changes: [
+      "로직 수정: 마지막 수유 카드 1줄은 [가장 최근 수유 시작~현재 경과시간(색상 아이콘)], 2줄은 [그 직전 수유 시작~현재 경과시간(• 색상 점)]으로 홈과 수유·생활 탭 모두 동일하게 반영"
+    ]
+  },
   {
     id: "patch-v11.55",
     version: "v11.55",
@@ -10130,7 +10139,7 @@ ${validText}
       lastFeed && prevFeed ? Math.max(0, (Number(lastFeed.startMs) || 0) - (Number(prevFeed.startMs) || 0)) : null;
     const lastDiaper = list.find((a) => a.type === "기저귀") || null;
     const lastSleep = list.find((a) => a.type === "수면") || null;
-    return { list, lastFeed, feedIntervalMs, lastDiaper, lastSleep };
+    return { list, lastFeed, prevFeed, feedIntervalMs, lastDiaper, lastSleep };
   };
 
   const handleQuickTapBabyActivity = async (typeId, childOverride = null) => {
@@ -12191,15 +12200,20 @@ ${validText}
                   </div>
                 </div>
                 <div className="bg-white rounded-xl py-1.5 px-1 border border-stone-200/80">
-                  <div className="text-[9px] font-bold text-stone-400">마지막 수유(시작)</div>
+                  <div className="text-[9px] font-bold text-stone-400">마지막 수유</div>
                   <div className={`text-[11px] font-black mt-0.5 ${feedMeta ? feedMeta.text : "text-stone-800"}`}>
-                    {sum.lastFeed ? formatElapsedKo(nowMs - sum.lastFeed.startMs) : "-"}
+                    {sum.lastFeed ? `${feedMeta?.emoji || ""} ${formatElapsedKo(nowMs - sum.lastFeed.startMs)}` : "-"}
                   </div>
-                  <div className="text-[9px] font-bold text-stone-500 truncate">
-                    {sum.lastFeed
-                      ? `${formatTime12Ko(sum.lastFeed.startMs)} ${sum.lastFeed.type}${sum.feedIntervalMs !== null ? ` · ${Math.floor(sum.feedIntervalMs / 3600000)}h${Math.floor((sum.feedIntervalMs % 3600000) / 60000)}m` : ""}`
-                      : "기록없음"}
-                  </div>
+                  {(() => {
+                    const prevMeta = sum.prevFeed ? BABY_ACTIVITY_TYPES.find((t) => t.id === sum.prevFeed.type) : null;
+                    return (
+                      <div className={`text-[9px] font-bold truncate ${prevMeta ? prevMeta.text : "text-stone-500"}`}>
+                        {sum.prevFeed
+                          ? `• ${formatElapsedKo(nowMs - sum.prevFeed.startMs)}`
+                          : sum.lastFeed?.type || "기록없음"}
+                      </div>
+                    );
+                  })()}
                 </div>
                 <div className="bg-white rounded-xl py-1.5 px-1 border border-stone-200/80">
                   <div className="text-[9px] font-bold text-stone-400">마지막 수면</div>
@@ -18368,15 +18382,20 @@ ${validText}
                         </div>
                       </div>
                       <div className="bg-[#FAF8F3] rounded-xl py-2 px-1 border border-stone-200">
-                        <div className="text-[10px] font-bold text-stone-400">마지막 수유(시작)</div>
+                        <div className="text-[10px] font-bold text-stone-400">마지막 수유</div>
                         <div className={`text-xs font-black mt-0.5 ${feedMeta ? feedMeta.text : "text-stone-800"}`}>
                           {sum.lastFeed ? `${feedMeta?.emoji || ""} ${formatElapsedKo(nowMs - sum.lastFeed.startMs)}` : "-"}
                         </div>
-                        <div className="text-[10px] font-bold text-stone-500">
-                          {sum.feedIntervalMs !== null
-                            ? `이전 ${Math.floor(sum.feedIntervalMs / 3600000)}시간 ${Math.floor((sum.feedIntervalMs % 3600000) / 60000)}분 텀`
-                            : sum.lastFeed?.type || "-"}
-                        </div>
+                        {(() => {
+                          const prevMeta = sum.prevFeed ? BABY_ACTIVITY_TYPES.find((t) => t.id === sum.prevFeed.type) : null;
+                          return (
+                            <div className={`text-[10px] font-bold ${prevMeta ? prevMeta.text : "text-stone-500"}`}>
+                              {sum.prevFeed
+                                ? `• ${formatElapsedKo(nowMs - sum.prevFeed.startMs)}`
+                                : sum.lastFeed?.type || "-"}
+                            </div>
+                          );
+                        })()}
                       </div>
                       <div className="bg-[#FAF8F3] rounded-xl py-2 px-1 border border-stone-200">
                         <div className="text-[10px] font-bold text-stone-400">마지막 수면</div>
