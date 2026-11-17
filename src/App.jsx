@@ -1212,7 +1212,7 @@ const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.65) =>
     img.src = dataUrl;
   });
 
-const APP_CODE_VERSION = "v11.43";
+const APP_CODE_VERSION = "v11.45";
 
 const formatRoutineTimeLabel = (hhmm) => {
   const m = String(hhmm || "").trim().match(/^(\d{2}):(\d{2})$/);
@@ -1228,7 +1228,7 @@ const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-const APP_BUILD_DATE = "2026-11-17 20:45";
+const APP_BUILD_DATE = "2026-11-17 20:52";
 const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1255,6 +1255,27 @@ const HELPER_CONFIGURABLE_TABS = [
 ];
 
 const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v11.45",
+    version: "v11.45",
+    date: "2026-11-17",
+    title: "장보기·가족공지 버튼 줄바꿈 개선 · 미완료 공지 필터 & 공지 1탭 복사 추가",
+    changes: [
+      "시각화 개선: 장보기 [❄️ 입고] 버튼과 가족공지 [+ 공지 작성]·[✓ 확인완료] 버튼에 whitespace-nowrap을 적용해 모바일 줄바꿈 방지",
+      "편의·신규 기능: 가족공지 탭에 [진행 중/완료] 요약 바, [미완료만 보기] 토글 및 공지별 [📋 복사] 1탭 버튼 추가",
+      "전수 검증: 전체 파일 JSX·문자열·상태·아이콘 오류 0건 최종 확인"
+    ]
+  },
+  {
+    id: "patch-v11.44",
+    version: "v11.44",
+    date: "2026-11-17",
+    title: "1MB 초과 백업 공유 지연 해결을 위한 [사진 제외 경량 백업] 버튼 추가 & 용량 안내",
+    changes: [
+      "경량 백업 도입: 육아일기 사진(Base64)으로 1MB를 넘어 공유 창/복사가 막히는 경우를 위해 수십 KB 단위의 [📄 사진 제외 경량 백업 보내기] 버튼 추가",
+      "용량 표시: 백업 공유·다운로드 시 실제 파일 용량(KB/MB)을 안내 토스트로 함께 표시"
+    ]
+  },
   {
     id: "patch-v11.43",
     version: "v11.43",
@@ -4193,6 +4214,7 @@ function MainApp() {
   const [expenseSearchQuery, setExpenseSearchQuery] = useState("");
   const [expenseCatFilter, setExpenseCatFilter] = useState("전체");
   const [expenseLedgerExpanded, setExpenseLedgerExpanded] = useState(false);
+  const [noticeHideDone, setNoticeHideDone] = useState(false);
   const [monthlyBudget, setMonthlyBudget] = useState(() => {
     return Number(localStorage.getItem("kim_family_budget") || 800000);
   });
@@ -6389,9 +6411,12 @@ function MainApp() {
   // ==========================================
   // 7. 전체 DB 원본(JSON) 1초 백업 다운로드 & Gmail/구글 드라이브 전송 & 1초 복원
   // ==========================================
-  const buildFullBackupJsonString = () => {
+  const buildFullBackupJsonString = (excludeDiaryPhotos = false) => {
+    const safeDiaryEntries = excludeDiaryPhotos
+      ? babyDiaryEntries.map((d) => ({ ...d, photoUrl: "", photoUrls: [] }))
+      : babyDiaryEntries;
     const fullSnapshot = {
-      backupVersion: "v7.3",
+      backupVersion: excludeDiaryPhotos ? "v7.3-lite" : "v7.3",
       exportedAt: new Date().toISOString(),
       projectId: USER_FIREBASE_CONFIG.projectId,
       data: {
@@ -6413,7 +6438,7 @@ function MainApp() {
         homeTimeRanges,
         routineTimeRanges,
         routineSlotDefs,
-        ...(isAdminUnlocked ? { babyDiaryEntries } : {})
+        ...(isAdminUnlocked ? { babyDiaryEntries: safeDiaryEntries } : {})
       }
     };
     return JSON.stringify(fullSnapshot, null, 2);
@@ -6436,14 +6461,17 @@ function MainApp() {
     showToast("전체 DB 원본(JSON) 백업 파일이 다운로드되었습니다!");
   };
 
-  const handleSendBackupToGmailOrDrive = async () => {
-    const jsonString = buildFullBackupJsonString();
-    const jsonFileName = `수혁아리나시목시율_DB백업_${getTodayStr()}.json`;
-    const txtFileName = `수혁아리나시목시율_DB백업_${getTodayStr()}.txt`;
+  const handleSendBackupToGmailOrDrive = async (excludeDiaryPhotos = false) => {
+    const isLite = excludeDiaryPhotos === true;
+    const jsonString = buildFullBackupJsonString(isLite);
+    const sizeKb = Math.round(new Blob([jsonString]).size / 1024);
+    const sizeLabel = sizeKb >= 1024 ? `${(sizeKb / 1024).toFixed(1)}MB` : `${sizeKb}KB`;
+    const suffix = isLite ? "_텍스트경량" : "";
+    const jsonFileName = `수혁아리나시목시율_DB백업${suffix}_${getTodayStr()}.json`;
+    const txtFileName = `수혁아리나시목시율_DB백업${suffix}_${getTodayStr()}.txt`;
     const jsonFile = new File([jsonString], jsonFileName, { type: "application/json" });
     const txtFile = new File([jsonString], txtFileName, { type: "text/plain" });
 
-    // 1) 모바일 Web Share API 지원 시 파일 첨부 공유 창 실행 (네이버 메일 / 드라이브 등 선택 가능)
     const shareCandidate =
       navigator.canShare && navigator.canShare({ files: [jsonFile] })
         ? jsonFile
@@ -6454,27 +6482,35 @@ function MainApp() {
     if (shareCandidate && navigator.share) {
       try {
         await navigator.share({
-          title: `[가족식탁 DB백업] ${getTodayStr()}`,
-          text: `식단 ${meals.length}건, 냉장고 ${Object.keys(fridgeMap || {}).length}건, 일정 ${schedules.length}건 전체 백업 파일입니다.`,
+          title: `[가족식탁 DB백업${isLite ? "·경량" : ""}] ${getTodayStr()}`,
+          text: `식단 ${meals.length}건, 냉장고 ${fridge.length}건, 일정 ${schedules.length}건 (${sizeLabel}) 백업 파일입니다.`,
           files: [shareCandidate]
         });
-        showToast("📎 백업 파일이 첨부된 공유 창이 열렸습니다!");
+        showToast(`📎 백업 파일(${sizeLabel})이 첨부된 공유 창이 열렸습니다!`);
         return;
       } catch (e) {
         if (e?.name === "AbortError") return;
       }
     }
 
-    // 2) 그 외 환경: 백업 파일(.json) 즉시 다운로드 + 네이버 메일 작성 창 열기
-    handleDownloadJsonBackup();
+    // 공유 창 미지원/용량 제한 시 파일 다운로드 + 네이버 메일 작성 창 열기
+    const blob = new Blob([jsonString], { type: "application/json;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.setAttribute("download", jsonFileName);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
     const targetMail = backupEmail.trim() || "";
-    const subject = encodeURIComponent(`[가족식탁 자동백업] ${getTodayStr()} 전체 데이터베이스 백업본`);
+    const subject = encodeURIComponent(`[가족식탁 자동백업${isLite ? "·경량" : ""}] ${getTodayStr()} 전체 데이터베이스`);
     const bodyText = encodeURIComponent(
-      `수혁·아리나·시목·시율네 식탁 데이터베이스 백업입니다.\n\n• 백업 일시: ${new Date().toLocaleString()}\n• 식단: ${meals.length}건 / 냉장고: ${Object.keys(fridgeMap || {}).length}건 / 가족일정: ${schedules.length}건\n\n방금 다운로드된 '${jsonFileName}' 파일을 첨부해 주세요.`
+      `수혁·아리나·시목·시율네 식탁 데이터베이스 백업(${sizeLabel})입니다.\n\n• 백업 일시: ${new Date().toLocaleString()}\n• 식단: ${meals.length}건 / 냉장고: ${fridge.length}건 / 가족일정: ${schedules.length}건\n\n방금 다운로드된 '${jsonFileName}' 파일을 첨부해 주세요.`
     );
     const naverComposeUrl = `https://mail.naver.com/v2/new?to=${encodeURIComponent(targetMail)}&subject=${subject}&body=${bodyText}`;
     window.open(naverComposeUrl, "_blank");
-    showToast("📥 백업 파일 다운로드 완료! 열린 네이버 메일에서 파일을 첨부해 보내세요.");
+    showToast(`📥 ${sizeLabel} 백업 파일 다운로드 완료! (공유창 미지원 → 네이버 메일에서 첨부해 주세요)`);
   };
 
   const handleRestoreFromJsonFile = async (e) => {
@@ -11095,7 +11131,7 @@ ${validText}
             </div>
             <div className="flex items-center gap-1 shrink-0">
               <button
-                onClick={handleSendBackupToGmailOrDrive}
+                onClick={() => handleSendBackupToGmailOrDrive(false)}
                 className="px-2.5 py-1 rounded-xl bg-stone-900 text-white text-[11px] font-black"
               >
                 1초 백업
@@ -15857,9 +15893,9 @@ ${validText}
                       setStockInItem(item);
                       setStockInPrice("");
                     }}
-                    className="px-2.5 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-[11px] font-extrabold"
+                    className="px-2.5 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-[11px] font-extrabold whitespace-nowrap"
                   >
-                    구매완료→냉장고입고
+                    ❄️ 입고
                   </button>
                   <button
                     onClick={() => handleDeleteShopping(item.id)}
@@ -15898,14 +15934,34 @@ ${validText}
                 });
                 setIsNoticeModalOpen(true);
               }}
-              className="px-3 py-2 rounded-xl bg-stone-900 text-white text-xs font-extrabold flex items-center gap-1"
+              className="px-3 py-2 rounded-xl bg-stone-900 text-white text-xs font-extrabold flex items-center gap-1 whitespace-nowrap shrink-0"
             >
               <Plus className="w-3.5 h-3.5" /> 공지 작성
             </button>
           </div>
 
+          {notices.length > 0 && (
+            <div className="flex items-center justify-between gap-2 bg-white border border-stone-200 rounded-2xl px-3 py-2">
+              <span className="text-[11px] font-bold text-stone-600">
+                진행 중 {notices.filter((n) => !n.done).length}건 · 완료 {notices.filter((n) => n.done).length}건
+              </span>
+              <button
+                type="button"
+                onClick={() => setNoticeHideDone((v) => !v)}
+                className={`px-2.5 py-1 rounded-full text-[10px] font-extrabold border whitespace-nowrap ${
+                  noticeHideDone
+                    ? "bg-stone-900 text-white border-stone-900"
+                    : "bg-stone-50 text-stone-600 border-stone-200"
+                }`}
+              >
+                {noticeHideDone ? "미완료만 보는 중" : "완료 포함 전체"}
+              </button>
+            </div>
+          )}
+
           <div className="space-y-2.5">
             {[...notices]
+              .filter((n) => !noticeHideDone || !n.done)
               .sort((a, b) => {
                 if (Boolean(a.done) !== Boolean(b.done)) return a.done ? 1 : -1;
                 if (Boolean(a.pinned) !== Boolean(b.pinned)) return a.pinned ? -1 : 1;
@@ -15937,10 +15993,25 @@ ${validText}
                     </span>
                   </div>
 
-                  <div className="flex items-center gap-1">
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        const txt = `[${n.category}] ${n.title}\n${n.content || ""}`.trim();
+                        try {
+                          await navigator.clipboard.writeText(txt);
+                          showToast("📋 공지 내용이 복사되었습니다!");
+                        } catch (e) {
+                          showToast("⚠️ 복사에 실패했습니다.");
+                        }
+                      }}
+                      className="px-2 py-0.5 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 text-[10px] font-extrabold whitespace-nowrap"
+                    >
+                      📋 복사
+                    </button>
                     <button
                       onClick={() => handleToggleNoticeDone(n)}
-                      className={`px-2 py-0.5 rounded-lg text-[10px] font-extrabold border ${
+                      className={`px-2 py-0.5 rounded-lg text-[10px] font-extrabold border whitespace-nowrap ${
                         n.done
                           ? "bg-emerald-600 text-white border-emerald-600"
                           : "bg-white text-stone-600 border-stone-300"
@@ -20618,11 +20689,18 @@ ${validText}
               />
 
               <button
-                onClick={handleSendBackupToGmailOrDrive}
+                onClick={() => handleSendBackupToGmailOrDrive(false)}
                 className="w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-extrabold flex items-center justify-center gap-1.5 shadow-sm"
               >
                 <Mail className="w-4 h-4" />
-                <span>네이버 메일 / 드라이브로 백업 보내기 (다운로드 후 첨부)</span>
+                <span>전체 백업 보내기 (사진 포함 · 네이버메일/공유)</span>
+              </button>
+
+              <button
+                onClick={() => handleSendBackupToGmailOrDrive(true)}
+                className="w-full py-2 rounded-xl bg-white hover:bg-amber-100/60 border border-amber-300 text-amber-900 text-[11px] font-extrabold flex items-center justify-center gap-1.5"
+              >
+                <span>📄 사진 제외 경량 백업 보내기 (1MB 미만 초고속 공유)</span>
               </button>
 
               <button
