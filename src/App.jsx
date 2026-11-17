@@ -248,7 +248,7 @@ const getAutoHomeTimeMode = (ranges = DEFAULT_HOME_TIME_RANGES, hourOverride = n
 
 const DEFAULT_HOME_MENU_ORDER = [
   "daily",
-  "weekly",
+  "routine_tab",
   "fridge",
   "shopping",
   "monthly_cal",
@@ -274,7 +274,7 @@ const DEFAULT_HOME_LAYOUT = {
     hiddenMenus: [],
     blockSizes: {},
     menuSizes: {},
-    menuOrder: ["daily", "fridge", "shopping", "ai", "weekly", "monthly_cal", "monthly_exp", "baby", "recipes", "notices"]
+    menuOrder: ["daily", "fridge", "shopping", "ai", "routine_tab", "monthly_cal", "monthly_exp", "baby", "recipes", "notices"]
   },
   night: {
     blocks: ["schedule_todo", "routine", "menu_grid"],
@@ -282,7 +282,7 @@ const DEFAULT_HOME_LAYOUT = {
     hiddenMenus: [],
     blockSizes: {},
     menuSizes: {},
-    menuOrder: ["weekly", "monthly_exp", "daily", "fridge", "shopping", "monthly_cal", "baby", "recipes", "notices", "ai"]
+    menuOrder: ["daily", "monthly_exp", "routine_tab", "fridge", "shopping", "monthly_cal", "baby", "recipes", "notices", "ai"]
   }
 };
 
@@ -1116,11 +1116,32 @@ const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.65) =>
     img.src = dataUrl;
   });
 
-const APP_CODE_VERSION = "v10.79";
-const APP_BUILD_DATE = "2026-11-17 08:21";
+const APP_CODE_VERSION = "v10.81";
+const APP_BUILD_DATE = "2026-11-17 09:55";
 const EDITOR_INVITE_CODE = "0402";
 
 const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v10.81",
+    version: "v10.81",
+    date: "2026-11-17",
+    title: "통합 식단 모바일 툴바 줄바꿈 정리 · 더보기 활성 탭 목록 정리",
+    changes: [
+      "통합 식단 상단 날짜 이동 바(< 이전주 | 날짜 | 오늘로 | 다음주 >)를 좁은 모바일 화면에서도 겹치지 않도록 2단 균형 배치로 정리",
+      "더보기 하단 버튼 활성 판별 목록에서 통합된 [weekly] 키 제거"
+    ]
+  },
+  {
+    id: "patch-v10.80",
+    version: "v10.80",
+    date: "2026-11-17",
+    title: "주간요약+식단 통합(🍽️ 식단) & 인별 카드 탭 시 오늘로 자동 이동",
+    changes: [
+      "가독성이 좋은 주간요약(조회일 ±3일)을 중심으로 기존 식단 탭을 [🍽️ 식단] 하나로 통합하고 각 날짜·끼니에서 바로 추가·수정·삭제 지원",
+      "상단 가족 인별 식단 카드(수혁·아리나·시목·시율)를 누르면 해당 구성원 필터링과 동시에 오늘 날짜 카드로 즉시 스크롤 이동",
+      "홈 바로가기 및 더보기 시트에서 중복되던 [주간요약] 메뉴를 정리하고 홈 그리드에 [🔄 반복 루틴] 바로가기 연결"
+    ]
+  },
   {
     id: "patch-v10.79",
     version: "v10.79",
@@ -8888,7 +8909,7 @@ ${validText}
 
         const MENU_DEFS = {
           daily: {
-            title: "🍽️ 오늘의 식단",
+            title: "🍽️ 식단 · 주간",
             actionLabel: `${todayMealsList.length}건 >`,
             actionColor: "text-stone-500",
             borderHover: "hover:border-stone-400",
@@ -8898,13 +8919,16 @@ ${validText}
               setActiveTab("daily");
             }
           },
-          weekly: {
-            title: "📊 주간요약",
+          routine_tab: {
+            title: "🔄 반복 루틴",
             actionLabel: "열기 >",
             actionColor: "text-stone-500",
             borderHover: "hover:border-stone-400",
-            sub: <span className="text-stone-500">조회일 ±3일 식단 흐름</span>,
-            onClick: () => setActiveTab("weekly")
+            sub: <span className="text-stone-500">남은 루틴 {activeRoutines.length}건</span>,
+            onClick: () => {
+              setScheduleSubTab("routine");
+              setActiveTab("schedule");
+            }
           },
           fridge: {
             title: "❄️ 냉장고",
@@ -9810,322 +9834,23 @@ ${validText}
       })()}
 
       {/* ==========================================
-          탭 1: 일별 식단
+          탭 1: 🍽️ 통합 식단 (주간 ±3일 한눈에 보기 + 즉시 추가·수정·삭제 + 인별 오늘 이동)
       ========================================== */}
       {activeTab === "daily" && (
-        <div className="p-3 space-y-2.5">
-          <div className="grid grid-cols-2 gap-1.5">
-            <button
-              onClick={() => {
-                setScanTargetMonth(selectedDate.slice(0, 7));
-                setIsDaycareModalOpen(true);
-              }}
-              className="py-1.5 px-2.5 rounded-xl bg-amber-50/90 border border-amber-200 hover:bg-amber-100 transition flex items-center justify-center gap-1.5"
-            >
-              <Camera className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-              <span className="text-[11px] font-extrabold text-amber-900 whitespace-nowrap">식단표 AI 스캔</span>
-            </button>
-            <button
-              onClick={() => setIsInventoryExportOpen(true)}
-              className="py-1.5 px-2.5 rounded-xl bg-stone-100 border border-stone-200 hover:bg-stone-200/80 transition flex items-center justify-center gap-1"
-            >
-              <span className="text-[11px] font-extrabold text-stone-800 whitespace-nowrap">📤 식단·재고 내보내기</span>
-            </button>
-          </div>
-
-          <div className="bg-white p-2.5 rounded-2xl border border-stone-200 shadow-sm">
-            <div className="flex items-center justify-between mb-2">
-              <button
-                onClick={() => {
-                  const d = new Date(selectedDate + "T00:00:00");
-                  d.setDate(d.getDate() - 1);
-                  const next = formatDate(d);
-                  setSelectedDate(next);
-                  setCurrentMonth(next.slice(0, 7));
-                }}
-                className="p-1.5 rounded-xl bg-stone-100 hover:bg-stone-200"
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </button>
-              <div className="flex items-center gap-1.5">
-                <input
-                  type="date"
-                  value={selectedDate}
-                  onChange={(e) => {
-                    setSelectedDate(e.target.value);
-                    if (e.target.value) setCurrentMonth(e.target.value.slice(0, 7));
-                  }}
-                  className="text-sm font-black text-stone-900 bg-transparent focus:outline-none"
-                />
-                <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-stone-100 text-stone-700">
-                  {getDayName(selectedDate)}요일
+        <div className="p-4 space-y-3.5">
+          <div className="bg-white p-3.5 rounded-2xl border border-stone-200 shadow-sm space-y-2.5">
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <h2 className="text-sm font-black text-stone-900 truncate">
+                  🍽️ 식단 ({weekDates[0].slice(5)} ~ {weekDates[6].slice(5)})
+                </h2>
+                <span className="text-[10px] font-bold text-stone-500 whitespace-nowrap shrink-0">
+                  조회일 ±3일
                 </span>
-                {selectedDate !== getTodayStr() ? (
-                  <button
-                    onClick={() => {
-                      const today = getTodayStr();
-                      setSelectedDate(today);
-                      setCurrentMonth(today.slice(0, 7));
-                    }}
-                    className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-500 text-white shadow-sm"
-                  >
-                    오늘로
-                  </button>
-                ) : (
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100 text-emerald-800">
-                    오늘
-                  </span>
-                )}
               </div>
-              <button
-                onClick={() => {
-                  const d = new Date(selectedDate + "T00:00:00");
-                  d.setDate(d.getDate() + 1);
-                  const next = formatDate(d);
-                  setSelectedDate(next);
-                  setCurrentMonth(next.slice(0, 7));
-                }}
-                className="p-1.5 rounded-xl bg-stone-100 hover:bg-stone-200"
-              >
-                <ChevronRight className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="grid grid-cols-7 gap-1">
-              {weekDates.map((d) => {
-                const isSel = d === selectedDate;
-                const isToday = d === getTodayStr();
-                const count = meals.filter((m) => m.date === d).length;
-                const dayEvents = getSchedulesForDate(d);
-                return (
-                  <button
-                    key={d}
-                    onClick={() => {
-                      setSelectedDate(d);
-                      setCurrentMonth(d.slice(0, 7));
-                    }}
-                    className={`relative py-1.5 rounded-xl text-center transition border ${
-                      isSel
-                        ? "bg-stone-900 text-white border-stone-900 shadow-sm"
-                        : isToday
-                        ? "bg-amber-50 text-amber-900 border-amber-300"
-                        : "bg-stone-50 text-stone-600 border-stone-200 hover:bg-stone-100"
-                    }`}
-                  >
-                    <div className="text-[10px] opacity-80">{getDayName(d)}</div>
-                    <div className="text-xs font-black">{d.slice(8)}</div>
-                    <div className={`text-[9px] font-bold ${isSel ? "text-amber-300" : "text-stone-400"}`}>
-                      {count}끼
-                    </div>
-                    {dayEvents.length > 0 && (
-                      <span className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-pink-500" />
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-
-
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 sm:grid sm:grid-cols-5 sm:gap-1">
-            <button
-              onClick={() => setSelectedMember("전체")}
-              className={`px-2.5 py-2 rounded-xl text-[11px] font-extrabold border transition flex items-center justify-center gap-1 whitespace-nowrap shrink-0 ${
-                selectedMember === "전체"
-                  ? "bg-stone-900 text-white border-stone-900 shadow-sm"
-                  : "bg-white text-stone-600 border-stone-200"
-              }`}
-            >
-              <span>👨‍👩‍👧‍👦</span>
-              <span>전체</span>
-            </button>
-            {FAMILY_MEMBERS.map((m) => (
-              <button
-                key={m.id}
-                onClick={() => setSelectedMember(m.id)}
-                className={`px-2.5 py-2 rounded-xl text-[11px] font-extrabold border transition flex items-center justify-center gap-1 whitespace-nowrap shrink-0 ${
-                  selectedMember === m.id
-                    ? "bg-stone-900 text-white border-stone-900 shadow-sm"
-                    : "bg-white text-stone-600 border-stone-200"
-                }`}
-              >
-                <MemberAvatar member={m} size="sm" />
-                <span>{m.name}</span>
-              </button>
-            ))}
-          </div>
-
-          <div className="space-y-2">
-            {MEAL_SLOTS.map((slot) => {
-              const slotMeals = meals.filter(
-                (m) =>
-                  m.date === selectedDate &&
-                  m.slot === slot.id &&
-                  (selectedMember === "전체" || toSafeArray(m.members).includes(selectedMember))
-              );
-              const openAddSlotMeal = () => {
-                setEditingMeal(null);
-                setMealForm({
-                  date: selectedDate,
-                  slot: slot.id,
-                  menu: "",
-                  members:
-                    selectedMember === "전체"
-                      ? ["수혁", "아리나"]
-                      : [selectedMember],
-                  ingredients: [],
-                  note: "",
-                  sourceType: "집밥/온가족식",
-                  cost: ""
-                });
-                setIsMealModalOpen(true);
-              };
-
-              if (slotMeals.length === 0) {
-                return (
-                  <div
-                    key={slot.id}
-                    className="bg-white/80 rounded-xl border border-stone-200/80 px-3 py-2 flex items-center justify-between gap-2"
-                  >
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span className="text-sm">{slot.icon}</span>
-                      <span className="text-xs font-black text-stone-700">{slot.label}</span>
-                      <span className="text-[10px] text-stone-400">{slot.time}</span>
-                    </div>
-                    <button
-                      onClick={openAddSlotMeal}
-                      className="px-2.5 py-1 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 text-[11px] font-extrabold flex items-center gap-0.5 shrink-0"
-                    >
-                      <Plus className="w-3 h-3" /> 추가
-                    </button>
-                  </div>
-                );
-              }
-
-              return (
-                <div
-                  key={slot.id}
-                  className="bg-white rounded-2xl border border-stone-200 p-2.5 shadow-sm"
-                >
-                  <div className="flex items-center justify-between mb-1.5">
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-base">{slot.icon}</span>
-                      <span className="text-xs font-black text-stone-900">{slot.label}</span>
-                      <span className="text-[10px] text-stone-400">{slot.time}</span>
-                    </div>
-                    <button
-                      onClick={openAddSlotMeal}
-                      className="px-2 py-0.5 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 text-[11px] font-extrabold flex items-center gap-0.5"
-                    >
-                      <Plus className="w-3 h-3" /> 추가
-                    </button>
-                  </div>
-
-                    <div className="space-y-1.5">
-                      {slotMeals.map((m) => {
-                        const safeMems = toSafeArray(m.members);
-                        const safeIngs = toSafeArray(m.ingredients);
-                        return (
-                          <div
-                            key={m.id}
-                            className="p-3 rounded-xl bg-stone-50 border border-stone-200/80 flex flex-col gap-1.5"
-                          >
-                            <div className="flex items-start justify-between gap-2">
-                              <div className="flex flex-wrap items-center gap-1">
-                                <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-stone-200 text-stone-700">
-                                  {m.sourceType || "집밥"}
-                                </span>
-                                {safeMems.map((memId) => {
-                                  const info = FAMILY_MEMBERS.find((f) => f.id === memId);
-                                  return info ? (
-                                    <span
-                                      key={memId}
-                                      className={`px-2 py-0.5 rounded-md text-[10px] font-bold border ${info.color}`}
-                                    >
-                                      <span className="inline-flex items-center gap-1"><MemberAvatar member={info} size="sm" /><span>{info.name}</span></span>
-                                    </span>
-                                  ) : null;
-                                })}
-                                {Number(m.cost) > 0 && (
-                                  <span className="px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-amber-100 text-amber-800">
-                                    💰 {Number(m.cost).toLocaleString()}원
-                                  </span>
-                                )}
-                              </div>
-                              <div className="flex items-center gap-2 shrink-0">
-                                <button
-                                  onClick={() => {
-                                    setEditingMeal(m);
-                                    setMealForm({
-                                      date: m.date,
-                                      slot: m.slot,
-                                      menu: m.menu || "",
-                                      members: safeMems,
-                                      ingredients: safeIngs,
-                                      note: m.note || "",
-                                      sourceType: m.sourceType || "집밥/온가족식",
-                                      cost: m.cost || ""
-                                    });
-                                    setIsMealModalOpen(true);
-                                  }}
-                                  className="w-11 h-11 flex items-center justify-center rounded-xl bg-stone-50 hover:bg-stone-200 border border-stone-200 text-stone-600"
-                                  title="식단 수정"
-                                >
-                                  <Edit2 className="w-3.5 h-3.5" />
-                                </button>
-                                <button
-                                  onClick={() => handleDeleteMeal(m)}
-                                  className="w-11 h-11 flex items-center justify-center rounded-xl bg-rose-50/70 hover:bg-rose-100 border border-rose-200/70 text-rose-600"
-                                  title="식단 삭제"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </button>
-                              </div>
-                            </div>
-
-                            <div className="text-sm font-extrabold text-stone-900 break-keep leading-snug">
-                              {m.menu}
-                            </div>
-
-                            {safeIngs.length > 0 && (
-                              <div className="text-[11px] text-emerald-700 font-semibold">
-                                🥬 사용 재료: {safeIngs.join(", ")}
-                              </div>
-                            )}
-                            {m.note && <div className="text-[11px] text-stone-500">💬 {m.note}</div>}
-                          </div>
-                        );
-                      })}
-                    </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* ==========================================
-          탭 2: 주간 요약
-      ========================================== */}
-      {activeTab === "weekly" && (
-        <div className="p-4 space-y-4">
-          <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-sm">
-            <div className="flex items-center justify-between mb-2 gap-1">
-              <h2 className="text-sm font-black text-stone-900 truncate">
-                📊 주간 식단 ({weekDates[0].slice(5)} ~ {weekDates[6].slice(5)})
-              </h2>
-              <button
-                onClick={() => {
-                  setExportScope("all");
-                  setIsInventoryExportOpen(true);
-                }}
-                className="px-2 py-1 rounded-lg bg-amber-100 hover:bg-amber-200 text-amber-900 text-[10px] font-extrabold shrink-0"
-              >
-                📤 식단·재고 내보내기
-              </button>
-              <div className="flex items-center gap-1 shrink-0">
+              <div className="flex items-center justify-between gap-1">
                 <button
+                  type="button"
                   onClick={() => {
                     const d = new Date(selectedDate + "T00:00:00");
                     d.setDate(d.getDate() - 7);
@@ -10133,11 +9858,23 @@ ${validText}
                     setSelectedDate(nextStr);
                     setCurrentMonth(nextStr.slice(0, 7));
                   }}
-                  className="px-2 py-0.5 rounded-lg bg-stone-100 hover:bg-stone-200 text-[10px] font-extrabold"
+                  className="px-2 py-1 rounded-lg bg-stone-100 hover:bg-stone-200 text-[10px] font-extrabold text-stone-700"
                 >
                   &lt; 이전주
                 </button>
+                <input
+                  type="date"
+                  value={selectedDate}
+                  onChange={(e) => {
+                    if (e.target.value) {
+                      setSelectedDate(e.target.value);
+                      setCurrentMonth(e.target.value.slice(0, 7));
+                    }
+                  }}
+                  className="px-1.5 py-0.5 rounded-lg border border-stone-200 text-[11px] font-black text-stone-900 bg-stone-50"
+                />
                 <button
+                  type="button"
                   onClick={() => {
                     const today = getTodayStr();
                     setSelectedDate(today);
@@ -10146,11 +9883,12 @@ ${validText}
                       document.getElementById(`weekly-day-${today}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
                     }, 120);
                   }}
-                  className="px-2 py-0.5 rounded-lg bg-emerald-50 text-emerald-700 text-[10px] font-extrabold"
+                  className="px-2 py-1 rounded-lg bg-stone-900 text-white text-[10px] font-extrabold"
                 >
                   오늘로
                 </button>
                 <button
+                  type="button"
                   onClick={() => {
                     const d = new Date(selectedDate + "T00:00:00");
                     d.setDate(d.getDate() + 7);
@@ -10158,37 +9896,83 @@ ${validText}
                     setSelectedDate(nextStr);
                     setCurrentMonth(nextStr.slice(0, 7));
                   }}
-                  className="px-2 py-0.5 rounded-lg bg-stone-100 hover:bg-stone-200 text-[10px] font-extrabold"
+                  className="px-2 py-1 rounded-lg bg-stone-100 hover:bg-stone-200 text-[10px] font-extrabold text-stone-700"
                 >
                   다음주 &gt;
                 </button>
               </div>
             </div>
 
-            <div className="grid grid-cols-4 gap-2 mt-3">
+            <div className="grid grid-cols-2 gap-1.5">
+              <button
+                type="button"
+                onClick={() => {
+                  setScanTargetMonth(selectedDate.slice(0, 7));
+                  setIsDaycareModalOpen(true);
+                }}
+                className="py-2 px-2.5 rounded-xl bg-stone-50 hover:bg-stone-100 border border-stone-200 text-stone-800 text-[11px] font-extrabold flex items-center justify-center gap-1.5"
+              >
+                <Camera className="w-3.5 h-3.5 text-stone-700 shrink-0" />
+                <span className="whitespace-nowrap">식단표 AI 스캔</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setExportScope("all");
+                  setIsInventoryExportOpen(true);
+                }}
+                className="py-2 px-2.5 rounded-xl bg-stone-50 hover:bg-stone-100 border border-stone-200 text-stone-800 text-[11px] font-extrabold flex items-center justify-center gap-1.5"
+              >
+                <span className="whitespace-nowrap">📤 식단·재고 내보내기</span>
+              </button>
+            </div>
+
+            <div className="grid grid-cols-4 gap-1.5">
               {FAMILY_MEMBERS.map((mem) => {
                 const cnt = meals.filter(
                   (m) => weekDates.includes(m.date) && toSafeArray(m.members).includes(mem.id)
                 ).length;
+                const isSel = selectedMember === mem.id;
                 return (
                   <button
                     key={mem.id}
-                    onClick={() =>
-                      setSelectedMember(selectedMember === mem.id ? "전체" : mem.id)
-                    }
-                    className={`p-2.5 rounded-xl border text-center transition ${
-                      selectedMember === mem.id
+                    type="button"
+                    onClick={() => {
+                      const today = getTodayStr();
+                      setSelectedMember(isSel ? "전체" : mem.id);
+                      setSelectedDate(today);
+                      setCurrentMonth(today.slice(0, 7));
+                      setTimeout(() => {
+                        document.getElementById(`weekly-day-${today}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+                      }, 120);
+                    }}
+                    className={`p-2 rounded-xl border text-center transition ${
+                      isSel
                         ? "bg-stone-900 text-white border-stone-900"
-                        : "bg-stone-50 border-stone-200"
+                        : "bg-stone-50 border-stone-200 text-stone-800"
                     }`}
                   >
                     <div className="flex justify-center mb-0.5"><MemberAvatar member={mem} size="md" /></div>
-                    <div className="text-[11px] font-extrabold mt-0.5">{mem.name}</div>
+                    <div className="text-[11px] font-extrabold mt-0.5 whitespace-nowrap">{mem.name}</div>
                     <div className="text-[10px] opacity-75">{cnt}끼</div>
                   </button>
                 );
               })}
             </div>
+            {selectedMember !== "전체" && (
+              <div className="flex items-center justify-between bg-stone-50 border border-stone-200 rounded-xl px-2.5 py-1">
+                <span className="text-[11px] font-bold text-stone-700">
+                  👤 {selectedMember} 식단만 표시 중
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setSelectedMember("전체")}
+                  className="text-[10px] font-extrabold text-stone-900 underline"
+                >
+                  전체 보기
+                </button>
+              </div>
+            )}
           </div>
 
           <div className="bg-white rounded-2xl border border-stone-200 overflow-hidden shadow-sm">
@@ -10199,26 +9983,41 @@ ${validText}
                     m.date === d &&
                     (selectedMember === "전체" || toSafeArray(m.members).includes(selectedMember))
                 );
+                const isTodayRow = d === getTodayStr();
                 return (
-                  <div key={d} id={`weekly-day-${d}`} className={`p-3 ${d === getTodayStr() ? "bg-emerald-50/40" : ""}`}>
+                  <div key={d} id={`weekly-day-${d}`} className={`p-3 ${isTodayRow ? "bg-stone-50/70" : ""}`}>
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-xs font-black text-stone-900 flex items-center gap-1.5">
                         <span>{d.slice(5)} ({getDayName(d)})</span>
                         {d === selectedDate && (
                           <span className="px-1.5 py-0.5 rounded bg-stone-900 text-white text-[9px] font-black whitespace-nowrap shrink-0">조회일</span>
                         )}
-                        {d === getTodayStr() && (
+                        {isTodayRow && (
                           <span className="px-1.5 py-0.5 rounded bg-emerald-600 text-white text-[9px] font-black whitespace-nowrap shrink-0">오늘</span>
                         )}
                       </span>
                       <button
+                        type="button"
                         onClick={() => {
-                          setSelectedDate(d);
-                          setActiveTab("daily");
+                          const h = new Date().getHours();
+                          const smartSlot =
+                            h >= 5 && h < 10 ? "아침" : h >= 10 && h < 14 ? "점심" : h >= 14 && h < 17 ? "오후간식" : h >= 17 && h < 21 ? "저녁" : "야식";
+                          setEditingMeal(null);
+                          setMealForm({
+                            date: d,
+                            slot: smartSlot,
+                            menu: "",
+                            members: selectedMember === "전체" ? ["수혁", "아리나"] : [selectedMember],
+                            ingredients: [],
+                            note: "",
+                            sourceType: "집밥/온가족식",
+                            cost: ""
+                          });
+                          setIsMealModalOpen(true);
                         }}
-                        className="text-[10px] font-bold text-stone-500 hover:text-stone-900"
+                        className="px-2 py-0.5 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 text-[10px] font-extrabold"
                       >
-                        상세보기 &gt;
+                        + 식단 추가
                       </button>
                     </div>
                     <div className="grid grid-cols-2 gap-1.5">
@@ -10228,29 +10027,79 @@ ${validText}
                           <div
                             key={slotId}
                             onClick={() => {
-                              setEditingMeal(null);
-                              setMealForm({
-                                date: d,
-                                slot: slotId,
-                                menu: "",
-                                members: ["수혁", "아리나", "시목", "시율"],
-                                ingredients: [],
-                                note: "",
-                                sourceType: "집밥/온가족식",
-                                cost: ""
-                              });
-                              setIsMealModalOpen(true);
+                              if (items.length > 0) {
+                                const m = items[0];
+                                setEditingMeal(m);
+                                setMealForm({
+                                  date: m.date,
+                                  slot: m.slot,
+                                  menu: m.menu || "",
+                                  members: toSafeArray(m.members),
+                                  ingredients: toSafeArray(m.ingredients),
+                                  note: m.note || "",
+                                  sourceType: m.sourceType || "집밥/온가족식",
+                                  cost: m.cost || ""
+                                });
+                                setIsMealModalOpen(true);
+                              } else {
+                                setEditingMeal(null);
+                                setMealForm({
+                                  date: d,
+                                  slot: slotId,
+                                  menu: "",
+                                  members: selectedMember === "전체" ? ["수혁", "아리나"] : [selectedMember],
+                                  ingredients: [],
+                                  note: "",
+                                  sourceType: "집밥/온가족식",
+                                  cost: ""
+                                });
+                                setIsMealModalOpen(true);
+                              }
                             }}
-                            className="p-2.5 rounded-xl bg-stone-50 hover:bg-stone-100 border border-stone-200 cursor-pointer min-h-[54px]"
+                            className="p-2.5 rounded-xl bg-white hover:bg-stone-50 border border-stone-200 cursor-pointer min-h-[54px] transition"
                           >
-                            <div className="text-[10px] font-extrabold text-stone-500 mb-0.5">
-                              {slotId}
+                            <div className="flex items-center justify-between gap-1 mb-0.5">
+                              <span className="text-[10px] font-extrabold text-stone-500">{slotId}</span>
+                              {items.length > 0 && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleDeleteMeal(items[0]);
+                                  }}
+                                  className="text-[10px] text-stone-400 hover:text-rose-600 px-1"
+                                  title="삭제"
+                                >
+                                  ×
+                                </button>
+                              )}
                             </div>
                             {items.length > 0 ? (
-                              <div className="text-xs font-bold text-stone-800 break-keep leading-snug">
-                                {items
-                                  .map((i) => String(i.menu || "").replace(/\[.*?\]\s*/, ""))
-                                  .join(", ")}
+                              <div className="text-xs font-bold text-stone-800 break-keep leading-snug space-y-0.5">
+                                {items.map((it) => (
+                                  <div
+                                    key={it.id}
+                                    onClick={(e) => {
+                                      if (items.length > 1) {
+                                        e.stopPropagation();
+                                        setEditingMeal(it);
+                                        setMealForm({
+                                          date: it.date,
+                                          slot: it.slot,
+                                          menu: it.menu || "",
+                                          members: toSafeArray(it.members),
+                                          ingredients: toSafeArray(it.ingredients),
+                                          note: it.note || "",
+                                          sourceType: it.sourceType || "집밥/온가족식",
+                                          cost: it.cost || ""
+                                        });
+                                        setIsMealModalOpen(true);
+                                      }
+                                    }}
+                                  >
+                                    {String(it.menu || "").replace(/\[.*?\]\s*/, "")}
+                                  </div>
+                                ))}
                               </div>
                             ) : (
                               <div className="text-[10px] text-stone-300">+ 등록</div>
@@ -14519,7 +14368,7 @@ ${validText}
             </div>
             <div className="grid grid-cols-3 gap-2">
               {[
-                { id: "weekly", label: "주간요약", icon: "📊" },
+                { id: "daily", label: "식단·주간", icon: "🍽️" },
                 { id: "monthly", label: "월간·식비", icon: "💰" },
                 { id: "shopping", label: "장보기", icon: "🛒" },
                 { id: "notices", label: "가족공지", icon: "📌" },
@@ -14590,14 +14439,14 @@ ${validText}
           ref={moreNavBtnRef}
           onClick={() => setIsMoreNavOpen((v) => !v)}
           className={`flex flex-col items-center justify-center py-1.5 rounded-xl transition ${
-            ["weekly", "monthly", "shopping", "notices", "ai", "recipes"].includes(activeTab) || isMoreNavOpen
+            ["monthly", "shopping", "notices", "ai", "recipes"].includes(activeTab) || isMoreNavOpen
               ? "text-stone-900 font-black bg-amber-50/80"
               : "text-stone-400 font-semibold"
           }`}
         >
           <LayoutGrid
             className={`w-4 h-4 ${
-              ["weekly", "monthly", "shopping", "notices", "ai", "recipes"].includes(activeTab) || isMoreNavOpen
+              ["monthly", "shopping", "notices", "ai", "recipes"].includes(activeTab) || isMoreNavOpen
                 ? "text-amber-600"
                 : ""
             }`}
