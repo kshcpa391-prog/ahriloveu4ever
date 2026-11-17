@@ -1116,11 +1116,21 @@ const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.65) =>
     img.src = dataUrl;
   });
 
-const APP_CODE_VERSION = "v10.90";
-const APP_BUILD_DATE = "2026-11-17 10:52";
+const APP_CODE_VERSION = "v10.91";
+const APP_BUILD_DATE = "2026-11-17 11:02";
 const EDITOR_INVITE_CODE = "0402";
 
 const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v10.91",
+    version: "v10.91",
+    date: "2026-11-17",
+    title: "인별 식단에도 ±3일(7일) 표시 유지 · 이름 배지 줄 제거(인라인 미니 아바타)",
+    changes: [
+      "특정 가족(수혁·아리나·시목·시율)을 선택했을 때도 조회일 기준 전 3일·이후 3일(7일) 식단이 모두 보이도록 개선",
+      "인별 선택 시 중복되던 이름 배지 줄을 완전히 숨기고, 전체 보기에서도 메뉴명 앞 인라인 미니 아바타(이름 텍스트 생략)로 압축해 세로 공간 대폭 절약"
+    ]
+  },
   {
     id: "patch-v10.90",
     version: "v10.90",
@@ -10101,8 +10111,8 @@ ${validText}
 
           </div>
 
-          {/* 상단 고정(Sticky) 1줄 인원 빠른 전환 바 (끼니수 제거로 슬림화) */}
-          <div className={`sticky z-20 bg-white/95 backdrop-blur border border-stone-200 rounded-2xl px-2 py-1.5 shadow-sm space-y-1.5 ${isHeaderPinned ? "top-[82px]" : "top-1"}`}>
+          {/* 상단 고정(Sticky) 1줄 인원 빠른 전환 바 */}
+          <div className={`sticky z-20 bg-white/95 backdrop-blur border border-stone-200 rounded-2xl px-2 py-1.5 shadow-sm ${isHeaderPinned ? "top-[82px]" : "top-1"}`}>
             <div className="flex items-center gap-1 overflow-x-auto">
               <button
                 type="button"
@@ -10113,7 +10123,7 @@ ${validText}
                     : "bg-stone-50 text-stone-600 border-stone-200"
                 }`}
               >
-                👨‍👩‍👧‍👦 전체(±3일)
+                👨‍👩‍👧‍👦 전체
               </button>
               {FAMILY_MEMBERS.map((mem) => {
                 const isSel = selectedMember === mem.id;
@@ -10130,8 +10140,8 @@ ${validText}
                         setSelectedDate(today);
                         setCurrentMonth(today.slice(0, 7));
                         setTimeout(() => {
-                          document.getElementById(`weekly-day-${today}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
-                        }, 80);
+                          document.getElementById(`weekly-day-${today}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+                        }, 100);
                       }
                     }}
                     className={`px-2.5 py-1.5 rounded-xl text-[11px] font-extrabold border whitespace-nowrap shrink-0 inline-flex items-center gap-1 transition ${
@@ -10146,56 +10156,11 @@ ${validText}
                 );
               })}
             </div>
-
-            {selectedMember !== "전체" && (
-              <div className="flex items-center justify-between gap-1.5 px-1 text-[10px] font-extrabold text-stone-600">
-                <span>👤 {selectedMember} 하루 식단 집중 보기</span>
-                <div className="flex items-center gap-1">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const d = new Date(selectedDate + "T00:00:00");
-                      d.setDate(d.getDate() - 1);
-                      const nextStr = formatDate(d);
-                      setSelectedDate(nextStr);
-                      setCurrentMonth(nextStr.slice(0, 7));
-                    }}
-                    className="px-2 py-0.5 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700"
-                  >
-                    &lt; 이전날
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const today = getTodayStr();
-                      setSelectedDate(today);
-                      setCurrentMonth(today.slice(0, 7));
-                    }}
-                    className="px-2 py-0.5 rounded-lg bg-stone-900 text-white"
-                  >
-                    오늘
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const d = new Date(selectedDate + "T00:00:00");
-                      d.setDate(d.getDate() + 1);
-                      const nextStr = formatDate(d);
-                      setSelectedDate(nextStr);
-                      setCurrentMonth(nextStr.slice(0, 7));
-                    }}
-                    className="px-2 py-0.5 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700"
-                  >
-                    다음날 &gt;
-                  </button>
-                </div>
-              </div>
-            )}
           </div>
 
           <div className="bg-white rounded-2xl border border-stone-200 overflow-hidden shadow-sm">
             <div className="divide-y divide-stone-200">
-              {(selectedMember === "전체" ? weekDates : [selectedDate]).map((d) => {
+              {weekDates.map((d) => {
                 const dayMeals = meals.filter(
                   (m) =>
                     m.date === d &&
@@ -10314,14 +10279,28 @@ ${validText}
                                     }}
                                     className="py-1 first:pt-0 last:pb-0 flex items-start justify-between gap-2 cursor-pointer hover:bg-stone-50/60 rounded-lg px-1 -mx-1 transition"
                                   >
-                                    <div className="min-w-0 flex-1 space-y-1">
-                                      <div className="text-xs font-extrabold text-stone-900 break-keep leading-snug">
-                                        <span>{String(it.menu || "").replace(/\[.*?\]\s*/, "")}</span>
-                                        {Number(it.cost) > 0 && (
-                                          <span className="ml-1 text-[10px] font-bold text-stone-500">
-                                            ({Number(it.cost).toLocaleString()}원)
+                                    <div className="min-w-0 flex-1 space-y-0.5">
+                                      <div className="flex items-start gap-1.5">
+                                        {selectedMember === "전체" && (
+                                          <span className="inline-flex items-center -space-x-1 mt-0.5 shrink-0" title={isAllFam ? "온가족" : memIds.join(", ")}>
+                                            {isAllFam ? (
+                                              <span className="text-[11px] leading-none">👨‍👩‍👧‍👦</span>
+                                            ) : (
+                                              memIds.map((mId) => {
+                                                const mInfo = FAMILY_MEMBERS.find((f) => f.id === mId);
+                                                return mInfo ? <MemberAvatar key={mId} member={mInfo} size="sm" /> : null;
+                                              })
+                                            )}
                                           </span>
                                         )}
+                                        <div className="text-xs font-extrabold text-stone-900 break-keep leading-snug min-w-0 flex-1">
+                                          <span>{String(it.menu || "").replace(/\[.*?\]\s*/, "")}</span>
+                                          {Number(it.cost) > 0 && (
+                                            <span className="ml-1 text-[10px] font-bold text-stone-500">
+                                              ({Number(it.cost).toLocaleString()}원)
+                                            </span>
+                                          )}
+                                        </div>
                                       </div>
                                       {(toSafeArray(it.ingredients).length > 0 || it.note) && (
                                         <div className="text-[10px] text-stone-500 truncate">
@@ -10330,26 +10309,6 @@ ${validText}
                                           {it.note && `💬 ${it.note}`}
                                         </div>
                                       )}
-                                      <div className="flex flex-wrap items-center gap-1">
-                                        {isAllFam ? (
-                                          <span className="px-1.5 py-0.5 rounded-md bg-stone-100 text-stone-700 text-[9px] font-extrabold">
-                                            👨‍👩‍👧‍👦 온가족
-                                          </span>
-                                        ) : (
-                                          memIds.map((mId) => {
-                                            const mInfo = FAMILY_MEMBERS.find((f) => f.id === mId);
-                                            return mInfo ? (
-                                              <span
-                                                key={mId}
-                                                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-stone-100 border border-stone-200/80 text-stone-700 text-[9px] font-extrabold whitespace-nowrap"
-                                              >
-                                                <MemberAvatar member={mInfo} size="sm" />
-                                                <span>{mInfo.id}</span>
-                                              </span>
-                                            ) : null;
-                                          })
-                                        )}
-                                      </div>
                                     </div>
                                     <button
                                       type="button"
