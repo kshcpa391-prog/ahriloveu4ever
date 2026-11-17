@@ -1203,8 +1203,8 @@ const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.65) =>
     img.src = dataUrl;
   });
 
-const APP_CODE_VERSION = "v11.22";
-const APP_BUILD_DATE = "2026-11-17 16:38";
+const APP_CODE_VERSION = "v11.23";
+const APP_BUILD_DATE = "2026-11-17 16:45";
 const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1231,6 +1231,17 @@ const HELPER_CONFIGURABLE_TABS = [
 ];
 
 const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v11.23",
+    version: "v11.23",
+    date: "2026-11-17",
+    title: "루틴 [아침 일괄완료] 버튼 제거 · 식단 메뉴 검색 필터 도입 · 전체 최종 점검",
+    changes: [
+      "요청에 따라 반복 루틴 상단의 [🌅 아침 일괄완료] 버튼을 제거해 헤더를 깔끔하게 정리 (완료 보존 병합 로직은 유지)",
+      "식단 탭 상단에 [🔍 식단 검색] 입력란을 추가해 조회 기간 내 원하는 메뉴·재료를 즉시 찾아볼 수 있도록 개선",
+      "전체 21,300+행 TDZ·JS 구문·JSX 태그·중복 상태 최종 검증 완료"
+    ]
+  },
   {
     id: "patch-v11.22",
     version: "v11.22",
@@ -3756,6 +3767,7 @@ function MainApp() {
   const [diaryExportFilename, setDiaryExportFilename] = useState("육아일기.png");
   const [diarySearchQuery, setDiarySearchQuery] = useState("");
   const [diaryChildFilter, setDiaryChildFilter] = useState("all");
+  const [mealSearchQuery, setMealSearchQuery] = useState("");
   const [diaryLightboxUrl, setDiaryLightboxUrl] = useState("");
   const [isWeatherModalOpen, setIsWeatherModalOpen] = useState(false);
   const weatherLastFetchedMsRef = useRef(0);
@@ -4150,32 +4162,6 @@ function MainApp() {
     showToast(wasDone ? `↩️ '${targetTitle}' 완료를 취소했습니다.` : `✅ '${targetTitle}' 루틴 완료!`);
     const updatedItem = nextList.find((r) => r.id === rtId);
     syncRoutinesToCloud(nextList, updatedItem ? { type: "upsert", item: updatedItem } : null);
-  };
-
-  const handleBulkCompleteSlotRoutines = (slotName = "아침") => {
-    if (!requireEditorAccess("schedule")) return;
-    const todayKey = getTodayStr();
-    if (todayKey !== currentDayKey) setCurrentDayKey(todayKey);
-    let count = 0;
-    const nextList = familyRoutines.map((r) => {
-      if ((r.timeSlot || "상시") !== slotName || isRoutineDoneNow(r)) return r;
-      count += 1;
-      const steps = parseRoutineSteps(r.title);
-      const targetKey = r.cycle === "interval" ? todayKey : getRoutineResetKey(r, todayKey);
-      return {
-        ...r,
-        lastDoneKey: targetKey,
-        ...(steps.length >= 2 ? { stepDoneKey: targetKey, stepDoneIndices: steps.map((_, idx) => idx) } : {})
-      };
-    });
-    if (count === 0) {
-      showToast(`이미 모든 ${slotName} 루틴이 완료되어 있습니다.`);
-      return;
-    }
-    setFamilyRoutines(nextList);
-    recordActivity("루틴", "일괄완료", `${slotName} 루틴 ${count}건`);
-    syncRoutinesToCloud(nextList);
-    showToast(`✅ ${slotName} 루틴 ${count}건을 일괄 완료 처리했습니다!`);
   };
 
   const getRoutineSubStepDoneSet = (rt) => {
@@ -12077,15 +12063,34 @@ ${validText}
               </button>
             </div>
 
-            <div className="pt-1">
+            <div className="pt-1 flex items-center gap-1.5">
+              <div className="relative flex-1 min-w-0">
+                <input
+                  type="text"
+                  value={mealSearchQuery}
+                  onChange={(e) => setMealSearchQuery(e.target.value)}
+                  placeholder="🔍 식단·재료 검색..."
+                  className="w-full px-2.5 py-1.5 pr-7 rounded-xl border border-stone-200 bg-stone-50 text-[11px] font-semibold text-stone-800"
+                />
+                {mealSearchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setMealSearchQuery("")}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-700 text-[10px] font-black"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
               <button
                 type="button"
                 onClick={handleOpenMealCopyModal}
-                className="w-full py-2 px-3 rounded-xl bg-[#EEF3EE] hover:bg-[#DFE9E0] text-[#35503C] border border-[#C9D8CC] text-xs font-extrabold flex items-center justify-center gap-1.5"
+                className="py-1.5 px-2.5 rounded-xl bg-[#EEF3EE] hover:bg-[#DFE9E0] text-[#35503C] border border-[#C9D8CC] text-[11px] font-extrabold whitespace-nowrap shrink-0"
               >
-                <span>📋 식단 복사하기 (원하는 끼니·날짜 선택)</span>
+                📋 식단 복사
               </button>
             </div>
+
 
           </div>
 
@@ -12139,10 +12144,15 @@ ${validText}
           <div className="bg-white rounded-2xl border border-stone-200 overflow-hidden shadow-sm">
             <div className="divide-y divide-stone-200">
               {weekDates.map((d) => {
+                const mq = mealSearchQuery.trim().toLowerCase();
                 const dayMeals = meals.filter(
                   (m) =>
                     m.date === d &&
-                    (selectedMember === "전체" || toSafeArray(m.members).includes(selectedMember))
+                    (selectedMember === "전체" || toSafeArray(m.members).includes(selectedMember)) &&
+                    (!mq ||
+                      String(m.menu || "").toLowerCase().includes(mq) ||
+                      String(m.note || "").toLowerCase().includes(mq) ||
+                      toSafeArray(m.ingredients).some((ing) => String(ing).toLowerCase().includes(mq)))
                 );
                 const isTodayRow = d === getTodayStr();
                 return (
@@ -13184,16 +13194,6 @@ ${validText}
                 })()}
               </div>
               <div className="flex items-center gap-1 shrink-0">
-                {familyRoutines.some((r) => (r.timeSlot || "상시") === "아침" && !isRoutineDoneNow(r)) && (
-                  <button
-                    type="button"
-                    onClick={() => handleBulkCompleteSlotRoutines("아침")}
-                    className="px-2 py-1.5 rounded-xl bg-[#EEF3EE] hover:bg-[#DFE9E0] text-[#35503C] border border-[#C9D8CC] text-[10px] font-extrabold whitespace-nowrap"
-                    title="미완료된 아침 루틴을 한 번에 완료 상태로 복구합니다"
-                  >
-                    🌅 아침 일괄완료
-                  </button>
-                )}
                 <button
                   type="button"
                   onClick={() => setIsRoutineRangeEditOpen((v) => !v)}
