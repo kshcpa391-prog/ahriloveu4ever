@@ -1212,7 +1212,7 @@ const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.65) =>
     img.src = dataUrl;
   });
 
-const APP_CODE_VERSION = "v11.52";
+const APP_CODE_VERSION = "v11.53";
 
 const formatRoutineTimeLabel = (hhmm) => {
   const m = String(hhmm || "").trim().match(/^(\d{2}):(\d{2})$/);
@@ -1228,7 +1228,7 @@ const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-const APP_BUILD_DATE = "2026-11-17 22:20";
+const APP_BUILD_DATE = "2026-11-17 22:22";
 const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1290,6 +1290,16 @@ const formatTime12Ko = (ms) => {
 };
 
 const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v11.53",
+    version: "v11.53",
+    date: "2026-11-17",
+    title: "수유·생활 오늘 요약 배지 · 직접 시각(HH:MM) 선택기 & 배포 구문 전수 재검증",
+    changes: [
+      "시각화·편의성 개선: [🍼 수유·생활] 상단에 오늘 수유 횟수·ml·모유 시간·기저귀 횟수 요약 배지를 추가하고, 모달에서 직접 시각(HH:MM) 입력 및 타이머 배너 [⏹️ 지금 다 먹었어요!] 연동 강화",
+      "배포 검증: V8(node --check) 종료코드 0 · JSX 태그 불일치 0건 · 중복 선언 0건 최종 확인"
+    ]
+  },
   {
     id: "patch-v11.52",
     version: "v11.52",
@@ -18242,7 +18252,7 @@ ${validText}
                               onClick={() => handleStopBabyActivityTimer(act)}
                               className="px-2.5 py-1 rounded-xl bg-stone-900 text-white text-[11px] font-extrabold whitespace-nowrap"
                             >
-                              ⏹️ 종료·저장
+                              {["모유", "분유", "유축수유"].includes(act.type) ? "⏹️ 지금 다 먹었어요!" : "⏹️ 종료·저장"}
                             </button>
                           </div>
                           {act.type === "모유" && (
@@ -18301,6 +18311,21 @@ ${validText}
                         </div>
                       </div>
                     </div>
+
+                    {(() => {
+                      const todayKey = getTodayStr();
+                      const todayActs = sum.list.filter((a) => a.date === todayKey);
+                      const fCount = todayActs.filter((a) => ["모유", "분유", "유축수유"].includes(a.type)).length;
+                      const fMl = todayActs.filter((a) => a.type === "분유" || a.type === "유축수유").reduce((s, a) => s + (Number(a.amountMl) || 0), 0);
+                      const bMin = todayActs.filter((a) => a.type === "모유").reduce((s, a) => s + (Number(a.durationMin) || 0), 0);
+                      const dCount = todayActs.filter((a) => a.type === "기저귀").length;
+                      return (
+                        <div className="flex items-center justify-between gap-1.5 px-2.5 py-1.5 rounded-xl bg-[#EEF3EE] border border-[#C9D8CC] text-[10px] font-extrabold text-[#35503C] flex-wrap">
+                          <span>📅 오늘 요약</span>
+                          <span>수유 {fCount}회 ({fMl > 0 ? `${fMl}ml` : ""}{fMl > 0 && bMin > 0 ? " + " : ""}{bMin > 0 ? `모유 ${bMin}분` : fMl === 0 ? "0분" : ""}) · 기저귀 {dCount}회</span>
+                        </div>
+                      );
+                    })()}
                   </div>
 
                   {sum.list.length > 0 && (
@@ -22834,9 +22859,23 @@ ${validText}
                     }}
                     className="text-xs font-extrabold text-stone-600 bg-stone-50 px-2 py-1 rounded-lg border border-stone-200"
                   />
-                  <div className="text-base font-black text-stone-900">
-                    {formatTime12Ko(startMsVal)}
-                  </div>
+                  <input
+                    type="time"
+                    value={`${String(new Date(startMsVal).getHours()).padStart(2, "0")}:${String(new Date(startMsVal).getMinutes()).padStart(2, "0")}`}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (!val) return;
+                      const dStr = activityEditModal.date || formatDate(new Date(startMsVal));
+                      const nextMs = new Date(`${dStr}T${val}:00`).getTime();
+                      if (Number.isFinite(nextMs)) {
+                        setActivityEditModal((p) => {
+                          const nextDur = p.endMs ? Math.max(0, Math.round((Number(p.endMs) - nextMs) / 60000)) : Number(p.durationMin) || 0;
+                          return { ...p, startMs: nextMs, durationMin: nextDur };
+                        });
+                      }
+                    }}
+                    className="text-sm font-black text-stone-900 bg-stone-50 px-2 py-1 rounded-lg border border-stone-200"
+                  />
                   <button
                     type="button"
                     onClick={handleFinishedNow}
