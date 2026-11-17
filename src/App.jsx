@@ -1164,8 +1164,8 @@ const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.65) =>
     img.src = dataUrl;
   });
 
-const APP_CODE_VERSION = "v10.95";
-const APP_BUILD_DATE = "2026-11-17 13:56";
+const APP_CODE_VERSION = "v10.98";
+const APP_BUILD_DATE = "2026-11-17 14:10";
 const EDITOR_INVITE_CODE = "0402";
 const DEFAULT_HELPER_CODE = "1234";
 const GUEST_ALLOWED_TABS = ["home", "daily", "recipes"];
@@ -1184,6 +1184,41 @@ const HELPER_CONFIGURABLE_TABS = [
 
 const INITIAL_PATCH_NOTES = [
   {
+    id: "patch-v10.98",
+    version: "v10.98",
+    date: "2026-11-17",
+    title: "용어 통일 · 종모양 읽지 않음 유지 · 빠른등록 권한별 필터 · ESC 모달 닫기 보완",
+    changes: [
+      "더보기 시트 메뉴명 [식단·주간] → [식단]으로 전체 앱 내비게이션·권한표와 명칭 통일",
+      "상단 종모양(🔔) 알림 점이 확인(클릭) 전까지 유지되고 알림 모달을 열면 읽음 처리되도록 개선",
+      "우측 하단 [+] 빠른 등록 메뉴가 현재 계정의 편집 허용 메뉴만 스마트하게 필터링해 표시",
+      "ESC 키로 최근 수정 알림 모달 및 로그인/권한 모달도 바로 닫히도록 키보드 접근성 보완"
+    ]
+  },
+  {
+    id: "patch-v10.97",
+    version: "v10.97",
+    date: "2026-11-17",
+    title: "상단 설정 왼쪽 종모양 알림 통합 · 관리자 비밀번호 노출 제거 · [육아지원군] 명칭 통일",
+    changes: [
+      "홈 화면의 넓은 최근 수정 알림 배너를 제거하고 맨 위 설정(⚙️) 왼쪽에 콤팩트한 종모양(🔔) 알림 버튼만 배치",
+      "로그인·잠금·설정 안내 문구에서 관리자 비밀번호 숫자 노출을 모두 제거",
+      "[육아지원군] 권한 명칭을 [육아지원군]으로 전면 통일"
+    ]
+  },
+  {
+    id: "patch-v10.96",
+    version: "v10.96",
+    date: "2026-11-17",
+    title: "최근 수정 알림 수정자 필터·권한 연동 · 커스텀 이름 입력 · 루틴 시간대 건수 배지",
+    changes: [
+      "홈 상단 최근 수정 알림창에 방금 수정 강조 표시(5분 이내) 및 육아지원군 로그인 시 허용된 메뉴의 수정 이력만 안전하게 필터링",
+      "최근 수정 알림 모달에 [수정자별(수혁·아리나·육아지원군 등)] 1탭 필터 칩 추가",
+      "로그인/권한 모달에서 수정자 이름 직접 입력 지원 및 열람전용 탭 상단 안내 배너 표시",
+      "반복 루틴 [⏰ 시간대] 설정 각 행에 연결된 루틴 건수(N건) 표시 및 엔터키로 새 시간대 즉시 추가"
+    ]
+  },
+  {
     id: "patch-v10.95",
     version: "v10.95",
     date: "2026-11-17",
@@ -1200,7 +1235,7 @@ const INITIAL_PATCH_NOTES = [
     title: "권한 가드 교차 검증 강화 · 홈 편집/빠른추가 권한 연동 · 알림 바로가기 · JSON 백업 확장",
     changes: [
       "홈 화면에서 루틴/할일/빠른추가 실행 시에도 해당 메뉴(일정·식단·냉장고 등)의 실제 편집 권한을 교차 검증하도록 보안 강화",
-      "미로그인 상태에서 [+] 빠른 추가 버튼을 숨기고, [✏️ 홈 편집]은 관리자(0402)에게만 노출되도록 정리",
+      "미로그인 상태에서 [+] 빠른 추가 버튼을 숨기고, [✏️ 홈 편집]은 관리자에게만 노출되도록 정리",
       "최근 수정 알림 내역 항목에 [바로가기 →] 버튼을 추가해 수정된 탭으로 1탭 이동 가능",
       "전체 JSON 백업·복원에 사용자 지정 반복 루틴 시간대(routineSlotDefs)까지 포함"
     ]
@@ -1211,8 +1246,8 @@ const INITIAL_PATCH_NOTES = [
     date: "2026-11-17",
     title: "권한별 비밀번호·열람/편집 세부 매트릭스 관리 · 반복 루틴 시간대 자유 추가/수정/삭제",
     changes: [
-      "⚙️설정에서 관리자 비밀번호와 산후도우미·가족 비밀번호를 모두 직접 변경 가능",
-      "메뉴별 권한 매트릭스로 [미로그인(열람)], [도우미·가족(열람)], [도우미·가족(편집)] 여부를 관리자가 자유롭게 선택",
+      "⚙️설정에서 관리자 비밀번호와 육아지원군 비밀번호를 모두 직접 변경 가능",
+      "메뉴별 권한 매트릭스로 [미로그인(열람)], [육아지원군(열람)], [육아지원군(편집)] 여부를 관리자가 자유롭게 선택",
       "일정 → 반복 루틴 [⏰ 시간대]에서 시간대 항목(예: 오후·새벽 등)을 새로 추가·이름 수정·삭제하고 평일/주말 적용 여부까지 자유롭게 변경 가능"
     ]
   },
@@ -1220,11 +1255,11 @@ const INITIAL_PATCH_NOTES = [
     id: "patch-v10.92",
     version: "v10.92",
     date: "2026-11-17",
-    title: "홈 상단 최근 수정 알림창 · 3단계 권한(미로그인 / 산후도우미·가족 / 관리자) 및 비밀번호 관리",
+    title: "홈 상단 최근 수정 알림창 · 3단계 권한(미로그인 / 육아지원군 / 관리자) 및 비밀번호 관리",
     changes: [
       "홈 화면 맨 위에 최근 누가·언제·무엇을 수정했는지 실시간으로 확인하는 [최근 수정 알림창] 및 전체 내역 모달 추가",
-      "권한을 3단계로 분리: ① 미로그인(가족사진·식단·레시피 일부만 열람, 그 외 열람 불가) ② 산후도우미·가족(허용 메뉴 열람·편집) ③ 관리자(0402 전체 권한)",
-      "관리자(0402)가 ⚙️설정에서 산후도우미·가족용 비밀번호 변경 및 접근 허용 메뉴를 직접 설정하고 실시간 동기화"
+      "권한을 3단계로 분리: ① 미로그인(가족사진·식단·레시피 일부만 열람, 그 외 열람 불가) ② 육아지원군(허용 메뉴 열람·편집) ③ 관리자(전체 권한)",
+      "관리자가 ⚙️설정에서 육아지원군 비밀번호 변경 및 접근 허용 메뉴를 직접 설정하고 실시간 동기화"
     ]
   },
   {
@@ -2447,7 +2482,7 @@ const INITIAL_PATCH_NOTES = [
     title: "초대 비밀코드 기반 편집 잠금(열람 전용 / 초대자 편집 분리) 기능 추가",
     changes: [
       "누구나 로그인 없이 식단·일정·육아수첩을 열람할 수 있도록 기본 열람 전용 모드 적용",
-      "상단 [🔒 열람전용 / ✏️ 편집가능] 배지 및 초대 코드(0402) 입력 모달·원터치 초대 링크 복사(?invite=0402) 추가",
+      "상단 [🔒 열람전용 / ✏️ 편집가능] 배지 및 관리자 초대 코드 입력 모달·원터치 초대 링크 복사 추가",
       "열람 전용 모드에서는 데이터 추가·수정·삭제, AI 키 설정 및 JSON 복원 동작을 안전하게 차단"
     ]
   },
@@ -3394,6 +3429,34 @@ function MainApp() {
   });
   const [isActivityModalOpen, setIsActivityModalOpen] = useState(false);
   const [activityFilter, setActivityFilter] = useState("전체");
+  const [activityActorFilter, setActivityActorFilter] = useState("전체");
+  const [lastSeenActivityMs, setLastSeenActivityMs] = useState(() => {
+    try {
+      return Number(localStorage.getItem("kim_last_seen_activity_ms_v1") || 0);
+    } catch (e) {
+      return 0;
+    }
+  });
+  const [actorNameDraft, setActorNameDraft] = useState("");
+  const ACTIVITY_CAT_TAB_MAP = {
+    "식단": "daily",
+    "냉장고": "fridge",
+    "일정": "schedule",
+    "할일": "schedule",
+    "루틴": "schedule",
+    "육아": "baby",
+    "장보기": "shopping",
+    "공지": "notices",
+    "레시피": "recipes"
+  };
+  const visibleRecentActivities = useMemo(() => {
+    if (isAdminUnlocked) return recentActivities;
+    if (accessRole === "guest") return [];
+    return recentActivities.filter((a) => {
+      const tab = ACTIVITY_CAT_TAB_MAP[a.category];
+      return !tab || canViewTab(tab);
+    });
+  }, [recentActivities, isAdminUnlocked, accessRole, helperAllowedTabs, guestAllowedTabs]);
   const [patchForm, setPatchForm] = useState({
     version: "",
     title: "",
@@ -3572,16 +3635,18 @@ function MainApp() {
   const [isRoutineModalOpen, setIsRoutineModalOpen] = useState(false);
   const [hideEmptyMealSlots, setHideEmptyMealSlots] = useState(false);
   useEffect(() => {
-    if (!isQuickFabOpen && !isRoutineModalOpen) return;
+    if (!isQuickFabOpen && !isRoutineModalOpen && !isActivityModalOpen && !isEditorUnlockModalOpen) return;
     const onEsc = (e) => {
       if (e.key === "Escape") {
         setIsQuickFabOpen(false);
         setIsRoutineModalOpen(false);
+        setIsActivityModalOpen(false);
+        setIsEditorUnlockModalOpen(false);
       }
     };
     window.addEventListener("keydown", onEsc);
     return () => window.removeEventListener("keydown", onEsc);
-  }, [isQuickFabOpen, isRoutineModalOpen]);
+  }, [isQuickFabOpen, isRoutineModalOpen, isActivityModalOpen, isEditorUnlockModalOpen]);
   const [showAllTodayRoutinesOnMain, setShowAllTodayRoutinesOnMain] = useState(false);
   const [isMainRoutineCollapsed, setIsMainRoutineCollapsed] = useState(false);
   const [currentDayKey, setCurrentDayKey] = useState(() => getTodayStr());
@@ -4248,7 +4313,7 @@ function MainApp() {
 
   const recordActivity = (category, action, detail = "") => {
     if (accessRole === "guest") return;
-    const who = (actorName || (isAdminUnlocked ? "관리자" : "산후도우미/가족")).trim();
+    const who = (actorName || (isAdminUnlocked ? "관리자" : "육아지원군")).trim();
     const entry = {
       id: `act-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       actor: who,
@@ -4340,7 +4405,7 @@ function MainApp() {
       return false;
     }
     if (code === adminCode) {
-      const nextActor = actorName && actorName !== "산후도우미/가족" ? actorName : "수혁";
+      const nextActor = actorName && actorName !== "육아지원군" ? actorName : "수혁";
       try {
         localStorage.setItem("family_access_role_v1", "admin");
         localStorage.setItem("family_editor_unlocked_v1", "true");
@@ -4354,7 +4419,7 @@ function MainApp() {
       return true;
     }
     if (code === helperCode) {
-      const nextActor = actorName && !["수혁", "아리나"].includes(actorName) ? actorName : "산후도우미/가족";
+      const nextActor = actorName && !["수혁", "아리나"].includes(actorName) ? actorName : "육아지원군";
       try {
         localStorage.setItem("family_access_role_v1", "helper");
         localStorage.removeItem("family_editor_unlocked_v1");
@@ -4392,8 +4457,8 @@ function MainApp() {
           <h3 className="text-sm font-black text-stone-900">{tabLabel} 메뉴는 잠겨 있습니다</h3>
           <p className="text-xs text-stone-500 leading-relaxed">
             {accessRole === "guest"
-              ? "미로그인 상태에서는 가족사진과 일부 메뉴(식단·레시피)만 볼 수 있습니다. 가족 또는 산후도우미 비밀번호로 로그인해 주세요."
-              : "현재 계정에서는 접근이 제한된 메뉴입니다. 관리자(0402) 비밀번호로 로그인하거나 설정에서 허용 메뉴를 변경할 수 있습니다."}
+              ? "미로그인 상태에서는 가족사진과 일부 메뉴(식단·레시피)만 볼 수 있습니다. 가족 또는 육아지원군 비밀번호로 로그인해 주세요."
+              : "현재 계정에서는 접근이 제한된 메뉴입니다. 관리자 비밀번호로 로그인하거나 설정에서 허용 메뉴를 변경할 수 있습니다."}
           </p>
         </div>
         <div className="flex items-center justify-center gap-2 pt-1">
@@ -9332,22 +9397,43 @@ ${validText}
                 {isAdminUnlocked
                   ? `👑 관리자 · ${actorName}`
                   : isHelperUnlocked
-                  ? `🌿 도우미 · ${actorName}`
+                  ? `🌿 육아지원군 · ${actorName}`
                   : "🔒 미로그인"}
               </span>
             </button>
           </div>
-          <button
-            onClick={() => {
-              setTempKeyInput(geminiApiKey);
-              setTempOpenaiKeyInput(openaiApiKey);
-              setIsSettingsOpen(true);
-            }}
-            className="p-1.5 rounded-full bg-stone-100 hover:bg-stone-200 text-stone-600 shrink-0"
-            title="백업 및 설정"
-          >
-            <Settings className="w-3.5 h-3.5" />
-          </button>
+          <div className="flex items-center gap-1 shrink-0">
+            {accessRole !== "guest" && (
+              <button
+                type="button"
+                onClick={() => {
+                  const nowMs = Date.now();
+                  setLastSeenActivityMs(nowMs);
+                  try { localStorage.setItem("kim_last_seen_activity_ms_v1", String(nowMs)); } catch (e) {}
+                  setIsActivityModalOpen(true);
+                }}
+                className="relative p-1.5 rounded-full bg-stone-100 hover:bg-sky-50 text-stone-600 hover:text-sky-700 shrink-0"
+                title="최근 수정 알림"
+                aria-label="최근 수정 알림"
+              >
+                <Bell className="w-3.5 h-3.5" />
+                {visibleRecentActivities[0]?.atMs && visibleRecentActivities[0].atMs > lastSeenActivityMs && (
+                  <span className="absolute top-0.5 right-0.5 w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
+                )}
+              </button>
+            )}
+            <button
+              onClick={() => {
+                setTempKeyInput(geminiApiKey);
+                setTempOpenaiKeyInput(openaiApiKey);
+                setIsSettingsOpen(true);
+              }}
+              className="p-1.5 rounded-full bg-stone-100 hover:bg-stone-200 text-stone-600 shrink-0"
+              title="백업 및 설정"
+            >
+              <Settings className="w-3.5 h-3.5" />
+            </button>
+          </div>
         </div>
 
         {activeTab === "home" && (
@@ -9421,38 +9507,6 @@ ${validText}
               </button>
             </div>
 
-            {accessRole !== "guest" && (
-              <div
-                onClick={() => setIsActivityModalOpen(true)}
-                className="mt-2 bg-sky-50/80 hover:bg-sky-50 border border-sky-200 rounded-xl px-3 py-2 cursor-pointer flex items-center justify-between gap-2 transition"
-              >
-                <div className="flex items-center gap-1.5 min-w-0">
-                  <Bell className="w-3.5 h-3.5 text-sky-600 shrink-0" />
-                  {recentActivities.length > 0 ? (
-                    <div className="text-[11px] leading-snug truncate text-stone-800">
-                      <span className="font-black text-sky-800 mr-1">[{recentActivities[0].actor}]</span>
-                      <span className="font-bold text-stone-700">
-                        {recentActivities[0].category} {recentActivities[0].action}
-                      </span>
-                      {recentActivities[0].detail && (
-                        <span className="text-stone-600"> · {recentActivities[0].detail}</span>
-                      )}
-                      <span className="text-[10px] font-bold text-sky-700 ml-1.5">
-                        ({formatActivityTime(recentActivities[0].atMs)})
-                      </span>
-                    </div>
-                  ) : (
-                    <span className="text-[11px] font-bold text-sky-800 truncate">
-                      최근 수정 알림 · 아직 기록된 변경 내역이 없습니다
-                    </span>
-                  )}
-                </div>
-                <span className="text-[10px] font-extrabold text-sky-700 shrink-0">
-                  {recentActivities.length > 0 ? `내역(${recentActivities.length}) >` : "알림 >"}
-                </span>
-              </div>
-            )}
-
             {accessRole !== "guest" && pinnedNotices.length > 0 && canViewTab("notices") && (
               <div
                 onClick={() => setActiveTab("notices")}
@@ -9473,6 +9527,21 @@ ${validText}
           </>
         )}
       </header>
+
+      {activeTab !== "home" && canViewTab(activeTab) && !canEditTab(activeTab) && (
+        <div className="mx-3 mt-2 px-3 py-1.5 rounded-xl bg-amber-50 border border-amber-200 flex items-center justify-between gap-2">
+          <span className="text-[11px] font-extrabold text-amber-900">
+            👁️ 현재 메뉴는 열람 전용입니다 (편집 권한 필요)
+          </span>
+          <button
+            type="button"
+            onClick={() => setIsEditorUnlockModalOpen(true)}
+            className="px-2 py-0.5 rounded-lg bg-amber-600 text-white text-[10px] font-extrabold shrink-0"
+          >
+            권한 변경
+          </button>
+        </div>
+      )}
 
       {/* ==========================================
           탭 0: 🏠 홈 (대시보드 & 바로가기 허브)
@@ -11891,6 +11960,9 @@ ${validText}
                         >
                           주말
                         </button>
+                        <span className="text-[9px] font-extrabold text-stone-400 px-1">
+                          {familyRoutines.filter((r) => (r.timeSlot || "상시") === slot.label).length}건
+                        </span>
                         {routineSlotDefs.length > 1 && (
                           <button
                             type="button"
@@ -11920,6 +11992,35 @@ ${validText}
                       type="text"
                       value={newSlotLabelInput}
                       onChange={(e) => setNewSlotLabelInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          if (!requireEditorAccess("schedule")) return;
+                          const lbl = newSlotLabelInput.trim();
+                          if (!lbl) {
+                            showToast("추가할 시간대 이름을 입력해 주세요.");
+                            return;
+                          }
+                          if (lbl === "상시" || routineSlotDefs.some((s) => s.label === lbl)) {
+                            showToast("이미 존재하는 시간대 이름입니다.");
+                            return;
+                          }
+                          const nextDefs = [
+                            ...routineSlotDefs,
+                            {
+                              id: `slot-${Date.now()}`,
+                              label: lbl,
+                              startTime: newSlotTimeInput || "14:00",
+                              weekday: newSlotWeekday,
+                              weekend: newSlotWeekend
+                            }
+                          ];
+                          persistSlots(nextDefs);
+                          setNewSlotLabelInput("");
+                          recordActivity("루틴", "시간대 추가", `${lbl} (${newSlotTimeInput || "14:00"})`);
+                          showToast(`⏰ [${lbl}] 시간대가 추가되었습니다!`);
+                        }
+                      }}
                       placeholder="새 시간대 (예: 새벽·오전)"
                       className="flex-1 min-w-[110px] px-2.5 py-1.5 rounded-lg border border-indigo-200 bg-white text-[11px] font-bold"
                     />
@@ -15125,6 +15226,7 @@ ${validText}
           >
             {[
               {
+                tab: "daily",
                 label: "🍽️ 식단 기록",
                 color: "bg-white text-stone-900 border-amber-200 hover:bg-amber-50",
                 onClick: () => {
@@ -15146,6 +15248,7 @@ ${validText}
                 }
               },
               {
+                tab: "schedule",
                 label: "🗓️ 일정 추가",
                 color: "bg-white text-stone-900 border-rose-200 hover:bg-rose-50",
                 onClick: () => {
@@ -15164,11 +15267,13 @@ ${validText}
                 }
               },
               {
+                tab: "schedule",
                 label: "🔄 루틴 추가",
                 color: "bg-white text-stone-900 border-stone-200 hover:bg-stone-50",
                 onClick: () => openNewRoutineModal()
               },
               {
+                tab: "schedule",
                 label: "✅ 할 일 추가",
                 color: "bg-white text-stone-900 border-amber-200 hover:bg-amber-50",
                 onClick: () => {
@@ -15187,11 +15292,13 @@ ${validText}
                 }
               },
               {
+                tab: "fridge",
                 label: "❄️ 냉장고 입고",
                 color: "bg-white text-stone-900 border-sky-200 hover:bg-sky-50",
                 onClick: () => openAddFridgeModal()
               },
               {
+                tab: "shopping",
                 label: "🛒 장보기 추가",
                 color: "bg-white text-stone-900 border-emerald-200 hover:bg-emerald-50",
                 onClick: () => {
@@ -15200,11 +15307,13 @@ ${validText}
                 }
               },
               {
+                tab: "fridge",
                 label: "🧾 영수증 AI 스캔",
                 color: "bg-white text-stone-900 border-teal-200 hover:bg-teal-50",
                 onClick: () => setIsReceiptModalOpen(true)
               },
               {
+                tab: "daily",
                 label: "📤 식단·재료 내보내기",
                 color: "bg-white text-stone-900 border-stone-300 hover:bg-stone-100",
                 onClick: () => {
@@ -15213,6 +15322,7 @@ ${validText}
                 }
               },
               {
+                tab: "baby",
                 label: "👶 성장기록",
                 color: "bg-white text-stone-900 border-sky-200 hover:bg-sky-50",
                 onClick: () => {
@@ -15222,11 +15332,12 @@ ${validText}
                 }
               },
               {
+                tab: "recipes",
                 label: "📖 레시피 등록",
                 color: "bg-white text-stone-900 border-purple-200 hover:bg-purple-50",
                 onClick: () => openNewRecipeModal()
               }
-            ].map((act) => (
+            ].filter((act) => canEditTab(act.tab)).map((act) => (
               <button
                 key={act.label}
                 type="button"
@@ -15291,7 +15402,7 @@ ${validText}
             </div>
             <div className="grid grid-cols-3 gap-2">
               {[
-                { id: "daily", label: "식단·주간", icon: "🍽️" },
+                { id: "daily", label: "식단", icon: "🍽️" },
                 { id: "monthly", label: "월간·식비", icon: "💰" },
                 { id: "shopping", label: "장보기", icon: "🛒" },
                 { id: "notices", label: "가족공지", icon: "📌" },
@@ -17399,10 +17510,10 @@ ${validText}
             {!isAdminUnlocked ? (
               <div className="bg-amber-50 p-3.5 rounded-2xl border border-amber-200 space-y-2">
                 <div className="text-xs font-extrabold text-amber-900">
-                  🔒 관리자(0402) 전용 설정 영역입니다
+                  🔒 관리자 전용 설정 영역입니다
                 </div>
                 <p className="text-[11px] text-amber-800">
-                  API 키 설정, 산후도우미/가족 비밀번호 관리 및 DB 복원은 관리자 비밀번호(0402)로 로그인해야 이용할 수 있습니다.
+                  API 키 설정, 육아지원군 비밀번호 관리 및 DB 복원은 관리자 비밀번호로 로그인해야 이용할 수 있습니다.
                 </p>
                 <button
                   onClick={() => {
@@ -17463,7 +17574,7 @@ ${validText}
                             return;
                           }
                           if (nextA === helperCode) {
-                            showToast("도우미/가족 비밀번호와 다른 번호를 입력해 주세요.");
+                            showToast("육아지원군 비밀번호와 다른 번호를 입력해 주세요.");
                             return;
                           }
                           await saveAccessConfigToCloud({ adminCode: nextA });
@@ -17478,7 +17589,7 @@ ${validText}
 
                   <div className="bg-white p-2 rounded-xl border border-sky-200 space-y-1">
                     <div className="flex items-center justify-between text-[10px] font-extrabold text-sky-900">
-                      <span>🌿 도우미·가족 비밀번호</span>
+                      <span>🌿 육아지원군 비밀번호</span>
                       <span>현재: {helperCode}</span>
                     </div>
                     <div className="flex items-center gap-1">
@@ -17486,7 +17597,7 @@ ${validText}
                         type="text"
                         value={helperCodeDraft}
                         onChange={(e) => setHelperCodeDraft(e.target.value)}
-                        placeholder="도우미/가족 비밀번호"
+                        placeholder="육아지원군 비밀번호"
                         className="flex-1 min-w-0 px-2.5 py-1 rounded-lg border border-sky-200 text-xs font-bold"
                       />
                       <button
@@ -17502,7 +17613,7 @@ ${validText}
                             return;
                           }
                           await saveAccessConfigToCloud({ helperCode: nextC });
-                          showToast(`🌿 도우미/가족 비밀번호가 [${nextC}]로 변경되었습니다!`);
+                          showToast(`🌿 육아지원군 비밀번호가 [${nextC}]로 변경되었습니다!`);
                         }}
                         className="px-2.5 py-1 rounded-lg bg-sky-700 hover:bg-sky-800 text-white text-[11px] font-extrabold shrink-0"
                       >
@@ -17516,8 +17627,8 @@ ${validText}
                   <div className="grid grid-cols-[1fr_54px_54px_54px] items-center bg-sky-100/70 px-2.5 py-1.5 text-[10px] font-black text-sky-950 text-center">
                     <span className="text-left">메뉴</span>
                     <span>미로그인</span>
-                    <span>도우미열람</span>
-                    <span>도우미편집</span>
+                    <span>지원군열람</span>
+                    <span>지원군편집</span>
                   </div>
                   <div className="divide-y divide-stone-100">
                     {HELPER_CONFIGURABLE_TABS.map((t) => {
@@ -17608,14 +17719,14 @@ ${validText}
                       const url = `${window.location.origin}/?invite=${helperCode}`;
                       try {
                         await navigator.clipboard.writeText(url);
-                        showToast("🔗 도우미/가족 링크 복사 완료!");
+                        showToast("🔗 육아지원군 링크 복사 완료!");
                       } catch (e) {
                         showToast(`링크: ${url}`);
                       }
                     }}
                     className="py-1.5 rounded-xl bg-white hover:bg-sky-100 text-sky-800 border border-sky-200 text-[10px] font-extrabold"
                   >
-                    🔗 도우미/가족 링크 복사
+                    🔗 육아지원군 링크 복사
                   </button>
                 </div>
               </div>
@@ -17850,7 +17961,7 @@ ${validText}
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-black text-stone-900 flex items-center gap-1.5">
                 <Bell className="w-4 h-4 text-sky-600" />
-                최근 수정 알림 내역
+                최근 수정 알림 내역 ({visibleRecentActivities.length}건)
               </h3>
               <div className="flex items-center gap-1.5">
                 {isAdminUnlocked && recentActivities.length > 0 && (
@@ -17892,14 +18003,46 @@ ${validText}
               ))}
             </div>
 
+            {(() => {
+              const actors = Array.from(new Set(visibleRecentActivities.map((a) => a.actor).filter(Boolean)));
+              if (actors.length <= 1) return null;
+              return (
+                <div className="flex items-center gap-1 overflow-x-auto pb-1">
+                  <span className="text-[10px] font-extrabold text-stone-400 shrink-0 mr-0.5">수정자:</span>
+                  {["전체", ...actors].map((ac) => (
+                    <button
+                      key={ac}
+                      type="button"
+                      onClick={() => setActivityActorFilter(ac)}
+                      className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold border whitespace-nowrap shrink-0 ${
+                        activityActorFilter === ac
+                          ? "bg-sky-700 text-white border-sky-700"
+                          : "bg-white text-stone-600 border-stone-200"
+                      }`}
+                    >
+                      {ac}
+                    </button>
+                  ))}
+                </div>
+              );
+            })()}
+
             <div className="flex-1 overflow-y-auto space-y-1.5 pr-0.5">
-              {recentActivities.filter((a) => activityFilter === "전체" || a.category === activityFilter).length === 0 ? (
+              {visibleRecentActivities.filter(
+                (a) =>
+                  (activityFilter === "전체" || a.category === activityFilter) &&
+                  (activityActorFilter === "전체" || a.actor === activityActorFilter)
+              ).length === 0 ? (
                 <div className="py-10 text-center text-xs font-bold text-stone-400">
                   기록된 수정 내역이 없습니다.
                 </div>
               ) : (
-                recentActivities
-                  .filter((a) => activityFilter === "전체" || a.category === activityFilter)
+                visibleRecentActivities
+                  .filter(
+                    (a) =>
+                      (activityFilter === "전체" || a.category === activityFilter) &&
+                      (activityActorFilter === "전체" || a.actor === activityActorFilter)
+                  )
                   .map((act) => (
                     <div
                       key={act.id}
@@ -17972,8 +18115,8 @@ ${validText}
                 {isAdminUnlocked
                   ? "👑 관리자 권한 활성화됨"
                   : isHelperUnlocked
-                  ? "🌿 산후도우미·가족 권한 활성화됨"
-                  : "🔐 가족 / 도우미 로그인"}
+                  ? "🌿 육아지원군 권한 활성화됨"
+                  : "🔐 가족 · 육아지원군 로그인"}
               </h3>
               <button onClick={() => setIsEditorUnlockModalOpen(false)}>
                 <X className="w-5 h-5 text-stone-400" />
@@ -17987,7 +18130,7 @@ ${validText}
                     현재 수정자 이름 (홈 최근 수정 알림에 기록됩니다)
                   </div>
                   <div className="flex flex-wrap gap-1.5">
-                    {(isAdminUnlocked ? ["수혁", "아리나"] : ["산후도우미", "가족"]).map((nm) => (
+                    {(isAdminUnlocked ? ["수혁", "아리나"] : ["육아지원군", "가족"]).map((nm) => (
                       <button
                         key={nm}
                         type="button"
@@ -18006,12 +18149,35 @@ ${validText}
                       </button>
                     ))}
                   </div>
+                  <div className="flex items-center gap-1 pt-0.5">
+                    <input
+                      type="text"
+                      value={actorNameDraft}
+                      onChange={(e) => setActorNameDraft(e.target.value)}
+                      placeholder="직접 입력 (예: 친정엄마, 이모님)"
+                      className="flex-1 min-w-0 px-2.5 py-1 rounded-lg border border-stone-200 bg-white text-[11px] font-bold"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const custom = actorNameDraft.trim();
+                        if (!custom) return;
+                        setActorName(custom);
+                        setActorNameDraft("");
+                        try { localStorage.setItem("family_actor_name_v1", custom); } catch (e) {}
+                        showToast(`수정자 이름이 [${custom}]로 설정되었습니다.`);
+                      }}
+                      className="px-2.5 py-1 rounded-lg bg-stone-800 text-white text-[10px] font-extrabold shrink-0"
+                    >
+                      적용
+                    </button>
+                  </div>
                 </div>
 
                 {isAdminUnlocked ? (
                   <>
                     <p className="text-xs text-stone-600 leading-relaxed">
-                      모든 메뉴 열람·편집과 설정(API 키, 백업, 도우미 비밀번호 변경)이 가능합니다.
+                      모든 메뉴 열람·편집과 설정(API 키, 백업, 육아지원군 비밀번호 변경)이 가능합니다.
                     </p>
                     <button
                       onClick={async () => {
@@ -18045,13 +18211,13 @@ ${validText}
               <div className="space-y-3">
                 <div className="bg-stone-50 p-3 rounded-2xl border border-stone-200 space-y-1 text-[11px] text-stone-600">
                   <div>· <strong className="text-stone-800">미로그인</strong>: 가족사진 및 식단·레시피 일부만 열람</div>
-                  <div>· <strong className="text-sky-800">산후도우미·가족</strong>: 허용 메뉴 열람 및 편집 가능</div>
-                  <div>· <strong className="text-emerald-800">관리자(0402)</strong>: 전체 메뉴·설정·비밀번호 관리</div>
+                  <div>· <strong className="text-sky-800">육아지원군</strong>: 허용 메뉴 열람 및 편집 가능</div>
+                  <div>· <strong className="text-emerald-800">관리자</strong>: 전체 메뉴·설정·비밀번호 관리</div>
                 </div>
                 <input
                   type="password"
                   inputMode="numeric"
-                  placeholder="관리자(0402) 또는 도우미/가족 비밀번호 입력"
+                  placeholder="관리자 또는 육아지원군 비밀번호 입력"
                   value={editorCodeInput}
                   onChange={(e) => setEditorCodeInput(e.target.value)}
                   onKeyDown={(e) => {
