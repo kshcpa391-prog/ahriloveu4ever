@@ -1116,11 +1116,32 @@ const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.65) =>
     img.src = dataUrl;
   });
 
-const APP_CODE_VERSION = "v10.86";
-const APP_BUILD_DATE = "2026-11-17 10:26";
+const APP_CODE_VERSION = "v10.88";
+const APP_BUILD_DATE = "2026-11-17 10:38";
 const EDITOR_INVITE_CODE = "0402";
 
 const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v10.88",
+    version: "v10.88",
+    date: "2026-11-17",
+    title: "통합 식단 사용 재료·메모 미리보기 & [빈 끼니 숨기기] 토글 + 전체 무결성 검증",
+    changes: [
+      "통합 식단 각 항목에 사용 재료(🥬)와 메모(💬)를 1줄 미리보기로 표시해 상세 모달을 열지 않아도 내용 파악 가능",
+      "식단 상단에 [빈 끼니 숨기기] 토글을 추가해 기록된 식단만 콤팩트하게 모아보기 지원"
+    ]
+  },
+  {
+    id: "patch-v10.87",
+    version: "v10.87",
+    date: "2026-11-17",
+    title: "통합 식단 1열 6줄 레이아웃 & 항목별 가족 아바타·이름 배지 + 개별 수정·삭제 지원",
+    changes: [
+      "통합 식단 날짜별 끼니 카드를 2열에서 시간순 1열 6줄(아침·오전간식·점심·오후간식·저녁·야식)로 변경하고, 빈 끼니는 슬림 1줄 바로 압축",
+      "각 식단 항목마다 누구의 식단인지 아바타·이름 배지(예: 수혁·아리나 / 시목 / 온가족)를 직관적으로 표시",
+      "같은 끼니에 여러 식단이 있어도 항목별 개별 탭 수정 및 개별 삭제(×), 끼니별 [+ 추가] 지원"
+    ]
+  },
   {
     id: "patch-v10.86",
     version: "v10.86",
@@ -3299,6 +3320,7 @@ function MainApp() {
   });
   const [editingRoutineId, setEditingRoutineId] = useState(null);
   const [isRoutineModalOpen, setIsRoutineModalOpen] = useState(false);
+  const [hideEmptyMealSlots, setHideEmptyMealSlots] = useState(false);
   useEffect(() => {
     if (!isQuickFabOpen && !isRoutineModalOpen) return;
     const onEsc = (e) => {
@@ -9960,9 +9982,22 @@ ${validText}
                 <h2 className="text-sm font-black text-stone-900 truncate">
                   🍽️ 식단 ({weekDates[0].slice(5)} ~ {weekDates[6].slice(5)})
                 </h2>
-                <span className="text-[10px] font-bold text-stone-500 whitespace-nowrap shrink-0">
-                  조회일 ±3일
-                </span>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setHideEmptyMealSlots((v) => !v)}
+                    className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold border whitespace-nowrap ${
+                      hideEmptyMealSlots
+                        ? "bg-stone-900 text-white border-stone-900"
+                        : "bg-stone-50 text-stone-600 border-stone-200"
+                    }`}
+                  >
+                    {hideEmptyMealSlots ? "빈 끼니 숨김중" : "빈 끼니 숨기기"}
+                  </button>
+                  <span className="text-[10px] font-bold text-stone-500 whitespace-nowrap">
+                    ±3일
+                  </span>
+                </div>
               </div>
               <div className="flex items-center justify-between gap-1">
                 <button
@@ -10136,95 +10171,134 @@ ${validText}
                         + 식단 추가
                       </button>
                     </div>
-                    <div className="grid grid-cols-2 gap-1.5">
-                      {["아침", "점심", "저녁", "오전간식", "오후간식", "야식"].map((slotId) => {
+                    <div className="space-y-1.5">
+                      {MEAL_SLOTS.map((slotMeta) => {
+                        const slotId = slotMeta.id;
                         const items = dayMeals.filter((m) => m.slot === slotId);
+                        const openAddForSlot = () => {
+                          setEditingMeal(null);
+                          setMealForm({
+                            date: d,
+                            slot: slotId,
+                            menu: "",
+                            members: selectedMember === "전체" ? ["수혁", "아리나"] : [selectedMember],
+                            ingredients: [],
+                            note: "",
+                            sourceType: "집밥/온가족식",
+                            cost: ""
+                          });
+                          setIsMealModalOpen(true);
+                        };
+                        if (items.length === 0) {
+                          if (hideEmptyMealSlots) return null;
+                          return (
+                            <button
+                              key={slotId}
+                              type="button"
+                              onClick={openAddForSlot}
+                              className="w-full px-2.5 py-1.5 rounded-xl bg-stone-50/70 hover:bg-stone-100 border border-stone-200/80 flex items-center justify-between gap-2 text-left transition"
+                            >
+                              <span className="text-[11px] font-extrabold text-stone-500 flex items-center gap-1.5">
+                                <span>{slotMeta.icon}</span>
+                                <span>{slotMeta.label}</span>
+                              </span>
+                              <span className="text-[10px] font-bold text-stone-400">+ 등록</span>
+                            </button>
+                          );
+                        }
                         return (
                           <div
                             key={slotId}
-                            onClick={() => {
-                              if (items.length > 0) {
-                                const m = items[0];
-                                setEditingMeal(m);
-                                setMealForm({
-                                  date: m.date,
-                                  slot: m.slot,
-                                  menu: m.menu || "",
-                                  members: toSafeArray(m.members),
-                                  ingredients: toSafeArray(m.ingredients),
-                                  note: m.note || "",
-                                  sourceType: m.sourceType || "집밥/온가족식",
-                                  cost: m.cost || ""
-                                });
-                                setIsMealModalOpen(true);
-                              } else {
-                                setEditingMeal(null);
-                                setMealForm({
-                                  date: d,
-                                  slot: slotId,
-                                  menu: "",
-                                  members: selectedMember === "전체" ? ["수혁", "아리나"] : [selectedMember],
-                                  ingredients: [],
-                                  note: "",
-                                  sourceType: "집밥/온가족식",
-                                  cost: ""
-                                });
-                                setIsMealModalOpen(true);
-                              }
-                            }}
-                            className="p-2.5 rounded-xl bg-white hover:bg-stone-50 border border-stone-200 cursor-pointer min-h-[54px] transition"
+                            className="p-2.5 rounded-xl bg-white border border-stone-200 space-y-1.5"
                           >
-                            <div className="flex items-center justify-between gap-1 mb-0.5">
-                              <span className="text-[10px] font-extrabold text-stone-500">{slotId}</span>
-                              {items.length > 0 && (
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleDeleteMeal(items[0]);
-                                  }}
-                                  className="text-[10px] text-stone-400 hover:text-rose-600 px-1"
-                                  title="삭제"
-                                >
-                                  ×
-                                </button>
-                              )}
+                            <div className="flex items-center justify-between gap-1">
+                              <span className="text-[10px] font-black text-stone-500 flex items-center gap-1">
+                                <span>{slotMeta.icon}</span>
+                                <span>{slotMeta.label}</span>
+                              </span>
+                              <button
+                                type="button"
+                                onClick={openAddForSlot}
+                                className="px-1.5 py-0.5 rounded bg-stone-100 hover:bg-stone-200 text-stone-600 text-[10px] font-extrabold"
+                              >
+                                + 추가
+                              </button>
                             </div>
-                            {items.length > 0 ? (
-                              <div className="text-xs font-bold text-stone-800 break-keep leading-snug space-y-0.5">
-                                {items.map((it) => (
+                            <div className="divide-y divide-stone-100">
+                              {items.map((it) => {
+                                const memIds = toSafeArray(it.members);
+                                const isAllFam = memIds.length >= FAMILY_MEMBERS.length;
+                                return (
                                   <div
                                     key={it.id}
-                                    onClick={(e) => {
-                                      if (items.length > 1) {
-                                        e.stopPropagation();
-                                        setEditingMeal(it);
-                                        setMealForm({
-                                          date: it.date,
-                                          slot: it.slot,
-                                          menu: it.menu || "",
-                                          members: toSafeArray(it.members),
-                                          ingredients: toSafeArray(it.ingredients),
-                                          note: it.note || "",
-                                          sourceType: it.sourceType || "집밥/온가족식",
-                                          cost: it.cost || ""
-                                        });
-                                        setIsMealModalOpen(true);
-                                      }
+                                    onClick={() => {
+                                      setEditingMeal(it);
+                                      setMealForm({
+                                        date: it.date,
+                                        slot: it.slot,
+                                        menu: it.menu || "",
+                                        members: memIds,
+                                        ingredients: toSafeArray(it.ingredients),
+                                        note: it.note || "",
+                                        sourceType: it.sourceType || "집밥/온가족식",
+                                        cost: it.cost || ""
+                                      });
+                                      setIsMealModalOpen(true);
                                     }}
+                                    className="py-1 first:pt-0 last:pb-0 flex items-start justify-between gap-2 cursor-pointer hover:bg-stone-50/60 rounded-lg px-1 -mx-1 transition"
                                   >
-                                    <span>{String(it.menu || "").replace(/\[.*?\]\s*/, "")}</span>
-                                    {Number(it.cost) > 0 && (
-                                      <span className="ml-1 text-[10px] font-bold text-stone-500">
-                                        ({Number(it.cost).toLocaleString()}원)
-                                      </span>
-                                    )}
+                                    <div className="min-w-0 flex-1 space-y-1">
+                                      <div className="text-xs font-extrabold text-stone-900 break-keep leading-snug">
+                                        <span>{String(it.menu || "").replace(/\[.*?\]\s*/, "")}</span>
+                                        {Number(it.cost) > 0 && (
+                                          <span className="ml-1 text-[10px] font-bold text-stone-500">
+                                            ({Number(it.cost).toLocaleString()}원)
+                                          </span>
+                                        )}
+                                      </div>
+                                      {(toSafeArray(it.ingredients).length > 0 || it.note) && (
+                                        <div className="text-[10px] text-stone-500 truncate">
+                                          {toSafeArray(it.ingredients).length > 0 && `🥬 ${toSafeArray(it.ingredients).join(", ")}`}
+                                          {toSafeArray(it.ingredients).length > 0 && it.note && " · "}
+                                          {it.note && `💬 ${it.note}`}
+                                        </div>
+                                      )}
+                                      <div className="flex flex-wrap items-center gap-1">
+                                        {isAllFam ? (
+                                          <span className="px-1.5 py-0.5 rounded-md bg-stone-100 text-stone-700 text-[9px] font-extrabold">
+                                            👨‍👩‍👧‍👦 온가족
+                                          </span>
+                                        ) : (
+                                          memIds.map((mId) => {
+                                            const mInfo = FAMILY_MEMBERS.find((f) => f.id === mId);
+                                            return mInfo ? (
+                                              <span
+                                                key={mId}
+                                                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-stone-100 border border-stone-200/80 text-stone-700 text-[9px] font-extrabold whitespace-nowrap"
+                                              >
+                                                <MemberAvatar member={mInfo} size="sm" />
+                                                <span>{mInfo.id}</span>
+                                              </span>
+                                            ) : null;
+                                          })
+                                        )}
+                                      </div>
+                                    </div>
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleDeleteMeal(it);
+                                      }}
+                                      className="p-1 text-stone-400 hover:text-rose-600 shrink-0"
+                                      title="삭제"
+                                    >
+                                      <X className="w-3.5 h-3.5" />
+                                    </button>
                                   </div>
-                                ))}
-                              </div>
-                            ) : (
-                              <div className="text-[10px] text-stone-300">+ 등록</div>
-                            )}
+                                );
+                              })}
+                            </div>
                           </div>
                         );
                       })}
