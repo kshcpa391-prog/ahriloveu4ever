@@ -1212,7 +1212,7 @@ const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.65) =>
     img.src = dataUrl;
   });
 
-const APP_CODE_VERSION = "v11.40";
+const APP_CODE_VERSION = "v11.41";
 
 const formatRoutineTimeLabel = (hhmm) => {
   const m = String(hhmm || "").trim().match(/^(\d{2}):(\d{2})$/);
@@ -1228,7 +1228,7 @@ const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-const APP_BUILD_DATE = "2026-11-17 20:20";
+const APP_BUILD_DATE = "2026-11-17 20:35";
 const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1255,6 +1255,17 @@ const HELPER_CONFIGURABLE_TABS = [
 ];
 
 const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v11.41",
+    version: "v11.41",
+    date: "2026-11-17",
+    title: "Gmail·드라이브 파일 첨부 공유 개선(다운로드 창 제거) & 월간 원장 스크롤·접기 시각화 개선",
+    changes: [
+      "백업 공유 개선: 모바일 브라우저가 .json 공유를 막을 때 text/plain(.txt)으로 자동 전환해 파일이 첨부된 Gmail·드라이브 공유 창이 바로 열리도록 수정(원치 않는 다운로드 창 제거, 미지원 환경은 클립보드 복사 + Gmail 웹 작성 창 연동)",
+      "복원 호환성: .json뿐 아니라 .txt로 공유된 백업 파일도 1초 복원에서 그대로 읽히도록 확장",
+      "시각화·편의 개선: 월간 식비 원장이 길어질 때 기본 10건 표시 + 스크롤(max-h-96) 및 [더 보기/접기] 버튼 추가"
+    ]
+  },
   {
     id: "patch-v11.40",
     version: "v11.40",
@@ -4161,6 +4172,7 @@ function MainApp() {
   const [monthlyMember, setMonthlyMember] = useState("시목");
   const [expenseSearchQuery, setExpenseSearchQuery] = useState("");
   const [expenseCatFilter, setExpenseCatFilter] = useState("전체");
+  const [expenseLedgerExpanded, setExpenseLedgerExpanded] = useState(false);
   const [monthlyBudget, setMonthlyBudget] = useState(() => {
     return Number(localStorage.getItem("kim_family_budget") || 800000);
   });
@@ -6406,28 +6418,50 @@ function MainApp() {
 
   const handleSendBackupToGmailOrDrive = async () => {
     const jsonString = buildFullBackupJsonString();
-    const fileName = `수혁아리나시목시율_DB백업_${getTodayStr()}.json`;
-    const fileObj = new File([jsonString], fileName, { type: "application/json" });
+    const jsonFileName = `수혁아리나시목시율_DB백업_${getTodayStr()}.json`;
+    const txtFileName = `수혁아리나시목시율_DB백업_${getTodayStr()}.txt`;
+    const jsonFile = new File([jsonString], jsonFileName, { type: "application/json" });
+    const txtFile = new File([jsonString], txtFileName, { type: "text/plain" });
 
-    if (navigator.canShare && navigator.canShare({ files: [fileObj] })) {
+    const shareCandidate =
+      navigator.canShare && navigator.canShare({ files: [jsonFile] })
+        ? jsonFile
+        : navigator.canShare && navigator.canShare({ files: [txtFile] })
+        ? txtFile
+        : null;
+
+    if (shareCandidate && navigator.share) {
       try {
         await navigator.share({
           title: `[가족식탁 DB백업] ${getTodayStr()}`,
-          text: `식단 ${meals.length}건, 냉장고 ${fridge.length}건, 일정 ${schedules.length}건 전체 백업 파일입니다.`,
-          files: [fileObj]
+          text: `식단 ${meals.length}건, 냉장고 ${Object.keys(fridgeMap || {}).length}건, 일정 ${schedules.length}건 전체 백업 파일입니다.`,
+          files: [shareCandidate]
         });
-        showToast("구글 드라이브 / Gmail 공유 창이 실행되었습니다!");
+        showToast("📎 백업 파일이 첨부된 공유 창(Gmail·드라이브)이 열렸습니다!");
         return;
-      } catch (e) {}
+      } catch (e) {
+        if (e?.name === "AbortError") return;
+      }
     }
 
-    handleDownloadJsonBackup();
     const targetMail = backupEmail.trim() || "";
     const subject = encodeURIComponent(`[가족식탁 자동백업] ${getTodayStr()} 전체 데이터베이스 백업본`);
-    const body = encodeURIComponent(
-      `수혁·아리나·시목·시율네 식탁 데이터베이스 백업입니다.\n\n• 백업 일시: ${new Date().toLocaleString()}\n• 식단: ${meals.length}건 / 냉장고: ${fridge.length}건 / 가족일정: ${schedules.length}건\n\n방금 다운로드된 '${fileName}' 파일을 첨부하거나 구글 드라이브에 보관해 두세요.`
+    let copiedOk = false;
+    try {
+      await navigator.clipboard.writeText(jsonString);
+      copiedOk = true;
+    } catch (e) {}
+
+    const bodyText = copiedOk
+      ? `수혁·아리나·시목·시율네 식탁 데이터베이스 백업입니다.\n\n• 백업 일시: ${new Date().toLocaleString()}\n• 식단: ${meals.length}건 / 일정: ${schedules.length}건\n\n※ 전체 백업 데이터가 클립보드에 복사되었습니다. 아래에 붙여넣기(Ctrl+V / 길게 눌러 붙여넣기) 하시거나 파일 다운로드 버튼을 이용해 첨부해 주세요.`
+      : `수혁·아리나·시목·시율네 식탁 데이터베이스 백업입니다.\n\n• 백업 일시: ${new Date().toLocaleString()}\n• 식단: ${meals.length}건 / 일정: ${schedules.length}건`;
+    const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(targetMail)}&su=${subject}&body=${encodeURIComponent(bodyText)}`;
+    window.open(gmailUrl, "_blank");
+    showToast(
+      copiedOk
+        ? "📧 백업 데이터를 클립보드에 복사하고 Gmail 작성 창을 열었습니다!"
+        : "📧 Gmail 작성 창을 열었습니다. (파일 첨부가 필요하면 아래 JSON 백업 다운로드를 이용해 주세요)"
     );
-    window.open(`mailto:${targetMail}?subject=${subject}&body=${body}`, "_blank");
   };
 
   const handleRestoreFromJsonFile = async (e) => {
@@ -13177,27 +13211,38 @@ ${validText}
                         </div>
                       </div>
                     )}
-                    <div className="divide-y divide-stone-100">
+                    <div className="divide-y divide-stone-100 max-h-96 overflow-y-auto pr-0.5">
                       {filteredLedger.length === 0 ? (
                         <div className="py-4 text-center text-[11px] font-bold text-stone-400">
                           조건에 맞는 지출 내역이 없습니다.
                         </div>
                       ) : (
-                        filteredLedger.map((exp) => (
-                          <div key={exp.id} className="py-2 flex items-center justify-between text-xs">
-                            <div>
-                              <div className="font-bold text-stone-800">{exp.title}</div>
-                              <div className="text-[10px] text-stone-400">
+                        (expenseLedgerExpanded ? filteredLedger : filteredLedger.slice(0, 10)).map((exp) => (
+                          <div key={exp.id} className="py-2 flex items-center justify-between gap-2 text-xs">
+                            <div className="min-w-0">
+                              <div className="font-bold text-stone-800 truncate">{exp.title}</div>
+                              <div className="text-[10px] text-stone-400 whitespace-nowrap">
                                 {exp.date} · {exp.category}
                               </div>
                             </div>
-                            <span className="font-extrabold text-stone-900">
+                            <span className="font-extrabold text-stone-900 whitespace-nowrap shrink-0">
                               {Number(exp.amount).toLocaleString()}원
                             </span>
                           </div>
                         ))
                       )}
                     </div>
+                    {filteredLedger.length > 10 && (
+                      <button
+                        type="button"
+                        onClick={() => setExpenseLedgerExpanded((v) => !v)}
+                        className="w-full py-1.5 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-[11px] font-extrabold"
+                      >
+                        {expenseLedgerExpanded
+                          ? "▲ 최근 10건만 보기"
+                          : `▼ 나머지 ${filteredLedger.length - 10}건 더 보기 (전체 ${filteredLedger.length}건)`}
+                      </button>
+                    )}
                   </div>
                 );
               })()}
@@ -20478,7 +20523,7 @@ ${validText}
               <input
                 ref={jsonRestoreInputRef}
                 type="file"
-                accept=".json,application/json"
+                accept=".json,.txt,application/json,text/plain"
                 onChange={handleRestoreFromJsonFile}
                 className="hidden"
               />
