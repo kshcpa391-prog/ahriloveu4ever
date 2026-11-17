@@ -1172,8 +1172,8 @@ const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.65) =>
     img.src = dataUrl;
   });
 
-const APP_CODE_VERSION = "v11.05";
-const APP_BUILD_DATE = "2026-11-17 14:50";
+const APP_CODE_VERSION = "v11.07";
+const APP_BUILD_DATE = "2026-11-17 15:02";
 const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1200,6 +1200,27 @@ const HELPER_CONFIGURABLE_TABS = [
 ];
 
 const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v11.07",
+    version: "v11.07",
+    date: "2026-11-17",
+    title: "다른 기기 수정 시 실시간 알림 팝업 · 알림 팝업 ON/OFF 설정 추가",
+    changes: [
+      "다른 가족이나 육아지원군이 식단·냉장고·일정 등을 수정하면 화면 상단에 실시간 알림 팝업(변경 전후 포함)이 자동 표시",
+      "알림 내역 모달 상단에서 [🔔 팝업 ON/OFF] 전환 및 브라우저 푸시 알림 허용 설정 지원"
+    ]
+  },
+  {
+    id: "patch-v11.06",
+    version: "v11.06",
+    date: "2026-11-17",
+    title: "식단 오늘자 전체 바로이동 · 직관적 식단 복사 모달 · 관리자 전용 육아일기(사진·예쁜 1장 이미지 내보내기)",
+    changes: [
+      "하단 [🍽️ 식단] 탭, 더보기, 홈 바로가기 클릭 시 항상 오늘 날짜·전체 가족 식단 리스트로 바로 이동",
+      "식단 상단의 불필요한 7일 요약 배지를 제거하고, 복사할 끼니와 붙여넣을 날짜를 직접 골라 복사하는 [📋 식단 복사] 모달 추가",
+      "육아 메뉴 내에 관리자 전용 [📖 육아일기] 추가 (날짜 선택, 사진 첨부, 예쁜 일기장 한 장 PNG 이미지 내보내기 및 미리보기)"
+    ]
+  },
   {
     id: "patch-v11.05",
     version: "v11.05",
@@ -3522,6 +3543,28 @@ function MainApp() {
   });
   const [isActivityModalOpen, setIsActivityModalOpen] = useState(false);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
+  const [isMealCopyModalOpen, setIsMealCopyModalOpen] = useState(false);
+  const [copyFromDate, setCopyFromDate] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 1);
+    return formatDate(d);
+  });
+  const [copyToDate, setCopyToDate] = useState(() => getTodayStr());
+  const [selectedCopyMealIds, setSelectedCopyMealIds] = useState([]);
+  const [copyTargetStatus, setCopyTargetStatus] = useState("planned");
+
+  const [babyDiaryEntries, setBabyDiaryEntries] = useState([]);
+  const [diaryForm, setDiaryForm] = useState({
+    date: getTodayStr(),
+    mood: "😊 행복",
+    title: "",
+    content: "",
+    photoUrl: ""
+  });
+  const [editingDiaryEntry, setEditingDiaryEntry] = useState(null);
+  const [diaryExportPreviewUrl, setDiaryExportPreviewUrl] = useState("");
+  const [diaryExportFilename, setDiaryExportFilename] = useState("육아일기.png");
+  const diaryPhotoInputRef = useRef(null);
   useEffect(() => {
     const t = setTimeout(() => setIsInitialLoading(false), 2000);
     return () => clearTimeout(t);
@@ -3535,6 +3578,18 @@ function MainApp() {
       return 0;
     }
   });
+  const [activityPopupEnabled, setActivityPopupEnabled] = useState(() => {
+    try {
+      return localStorage.getItem("kim_activity_popup_enabled_v1") !== "false";
+    } catch (e) {
+      return true;
+    }
+  });
+  const [liveActivityPopup, setLiveActivityPopup] = useState(null);
+  const activitySnapshotInitRef = useRef(false);
+  const localLastActIdRef = useRef("");
+  const lastPopupActIdRef = useRef("");
+  const activityPopupTimerRef = useRef(null);
   const [actorNameDraft, setActorNameDraft] = useState("");
   const ACTIVITY_CAT_TAB_MAP = {
     "식단": "daily",
@@ -4424,6 +4479,8 @@ function MainApp() {
       afterText: extra?.afterText ? String(extra.afterText).slice(0, 120) : "",
       atMs: Date.now()
     };
+    localLastActIdRef.current = entry.id;
+    lastPopupActIdRef.current = entry.id;
     setRecentActivities((prev) => {
       const top = prev[0];
       if (
@@ -5101,6 +5158,34 @@ function MainApp() {
               const acts = toSafeArray(d.data().items).slice(0, 30);
               setRecentActivities(acts);
               try { localStorage.setItem("kim_recent_activities_v1", JSON.stringify(acts)); } catch (e) {}
+              const latest = acts[0];
+              if (!activitySnapshotInitRef.current) {
+                activitySnapshotInitRef.current = true;
+                if (latest?.id) lastPopupActIdRef.current = latest.id;
+              } else if (
+                latest?.id &&
+                latest.id !== lastPopupActIdRef.current &&
+                latest.id !== localLastActIdRef.current &&
+                accessRole !== "guest" &&
+                activityPopupEnabled
+              ) {
+                const catTab = ACTIVITY_CAT_TAB_MAP[latest.category];
+                if (isAdminUnlocked || !catTab || canViewTab(catTab)) {
+                  lastPopupActIdRef.current = latest.id;
+                  setLiveActivityPopup(latest);
+                  if (activityPopupTimerRef.current) clearTimeout(activityPopupTimerRef.current);
+                  activityPopupTimerRef.current = setTimeout(() => {
+                    setLiveActivityPopup(null);
+                  }, 8000);
+                  if (typeof Notification !== "undefined" && Notification.permission === "granted") {
+                    try {
+                      new Notification(`[${latest.actor}] ${latest.category} ${latest.action}`, {
+                        body: latest.detail || "새로운 변경 사항이 있습니다."
+                      });
+                    } catch (e) {}
+                  }
+                }
+              }
             }
           });
         },
@@ -5273,6 +5358,23 @@ function MainApp() {
         () => {}
       )
     );
+
+    if (isAdminUnlocked) {
+      unsubscribers.push(
+        onSnapshot(
+          getColRef("family_baby_diary_v8"),
+          (snap) => {
+            const loaded = snap.docs
+              .map((d) => ({ id: d.id, ...d.data() }))
+              .sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")) || (b.createdAtMs || 0) - (a.createdAtMs || 0));
+            setBabyDiaryEntries(loaded);
+          },
+          () => {}
+        )
+      );
+    } else {
+      setBabyDiaryEntries([]);
+    }
 
     unsubscribers.push(
       onSnapshot(
@@ -8664,6 +8766,307 @@ ${validText}
     }
   };
 
+  const openDailyTodayAll = () => {
+    const today = getTodayStr();
+    setSelectedMember("전체");
+    setSelectedDate(today);
+    setCurrentMonth(today.slice(0, 7));
+    setActiveTab("daily");
+    setIsMoreNavOpen(false);
+    setTimeout(() => {
+      document.getElementById(`weekly-day-${today}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 180);
+  };
+
+  const handleOpenMealCopyModal = () => {
+    if (!requireEditorAccess("daily")) return;
+    const d = new Date(selectedDate + "T00:00:00");
+    d.setDate(d.getDate() - 1);
+    const prevStr = formatDate(d);
+    const prevMeals = meals.filter((m) => m.date === prevStr);
+    setCopyFromDate(prevStr);
+    setCopyToDate(selectedDate || getTodayStr());
+    setSelectedCopyMealIds(prevMeals.map((m) => m.id));
+    setCopyTargetStatus(selectedDate > getTodayStr() ? "planned" : "recorded");
+    setIsMealCopyModalOpen(true);
+  };
+
+  const handleExecuteSelectedMealCopy = async () => {
+    if (!requireEditorAccess("daily")) return;
+    const targets = meals.filter((m) => m.date === copyFromDate && selectedCopyMealIds.includes(m.id));
+    if (targets.length === 0) {
+      showToast("복사할 식단을 1개 이상 선택해 주세요.");
+      return;
+    }
+    if (!copyToDate) {
+      showToast("붙여넣을 날짜를 선택해 주세요.");
+      return;
+    }
+    if (!user || !db) {
+      showToast("⚠️ 서버 연결 후 복사할 수 있습니다.");
+      return;
+    }
+    beginWrite();
+    let ok = false;
+    try {
+      const batch = writeBatch(db);
+      const localUpdates = {};
+      targets.forEach((m, idx) => {
+        const nid = `m-${Date.now()}-${idx}-${Math.random().toString(36).slice(2, 5)}`;
+        const p = {
+          ...m,
+          id: nid,
+          date: copyToDate,
+          mealStatus: copyTargetStatus,
+          updatedAt: new Date().toISOString()
+        };
+        batch.set(getDocRef("family_meals_v3", nid), p);
+        batch.set(getDocRef("family_meals_v4", nid), p);
+        localUpdates[nid] = p;
+      });
+      await batch.commit();
+      setMealsMap((prev) => ({ ...prev, local: { ...(prev.local || {}), ...localUpdates } }));
+      recordActivity("식단", "선택복사", `${copyFromDate} → ${copyToDate} (${targets.length}끼)`, {
+        beforeText: `${copyFromDate} (${targets.map((t) => `${t.slot}:${t.menu}`).join(", ")})`,
+        afterText: `${copyToDate} (${targets.length}끼 ${copyTargetStatus === "planned" ? "계획" : "기록"})`
+      });
+      setIsMealCopyModalOpen(false);
+      setSelectedDate(copyToDate);
+      showToast(`📋 ${targets.length}끼 식단을 ${copyToDate}에 붙여넣었습니다!`);
+      ok = true;
+    } catch (e) {
+      showToast("⚠️ 식단 복사 실패");
+    } finally {
+      endWrite(ok);
+    }
+  };
+
+  const handleDiaryPhotoSelect = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const { previewUrl, base64, mimeType } = await fileToBase64(file, { maxSide: 800, quality: 0.72 });
+      const dataUrl = previewUrl || (base64 ? `data:${mimeType || "image/jpeg"};base64,${base64}` : "");
+      if (!dataUrl) {
+        showToast("⚠️ 사진을 읽을 수 없습니다.");
+        return;
+      }
+      setDiaryForm((prev) => ({ ...prev, photoUrl: dataUrl }));
+      showToast("📸 육아일기 사진이 첨부되었습니다!");
+    } catch (err) {
+      showToast("⚠️ 사진 처리 중 오류가 발생했습니다.");
+    } finally {
+      if (diaryPhotoInputRef.current) diaryPhotoInputRef.current.value = "";
+    }
+  };
+
+  const handleSaveBabyDiary = async () => {
+    if (!isAdminUnlocked) {
+      showToast("🔒 육아일기는 관리자만 작성·열람할 수 있습니다.");
+      return;
+    }
+    if (!diaryForm.content.trim() && !diaryForm.title.trim() && !diaryForm.photoUrl) {
+      showToast("제목, 내용 또는 사진 중 하나 이상 입력해 주세요.");
+      return;
+    }
+    if (!user || !db) {
+      showToast("⚠️ 서버 연결 후 저장할 수 있습니다.");
+      return;
+    }
+    const id = editingDiaryEntry ? editingDiaryEntry.id : `bd-${Date.now()}`;
+    const payload = {
+      id,
+      childId: selectedChildId,
+      date: diaryForm.date || getTodayStr(),
+      mood: diaryForm.mood || "😊 행복",
+      title: (diaryForm.title || "").trim(),
+      content: (diaryForm.content || "").trim(),
+      photoUrl: diaryForm.photoUrl || "",
+      author: actorName || "관리자",
+      createdAtMs: editingDiaryEntry?.createdAtMs || Date.now(),
+      updatedAt: new Date().toISOString()
+    };
+    beginWrite();
+    let ok = false;
+    try {
+      await setDoc(getDocRef("family_baby_diary_v8", id), payload);
+      setEditingDiaryEntry(null);
+      setDiaryForm({ date: getTodayStr(), mood: "😊 행복", title: "", content: "", photoUrl: "" });
+      recordActivity("육아", editingDiaryEntry ? "일기수정" : "일기등록", `${selectedChildId} · ${payload.date}`);
+      showToast("📖 육아일기가 저장되었습니다!");
+      ok = true;
+    } catch (e) {
+      showToast("⚠️ 육아일기 저장 실패 (사진 용량이 큰 경우 다시 시도해 주세요)");
+    } finally {
+      endWrite(ok);
+    }
+  };
+
+  const handleDeleteBabyDiary = async (id) => {
+    if (!isAdminUnlocked || !user || !db) return;
+    try {
+      await deleteDoc(getDocRef("family_baby_diary_v8", id));
+      showToast("육아일기가 삭제되었습니다.");
+    } catch (e) {
+      showToast("⚠️ 삭제 실패");
+    }
+  };
+
+  const handleExportDiaryCardImage = async (entry) => {
+    if (!entry) return;
+    const childMeta = CHILDREN_INFO.find((c) => c.id === entry.childId) || CHILDREN_INFO[1];
+    const birthD = new Date(childMeta.birthDate + "T00:00:00");
+    const entryD = new Date(String(entry.date || getTodayStr()).slice(0, 10) + "T00:00:00");
+    const dPlus = Math.max(1, Math.round((entryD - birthD) / 86400000) + 1);
+    const weekday = WEEKDAY_KO[entryD.getDay()] || "";
+
+    const W = 1080;
+    const padX = 76;
+    const maxTextW = W - padX * 2 - 48;
+
+    const loadImg = (src) =>
+      new Promise((resolve) => {
+        if (!src) return resolve(null);
+        const im = new Image();
+        im.onload = () => resolve(im);
+        im.onerror = () => resolve(null);
+        im.src = src;
+      });
+    const photoImg = await loadImg(entry.photoUrl);
+
+    // Pre-calculate text lines
+    const tmpCanvas = document.createElement("canvas");
+    const tCtx = tmpCanvas.getContext("2d");
+    tCtx.font = "500 32px sans-serif";
+    const wrapLines = (rawText) => {
+      const result = [];
+      String(rawText || "").split("\n").forEach((para) => {
+        if (!para) { result.push(""); return; }
+        let line = "";
+        for (const ch of para) {
+          const test = line + ch;
+          if (tCtx.measureText(test).width > maxTextW && line) {
+            result.push(line);
+            line = ch;
+          } else {
+            line = test;
+          }
+        }
+        if (line) result.push(line);
+      });
+      return result;
+    };
+    const bodyLines = wrapLines(entry.content || "");
+    const photoH = photoImg ? Math.min(620, Math.round((photoImg.height / photoImg.width) * (W - padX * 2 - 48))) : 0;
+    const H = Math.max(1320, 360 + (photoImg ? photoH + 56 : 0) + (entry.title ? 70 : 0) + bodyLines.length * 52 + 160);
+
+    const canvas = document.createElement("canvas");
+    canvas.width = W;
+    canvas.height = H;
+    const ctx = canvas.getContext("2d");
+
+    // Warm ivory paper background
+    ctx.fillStyle = "#FAF8F3";
+    ctx.fillRect(0, 0, W, H);
+
+    // Outer & inner sage/beige diary frame
+    ctx.strokeStyle = "#C9D8CC";
+    ctx.lineWidth = 6;
+    ctx.strokeRect(36, 36, W - 72, H - 72);
+    ctx.strokeStyle = "#E7E0D2";
+    ctx.lineWidth = 2;
+    ctx.strokeRect(50, 50, W - 100, H - 100);
+
+    // Top beige header band
+    ctx.fillStyle = "#F3EEE4";
+    ctx.fillRect(52, 52, W - 104, 156);
+
+    // Header date & child badge
+    ctx.fillStyle = "#35503C";
+    ctx.font = "bold 28px sans-serif";
+    ctx.fillText(`📖 ${childMeta.name}의 육아일기 · D+${dPlus.toLocaleString()}일`, padX, 112);
+
+    ctx.fillStyle = "#292524";
+    ctx.font = "bold 40px sans-serif";
+    ctx.fillText(`${entry.date} (${weekday})`, padX, 172);
+
+    if (entry.mood) {
+      ctx.font = "bold 30px sans-serif";
+      const moodW = ctx.measureText(entry.mood).width;
+      ctx.fillStyle = "#5E7A65";
+      ctx.fillText(entry.mood, W - padX - moodW, 168);
+    }
+
+    let curY = 258;
+    // Photo frame
+    if (photoImg) {
+      const boxW = W - padX * 2 - 48;
+      const boxX = (W - boxW) / 2;
+      const boxY = curY;
+      const r = 24;
+      ctx.save();
+      ctx.beginPath();
+      ctx.moveTo(boxX + r, boxY);
+      ctx.lineTo(boxX + boxW - r, boxY);
+      ctx.quadraticCurveTo(boxX + boxW, boxY, boxX + boxW, boxY + r);
+      ctx.lineTo(boxX + boxW, boxY + photoH - r);
+      ctx.quadraticCurveTo(boxX + boxW, boxY + photoH, boxX + boxW - r, boxY + photoH);
+      ctx.lineTo(boxX + r, boxY + photoH);
+      ctx.quadraticCurveTo(boxX, boxY + photoH, boxX, boxY + photoH - r);
+      ctx.lineTo(boxX, boxY + r);
+      ctx.quadraticCurveTo(boxX, boxY, boxX + r, boxY);
+      ctx.closePath();
+      ctx.clip();
+      ctx.drawImage(photoImg, boxX, boxY, boxW, photoH);
+      ctx.restore();
+      ctx.strokeStyle = "#D6D3D1";
+      ctx.lineWidth = 2;
+      ctx.strokeRect(boxX, boxY, boxW, photoH);
+      curY += photoH + 64;
+    }
+
+    // Diary Title
+    if (entry.title) {
+      ctx.fillStyle = "#1C1917";
+      ctx.font = "bold 38px sans-serif";
+      ctx.fillText(entry.title, padX + 24, curY);
+      curY += 66;
+    }
+
+    // Subtle ruled lines & diary body
+    ctx.fillStyle = "#44403C";
+    ctx.font = "500 32px sans-serif";
+    bodyLines.forEach((ln) => {
+      ctx.fillText(ln, padX + 24, curY);
+      ctx.strokeStyle = "#EFECE4";
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(padX + 24, curY + 14);
+      ctx.lineTo(W - padX - 24, curY + 14);
+      ctx.stroke();
+      curY += 52;
+    });
+
+    // Footer
+    ctx.fillStyle = "#78716C";
+    ctx.font = "bold 24px sans-serif";
+    ctx.fillText(`작성: ${entry.author || "엄마·아빠"}  |  수혁 · 아리나 · 시목 · 시율 ♡`, padX + 24, H - 86);
+
+    const pngUrl = canvas.toDataURL("image/png");
+    const fname = `육아일기_${childMeta.name}_${entry.date}.png`;
+    setDiaryExportFilename(fname);
+    setDiaryExportPreviewUrl(pngUrl);
+    try {
+      const a = document.createElement("a");
+      a.href = pngUrl;
+      a.download = fname;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    } catch (e) {}
+    showToast("🖼️ 예쁜 육아일기 한 장이 생성되었습니다!");
+  };
+
   const handleReuseMealsFromOffset = async (offsetDays) => {
     if (!requireEditorAccess("daily")) return;
     if (!user || !db) {
@@ -9990,13 +10393,7 @@ ${validText}
             actionColor: isDinnerPending ? "text-amber-700" : "text-stone-500",
             borderHover: "hover:border-stone-400",
             sub: <span className={targetMealObj ? "text-stone-600" : "text-stone-400"}>{mealPreviewText}</span>,
-            onClick: () => {
-              setSelectedDate(todayKey);
-              setActiveTab("daily");
-              setTimeout(() => {
-                document.getElementById(`weekly-day-${todayKey}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
-              }, 160);
-            }
+            onClick: openDailyTodayAll
           },
           routine_tab: {
             title: "🔄 반복 루틴",
@@ -11090,35 +11487,15 @@ ${validText}
               </button>
             </div>
 
-            {(() => {
-              const weekMeals = meals.filter((m) => weekDates.includes(m.date) && (selectedMember === "전체" || toSafeArray(m.members).includes(selectedMember)));
-              const recCnt = weekMeals.filter((m) => m.mealStatus !== "planned").length;
-              const planCnt = weekMeals.filter((m) => m.mealStatus === "planned").length;
-              const weekCost = weekMeals.reduce((acc, m) => acc + (Number(m.cost) || 0), 0);
-              return (
-                <div className="flex flex-wrap items-center justify-between gap-1.5 pt-1.5 border-t border-stone-100">
-                  <div className="text-[10px] font-extrabold text-stone-700 bg-[#F3EEE4] px-2.5 py-1 rounded-lg">
-                    7일 요약: 기록 {recCnt}끼 · 계획 {planCnt}끼{weekCost > 0 ? ` · ${weekCost.toLocaleString()}원` : ""}
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <button
-                      type="button"
-                      onClick={() => handleReuseMealsFromOffset(-1)}
-                      className="px-2 py-1 rounded-lg bg-[#EEF3EE] hover:bg-[#DFE9E0] text-[#35503C] border border-[#C9D8CC] text-[10px] font-extrabold"
-                    >
-                      ↺ 어제 식단 복사
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleReuseMealsFromOffset(-7)}
-                      className="px-2 py-1 rounded-lg bg-[#EEF3EE] hover:bg-[#DFE9E0] text-[#35503C] border border-[#C9D8CC] text-[10px] font-extrabold"
-                    >
-                      ↺ 지난주 복사
-                    </button>
-                  </div>
-                </div>
-              );
-            })()}
+            <div className="pt-1">
+              <button
+                type="button"
+                onClick={handleOpenMealCopyModal}
+                className="w-full py-2 px-3 rounded-xl bg-[#EEF3EE] hover:bg-[#DFE9E0] text-[#35503C] border border-[#C9D8CC] text-xs font-extrabold flex items-center justify-center gap-1.5"
+              >
+                <span>📋 식단 복사하기 (원하는 끼니·날짜 선택)</span>
+              </button>
+            </div>
 
           </div>
 
@@ -15185,13 +15562,14 @@ ${validText}
               })}
             </div>
 
-            {/* 육아수첩 4개 서브 탭 */}
-            <div className="grid grid-cols-4 gap-1 bg-stone-200 p-1 rounded-2xl">
+            {/* 육아수첩 서브 탭 (육아일기는 관리자 전용) */}
+            <div className={`grid ${isAdminUnlocked ? "grid-cols-5" : "grid-cols-4"} gap-1 bg-stone-200 p-1 rounded-2xl`}>
               {[
                 { id: "milestones", label: "🌱 발달" },
                 { id: "vaccines", label: "💉 접종·검진" },
                 { id: "growth", label: "📏 성장기록" },
-                { id: "medical", label: "🩺 진료·열" }
+                { id: "medical", label: "🩺 진료·열" },
+                ...(isAdminUnlocked ? [{ id: "diary", label: "📖 일기" }] : [])
               ].map((st) => (
                 <button
                   key={st.id}
@@ -15631,6 +16009,183 @@ ${validText}
                 )}
               </div>
             )}
+
+            {babySubTab === "diary" && (
+              !isAdminUnlocked ? (
+                renderLockedTabScreen("📖 육아일기 (관리자 전용)")
+              ) : (
+                <div className="space-y-3">
+                  <div className="bg-white p-3.5 rounded-2xl border border-stone-200 shadow-sm space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-black text-stone-900">
+                        📖 {activeChild.name} 육아일기 {editingDiaryEntry ? "수정" : "작성"} (관리자 전용)
+                      </span>
+                      {editingDiaryEntry && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditingDiaryEntry(null);
+                            setDiaryForm({ date: getTodayStr(), mood: "😊 행복", title: "", content: "", photoUrl: "" });
+                          }}
+                          className="text-[10px] font-extrabold text-stone-500 underline"
+                        >
+                          새 일기로
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <input
+                        type="date"
+                        value={diaryForm.date}
+                        onChange={(e) => setDiaryForm((p) => ({ ...p, date: e.target.value }))}
+                        className="px-3 py-2 rounded-xl border border-stone-200 bg-stone-50 text-xs font-bold"
+                      />
+                      <select
+                        value={diaryForm.mood}
+                        onChange={(e) => setDiaryForm((p) => ({ ...p, mood: e.target.value }))}
+                        className="px-3 py-2 rounded-xl border border-stone-200 bg-stone-50 text-xs font-bold"
+                      >
+                        {["😊 행복", "🥰 감동", "😴 잘잠", "🍼 잘먹음", "🤒 컨디션관리", "🎉 첫성공"].map((md) => (
+                          <option key={md} value={md}>{md}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <input
+                      type="text"
+                      placeholder="오늘의 한 줄 제목 (예: 처음으로 뒤집기 성공!)"
+                      value={diaryForm.title}
+                      onChange={(e) => setDiaryForm((p) => ({ ...p, title: e.target.value }))}
+                      className="w-full px-3 py-2 rounded-xl border border-stone-200 text-xs font-bold"
+                    />
+                    <textarea
+                      rows={4}
+                      placeholder={`${activeChild.name}의 오늘 기록을 자유롭게 남겨보세요...`}
+                      value={diaryForm.content}
+                      onChange={(e) => setDiaryForm((p) => ({ ...p, content: e.target.value }))}
+                      className="w-full px-3 py-2 rounded-xl border border-stone-200 text-xs leading-relaxed"
+                    />
+
+                    <div className="flex items-center gap-2">
+                      <input
+                        ref={diaryPhotoInputRef}
+                        type="file"
+                        accept="image/*"
+                        onChange={handleDiaryPhotoSelect}
+                        className="hidden"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => diaryPhotoInputRef.current?.click()}
+                        className="px-3 py-2 rounded-xl bg-[#F3EEE4] hover:bg-stone-200 text-stone-800 text-xs font-extrabold flex items-center gap-1.5"
+                      >
+                        <Camera className="w-3.5 h-3.5" />
+                        <span>{diaryForm.photoUrl ? "사진 변경" : "사진 첨부"}</span>
+                      </button>
+                      {diaryForm.photoUrl && (
+                        <button
+                          type="button"
+                          onClick={() => setDiaryForm((p) => ({ ...p, photoUrl: "" }))}
+                          className="px-2.5 py-2 rounded-xl bg-rose-50 text-rose-700 text-xs font-bold"
+                        >
+                          사진 제거
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={handleSaveBabyDiary}
+                        className="ml-auto px-4 py-2 rounded-xl bg-[#5E7A65] hover:bg-[#4E6855] text-white text-xs font-extrabold"
+                      >
+                        💾 일기 저장
+                      </button>
+                    </div>
+
+                    {diaryForm.photoUrl && (
+                      <div className="rounded-2xl overflow-hidden border border-stone-200 bg-stone-50">
+                        <img src={diaryForm.photoUrl} alt="첨부 미리보기" className="w-full max-h-56 object-cover" />
+                      </div>
+                    )}
+                  </div>
+
+                  {babyDiaryEntries.filter((d) => d.childId === activeChild.id).length === 0 ? (
+                    renderStatusState({
+                      type: "empty",
+                      title: `${activeChild.name}의 첫 육아일기를 남겨보세요`,
+                      description: "사진과 함께 오늘의 소중한 순간을 기록하고 예쁜 일기장 한 장으로 저장할 수 있습니다."
+                    })
+                  ) : (
+                    <div className="space-y-2.5">
+                      {babyDiaryEntries
+                        .filter((d) => d.childId === activeChild.id)
+                        .map((entry) => (
+                          <div
+                            key={entry.id}
+                            className="bg-[#FAF8F3] border border-[#C9D8CC] rounded-2xl p-3.5 shadow-sm space-y-2"
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="px-2 py-0.5 rounded-lg bg-[#EEF3EE] text-[#35503C] text-[10px] font-black">
+                                  {entry.date}
+                                </span>
+                                {entry.mood && (
+                                  <span className="px-2 py-0.5 rounded-lg bg-white border border-stone-200 text-[10px] font-bold">
+                                    {entry.mood}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <button
+                                  type="button"
+                                  onClick={() => handleExportDiaryCardImage(entry)}
+                                  className="px-2.5 py-1 rounded-lg bg-[#5E7A65] hover:bg-[#4E6855] text-white text-[10px] font-extrabold"
+                                >
+                                  🖼️ 한 장 내보내기
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setEditingDiaryEntry(entry);
+                                    setDiaryForm({
+                                      date: entry.date || getTodayStr(),
+                                      mood: entry.mood || "😊 행복",
+                                      title: entry.title || "",
+                                      content: entry.content || "",
+                                      photoUrl: entry.photoUrl || ""
+                                    });
+                                  }}
+                                  className="p-1 text-stone-400 hover:text-stone-700"
+                                >
+                                  <Edit2 className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteBabyDiary(entry.id)}
+                                  className="p-1 text-stone-400 hover:text-rose-600"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </div>
+                            {entry.photoUrl && (
+                              <div className="rounded-xl overflow-hidden border border-stone-200 bg-white">
+                                <img src={entry.photoUrl} alt={entry.title || "육아일기 사진"} className="w-full max-h-64 object-cover" />
+                              </div>
+                            )}
+                            {entry.title && <div className="text-sm font-black text-stone-900">{entry.title}</div>}
+                            {entry.content && (
+                              <div className="text-xs text-stone-700 whitespace-pre-wrap leading-relaxed">{entry.content}</div>
+                            )}
+                            <div className="text-[10px] font-bold text-stone-400 text-right">
+                              작성: {entry.author || "관리자"}
+                            </div>
+                          </div>
+                        ))}
+                    </div>
+                  )}
+                </div>
+              )
+            )}
           </div>
         );
       })()}
@@ -15835,8 +16390,12 @@ ${validText}
                 <button
                   key={m.id}
                   onClick={() => {
-                    setActiveTab(m.id);
-                    setIsMoreNavOpen(false);
+                    if (m.id === "daily") {
+                      openDailyTodayAll();
+                    } else {
+                      setActiveTab(m.id);
+                      setIsMoreNavOpen(false);
+                    }
                   }}
                   className={`py-3 px-2 rounded-2xl border text-xs font-extrabold flex flex-col items-center gap-1 ${
                     activeTab === m.id
@@ -15868,9 +16427,13 @@ ${validText}
             <button
               key={item.id}
               onClick={() => {
-                setActiveTab(item.id);
-                setIsMoreNavOpen(false);
-                window.scrollTo({ top: 0, behavior: "instant" });
+                if (item.id === "daily") {
+                  openDailyTodayAll();
+                } else {
+                  setActiveTab(item.id);
+                  setIsMoreNavOpen(false);
+                  window.scrollTo({ top: 0, behavior: "instant" });
+                }
               }}
               className={`flex flex-col items-center justify-center py-1.5 rounded-xl transition ${
                 active ? "text-[#35503C] font-black bg-[#EEF3EE]" : "text-stone-400 font-semibold"
@@ -18425,6 +18988,269 @@ ${validText}
         </div>
       )}
 
+      {liveActivityPopup && (
+        <div className="fixed top-3 left-1/2 -translate-x-1/2 z-50 w-[92%] max-w-sm bg-white border-2 border-[#5E7A65] rounded-2xl shadow-2xl p-3 space-y-2">
+          <div className="flex items-start justify-between gap-2">
+            <div className="flex items-center gap-1.5 min-w-0">
+              <span className="w-6 h-6 rounded-full bg-[#EEF3EE] text-[#35503C] flex items-center justify-center shrink-0">
+                <Bell className="w-3.5 h-3.5" />
+              </span>
+              <div className="min-w-0">
+                <div className="text-[11px] font-black text-stone-900 truncate">
+                  [{liveActivityPopup.actor}] {liveActivityPopup.category} {liveActivityPopup.action}
+                </div>
+                {liveActivityPopup.detail && (
+                  <div className="text-[11px] text-stone-700 truncate">{liveActivityPopup.detail}</div>
+                )}
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setLiveActivityPopup(null)}
+              className="text-stone-400 hover:text-stone-700 shrink-0"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+          <div className="flex items-center justify-end gap-1.5">
+            <button
+              type="button"
+              onClick={() => {
+                const nowMs = Date.now();
+                setLastSeenActivityMs(nowMs);
+                try { localStorage.setItem("kim_last_seen_activity_ms_v1", String(nowMs)); } catch (e) {}
+                setLiveActivityPopup(null);
+              }}
+              className="px-2.5 py-1 rounded-lg bg-stone-100 text-stone-700 text-[10px] font-extrabold"
+            >
+              확인
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                const nowMs = Date.now();
+                setLastSeenActivityMs(nowMs);
+                try { localStorage.setItem("kim_last_seen_activity_ms_v1", String(nowMs)); } catch (e) {}
+                setLiveActivityPopup(null);
+                setIsActivityModalOpen(true);
+              }}
+              className="px-2.5 py-1 rounded-lg bg-[#5E7A65] text-white text-[10px] font-extrabold"
+            >
+              내역 보기
+            </button>
+          </div>
+        </div>
+      )}
+
+      {isMealCopyModalOpen && (() => {
+        const srcMeals = meals.filter((m) => m.date === copyFromDate);
+        const shiftDay = (baseStr, delta) => {
+          const d = new Date(baseStr + "T00:00:00");
+          d.setDate(d.getDate() + delta);
+          return formatDate(d);
+        };
+        const setFromAndSelect = (nextDate) => {
+          setCopyFromDate(nextDate);
+          setSelectedCopyMealIds(meals.filter((m) => m.date === nextDate).map((m) => m.id));
+        };
+        return (
+          <div
+            className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+            onClick={() => setIsMealCopyModalOpen(false)}
+          >
+            <div
+              className="bg-white rounded-3xl max-w-md w-full p-5 space-y-3.5 max-h-[88vh] flex flex-col shadow-xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-black text-stone-900">📋 식단 골라서 복사하기</h3>
+                <button type="button" onClick={() => setIsMealCopyModalOpen(false)}>
+                  <X className="w-5 h-5 text-stone-400" />
+                </button>
+              </div>
+
+              <div className="p-3 rounded-2xl bg-[#FAF8F3] border border-stone-200 space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs font-black text-stone-900">1. 복사할 날짜 · 끼니 선택</span>
+                  <input
+                    type="date"
+                    value={copyFromDate}
+                    onChange={(e) => e.target.value && setFromAndSelect(e.target.value)}
+                    className="px-2 py-1 rounded-lg border border-stone-200 bg-white text-[11px] font-bold"
+                  />
+                </div>
+                <div className="flex flex-wrap gap-1">
+                  {[
+                    { label: "어제", date: shiftDay(getTodayStr(), -1) },
+                    { label: "오늘", date: getTodayStr() },
+                    { label: "지난주 오늘", date: shiftDay(getTodayStr(), -7) }
+                  ].map((q) => (
+                    <button
+                      key={q.label}
+                      type="button"
+                      onClick={() => setFromAndSelect(q.date)}
+                      className={`px-2.5 py-1 rounded-lg text-[10px] font-extrabold border ${
+                        copyFromDate === q.date
+                          ? "bg-stone-900 text-white border-stone-900"
+                          : "bg-white text-stone-600 border-stone-200"
+                      }`}
+                    >
+                      {q.label}
+                    </button>
+                  ))}
+                  {srcMeals.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setSelectedCopyMealIds(
+                          selectedCopyMealIds.length === srcMeals.length ? [] : srcMeals.map((m) => m.id)
+                        )
+                      }
+                      className="ml-auto px-2 py-1 rounded-lg bg-[#EEF3EE] text-[#35503C] text-[10px] font-extrabold"
+                    >
+                      {selectedCopyMealIds.length === srcMeals.length ? "전체 해제" : "전체 선택"}
+                    </button>
+                  )}
+                </div>
+
+                <div className="max-h-40 overflow-y-auto space-y-1">
+                  {srcMeals.length === 0 ? (
+                    <div className="py-4 text-center text-[11px] font-bold text-stone-400">
+                      {copyFromDate}에 등록된 식단이 없습니다.
+                    </div>
+                  ) : (
+                    srcMeals.map((m) => {
+                      const checked = selectedCopyMealIds.includes(m.id);
+                      return (
+                        <button
+                          key={m.id}
+                          type="button"
+                          onClick={() =>
+                            setSelectedCopyMealIds((prev) =>
+                              checked ? prev.filter((id) => id !== m.id) : [...prev, m.id]
+                            )
+                          }
+                          className={`w-full p-2 rounded-xl border text-left flex items-center gap-2 transition ${
+                            checked
+                              ? "bg-[#EEF3EE] border-[#5E7A65] text-stone-900"
+                              : "bg-white border-stone-200 text-stone-500"
+                          }`}
+                        >
+                          <span
+                            className={`w-4 h-4 rounded flex items-center justify-center text-[10px] font-black shrink-0 ${
+                              checked ? "bg-[#5E7A65] text-white" : "border border-stone-300 bg-white"
+                            }`}
+                          >
+                            {checked ? "✓" : ""}
+                          </span>
+                          <span className="text-[10px] font-black text-stone-500 shrink-0">{m.slot}</span>
+                          <span className="text-xs font-extrabold truncate flex-1">{m.menu}</span>
+                          <span className="text-[10px] font-bold text-stone-400 shrink-0">
+                            {toSafeArray(m.members).join(",")}
+                          </span>
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+
+              <div className="p-3 rounded-2xl bg-[#F3EEE4]/60 border border-stone-200 space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs font-black text-stone-900">2. 붙여넣을 날짜 선택</span>
+                  <input
+                    type="date"
+                    value={copyToDate}
+                    onChange={(e) => e.target.value && setCopyToDate(e.target.value)}
+                    className="px-2 py-1 rounded-lg border border-stone-200 bg-white text-[11px] font-bold"
+                  />
+                </div>
+                <div className="flex flex-wrap gap-1">
+                  {[
+                    { label: "오늘", date: getTodayStr() },
+                    { label: "내일", date: shiftDay(getTodayStr(), 1) },
+                    { label: "+2일", date: shiftDay(getTodayStr(), 2) },
+                    { label: "다음주 오늘", date: shiftDay(getTodayStr(), 7) }
+                  ].map((q) => (
+                    <button
+                      key={q.label}
+                      type="button"
+                      onClick={() => setCopyToDate(q.date)}
+                      className={`px-2.5 py-1 rounded-lg text-[10px] font-extrabold border ${
+                        copyToDate === q.date
+                          ? "bg-stone-900 text-white border-stone-900"
+                          : "bg-white text-stone-600 border-stone-200"
+                      }`}
+                    >
+                      {q.label}
+                    </button>
+                  ))}
+                </div>
+                <div className="flex gap-1 bg-white p-1 rounded-xl border border-stone-200">
+                  {[
+                    { id: "planned", label: "📅 계획 식단으로 넣기" },
+                    { id: "recorded", label: "📝 실제 기록으로 넣기" }
+                  ].map((st) => (
+                    <button
+                      key={st.id}
+                      type="button"
+                      onClick={() => setCopyTargetStatus(st.id)}
+                      className={`flex-1 py-1 rounded-lg text-[10px] font-extrabold ${
+                        copyTargetStatus === st.id ? "bg-[#5E7A65] text-white" : "text-stone-500"
+                      }`}
+                    >
+                      {st.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleExecuteSelectedMealCopy}
+                className="w-full py-2.5 rounded-xl bg-[#5E7A65] hover:bg-[#4E6855] text-white text-xs font-extrabold"
+              >
+                📋 선택한 {selectedCopyMealIds.length}끼 ({copyToDate})에 붙여넣기
+              </button>
+            </div>
+          </div>
+        );
+      })()}
+
+      {diaryExportPreviewUrl && (
+        <div
+          className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4"
+          onClick={() => setDiaryExportPreviewUrl("")}
+        >
+          <div
+            className="bg-white rounded-3xl max-w-sm w-full p-4 space-y-3 shadow-2xl max-h-[90vh] flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-black text-stone-900">🖼️ 예쁜 육아일기 한 장</h3>
+              <button type="button" onClick={() => setDiaryExportPreviewUrl("")}>
+                <X className="w-5 h-5 text-stone-400" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto rounded-2xl border border-stone-200 bg-[#FAF8F3]">
+              <img src={diaryExportPreviewUrl} alt="육아일기 내보내기" className="w-full h-auto block" />
+            </div>
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[10px] font-bold text-stone-500">
+                이미지를 길게 눌러 사진첩에 저장할 수도 있어요
+              </span>
+              <a
+                href={diaryExportPreviewUrl}
+                download={diaryExportFilename}
+                className="px-3 py-1.5 rounded-xl bg-[#5E7A65] text-white text-xs font-extrabold shrink-0"
+              >
+                다운로드
+              </a>
+            </div>
+          </div>
+        </div>
+      )}
+
       {isActivityModalOpen && (
         <div
           className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
@@ -18440,6 +19266,25 @@ ${validText}
                 최근 수정 알림 내역 ({visibleRecentActivities.length}건)
               </h3>
               <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const nextVal = !activityPopupEnabled;
+                    setActivityPopupEnabled(nextVal);
+                    try { localStorage.setItem("kim_activity_popup_enabled_v1", String(nextVal)); } catch (e) {}
+                    if (nextVal && typeof Notification !== "undefined" && Notification.permission === "default") {
+                      Notification.requestPermission().catch(() => {});
+                    }
+                    showToast(nextVal ? "🔔 새 수정 알림 팝업이 켜졌습니다." : "🔕 새 수정 알림 팝업이 꺼졌습니다.");
+                  }}
+                  className={`px-2 py-1 rounded-lg text-[10px] font-extrabold border ${
+                    activityPopupEnabled
+                      ? "bg-[#EEF3EE] text-[#35503C] border-[#C9D8CC]"
+                      : "bg-stone-100 text-stone-500 border-stone-200"
+                  }`}
+                >
+                  {activityPopupEnabled ? "🔔 팝업 ON" : "🔕 팝업 OFF"}
+                </button>
                 {isAdminUnlocked && recentActivities.length > 0 && (
                   <button
                     type="button"
