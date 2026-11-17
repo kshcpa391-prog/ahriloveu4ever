@@ -1212,7 +1212,7 @@ const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.65) =>
     img.src = dataUrl;
   });
 
-const APP_CODE_VERSION = "v11.60";
+const APP_CODE_VERSION = "v11.62";
 
 const formatRoutineTimeLabel = (hhmm) => {
   const m = String(hhmm || "").trim().match(/^(\d{2}):(\d{2})$/);
@@ -1228,7 +1228,7 @@ const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-const APP_BUILD_DATE = "2026-11-17 23:28";
+const APP_BUILD_DATE = "2026-11-18 06:25";
 const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1290,6 +1290,27 @@ const formatTime12Ko = (ms) => {
 };
 
 const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v11.62",
+    version: "v11.62",
+    date: "2026-11-18",
+    title: "홈 시간대 바 줄바꿈 안전화 · 냉장고 [⏰ 임박만(N)] 건수 표시 & 전체 구문·JSX 재검증",
+    changes: [
+      "시각화·편의성 개선: 냉장고 [⏰ 임박만] 버튼에 임박 재료 건수 실시간 표시, 홈 시간대·브리핑 바 flex-wrap 안전 배치 적용",
+      "배포 재검증: V8(node --check) 종료코드 0 · JSX 태그/프래그먼트 불일치 0건 · 중복 선언 0건 최종 확인"
+    ]
+  },
+  {
+    id: "patch-v11.61",
+    version: "v11.61",
+    date: "2026-11-18",
+    title: "홈 수유시간 줄바꿈 해소 · 홈 가독성 정돈 · 냉장고 버튼 줄바꿈 수정 & [⏰ 임박만] 필터",
+    changes: [
+      "홈 화면 정돈: 수유·기저귀·수면 경과 시간에 whitespace-nowrap 적용해 '2시간 32분 전' 줄바꿈 완전 해소, 케어 카드 제목 간소화 및 시간대 바 여백 정돈",
+      "냉장고 줄바꿈 수정: 상단 위치 탭·[+ 재료 추가]·[칸별 뷰]·하단 4종 액션 버튼(반만먹음·다먹음·+장보기·폐기) 크기·줄바꿈 정돈",
+      "편의성 개선: 냉장고 리스트 뷰에 [⏰ 임박만] 1탭 필터 버튼 추가"
+    ]
+  },
   {
     id: "patch-v11.60",
     version: "v11.60",
@@ -12136,7 +12157,7 @@ ${validText}
         </div>
 
         {activeTab === "home" && (
-          <div className="relative h-36 sm:h-40 rounded-2xl overflow-hidden mb-2 border border-stone-200 shadow-sm bg-gradient-to-r from-amber-100 via-stone-100 to-rose-100">
+          <div className="relative h-32 sm:h-36 rounded-2xl overflow-hidden mb-2 border border-stone-200 shadow-sm bg-gradient-to-r from-amber-100 via-stone-100 to-rose-100">
             <img
               src={HERO_FAMILY_FALLBACK}
               alt="수혁 아리나 시목 시율 가족사진"
@@ -12272,11 +12293,11 @@ ${validText}
                 setActiveTab("baby");
                 setTimeout(() => activityTopRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 120);
               }}
-              className="mt-2 bg-[#FAF8F3] hover:bg-stone-100/80 border border-[#C9D8CC] rounded-2xl p-2.5 cursor-pointer transition space-y-2"
+              className="mt-2 bg-white hover:bg-stone-50/70 border border-stone-200 rounded-2xl p-2.5 cursor-pointer transition space-y-2 shadow-sm"
               title="눌러서 시율이 수유·기저귀·수면 기록으로 이동"
             >
               <div className="flex items-center justify-between gap-1 text-[11.5px] font-black text-[#35503C]">
-                <span className="truncate">👶 시율 실시간 케어 현황 (시작시간 기준)</span>
+                <span className="truncate font-black text-stone-900">👶 시율 케어 현황</span>
                 <div className="flex items-center gap-1.5 shrink-0">
                   {(() => {
                     const running = sum.list.find((a) => a.inProgress);
@@ -12294,7 +12315,7 @@ ${validText}
               <div className="grid grid-cols-3 gap-1.5 text-center">
                 <div className="bg-white rounded-xl py-1.5 px-1 border border-stone-200/80 border-t-2 border-t-amber-600">
                   <div className="text-[10.5px] font-bold text-stone-400">마지막 기저귀</div>
-                  <div className="text-[12.5px] font-black text-amber-800 mt-0.5">
+                  <div className="text-[11px] font-black text-amber-800 mt-0.5 whitespace-nowrap">
                     {sum.lastDiaper ? formatElapsedKo(nowMs - sum.lastDiaper.startMs) : "-"}
                   </div>
                   <div className="text-[10.5px] font-bold text-stone-500">
@@ -12303,7 +12324,7 @@ ${validText}
                 </div>
                 <div className="bg-white rounded-xl py-1.5 px-1 border border-stone-200/80 border-t-2 border-t-rose-500">
                   <div className="text-[10.5px] font-bold text-stone-400">마지막 수유</div>
-                  <div className={`text-[12.5px] font-black mt-0.5 ${feedMeta ? feedMeta.text : "text-stone-800"}`}>
+                  <div className={`text-[11px] font-black mt-0.5 whitespace-nowrap ${feedMeta ? feedMeta.text : "text-stone-800"}`}>
                     {sum.lastFeed ? `${feedMeta?.emoji || ""} ${formatElapsedKo(nowMs - sum.lastFeed.startMs)}` : "-"}
                   </div>
                   {(() => {
@@ -12319,7 +12340,7 @@ ${validText}
                 </div>
                 <div className="bg-white rounded-xl py-1.5 px-1 border border-stone-200/80 border-t-2 border-t-indigo-500">
                   <div className="text-[10.5px] font-bold text-stone-400">마지막 수면</div>
-                  <div className="text-[12.5px] font-black text-indigo-700 mt-0.5">
+                  <div className="text-[11px] font-black text-indigo-700 mt-0.5 whitespace-nowrap">
                     {sum.lastSleep ? formatElapsedKo(nowMs - sum.lastSleep.startMs) : "-"}
                   </div>
                   <div className="text-[10.5px] font-bold text-stone-500">
@@ -12777,7 +12798,7 @@ ${validText}
                       </div>
                     );
                   })()}
-                  <div className="flex items-center justify-between gap-1.5">
+                  <div className="flex items-center justify-between gap-1.5 flex-wrap">
                     <span className="text-[13.5px] font-black text-stone-900 truncate">
                       🔄 {homeRoutineSlotFilter === "auto" ? `지금(${curSlot}) 루틴` : homeRoutineSlotFilter === "전체" ? "오늘 남은 루틴" : `${homeRoutineSlotFilter} 루틴`} ({visibleRoutineList.length}건)
                     </span>
@@ -13095,7 +13116,7 @@ ${validText}
                     key={m.id}
                     type="button"
                     onClick={() => setHomeTimeModeOverride(m.id)}
-                    className={`px-2 py-0.5 rounded-full text-[11.5px] font-extrabold border whitespace-nowrap transition shrink-0 ${
+                    className={`px-2 py-0.5 rounded-full text-[10.5px] font-extrabold border whitespace-nowrap transition shrink-0 ${
                       homeTimeModeOverride === m.id
                         ? "bg-stone-900 text-white border-stone-900"
                         : "bg-white text-stone-600 border-stone-200"
@@ -13110,7 +13131,7 @@ ${validText}
                 <button
                   type="button"
                   onClick={handleCopyTodayBriefing}
-                  className="px-2 py-0.5 rounded-full text-[11.5px] font-extrabold border bg-[#EEF3EE] text-[#35503C] border-[#C9D8CC] whitespace-nowrap shrink-0"
+                  className="px-2 py-0.5 rounded-full text-[10.5px] font-extrabold border bg-[#EEF3EE] text-[#35503C] border-[#C9D8CC] whitespace-nowrap shrink-0"
                   title="오늘 날씨·식단·일정·장보기 브리핑 복사"
                 >
                   📋 브리핑
@@ -16050,7 +16071,7 @@ ${validText}
                   <button
                     key={loc}
                     onClick={() => setFridgeLocFilter(loc)}
-                    className={`px-2 py-1 rounded-lg text-[12.5px] font-extrabold whitespace-nowrap transition ${
+                    className={`px-2 py-1 rounded-lg text-[11px] font-extrabold whitespace-nowrap transition ${
                       isActive
                         ? "bg-white text-stone-900 shadow-sm"
                         : "text-stone-600"
@@ -16063,7 +16084,7 @@ ${validText}
             </div>
             <button
               onClick={openAddFridgeModal}
-              className="px-3 py-2 rounded-xl bg-stone-900 text-white text-[13.5px] font-extrabold flex items-center gap-1 shrink-0"
+              className="px-2.5 py-1.5 rounded-xl bg-stone-900 text-white text-[11.5px] font-extrabold flex items-center gap-1 shrink-0 whitespace-nowrap"
             >
               <Plus className="w-3.5 h-3.5" /> 재료 추가
             </button>
@@ -16072,7 +16093,7 @@ ${validText}
           <div className="flex items-center justify-between gap-2 bg-stone-100 p-1 rounded-xl">
             <button
               onClick={() => { setFridgeViewMode("list"); setBulkMoveMode(false); setSelectedBulkFridgeIds([]); }}
-              className={`flex-1 py-1.5 rounded-lg text-[13.5px] font-extrabold transition ${
+              className={`flex-1 py-1.5 rounded-lg text-[12px] font-extrabold whitespace-nowrap transition ${
                 fridgeViewMode === "list" ? "bg-white text-stone-900 shadow-sm" : "text-stone-500"
               }`}
             >
@@ -16080,11 +16101,11 @@ ${validText}
             </button>
             <button
               onClick={() => setFridgeViewMode("visual")}
-              className={`flex-1 py-1.5 rounded-lg text-[13.5px] font-extrabold transition ${
+              className={`flex-1 py-1.5 rounded-lg text-[12px] font-extrabold whitespace-nowrap transition ${
                 fridgeViewMode === "visual" ? "bg-white text-stone-900 shadow-sm" : "text-stone-500"
               }`}
             >
-              🗂️ 냉장고 시각적 구성 뷰
+              🗂️ 냉장고 칸별 뷰
             </button>
           </div>
 
@@ -16124,15 +16145,28 @@ ${validText}
               )}
             </div>
             {fridgeViewMode === "list" && (
-              <select
-                value={fridgeSort}
-                onChange={(e) => setFridgeSort(e.target.value)}
-                className="px-2.5 py-2 rounded-xl border border-stone-200 bg-white text-[13.5px] font-extrabold text-stone-700 shrink-0"
-              >
-                <option value="expiry">임박순</option>
-                <option value="recent">최신순</option>
-                <option value="name">이름순</option>
-              </select>
+              <div className="flex items-center gap-1 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setVisualExpiringOnly((v) => !v)}
+                  className={`px-2 py-2 rounded-xl border text-[11px] font-extrabold whitespace-nowrap ${
+                    visualExpiringOnly
+                      ? "bg-orange-600 text-white border-orange-600"
+                      : "bg-white text-orange-700 border-orange-200"
+                  }`}
+                >
+                  ⏰ 임박만{expiringItems.length > 0 ? ` (${expiringItems.length})` : ""}
+                </button>
+                <select
+                  value={fridgeSort}
+                  onChange={(e) => setFridgeSort(e.target.value)}
+                  className="px-2 py-2 rounded-xl border border-stone-200 bg-white text-[11.5px] font-extrabold text-stone-700 shrink-0"
+                >
+                  <option value="expiry">임박순</option>
+                  <option value="recent">최신순</option>
+                  <option value="name">이름순</option>
+                </select>
+              </div>
             )}
           </div>
 
@@ -16551,29 +16585,29 @@ ${validText}
                       </div>
 
                       <div className="flex items-center justify-between pt-1.5 border-t border-stone-100 gap-1">
-                        <div className="flex items-center gap-1 flex-nowrap">
+                        <div className="flex items-center gap-1 flex-wrap">
                           <button
                             onClick={() => handleHalfEatFridgeItem(item)}
-                            className="px-2 py-1 rounded-lg bg-[#EEF3EE] hover:bg-[#DFE9E0] text-[#35503C] border border-[#C9D8CC] text-[12.5px] font-extrabold whitespace-nowrap"
+                            className="px-2 py-1 rounded-lg bg-[#EEF3EE] hover:bg-[#DFE9E0] text-[#35503C] border border-[#C9D8CC] text-[11px] px-1.5 font-extrabold whitespace-nowrap"
                             title="수량 0.5(또는 절반) 차감"
                           >
                             🌗 반만먹음
                           </button>
                           <button
                             onClick={() => handleConsumeFridgeItem(item, false)}
-                            className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[12.5px] font-extrabold flex items-center gap-1 whitespace-nowrap"
+                            className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] px-1.5 font-extrabold flex items-center gap-1 whitespace-nowrap"
                           >
                             <Check className="w-3 h-3 shrink-0" /> 다 먹음
                           </button>
                           <button
                             onClick={() => handleConsumeFridgeItem(item, true)}
-                            className="px-2 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 text-[12.5px] font-extrabold whitespace-nowrap"
+                            className="px-2 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 text-[11px] px-1.5 font-extrabold whitespace-nowrap"
                           >
                             + 장보기
                           </button>
                           <button
                             onClick={() => handleWasteFridgeItem(item)}
-                            className="px-2 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-800 border border-rose-200 text-[12.5px] font-extrabold whitespace-nowrap"
+                            className="px-2 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-800 border border-rose-200 text-[11px] px-1.5 font-extrabold whitespace-nowrap"
                             title="폐기 처리 및 손실 기록"
                           >
                             🗑️ 폐기
@@ -18603,7 +18637,7 @@ ${validText}
                     <div className="grid grid-cols-3 gap-1.5 pt-1 border-t border-stone-100 text-center">
                       <div className="bg-[#FAF8F3] rounded-xl py-2 px-1 border border-stone-200">
                         <div className="text-[11.5px] font-bold text-stone-400">마지막 기저귀</div>
-                        <div className="text-[13.5px] font-black text-amber-800 mt-0.5">
+                        <div className="text-[12px] font-black text-amber-800 mt-0.5 whitespace-nowrap">
                           {sum.lastDiaper ? formatElapsedKo(nowMs - sum.lastDiaper.startMs) : "-"}
                         </div>
                         <div className="text-[11.5px] font-bold text-stone-500">
@@ -18612,7 +18646,7 @@ ${validText}
                       </div>
                       <div className="bg-[#FAF8F3] rounded-xl py-2 px-1 border border-stone-200">
                         <div className="text-[11.5px] font-bold text-stone-400">마지막 수유</div>
-                        <div className={`text-[13.5px] font-black mt-0.5 ${feedMeta ? feedMeta.text : "text-stone-800"}`}>
+                        <div className={`text-[12px] font-black mt-0.5 whitespace-nowrap ${feedMeta ? feedMeta.text : "text-stone-800"}`}>
                           {sum.lastFeed ? `${feedMeta?.emoji || ""} ${formatElapsedKo(nowMs - sum.lastFeed.startMs)}` : "-"}
                         </div>
                         {(() => {
@@ -18628,7 +18662,7 @@ ${validText}
                       </div>
                       <div className="bg-[#FAF8F3] rounded-xl py-2 px-1 border border-stone-200">
                         <div className="text-[11.5px] font-bold text-stone-400">마지막 수면</div>
-                        <div className="text-[13.5px] font-black text-indigo-700 mt-0.5">
+                        <div className="text-[12px] font-black text-indigo-700 mt-0.5 whitespace-nowrap">
                           {sum.lastSleep ? formatElapsedKo(nowMs - sum.lastSleep.startMs) : "-"}
                         </div>
                         <div className="text-[11.5px] font-bold text-stone-500">
