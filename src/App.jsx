@@ -1212,7 +1212,7 @@ const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.65) =>
     img.src = dataUrl;
   });
 
-const APP_CODE_VERSION = "v11.46";
+const APP_CODE_VERSION = "v11.47";
 
 const formatRoutineTimeLabel = (hhmm) => {
   const m = String(hhmm || "").trim().match(/^(\d{2}):(\d{2})$/);
@@ -1228,7 +1228,7 @@ const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-const APP_BUILD_DATE = "2026-11-17 21:25";
+const APP_BUILD_DATE = "2026-11-17 21:52";
 const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1255,6 +1255,16 @@ const HELPER_CONFIGURABLE_TABS = [
 ];
 
 const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v11.47",
+    version: "v11.47",
+    date: "2026-11-17",
+    title: "외부 육아앱(베이비타임) 일기·사진·성장기록 ZIP 클라우드 직접 업로드 기능 도입",
+    changes: [
+      "신규 기능: 육아일기 상단에 [📥 외부일기(.zip)] 버튼 추가 — 베이비타임 등에서 내보낸 ZIP을 선택하면 코드 내장 없이 일기 글·사진(자동압축)·몸무게/키 성장기록을 파싱해 Firebase 클라우드에 즉시 업로드",
+      "중복 방지: 이미 저장된 날짜·내용의 일기나 성장 수치는 자동으로 중복 건너뛰기 처리"
+    ]
+  },
   {
     id: "patch-v11.46",
     version: "v11.46",
@@ -4055,6 +4065,7 @@ function MainApp() {
   const [highlightedDiaryId, setHighlightedDiaryId] = useState("");
   const [pendingDiaryPhotoFile, setPendingDiaryPhotoFile] = useState(null);
   const diaryPhotoInputRef = useRef(null);
+  const babytimeZipInputRef = useRef(null);
   useEffect(() => {
     return () => {
       if (activityPopupTimerRef.current) clearTimeout(activityPopupTimerRef.current);
@@ -9744,6 +9755,202 @@ ${validText}
       setDiarySaveWarning(`❌ 육아일기 저장 실패 원인: ${errDetail}`);
       setSyncErrorMsg(`육아일기 저장 실패: ${errDetail}`);
       showToast(`❌ 육아일기 저장 실패: ${errDetail}`);
+    } finally {
+      setDiaryUploadProgress(null);
+      endWrite(ok);
+    }
+  };
+
+  const parseZipEntriesInBrowser = async (arrayBuffer) => {
+    const bytes = new Uint8Array(arrayBuffer);
+    const dv = new DataView(arrayBuffer);
+    let eocdOffset = -1;
+    for (let i = bytes.length - 22; i >= Math.max(0, bytes.length - 65557); i--) {
+      if (dv.getUint32(i, true) === 0x06054b50) {
+        eocdOffset = i;
+        break;
+      }
+    }
+    if (eocdOffset < 0) throw new Error("유효한 ZIP 파일이 아닙니다.");
+    const totalEntries = dv.getUint16(eocdOffset + 10, true);
+    let cdOffset = dv.getUint32(eocdOffset + 16, true);
+    const decoder = new TextDecoder("utf-8");
+    const filesMap = {};
+
+    for (let idx = 0; idx < totalEntries; idx++) {
+      if (dv.getUint32(cdOffset, true) !== 0x02014b50) break;
+      const compMethod = dv.getUint16(cdOffset + 10, true);
+      const compSize = dv.getUint32(cdOffset + 20, true);
+      const nameLen = dv.getUint16(cdOffset + 28, true);
+      const extraLen = dv.getUint16(cdOffset + 30, true);
+      const commentLen = dv.getUint16(cdOffset + 32, true);
+      const localHeaderOffset = dv.getUint32(cdOffset + 42, true);
+      const fileName = decoder.decode(bytes.slice(cdOffset + 46, cdOffset + 46 + nameLen));
+      cdOffset += 46 + nameLen + extraLen + commentLen;
+
+      if (fileName.endsWith("/")) continue;
+      if (dv.getUint32(localHeaderOffset, true) !== 0x04034b50) continue;
+      const lhNameLen = dv.getUint16(localHeaderOffset + 26, true);
+      const lhExtraLen = dv.getUint16(localHeaderOffset + 28, true);
+      const dataStart = localHeaderOffset + 30 + lhNameLen + lhExtraLen;
+      const compData = bytes.slice(dataStart, dataStart + compSize);
+
+      let rawBytes = null;
+      if (compMethod === 0) {
+        rawBytes = compData;
+      } else if (compMethod === 8 && typeof DecompressionStream !== "undefined") {
+        const ds = new DecompressionStream("deflate-raw");
+        const writer = ds.writable.getWriter();
+        writer.write(compData);
+        writer.close();
+        const ab = await new Response(ds.readable).arrayBuffer();
+        rawBytes = new Uint8Array(ab);
+      }
+      if (rawBytes) {
+        filesMap[fileName] = rawBytes;
+      }
+    }
+    return filesMap;
+  };
+
+  const handleImportBabyTimeZip = async (e) => {
+    const file = e.target.files?.[0];
+    if (e.target) e.target.value = "";
+    if (!file) return;
+    if (!isAdminUnlocked) {
+      showToast("🔒 육아일기는 관리자만 가져올 수 있습니다.");
+      return;
+    }
+    if (!user || !db) {
+      showToast("⚠️ 서버 연결 후 가져올 수 있습니다.");
+      return;
+    }
+
+    setDiaryUploadProgress({ stepText: "📦 일기 ZIP 파일 분석 중...", pct: 10 });
+    beginWrite();
+    let ok = false;
+    try {
+      const ab = await file.arrayBuffer();
+      const filesMap = await parseZipEntriesInBrowser(ab);
+      const txtKeys = Object.keys(filesMap).filter((k) => k.endsWith(".txt") && !k.toUpperCase().includes("NOTICE"));
+      const ascKey = txtKeys.find((k) => k.includes("_asc")) || txtKeys[0];
+      if (!ascKey) throw new Error("일기 텍스트(.txt)를 찾지 못했습니다.");
+
+      const rawText = new TextDecoder("utf-8").decode(filesMap[ascKey]);
+      const targetChild = file.name.includes("시목") ? "시목" : file.name.includes("시율") ? "시율" : selectedChildId;
+      const blocks = rawText.split(/={5,}/).map((b) => b.trim()).filter(Boolean);
+
+      let importedDiaryCount = 0;
+      let importedGrowthCount = 0;
+      let skippedDupCount = 0;
+
+      for (let bIdx = 0; bIdx < blocks.length; bIdx++) {
+        const block = blocks[bIdx];
+        const dateMatch = block.match(/date:\s*(\d{4}-\d{2}-\d{2})/i);
+        if (!dateMatch) continue;
+        const entryDate = dateMatch[1];
+
+        const weightMatch = block.match(/weight:\s*([0-9.]+)/i);
+        const heightMatch = block.match(/height:\s*([0-9.]+)/i);
+        const headMatch = block.match(/head:\s*([0-9.]+)/i);
+
+        let contentText = "";
+        const contentIdx = block.search(/content:\s*/i);
+        if (contentIdx >= 0) {
+          let after = block.slice(contentIdx).replace(/^content:\s*/i, "");
+          after = after.split(/\n(?:images:|weight:|height:|head:)/i)[0].trim();
+          contentText = after;
+        }
+
+        const imageNames = [];
+        const imgLineMatch = block.match(/images:\s*([^\n\r]+)/i);
+        if (imgLineMatch) {
+          imgLineMatch[1].split(",").forEach((seg) => {
+            const clean = seg.replace(/images:\s*/i, "").trim();
+            if (clean) imageNames.push(clean);
+          });
+        }
+
+        setDiaryUploadProgress({
+          stepText: `☁️ 클라우드 반영 중... (${bIdx + 1}/${blocks.length})`,
+          pct: Math.min(90, Math.round(((bIdx + 1) / Math.max(1, blocks.length)) * 80) + 10)
+        });
+
+        if (weightMatch || heightMatch || headMatch) {
+          const wVal = weightMatch ? Number(weightMatch[1]) : null;
+          const hVal = heightMatch ? Number(heightMatch[1]) : null;
+          const hdVal = headMatch ? Number(headMatch[1]) : null;
+          const dupGrowth = babyGrowthLogs.some(
+            (g) => g.childId === targetChild && g.date === entryDate && g.weight === wVal && g.height === hVal
+          );
+          if (!dupGrowth) {
+            const gId = `gr-bt-${targetChild}-${entryDate}-${Date.now()}-${bIdx}`;
+            const gPayload = {
+              id: gId,
+              childId: targetChild,
+              date: entryDate,
+              height: hVal,
+              weight: wVal,
+              head: hdVal,
+              memo: "베이비타임 일기 가져오기"
+            };
+            await setDoc(getDocRef("family_baby_growth_v7", gId), gPayload);
+            importedGrowthCount += 1;
+          }
+        }
+
+        if (contentText || imageNames.length > 0) {
+          const dupDiary = babyDiaryEntries.some(
+            (d) => d.date === entryDate && getDiaryEntryChildIds(d).includes(targetChild) && String(d.content || "").trim() === contentText
+          );
+          if (dupDiary) {
+            skippedDupCount += 1;
+            continue;
+          }
+          const cappedNames = imageNames.slice(0, 4);
+          const perPhotoBudget = Math.max(90000, Math.floor(740000 / Math.max(1, cappedNames.length)));
+          const finalUrls = [];
+          for (const imgName of cappedNames) {
+            const matchedKey = Object.keys(filesMap).find((k) => k === imgName || k.endsWith(`/${imgName}`));
+            if (!matchedKey) continue;
+            const ext = imgName.toLowerCase().endsWith(".png") ? "image/png" : "image/jpeg";
+            const imgFile = new File([filesMap[matchedKey]], imgName, { type: ext });
+            const compressedUrl = await compressDiaryPhotoToBudget(imgFile, perPhotoBudget);
+            if (compressedUrl) finalUrls.push(compressedUrl);
+          }
+          const dId = `bd-bt-${entryDate}-${Date.now()}-${bIdx}`;
+          const dPayload = {
+            id: dId,
+            childId: targetChild,
+            childIds: [targetChild],
+            date: entryDate,
+            mood: "😊 행복",
+            title: "",
+            content: contentText,
+            photoUrl: "",
+            photoUrls: finalUrls,
+            author: actorName || "관리자",
+            createdAtMs: new Date(`${entryDate}T12:00:00`).getTime() || Date.now(),
+            updatedAt: new Date().toISOString()
+          };
+          await setDoc(getDocRef("family_baby_diary_v8", dId), dPayload);
+          importedDiaryCount += 1;
+        }
+      }
+
+      if (importedDiaryCount > 0 || importedGrowthCount > 0) {
+        recordActivity("육아", "일기가져오기", `${targetChild} · 일기 ${importedDiaryCount}편 · 성장 ${importedGrowthCount}건`, {
+          targetSubTab: "diary",
+          targetChildId: targetChild
+        });
+      }
+      showToast(
+        `☁️ ${targetChild} 가져오기 완료! 일기 ${importedDiaryCount}편 · 성장 ${importedGrowthCount}건 클라우드 저장` +
+          (skippedDupCount > 0 ? ` (중복 ${skippedDupCount}건 제외)` : "")
+      );
+      ok = true;
+    } catch (err) {
+      showToast(`❌ 일기 ZIP 가져오기 실패: ${err?.message || "형식 오류"}`);
     } finally {
       setDiaryUploadProgress(null);
       endWrite(ok);
@@ -17783,6 +17990,13 @@ ${validText}
               ) : (
                 <div className="space-y-3">
                   <div className="bg-white p-3.5 rounded-2xl border border-stone-200 shadow-sm space-y-2.5">
+                    <input
+                      ref={babytimeZipInputRef}
+                      type="file"
+                      accept=".zip,application/zip"
+                      onChange={handleImportBabyTimeZip}
+                      className="hidden"
+                    />
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-xs font-black text-stone-900 flex items-center gap-1.5">
                         <span>📖 육아일기 {editingDiaryEntry ? "수정" : "작성"}</span>
@@ -17790,6 +18004,17 @@ ${validText}
                           {babyDiaryEntries.filter((d) => getDiaryEntryChildIds(d).includes(activeChild.id)).length}편
                         </span>
                       </span>
+                      {!editingDiaryEntry && (
+                        <button
+                          type="button"
+                          disabled={Boolean(diaryUploadProgress)}
+                          onClick={() => babytimeZipInputRef.current?.click()}
+                          className="px-2 py-1 rounded-xl bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-900 text-[10px] font-extrabold whitespace-nowrap shrink-0"
+                          title="베이비타임 등 외부 앱에서 내보낸 일기 ZIP 파일을 클라우드에 바로 업로드"
+                        >
+                          📥 외부일기(.zip)
+                        </button>
+                      )}
                       {editingDiaryEntry && (
                         <button
                           type="button"
