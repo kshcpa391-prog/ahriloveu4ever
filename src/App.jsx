@@ -376,10 +376,17 @@ const getRoutineNextDateInfo = (rt, dayStr = getTodayStr()) => {
   if (rt.cycle === "monthly") {
     const y = base.getFullYear();
     const m = base.getMonth() + 1;
+    const rawDay = Math.max(1, Number(rt.monthDay) || 1);
     const lastDay = new Date(y, m, 0).getDate();
-    const targetDay = Math.min(Math.max(1, Number(rt.monthDay) || 1), lastDay);
-    const target = new Date(y, m - 1, targetDay);
-    const diff = Math.round((target - base) / 86400000);
+    let target = new Date(y, m - 1, Math.min(rawDay, lastDay));
+    let diff = Math.round((target - base) / 86400000);
+    if (diff < 0) {
+      const ny = m === 12 ? y + 1 : y;
+      const nm = m === 12 ? 1 : m + 1;
+      const nextLastDay = new Date(ny, nm, 0).getDate();
+      target = new Date(ny, nm - 1, Math.min(rawDay, nextLastDay));
+      diff = Math.round((target - base) / 86400000);
+    }
     return { dateLabel: fmt(target), diff };
   }
   if (rt.cycle === "monthly_weekday") {
@@ -428,7 +435,7 @@ const getDaysDiff = (expiryStr) => {
   const today = new Date(getTodayStr() + "T00:00:00");
   const exp = new Date(String(expiryStr).slice(0, 10) + "T00:00:00");
   if (isNaN(exp.getTime())) return 999;
-  return Math.ceil((exp - today) / (1000 * 60 * 60 * 24));
+  return Math.round((exp - today) / (1000 * 60 * 60 * 24));
 };
 
 const getDaysInMonth = (yearMonth) => {
@@ -1164,8 +1171,17 @@ const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.65) =>
     img.src = dataUrl;
   });
 
-const APP_CODE_VERSION = "v10.98";
-const APP_BUILD_DATE = "2026-11-17 14:10";
+const APP_CODE_VERSION = "v11.00";
+const APP_BUILD_DATE = "2026-11-17 14:25";
+const UI_TOKENS = {
+  ivoryBg: "bg-[#FAF8F3]",
+  beigeSurface: "bg-[#F3EEE4]",
+  sageBtn: "bg-[#5E7A65] hover:bg-[#4E6855] text-white",
+  sageSoft: "bg-[#EEF3EE] text-[#35503C] border-[#C9D8CC]",
+  cardBase: "bg-white rounded-2xl border border-stone-200 shadow-sm",
+  btnPrimary: "h-9 px-3.5 rounded-xl text-xs font-extrabold transition",
+  btnCompact: "h-7 px-2.5 rounded-lg text-[10px] font-extrabold transition"
+};
 const EDITOR_INVITE_CODE = "0402";
 const DEFAULT_HELPER_CODE = "1234";
 const GUEST_ALLOWED_TABS = ["home", "daily", "recipes"];
@@ -1183,6 +1199,30 @@ const HELPER_CONFIGURABLE_TABS = [
 ];
 
 const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v11.00",
+    version: "v11.00",
+    date: "2026-11-17",
+    title: "알림 상세 변경전후 Diff · 아이보리/세이지그린 디자인 토큰 · 식단 계획/복사/이동/재사용",
+    changes: [
+      "최근 수정 알림 모달에 [변경 전 → 변경 후] 상세 비교 카드와 정확한 시·분·초 타임스탬프 표시",
+      "따뜻한 아이보리(#FAF8F3)·세이지그린(#5E7A65)·베이지(#F3EEE4) 디자인 토큰 및 공통 로딩·빈·오류 상태 UI 적용",
+      "식단 기록과 [계획 식단] 구분, 1탭 [✓ 먹음] 전환, 기존 식단 오늘/내일 복사 및 -1일/+1일 날짜 이동 추가",
+      "식단 상단에 [↺ 어제 식단 복사] · [↺ 지난주 식단 복사] 및 이번 7일 기록·계획·식비 요약 바 추가"
+    ]
+  },
+  {
+    id: "patch-v10.99",
+    version: "v10.99",
+    date: "2026-11-17",
+    title: "냉장고 소비기한 미확인·로트/FEFO·트랜잭션 중복방지 · 변경전후 수량 이력 · 월간 루틴 날짜 보정",
+    changes: [
+      "소비기한 미입력 시 오늘 날짜로 자동 저장되던 문제를 수정하고 [소비기한 미확인]과 [확정 만료일]을 명확히 구분",
+      "구매일·소비기한·보관위치별 로트(lotKey) 관리 및 요리 차감 시 소비기한이 빠른 로트(FEFO) 우선 제안",
+      "장보기 입고·수량 조절·요리 차감을 서버 트랜잭션 및 이중클릭 락으로 보호해 음수 재고 및 중복 입고/식비 등록 원천 차단",
+      "변경 이력에 변경 전후 수량(예: 2개 → 1개) 기록 및 월간 루틴 당월 실행일 경과 시 다음 달 예정일(윤년·월말·연도변경 보정) 자동 계산"
+    ]
+  },
   {
     id: "patch-v10.98",
     version: "v10.98",
@@ -3314,6 +3354,7 @@ function MainApp() {
   });
   const [toastUndo, setToastUndo] = useState(null);
   const toastTimerRef = useRef(null);
+  const inFlightOpsRef = useRef(new Set());
   const moreNavBtnRef = useRef(null);
   const moreSheetCloseRef = useRef(null);
   const [adminCode, setAdminCode] = useState(() => {
@@ -3428,6 +3469,11 @@ function MainApp() {
     }
   });
   const [isActivityModalOpen, setIsActivityModalOpen] = useState(false);
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
+  useEffect(() => {
+    const t = setTimeout(() => setIsInitialLoading(false), 2000);
+    return () => clearTimeout(t);
+  }, []);
   const [activityFilter, setActivityFilter] = useState("전체");
   const [activityActorFilter, setActivityActorFilter] = useState("전체");
   const [lastSeenActivityMs, setLastSeenActivityMs] = useState(() => {
@@ -4074,7 +4120,8 @@ function MainApp() {
     ingredients: [],
     note: "",
     sourceType: "집밥/온가족식",
-    cost: ""
+    cost: "",
+    mealStatus: "recorded"
   });
 
   // 냉장고 모달 상태
@@ -4311,7 +4358,7 @@ function MainApp() {
     return `${d.getMonth() + 1}/${d.getDate()} ${hh}:${mm}`;
   };
 
-  const recordActivity = (category, action, detail = "") => {
+  const recordActivity = (category, action, detail = "", extra = {}) => {
     if (accessRole === "guest") return;
     const who = (actorName || (isAdminUnlocked ? "관리자" : "육아지원군")).trim();
     const entry = {
@@ -4320,7 +4367,9 @@ function MainApp() {
       role: accessRole,
       category,
       action,
-      detail: String(detail || "").trim().slice(0, 80),
+      detail: String(detail || "").trim().slice(0, 120),
+      beforeText: extra?.beforeText ? String(extra.beforeText).slice(0, 120) : "",
+      afterText: extra?.afterText ? String(extra.afterText).slice(0, 120) : "",
       atMs: Date.now()
     };
     setRecentActivities((prev) => {
@@ -4445,6 +4494,32 @@ function MainApp() {
     setIsEditorUnlockModalOpen(false);
     if (!guestAllowedTabs.includes(activeTab)) setActiveTab("home");
     showToast("🔒 로그아웃되어 열람 제한 모드로 전환되었습니다.");
+  };
+
+  const renderStatusState = ({ type = "empty", title, description, actionLabel, onAction }) => {
+    const tone =
+      type === "error"
+        ? "bg-rose-50 border-rose-200 text-rose-900"
+        : type === "loading"
+        ? "bg-[#EEF3EE] border-[#C9D8CC] text-[#35503C]"
+        : "bg-[#F3EEE4]/70 border-stone-200 text-stone-800";
+    const icon = type === "error" ? "⚠️" : type === "loading" ? "⏳" : "📭";
+    return (
+      <div className={`rounded-2xl border p-5 text-center space-y-2 ${tone}`}>
+        <div className="text-xl">{icon}</div>
+        <div className="text-xs font-black">{title}</div>
+        {description && <div className="text-[11px] opacity-85 leading-relaxed">{description}</div>}
+        {actionLabel && onAction && (
+          <button
+            type="button"
+            onClick={onAction}
+            className="mt-1 px-3.5 py-1.5 rounded-xl bg-stone-900 text-white text-[11px] font-extrabold"
+          >
+            {actionLabel}
+          </button>
+        )}
+      </div>
+    );
   };
 
   const renderLockedTabScreen = (tabLabel) => (
@@ -7750,26 +7825,36 @@ ${validText}
       showToast("⚠️ 수량은 0 이상의 숫자로 입력해 주세요.");
       return;
     }
+    const lockKey = editingFridge ? `fridge-save-${editingFridge.id}` : "fridge-save-new";
+    if (inFlightOpsRef.current.has(lockKey)) return;
+    inFlightOpsRef.current.add(lockKey);
+
     const id = editingFridge ? editingFridge.id : `f-${Date.now()}`;
     const priceNum = Number(fridgeForm.price) || 0;
     const baseUpdatedAt = typeof overrideUpdatedAt === "string" ? overrideUpdatedAt : editingFridge?.updatedAt;
+    const cleanExp = fridgeForm.expiryDate ? String(fridgeForm.expiryDate).slice(0, 10) : "";
+    const cleanPurchase = fridgeForm.purchaseDate || selectedDate;
+    const cleanName = fridgeForm.name.trim();
 
     const payload = {
       id,
-      name: fridgeForm.name.trim(),
+      name: cleanName,
       location: fridgeForm.location,
       category: fridgeForm.category,
       quantity: parsedQty,
       unit: fridgeForm.unit || "개",
-      expiryDate: fridgeForm.expiryDate || getTodayStr(),
-      expiryIsTemp: editingFridge ? Boolean(editingFridge.expiryIsTemp && !isExpiryManuallyEdited) : !isExpiryManuallyEdited,
+      expiryDate: cleanExp,
+      expiryStatus: cleanExp ? "confirmed" : "unknown",
+      expiryIsTemp: !cleanExp,
+      lotKey: `${cleanName}|${fridgeForm.location}|${cleanPurchase}|${cleanExp || "unknown"}`,
       price: priceNum,
-      purchaseDate: fridgeForm.purchaseDate || selectedDate,
+      purchaseDate: cleanPurchase,
       shelfZone: fridgeForm.shelfZone || "",
       updatedAt: new Date().toISOString()
     };
 
     if (!user || !db) {
+      inFlightOpsRef.current.delete(lockKey);
       showToast("⚠️ 서버 연결 후 재고를 저장할 수 있습니다.");
       return;
     }
@@ -7822,23 +7907,35 @@ ${validText}
       setIsFridgeModalOpen(false);
       setEditingFridge(null);
       ok = true;
-      recordActivity("냉장고", editingFridge ? "수정" : "입고", `${fridgeForm.name || ""}`);
+      const qtyInfo = editingFridge
+        ? `${cleanName} (${editingFridge.quantity}${editingFridge.unit || "개"} → ${parsedQty}${payload.unit})`
+        : `${cleanName} (0 → ${parsedQty}${payload.unit})`;
+      recordActivity("냉장고", editingFridge ? "수정" : "입고", qtyInfo, {
+        beforeText: editingFridge
+          ? `${editingFridge.name} · ${editingFridge.quantity}${editingFridge.unit || "개"} · ${editingFridge.location}${editingFridge.expiryDate ? ` · 기한 ${editingFridge.expiryDate}` : " · 기한 미확인"}`
+          : "",
+        afterText: `${cleanName} · ${parsedQty}${payload.unit} · ${payload.location}${cleanExp ? ` · 기한 ${cleanExp}` : " · 기한 미확인"}`
+      });
       showToast(editingFridge ? "냉장고 재료가 수정되었습니다." : "냉장고에 새 재료가 입고되었습니다.");
     } catch (e) {
       errMsg = e.message;
       showToast("⚠️ 재고 저장 실패: 네트워크 상태를 확인해 주세요.");
     } finally {
+      inFlightOpsRef.current.delete(lockKey);
       endWrite(ok, errMsg);
     }
   };
 
   const handleAdjustQuantity = async (item, delta) => {
-    if (!requireEditorAccess()) return;
+    if (!requireEditorAccess("fridge")) return;
     if (!Number.isFinite(delta)) return;
+    const adjKey = `fridge-adj-${item.id}`;
+    if (inFlightOpsRef.current.has(adjKey)) return;
     if (!user || !db) {
       showToast("⚠️ 서버 연결 후 수량을 변경할 수 있습니다.");
       return;
     }
+    inFlightOpsRef.current.add(adjKey);
     const optimisticNext = Math.max(0, Number(item.quantity || 0) + delta);
     const updated = { ...item, quantity: optimisticNext };
     setFridgeMap((prev) => ({
@@ -7879,6 +7976,15 @@ ${validText}
         ...prev,
         local: { ...(prev.local || {}), [item.id]: { ...item, quantity: finalServerQty, updatedAt: finalUpdatedAt } }
       }));
+      recordActivity(
+        "냉장고",
+        "수량변경",
+        `${item.name} (${item.quantity ?? 0}${item.unit || "개"} → ${finalServerQty}${item.unit || "개"})`,
+        {
+          beforeText: `${item.name} ${item.quantity ?? 0}${item.unit || "개"}`,
+          afterText: `${item.name} ${finalServerQty}${item.unit || "개"}`
+        }
+      );
       ok = true;
     } catch (e) {
       errMsg = e.message;
@@ -7888,6 +7994,7 @@ ${validText}
       }));
       showToast(`⚠️ ${e.message || "수량 저장 실패"}`);
     } finally {
+      inFlightOpsRef.current.delete(adjKey);
       endWrite(ok, errMsg);
     }
   };
@@ -8089,13 +8196,20 @@ ${validText}
   const handleCompleteRecipeCooking = (recipe) => {
     if (!requireEditorAccess()) return;
     const used = toSafeArray(recipe.usedIngredients);
-    const matched = fridge.filter((f) =>
-      used.some(
-        (u) =>
-          String(f.name || "").toLowerCase().includes(u.toLowerCase()) ||
-          u.toLowerCase().includes(String(f.name || "").toLowerCase())
-      ) && Number(f.quantity || 0) > 0
-    );
+    const matched = fridge
+      .filter((f) =>
+        used.some(
+          (u) =>
+            String(f.name || "").toLowerCase().includes(u.toLowerCase()) ||
+            u.toLowerCase().includes(String(f.name || "").toLowerCase())
+        ) && Number(f.quantity || 0) > 0
+      )
+      .sort((a, b) => {
+        const ae = a.expiryDate ? String(a.expiryDate).slice(0, 10) : "9999-12-31";
+        const be = b.expiryDate ? String(b.expiryDate).slice(0, 10) : "9999-12-31";
+        if (ae !== be) return ae.localeCompare(be);
+        return String(a.purchaseDate || "").localeCompare(String(b.purchaseDate || ""));
+      });
     if (matched.length === 0) {
       showToast("차감할 매칭 냉장고 재고가 없습니다.");
       return;
@@ -8184,6 +8298,11 @@ ${validText}
         if (alreadyProcessed) {
           showToast("이미 처리된 요리 완료 기록입니다.");
         } else {
+          recordActivity(
+            "냉장고",
+            "요리차감",
+            `${cookingConfirmModal.recipeTitle} (${toDeduct.map((d) => `${d.item.name} -${d.deductQty}`).join(", ")})`
+          );
           showToast(`요리 완료! 선택한 재료 ${toDeduct.length}종이 안전하게 일괄 차감되었습니다.`);
         }
       } catch (e) {
@@ -8269,7 +8388,7 @@ ${validText}
         showToast(`'${item.name}' 소진 완료! (이미 장보기 목록에 있어 중복 추가 제외)`);
       }
     } else {
-      recordActivity("냉장고", "소진", `${item.name}`);
+      recordActivity("냉장고", "소진", `${item.name} (${item.quantity ?? 1}${item.unit || "개"} → 0)`);
       showToast(`'${item.name}' 다 먹음 처리 완료! (이번 달 지출 식비는 그대로 유지됩니다)`);
     }
   };
@@ -8336,6 +8455,7 @@ ${validText}
       note: mealForm.note || "",
       sourceType: mealForm.sourceType || "집밥/온가족식",
       cost: Number(mealForm.cost) || 0,
+      mealStatus: mealForm.mealStatus || (mealForm.date > getTodayStr() ? "planned" : "recorded"),
       updatedAt: new Date().toISOString()
     };
 
@@ -8379,13 +8499,161 @@ ${validText}
       setIsMealModalOpen(false);
       setEditingMeal(null);
       ok = true;
-      recordActivity("식단", editingMeal ? "수정" : "등록", `${mealForm.date} ${mealForm.slot} · ${mealForm.menu}`);
+      recordActivity("식단", editingMeal ? "수정" : "등록", `${payload.date} ${payload.slot} · ${payload.menu}`, {
+        beforeText: editingMeal ? `${editingMeal.date} ${editingMeal.slot} · ${editingMeal.menu || ""}` : "",
+        afterText: `${payload.date} ${payload.slot} · ${payload.menu} (${payload.mealStatus === "planned" ? "계획" : "기록"})`
+      });
       showToast("식단이 저장되었습니다.");
     } catch (e) {
       errMsg = e.message;
       showToast("⚠️ 식단 저장 실패: 입력 내용은 유지되었으니 다시 시도해 주세요.");
     } finally {
       endWrite(ok, errMsg);
+    }
+  };
+
+  const handleCopyMealToDate = async (srcMeal, targetDate) => {
+    if (!requireEditorAccess("daily") || !srcMeal) return;
+    if (!user || !db) {
+      showToast("⚠️ 서버 연결 후 복사할 수 있습니다.");
+      return;
+    }
+    const newId = `m-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`;
+    const payload = {
+      ...srcMeal,
+      id: newId,
+      date: targetDate,
+      mealStatus: targetDate > getTodayStr() ? "planned" : "recorded",
+      updatedAt: new Date().toISOString()
+    };
+    beginWrite();
+    let ok = false;
+    try {
+      await setDoc(getDocRef("family_meals_v3", newId), payload);
+      await setDoc(getDocRef("family_meals_v4", newId), payload);
+      setMealsMap((prev) => ({ ...prev, local: { ...(prev.local || {}), [newId]: payload } }));
+      recordActivity("식단", "복사", `${srcMeal.date} → ${targetDate} · ${srcMeal.menu}`, {
+        beforeText: `${srcMeal.date} ${srcMeal.slot} · ${srcMeal.menu}`,
+        afterText: `${targetDate} ${srcMeal.slot} · ${srcMeal.menu}`
+      });
+      showToast(`📋 ${targetDate} 식단으로 복사되었습니다!`);
+      ok = true;
+    } catch (e) {
+      showToast("⚠️ 식단 복사 실패");
+    } finally {
+      endWrite(ok);
+    }
+  };
+
+  const handleMoveMealByDays = async (srcMeal, deltaDays) => {
+    if (!requireEditorAccess("daily") || !srcMeal) return;
+    if (!user || !db) {
+      showToast("⚠️ 서버 연결 후 이동할 수 있습니다.");
+      return;
+    }
+    const dObj = new Date(String(srcMeal.date).slice(0, 10) + "T00:00:00");
+    dObj.setDate(dObj.getDate() + deltaDays);
+    const nextDate = formatDate(dObj);
+    const updated = {
+      ...srcMeal,
+      date: nextDate,
+      mealStatus: nextDate > getTodayStr() ? "planned" : (srcMeal.mealStatus || "recorded"),
+      updatedAt: new Date().toISOString()
+    };
+    beginWrite();
+    let ok = false;
+    try {
+      await setDoc(getDocRef("family_meals_v3", srcMeal.id), updated);
+      await setDoc(getDocRef("family_meals_v4", srcMeal.id), updated);
+      setMealsMap((prev) => ({ ...prev, local: { ...(prev.local || {}), [srcMeal.id]: updated } }));
+      setMealForm((prev) => ({ ...prev, date: nextDate }));
+      setEditingMeal(updated);
+      recordActivity("식단", "날짜이동", `${srcMeal.date} → ${nextDate} · ${srcMeal.menu}`, {
+        beforeText: `${srcMeal.date} ${srcMeal.slot} · ${srcMeal.menu}`,
+        afterText: `${nextDate} ${srcMeal.slot} · ${srcMeal.menu}`
+      });
+      showToast(`📅 ${nextDate}로 이동되었습니다!`);
+      ok = true;
+    } catch (e) {
+      showToast("⚠️ 식단 이동 실패");
+    } finally {
+      endWrite(ok);
+    }
+  };
+
+  const handleMarkPlannedMealRecorded = async (e, meal) => {
+    e.stopPropagation();
+    if (!requireEditorAccess("daily")) return;
+    if (!user || !db) return;
+    const updated = { ...meal, mealStatus: "recorded", updatedAt: new Date().toISOString() };
+    try {
+      await setDoc(getDocRef("family_meals_v3", meal.id), updated);
+      await setDoc(getDocRef("family_meals_v4", meal.id), updated);
+      setMealsMap((prev) => ({ ...prev, local: { ...(prev.local || {}), [meal.id]: updated } }));
+      recordActivity("식단", "기록전환", `${meal.date} ${meal.slot} · ${meal.menu}`, {
+        beforeText: "계획 식단",
+        afterText: "실제 기록"
+      });
+      showToast("✅ 실제 먹은 식단으로 기록되었습니다!");
+    } catch (err) {
+      showToast("⚠️ 상태 변경 실패");
+    }
+  };
+
+  const handleReuseMealsFromOffset = async (offsetDays) => {
+    if (!requireEditorAccess("daily")) return;
+    if (!user || !db) {
+      showToast("⚠️ 서버 연결 후 불러올 수 있습니다.");
+      return;
+    }
+    const baseD = new Date(selectedDate + "T00:00:00");
+    baseD.setDate(baseD.getDate() + offsetDays);
+    const srcDate = formatDate(baseD);
+    const srcMeals = meals.filter(
+      (m) => m.date === srcDate && (selectedMember === "전체" || toSafeArray(m.members).includes(selectedMember))
+    );
+    if (srcMeals.length === 0) {
+      showToast(`${srcDate}에 복사할 식단이 없습니다.`);
+      return;
+    }
+    const existingKeys = new Set(
+      meals.filter((m) => m.date === selectedDate).map((m) => `${m.slot}|${m.menu}`)
+    );
+    const toCopy = srcMeals.filter((m) => !existingKeys.has(`${m.slot}|${m.menu}`));
+    if (toCopy.length === 0) {
+      showToast("선택한 날짜에 이미 동일한 식단이 모두 있습니다.");
+      return;
+    }
+    beginWrite();
+    let ok = false;
+    try {
+      const batch = writeBatch(db);
+      const localUpdates = {};
+      toCopy.forEach((m, idx) => {
+        const nid = `m-${Date.now()}-${idx}-${Math.random().toString(36).slice(2, 5)}`;
+        const p = {
+          ...m,
+          id: nid,
+          date: selectedDate,
+          mealStatus: "planned",
+          updatedAt: new Date().toISOString()
+        };
+        batch.set(getDocRef("family_meals_v3", nid), p);
+        batch.set(getDocRef("family_meals_v4", nid), p);
+        localUpdates[nid] = p;
+      });
+      await batch.commit();
+      setMealsMap((prev) => ({ ...prev, local: { ...(prev.local || {}), ...localUpdates } }));
+      recordActivity("식단", "식단재사용", `${srcDate} → ${selectedDate} (${toCopy.length}끼)`, {
+        beforeText: `${srcDate} 식단 ${toCopy.length}끼`,
+        afterText: `${selectedDate} 계획 식단 ${toCopy.length}끼`
+      });
+      showToast(`↺ ${srcDate} 식단 ${toCopy.length}끼를 ${selectedDate} 계획 식단으로 복사했습니다!`);
+      ok = true;
+    } catch (e) {
+      showToast("⚠️ 식단 불러오기 실패");
+    } finally {
+      endWrite(ok);
     }
   };
 
@@ -9016,32 +9284,47 @@ ${validText}
     }));
     setShoppingList((prev) => prev.filter((s) => s.id !== stockInItem.id));
 
+    const stockLockKey = `stockin-${stockInItem.id}`;
+    if (inFlightOpsRef.current.has(stockLockKey)) return;
+    inFlightOpsRef.current.add(stockLockKey);
     if (user && db) {
       beginWrite();
       let ok = false;
       let errMsg = "";
       try {
-        await setDoc(getDocRef("family_fridge_v3", fId), newFridgeItem);
-        await setDoc(getDocRef("family_fridge_v4", fId), newFridgeItem);
-        await deleteDoc(getDocRef("family_shopping_v4", stockInItem.id));
-        if (priceNum > 0) {
-          const expId = `exp-${fId}`;
-          await setDoc(getDocRef("family_expenses_v4", expId), {
-            id: expId,
-            title: newFridgeItem.name,
-            category: newFridgeItem.category,
-            amount: priceNum,
-            date: selectedDate,
-            type: "장보기/식재료"
-          });
-        }
+        await runTransaction(db, async (tx) => {
+          const shopRef = getDocRef("family_shopping_v4", stockInItem.id);
+          const shopSnap = await tx.get(shopRef);
+          if (!shopSnap.exists()) {
+            throw new Error("이미 입고 완료되었거나 삭제된 장보기 항목입니다.");
+          }
+          tx.set(getDocRef("family_fridge_v3", fId), newFridgeItem);
+          tx.set(getDocRef("family_fridge_v4", fId), newFridgeItem);
+          tx.delete(shopRef);
+          if (priceNum > 0) {
+            const expId = `exp-${fId}`;
+            tx.set(getDocRef("family_expenses_v4", expId), {
+              id: expId,
+              title: newFridgeItem.name,
+              category: newFridgeItem.category,
+              amount: priceNum,
+              date: selectedDate,
+              type: "장보기/식재료"
+            });
+          }
+        });
+        recordActivity("냉장고", "장보기입고", `${newFridgeItem.name} (0 → ${parsedQty}${parsedUnit})`);
         ok = true;
       } catch (e) {
         errMsg = e?.message || "장보기 입고 동기화 오류";
         setSyncErrorMsg(errMsg);
+        showToast(`⚠️ ${errMsg}`);
       } finally {
+        inFlightOpsRef.current.delete(stockLockKey);
         endWrite(ok, errMsg);
       }
+    } else {
+      inFlightOpsRef.current.delete(stockLockKey);
     }
     setStockInItem(null);
     setStockInPrice("");
@@ -9295,7 +9578,7 @@ ${validText}
   };
 
   return (
-    <div className="min-h-screen bg-stone-50 text-stone-800 pb-24 max-w-md mx-auto shadow-xl border-x border-stone-200 relative font-sans">
+    <div className="min-h-screen bg-[#FAF8F3] text-stone-800 pb-24 max-w-md mx-auto shadow-xl border-x border-stone-200 relative font-sans">
       {toastMsg && (
         <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 max-w-[92vw] bg-stone-900 text-white px-4 py-2.5 rounded-full text-xs font-bold shadow-lg flex items-center gap-2">
           <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
@@ -9527,6 +9810,16 @@ ${validText}
           </>
         )}
       </header>
+
+      {isInitialLoading && (
+        <div className="mx-3 mt-2">
+          {renderStatusState({
+            type: "loading",
+            title: "가족 데이터를 불러오는 중입니다...",
+            description: "실시간 동기화가 완료되면 자동으로 표시됩니다."
+          })}
+        </div>
+      )}
 
       {activeTab !== "home" && canViewTab(activeTab) && !canEditTab(activeTab) && (
         <div className="mx-3 mt-2 px-3 py-1.5 rounded-xl bg-amber-50 border border-amber-200 flex items-center justify-between gap-2">
@@ -10735,6 +11028,36 @@ ${validText}
               </button>
             </div>
 
+            {(() => {
+              const weekMeals = meals.filter((m) => weekDates.includes(m.date) && (selectedMember === "전체" || toSafeArray(m.members).includes(selectedMember)));
+              const recCnt = weekMeals.filter((m) => m.mealStatus !== "planned").length;
+              const planCnt = weekMeals.filter((m) => m.mealStatus === "planned").length;
+              const weekCost = weekMeals.reduce((acc, m) => acc + (Number(m.cost) || 0), 0);
+              return (
+                <div className="flex flex-wrap items-center justify-between gap-1.5 pt-1.5 border-t border-stone-100">
+                  <div className="text-[10px] font-extrabold text-stone-700 bg-[#F3EEE4] px-2.5 py-1 rounded-lg">
+                    7일 요약: 기록 {recCnt}끼 · 계획 {planCnt}끼{weekCost > 0 ? ` · ${weekCost.toLocaleString()}원` : ""}
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => handleReuseMealsFromOffset(-1)}
+                      className="px-2 py-1 rounded-lg bg-[#EEF3EE] hover:bg-[#DFE9E0] text-[#35503C] border border-[#C9D8CC] text-[10px] font-extrabold"
+                    >
+                      ↺ 어제 식단 복사
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleReuseMealsFromOffset(-7)}
+                      className="px-2 py-1 rounded-lg bg-[#EEF3EE] hover:bg-[#DFE9E0] text-[#35503C] border border-[#C9D8CC] text-[10px] font-extrabold"
+                    >
+                      ↺ 지난주 복사
+                    </button>
+                  </div>
+                </div>
+              );
+            })()}
+
           </div>
 
           {/* 상단 고정(Sticky) 1줄 인원 빠른 전환 바 */}
@@ -10920,7 +11243,21 @@ ${validText}
                                           </span>
                                         )}
                                         <div className="text-xs font-extrabold text-stone-900 break-keep leading-snug min-w-0 flex-1">
+                                          {it.mealStatus === "planned" && (
+                                            <span className="inline-block mr-1 px-1.5 py-0.5 rounded bg-[#EEF3EE] text-[#35503C] border border-[#C9D8CC] text-[9px] font-black align-middle">
+                                              계획
+                                            </span>
+                                          )}
                                           <span>{String(it.menu || "").replace(/\[.*?\]\s*/, "")}</span>
+                                          {it.mealStatus === "planned" && (
+                                            <button
+                                              type="button"
+                                              onClick={(e) => handleMarkPlannedMealRecorded(e, it)}
+                                              className="ml-1.5 px-1.5 py-0.5 rounded bg-[#5E7A65] text-white text-[9px] font-extrabold align-middle"
+                                            >
+                                              ✓ 먹음
+                                            </button>
+                                          )}
                                           {Number(it.cost) > 0 && (
                                             <span className="ml-1 text-[10px] font-bold text-stone-500">
                                               ({Number(it.cost).toLocaleString()}원)
@@ -16602,6 +16939,56 @@ ${validText}
               </select>
             </div>
 
+            <div className="flex items-center justify-between gap-1.5">
+              <div className="flex gap-1 bg-stone-100 p-1 rounded-xl flex-1">
+                {[
+                  { id: "recorded", label: "📝 실제 기록" },
+                  { id: "planned", label: "📅 계획 식단" }
+                ].map((st) => (
+                  <button
+                    key={st.id}
+                    type="button"
+                    onClick={() => setMealForm({ ...mealForm, mealStatus: st.id })}
+                    className={`flex-1 py-1 rounded-lg text-[10px] font-extrabold transition ${
+                      (mealForm.mealStatus || "recorded") === st.id
+                        ? "bg-white text-stone-900 shadow-sm"
+                        : "text-stone-500"
+                    }`}
+                  >
+                    {st.label}
+                  </button>
+                ))}
+              </div>
+              {editingMeal && (
+                <div className="flex items-center gap-1 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => handleMoveMealByDays(editingMeal, -1)}
+                    className="px-2 py-1.5 rounded-xl bg-stone-100 hover:bg-stone-200 text-[10px] font-extrabold text-stone-700"
+                    title="하루 전으로 이동"
+                  >
+                    ◀ -1일
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleMoveMealByDays(editingMeal, 1)}
+                    className="px-2 py-1.5 rounded-xl bg-stone-100 hover:bg-stone-200 text-[10px] font-extrabold text-stone-700"
+                    title="다음 날로 이동"
+                  >
+                    +1일 ▶
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleCopyMealToDate(editingMeal, getTodayStr())}
+                    className="px-2 py-1.5 rounded-xl bg-[#EEF3EE] text-[#35503C] border border-[#C9D8CC] text-[10px] font-extrabold"
+                    title="오늘 날짜로 복사"
+                  >
+                    📋 오늘복사
+                  </button>
+                </div>
+              )}
+            </div>
+
             <div>
               <div className="flex items-center justify-between mb-1">
                 <span className="text-xs font-bold text-stone-600">식사 대상</span>
@@ -18064,13 +18451,32 @@ ${validText}
                           </span>
                         </div>
                         {act.detail && (
-                          <div className="text-[11px] text-stone-600 break-keep">{act.detail}</div>
+                          <div className="text-[11px] text-stone-700 font-semibold break-keep">{act.detail}</div>
+                        )}
+                        {(act.beforeText || act.afterText) && (
+                          <div className="mt-1 space-y-0.5 text-[10px] rounded-xl bg-white border border-stone-200 p-1.5">
+                            {act.beforeText && (
+                              <div className="text-rose-700 bg-rose-50/70 px-1.5 py-0.5 rounded">
+                                <span className="font-black mr-1">변경 전:</span>{act.beforeText}
+                              </div>
+                            )}
+                            {act.afterText && (
+                              <div className="text-emerald-800 bg-emerald-50/70 px-1.5 py-0.5 rounded">
+                                <span className="font-black mr-1">변경 후:</span>{act.afterText}
+                              </div>
+                            )}
+                          </div>
                         )}
                       </div>
                       <div className="flex flex-col items-end gap-1 shrink-0">
-                        <span className="text-[10px] font-bold text-stone-400 whitespace-nowrap">
+                        <span className="text-[10px] font-bold text-stone-500 whitespace-nowrap">
                           {formatActivityTime(act.atMs)}
                         </span>
+                        {act.atMs && (
+                          <span className="text-[9px] text-stone-400 whitespace-nowrap">
+                            {new Date(act.atMs).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false })}
+                          </span>
+                        )}
                         {(() => {
                           const catTabMap = {
                             "식단": "daily",
