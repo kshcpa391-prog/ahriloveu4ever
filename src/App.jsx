@@ -63,8 +63,6 @@ import {
 import {
   getStorage,
   ref as storageRef,
-  uploadBytes,
-  getDownloadURL,
   deleteObject
 } from "firebase/storage";
 
@@ -1082,6 +1080,17 @@ const resolveItemShelfZone = (item) => {
   return "냉장 3단(하단)";
 };
 
+const shelfZoneToLocation = (zoneName) => {
+  const z = String(zoneName || "");
+  if (z === "팬트리") return "실온·팬트리";
+  if (z.startsWith("전용냉동")) return "별도 냉동고";
+  if (z.startsWith("하부냉동")) return "메인 냉동실";
+  return "냉장실";
+};
+
+const getOffsetDateStr = (baseDateStr, offsetDays = 0) =>
+  addMonthsToDateStr(baseDateStr || getTodayStr(), 0, offsetDays);
+
 const EXPORT_MEAL_GOALS = [
   "재고소진",
   "산후조리/영양보충",
@@ -1203,7 +1212,7 @@ const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.65) =>
     img.src = dataUrl;
   });
 
-const APP_CODE_VERSION = "v11.30";
+const APP_CODE_VERSION = "v11.33";
 
 const formatRoutineTimeLabel = (hhmm) => {
   const m = String(hhmm || "").trim().match(/^(\d{2}):(\d{2})$/);
@@ -1246,6 +1255,40 @@ const HELPER_CONFIGURABLE_TABS = [
 ];
 
 const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v11.33",
+    version: "v11.33",
+    date: "2026-11-17",
+    title: "월간 식비 원장 검색·카테고리 필터 · 미사용 Storage 임포트 정리 & 전체 정적 검증",
+    changes: [
+      "오류 점검: 미사용 firebase/storage 임포트(uploadBytes·getDownloadURL) 제거 및 전체 21,900+행 미정의 함수 호출·중복 상태·TDZ 전수 검증 완료",
+      "시각화 개선: 육아일기 사진 첨부 시 첨부 장수(N/4장)·자동 최적화 안내 바 추가",
+      "편의성 개선: 월간 식비 가계부 원장 상단에 [🔍 지출 품목 검색...] 입력란 추가",
+      "신규 기능: 월간 식비 가계부 원장에 카테고리별 필터 칩 및 필터링된 지출 합계 자동 계산 기능 도입"
+    ]
+  },
+  {
+    id: "patch-v11.32",
+    version: "v11.32",
+    date: "2026-11-17",
+    title: "할 일 탭 오류 수정 · 육아일기 압축 전용(최대4장)·내보내기 본문우선/선택저장·버튼 줄바꿈 & AI제거",
+    changes: [
+      "오류 수정: 일정→할 일 탭에서 발생하던 addDaysToDate 미정의 오류 및 냉장고 칸 추가·일괄이동 미정의 헬퍼(shelfZoneToLocation·getOffsetDateStr) 3건 완전 해결",
+      "육아일기 저장 개편: 유료 Storage 대기 없이 즉시 자동 압축(최대 4장 제한) 저장하도록 단순화·고속화",
+      "육아일기 내보내기 개선: 글(제목·본문)이 먼저 오고 그 아래 사진이 배치되도록 순서 변경, 자동 다운로드 제거(미리보기에서 공유/다운로드 직접 선택)",
+      "UI·편의 개선: 육아일기 카드 [📄 복사]·[🖼️ 한 장 내보내기] 버튼 세로 줄바꿈 수정 및 실용성 낮은 [✨ AI 다듬기] 기능 제거"
+    ]
+  },
+  {
+    id: "patch-v11.31",
+    version: "v11.31",
+    date: "2026-11-17",
+    title: "육아일기 Storage 타임아웃 5초 단축 · 사진 업로드 진행률 바 표시",
+    changes: [
+      "타임아웃 단축: Firebase Storage 응답 대기 시간을 8초에서 5초로 단축해 실패 시 더 빠르게 폴백 전환",
+      "진행률 표시: 육아일기 사진 업로드·저장 중 상단 플로팅 진행률 팝업 및 버튼 아래 진행 바(%)를 실시간 표시하고 중복 클릭 방지"
+    ]
+  },
   {
     id: "patch-v11.30",
     version: "v11.30",
@@ -3863,8 +3906,8 @@ function MainApp() {
   const [diaryLightboxUrl, setDiaryLightboxUrl] = useState("");
   const [isWeatherModalOpen, setIsWeatherModalOpen] = useState(false);
   const weatherLastFetchedMsRef = useRef(0);
-  const [isPolishingDiary, setIsPolishingDiary] = useState(false);
   const [diarySaveWarning, setDiarySaveWarning] = useState("");
+  const [diaryUploadProgress, setDiaryUploadProgress] = useState(null);
   const [highlightedDiaryId, setHighlightedDiaryId] = useState("");
   const [pendingDiaryPhotoFile, setPendingDiaryPhotoFile] = useState(null);
   const diaryPhotoInputRef = useRef(null);
@@ -4036,6 +4079,8 @@ function MainApp() {
   const [monthlySubTab, setMonthlySubTab] = useState("calendar");
   const [currentMonth, setCurrentMonth] = useState(() => getCurrentYearMonth());
   const [monthlyMember, setMonthlyMember] = useState("시목");
+  const [expenseSearchQuery, setExpenseSearchQuery] = useState("");
+  const [expenseCatFilter, setExpenseCatFilter] = useState("전체");
   const [monthlyBudget, setMonthlyBudget] = useState(() => {
     return Number(localStorage.getItem("kim_family_budget") || 800000);
   });
@@ -9159,6 +9204,7 @@ ${validText}
     } catch (e) {
       showToast("⚠️ 식단 복사 실패");
     } finally {
+      setDiaryUploadProgress(null);
       endWrite(ok);
     }
   };
@@ -9364,20 +9410,31 @@ ${validText}
     const files = Array.from(e.target.files || []);
     if (files.length === 0) return;
     try {
-      const added = files.map((file) => ({
+      const curCount = Array.isArray(diaryForm.photos) ? diaryForm.photos.length : 0;
+      const remain = Math.max(0, 4 - curCount);
+      if (remain === 0) {
+        showToast("📸 육아일기 사진은 최대 4장까지 첨부할 수 있습니다.");
+        return;
+      }
+      const picked = files.slice(0, remain);
+      const added = picked.map((file) => ({
         url: URL.createObjectURL(file),
         file
       }));
       setDiaryForm((prev) => {
         const curPhotos = Array.isArray(prev.photos) ? prev.photos : [];
-        const nextPhotos = [...curPhotos, ...added];
+        const nextPhotos = [...curPhotos, ...added].slice(0, 4);
         return {
           ...prev,
           photos: nextPhotos,
           photoUrl: nextPhotos[0]?.url || ""
         };
       });
-      showToast(`📸 원본 화질 사진 ${files.length}장이 첨부되었습니다!`);
+      if (files.length > remain) {
+        showToast(`📸 최대 4장 제한으로 ${picked.length}장만 첨부되었습니다.`);
+      } else {
+        showToast(`📸 사진 ${picked.length}장이 첨부되었습니다!`);
+      }
     } catch (err) {
       showToast("⚠️ 사진 처리 중 오류가 발생했습니다.");
     } finally {
@@ -9408,6 +9465,7 @@ ${validText}
       showToast("🔒 육아일기는 관리자만 작성·열람할 수 있습니다.");
       return;
     }
+    if (diaryUploadProgress) return;
     const formPhotos = Array.isArray(diaryForm.photos)
       ? diaryForm.photos
       : diaryForm.photoUrl
@@ -9427,50 +9485,41 @@ ${validText}
         : [selectedChildId];
     const primaryChildLabel = targetChildIds.length >= 2 ? "시목·시율" : targetChildIds[0];
     const id = editingDiaryEntry ? editingDiaryEntry.id : `bd-${Date.now()}`;
-    const existingDataLen = formPhotos
+    const cappedPhotos = formPhotos.slice(0, 4);
+    const existingDataLen = cappedPhotos
       .filter((p) => !p?.file && p?.url && String(p.url).startsWith("data:"))
       .reduce((acc, p) => acc + String(p.url).length, 0);
-    const newFilesCount = Math.max(1, formPhotos.filter((p) => p?.file).length);
-    const perPhotoBudget = Math.max(90000, Math.floor((720000 - existingDataLen) / newFilesCount));
+    const newFilesCount = Math.max(1, cappedPhotos.filter((p) => p?.file).length);
+    const perPhotoBudget = Math.max(90000, Math.floor((740000 - existingDataLen) / newFilesCount));
     setDiarySaveWarning("");
+    const totalFilesToUpload = cappedPhotos.filter((p) => p?.file).length;
+    let uploadedFileSeq = 0;
+    setDiaryUploadProgress({
+      stepText: totalFilesToUpload > 0 ? `사진 자동 압축 중... (0/${totalFilesToUpload}장)` : "육아일기 저장 중...",
+      pct: totalFilesToUpload > 0 ? 15 : 60
+    });
     beginWrite();
     let ok = false;
-    let storageWarnReason = "";
     try {
       const finalUrls = [];
-      let usedFallbackCompress = false;
-      for (let idx = 0; idx < formPhotos.length; idx++) {
-        const pItem = formPhotos[idx];
+      for (let idx = 0; idx < cappedPhotos.length; idx++) {
+        const pItem = cappedPhotos[idx];
         if (pItem?.file) {
-          let uploadedUrl = "";
-          if (storage) {
-            try {
-              const safeName = String(pItem.file.name || "photo.jpg").replace(/[^a-zA-Z0-9._-]/g, "_");
-              const sRef = storageRef(storage, `artifacts/${APP_ID}/baby_diary/${primaryChildLabel}/${id}_${idx}_${safeName}`);
-              await Promise.race([
-                uploadBytes(sRef, pItem.file, {
-                  contentType: pItem.file.type || "image/jpeg"
-                }),
-                new Promise((_, reject) => setTimeout(() => reject(new Error("Storage 응답 시간 초과(8초)")), 8000))
-              ]);
-              uploadedUrl = await getDownloadURL(sRef);
-            } catch (storageErr) {
-              storageWarnReason = storageErr?.code
-                ? `${storageErr.code}: ${storageErr.message || ""}`
-                : (storageErr?.message || "Storage 연결/권한 오류");
-              uploadedUrl = await compressDiaryPhotoToBudget(pItem.file, perPhotoBudget);
-              usedFallbackCompress = true;
-            }
-          } else {
-            storageWarnReason = "Firebase Storage 미초기화";
-            uploadedUrl = await compressDiaryPhotoToBudget(pItem.file, perPhotoBudget);
-            usedFallbackCompress = true;
-          }
+          uploadedFileSeq += 1;
+          setDiaryUploadProgress({
+            stepText: `사진 자동 압축 중... (${uploadedFileSeq}/${totalFilesToUpload}장)`,
+            pct: Math.min(85, Math.round((uploadedFileSeq / totalFilesToUpload) * 80))
+          });
+          const uploadedUrl = await compressDiaryPhotoToBudget(pItem.file, perPhotoBudget);
           if (uploadedUrl) finalUrls.push(uploadedUrl);
         } else if (pItem?.url && !pItem.url.startsWith("blob:")) {
           finalUrls.push(pItem.url);
         }
       }
+      setDiaryUploadProgress({
+        stepText: "서버에 일기 저장 중...",
+        pct: 92
+      });
       const payload = {
         id,
         childId: primaryChildLabel,
@@ -9497,18 +9546,15 @@ ${validText}
         photos: [],
         childIds: [selectedChildId]
       });
-      if (storageWarnReason) {
-        setDiarySaveWarning(`⚠️ Storage 원본 업로드 실패(${storageWarnReason}) → 자동 압축으로 저장되었습니다.`);
-      }
       recordActivity("육아", editingDiaryEntry ? "일기수정" : "일기등록", `${primaryChildLabel} · ${payload.date}`, {
         targetSubTab: "diary",
         targetId: id,
         targetChildId: targetChildIds[0] || selectedChildId
       });
       showToast(
-        usedFallbackCompress
-          ? `⚠️ Storage 실패(${storageWarnReason}) → 사진 ${finalUrls.length}장 압축 저장됨`
-          : `📖 ${primaryChildLabel} 육아일기(사진 ${finalUrls.length}장)가 저장되었습니다!`
+        finalUrls.length > 0
+          ? `📖 ${primaryChildLabel} 육아일기(사진 ${finalUrls.length}장 자동압축)가 저장되었습니다!`
+          : `📖 ${primaryChildLabel} 육아일기가 저장되었습니다!`
       );
       ok = true;
     } catch (e) {
@@ -9681,7 +9727,31 @@ ${validText}
       ctx.fillText(entry.mood, W - padX - moodW, 168);
     }
 
-    let curY = 256;
+    let curY = 264;
+
+    // Diary Title & Body FIRST
+    if (entry.title) {
+      ctx.fillStyle = "#1C1917";
+      ctx.font = "bold 38px sans-serif";
+      ctx.fillText(entry.title, padX + 24, curY);
+      curY += 66;
+    }
+
+    ctx.fillStyle = "#44403C";
+    ctx.font = "500 32px sans-serif";
+    bodyLines.forEach((ln) => {
+      ctx.fillText(ln, padX + 24, curY);
+      ctx.strokeStyle = "#EFECE4";
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(padX + 24, curY + 14);
+      ctx.lineTo(W - padX - 24, curY + 14);
+      ctx.stroke();
+      curY += 52;
+    });
+
+    // Photos BELOW text
+    if (photoDims.length > 0) curY += 20;
     for (const pd of photoDims) {
       const boxX = (W - pd.w) / 2;
       const boxY = curY;
@@ -9706,29 +9776,6 @@ ${validText}
       ctx.strokeRect(boxX, boxY, pd.w, pd.h);
       curY += pd.h + 32;
     }
-    if (photoDims.length > 0) curY += 28;
-
-    // Diary Title
-    if (entry.title) {
-      ctx.fillStyle = "#1C1917";
-      ctx.font = "bold 38px sans-serif";
-      ctx.fillText(entry.title, padX + 24, curY);
-      curY += 66;
-    }
-
-    // Subtle ruled lines & diary body
-    ctx.fillStyle = "#44403C";
-    ctx.font = "500 32px sans-serif";
-    bodyLines.forEach((ln) => {
-      ctx.fillText(ln, padX + 24, curY);
-      ctx.strokeStyle = "#EFECE4";
-      ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      ctx.moveTo(padX + 24, curY + 14);
-      ctx.lineTo(W - padX - 24, curY + 14);
-      ctx.stroke();
-      curY += 52;
-    });
 
     // Footer
     ctx.fillStyle = "#78716C";
@@ -9739,61 +9786,9 @@ ${validText}
     const fname = `육아일기_${childMetas.map((c) => c.name).join("_") || "아기"}_${entry.date}.png`;
     setDiaryExportFilename(fname);
     setDiaryExportPreviewUrl(pngUrl);
-    try {
-      const a = document.createElement("a");
-      a.href = pngUrl;
-      a.download = fname;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-    } catch (e) {}
-    showToast("🖼️ 예쁜 육아일기 한 장이 생성되었습니다!");
+    showToast("🖼️ 미리보기에서 공유 또는 다운로드를 선택해 주세요!");
   };
 
-  const handlePolishBabyDiaryWithAi = async () => {
-    if (!isAdminUnlocked) return;
-    if (!diaryForm.content.trim() && !diaryForm.title.trim()) {
-      showToast("다듬을 메모나 내용을 먼저 간단히 입력해 주세요.");
-      return;
-    }
-    if (!geminiApiKey && !openaiApiKey && !EMBEDDED_GEMINI_KEY) {
-      showToast("⚙️ 설정에서 AI API 키를 입력하면 AI 문장 다듬기를 사용할 수 있습니다.");
-      return;
-    }
-    setIsPolishingDiary(true);
-    try {
-      const targetIds = Array.isArray(diaryForm.childIds) && diaryForm.childIds.length > 0 ? diaryForm.childIds : [selectedChildId];
-      const promptText = `당신은 다정한 한국인 부모의 육아일기를 다듬어주는 에디터입니다.
-아래 아기(${targetIds.join(", ")}, 날짜 ${diaryForm.date})에 대한 부모의 짧은 메모를 바탕으로, 과장 없이 진심이 담긴 따뜻한 일기 제목과 3~5문장의 자연스러운 일기 본문으로 다듬어 주세요.
-기존에 적힌 구체적 사실(식단, 수치, 행동)은 빠뜨리지 말고 유지하세요.
-반드시 JSON 객체로만 응답하세요: {"title": "제목", "content": "다듬어진 본문"}
-
-기존 제목: ${diaryForm.title || "(없음)"}
-기존 메모: ${diaryForm.content}`;
-      const res = await callReliableAiEngine({
-        apiKey: geminiApiKey,
-        openaiApiKey,
-        aiProvider,
-        promptText,
-        temperature: 0.65,
-        expectObject: true
-      });
-      if (res && (res.title || res.content)) {
-        setDiaryForm((prev) => ({
-          ...prev,
-          title: res.title ? String(res.title).trim() : prev.title,
-          content: res.content ? String(res.content).trim() : prev.content
-        }));
-        showToast("✨ AI가 육아일기 문장을 따뜻하게 다듬었습니다!");
-      } else {
-        showToast("⚠️ AI 응답을 읽지 못했습니다. 다시 시도해 주세요.");
-      }
-    } catch (e) {
-      showToast(`⚠️ ${e?.message || "AI 다듬기 오류"}`);
-    } finally {
-      setIsPolishingDiary(false);
-    }
-  };
 
   const handleReuseMealsFromOffset = async (offsetDays) => {
     if (!requireEditorAccess("daily")) return;
@@ -10803,6 +10798,21 @@ ${validText}
 
   return (
     <div className="min-h-screen bg-[#FAF8F3] text-stone-800 pb-24 max-w-md mx-auto shadow-xl border-x border-stone-200 relative font-sans">
+      {diaryUploadProgress && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 w-[88%] max-w-xs bg-stone-900/95 text-white px-4 py-2.5 rounded-2xl shadow-xl space-y-1.5">
+          <div className="flex items-center justify-between text-[11px] font-extrabold">
+            <span className="truncate">⏳ {diaryUploadProgress.stepText}</span>
+            <span className="text-emerald-300 shrink-0 ml-2">{diaryUploadProgress.pct}%</span>
+          </div>
+          <div className="w-full h-1.5 rounded-full bg-stone-700 overflow-hidden">
+            <div
+              className="h-full bg-emerald-400 transition-all duration-300"
+              style={{ width: `${diaryUploadProgress.pct}%` }}
+            />
+          </div>
+        </div>
+      )}
+
       {toastMsg && (
         <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 max-w-[92vw] bg-stone-900 text-white px-4 py-2.5 rounded-full text-xs font-bold shadow-lg flex items-center gap-2">
           <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
@@ -12860,26 +12870,92 @@ ${validText}
                 )}
               </div>
 
-              <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-sm space-y-2.5">
-                <h3 className="text-xs font-black text-stone-900">
-                  🧾 {currentMonth}월 장보기 지출 원장 ({monthlyExpenseSummary.ledgerItems.length}건)
-                </h3>
-                <div className="divide-y divide-stone-100">
-                  {monthlyExpenseSummary.ledgerItems.map((exp) => (
-                    <div key={exp.id} className="py-2 flex items-center justify-between text-xs">
-                      <div>
-                        <div className="font-bold text-stone-800">{exp.title}</div>
-                        <div className="text-[10px] text-stone-400">
-                          {exp.date} · {exp.category}
+              {(() => {
+                const eq = expenseSearchQuery.trim().toLowerCase();
+                const cats = ["전체", ...Array.from(new Set(monthlyExpenseSummary.ledgerItems.map((x) => x.category || "기타")))];
+                const filteredLedger = monthlyExpenseSummary.ledgerItems.filter((exp) => {
+                  if (expenseCatFilter !== "전체" && (exp.category || "기타") !== expenseCatFilter) return false;
+                  if (!eq) return true;
+                  return (
+                    String(exp.title || "").toLowerCase().includes(eq) ||
+                    String(exp.category || "").toLowerCase().includes(eq)
+                  );
+                });
+                const filteredSum = filteredLedger.reduce((acc, cur) => acc + (Number(cur.amount) || 0), 0);
+                return (
+                  <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-sm space-y-2.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <h3 className="text-xs font-black text-stone-900">
+                        🧾 {currentMonth}월 장보기 지출 원장 ({filteredLedger.length}건)
+                      </h3>
+                      {(expenseCatFilter !== "전체" || eq) && (
+                        <span className="text-[11px] font-black text-emerald-700 whitespace-nowrap">
+                          합계 {filteredSum.toLocaleString()}원
+                        </span>
+                      )}
+                    </div>
+                    {monthlyExpenseSummary.ledgerItems.length > 0 && (
+                      <div className="space-y-1.5">
+                        <div className="relative">
+                          <input
+                            type="text"
+                            value={expenseSearchQuery}
+                            onChange={(e) => setExpenseSearchQuery(e.target.value)}
+                            placeholder="🔍 지출 품목·카테고리 검색..."
+                            className="w-full px-3 py-1.5 pr-7 rounded-xl border border-stone-200 bg-stone-50 text-[11px] font-semibold text-stone-800"
+                          />
+                          {expenseSearchQuery && (
+                            <button
+                              type="button"
+                              onClick={() => setExpenseSearchQuery("")}
+                              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-700 text-[10px] font-black"
+                            >
+                              ✕
+                            </button>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-1 overflow-x-auto pb-0.5">
+                          {cats.map((c) => (
+                            <button
+                              key={c}
+                              type="button"
+                              onClick={() => setExpenseCatFilter(c)}
+                              className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold border whitespace-nowrap shrink-0 ${
+                                expenseCatFilter === c
+                                  ? "bg-stone-900 text-white border-stone-900"
+                                  : "bg-stone-50 text-stone-600 border-stone-200"
+                              }`}
+                            >
+                              {c}
+                            </button>
+                          ))}
                         </div>
                       </div>
-                      <span className="font-extrabold text-stone-900">
-                        {Number(exp.amount).toLocaleString()}원
-                      </span>
+                    )}
+                    <div className="divide-y divide-stone-100">
+                      {filteredLedger.length === 0 ? (
+                        <div className="py-4 text-center text-[11px] font-bold text-stone-400">
+                          조건에 맞는 지출 내역이 없습니다.
+                        </div>
+                      ) : (
+                        filteredLedger.map((exp) => (
+                          <div key={exp.id} className="py-2 flex items-center justify-between text-xs">
+                            <div>
+                              <div className="font-bold text-stone-800">{exp.title}</div>
+                              <div className="text-[10px] text-stone-400">
+                                {exp.date} · {exp.category}
+                              </div>
+                            </div>
+                            <span className="font-extrabold text-stone-900">
+                              {Number(exp.amount).toLocaleString()}원
+                            </span>
+                          </div>
+                        ))
+                      )}
                     </div>
-                  ))}
-                </div>
-              </div>
+                  </div>
+                );
+              })()}
             </div>
           )}
         </div>
@@ -14186,7 +14262,7 @@ ${validText}
                       })()
                     }
                   ].map((dOpt) => {
-                    const targetDate = addDaysToDate(getTodayStr(), dOpt.offset);
+                    const targetDate = addMonthsToDateStr(getTodayStr(), 0, dOpt.offset);
                     return (
                       <button
                         key={dOpt.label}
@@ -17250,40 +17326,51 @@ ${validText}
                         onChange={handleDiaryPhotoSelect}
                         className="hidden"
                       />
-                      <div className="grid grid-cols-3 gap-1.5">
+                      <div className="grid grid-cols-2 gap-1.5">
                         <button
                           type="button"
+                          disabled={(diaryForm.photos?.length || 0) >= 4}
                           onClick={() => diaryPhotoInputRef.current?.click()}
-                          className="py-2 px-1.5 rounded-xl bg-[#F3EEE4] hover:bg-stone-200 text-stone-800 text-[11px] font-extrabold flex items-center justify-center gap-1 whitespace-nowrap"
+                          className="py-2 px-2 rounded-xl bg-[#F3EEE4] hover:bg-stone-200 disabled:opacity-50 text-stone-800 text-[11px] font-extrabold flex items-center justify-center gap-1 whitespace-nowrap"
                         >
                           <Camera className="w-3.5 h-3.5 shrink-0" />
-                          <span>{(diaryForm.photos?.length || 0) > 0 ? `사진(${diaryForm.photos.length})` : "사진 첨부"}</span>
+                          <span>
+                            {(diaryForm.photos?.length || 0) >= 4
+                              ? "사진 4/4 (최대)"
+                              : (diaryForm.photos?.length || 0) > 0
+                              ? `사진 (${diaryForm.photos.length}/4)`
+                              : "사진 첨부 (최대 4장)"}
+                          </span>
                         </button>
                         <button
                           type="button"
                           onClick={handleInsertTodayBabySummaryToDiary}
-                          className="py-2 px-1.5 rounded-xl bg-[#EEF3EE] hover:bg-[#DFE9E0] text-[#35503C] border border-[#C9D8CC] text-[11px] font-extrabold whitespace-nowrap"
+                          className="py-2 px-2 rounded-xl bg-[#EEF3EE] hover:bg-[#DFE9E0] text-[#35503C] border border-[#C9D8CC] text-[11px] font-extrabold whitespace-nowrap"
                           title="선택한 날짜의 식단·성장·진료 기록을 본문에 추가"
                         >
                           ✨ 기록 불러오기
                         </button>
-                        <button
-                          type="button"
-                          onClick={handlePolishBabyDiaryWithAi}
-                          disabled={isPolishingDiary}
-                          className="py-2 px-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 text-[11px] font-extrabold whitespace-nowrap disabled:opacity-50"
-                          title="짧은 메모를 따뜻한 육아일기 문장으로 다듬기"
-                        >
-                          {isPolishingDiary ? "다듬는중..." : "✨ AI 다듬기"}
-                        </button>
                       </div>
                       <button
                         type="button"
+                        disabled={Boolean(diaryUploadProgress)}
                         onClick={handleSaveBabyDiary}
-                        className="w-full py-2.5 rounded-xl bg-[#5E7A65] hover:bg-[#4E6855] text-white text-xs font-extrabold whitespace-nowrap"
+                        className="w-full py-2.5 rounded-xl bg-[#5E7A65] hover:bg-[#4E6855] disabled:opacity-60 text-white text-xs font-extrabold whitespace-nowrap"
                       >
-                        💾 {editingDiaryEntry ? "일기 수정 저장" : "육아일기 저장하기"}
+                        {diaryUploadProgress
+                          ? `⏳ ${diaryUploadProgress.stepText}`
+                          : `💾 ${editingDiaryEntry ? "일기 수정 저장" : "육아일기 저장하기"}`}
                       </button>
+                      {diaryUploadProgress && (
+                        <div className="space-y-1">
+                          <div className="w-full h-2 rounded-full bg-stone-200 overflow-hidden">
+                            <div
+                              className="h-full bg-[#5E7A65] transition-all duration-300"
+                              style={{ width: `${diaryUploadProgress.pct}%` }}
+                            />
+                          </div>
+                        </div>
+                      )}
                       {diarySaveWarning && (
                         <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-[11px] font-bold text-rose-900 flex items-start justify-between gap-2">
                           <span className="break-all leading-snug">{diarySaveWarning}</span>
@@ -17299,7 +17386,12 @@ ${validText}
                     </div>
 
                     {Array.isArray(diaryForm.photos) && diaryForm.photos.length > 0 && (
-                      <div className="grid grid-cols-2 gap-2">
+                      <div className="space-y-1.5">
+                        <div className="text-[10px] font-extrabold text-[#35503C] bg-[#EEF3EE] px-2.5 py-1 rounded-lg flex items-center justify-between">
+                          <span>📸 {diaryForm.photos.length}/4장 첨부됨</span>
+                          <span>저장 시 자동 압축 최적화</span>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
                         {diaryForm.photos.map((pItem, pIdx) => (
                           <div key={pIdx} className="relative rounded-xl overflow-hidden border border-stone-200 bg-stone-50">
                             <img src={pItem.url} alt={`첨부 ${pIdx + 1}`} className="w-full h-32 object-cover" />
@@ -17354,6 +17446,7 @@ ${validText}
                             </button>
                           </div>
                         ))}
+                        </div>
                       </div>
                     )}
                   </div>
@@ -17450,21 +17543,23 @@ ${validText}
                                 : "border-[#C9D8CC]"
                             }`}
                           >
-                            <div className="flex items-center justify-between gap-2">
-                              <div className="flex items-center gap-1.5 flex-wrap">
-                                <span className="px-2 py-0.5 rounded-lg bg-[#EEF3EE] text-[#35503C] text-[10px] font-black">
-                                  {entry.date} · {formatBabyAgeLabel(activeChild.birthDate, entry.date)}
-                                </span>
-                                <span className="text-[10px] font-bold text-stone-400">
-                                  ({activeChild.birthDate}생)
-                                </span>
-                                {entry.mood && (
-                                  <span className="px-2 py-0.5 rounded-lg bg-white border border-stone-200 text-[10px] font-bold">
-                                    {entry.mood}
+                            <div className="space-y-1.5">
+                              <div className="flex items-center justify-between gap-1.5">
+                                <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+                                  <span className="px-2 py-0.5 rounded-lg bg-[#EEF3EE] text-[#35503C] text-[10px] font-black whitespace-nowrap">
+                                    {entry.date} · {formatBabyAgeLabel(activeChild.birthDate, entry.date)}
                                   </span>
-                                )}
+                                  <span className="text-[10px] font-bold text-stone-400 whitespace-nowrap">
+                                    ({activeChild.birthDate}생)
+                                  </span>
+                                  {entry.mood && (
+                                    <span className="px-2 py-0.5 rounded-lg bg-white border border-stone-200 text-[10px] font-bold whitespace-nowrap">
+                                      {entry.mood}
+                                    </span>
+                                  )}
+                                </div>
                               </div>
-                              <div className="flex items-center gap-1">
+                              <div className="flex items-center justify-end gap-1 flex-nowrap">
                                 <button
                                   type="button"
                                   onClick={async () => {
@@ -17477,14 +17572,14 @@ ${validText}
                                       showToast("📄 육아일기 텍스트가 복사되었습니다!");
                                     } catch (e) {}
                                   }}
-                                  className="px-2 py-1 rounded-lg bg-[#F3EEE4] hover:bg-stone-200 text-stone-800 text-[10px] font-extrabold"
+                                  className="px-2.5 py-1 rounded-lg bg-[#F3EEE4] hover:bg-stone-200 text-stone-800 text-[10px] font-extrabold whitespace-nowrap shrink-0"
                                 >
                                   📄 복사
                                 </button>
                                 <button
                                   type="button"
                                   onClick={() => handleExportDiaryCardImage(entry)}
-                                  className="px-2.5 py-1 rounded-lg bg-[#5E7A65] hover:bg-[#4E6855] text-white text-[10px] font-extrabold"
+                                  className="px-2.5 py-1 rounded-lg bg-[#5E7A65] hover:bg-[#4E6855] text-white text-[10px] font-extrabold whitespace-nowrap shrink-0"
                                 >
                                   🖼️ 한 장 내보내기
                                 </button>
@@ -17515,6 +17610,7 @@ ${validText}
                                   <Trash2 className="w-3.5 h-3.5" />
                                 </button>
                               </div>
+                            </div>
                             </div>
                             {getDiaryEntryChildIds(entry).length >= 2 && (
                               <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-amber-50 border border-amber-200 text-amber-900 text-[10px] font-black">
