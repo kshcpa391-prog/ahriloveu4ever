@@ -1212,7 +1212,7 @@ const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.65) =>
     img.src = dataUrl;
   });
 
-const APP_CODE_VERSION = "v11.67";
+const APP_CODE_VERSION = "v11.68";
 
 const formatRoutineTimeLabel = (hhmm) => {
   const m = String(hhmm || "").trim().match(/^(\d{2}):(\d{2})$/);
@@ -1290,6 +1290,17 @@ const formatTime12Ko = (ms) => {
 };
 
 const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v11.68",
+    version: "v11.68",
+    date: "2026-11-18",
+    title: "성장분석 또래 한국 남아(시목)·여아(시율) 백분위 비교 & 인증 오류 방어 보강",
+    changes: [
+      "또래 한국 영유아 성장 비교: 질병관리청 2017 소아청소년 성장도표(0~35개월)를 기준으로 시목(남아)·시율(여아)의 키·몸무게 백분위, 또래 평균(P50) 대비 차이, P3~P97 게이지 바 및 출처 표시 추가",
+      "성장 이력 백분위 배지: 과거 성장 측정 카드마다 해당 시점의 백분위(P)를 함께 표시",
+      "인증 연결 안정화: Firebase 익명 로그인 실패 시 조용히 빈 화면이 되지 않도록 오류 안내 및 2.5초 후 자동 재시도 추가"
+    ]
+  },
   {
     id: "patch-v11.67",
     version: "v11.67",
@@ -3570,9 +3581,106 @@ const INITIAL_SCHEDULES = [
 ];
 
 const CHILDREN_INFO = [
-  { id: "시목", name: "김시목", birthDate: "2025-08-03", emoji: "👦🏻", badge: "첫째" },
-  { id: "시율", name: "김시율", birthDate: "2026-11-06", emoji: "👶🏻", badge: "둘째" }
+  { id: "시목", name: "김시목", birthDate: "2025-08-03", gender: "남아", emoji: "👦🏻", badge: "첫째" },
+  { id: "시율", name: "김시율", birthDate: "2026-11-06", gender: "여아", emoji: "👶🏻", badge: "둘째" }
 ];
+
+// 질병관리청 · 대한소아청소년과학회 「2017 소아청소년 성장도표」 (0~35개월, [월령, P3, P50, P97])
+const KOREA_GROWTH_STD_2017 = {
+  남아: {
+    height: [
+      [0, 46.3, 49.9, 53.4], [1, 51.1, 54.7, 58.4], [2, 54.7, 58.4, 62.2], [3, 57.6, 61.4, 65.3],
+      [4, 60.0, 63.9, 67.8], [5, 61.9, 65.9, 69.9], [6, 63.6, 67.6, 71.6], [7, 65.1, 69.2, 73.2],
+      [8, 66.5, 70.6, 74.7], [9, 67.7, 72.0, 76.2], [10, 69.0, 73.3, 77.6], [11, 70.2, 74.5, 78.9],
+      [12, 71.3, 75.7, 80.2], [15, 74.4, 79.1, 83.9], [18, 77.2, 82.3, 87.3], [21, 79.7, 85.1, 90.5],
+      [24, 81.4, 87.1, 92.9], [27, 83.5, 89.6, 95.7], [30, 85.5, 91.9, 98.3], [33, 87.4, 94.1, 100.8],
+      [35, 88.5, 95.4, 102.3]
+    ],
+    weight: [
+      [0, 2.5, 3.3, 4.3], [1, 3.4, 4.5, 5.7], [2, 4.4, 5.6, 7.0], [3, 5.1, 6.4, 7.9],
+      [4, 5.6, 7.0, 8.6], [5, 6.1, 7.5, 9.2], [6, 6.4, 7.9, 9.7], [7, 6.7, 8.3, 10.2],
+      [8, 7.0, 8.6, 10.5], [9, 7.2, 8.9, 10.9], [10, 7.5, 9.2, 11.2], [11, 7.7, 9.4, 11.5],
+      [12, 7.8, 9.6, 11.8], [15, 8.4, 10.3, 12.7], [18, 8.9, 10.9, 13.5], [21, 9.3, 11.5, 14.3],
+      [24, 9.8, 12.2, 15.1], [27, 10.2, 12.7, 15.9], [30, 10.7, 13.3, 16.6], [33, 11.1, 13.8, 17.3],
+      [35, 11.3, 14.2, 17.8]
+    ]
+  },
+  여아: {
+    height: [
+      [0, 45.6, 49.1, 52.7], [1, 50.0, 53.7, 57.4], [2, 53.2, 57.1, 60.9], [3, 55.8, 59.8, 63.8],
+      [4, 58.0, 62.1, 66.2], [5, 59.9, 64.0, 68.2], [6, 61.5, 65.7, 70.0], [7, 62.9, 67.3, 71.6],
+      [8, 64.3, 68.7, 73.2], [9, 65.6, 70.1, 74.7], [10, 66.8, 71.5, 76.1], [11, 68.0, 72.8, 77.5],
+      [12, 69.2, 74.0, 78.9], [15, 72.4, 77.5, 82.7], [18, 75.2, 80.7, 86.2], [21, 77.9, 83.7, 89.4],
+      [24, 79.6, 85.7, 91.8], [27, 81.9, 88.3, 94.6], [30, 84.0, 90.7, 97.3], [33, 86.0, 92.9, 99.8],
+      [35, 87.3, 94.4, 101.4]
+    ],
+    weight: [
+      [0, 2.4, 3.2, 4.2], [1, 3.2, 4.2, 5.4], [2, 4.0, 5.1, 6.5], [3, 4.6, 5.8, 7.4],
+      [4, 5.1, 6.4, 8.1], [5, 5.5, 6.9, 8.7], [6, 5.8, 7.3, 9.2], [7, 6.1, 7.6, 9.6],
+      [8, 6.3, 7.9, 10.0], [9, 6.6, 8.2, 10.4], [10, 6.8, 8.5, 10.7], [11, 7.0, 8.7, 11.0],
+      [12, 7.1, 8.9, 11.3], [15, 7.7, 9.6, 12.2], [18, 8.2, 10.2, 13.0], [21, 8.7, 10.9, 13.8],
+      [24, 9.2, 11.5, 14.6], [27, 9.6, 12.1, 15.4], [30, 10.1, 12.7, 16.2], [33, 10.5, 13.3, 17.0],
+      [35, 10.8, 13.7, 17.6]
+    ]
+  }
+};
+
+const normalCdf = (z) => {
+  const t = 1 / (1 + 0.2316419 * Math.abs(z));
+  const d = 0.3989422804014327 * Math.exp((-z * z) / 2);
+  const p = d * t * (0.31938153 + t * (-0.356563782 + t * (1.781477937 + t * (-1.821255978 + t * 1.330274429))));
+  return z >= 0 ? 1 - p : p;
+};
+
+const interpolateGrowthRef = (table, monthsFloat) => {
+  const m = Math.max(0, Math.min(35, monthsFloat));
+  for (let i = 0; i < table.length - 1; i++) {
+    const [m0, p30, p500, p970] = table[i];
+    const [m1, p31, p501, p971] = table[i + 1];
+    if (m >= m0 && m <= m1) {
+      const r = m1 === m0 ? 0 : (m - m0) / (m1 - m0);
+      return {
+        p3: p30 + (p31 - p30) * r,
+        p50: p500 + (p501 - p500) * r,
+        p97: p970 + (p971 - p970) * r
+      };
+    }
+  }
+  const last = table[table.length - 1];
+  return { p3: last[1], p50: last[2], p97: last[3] };
+};
+
+const evaluateGrowthMetric = (table, monthsFloat, val) => {
+  const num = Number(val);
+  if (!Number.isFinite(num) || num <= 0) return null;
+  const ref = interpolateGrowthRef(table, monthsFloat);
+  const z =
+    num >= ref.p50
+      ? (num - ref.p50) / Math.max(0.01, (ref.p97 - ref.p50) / 1.8808)
+      : (num - ref.p50) / Math.max(0.01, (ref.p50 - ref.p3) / 1.8808);
+  const rawPct = Math.round(normalCdf(z) * 100);
+  const pct = Math.max(1, Math.min(99, rawPct));
+  const label = num < ref.p3 ? "3백분위 미만" : num > ref.p97 ? "97백분위 초과" : `${pct}백분위`;
+  const status = num < ref.p3 ? "저성장 주의" : num > ref.p97 ? "상위 3% 이내" : "정상 범위";
+  return { val: num, ...ref, pct, label, status, diffP50: num - ref.p50 };
+};
+
+const evaluateKoreanGrowthPercentile = (child, measureDateStr, heightVal, weightVal) => {
+  if (!child?.birthDate) return null;
+  const gender = child.gender || (child.id === "시율" ? "여아" : "남아");
+  const std = KOREA_GROWTH_STD_2017[gender];
+  if (!std) return null;
+  const birthMs = new Date(child.birthDate + "T00:00:00").getTime();
+  const measMs = new Date((measureDateStr || getTodayStr()) + "T00:00:00").getTime();
+  const diffDays = Math.max(0, (measMs - birthMs) / (1000 * 60 * 60 * 24));
+  const monthsFloat = Math.min(35, diffDays / 30.4375);
+  return {
+    gender,
+    monthsFloat,
+    height: evaluateGrowthMetric(std.height, monthsFloat, heightVal),
+    weight: evaluateGrowthMetric(std.weight, monthsFloat, weightVal)
+  };
+};
 
 const getChildAgeStats = (birthStr) => {
   const today = new Date(getTodayStr() + "T00:00:00");
@@ -5962,7 +6070,8 @@ function MainApp() {
   // ==========================================
   useEffect(() => {
     if (!auth) return;
-    const initAuth = async () => {
+    let retryTimer = null;
+    const initAuth = async (isRetry = false) => {
       try {
         if (typeof __initial_auth_token !== "undefined" && __initial_auth_token) {
           await signInWithCustomToken(auth, __initial_auth_token);
@@ -5971,11 +6080,22 @@ function MainApp() {
         }
       } catch (err) {
         console.error("Auth error:", err);
+        if (!isRetry) {
+          retryTimer = setTimeout(() => initAuth(true), 2500);
+        } else {
+          setSyncErrorMsg("서버 인증 연결에 실패했습니다. 네트워크 확인 후 새로고침(F5)해 주세요.");
+        }
       }
     };
-    initAuth();
-    const unsub = onAuthStateChanged(auth, (u) => setUser(u));
-    return () => unsub();
+    initAuth(false);
+    const unsub = onAuthStateChanged(auth, (u) => {
+      setUser(u);
+      if (u) setSyncErrorMsg((prev) => (prev.includes("서버 인증") ? "" : prev));
+    });
+    return () => {
+      if (retryTimer) clearTimeout(retryTimer);
+      unsub();
+    };
   }, []);
 
   useEffect(() => {
@@ -19234,6 +19354,72 @@ ${validText}
                   </button>
                 </div>
 
+                {childGrowth.length > 0 && (() => {
+                  const latest = childGrowth[0];
+                  const cmp = evaluateKoreanGrowthPercentile(activeChild, latest.date, latest.height, latest.weight);
+                  if (!cmp || (!cmp.height && !cmp.weight)) return null;
+                  const renderMetricGauge = (title, emoji, unit, m, tone) => {
+                    if (!m) return null;
+                    const barPct = Math.max(2, Math.min(98, m.pct));
+                    const diffSign = m.diffP50 >= 0 ? "+" : "";
+                    return (
+                      <div className="bg-[#FAF8F3] rounded-xl p-2.5 border border-stone-200/80 space-y-1.5">
+                        <div className="flex items-center justify-between gap-1">
+                          <span className="text-[12px] font-black text-stone-800 whitespace-nowrap">
+                            {emoji} {title} <span className="text-[13.5px] text-stone-950">{m.val}{unit}</span>
+                          </span>
+                          <span className={`px-2 py-0.5 rounded-full text-[10.5px] font-black whitespace-nowrap ${
+                            m.val < m.p3 || m.val > m.p97
+                              ? "bg-amber-100 text-amber-900"
+                              : tone === "emerald"
+                              ? "bg-emerald-100 text-emerald-800"
+                              : "bg-indigo-100 text-indigo-800"
+                          }`}>
+                            {m.label}
+                          </span>
+                        </div>
+                        <div className="relative h-2 rounded-full bg-stone-200 overflow-visible">
+                          <div
+                            className={`h-full rounded-full ${tone === "emerald" ? "bg-emerald-500" : "bg-indigo-500"}`}
+                            style={{ width: `${barPct}%` }}
+                          />
+                          <div
+                            className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-3 h-3 rounded-full bg-white border-2 border-stone-800 shadow-sm"
+                            style={{ left: `${barPct}%` }}
+                          />
+                        </div>
+                        <div className="flex items-center justify-between text-[10.5px] font-bold text-stone-500 gap-1">
+                          <span className="whitespace-nowrap">
+                            또래 평균(P50) {m.p50.toFixed(1)}{unit} ({diffSign}{m.diffP50.toFixed(1)}{unit})
+                          </span>
+                          <span className="whitespace-nowrap text-stone-400">
+                            정상 {m.p3.toFixed(1)}~{m.p97.toFixed(1)}{unit}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  };
+                  return (
+                    <div className="bg-white p-3.5 rounded-2xl border border-stone-200 shadow-sm space-y-2.5">
+                      <div className="flex items-center justify-between gap-1">
+                        <span className="text-[13.5px] font-black text-stone-900">
+                          📊 또래 한국 {cmp.gender} 비교 ({cmp.monthsFloat.toFixed(1)}개월)
+                        </span>
+                        <span className="text-[10.5px] font-bold text-stone-400 whitespace-nowrap">
+                          {latest.date} 측정 기준
+                        </span>
+                      </div>
+                      <div className="space-y-2">
+                        {renderMetricGauge("키", "📏", "cm", cmp.height, "emerald")}
+                        {renderMetricGauge("몸무게", "⚖️", "kg", cmp.weight, "indigo")}
+                      </div>
+                      <div className="text-[10px] font-semibold text-stone-400 leading-snug">
+                        출처: 질병관리청(KDCA) · 대한소아청소년과학회 「2017 소아청소년 성장도표」 (0~35개월 WHO 기준)
+                      </div>
+                    </div>
+                  );
+                })()}
+
                 {childGrowth.length >= 2 && (() => {
                   const sorted = [...childGrowth].reverse().slice(-8);
                   const weights = sorted.map((g) => Number(g.weight || 0)).filter((v) => v > 0);
@@ -19310,13 +19496,26 @@ ${validText}
                         prev && g.weight && prev.weight ? (g.weight - prev.weight).toFixed(1) : null;
                       const hDiff =
                         prev && g.height && prev.height ? (g.height - prev.height).toFixed(1) : null;
+                      const rowCmp = evaluateKoreanGrowthPercentile(activeChild, g.date, g.height, g.weight);
                       return (
                         <div
                           key={g.id}
                           className="bg-white p-3 rounded-2xl border border-stone-200 flex items-center justify-between gap-2"
                         >
                           <div>
-                            <div className="text-[12.5px] font-bold text-stone-500">{g.date}</div>
+                            <div className="text-[12.5px] font-bold text-stone-500 flex items-center gap-1.5 flex-wrap">
+                              <span>{g.date}</span>
+                              {rowCmp?.height && (
+                                <span className="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 text-[10px] font-extrabold">
+                                  키 P{rowCmp.height.pct}
+                                </span>
+                              )}
+                              {rowCmp?.weight && (
+                                <span className="px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 text-[10px] font-extrabold">
+                                  체중 P{rowCmp.weight.pct}
+                                </span>
+                              )}
+                            </div>
                             <div className="text-[13.5px] font-black text-stone-900 mt-0.5 flex flex-wrap gap-2">
                               {g.height && (
                                 <span>
