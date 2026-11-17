@@ -1212,7 +1212,7 @@ const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.65) =>
     img.src = dataUrl;
   });
 
-const APP_CODE_VERSION = "v11.56";
+const APP_CODE_VERSION = "v11.59";
 
 const formatRoutineTimeLabel = (hhmm) => {
   const m = String(hhmm || "").trim().match(/^(\d{2}):(\d{2})$/);
@@ -1228,15 +1228,15 @@ const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-const APP_BUILD_DATE = "2026-11-17 22:38";
+const APP_BUILD_DATE = "2026-11-17 23:08";
 const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
   sageBtn: "bg-[#5E7A65] hover:bg-[#4E6855] text-white",
   sageSoft: "bg-[#EEF3EE] text-[#35503C] border-[#C9D8CC]",
   cardBase: "bg-white rounded-2xl border border-stone-200 shadow-sm",
-  btnPrimary: "h-9 px-3.5 rounded-xl text-xs font-extrabold transition",
-  btnCompact: "h-7 px-2.5 rounded-lg text-[10px] font-extrabold transition"
+  btnPrimary: "h-9 px-3.5 rounded-xl text-[13.5px] font-extrabold transition",
+  btnCompact: "h-7 px-2.5 rounded-lg text-[11.5px] font-extrabold transition"
 };
 const EDITOR_INVITE_CODE = "0402";
 const DEFAULT_HELPER_CODE = "1234";
@@ -1290,6 +1290,36 @@ const formatTime12Ko = (ms) => {
 };
 
 const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v11.59",
+    version: "v11.59",
+    date: "2026-11-17",
+    title: "기저귀 원탭/롱프레스 즉시 기록 (짧게=소변 · 길게 0.5초=대변)",
+    changes: [
+      "원탭 기저귀 기록: 홈 화면과 [🍼 수유·생활]의 🧷 기저귀 버튼을 짧게 누르면 소변, 0.5초 이상 길게 누르면 대변으로 팝업 없이 즉시 기록되도록 개선"
+    ]
+  },
+  {
+    id: "patch-v11.58",
+    version: "v11.58",
+    date: "2026-11-17",
+    title: "전체 가독성 글씨 크기 상향(테두리·표 크기 유지) · 케어 카드 색상 포인트 & [⬆️ 위로] 플로팅 버튼",
+    changes: [
+      "가독성 개선: 카드 패딩·표 크기·테두리는 유지하면서 전체 텍스트 크기 체계를 한 단계씩(+1.5px) 비례 상향해 제목·본문·라벨 위계를 유지한 채 시인성 강화",
+      "시각화 개선: 홈 케어 현황 3칸 타일 상단에 기저귀(앰버)·수유(로즈)·수면(인디고) 컬러 포인트 바 적용",
+      "편의성 개선: 스크롤 시 좌측 하단에 [⬆️ 위로] 플로팅 버튼을 표시해 1탭으로 상단 복귀"
+    ]
+  },
+  {
+    id: "patch-v11.57",
+    version: "v11.57",
+    date: "2026-11-17",
+    title: "홈 편집 버튼 상단(알림 왼쪽) 이동 & 날씨·시율 케어 현황 표시/숨김 선택 지원",
+    changes: [
+      "헤더 배치 개선: [✏️ 홈편집] 버튼을 홈 화면 맨 위 알림(🔔) 버튼 왼쪽으로 이동해 즉시 접근 가능",
+      "표시/숨김 확장: 홈 편집 패널에서 [🌤️ 날씨 배너]와 [👶 시율 케어현황]의 표시·숨김 여부를 시간대별로 직접 선택 가능"
+    ]
+  },
   {
     id: "patch-v11.56",
     version: "v11.56",
@@ -3731,11 +3761,11 @@ class ErrorBoundary extends React.Component {
         <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-stone-50 text-center">
           <div className="bg-white p-6 rounded-3xl shadow-lg border border-red-200 max-w-sm w-full space-y-3">
             <div className="text-2xl">⚠️</div>
-            <h2 className="text-sm font-black text-stone-900">화면 자동 복구</h2>
-            <p className="text-xs text-stone-600 break-all">{this.state.errorMsg}</p>
+            <h2 className="text-[15.5px] font-black text-stone-900">화면 자동 복구</h2>
+            <p className="text-[13.5px] text-stone-600 break-all">{this.state.errorMsg}</p>
             <button
               onClick={() => window.location.reload()}
-              className="w-full py-2.5 rounded-xl bg-stone-900 text-white text-xs font-extrabold"
+              className="w-full py-2.5 rounded-xl bg-stone-900 text-white text-[13.5px] font-extrabold"
             >
               새로고침
             </button>
@@ -4247,10 +4277,21 @@ function MainApp() {
   const [activityDateFilter, setActivityDateFilter] = useState("all");
   const [activityTypeFilter, setActivityTypeFilter] = useState("all");
   const [activityShowAllDays, setActivityShowAllDays] = useState(false);
+  const [showScrollTop, setShowScrollTop] = useState(false);
   const [activityTimerTick, setActivityTimerTick] = useState(Date.now());
   const activityZipInputRef = useRef(null);
   const activityPhotoInputRef = useRef(null);
   const activityTopRef = useRef(null);
+  const diaperPressTimerRef = useRef(null);
+  const diaperLongPressedRef = useRef(false);
+
+  useEffect(() => {
+    const onScroll = () => {
+      setShowScrollTop((window.scrollY || document.documentElement.scrollTop || 0) > 320);
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
 
   useEffect(() => {
     const hasActive = babyActivities.some((a) => a.inProgress);
@@ -5356,13 +5397,13 @@ function MainApp() {
     return (
       <div className={`rounded-2xl border p-5 text-center space-y-2 ${tone}`}>
         <div className="text-xl">{icon}</div>
-        <div className="text-xs font-black">{title}</div>
-        {description && <div className="text-[11px] opacity-85 leading-relaxed">{description}</div>}
+        <div className="text-[13.5px] font-black">{title}</div>
+        {description && <div className="text-[12.5px] opacity-85 leading-relaxed">{description}</div>}
         {actionLabel && onAction && (
           <button
             type="button"
             onClick={onAction}
-            className="mt-1 px-3.5 py-1.5 rounded-xl bg-stone-900 text-white text-[11px] font-extrabold"
+            className="mt-1 px-3.5 py-1.5 rounded-xl bg-stone-900 text-white text-[12.5px] font-extrabold"
           >
             {actionLabel}
           </button>
@@ -5378,8 +5419,8 @@ function MainApp() {
           <Lock className="w-6 h-6" />
         </div>
         <div className="space-y-1">
-          <h3 className="text-sm font-black text-stone-900">{tabLabel} 메뉴는 잠겨 있습니다</h3>
-          <p className="text-xs text-stone-500 leading-relaxed">
+          <h3 className="text-[15.5px] font-black text-stone-900">{tabLabel} 메뉴는 잠겨 있습니다</h3>
+          <p className="text-[13.5px] text-stone-500 leading-relaxed">
             {accessRole === "guest"
               ? "미로그인 상태에서는 가족사진과 일부 메뉴(식단·레시피)만 볼 수 있습니다. 가족 또는 육아지원군 비밀번호로 로그인해 주세요."
               : "현재 계정에서는 접근이 제한된 메뉴입니다. 관리자 비밀번호로 로그인하거나 설정에서 허용 메뉴를 변경할 수 있습니다."}
@@ -5389,14 +5430,14 @@ function MainApp() {
           <button
             type="button"
             onClick={() => setIsEditorUnlockModalOpen(true)}
-            className="px-4 py-2 rounded-xl bg-stone-900 hover:bg-stone-800 text-white text-xs font-extrabold"
+            className="px-4 py-2 rounded-xl bg-stone-900 hover:bg-stone-800 text-white text-[13.5px] font-extrabold"
           >
             🔑 로그인 / 권한 변경
           </button>
           <button
             type="button"
             onClick={() => setActiveTab("home")}
-            className="px-3.5 py-2 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-xs font-bold"
+            className="px-3.5 py-2 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-[13.5px] font-bold"
           >
             🏠 홈으로
           </button>
@@ -10142,6 +10183,36 @@ ${validText}
     return { list, lastFeed, prevFeed, feedIntervalMs, lastDiaper, lastSleep };
   };
 
+  const handleQuickRecordDiaper = async (subType = "소변", childOverride = null) => {
+    if (!requireEditorAccess()) return;
+    if (!user || !db) {
+      showToast("⚠️ 서버 연결 후 기록할 수 있습니다.");
+      return;
+    }
+    const targetChild = childOverride || selectedChildId || "시율";
+    const nowMs = Date.now();
+    const todayStr = formatDate(new Date(nowMs));
+    const id = `act-${targetChild}-${nowMs}`;
+    const payload = {
+      id,
+      childId: targetChild,
+      type: "기저귀",
+      subType,
+      date: todayStr,
+      startMs: nowMs,
+      endMs: null,
+      durationMin: 0,
+      amountMl: 0,
+      memo: "",
+      photoUrl: "",
+      inProgress: false,
+      author: actorName || "관리자",
+      updatedAt: new Date().toISOString()
+    };
+    await setDoc(getDocRef("family_baby_activities_v1", id), payload);
+    showToast(`${subType === "대변" ? "💩" : "🧷"} ${targetChild} ${subType}이 즉시 기록되었습니다!`);
+  };
+
   const handleQuickTapBabyActivity = async (typeId, childOverride = null) => {
     if (!requireEditorAccess()) return;
     if (!user || !db) {
@@ -11886,7 +11957,7 @@ ${validText}
     <div className="min-h-screen bg-[#FAF8F3] text-stone-800 pb-24 max-w-md mx-auto shadow-xl border-x border-stone-200 relative font-sans">
       {diaryUploadProgress && (
         <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 w-[88%] max-w-xs bg-stone-900/95 text-white px-4 py-2.5 rounded-2xl shadow-xl space-y-1.5">
-          <div className="flex items-center justify-between text-[11px] font-extrabold">
+          <div className="flex items-center justify-between text-[12.5px] font-extrabold">
             <span className="truncate">⏳ {diaryUploadProgress.stepText}</span>
             <span className="text-emerald-300 shrink-0 ml-2">{diaryUploadProgress.pct}%</span>
           </div>
@@ -11900,7 +11971,7 @@ ${validText}
       )}
 
       {toastMsg && (
-        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 max-w-[92vw] bg-stone-900 text-white px-4 py-2.5 rounded-full text-xs font-bold shadow-lg flex items-center gap-2">
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 max-w-[92vw] bg-stone-900 text-white px-4 py-2.5 rounded-full text-[13.5px] font-bold shadow-lg flex items-center gap-2">
           <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
           <span className="truncate">{toastMsg}</span>
           {toastUndo?.fn && (
@@ -11911,7 +11982,7 @@ ${validText}
                 setToastUndo(null);
                 fn();
               }}
-              className="ml-1 px-2.5 py-1 rounded-full bg-amber-500 hover:bg-amber-400 text-stone-950 text-[11px] font-black shrink-0 whitespace-nowrap"
+              className="ml-1 px-2.5 py-1 rounded-full bg-amber-500 hover:bg-amber-400 text-stone-950 text-[12.5px] font-black shrink-0 whitespace-nowrap"
             >
               ↩️ 되돌리기
             </button>
@@ -11929,13 +12000,13 @@ ${validText}
       >
         {isFirstDayOfMonthBackupNeeded && (
           <div className="mb-2 bg-amber-500 text-white rounded-2xl p-2.5 shadow-sm flex items-center justify-between gap-2">
-            <div className="text-xs font-extrabold leading-snug">
+            <div className="text-[13.5px] font-extrabold leading-snug">
               📦 [매월 1일 정기 백업] 이번 달 가족 데이터를 백업할까요?
             </div>
             <div className="flex items-center gap-1 shrink-0">
               <button
                 onClick={() => handleSendBackupToGmailOrDrive(false)}
-                className="px-2.5 py-1 rounded-xl bg-stone-900 text-white text-[11px] font-black"
+                className="px-2.5 py-1 rounded-xl bg-stone-900 text-white text-[12.5px] font-black"
               >
                 1초 백업
               </button>
@@ -11956,7 +12027,7 @@ ${validText}
         <div className="mb-2 flex items-center justify-between gap-1">
           <div className="flex items-center gap-1 min-w-0 overflow-x-auto">
             <span
-              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold border whitespace-nowrap shrink-0 ${
+              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[12.5px] font-bold border whitespace-nowrap shrink-0 ${
                 syncStatus === "offline" || syncStatus === "error"
                   ? "bg-rose-50 text-rose-700 border-rose-200"
                   : syncStatus === "saving" || syncStatus === "connecting"
@@ -11979,7 +12050,7 @@ ${validText}
             </span>
             <button
               onClick={() => setIsPatchModalOpen(true)}
-              className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-stone-100 hover:bg-stone-200 text-stone-700 border border-stone-200 inline-flex items-center gap-1 whitespace-nowrap shrink-0"
+              className="px-2 py-0.5 rounded-full text-[11.5px] font-extrabold bg-stone-100 hover:bg-stone-200 text-stone-700 border border-stone-200 inline-flex items-center gap-1 whitespace-nowrap shrink-0"
               title="패치노트 기록 및 히스토리"
             >
               <ClipboardList className="w-3 h-3 text-stone-600 shrink-0" />
@@ -11987,7 +12058,7 @@ ${validText}
             </button>
             <button
               onClick={() => setIsEditorUnlockModalOpen(true)}
-              className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold border inline-flex items-center gap-1 whitespace-nowrap shrink-0 ${
+              className={`px-2 py-0.5 rounded-full text-[11.5px] font-extrabold border inline-flex items-center gap-1 whitespace-nowrap shrink-0 ${
                 isAdminUnlocked
                   ? "bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border-emerald-200"
                   : isHelperUnlocked
@@ -12006,6 +12077,20 @@ ${validText}
             </button>
           </div>
           <div className="flex items-center gap-1 shrink-0">
+            {activeTab === "home" && isAdminUnlocked && (
+              <button
+                type="button"
+                onClick={() => setIsHomeEditMode((v) => !v)}
+                className={`px-2 py-1 rounded-full text-[11.5px] font-extrabold border whitespace-nowrap shrink-0 transition ${
+                  isHomeEditMode
+                    ? "bg-emerald-600 text-white border-emerald-600"
+                    : "bg-stone-100 hover:bg-stone-200 text-stone-700 border-stone-200"
+                }`}
+                title="홈 화면 구성 편집"
+              >
+                {isHomeEditMode ? "✅ 완료" : "✏️ 홈편집"}
+              </button>
+            )}
             {accessRole !== "guest" && (
               <button
                 type="button"
@@ -12048,7 +12133,7 @@ ${validText}
             />
             <div className="absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-stone-950/65 to-transparent pointer-events-none" />
             <div className="absolute bottom-1.5 right-2.5">
-              <span className="text-[11px] font-black text-white/95 drop-shadow">
+              <span className="text-[12.5px] font-black text-white/95 drop-shadow">
                 수혁 · 아리나 · 시목 · 시율 ♡
               </span>
             </div>
@@ -12056,7 +12141,7 @@ ${validText}
         )}
 
         <div className="flex items-center justify-between gap-1">
-          <h1 className="text-sm font-black tracking-tight text-stone-900 whitespace-nowrap">
+          <h1 className="text-[15.5px] font-black tracking-tight text-stone-900 whitespace-nowrap">
             {activeTab === "home" ? "우리 가족 홈 ♡" : "우리 가족 식탁 🍽️"}
           </h1>
 
@@ -12064,7 +12149,7 @@ ${validText}
             <div className="flex items-center gap-1 shrink-0">
               <button
                 onClick={handleToggleHeaderPin}
-                className={`px-2 py-1 rounded-lg text-[10px] font-extrabold border flex items-center gap-0.5 transition ${
+                className={`px-2 py-1 rounded-lg text-[11.5px] font-extrabold border flex items-center gap-0.5 transition ${
                   isHeaderPinned
                     ? "bg-amber-100 text-amber-900 border-amber-300"
                     : "bg-stone-100 text-stone-600 border-stone-200"
@@ -12087,8 +12172,15 @@ ${validText}
           )}
         </div>
 
-        {activeTab === "home" && (
+        {activeTab === "home" && (() => {
+          const activeModeForHdr =
+            homeTimeModeOverride === "auto" ? getAutoHomeTimeMode(homeTimeRanges, Math.floor(liveMinuteTick / 60)) : homeTimeModeOverride;
+          const hdrHidden = Array.isArray(homeLayoutConfig?.[activeModeForHdr]?.hiddenBlocks)
+            ? homeLayoutConfig[activeModeForHdr].hiddenBlocks
+            : [];
+          return (
           <>
+            {!hdrHidden.includes("weather") && (
             <div
               onClick={() => weatherInfo && setIsWeatherModalOpen(true)}
               className={`mt-2 flex items-center justify-between gap-1.5 border rounded-2xl px-3 py-1.5 cursor-pointer transition ${
@@ -12103,40 +12195,41 @@ ${validText}
               <div className="min-w-0 flex-1 space-y-0.5">
                 {weatherInfo ? (
                   <>
-                    <div className="text-[11px] font-black leading-snug break-keep">
+                    <div className="text-[12.5px] font-black leading-snug break-keep">
                       {weatherInfo.emoji} {weatherInfo.temp}°C ({weatherInfo.min}°/{weatherInfo.max}°) ·{" "}
                       <span className={weatherInfo.hasUpcomingRain ? "text-sky-700" : "text-stone-700"}>
                         {weatherInfo.rainBarText || "☔ 0%"}
                       </span>
-                      {isWeatherLoading && <span className="ml-1 text-[9px] text-stone-400">갱신 중...</span>}
+                      {isWeatherLoading && <span className="ml-1 text-[10.5px] text-stone-400">갱신 중...</span>}
                     </div>
-                    <div className="text-[10px] font-bold opacity-85 leading-snug">
+                    <div className="text-[11.5px] font-bold opacity-85 leading-snug">
                       미세 {weatherInfo.pm10}({weatherInfo.dust?.label || "-"}) · 초미세 {weatherInfo.pm25}
                       {weatherError && <span className="ml-1 text-rose-600">· 재시도 필요</span>}
                     </div>
                   </>
                 ) : weatherError ? (
-                  <span className="text-[11px] font-bold text-rose-700">⚠️ 날씨 불러오기 실패 ({weatherError}) · 우측 버튼으로 재시도</span>
+                  <span className="text-[12.5px] font-bold text-rose-700">⚠️ 날씨 불러오기 실패 ({weatherError}) · 우측 버튼으로 재시도</span>
                 ) : (
-                  <span className="text-[11px] font-bold">
+                  <span className="text-[12.5px] font-bold">
                     {isWeatherLoading ? "🔄 서울 중구 날씨 불러오는 중..." : "🌤️ 서울 중구 날씨 불러오는 중..."}
                   </span>
                 )}
               </div>
               <div className="flex items-center gap-1 shrink-0">
-                <span className="text-[10px] font-extrabold opacity-60">상세 &gt;</span>
+                <span className="text-[11.5px] font-extrabold opacity-60">상세 &gt;</span>
                 <button
                   type="button"
                   onClick={(e) => {
                     e.stopPropagation();
                     fetchSeoulJungGuWeather();
                   }}
-                  className="px-2 py-0.5 rounded-lg bg-white border border-stone-200 text-[10px] font-extrabold text-stone-600 shrink-0"
+                  className="px-2 py-0.5 rounded-lg bg-white border border-stone-200 text-[11.5px] font-extrabold text-stone-600 shrink-0"
                 >
                   ↻
                 </button>
               </div>
             </div>
+            )}
 
             {accessRole !== "guest" && pinnedNotices.length > 0 && canViewTab("notices") && (
               <div
@@ -12145,19 +12238,17 @@ ${validText}
               >
                 <div className="flex items-start gap-1.5 min-w-0">
                   <Pin className="w-3.5 h-3.5 text-stone-500 shrink-0 mt-0.5" />
-                  <div className="text-xs leading-snug break-keep">
+                  <div className="text-[13.5px] leading-snug break-keep">
                     <span className="font-extrabold text-stone-900 mr-1">[가족공지]</span>
                     <span className="font-semibold text-stone-700">{pinnedNotices[0].title}</span>
                   </div>
                 </div>
-                <span className="text-[10px] font-bold text-stone-500 shrink-0 mt-0.5">
+                <span className="text-[11.5px] font-bold text-stone-500 shrink-0 mt-0.5">
                   전체보기 &gt;
                 </span>
               </div>
             )}
-          </>
-        )}
-        {activeTab === "home" && accessRole !== "guest" && (() => {
+        {!hdrHidden.includes("siyul_care") && accessRole !== "guest" && (() => {
           const sum = computeActivitySummaryForChild("시율");
           const nowMs = activityTimerTick || Date.now();
           const feedMeta = sum.lastFeed ? BABY_ACTIVITY_TYPES.find((t) => t.id === sum.lastFeed.type) : null;
@@ -12173,7 +12264,7 @@ ${validText}
               className="mt-2 bg-[#FAF8F3] hover:bg-stone-100/80 border border-[#C9D8CC] rounded-2xl p-2.5 cursor-pointer transition space-y-2"
               title="눌러서 시율이 수유·기저귀·수면 기록으로 이동"
             >
-              <div className="flex items-center justify-between gap-1 text-[10px] font-black text-[#35503C]">
+              <div className="flex items-center justify-between gap-1 text-[11.5px] font-black text-[#35503C]">
                 <span className="truncate">👶 시율 실시간 케어 현황 (시작시간 기준)</span>
                 <div className="flex items-center gap-1.5 shrink-0">
                   {(() => {
@@ -12181,7 +12272,7 @@ ${validText}
                     if (!running) return null;
                     const sec = Math.max(0, Math.floor((nowMs - (Number(running.startMs) || nowMs)) / 1000));
                     return (
-                      <span className="px-1.5 py-0.5 rounded-md bg-emerald-600 text-white font-mono text-[9px] animate-pulse">
+                      <span className="px-1.5 py-0.5 rounded-md bg-emerald-600 text-white font-mono text-[10.5px] animate-pulse">
                         ⏱️ {running.type} {String(Math.floor(sec / 60)).padStart(2, "0")}:{String(sec % 60).padStart(2, "0")}
                       </span>
                     );
@@ -12190,24 +12281,24 @@ ${validText}
                 </div>
               </div>
               <div className="grid grid-cols-3 gap-1.5 text-center">
-                <div className="bg-white rounded-xl py-1.5 px-1 border border-stone-200/80">
-                  <div className="text-[9px] font-bold text-stone-400">마지막 기저귀</div>
-                  <div className="text-[11px] font-black text-amber-800 mt-0.5">
+                <div className="bg-white rounded-xl py-1.5 px-1 border border-stone-200/80 border-t-2 border-t-amber-600">
+                  <div className="text-[10.5px] font-bold text-stone-400">마지막 기저귀</div>
+                  <div className="text-[12.5px] font-black text-amber-800 mt-0.5">
                     {sum.lastDiaper ? formatElapsedKo(nowMs - sum.lastDiaper.startMs) : "-"}
                   </div>
-                  <div className="text-[9px] font-bold text-stone-500">
+                  <div className="text-[10.5px] font-bold text-stone-500">
                     {sum.lastDiaper?.subType || "기록없음"}
                   </div>
                 </div>
-                <div className="bg-white rounded-xl py-1.5 px-1 border border-stone-200/80">
-                  <div className="text-[9px] font-bold text-stone-400">마지막 수유</div>
-                  <div className={`text-[11px] font-black mt-0.5 ${feedMeta ? feedMeta.text : "text-stone-800"}`}>
+                <div className="bg-white rounded-xl py-1.5 px-1 border border-stone-200/80 border-t-2 border-t-rose-500">
+                  <div className="text-[10.5px] font-bold text-stone-400">마지막 수유</div>
+                  <div className={`text-[12.5px] font-black mt-0.5 ${feedMeta ? feedMeta.text : "text-stone-800"}`}>
                     {sum.lastFeed ? `${feedMeta?.emoji || ""} ${formatElapsedKo(nowMs - sum.lastFeed.startMs)}` : "-"}
                   </div>
                   {(() => {
                     const prevMeta = sum.prevFeed ? BABY_ACTIVITY_TYPES.find((t) => t.id === sum.prevFeed.type) : null;
                     return (
-                      <div className={`text-[9px] font-bold truncate ${prevMeta ? prevMeta.text : "text-stone-500"}`}>
+                      <div className={`text-[10.5px] font-bold truncate ${prevMeta ? prevMeta.text : "text-stone-500"}`}>
                         {sum.prevFeed
                           ? `• ${formatElapsedKo(nowMs - sum.prevFeed.startMs)}`
                           : sum.lastFeed?.type || "기록없음"}
@@ -12215,12 +12306,12 @@ ${validText}
                     );
                   })()}
                 </div>
-                <div className="bg-white rounded-xl py-1.5 px-1 border border-stone-200/80">
-                  <div className="text-[9px] font-bold text-stone-400">마지막 수면</div>
-                  <div className="text-[11px] font-black text-indigo-700 mt-0.5">
+                <div className="bg-white rounded-xl py-1.5 px-1 border border-stone-200/80 border-t-2 border-t-indigo-500">
+                  <div className="text-[10.5px] font-bold text-stone-400">마지막 수면</div>
+                  <div className="text-[12.5px] font-black text-indigo-700 mt-0.5">
                     {sum.lastSleep ? formatElapsedKo(nowMs - sum.lastSleep.startMs) : "-"}
                   </div>
-                  <div className="text-[9px] font-bold text-stone-500">
+                  <div className="text-[10.5px] font-bold text-stone-500">
                     {sum.lastSleep?.subType || "기록없음"}
                   </div>
                 </div>
@@ -12234,18 +12325,58 @@ ${validText}
                     <button
                       key={`hq-${qId}`}
                       type="button"
+                      onPointerDown={(e) => {
+                        if (qId !== "기저귀") return;
+                        e.stopPropagation();
+                        diaperLongPressedRef.current = false;
+                        if (diaperPressTimerRef.current) clearTimeout(diaperPressTimerRef.current);
+                        diaperPressTimerRef.current = setTimeout(() => {
+                          diaperLongPressedRef.current = true;
+                          setSelectedChildId("시율");
+                          handleQuickRecordDiaper("대변", "시율");
+                        }, 500);
+                      }}
+                      onPointerUp={() => {
+                        if (qId === "기저귀" && diaperPressTimerRef.current) {
+                          clearTimeout(diaperPressTimerRef.current);
+                          diaperPressTimerRef.current = null;
+                        }
+                      }}
+                      onPointerLeave={() => {
+                        if (qId === "기저귀" && diaperPressTimerRef.current) {
+                          clearTimeout(diaperPressTimerRef.current);
+                          diaperPressTimerRef.current = null;
+                        }
+                      }}
+                      onPointerCancel={() => {
+                        if (qId === "기저귀" && diaperPressTimerRef.current) {
+                          clearTimeout(diaperPressTimerRef.current);
+                          diaperPressTimerRef.current = null;
+                        }
+                      }}
+                      onContextMenu={(e) => {
+                        if (qId === "기저귀") e.preventDefault();
+                      }}
                       onClick={(e) => {
                         e.stopPropagation();
                         setSelectedChildId("시율");
+                        if (qId === "기저귀") {
+                          if (diaperLongPressedRef.current) {
+                            diaperLongPressedRef.current = false;
+                            return;
+                          }
+                          handleQuickRecordDiaper("소변", "시율");
+                          return;
+                        }
                         handleQuickTapBabyActivity(qId, "시율");
                       }}
-                      className={`py-1.5 px-1 rounded-xl border text-[10px] font-extrabold flex flex-col items-center gap-0.5 transition active:scale-95 ${
+                      className={`py-1.5 px-1 rounded-xl border text-[11.5px] font-extrabold flex flex-col items-center gap-0.5 transition active:scale-95 ${
                         isRunning
                           ? "bg-emerald-600 text-white border-emerald-600 animate-pulse"
                           : "bg-white hover:bg-stone-50 text-stone-800 border-stone-200"
                       }`}
                     >
-                      <span className="text-sm leading-none">{tm.emoji}</span>
+                      <span className="text-[15.5px] leading-none">{tm.emoji}</span>
                       <span className="truncate w-full text-center leading-tight">
                         {isRunning ? "종료" : tm.label}
                       </span>
@@ -12256,18 +12387,21 @@ ${validText}
             </div>
           );
         })()}
+          </>
+          );
+        })()}
       </header>
 
       {syncErrorMsg && (
         <div className="mx-3 mt-2 px-3 py-2 rounded-2xl bg-rose-50 border border-rose-300 text-rose-900 flex items-start justify-between gap-2 shadow-sm">
-          <div className="text-[11px] font-bold leading-snug break-all">
+          <div className="text-[12.5px] font-bold leading-snug break-all">
             <span className="font-black mr-1">⚠️ 오류 발생:</span>
             <span>{syncErrorMsg}</span>
           </div>
           <button
             type="button"
             onClick={() => setSyncErrorMsg("")}
-            className="text-rose-500 hover:text-rose-800 text-xs font-black shrink-0"
+            className="text-rose-500 hover:text-rose-800 text-[13.5px] font-black shrink-0"
           >
             ✕
           </button>
@@ -12286,13 +12420,13 @@ ${validText}
 
       {activeTab !== "home" && canViewTab(activeTab) && !canEditTab(activeTab) && (
         <div className="mx-3 mt-2 px-3 py-1.5 rounded-xl bg-amber-50 border border-amber-200 flex items-center justify-between gap-2">
-          <span className="text-[11px] font-extrabold text-amber-900">
+          <span className="text-[12.5px] font-extrabold text-amber-900">
             👁️ 현재 메뉴는 열람 전용입니다 (편집 권한 필요)
           </span>
           <button
             type="button"
             onClick={() => setIsEditorUnlockModalOpen(true)}
-            className="px-2 py-0.5 rounded-lg bg-amber-600 text-white text-[10px] font-extrabold shrink-0"
+            className="px-2 py-0.5 rounded-lg bg-amber-600 text-white text-[11.5px] font-extrabold shrink-0"
           >
             권한 변경
           </button>
@@ -12535,7 +12669,7 @@ ${validText}
                 {/* 1) 3일 내 일정 */}
                 <div className={`${padCls} space-y-1.5`}>
                   <div className="flex items-center justify-between gap-1">
-                    <span className="text-xs font-black text-stone-900">
+                    <span className="text-[13.5px] font-black text-stone-900">
                       🗓️ 3일 내 일정 ({imminentSchedulesWithin3Days.length}건)
                     </span>
                     <div className="flex items-center gap-1.5 shrink-0">
@@ -12555,7 +12689,7 @@ ${validText}
                           });
                           setIsScheduleModalOpen(true);
                         }}
-                        className="px-1.5 py-0.5 rounded bg-stone-100 hover:bg-stone-200 text-stone-700 text-[10px] font-extrabold"
+                        className="px-1.5 py-0.5 rounded bg-stone-100 hover:bg-stone-200 text-stone-700 text-[11.5px] font-extrabold"
                       >
                         + 추가
                       </button>
@@ -12565,14 +12699,14 @@ ${validText}
                           setScheduleSubTab("calendar");
                           setActiveTab("schedule");
                         }}
-                        className="text-[10px] font-extrabold text-stone-500"
+                        className="text-[11.5px] font-extrabold text-stone-500"
                       >
                         전체 &gt;
                       </button>
                     </div>
                   </div>
                   {imminentSchedulesWithin3Days.length === 0 ? (
-                    <div className="text-[11px] font-bold text-stone-400">
+                    <div className="text-[12.5px] font-bold text-stone-400">
                       3일 이내 예정된 일정이 없습니다.
                     </div>
                   ) : (
@@ -12592,9 +12726,9 @@ ${validText}
                               isTodayEv ? "bg-rose-50/70 border-rose-200" : "bg-stone-50/70 border-stone-200"
                             }`}
                           >
-                            <span className="text-[11px] font-extrabold text-stone-800 truncate">{ev.title}</span>
+                            <span className="text-[12.5px] font-extrabold text-stone-800 truncate">{ev.title}</span>
                             <span
-                              className={`px-1.5 py-0.5 rounded text-[10px] font-black shrink-0 ${
+                              className={`px-1.5 py-0.5 rounded text-[11.5px] font-black shrink-0 ${
                                 isTodayEv
                                   ? "bg-rose-600 text-white"
                                   : isTomorrowEv
@@ -12626,14 +12760,14 @@ ${validText}
                             style={{ width: `${pctRt}%` }}
                           />
                         </div>
-                        <span className="text-[10px] font-black text-emerald-700 whitespace-nowrap shrink-0">
+                        <span className="text-[11.5px] font-black text-emerald-700 whitespace-nowrap shrink-0">
                           달성 {doneRt}/{totalRt} ({pctRt}%)
                         </span>
                       </div>
                     );
                   })()}
                   <div className="flex items-center justify-between gap-1.5">
-                    <span className="text-xs font-black text-stone-900 truncate">
+                    <span className="text-[13.5px] font-black text-stone-900 truncate">
                       🔄 {homeRoutineSlotFilter === "auto" ? `지금(${curSlot}) 루틴` : homeRoutineSlotFilter === "전체" ? "오늘 남은 루틴" : `${homeRoutineSlotFilter} 루틴`} ({visibleRoutineList.length}건)
                     </span>
                     <div className="flex items-center gap-1 shrink-0">
@@ -12648,7 +12782,7 @@ ${validText}
                               localStorage.setItem("kim_home_routine_target_v1", "전체");
                             } catch (e) {}
                           }}
-                          className="px-2 py-0.5 rounded-lg bg-stone-100 border border-stone-200 text-stone-700 text-[10px] font-extrabold whitespace-nowrap"
+                          className="px-2 py-0.5 rounded-lg bg-stone-100 border border-stone-200 text-stone-700 text-[11.5px] font-extrabold whitespace-nowrap"
                         >
                           자동 복귀
                         </button>
@@ -12659,7 +12793,7 @@ ${validText}
                           setScheduleSubTab("routine");
                           setActiveTab("schedule");
                         }}
-                        className="px-2 py-0.5 rounded-lg bg-stone-900 text-white text-[10px] font-extrabold whitespace-nowrap"
+                        className="px-2 py-0.5 rounded-lg bg-stone-900 text-white text-[11.5px] font-extrabold whitespace-nowrap"
                       >
                         관리
                       </button>
@@ -12680,7 +12814,7 @@ ${validText}
                           setHomeRoutineTargetFilter(tgt.id);
                           try { localStorage.setItem("kim_home_routine_target_v1", tgt.id); } catch (e) {}
                         }}
-                        className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold whitespace-nowrap border transition shrink-0 ${
+                        className={`px-2 py-0.5 rounded-full text-[11.5px] font-extrabold whitespace-nowrap border transition shrink-0 ${
                           homeRoutineTargetFilter === tgt.id
                             ? "bg-stone-900 text-white border-stone-900"
                             : "bg-white text-stone-600 border-stone-200"
@@ -12704,7 +12838,7 @@ ${validText}
                           setHomeRoutineSlotFilter(opt.id);
                           try { localStorage.setItem("kim_home_routine_slot_v1", opt.id); } catch (e) {}
                         }}
-                        className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold whitespace-nowrap border transition shrink-0 ${
+                        className={`px-2 py-0.5 rounded-full text-[11.5px] font-extrabold whitespace-nowrap border transition shrink-0 ${
                           homeRoutineSlotFilter === opt.id
                             ? "bg-stone-900 text-white border-stone-900"
                             : "bg-stone-50 text-stone-600 border-stone-200"
@@ -12716,11 +12850,11 @@ ${validText}
                   </div>
 
                   {activeRoutines.length === 0 ? (
-                    <div className="text-[11px] font-bold text-emerald-700 bg-stone-50 rounded-xl px-2.5 py-1.5">
+                    <div className="text-[12.5px] font-bold text-emerald-700 bg-stone-50 rounded-xl px-2.5 py-1.5">
                       🎉 오늘 예정된 모든 루틴을 완료했습니다!
                     </div>
                   ) : visibleRoutineList.length === 0 ? (
-                    <div className="text-[11px] font-bold text-stone-500 bg-stone-50 rounded-xl px-2.5 py-1.5">
+                    <div className="text-[12.5px] font-bold text-stone-500 bg-stone-50 rounded-xl px-2.5 py-1.5">
                       ✅ 선택한 조건의 루틴을 모두 완료했습니다.
                     </div>
                   ) : (
@@ -12750,14 +12884,14 @@ ${validText}
                                         key={sIdx}
                                         type="button"
                                         onClick={() => handleToggleRoutineSubStep(rt.id, sIdx, steps.length)}
-                                        className={`w-full flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-[11px] font-extrabold border text-left transition active:scale-[0.99] ${
+                                        className={`w-full flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-[12.5px] font-extrabold border text-left transition active:scale-[0.99] ${
                                           sDone
                                             ? "bg-emerald-50 border-emerald-300 text-emerald-800"
                                             : "bg-white border-stone-200 text-stone-800 hover:bg-stone-100"
                                         }`}
                                       >
                                         <span
-                                          className={`inline-flex items-center justify-center w-4 h-4 rounded-full border text-[9px] font-black shrink-0 ${
+                                          className={`inline-flex items-center justify-center w-4 h-4 rounded-full border text-[10.5px] font-black shrink-0 ${
                                             sDone
                                               ? "bg-emerald-600 border-emerald-600 text-white"
                                               : "border-stone-400 text-stone-700 bg-white"
@@ -12776,20 +12910,20 @@ ${validText}
                                 <button
                                   type="button"
                                   onClick={() => handleToggleRoutine(rt.id)}
-                                  className="text-left text-xs font-extrabold text-stone-900 whitespace-normal break-words leading-snug w-full"
+                                  className="text-left text-[13.5px] font-extrabold text-stone-900 whitespace-normal break-words leading-snug w-full"
                                 >
                                   {rt.title}
                                 </button>
                               )}
                               <div className="flex flex-wrap items-center gap-1 mt-1">
-                                <span className="px-1.5 py-0.5 rounded bg-stone-200/70 text-stone-700 text-[9px] font-black">
+                                <span className="px-1.5 py-0.5 rounded bg-stone-200/70 text-stone-700 text-[10.5px] font-black">
                                   {rt.timeSlot || "상시"}
                                 </span>
                                 {rt.scheduledTime && (() => {
                                   const overdue = isRoutineTimeOverdue(rt.scheduledTime);
                                   return (
                                     <span
-                                      className={`px-1.5 py-0.5 rounded text-[9px] font-black ${
+                                      className={`px-1.5 py-0.5 rounded text-[10.5px] font-black ${
                                         overdue
                                           ? "bg-amber-100 text-amber-900 border border-amber-300"
                                           : "bg-sky-100 text-sky-800"
@@ -12799,16 +12933,16 @@ ${validText}
                                     </span>
                                   );
                                 })()}
-                                <span className={`px-1.5 py-0.5 rounded text-[9px] font-black ${getRoutineAssigneeBadgeCls(rt.assignee)}`}>
+                                <span className={`px-1.5 py-0.5 rounded text-[10.5px] font-black ${getRoutineAssigneeBadgeCls(rt.assignee)}`}>
                                   {rt.assignee || "공통"}
                                 </span>
                                 {steps.length >= 2 && (
-                                  <span className="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 text-[9px] font-black">
+                                  <span className="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 text-[10.5px] font-black">
                                     진행 {stepDoneSet.size}/{steps.length}
                                   </span>
                                 )}
                                 {nextInfo && (
-                                  <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 text-[9px] font-bold">
+                                  <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 text-[10.5px] font-bold">
                                     {nextInfo.dateLabel}
                                   </span>
                                 )}
@@ -12824,7 +12958,7 @@ ${validText}
                 {/* 3) 남은 할 일 */}
                 <div className={`${padCls} space-y-1.5`}>
                   <div className="flex items-center justify-between gap-1">
-                    <span className="text-xs font-black text-stone-900">
+                    <span className="text-[13.5px] font-black text-stone-900">
                       ✅ 남은 할 일 ({globalTodoBadgeStats.activeCount}건)
                     </span>
                     <div className="flex items-center gap-1.5 shrink-0">
@@ -12844,7 +12978,7 @@ ${validText}
                           });
                           setIsScheduleModalOpen(true);
                         }}
-                        className="px-1.5 py-0.5 rounded bg-stone-100 hover:bg-stone-200 text-stone-700 text-[10px] font-extrabold"
+                        className="px-1.5 py-0.5 rounded bg-stone-100 hover:bg-stone-200 text-stone-700 text-[11.5px] font-extrabold"
                       >
                         + 추가
                       </button>
@@ -12854,14 +12988,14 @@ ${validText}
                           setScheduleSubTab("todo");
                           setActiveTab("schedule");
                         }}
-                        className="text-[10px] font-extrabold text-stone-500"
+                        className="text-[11.5px] font-extrabold text-stone-500"
                       >
                         전체 &gt;
                       </button>
                     </div>
                   </div>
                   {previewTodos.length === 0 ? (
-                    <div className="text-[11px] font-bold text-stone-400">
+                    <div className="text-[12.5px] font-bold text-stone-400">
                       남은 할 일이 없습니다.
                     </div>
                   ) : (
@@ -12880,9 +13014,9 @@ ${validText}
                             }`}
                           >
                             <span className={`w-3.5 h-3.5 rounded border bg-white shrink-0 ${isOverdue ? "border-rose-400" : "border-stone-400"}`} />
-                            <span className="text-[11px] font-extrabold text-stone-800 truncate flex-1">{todo.title}</span>
+                            <span className="text-[12.5px] font-extrabold text-stone-800 truncate flex-1">{todo.title}</span>
                             {todo.date && (
-                              <span className={`text-[10px] font-bold shrink-0 ${isOverdue ? "text-rose-600 font-black" : "text-stone-500"}`}>
+                              <span className={`text-[11.5px] font-bold shrink-0 ${isOverdue ? "text-rose-600 font-black" : "text-stone-500"}`}>
                                 {todo.date.slice(5)}
                               </span>
                             )}
@@ -12922,10 +13056,10 @@ ${validText}
                       className={`bg-white border border-stone-200 ${item.borderHover} rounded-2xl ${sizeCls} text-left shadow-sm space-y-0.5 transition`}
                     >
                       <div className="flex items-center justify-between">
-                        <span className="text-xs font-black text-stone-900">{item.title}</span>
-                        <span className={`text-[10px] font-extrabold ${item.actionColor}`}>{item.actionLabel}</span>
+                        <span className="text-[13.5px] font-black text-stone-900">{item.title}</span>
+                        <span className={`text-[11.5px] font-extrabold ${item.actionColor}`}>{item.actionLabel}</span>
                       </div>
-                      <div className="text-[11px] font-bold text-stone-600 truncate">{item.sub}</div>
+                      <div className="text-[12.5px] font-bold text-stone-600 truncate">{item.sub}</div>
                     </button>
                   );
                 })}
@@ -12950,7 +13084,7 @@ ${validText}
                     key={m.id}
                     type="button"
                     onClick={() => setHomeTimeModeOverride(m.id)}
-                    className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold border whitespace-nowrap transition shrink-0 ${
+                    className={`px-2 py-0.5 rounded-full text-[11.5px] font-extrabold border whitespace-nowrap transition shrink-0 ${
                       homeTimeModeOverride === m.id
                         ? "bg-stone-900 text-white border-stone-900"
                         : "bg-white text-stone-600 border-stone-200"
@@ -12965,32 +13099,20 @@ ${validText}
                 <button
                   type="button"
                   onClick={handleCopyTodayBriefing}
-                  className="px-2 py-0.5 rounded-full text-[10px] font-extrabold border bg-[#EEF3EE] text-[#35503C] border-[#C9D8CC] whitespace-nowrap shrink-0"
+                  className="px-2 py-0.5 rounded-full text-[11.5px] font-extrabold border bg-[#EEF3EE] text-[#35503C] border-[#C9D8CC] whitespace-nowrap shrink-0"
                   title="오늘 날씨·식단·일정·장보기 브리핑 복사"
                 >
                   📋 브리핑
                 </button>
               )}
-              {isAdminUnlocked && (
-                <button
-                  type="button"
-                  onClick={() => setIsHomeEditMode((v) => !v)}
-                  className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold border whitespace-nowrap shrink-0 transition ${
-                    isHomeEditMode
-                      ? "bg-emerald-600 text-white border-emerald-600"
-                      : "bg-white text-stone-700 border-stone-200"
-                  }`}
-                >
-                  {isHomeEditMode ? "✅ 편집 완료" : "✏️ 홈 편집"}
-                </button>
-              )}
+
               </div>
             </div>
 
             {isHomeEditMode && (
               <div className="bg-white border border-stone-300 rounded-2xl p-3 shadow-sm space-y-2.5">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-black text-stone-900">
+                  <span className="text-[13.5px] font-black text-stone-900">
                     🛠️ {modeMeta.label} 홈 화면 구성 편집
                   </span>
                   <button
@@ -12999,7 +13121,7 @@ ${validText}
                       saveHomeLayout(() => ({ ...DEFAULT_HOME_LAYOUT[activeHomeTimeMode] }));
                       showToast(`${modeMeta.label} 기본 구성으로 초기화했습니다.`);
                     }}
-                    className="px-2 py-0.5 rounded-lg bg-stone-100 text-stone-600 text-[10px] font-extrabold"
+                    className="px-2 py-0.5 rounded-lg bg-stone-100 text-stone-600 text-[11.5px] font-extrabold"
                   >
                     기본값 초기화
                   </button>
@@ -13007,7 +13129,7 @@ ${validText}
 
                 <div className="bg-stone-50 border border-stone-200 rounded-xl p-2.5 space-y-1.5">
                   <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-extrabold text-stone-600">0) 시간대 기준 시각 설정</span>
+                    <span className="text-[11.5px] font-extrabold text-stone-600">0) 시간대 기준 시각 설정</span>
                     <button
                       type="button"
                       onClick={() => {
@@ -13018,7 +13140,7 @@ ${validText}
                         syncHomeSettingsToCloud(null, DEFAULT_HOME_TIME_RANGES);
                         showToast("시간대 기준 시각을 기본값(05/11/20시)으로 되돌렸습니다.");
                       }}
-                      className="text-[10px] font-extrabold text-stone-500 underline"
+                      className="text-[11.5px] font-extrabold text-stone-500 underline"
                     >
                       시각 초기화
                     </button>
@@ -13030,7 +13152,7 @@ ${validText}
                       { key: "nightStart", label: "🌙 밤 시작" }
                     ].map((f) => (
                       <label key={f.key} className="block">
-                        <span className="text-[10px] font-bold text-stone-500 block mb-0.5">{f.label}</span>
+                        <span className="text-[11.5px] font-bold text-stone-500 block mb-0.5">{f.label}</span>
                         <select
                           value={homeTimeRanges[f.key]}
                           onChange={(e) => {
@@ -13044,7 +13166,7 @@ ${validText}
                               return next;
                             });
                           }}
-                          className="w-full px-2 py-1 rounded-lg border border-stone-200 bg-white text-[11px] font-black text-stone-800"
+                          className="w-full px-2 py-1 rounded-lg border border-stone-200 bg-white text-[12.5px] font-black text-stone-800"
                         >
                           {Array.from({ length: 24 }, (_, hr) => (
                             <option key={hr} value={hr}>
@@ -13055,20 +13177,20 @@ ${validText}
                       </label>
                     ))}
                   </div>
-                  <div className="text-[10px] font-semibold text-stone-500">
+                  <div className="text-[11.5px] font-semibold text-stone-500">
                     현재 적용: 오전 {String(homeTimeRanges.morningStart).padStart(2, "0")}시 · 오후 {String(homeTimeRanges.afternoonStart).padStart(2, "0")}시 · 밤 {String(homeTimeRanges.nightStart).padStart(2, "0")}시~익일 {String(homeTimeRanges.morningStart).padStart(2, "0")}시
                   </div>
                   {(homeTimeRanges.morningStart === homeTimeRanges.afternoonStart ||
                     homeTimeRanges.afternoonStart === homeTimeRanges.nightStart ||
                     homeTimeRanges.nightStart === homeTimeRanges.morningStart) && (
-                    <div className="text-[10px] font-extrabold text-rose-600">
+                    <div className="text-[11.5px] font-extrabold text-rose-600">
                       ⚠️ 오전·오후·밤 시작 시각은 서로 다르게 설정해 주세요.
                     </div>
                   )}
                 </div>
 
                 <div className="space-y-1">
-                  <div className="text-[10px] font-extrabold text-stone-500">1) 주요 영역 순서(⋮⋮ 드래그 / ▲▼) · 크기 · 표시</div>
+                  <div className="text-[11.5px] font-extrabold text-stone-500">1) 주요 영역 순서(⋮⋮ 드래그 / ▲▼) · 크기 · 표시</div>
                   {blockOrder.map((bId, idx) => {
                     const isHidden = hiddenBlocks.includes(bId);
                     const bSize = blockSizes[bId] || "normal";
@@ -13133,12 +13255,12 @@ ${validText}
                               homeDragOverRef.current = "";
                               setHomeDragOverKey("");
                             }}
-                            className="px-1 py-0.5 text-stone-400 hover:text-stone-700 cursor-grab select-none text-xs font-black shrink-0"
+                            className="px-1 py-0.5 text-stone-400 hover:text-stone-700 cursor-grab select-none text-[13.5px] font-black shrink-0"
                             title="끌어서 순서 변경"
                           >
                             ⋮⋮
                           </span>
-                          <span className={`text-[11px] font-extrabold truncate ${isHidden ? "text-stone-400 line-through" : "text-stone-800"}`}>
+                          <span className={`text-[12.5px] font-extrabold truncate ${isHidden ? "text-stone-400 line-through" : "text-stone-800"}`}>
                             {BLOCK_LABELS[bId]}
                           </span>
                         </div>
@@ -13151,7 +13273,7 @@ ${validText}
                                 blockSizes: { ...(cur.blockSizes || {}), [bId]: nextBlockSize }
                               }))
                             }
-                            className="px-1.5 py-0.5 rounded bg-sky-50 border border-sky-200 text-sky-800 text-[10px] font-extrabold"
+                            className="px-1.5 py-0.5 rounded bg-sky-50 border border-sky-200 text-sky-800 text-[11.5px] font-extrabold"
                             title="영역 크기 전환"
                           >
                             {bSizeLabel}
@@ -13160,7 +13282,7 @@ ${validText}
                             type="button"
                             disabled={idx === 0}
                             onClick={() => saveHomeLayout((cur) => ({ ...cur, blocks: moveArrayItem(blockOrder, idx, -1) }))}
-                            className="px-1.5 py-0.5 rounded bg-white border border-stone-200 text-[10px] font-black disabled:opacity-30"
+                            className="px-1.5 py-0.5 rounded bg-white border border-stone-200 text-[11.5px] font-black disabled:opacity-30"
                           >
                             ▲
                           </button>
@@ -13168,7 +13290,7 @@ ${validText}
                             type="button"
                             disabled={idx === blockOrder.length - 1}
                             onClick={() => saveHomeLayout((cur) => ({ ...cur, blocks: moveArrayItem(blockOrder, idx, 1) }))}
-                            className="px-1.5 py-0.5 rounded bg-white border border-stone-200 text-[10px] font-black disabled:opacity-30"
+                            className="px-1.5 py-0.5 rounded bg-white border border-stone-200 text-[11.5px] font-black disabled:opacity-30"
                           >
                             ▼
                           </button>
@@ -13182,7 +13304,7 @@ ${validText}
                                   : [...hiddenBlocks, bId]
                               }))
                             }
-                            className={`px-2 py-0.5 rounded text-[10px] font-extrabold ${
+                            className={`px-2 py-0.5 rounded text-[11.5px] font-extrabold ${
                               isHidden ? "bg-stone-200 text-stone-600" : "bg-emerald-100 text-emerald-800"
                             }`}
                           >
@@ -13192,10 +13314,40 @@ ${validText}
                       </div>
                     );
                   })}
+                  <div className="grid grid-cols-2 gap-1.5 pt-1">
+                    {[
+                      { id: "weather", label: "🌤️ 날씨 배너" },
+                      { id: "siyul_care", label: "👶 시율 케어현황" }
+                    ].map((extra) => {
+                      const isExHidden = hiddenBlocks.includes(extra.id);
+                      return (
+                        <button
+                          key={extra.id}
+                          type="button"
+                          onClick={() =>
+                            saveHomeLayout((cur) => ({
+                              ...cur,
+                              hiddenBlocks: isExHidden
+                                ? (cur.hiddenBlocks || []).filter((x) => x !== extra.id)
+                                : [...(cur.hiddenBlocks || []), extra.id]
+                            }))
+                          }
+                          className={`px-2.5 py-1.5 rounded-xl border text-[12.5px] font-extrabold flex items-center justify-between gap-1 ${
+                            isExHidden
+                              ? "bg-stone-100 border-stone-200 text-stone-400"
+                              : "bg-[#EEF3EE] border-[#C9D8CC] text-[#35503C]"
+                          }`}
+                        >
+                          <span className="truncate">{extra.label}</span>
+                          <span className="shrink-0 text-[11.5px]">{isExHidden ? "숨김" : "표시"}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
 
                 <div className="space-y-1">
-                  <div className="text-[10px] font-extrabold text-stone-500">2) 바로가기 카드 순서(⋮⋮ 드래그 / ▲▼) · 크기 · 표시</div>
+                  <div className="text-[11.5px] font-extrabold text-stone-500">2) 바로가기 카드 순서(⋮⋮ 드래그 / ▲▼) · 크기 · 표시</div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-1">
                     {menuOrder.map((mId, idx) => {
                       const def = MENU_DEFS[mId];
@@ -13263,12 +13415,12 @@ ${validText}
                                 homeDragOverRef.current = "";
                                 setHomeDragOverKey("");
                               }}
-                              className="px-0.5 text-stone-400 hover:text-stone-700 cursor-grab select-none text-[11px] font-black shrink-0"
+                              className="px-0.5 text-stone-400 hover:text-stone-700 cursor-grab select-none text-[12.5px] font-black shrink-0"
                               title="끌어서 순서 변경"
                             >
                               ⋮⋮
                             </span>
-                            <span className={`text-[11px] font-extrabold truncate ${isHidden ? "text-stone-400 line-through" : "text-stone-800"}`}>
+                            <span className={`text-[12.5px] font-extrabold truncate ${isHidden ? "text-stone-400 line-through" : "text-stone-800"}`}>
                               {def.title}
                             </span>
                           </div>
@@ -13281,7 +13433,7 @@ ${validText}
                                   menuSizes: { ...(cur.menuSizes || {}), [mId]: nextMenuSize }
                                 }))
                               }
-                              className="px-1.5 py-0.5 rounded bg-sky-50 border border-sky-200 text-sky-800 text-[9px] font-extrabold"
+                              className="px-1.5 py-0.5 rounded bg-sky-50 border border-sky-200 text-sky-800 text-[10.5px] font-extrabold"
                               title="카드 크기 전환 (반폭/전체폭/크게)"
                             >
                               {mSizeLabel}
@@ -13290,7 +13442,7 @@ ${validText}
                               type="button"
                               disabled={idx === 0}
                               onClick={() => saveHomeLayout((cur) => ({ ...cur, menuOrder: moveArrayItem(menuOrder, idx, -1) }))}
-                              className="px-1 py-0.5 rounded bg-white border border-stone-200 text-[9px] font-black disabled:opacity-30"
+                              className="px-1 py-0.5 rounded bg-white border border-stone-200 text-[10.5px] font-black disabled:opacity-30"
                             >
                               ▲
                             </button>
@@ -13298,7 +13450,7 @@ ${validText}
                               type="button"
                               disabled={idx === menuOrder.length - 1}
                               onClick={() => saveHomeLayout((cur) => ({ ...cur, menuOrder: moveArrayItem(menuOrder, idx, 1) }))}
-                              className="px-1 py-0.5 rounded bg-white border border-stone-200 text-[9px] font-black disabled:opacity-30"
+                              className="px-1 py-0.5 rounded bg-white border border-stone-200 text-[10.5px] font-black disabled:opacity-30"
                             >
                               ▼
                             </button>
@@ -13312,7 +13464,7 @@ ${validText}
                                     : [...hiddenMenus, mId]
                                 }))
                               }
-                              className={`px-1.5 py-0.5 rounded text-[9px] font-extrabold ${
+                              className={`px-1.5 py-0.5 rounded text-[10.5px] font-extrabold ${
                                 isHidden ? "bg-stone-200 text-stone-600" : "bg-emerald-100 text-emerald-800"
                               }`}
                             >
@@ -13334,10 +13486,10 @@ ${validText}
               return (
                 <div className="bg-white border border-stone-200 rounded-2xl p-3 space-y-1.5 shadow-sm">
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-xs font-black text-stone-900">🌅 좋은 아침 · 등원/오전 브리핑</span>
-                    <span className="px-2 py-0.5 rounded-full bg-stone-100 text-stone-600 text-[10px] font-extrabold">{modeMeta.rangeLabel}</span>
+                    <span className="text-[13.5px] font-black text-stone-900">🌅 좋은 아침 · 등원/오전 브리핑</span>
+                    <span className="px-2 py-0.5 rounded-full bg-stone-100 text-stone-600 text-[11.5px] font-extrabold">{modeMeta.rangeLabel}</span>
                   </div>
-                  <div className="flex items-center justify-between gap-2 text-[11px] font-bold text-stone-600">
+                  <div className="flex items-center justify-between gap-2 text-[12.5px] font-bold text-stone-600">
                     <span className="truncate">
                       {morningMeals[0] ? `🍽️ ${morningMeals[0].slot}: ${morningMeals[0].menu}` : "🍽️ 오늘 아침·점심 식단을 기록해 보세요"}
                     </span>
@@ -13350,7 +13502,7 @@ ${validText}
                           document.getElementById(`weekly-day-${todayKey}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
                         }, 160);
                       }}
-                      className="px-2 py-0.5 rounded-lg bg-stone-900 text-white text-[10px] font-extrabold shrink-0"
+                      className="px-2 py-0.5 rounded-lg bg-stone-900 text-white text-[11.5px] font-extrabold shrink-0"
                     >
                       식단 ({morningRoutineLeft > 0 ? `루틴 ${morningRoutineLeft}` : "확인"})
                     </button>
@@ -13364,8 +13516,8 @@ ${validText}
               return (
                 <div className="bg-white border border-stone-200 rounded-2xl p-3 space-y-1.5 shadow-sm">
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-xs font-black text-stone-900">🌆 오후 · 저녁 준비 &amp; 냉장고 파먹기</span>
-                    <span className="px-2 py-0.5 rounded-full bg-stone-100 text-stone-600 text-[10px] font-extrabold">{modeMeta.rangeLabel}</span>
+                    <span className="text-[13.5px] font-black text-stone-900">🌆 오후 · 저녁 준비 &amp; 냉장고 파먹기</span>
+                    <span className="px-2 py-0.5 rounded-full bg-stone-100 text-stone-600 text-[11.5px] font-extrabold">{modeMeta.rangeLabel}</span>
                   </div>
                   <div className="flex flex-wrap items-center gap-1">
                     {expiringItems.length > 0 ? (
@@ -13374,18 +13526,18 @@ ${validText}
                           key={it.id}
                           type="button"
                           onClick={() => setActiveTab("fridge")}
-                          className="px-2 py-0.5 rounded-full bg-rose-50 text-rose-700 border border-rose-200 text-[10px] font-extrabold"
+                          className="px-2 py-0.5 rounded-full bg-rose-50 text-rose-700 border border-rose-200 text-[11.5px] font-extrabold"
                         >
                           ❄️ {it.name} ({it.diff < 0 ? "만료" : `D-${it.diff}`})
                         </button>
                       ))
                     ) : (
-                      <span className="text-[11px] font-bold text-stone-500">임박한 냉장고 재료가 없습니다</span>
+                      <span className="text-[12.5px] font-bold text-stone-500">임박한 냉장고 재료가 없습니다</span>
                     )}
                     <button
                       type="button"
                       onClick={() => setActiveTab(dinnerMeal ? "daily" : "ai")}
-                      className="ml-auto px-2 py-0.5 rounded-lg bg-stone-900 text-white text-[10px] font-extrabold"
+                      className="ml-auto px-2 py-0.5 rounded-lg bg-stone-900 text-white text-[11.5px] font-extrabold"
                     >
                       {dinnerMeal ? `🍽️ 저녁: ${dinnerMeal.menu}` : "✨ AI 저녁 추천"}
                     </button>
@@ -13403,8 +13555,8 @@ ${validText}
                     <Lock className="w-4 h-4" />
                   </div>
                   <div className="min-w-0">
-                    <div className="text-xs font-black text-stone-900">미로그인 상태 (일부 메뉴만 공개)</div>
-                    <p className="text-[11px] text-stone-500 leading-snug">
+                    <div className="text-[13.5px] font-black text-stone-900">미로그인 상태 (일부 메뉴만 공개)</div>
+                    <p className="text-[12.5px] text-stone-500 leading-snug">
                       가족사진과 식단·레시피 일부만 열람 가능합니다. 전체 메뉴 열람·편집은 로그인해 주세요.
                     </p>
                   </div>
@@ -13412,7 +13564,7 @@ ${validText}
                 <button
                   type="button"
                   onClick={() => setIsEditorUnlockModalOpen(true)}
-                  className="px-3 py-1.5 rounded-xl bg-stone-900 hover:bg-stone-800 text-white text-[11px] font-extrabold shrink-0"
+                  className="px-3 py-1.5 rounded-xl bg-stone-900 hover:bg-stone-800 text-white text-[12.5px] font-extrabold shrink-0"
                 >
                   🔑 로그인
                 </button>
@@ -13432,14 +13584,14 @@ ${validText}
           <div className="bg-white p-3.5 rounded-2xl border border-stone-200 shadow-sm space-y-2.5">
             <div className="space-y-2">
               <div className="flex items-center justify-between gap-2">
-                <h2 className="text-sm font-black text-stone-900 truncate">
+                <h2 className="text-[15.5px] font-black text-stone-900 truncate">
                   🍽️ 식단 ({weekDates[0].slice(5)} ~ {weekDates[6].slice(5)})
                 </h2>
                 <div className="flex items-center gap-1.5 shrink-0">
                   <button
                     type="button"
                     onClick={() => setHideEmptyMealSlots((v) => !v)}
-                    className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold border whitespace-nowrap ${
+                    className={`px-2 py-0.5 rounded-full text-[11.5px] font-extrabold border whitespace-nowrap ${
                       hideEmptyMealSlots
                         ? "bg-stone-900 text-white border-stone-900"
                         : "bg-stone-50 text-stone-600 border-stone-200"
@@ -13447,7 +13599,7 @@ ${validText}
                   >
                     {hideEmptyMealSlots ? "빈 끼니 숨김중" : "빈 끼니 숨기기"}
                   </button>
-                  <span className="text-[10px] font-bold text-stone-500 whitespace-nowrap">
+                  <span className="text-[11.5px] font-bold text-stone-500 whitespace-nowrap">
                     ±3일
                   </span>
                 </div>
@@ -13462,7 +13614,7 @@ ${validText}
                     setSelectedDate(nextStr);
                     setCurrentMonth(nextStr.slice(0, 7));
                   }}
-                  className="px-2 py-1 rounded-lg bg-stone-100 hover:bg-stone-200 text-[10px] font-extrabold text-stone-700"
+                  className="px-2 py-1 rounded-lg bg-stone-100 hover:bg-stone-200 text-[11.5px] font-extrabold text-stone-700"
                 >
                   &lt; 이전주
                 </button>
@@ -13475,7 +13627,7 @@ ${validText}
                       setCurrentMonth(e.target.value.slice(0, 7));
                     }
                   }}
-                  className="px-1.5 py-0.5 rounded-lg border border-stone-200 text-[11px] font-black text-stone-900 bg-stone-50"
+                  className="px-1.5 py-0.5 rounded-lg border border-stone-200 text-[12.5px] font-black text-stone-900 bg-stone-50"
                 />
                 <button
                   type="button"
@@ -13487,7 +13639,7 @@ ${validText}
                       document.getElementById(`weekly-day-${today}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
                     }, 120);
                   }}
-                  className="px-2 py-1 rounded-lg bg-stone-900 text-white text-[10px] font-extrabold"
+                  className="px-2 py-1 rounded-lg bg-stone-900 text-white text-[11.5px] font-extrabold"
                 >
                   오늘로
                 </button>
@@ -13500,7 +13652,7 @@ ${validText}
                     setSelectedDate(nextStr);
                     setCurrentMonth(nextStr.slice(0, 7));
                   }}
-                  className="px-2 py-1 rounded-lg bg-stone-100 hover:bg-stone-200 text-[10px] font-extrabold text-stone-700"
+                  className="px-2 py-1 rounded-lg bg-stone-100 hover:bg-stone-200 text-[11.5px] font-extrabold text-stone-700"
                 >
                   다음주 &gt;
                 </button>
@@ -13514,7 +13666,7 @@ ${validText}
                   setScanTargetMonth(selectedDate.slice(0, 7));
                   setIsDaycareModalOpen(true);
                 }}
-                className="py-2 px-2.5 rounded-xl bg-stone-50 hover:bg-stone-100 border border-stone-200 text-stone-800 text-[11px] font-extrabold flex items-center justify-center gap-1.5"
+                className="py-2 px-2.5 rounded-xl bg-stone-50 hover:bg-stone-100 border border-stone-200 text-stone-800 text-[12.5px] font-extrabold flex items-center justify-center gap-1.5"
               >
                 <Camera className="w-3.5 h-3.5 text-stone-700 shrink-0" />
                 <span className="whitespace-nowrap">식단표 AI 스캔</span>
@@ -13525,7 +13677,7 @@ ${validText}
                   setExportScope("all");
                   setIsInventoryExportOpen(true);
                 }}
-                className="py-2 px-2.5 rounded-xl bg-stone-50 hover:bg-stone-100 border border-stone-200 text-stone-800 text-[11px] font-extrabold flex items-center justify-center gap-1.5"
+                className="py-2 px-2.5 rounded-xl bg-stone-50 hover:bg-stone-100 border border-stone-200 text-stone-800 text-[12.5px] font-extrabold flex items-center justify-center gap-1.5"
               >
                 <span className="whitespace-nowrap">📤 식단·재고 내보내기</span>
               </button>
@@ -13538,13 +13690,13 @@ ${validText}
                   value={mealSearchQuery}
                   onChange={(e) => setMealSearchQuery(e.target.value)}
                   placeholder="🔍 식단·재료 검색..."
-                  className="w-full px-2.5 py-1.5 pr-7 rounded-xl border border-stone-200 bg-stone-50 text-[11px] font-semibold text-stone-800"
+                  className="w-full px-2.5 py-1.5 pr-7 rounded-xl border border-stone-200 bg-stone-50 text-[12.5px] font-semibold text-stone-800"
                 />
                 {mealSearchQuery && (
                   <button
                     type="button"
                     onClick={() => setMealSearchQuery("")}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-700 text-[10px] font-black"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-700 text-[11.5px] font-black"
                   >
                     ✕
                   </button>
@@ -13553,7 +13705,7 @@ ${validText}
               <button
                 type="button"
                 onClick={handleOpenMealCopyModal}
-                className="py-1.5 px-2.5 rounded-xl bg-[#EEF3EE] hover:bg-[#DFE9E0] text-[#35503C] border border-[#C9D8CC] text-[11px] font-extrabold whitespace-nowrap shrink-0"
+                className="py-1.5 px-2.5 rounded-xl bg-[#EEF3EE] hover:bg-[#DFE9E0] text-[#35503C] border border-[#C9D8CC] text-[12.5px] font-extrabold whitespace-nowrap shrink-0"
               >
                 📋 식단 복사
               </button>
@@ -13568,7 +13720,7 @@ ${validText}
               <button
                 type="button"
                 onClick={() => setSelectedMember("전체")}
-                className={`px-2.5 py-1.5 rounded-xl text-[11px] font-extrabold border whitespace-nowrap shrink-0 transition ${
+                className={`px-2.5 py-1.5 rounded-xl text-[12.5px] font-extrabold border whitespace-nowrap shrink-0 transition ${
                   selectedMember === "전체"
                     ? "bg-stone-900 text-white border-stone-900"
                     : "bg-stone-50 text-stone-600 border-stone-200"
@@ -13595,7 +13747,7 @@ ${validText}
                         }, 100);
                       }
                     }}
-                    className={`px-2.5 py-1.5 rounded-xl text-[11px] font-extrabold border whitespace-nowrap shrink-0 inline-flex items-center gap-1 transition ${
+                    className={`px-2.5 py-1.5 rounded-xl text-[12.5px] font-extrabold border whitespace-nowrap shrink-0 inline-flex items-center gap-1 transition ${
                       isSel
                         ? "bg-stone-900 text-white border-stone-900"
                         : "bg-stone-50 text-stone-700 border-stone-200"
@@ -13626,13 +13778,13 @@ ${validText}
                 return (
                   <div key={d} id={`weekly-day-${d}`} className={`p-3 ${isTodayRow ? "bg-stone-50/70" : ""}`}>
                     <div className="flex items-center justify-between mb-2">
-                      <span className="text-xs font-black text-stone-900 flex items-center gap-1.5">
+                      <span className="text-[13.5px] font-black text-stone-900 flex items-center gap-1.5">
                         <span>{d.slice(5)} ({getDayName(d)})</span>
                         {d === selectedDate && (
-                          <span className="px-1.5 py-0.5 rounded bg-stone-900 text-white text-[9px] font-black whitespace-nowrap shrink-0">조회일</span>
+                          <span className="px-1.5 py-0.5 rounded bg-stone-900 text-white text-[10.5px] font-black whitespace-nowrap shrink-0">조회일</span>
                         )}
                         {isTodayRow && (
-                          <span className="px-1.5 py-0.5 rounded bg-emerald-600 text-white text-[9px] font-black whitespace-nowrap shrink-0">오늘</span>
+                          <span className="px-1.5 py-0.5 rounded bg-emerald-600 text-white text-[10.5px] font-black whitespace-nowrap shrink-0">오늘</span>
                         )}
                       </span>
                       <button
@@ -13654,14 +13806,14 @@ ${validText}
                           });
                           setIsMealModalOpen(true);
                         }}
-                        className="px-2 py-0.5 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 text-[10px] font-extrabold"
+                        className="px-2 py-0.5 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 text-[11.5px] font-extrabold"
                       >
                         + 식단 추가
                       </button>
                     </div>
                     <div className="space-y-1.5">
                       {hideEmptyMealSlots && dayMeals.length === 0 && (
-                        <div className="px-2.5 py-1.5 rounded-xl bg-stone-50/70 border border-dashed border-stone-200 text-[11px] font-bold text-stone-400 text-center">
+                        <div className="px-2.5 py-1.5 rounded-xl bg-stone-50/70 border border-dashed border-stone-200 text-[12.5px] font-bold text-stone-400 text-center">
                           등록된 식단이 없습니다 · 우측 [+ 식단 추가]로 등록하세요
                         </div>
                       )}
@@ -13691,11 +13843,11 @@ ${validText}
                               onClick={openAddForSlot}
                               className="w-full px-2.5 py-1.5 rounded-xl bg-stone-50/70 hover:bg-stone-100 border border-stone-200/80 flex items-center justify-between gap-2 text-left transition"
                             >
-                              <span className="text-[11px] font-extrabold text-stone-500 flex items-center gap-1.5">
+                              <span className="text-[12.5px] font-extrabold text-stone-500 flex items-center gap-1.5">
                                 <span>{slotMeta.icon}</span>
                                 <span>{slotMeta.label}</span>
                               </span>
-                              <span className="text-[10px] font-bold text-stone-400">+ 등록</span>
+                              <span className="text-[11.5px] font-bold text-stone-400">+ 등록</span>
                             </button>
                           );
                         }
@@ -13705,14 +13857,14 @@ ${validText}
                             className="p-2.5 rounded-xl bg-white border border-stone-200 space-y-1.5"
                           >
                             <div className="flex items-center justify-between gap-1">
-                              <span className="text-[10px] font-black text-stone-500 flex items-center gap-1">
+                              <span className="text-[11.5px] font-black text-stone-500 flex items-center gap-1">
                                 <span>{slotMeta.icon}</span>
                                 <span>{slotMeta.label}</span>
                               </span>
                               <button
                                 type="button"
                                 onClick={openAddForSlot}
-                                className="px-1.5 py-0.5 rounded bg-stone-100 hover:bg-stone-200 text-stone-600 text-[10px] font-extrabold"
+                                className="px-1.5 py-0.5 rounded bg-stone-100 hover:bg-stone-200 text-stone-600 text-[11.5px] font-extrabold"
                               >
                                 + 추가
                               </button>
@@ -13745,7 +13897,7 @@ ${validText}
                                         {selectedMember === "전체" && (
                                           <span className="inline-flex items-center -space-x-1 mt-0.5 shrink-0" title={isAllFam ? "온가족" : memIds.join(", ")}>
                                             {isAllFam ? (
-                                              <span className="text-[11px] leading-none">👨‍👩‍👧‍👦</span>
+                                              <span className="text-[12.5px] leading-none">👨‍👩‍👧‍👦</span>
                                             ) : (
                                               memIds.map((mId) => {
                                                 const mInfo = FAMILY_MEMBERS.find((f) => f.id === mId);
@@ -13754,9 +13906,9 @@ ${validText}
                                             )}
                                           </span>
                                         )}
-                                        <div className="text-xs font-extrabold text-stone-900 break-keep leading-snug min-w-0 flex-1">
+                                        <div className="text-[13.5px] font-extrabold text-stone-900 break-keep leading-snug min-w-0 flex-1">
                                           {it.mealStatus === "planned" && (
-                                            <span className="inline-block mr-1 px-1.5 py-0.5 rounded bg-[#EEF3EE] text-[#35503C] border border-[#C9D8CC] text-[9px] font-black align-middle">
+                                            <span className="inline-block mr-1 px-1.5 py-0.5 rounded bg-[#EEF3EE] text-[#35503C] border border-[#C9D8CC] text-[10.5px] font-black align-middle">
                                               계획
                                             </span>
                                           )}
@@ -13765,20 +13917,20 @@ ${validText}
                                             <button
                                               type="button"
                                               onClick={(e) => handleMarkPlannedMealRecorded(e, it)}
-                                              className="ml-1.5 px-1.5 py-0.5 rounded bg-[#5E7A65] text-white text-[9px] font-extrabold align-middle"
+                                              className="ml-1.5 px-1.5 py-0.5 rounded bg-[#5E7A65] text-white text-[10.5px] font-extrabold align-middle"
                                             >
                                               ✓ 먹음
                                             </button>
                                           )}
                                           {Number(it.cost) > 0 && (
-                                            <span className="ml-1 text-[10px] font-bold text-stone-500">
+                                            <span className="ml-1 text-[11.5px] font-bold text-stone-500">
                                               ({Number(it.cost).toLocaleString()}원)
                                             </span>
                                           )}
                                         </div>
                                       </div>
                                       {(toSafeArray(it.ingredients).length > 0 || it.note) && (
-                                        <div className="text-[10px] text-stone-500 truncate">
+                                        <div className="text-[11.5px] text-stone-500 truncate">
                                           {toSafeArray(it.ingredients).length > 0 && `🥬 ${toSafeArray(it.ingredients).join(", ")}`}
                                           {toSafeArray(it.ingredients).length > 0 && it.note && " · "}
                                           {it.note && `💬 ${it.note}`}
@@ -13837,7 +13989,7 @@ ${validText}
                   setSelectedDate(`${e.target.value}-01`);
                 }
               }}
-              className="text-sm font-black text-stone-900 bg-transparent focus:outline-none"
+              className="text-[15.5px] font-black text-stone-900 bg-transparent focus:outline-none"
             />
             <button
               onClick={() => {
@@ -13854,7 +14006,7 @@ ${validText}
           <div className="grid grid-cols-2 gap-1.5 bg-stone-200 p-1 rounded-2xl">
             <button
               onClick={() => setMonthlySubTab("calendar")}
-              className={`py-2 rounded-xl text-xs font-extrabold transition ${
+              className={`py-2 rounded-xl text-[13.5px] font-extrabold transition ${
                 monthlySubTab === "calendar"
                   ? "bg-white text-stone-900 shadow-sm"
                   : "text-stone-600"
@@ -13864,7 +14016,7 @@ ${validText}
             </button>
             <button
               onClick={() => setMonthlySubTab("expense")}
-              className={`py-2 rounded-xl text-xs font-extrabold transition ${
+              className={`py-2 rounded-xl text-[13.5px] font-extrabold transition ${
                 monthlySubTab === "expense"
                   ? "bg-white text-stone-900 shadow-sm"
                   : "text-stone-600"
@@ -13888,13 +14040,13 @@ ${validText}
                     }`}
                   >
                     <div className="flex justify-center mb-0.5"><MemberAvatar member={m} size="md" /></div>
-                    <div className="text-xs font-extrabold mt-0.5">{m.name}</div>
+                    <div className="text-[13.5px] font-extrabold mt-0.5">{m.name}</div>
                   </button>
                 ))}
               </div>
 
               <div className="bg-white p-3 rounded-2xl border border-stone-200 shadow-sm">
-                <div className="grid grid-cols-7 gap-1 text-center text-[10px] font-extrabold text-stone-400 mb-1.5">
+                <div className="grid grid-cols-7 gap-1 text-center text-[11.5px] font-extrabold text-stone-400 mb-1.5">
                   {["일", "월", "화", "수", "목", "금", "토"].map((d) => (
                     <div key={d}>{d}</div>
                   ))}
@@ -13923,10 +14075,10 @@ ${validText}
                             : "bg-stone-50 text-stone-700 border-stone-200"
                         }`}
                       >
-                        <div className="text-[10px] font-black">{i + 1}</div>
+                        <div className="text-[11.5px] font-black">{i + 1}</div>
                         {mList.length > 0 && (
                           <div
-                            className={`text-[9px] font-extrabold px-1 py-0.5 rounded text-center ${
+                            className={`text-[10.5px] font-extrabold px-1 py-0.5 rounded text-center ${
                               isSel ? "bg-amber-400 text-stone-900" : "bg-emerald-100 text-emerald-800"
                             }`}
                           >
@@ -13940,7 +14092,7 @@ ${validText}
               </div>
 
               <div className="bg-white p-3.5 rounded-2xl border border-stone-200 shadow-sm space-y-2">
-                <div className="text-xs font-black text-stone-900">
+                <div className="text-[13.5px] font-black text-stone-900">
                   📌 {selectedDate} ({getDayName(selectedDate)}) {monthlyMember}님의 식단
                 </div>
                 {meals
@@ -13950,7 +14102,7 @@ ${validText}
                   .map((m) => (
                     <div
                       key={m.id}
-                      className="p-2.5 rounded-xl bg-stone-50 border border-stone-200 text-xs leading-snug break-keep"
+                      className="p-2.5 rounded-xl bg-stone-50 border border-stone-200 text-[13.5px] leading-snug break-keep"
                     >
                       <span className="font-extrabold text-amber-700 mr-2">[{m.slot}]</span>
                       <span className="font-bold text-stone-800">{m.menu}</span>
@@ -13961,7 +14113,7 @@ ${validText}
           ) : (
             <div className="space-y-4">
               <div className="bg-stone-900 text-white p-4 rounded-2xl shadow-md">
-                <div className="flex items-center justify-between text-xs text-stone-300 mb-1">
+                <div className="flex items-center justify-between text-[13.5px] text-stone-300 mb-1">
                   <span>{currentMonth}월 총 식비 지출 (냉장고 소진 시에도 유지됨)</span>
                   <button
                     onClick={() => {
@@ -13980,7 +14132,7 @@ ${validText}
                   {monthlyExpenseSummary.total.toLocaleString()}원
                 </div>
 
-                <div className="grid grid-cols-2 gap-2 pt-3 mt-2 border-t border-stone-700 text-xs">
+                <div className="grid grid-cols-2 gap-2 pt-3 mt-2 border-t border-stone-700 text-[13.5px]">
                   <div>
                     <div className="text-stone-400">🛒 장보기/식재료 구입</div>
                     <div className="font-extrabold text-white mt-0.5">
@@ -14006,7 +14158,7 @@ ${validText}
                       }}
                     />
                   </div>
-                  <div className="flex items-center justify-between text-[10px] text-stone-300">
+                  <div className="flex items-center justify-between text-[11.5px] text-stone-300">
                     <span>
                       예산 사용률 {monthlyBudget > 0 ? Math.round((monthlyExpenseSummary.total / monthlyBudget) * 100) : 0}%
                     </span>
@@ -14023,9 +14175,9 @@ ${validText}
 
                 {monthlyExpenseSummary.categoryTop?.length > 0 && (
                   <div className="mt-2.5 pt-2 border-t border-stone-700 space-y-1.5">
-                    <div className="text-[10px] font-bold text-stone-400">📊 카테고리별 식비 비중 (상위 4개)</div>
+                    <div className="text-[11.5px] font-bold text-stone-400">📊 카테고리별 식비 비중 (상위 4개)</div>
                     {monthlyExpenseSummary.categoryTop.map((ct) => (
-                      <div key={ct.category} className="space-y-0.5 text-[10px]">
+                      <div key={ct.category} className="space-y-0.5 text-[11.5px]">
                         <div className="flex items-center justify-between text-stone-200">
                           <span>{ct.category}</span>
                           <span className="font-bold">{ct.amount.toLocaleString()}원 ({ct.pct}%)</span>
@@ -14039,7 +14191,7 @@ ${validText}
                 )}
 
                 {monthlyExpenseSummary.rescuedCount > 0 && (
-                  <div className="mt-2.5 pt-2 border-t border-stone-700 flex items-center justify-between text-[11px]">
+                  <div className="mt-2.5 pt-2 border-t border-stone-700 flex items-center justify-between text-[12.5px]">
                     <span className="text-emerald-300 font-bold">
                       🎉 임박 재료 구출 저금통 ({monthlyExpenseSummary.rescuedCount}건)
                     </span>
@@ -14050,7 +14202,7 @@ ${validText}
                 )}
 
                 {monthlyExpenseSummary.wasteCount > 0 && (
-                  <div className="mt-2.5 pt-2 border-t border-stone-700 flex items-center justify-between text-[11px]">
+                  <div className="mt-2.5 pt-2 border-t border-stone-700 flex items-center justify-between text-[12.5px]">
                     <span className="text-rose-300 font-bold">
                       🗑️ 이번 달 폐기손실 ({monthlyExpenseSummary.wasteCount}건 · 폐기율 {monthlyExpenseSummary.wasteRate}%)
                     </span>
@@ -14085,17 +14237,17 @@ ${validText}
                   return (
                     <div className="mt-2.5 pt-2.5 border-t border-stone-700 space-y-2.5">
                       {isCurMonth && (
-                        <div className="bg-stone-800/80 rounded-xl p-2.5 flex items-center justify-between gap-2 text-[10px]">
+                        <div className="bg-stone-800/80 rounded-xl p-2.5 flex items-center justify-between gap-2 text-[11.5px]">
                           <div>
                             <div className="text-stone-400 font-bold">📈 월말 예상 식비 (일평균 {dailyAvg.toLocaleString()}원)</div>
-                            <div className={`text-xs font-black mt-0.5 ${monthlyBudget > 0 && projectedTotal > monthlyBudget ? "text-rose-300" : "text-emerald-300"}`}>
+                            <div className={`text-[13.5px] font-black mt-0.5 ${monthlyBudget > 0 && projectedTotal > monthlyBudget ? "text-rose-300" : "text-emerald-300"}`}>
                               약 {projectedTotal.toLocaleString()}원 예상
                             </div>
                           </div>
                           {dailyAllow !== null && (
                             <div className="text-right">
                               <div className="text-stone-400 font-bold">남은 {remainDays}일 하루 권장</div>
-                              <div className={`text-xs font-black mt-0.5 ${dailyAllow < 0 ? "text-rose-300" : "text-amber-300"}`}>
+                              <div className={`text-[13.5px] font-black mt-0.5 ${dailyAllow < 0 ? "text-rose-300" : "text-amber-300"}`}>
                                 {dailyAllow < 0 ? `예산 초과` : `${dailyAllow.toLocaleString()}원/일`}
                               </div>
                             </div>
@@ -14103,7 +14255,7 @@ ${validText}
                         </div>
                       )}
                       <div className="space-y-1">
-                        <div className="text-[10px] font-bold text-stone-400">📅 최근 6개월 월별 식비 추이</div>
+                        <div className="text-[11.5px] font-bold text-stone-400">📅 최근 6개월 월별 식비 추이</div>
                         <div className="grid grid-cols-6 gap-1.5 items-end h-14 pt-1">
                           {trendMonths.map((tm) => {
                             const hPct = tm.total > 0 ? Math.max(12, Math.round((tm.total / maxTrend) * 100)) : 6;
@@ -14119,7 +14271,7 @@ ${validText}
                                     style={{ height: `${hPct}%` }}
                                   />
                                 </div>
-                                <span className={`text-[9px] font-bold ${isSel ? "text-amber-300" : "text-stone-400"}`}>
+                                <span className={`text-[10.5px] font-bold ${isSel ? "text-amber-300" : "text-stone-400"}`}>
                                   {Number(tm.ym.slice(5))}월
                                 </span>
                               </div>
@@ -14147,7 +14299,7 @@ ${validText}
                 return (
                   <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-sm space-y-2.5">
                     <div className="flex items-center justify-between gap-2">
-                      <h3 className="text-xs font-black text-stone-900">
+                      <h3 className="text-[13.5px] font-black text-stone-900">
                         🧾 {currentMonth}월 장보기 지출 원장 ({filteredLedger.length}건)
                       </h3>
                       {filteredLedger.length > 0 && (
@@ -14165,13 +14317,13 @@ ${validText}
                               showToast("⚠️ 클립보드 복사에 실패했습니다.");
                             }
                           }}
-                          className="px-2 py-1 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 text-[10px] font-extrabold whitespace-nowrap shrink-0"
+                          className="px-2 py-1 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 text-[11.5px] font-extrabold whitespace-nowrap shrink-0"
                         >
                           📋 원장 복사
                         </button>
                       )}
                       {(expenseCatFilter !== "전체" || eq) && (
-                        <span className="text-[11px] font-black text-emerald-700 whitespace-nowrap">
+                        <span className="text-[12.5px] font-black text-emerald-700 whitespace-nowrap">
                           합계 {filteredSum.toLocaleString()}원
                         </span>
                       )}
@@ -14184,13 +14336,13 @@ ${validText}
                             value={expenseSearchQuery}
                             onChange={(e) => setExpenseSearchQuery(e.target.value)}
                             placeholder="🔍 지출 품목·카테고리 검색..."
-                            className="w-full px-3 py-1.5 pr-7 rounded-xl border border-stone-200 bg-stone-50 text-[11px] font-semibold text-stone-800"
+                            className="w-full px-3 py-1.5 pr-7 rounded-xl border border-stone-200 bg-stone-50 text-[12.5px] font-semibold text-stone-800"
                           />
                           {expenseSearchQuery && (
                             <button
                               type="button"
                               onClick={() => setExpenseSearchQuery("")}
-                              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-700 text-[10px] font-black"
+                              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-700 text-[11.5px] font-black"
                             >
                               ✕
                             </button>
@@ -14202,7 +14354,7 @@ ${validText}
                               key={c}
                               type="button"
                               onClick={() => setExpenseCatFilter(c)}
-                              className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold border whitespace-nowrap shrink-0 ${
+                              className={`px-2 py-0.5 rounded-full text-[11.5px] font-extrabold border whitespace-nowrap shrink-0 ${
                                 expenseCatFilter === c
                                   ? "bg-stone-900 text-white border-stone-900"
                                   : "bg-stone-50 text-stone-600 border-stone-200"
@@ -14216,15 +14368,15 @@ ${validText}
                     )}
                     <div className="divide-y divide-stone-100 max-h-96 overflow-y-auto pr-0.5">
                       {filteredLedger.length === 0 ? (
-                        <div className="py-4 text-center text-[11px] font-bold text-stone-400">
+                        <div className="py-4 text-center text-[12.5px] font-bold text-stone-400">
                           조건에 맞는 지출 내역이 없습니다.
                         </div>
                       ) : (
                         (expenseLedgerExpanded ? filteredLedger : filteredLedger.slice(0, 10)).map((exp) => (
-                          <div key={exp.id} className="py-2 flex items-center justify-between gap-2 text-xs">
+                          <div key={exp.id} className="py-2 flex items-center justify-between gap-2 text-[13.5px]">
                             <div className="min-w-0">
                               <div className="font-bold text-stone-800 truncate">{exp.title}</div>
-                              <div className="text-[10px] text-stone-400 whitespace-nowrap">
+                              <div className="text-[11.5px] text-stone-400 whitespace-nowrap">
                                 {exp.date} · {exp.category}
                               </div>
                             </div>
@@ -14239,7 +14391,7 @@ ${validText}
                       <button
                         type="button"
                         onClick={() => setExpenseLedgerExpanded((v) => !v)}
-                        className="w-full py-1.5 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-[11px] font-extrabold"
+                        className="w-full py-1.5 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-[12.5px] font-extrabold"
                       >
                         {expenseLedgerExpanded
                           ? "▲ 최근 10건만 보기"
@@ -14261,11 +14413,11 @@ ${validText}
         <div className="p-4 space-y-4">
           <div className="flex items-center justify-between gap-2">
             <div className="min-w-0">
-              <h2 className="text-sm font-black text-stone-900 flex items-center gap-1.5">
+              <h2 className="text-[15.5px] font-black text-stone-900 flex items-center gap-1.5">
                 <CalendarDays className="w-4 h-4 text-pink-600 shrink-0" />
                 <span className="truncate">우리 가족 월간 일정표</span>
               </h2>
-              <p className="text-[11px] text-stone-500">
+              <p className="text-[12.5px] text-stone-500">
                 월간 달력 · 주간 일정 요약 · 전체 To-Do 체크리스트 · 기념일 D-Day
               </p>
             </div>
@@ -14287,7 +14439,7 @@ ${validText}
                 });
                 setIsScheduleModalOpen(true);
               }}
-              className="px-3 py-2 rounded-xl bg-stone-900 text-white text-xs font-extrabold flex items-center gap-1 shrink-0 shadow-sm"
+              className="px-3 py-2 rounded-xl bg-stone-900 text-white text-[13.5px] font-extrabold flex items-center gap-1 shrink-0 shadow-sm"
             >
               <Plus className="w-3.5 h-3.5" /> 일정 추가
             </button>
@@ -14297,7 +14449,7 @@ ${validText}
             <button
               type="button"
               onClick={() => setScheduleSubTab("calendar")}
-              className={`py-2 px-2 rounded-xl text-[11px] font-black flex items-center justify-center gap-1 transition ${
+              className={`py-2 px-2 rounded-xl text-[12.5px] font-black flex items-center justify-center gap-1 transition ${
                 scheduleSubTab === "calendar"
                   ? "bg-white text-stone-900 shadow-sm"
                   : "text-stone-500 hover:text-stone-800"
@@ -14305,7 +14457,7 @@ ${validText}
             >
               <span className="whitespace-nowrap">📅 달력·일정</span>
               {imminentSchedulesWithin3Days.length > 0 && (
-                <span className="px-1.5 py-0.5 rounded-full bg-rose-600 text-white text-[9px] font-black leading-none">
+                <span className="px-1.5 py-0.5 rounded-full bg-rose-600 text-white text-[10.5px] font-black leading-none">
                   {imminentSchedulesWithin3Days.length}
                 </span>
               )}
@@ -14313,7 +14465,7 @@ ${validText}
             <button
               type="button"
               onClick={() => setScheduleSubTab("todo")}
-              className={`py-2 px-2 rounded-xl text-[11px] font-black flex items-center justify-center gap-1 transition ${
+              className={`py-2 px-2 rounded-xl text-[12.5px] font-black flex items-center justify-center gap-1 transition ${
                 scheduleSubTab === "todo"
                   ? "bg-white text-stone-900 shadow-sm"
                   : "text-stone-500 hover:text-stone-800"
@@ -14321,7 +14473,7 @@ ${validText}
             >
               <span className="whitespace-nowrap">✅ 할 일</span>
               {globalTodoBadgeStats.activeCount > 0 && (
-                <span className="px-1.5 py-0.5 rounded-full bg-amber-500 text-white text-[9px] font-black leading-none">
+                <span className="px-1.5 py-0.5 rounded-full bg-amber-500 text-white text-[10.5px] font-black leading-none">
                   {globalTodoBadgeStats.activeCount}
                 </span>
               )}
@@ -14329,7 +14481,7 @@ ${validText}
             <button
               type="button"
               onClick={() => setScheduleSubTab("routine")}
-              className={`py-2 px-2 rounded-xl text-[11px] font-black flex items-center justify-center gap-1 transition ${
+              className={`py-2 px-2 rounded-xl text-[12.5px] font-black flex items-center justify-center gap-1 transition ${
                 scheduleSubTab === "routine"
                   ? "bg-white text-stone-900 shadow-sm"
                   : "text-stone-500 hover:text-stone-800"
@@ -14337,7 +14489,7 @@ ${validText}
             >
               <span className="whitespace-nowrap">🔄 반복 루틴</span>
               {familyRoutines.filter((r) => !isRoutineDoneNow(r)).length > 0 && (
-                <span className="px-1.5 py-0.5 rounded-full bg-indigo-600 text-white text-[9px] font-black leading-none">
+                <span className="px-1.5 py-0.5 rounded-full bg-indigo-600 text-white text-[10.5px] font-black leading-none">
                   {familyRoutines.filter((r) => !isRoutineDoneNow(r)).length}
                 </span>
               )}
@@ -14350,7 +14502,7 @@ ${validText}
                 setScheduleMemberFilter("전체");
                 setRoutineTargetFilter("전체");
               }}
-              className={`px-2.5 py-2 rounded-xl text-[11px] font-extrabold border transition flex items-center justify-center gap-1 whitespace-nowrap shrink-0 ${
+              className={`px-2.5 py-2 rounded-xl text-[12.5px] font-extrabold border transition flex items-center justify-center gap-1 whitespace-nowrap shrink-0 ${
                 scheduleMemberFilter === "전체"
                   ? "bg-stone-900 text-white border-stone-900"
                   : "bg-white text-stone-600 border-stone-200"
@@ -14366,7 +14518,7 @@ ${validText}
                   setScheduleMemberFilter(m.id);
                   setRoutineTargetFilter(m.id);
                 }}
-                className={`px-2.5 py-2 rounded-xl text-[11px] font-extrabold border transition flex items-center justify-center gap-1 whitespace-nowrap shrink-0 ${
+                className={`px-2.5 py-2 rounded-xl text-[12.5px] font-extrabold border transition flex items-center justify-center gap-1 whitespace-nowrap shrink-0 ${
                   scheduleMemberFilter === m.id
                     ? "bg-stone-900 text-white border-stone-900"
                     : "bg-white text-stone-600 border-stone-200"
@@ -14403,7 +14555,7 @@ ${validText}
                       setScheduleSelectedDate(`${e.target.value}-01`);
                     }
                   }}
-                  className="text-sm font-black text-stone-900 bg-transparent focus:outline-none"
+                  className="text-[15.5px] font-black text-stone-900 bg-transparent focus:outline-none"
                 />
                 <button
                   onClick={() => {
@@ -14411,7 +14563,7 @@ ${validText}
                     setScheduleMonth(today.slice(0, 7));
                     setScheduleSelectedDate(today);
                   }}
-                  className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-stone-100 text-stone-700 hover:bg-stone-200"
+                  className="px-2 py-0.5 rounded-full text-[11.5px] font-extrabold bg-stone-100 text-stone-700 hover:bg-stone-200"
                 >
                   오늘
                 </button>
@@ -14433,7 +14585,7 @@ ${validText}
                 <button
                   key={cat}
                   onClick={() => setScheduleCatFilter(cat)}
-                  className={`px-2.5 py-1 rounded-full text-[10px] font-extrabold shrink-0 border ${
+                  className={`px-2.5 py-1 rounded-full text-[11.5px] font-extrabold shrink-0 border ${
                     scheduleCatFilter === cat
                       ? "bg-pink-600 text-white border-pink-600"
                       : "bg-stone-50 text-stone-600 border-stone-200"
@@ -14444,7 +14596,7 @@ ${validText}
               ))}
             </div>
 
-            <div className="grid grid-cols-7 gap-1 text-center text-[10px] font-extrabold text-stone-400">
+            <div className="grid grid-cols-7 gap-1 text-center text-[11.5px] font-extrabold text-stone-400">
               {["일", "월", "화", "수", "목", "금", "토"].map((d) => (
                 <div key={d}>{d}</div>
               ))}
@@ -14481,7 +14633,7 @@ ${validText}
                     }`}
                   >
                     <div className="flex items-center justify-between gap-0.5 w-full">
-                      <span className="text-[10px] font-black shrink-0">{i + 1}</span>
+                      <span className="text-[11.5px] font-black shrink-0">{i + 1}</span>
                       {isToday && (
                         <span className="text-[8px] font-extrabold px-1 rounded bg-amber-400 text-stone-900 whitespace-nowrap shrink-0 leading-tight">
                           오늘
@@ -14522,7 +14674,7 @@ ${validText}
           {/* [2순위 배치] 선택한 날짜의 상세 일정 관리 */}
           <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-sm space-y-2.5">
             <div className="flex items-center justify-between">
-              <div className="text-xs font-black text-stone-900">
+              <div className="text-[13.5px] font-black text-stone-900">
                 📌 {scheduleSelectedDate} ({getDayName(scheduleSelectedDate)}) 상세 일정
               </div>
               <button
@@ -14540,7 +14692,7 @@ ${validText}
                   });
                   setIsScheduleModalOpen(true);
                 }}
-                className="text-[11px] font-extrabold text-pink-600 hover:underline"
+                className="text-[12.5px] font-extrabold text-pink-600 hover:underline"
               >
                 + 이 날짜에 추가
               </button>
@@ -14548,7 +14700,7 @@ ${validText}
 
             {getSchedulesForDate(scheduleSelectedDate, scheduleMemberFilter, scheduleCatFilter)
               .length === 0 ? (
-              <div className="text-xs text-stone-400 py-4 text-center bg-stone-50 rounded-xl border border-dashed border-stone-200">
+              <div className="text-[13.5px] text-stone-400 py-4 text-center bg-stone-50 rounded-xl border border-dashed border-stone-200">
                 이 날짜에 등록된 일정이나 기념일이 없습니다.
               </div>
             ) : (
@@ -14572,19 +14724,19 @@ ${validText}
                     >
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex flex-wrap items-center gap-1">
-                          <span className="px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-white border border-stone-200 text-stone-700">
+                          <span className="px-2 py-0.5 rounded-md text-[11.5px] font-extrabold bg-white border border-stone-200 text-stone-700">
                             {ev.category}
                           </span>
                           {ev.isAnnual && (
-                            <span className="px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-pink-600 text-white">
+                            <span className="px-2 py-0.5 rounded-md text-[11.5px] font-extrabold bg-pink-600 text-white">
                               🔄 매년 반복
                             </span>
                           )}
-                          <span className="px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-amber-100 text-amber-900">
+                          <span className="px-2 py-0.5 rounded-md text-[11.5px] font-extrabold bg-amber-100 text-amber-900">
                             {dInfo.dDayText}
                           </span>
                           {dInfo.elapsedDays !== null && (
-                            <span className="px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-emerald-100 text-emerald-800">
+                            <span className="px-2 py-0.5 rounded-md text-[11.5px] font-extrabold bg-emerald-100 text-emerald-800">
                               D+{dInfo.elapsedDays.toLocaleString()}일째
                             </span>
                           )}
@@ -14593,7 +14745,7 @@ ${validText}
                             return info ? (
                               <span
                                 key={mId}
-                                className={`px-1.5 py-0.5 rounded text-[10px] font-bold border ${info.color}`}
+                                className={`px-1.5 py-0.5 rounded text-[11.5px] font-bold border ${info.color}`}
                               >
                                 <span className="inline-flex items-center gap-1"><MemberAvatar member={info} size="sm" /><span>{info.name}</span></span>
                               </span>
@@ -14605,7 +14757,7 @@ ${validText}
                           {ev.category !== "기념일/생일" && (
                             <button
                               onClick={() => handleToggleScheduleDone(ev)}
-                              className={`px-2 py-0.5 rounded-lg text-[10px] font-extrabold border ${
+                              className={`px-2 py-0.5 rounded-lg text-[11.5px] font-extrabold border ${
                                 ev.done
                                   ? "bg-emerald-600 text-white border-emerald-600"
                                   : "bg-white text-stone-600 border-stone-300"
@@ -14643,13 +14795,13 @@ ${validText}
                       </div>
 
                       <div
-                        className={`text-sm font-black break-keep ${
+                        className={`text-[15.5px] font-black break-keep ${
                           ev.done ? "line-through text-stone-400" : "text-stone-900"
                         }`}
                       >
                         {ev.title}
                       </div>
-                      {ev.memo && <div className="text-xs text-stone-600">💬 {ev.memo}</div>}
+                      {ev.memo && <div className="text-[13.5px] text-stone-600">💬 {ev.memo}</div>}
                     </div>
                   );
                 })}
@@ -14664,7 +14816,7 @@ ${validText}
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-1.5">
                 <CalendarRange className="w-4 h-4 text-indigo-600" />
-                <h3 className="text-xs font-black text-stone-900">
+                <h3 className="text-[13.5px] font-black text-stone-900">
                   📊 주간 일정 요약 ({scheduleWeekDates[0].slice(5)} ~ {scheduleWeekDates[6].slice(5)})
                 </h3>
               </div>
@@ -14677,7 +14829,7 @@ ${validText}
                     setScheduleSelectedDate(nextStr);
                     setScheduleMonth(nextStr.slice(0, 7));
                   }}
-                  className="px-2 py-0.5 rounded-lg bg-stone-100 hover:bg-stone-200 text-[10px] font-extrabold text-stone-700"
+                  className="px-2 py-0.5 rounded-lg bg-stone-100 hover:bg-stone-200 text-[11.5px] font-extrabold text-stone-700"
                 >
                   &lt; 이전주
                 </button>
@@ -14687,7 +14839,7 @@ ${validText}
                     setScheduleSelectedDate(today);
                     setScheduleMonth(today.slice(0, 7));
                   }}
-                  className="px-2 py-0.5 rounded-lg bg-indigo-50 text-indigo-700 text-[10px] font-extrabold"
+                  className="px-2 py-0.5 rounded-lg bg-indigo-50 text-indigo-700 text-[11.5px] font-extrabold"
                 >
                   이번주
                 </button>
@@ -14699,7 +14851,7 @@ ${validText}
                     setScheduleSelectedDate(nextStr);
                     setScheduleMonth(nextStr.slice(0, 7));
                   }}
-                  className="px-2 py-0.5 rounded-lg bg-stone-100 hover:bg-stone-200 text-[10px] font-extrabold text-stone-700"
+                  className="px-2 py-0.5 rounded-lg bg-stone-100 hover:bg-stone-200 text-[11.5px] font-extrabold text-stone-700"
                 >
                   다음주 &gt;
                 </button>
@@ -14707,7 +14859,7 @@ ${validText}
             </div>
 
             {weeklyActiveScheduleSummary.length === 0 ? (
-              <div className="text-xs text-stone-400 py-4 text-center bg-stone-50 rounded-xl border border-dashed border-stone-200">
+              <div className="text-[13.5px] text-stone-400 py-4 text-center bg-stone-50 rounded-xl border border-dashed border-stone-200">
                 이 주간({scheduleWeekDates[0].slice(5)} ~ {scheduleWeekDates[6].slice(5)})에는 등록된 일정이 없습니다.
               </div>
             ) : (
@@ -14726,16 +14878,16 @@ ${validText}
                     >
                       <div className="flex items-center justify-between mb-1.5">
                         <div className="flex items-center gap-1.5">
-                          <span className="text-xs font-black text-stone-900">
+                          <span className="text-[13.5px] font-black text-stone-900">
                             {dayGroup.date.slice(5).replace("-", "월 ")}일 ({dayGroup.dayName})
                           </span>
                           {isToday && (
-                            <span className="px-1.5 py-0.2 rounded bg-amber-400 text-stone-900 text-[9px] font-black">
+                            <span className="px-1.5 py-0.2 rounded bg-amber-400 text-stone-900 text-[10.5px] font-black">
                               오늘
                             </span>
                           )}
                         </div>
-                        <span className="text-[10px] font-extrabold text-indigo-700">
+                        <span className="text-[11.5px] font-extrabold text-indigo-700">
                           {dayGroup.items.length}건
                         </span>
                       </div>
@@ -14746,7 +14898,7 @@ ${validText}
                           return (
                             <div
                               key={ev.id}
-                              className="flex items-center justify-between gap-2 bg-white px-2.5 py-1.5 rounded-lg border border-stone-200/80 text-xs"
+                              className="flex items-center justify-between gap-2 bg-white px-2.5 py-1.5 rounded-lg border border-stone-200/80 text-[13.5px]"
                             >
                               <div className="flex items-center gap-1.5 min-w-0">
                                 {ev.category !== "기념일/생일" && (
@@ -14777,12 +14929,12 @@ ${validText}
                                 {toSafeArray(ev.members).map((mId) => {
                                   const info = FAMILY_MEMBERS.find((f) => f.id === mId);
                                   return info ? (
-                                    <span key={mId} className="text-[11px]" title={info.name}>
+                                    <span key={mId} className="text-[12.5px]" title={info.name}>
                                       {info.emoji}
                                     </span>
                                   ) : null;
                                 })}
-                                <span className="px-1.5 py-0.2 rounded bg-stone-100 text-stone-700 text-[10px] font-extrabold">
+                                <span className="px-1.5 py-0.2 rounded bg-stone-100 text-stone-700 text-[11.5px] font-extrabold">
                                   {dInfo.dDayText}
                                 </span>
                               </div>
@@ -14805,13 +14957,13 @@ ${validText}
           <div id="routine-board-section" className="bg-white p-4 rounded-2xl border border-stone-200 shadow-sm space-y-3">
             <div className="flex items-center justify-between gap-2">
               <div className="min-w-0">
-                <h3 className="text-xs font-black text-stone-900 flex flex-wrap items-center gap-1.5">
+                <h3 className="text-[13.5px] font-black text-stone-900 flex flex-wrap items-center gap-1.5">
                   <span className="whitespace-nowrap">🔄 반복 루틴</span>
-                  <span className="px-2 py-0.5 rounded-full bg-stone-100 text-stone-800 text-[10px] font-black whitespace-nowrap shrink-0">
+                  <span className="px-2 py-0.5 rounded-full bg-stone-100 text-stone-800 text-[11.5px] font-black whitespace-nowrap shrink-0">
                     남은 {familyRoutines.filter((r) => !isRoutineDoneNow(r)).length}건
                   </span>
                 </h3>
-                <p className="text-[10px] text-stone-500 font-semibold mt-0.5">
+                <p className="text-[11.5px] text-stone-500 font-semibold mt-0.5">
                   현재({isWeekendNow() ? "주말" : "평일"}): <span className="text-stone-900 font-extrabold">{getCurrentRoutineTimeSlot(routineTimeRanges, liveMinuteTick, routineSlotDefs)}</span> · 자정·월요일 자동 리셋
                 </p>
                 {familyRoutines.length > 0 && (() => {
@@ -14822,7 +14974,7 @@ ${validText}
                       <div className="flex-1 h-1.5 rounded-full bg-stone-100 overflow-hidden">
                         <div className="h-full bg-[#5E7A65] transition-all" style={{ width: `${pct}%` }} />
                       </div>
-                      <span className="text-[10px] font-black text-[#35503C] whitespace-nowrap">
+                      <span className="text-[11.5px] font-black text-[#35503C] whitespace-nowrap">
                         달성 {doneCnt}/{familyRoutines.length} ({pct}%)
                       </span>
                     </div>
@@ -14833,7 +14985,7 @@ ${validText}
                 <button
                   type="button"
                   onClick={() => setIsRoutineRangeEditOpen((v) => !v)}
-                  className={`px-2 py-1.5 rounded-xl text-[10px] font-extrabold border whitespace-nowrap ${
+                  className={`px-2 py-1.5 rounded-xl text-[11.5px] font-extrabold border whitespace-nowrap ${
                     isRoutineRangeEditOpen
                       ? "bg-stone-900 text-white border-stone-900"
                       : "bg-stone-50 text-stone-700 border-stone-200"
@@ -14844,7 +14996,7 @@ ${validText}
                 <button
                   type="button"
                   onClick={openNewRoutineModal}
-                  className="px-2.5 py-1.5 rounded-xl bg-stone-900 text-white text-[11px] font-extrabold whitespace-nowrap flex items-center gap-1"
+                  className="px-2.5 py-1.5 rounded-xl bg-stone-900 text-white text-[12.5px] font-extrabold whitespace-nowrap flex items-center gap-1"
                 >
                   <Plus className="w-3.5 h-3.5" /> 루틴 추가
                 </button>
@@ -14873,7 +15025,7 @@ ${validText}
               return (
                 <div className="bg-indigo-50/70 border border-indigo-200 rounded-xl p-2.5 space-y-2.5">
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-[10px] font-extrabold text-indigo-950">
+                    <span className="text-[11.5px] font-extrabold text-indigo-950">
                       루틴 시간대 추가·수정·삭제 및 평일/주말 설정
                     </span>
                     <button
@@ -14883,13 +15035,13 @@ ${validText}
                         persistSlots(DEFAULT_ROUTINE_SLOT_DEFS);
                         showToast("루틴 시간대를 기본값으로 초기화했습니다.");
                       }}
-                      className="text-[10px] font-extrabold text-indigo-700 underline shrink-0"
+                      className="text-[11.5px] font-extrabold text-indigo-700 underline shrink-0"
                     >
                       기본값 초기화
                     </button>
                   </div>
 
-                  <div className="text-[10px] text-indigo-900 space-y-0.5 bg-white/80 border border-indigo-100 rounded-lg px-2 py-1.5">
+                  <div className="text-[11.5px] text-indigo-900 space-y-0.5 bg-white/80 border border-indigo-100 rounded-lg px-2 py-1.5">
                     <div>
                       <span className="font-black">평일:</span>{" "}
                       <span className="font-semibold text-indigo-700">
@@ -14945,7 +15097,7 @@ ${validText}
                               recordActivity("루틴", "시간대 수정", `${slot.label} → ${nextLabel}`);
                               showToast(`시간대 [${slot.label}] → [${nextLabel}] 변경 완료`);
                             }}
-                            className="w-20 px-2 py-1 rounded-lg border border-stone-200 text-[11px] font-black text-stone-900 bg-stone-50"
+                            className="w-20 px-2 py-1 rounded-lg border border-stone-200 text-[12.5px] font-black text-stone-900 bg-stone-50"
                             title="시간대 이름 수정"
                           />
                           <input
@@ -14958,7 +15110,7 @@ ${validText}
                                 routineSlotDefs.map((x) => (x.id === slot.id ? { ...x, startTime: val } : x))
                               );
                             }}
-                            className="flex-1 min-w-0 px-2 py-1 rounded-lg border border-indigo-200 bg-white text-[11px] font-black text-stone-800"
+                            className="flex-1 min-w-0 px-2 py-1 rounded-lg border border-indigo-200 bg-white text-[12.5px] font-black text-stone-800"
                           />
                           {routineSlotDefs.length > 1 && (
                             <button
@@ -14975,7 +15127,7 @@ ${validText}
                                 recordActivity("루틴", "시간대 삭제", slot.label);
                                 showToast(`[${slot.label}] 시간대가 삭제되었습니다.`);
                               }}
-                              className="px-2 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 text-[10px] font-extrabold shrink-0"
+                              className="px-2 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 text-[11.5px] font-extrabold shrink-0"
                             >
                               삭제
                             </button>
@@ -14983,7 +15135,7 @@ ${validText}
                         </div>
                         <div className="flex items-center justify-between gap-2">
                           <div className="flex items-center gap-1.5 flex-nowrap shrink-0">
-                            <span className="text-[10px] font-bold text-stone-400">적용:</span>
+                            <span className="text-[11.5px] font-bold text-stone-400">적용:</span>
                             <button
                               type="button"
                               onClick={() => {
@@ -14992,7 +15144,7 @@ ${validText}
                                   routineSlotDefs.map((x) => (x.id === slot.id ? { ...x, weekday: !x.weekday } : x))
                                 );
                               }}
-                              className={`px-2.5 py-0.5 rounded-lg text-[10px] font-extrabold border whitespace-nowrap ${
+                              className={`px-2.5 py-0.5 rounded-lg text-[11.5px] font-extrabold border whitespace-nowrap ${
                                 slot.weekday
                                   ? "bg-indigo-600 text-white border-indigo-600"
                                   : "bg-stone-50 text-stone-400 border-stone-200"
@@ -15008,7 +15160,7 @@ ${validText}
                                   routineSlotDefs.map((x) => (x.id === slot.id ? { ...x, weekend: !x.weekend } : x))
                                 );
                               }}
-                              className={`px-2.5 py-0.5 rounded-lg text-[10px] font-extrabold border whitespace-nowrap ${
+                              className={`px-2.5 py-0.5 rounded-lg text-[11.5px] font-extrabold border whitespace-nowrap ${
                                 slot.weekend
                                   ? "bg-teal-600 text-white border-teal-600"
                                   : "bg-stone-50 text-stone-400 border-stone-200"
@@ -15017,7 +15169,7 @@ ${validText}
                               주말
                             </button>
                           </div>
-                          <span className="text-[10px] font-extrabold text-stone-400">
+                          <span className="text-[11.5px] font-extrabold text-stone-400">
                             연결 루틴 {familyRoutines.filter((r) => (r.timeSlot || "상시") === slot.label).length}건
                           </span>
                         </div>
@@ -15060,19 +15212,19 @@ ${validText}
                         }
                       }}
                       placeholder="새 시간대 (예: 새벽·오전)"
-                      className="flex-1 min-w-[110px] px-2.5 py-1.5 rounded-lg border border-indigo-200 bg-white text-[11px] font-bold"
+                      className="flex-1 min-w-[110px] px-2.5 py-1.5 rounded-lg border border-indigo-200 bg-white text-[12.5px] font-bold"
                     />
                     <input
                       type="time"
                       value={newSlotTimeInput}
                       onChange={(e) => setNewSlotTimeInput(e.target.value)}
-                      className="px-2 py-1.5 rounded-lg border border-indigo-200 bg-white text-[11px] font-black"
+                      className="px-2 py-1.5 rounded-lg border border-indigo-200 bg-white text-[12.5px] font-black"
                     />
                     <div className="flex items-center gap-1 flex-nowrap shrink-0">
                       <button
                         type="button"
                         onClick={() => setNewSlotWeekday((v) => !v)}
-                        className={`px-2 py-1 rounded-lg text-[10px] font-extrabold border whitespace-nowrap ${
+                        className={`px-2 py-1 rounded-lg text-[11.5px] font-extrabold border whitespace-nowrap ${
                           newSlotWeekday ? "bg-indigo-600 text-white border-indigo-600" : "bg-white text-stone-400 border-stone-200"
                         }`}
                       >
@@ -15081,7 +15233,7 @@ ${validText}
                       <button
                         type="button"
                         onClick={() => setNewSlotWeekend((v) => !v)}
-                        className={`px-2 py-1 rounded-lg text-[10px] font-extrabold border whitespace-nowrap ${
+                        className={`px-2 py-1 rounded-lg text-[11.5px] font-extrabold border whitespace-nowrap ${
                           newSlotWeekend ? "bg-teal-600 text-white border-teal-600" : "bg-white text-stone-400 border-stone-200"
                         }`}
                       >
@@ -15116,14 +15268,14 @@ ${validText}
                         recordActivity("루틴", "시간대 추가", `${lbl} (${newSlotTimeInput || "14:00"})`);
                         showToast(`⏰ [${lbl}] 시간대가 추가되었습니다!`);
                       }}
-                      className="px-2.5 py-1.5 rounded-lg bg-indigo-700 hover:bg-indigo-800 text-white text-[10px] font-extrabold"
+                      className="px-2.5 py-1.5 rounded-lg bg-indigo-700 hover:bg-indigo-800 text-white text-[11.5px] font-extrabold"
                     >
                       + 추가
                     </button>
                   </div>
 
                   {(hasDupWd || hasDupWe) && (
-                    <div className="text-[10px] font-extrabold text-rose-600">
+                    <div className="text-[11.5px] font-extrabold text-rose-600">
                       ⚠️ 같은 요일 그룹 내 시작 시각이 중복된 시간대가 있습니다.
                     </div>
                   )}
@@ -15144,7 +15296,7 @@ ${validText}
                   key={tgt.id}
                   type="button"
                   onClick={() => setRoutineTargetFilter(tgt.id)}
-                  className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold border shrink-0 ${
+                  className={`px-2 py-0.5 rounded-full text-[11.5px] font-extrabold border shrink-0 ${
                     routineTargetFilter === tgt.id
                       ? "bg-stone-900 text-white border-stone-900"
                       : "bg-stone-50 text-stone-600 border-stone-200"
@@ -15161,7 +15313,7 @@ ${validText}
                   key={ts}
                   type="button"
                   onClick={() => setRoutineTimeFilter(ts)}
-                  className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold border shrink-0 ${
+                  className={`px-2 py-0.5 rounded-full text-[11.5px] font-extrabold border shrink-0 ${
                     routineTimeFilter === ts
                       ? "bg-stone-900 text-white border-stone-900"
                       : "bg-stone-50 text-stone-600 border-stone-200"
@@ -15180,10 +15332,10 @@ ${validText}
               return (
                 <div className="bg-sky-50/70 border border-sky-200/80 rounded-2xl p-2 space-y-1.5">
                   <div className="flex items-center justify-between px-0.5">
-                    <span className="text-[10px] font-black text-sky-900">
+                    <span className="text-[11.5px] font-black text-sky-900">
                       ⏰ 오늘 루틴 시간표 ({timedRoutines.filter((r) => isRoutineDoneNow(r)).length}/{timedRoutines.length} 완료)
                     </span>
-                    <span className="text-[9px] font-bold text-sky-700">눌러서 완료 체크</span>
+                    <span className="text-[10.5px] font-bold text-sky-700">눌러서 완료 체크</span>
                   </div>
                   <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5">
                     {timedRoutines.map((rt) => {
@@ -15196,7 +15348,7 @@ ${validText}
                           key={`tl-${rt.id}`}
                           type="button"
                           onClick={() => handleToggleRoutine(rt.id)}
-                          className={`px-2 py-1 rounded-xl text-[10px] font-extrabold border whitespace-nowrap shrink-0 transition active:scale-95 ${
+                          className={`px-2 py-1 rounded-xl text-[11.5px] font-extrabold border whitespace-nowrap shrink-0 transition active:scale-95 ${
                             tDone
                               ? "bg-emerald-50 border-emerald-200 text-emerald-700 line-through opacity-75"
                               : tOver
@@ -15214,7 +15366,7 @@ ${validText}
             })()}
 
             {familyRoutines.length === 0 ? (
-              <div className="text-center py-3 text-xs text-stone-400">
+              <div className="text-center py-3 text-[13.5px] text-stone-400">
                 등록된 루틴이 없습니다. 위에서 매일/매주 반복 루틴을 추가해 보세요.
               </div>
             ) : (
@@ -15280,14 +15432,14 @@ ${validText}
                                           key={sIdx}
                                           type="button"
                                           onClick={() => handleToggleRoutineSubStep(rt.id, sIdx, steps.length)}
-                                          className={`w-full flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-[11px] font-extrabold border text-left transition active:scale-[0.99] ${
+                                          className={`w-full flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-[12.5px] font-extrabold border text-left transition active:scale-[0.99] ${
                                             sDone
                                               ? "bg-emerald-50 border-emerald-300 text-emerald-800"
                                               : "bg-white border-stone-200 text-stone-800 hover:bg-stone-100"
                                           }`}
                                         >
                                           <span
-                                            className={`inline-flex items-center justify-center w-4 h-4 rounded-full border text-[9px] font-black shrink-0 ${
+                                            className={`inline-flex items-center justify-center w-4 h-4 rounded-full border text-[10.5px] font-black shrink-0 ${
                                               sDone
                                                 ? "bg-emerald-600 border-emerald-600 text-white"
                                                 : "border-stone-400 text-stone-700 bg-white"
@@ -15308,7 +15460,7 @@ ${validText}
                                 <button
                                   type="button"
                                   onClick={() => handleToggleRoutine(rt.id)}
-                                  className={`text-left text-xs font-extrabold whitespace-normal break-words leading-snug w-full ${doneNow ? "line-through text-stone-400" : "text-stone-900"}`}
+                                  className={`text-left text-[13.5px] font-extrabold whitespace-normal break-words leading-snug w-full ${doneNow ? "line-through text-stone-400" : "text-stone-900"}`}
                                 >
                                   {rt.title}
                                 </button>
@@ -15316,18 +15468,18 @@ ${validText}
                             })()}
                             <div className="flex flex-wrap items-center gap-1 mt-1">
                               {parseRoutineSteps(rt.title).length >= 2 && (
-                                <span className="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 text-[9px] font-black">
+                                <span className="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 text-[10.5px] font-black">
                                   진행 {doneNow ? parseRoutineSteps(rt.title).length : getRoutineSubStepDoneSet(rt).size}/{parseRoutineSteps(rt.title).length}
                                 </span>
                               )}
-                              <span className="px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-800 text-[9px] font-black">
+                              <span className="px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-800 text-[10.5px] font-black">
                                 {rt.timeSlot || "상시"}
                               </span>
                               {rt.scheduledTime && (() => {
                                 const overdue = !doneNow && isRoutineTimeOverdue(rt.scheduledTime);
                                 return (
                                   <span
-                                    className={`px-1.5 py-0.5 rounded text-[9px] font-black ${
+                                    className={`px-1.5 py-0.5 rounded text-[10.5px] font-black ${
                                       doneNow
                                         ? "bg-stone-200 text-stone-600"
                                         : overdue
@@ -15342,7 +15494,7 @@ ${validText}
                               {(() => {
                                 if (rt.cycle === "interval" && intervalInfo) {
                                   return (
-                                    <span className={`px-1.5 py-0.5 rounded text-[9px] font-black ${
+                                    <span className={`px-1.5 py-0.5 rounded text-[10.5px] font-black ${
                                       !doneNow ? "bg-teal-100 text-teal-900" : "bg-stone-200 text-stone-600"
                                     }`}>
                                       {intervalInfo.intervalDays}일마다{doneNow ? ` · D-${intervalInfo.daysLeft}` : " · 오늘 할 날"}
@@ -15362,7 +15514,7 @@ ${validText}
                                     ? ` · ${info.dateLabel} (${Math.abs(info.diff)}일 지남)`
                                     : ` · ${info.dateLabel} (D-${info.diff})`;
                                   return (
-                                    <span className={`px-1.5 py-0.5 rounded text-[9px] font-black ${
+                                    <span className={`px-1.5 py-0.5 rounded text-[10.5px] font-black ${
                                       !doneNow && info && info.diff <= 0
                                         ? "bg-rose-100 text-rose-800"
                                         : "bg-amber-100 text-amber-900"
@@ -15377,18 +15529,18 @@ ${validText}
                                       ? `매주 ${WEEKDAY_KO[Number(rt.weekDay)] || ""}요일${nextDateInfo ? ` · ${nextDateInfo.dateLabel}` : ""}`
                                       : "매주 리셋";
                                   return (
-                                    <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-purple-100 text-purple-800">
+                                    <span className="px-1.5 py-0.5 rounded text-[10.5px] font-black bg-purple-100 text-purple-800">
                                       {wkLabel}
                                     </span>
                                   );
                                 }
                                 return (
-                                  <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-sky-100 text-sky-800">
+                                  <span className="px-1.5 py-0.5 rounded text-[10.5px] font-black bg-sky-100 text-sky-800">
                                     매일 자정 리셋
                                   </span>
                                 );
                               })()}
-                              <span className={`px-1.5 py-0.5 rounded text-[9px] font-black ${getRoutineAssigneeBadgeCls(rt.assignee)}`}>
+                              <span className={`px-1.5 py-0.5 rounded text-[10.5px] font-black ${getRoutineAssigneeBadgeCls(rt.assignee)}`}>
                                 {rt.assignee || "공통"}
                               </span>
                             </div>
@@ -15430,7 +15582,7 @@ ${validText}
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-1.5 min-w-0">
                   <ListTodo className="w-4 h-4 text-emerald-600 shrink-0" />
-                  <h3 className="text-xs font-black text-stone-900 leading-snug">
+                  <h3 className="text-[13.5px] font-black text-stone-900 leading-snug">
                     ✅ 전체 To-Do 체크리스트 ({todoStats.activeCount}건 남음 / 완료 {todoStats.doneCount}건)
                   </h3>
                 </div>
@@ -15446,7 +15598,7 @@ ${validText}
                     <button
                       key={tab.id}
                       onClick={() => setTodoStatusFilter(tab.id)}
-                      className={`px-2.5 py-1 rounded-md text-[10px] font-extrabold whitespace-nowrap transition ${
+                      className={`px-2.5 py-1 rounded-md text-[11.5px] font-extrabold whitespace-nowrap transition ${
                         todoStatusFilter === tab.id
                           ? "bg-stone-900 text-white"
                           : "text-stone-500 hover:text-stone-800"
@@ -15460,7 +15612,7 @@ ${validText}
                   <button
                     type="button"
                     onClick={handleClearCompletedTodos}
-                    className="px-2.5 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 border border-rose-200 text-[10px] font-extrabold text-rose-700 whitespace-nowrap"
+                    className="px-2.5 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 border border-rose-200 text-[11.5px] font-extrabold text-rose-700 whitespace-nowrap"
                   >
                     🧹 완료됨 비우기
                   </button>
@@ -15469,12 +15621,12 @@ ${validText}
             </div>
 
             <div className="flex items-center justify-between gap-2">
-              <span className="text-[11px] font-semibold text-stone-500">
+              <span className="text-[12.5px] font-semibold text-stone-500">
                 {todoIncludeOtherCats ? "할일 + 육아/병원·가족행사 함께 표시 중" : "할일(To-Do)만 표시 중"}
               </span>
               <button
                 onClick={() => setTodoIncludeOtherCats((v) => !v)}
-                className={`px-2.5 py-1 rounded-lg text-[11px] font-extrabold border transition whitespace-nowrap ${
+                className={`px-2.5 py-1 rounded-lg text-[12.5px] font-extrabold border transition whitespace-nowrap ${
                   todoIncludeOtherCats
                     ? "bg-amber-100 text-amber-900 border-amber-300"
                     : "bg-stone-100 text-stone-600 border-stone-200 hover:bg-stone-200"
@@ -15489,7 +15641,7 @@ ${validText}
               const pct = Math.round((todoStats.doneCount / todoStats.total) * 100);
               return (
                 <div className="space-y-1">
-                  <div className="flex items-center justify-between text-[10px] font-extrabold text-stone-500">
+                  <div className="flex items-center justify-between text-[11.5px] font-extrabold text-stone-500">
                     <span>진행률 {todoStats.doneCount}/{todoStats.total}건</span>
                     <span className="text-emerald-700">{pct}%</span>
                   </div>
@@ -15510,13 +15662,13 @@ ${validText}
                   value={todoSearchQuery}
                   onChange={(e) => setTodoSearchQuery(e.target.value)}
                   placeholder="🔍 할 일 제목·메모 검색..."
-                  className="w-full px-3 py-1.5 pr-7 rounded-xl border border-stone-200 bg-stone-50 text-[11px] font-semibold text-stone-800"
+                  className="w-full px-3 py-1.5 pr-7 rounded-xl border border-stone-200 bg-stone-50 text-[12.5px] font-semibold text-stone-800"
                 />
                 {todoSearchQuery && (
                   <button
                     type="button"
                     onClick={() => setTodoSearchQuery("")}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-700 text-[10px] font-black"
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-700 text-[11.5px] font-black"
                   >
                     ✕
                   </button>
@@ -15534,14 +15686,14 @@ ${validText}
                 onKeyDown={(e) => {
                   if (e.key === "Enter") handleQuickAddTodo();
                 }}
-                className="w-full px-2.5 py-1.5 rounded-lg border border-stone-200 text-xs font-bold bg-white"
+                className="w-full px-2.5 py-1.5 rounded-lg border border-stone-200 text-[13.5px] font-bold bg-white"
               />
               <div className="flex items-center justify-between gap-1.5 flex-wrap">
                 <input
                   type="date"
                   value={quickTodoDate}
                   onChange={(e) => setQuickTodoDate(e.target.value)}
-                  className="px-2 py-1.5 rounded-lg border border-stone-200 text-[11px] font-bold bg-white flex-1 min-w-[120px]"
+                  className="px-2 py-1.5 rounded-lg border border-stone-200 text-[12.5px] font-bold bg-white flex-1 min-w-[120px]"
                 />
                 <div className="flex items-center gap-1 shrink-0">
                   {[
@@ -15561,7 +15713,7 @@ ${validText}
                         key={dOpt.label}
                         type="button"
                         onClick={() => setQuickTodoDate(targetDate)}
-                        className={`px-2 py-1.5 rounded-lg text-[10px] font-extrabold border whitespace-nowrap ${
+                        className={`px-2 py-1.5 rounded-lg text-[11.5px] font-extrabold border whitespace-nowrap ${
                           quickTodoDate === targetDate
                             ? "bg-stone-900 text-white border-stone-900"
                             : "bg-white text-stone-600 border-stone-200"
@@ -15574,7 +15726,7 @@ ${validText}
                 </div>
                 <button
                   onClick={handleQuickAddTodo}
-                  className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold whitespace-nowrap shrink-0"
+                  className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[13.5px] font-extrabold whitespace-nowrap shrink-0"
                 >
                   + 추가
                 </button>
@@ -15593,7 +15745,7 @@ ${validText}
                 : allTodoChecklistItems;
               if (visibleTodoItems.length === 0) {
                 return (
-                  <div className="text-xs text-stone-400 py-4 text-center bg-stone-50 rounded-xl border border-dashed border-stone-200">
+                  <div className="text-[13.5px] text-stone-400 py-4 text-center bg-stone-50 rounded-xl border border-dashed border-stone-200">
                     {tq ? "검색어와 일치하는 할 일이 없습니다." : "표시할 To-Do 체크리스트 항목이 없습니다."}
                   </div>
                 );
@@ -15626,7 +15778,7 @@ ${validText}
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-1.5 flex-wrap">
                           <span
-                            className={`text-xs font-extrabold break-keep ${
+                            className={`text-[13.5px] font-extrabold break-keep ${
                               todo.done ? "line-through text-stone-400" : "text-stone-900"
                             }`}
                           >
@@ -15634,7 +15786,7 @@ ${validText}
                           </span>
                           {!todo.done && (
                             <span
-                              className={`px-1.5 py-0.2 rounded text-[9px] font-black ${
+                              className={`px-1.5 py-0.2 rounded text-[10.5px] font-black ${
                                 todo.calc.daysUntil <= 3 && todo.calc.daysUntil >= 0
                                   ? "bg-rose-500 text-white"
                                   : "bg-amber-100 text-amber-900"
@@ -15644,7 +15796,7 @@ ${validText}
                             </span>
                           )}
                         </div>
-                        <div className="flex items-center gap-1.5 text-[10px] text-stone-500 mt-0.5">
+                        <div className="flex items-center gap-1.5 text-[11.5px] text-stone-500 mt-0.5">
                           <span>
                             📅 {todo.date} ({getDayName(todo.date)})
                           </span>
@@ -15701,7 +15853,7 @@ ${validText}
           {scheduleSubTab === "calendar" && (
           <div className="bg-gradient-to-br from-stone-900 via-stone-800 to-stone-900 text-white p-4 rounded-2xl shadow-md space-y-2.5">
             <div className="flex items-center justify-between">
-              <div className="text-xs font-black text-amber-300 flex items-center gap-1.5">
+              <div className="text-[13.5px] font-black text-amber-300 flex items-center gap-1.5">
                 <Star className="w-3.5 h-3.5 fill-amber-300 text-amber-300" />
                 <span>우리 가족 D-Day & 기념일 카운트다운 (오늘: {getTodayStr()})</span>
               </div>
@@ -15725,10 +15877,10 @@ ${validText}
                   className="bg-white/10 hover:bg-white/15 border border-white/15 rounded-xl px-3 py-2.5 cursor-pointer transition flex items-center justify-between gap-2"
                 >
                   <div className="min-w-0 flex-1">
-                    <div className="text-xs font-extrabold text-white break-keep leading-snug">
+                    <div className="text-[13.5px] font-extrabold text-white break-keep leading-snug">
                       {item.title}
                     </div>
-                    <div className="text-[11px] font-semibold text-stone-300 mt-0.5 flex flex-wrap items-center gap-2">
+                    <div className="text-[12.5px] font-semibold text-stone-300 mt-0.5 flex flex-wrap items-center gap-2">
                       <span>
                         📅 {item.isAnnual ? `매년 ${String(item.date).slice(5).replace("-", "월 ")}일` : item.date}
                       </span>
@@ -15741,7 +15893,7 @@ ${validText}
                   </div>
 
                   <span
-                    className={`px-2.5 py-1 rounded-xl text-xs font-black shrink-0 ${
+                    className={`px-2.5 py-1 rounded-xl text-[13.5px] font-black shrink-0 ${
                       item.calc.daysUntil <= 3 && item.calc.daysUntil >= 0
                         ? "bg-rose-500 text-white animate-pulse"
                         : "bg-amber-400 text-stone-900"
@@ -15771,27 +15923,27 @@ ${validText}
                 <Receipt className="w-4 h-4" />
               </div>
               <div className="min-w-0">
-                <div className="text-xs font-black text-emerald-900 leading-tight">
+                <div className="text-[13.5px] font-black text-emerald-900 leading-tight">
                   마트 영수증 AI 스캔
                 </div>
-                <div className="text-[11px] font-semibold text-emerald-700 leading-tight mt-0.5">
+                <div className="text-[12.5px] font-semibold text-emerald-700 leading-tight mt-0.5">
                   사진 1장으로 냉장고 + 가계부 자동입고
                 </div>
               </div>
             </div>
-            <span className="text-xs font-extrabold text-emerald-700 shrink-0">스캔 &gt;</span>
+            <span className="text-[13.5px] font-extrabold text-emerald-700 shrink-0">스캔 &gt;</span>
           </button>
 
           <button
             onClick={() => setIsInventoryExportOpen(true)}
-            className="w-full py-2.5 px-3 rounded-2xl bg-stone-100 hover:bg-stone-200/80 border border-stone-200 text-stone-800 text-xs font-extrabold flex items-center justify-between"
+            className="w-full py-2.5 px-3 rounded-2xl bg-stone-100 hover:bg-stone-200/80 border border-stone-200 text-stone-800 text-[13.5px] font-extrabold flex items-center justify-between"
           >
             <span>📤 1주일 식단 · 전체 재고 내보내기 (드롭다운 선택)</span>
             <span className="text-stone-500">열기 &gt;</span>
           </button>
           {expiringItems.length > 0 && (
             <div className="bg-orange-50 border border-orange-200 rounded-2xl p-3">
-              <div className="flex items-center gap-1.5 text-xs font-black text-orange-900 mb-1.5">
+              <div className="flex items-center gap-1.5 text-[13.5px] font-black text-orange-900 mb-1.5">
                 <AlertCircle className="w-4 h-4 text-orange-600" />
                 <span>소비기한 임박/경과 재료 ({expiringItems.length}건)</span>
               </div>
@@ -15801,7 +15953,7 @@ ${validText}
                     key={item.id}
                     type="button"
                     onClick={() => setQuickFridgeItem(item)}
-                    className="px-2.5 py-1 rounded-full text-[11px] font-extrabold bg-white hover:bg-orange-100 text-orange-800 border border-orange-200 active:scale-95 transition"
+                    className="px-2.5 py-1 rounded-full text-[12.5px] font-extrabold bg-white hover:bg-orange-100 text-orange-800 border border-orange-200 active:scale-95 transition"
                   >
                     {item.name} ({item.diff < 0 ? `${Math.abs(item.diff)}일 지남` : `D-${item.diff}`})
                   </button>
@@ -15829,15 +15981,15 @@ ${validText}
                       isSel ? "bg-stone-900 text-white border-stone-900 shadow-sm" : "bg-white text-stone-800 border-stone-200 hover:bg-stone-50"
                     }`}
                   >
-                    <div className="flex items-center justify-between text-[10px] font-extrabold">
+                    <div className="flex items-center justify-between text-[11.5px] font-extrabold">
                       <span>{zone.icon} {zone.key.replace("·팬트리", "")}</span>
                       {zExp > 0 && (
-                        <span className={`px-1.5 py-0.2 rounded-full text-[9px] font-black ${isSel ? "bg-amber-400 text-stone-900" : "bg-orange-100 text-orange-800"}`}>
+                        <span className={`px-1.5 py-0.2 rounded-full text-[10.5px] font-black ${isSel ? "bg-amber-400 text-stone-900" : "bg-orange-100 text-orange-800"}`}>
                           임박 {zExp}
                         </span>
                       )}
                     </div>
-                    <div className={`text-sm font-black mt-0.5 ${isSel ? "text-white" : "text-stone-900"}`}>
+                    <div className={`text-[15.5px] font-black mt-0.5 ${isSel ? "text-white" : "text-stone-900"}`}>
                       {zItems.length}개
                     </div>
                   </button>
@@ -15861,7 +16013,7 @@ ${validText}
                   <button
                     key={loc}
                     onClick={() => setFridgeLocFilter(loc)}
-                    className={`px-2 py-1 rounded-lg text-[11px] font-extrabold whitespace-nowrap transition ${
+                    className={`px-2 py-1 rounded-lg text-[12.5px] font-extrabold whitespace-nowrap transition ${
                       isActive
                         ? "bg-white text-stone-900 shadow-sm"
                         : "text-stone-600"
@@ -15874,7 +16026,7 @@ ${validText}
             </div>
             <button
               onClick={openAddFridgeModal}
-              className="px-3 py-2 rounded-xl bg-stone-900 text-white text-xs font-extrabold flex items-center gap-1 shrink-0"
+              className="px-3 py-2 rounded-xl bg-stone-900 text-white text-[13.5px] font-extrabold flex items-center gap-1 shrink-0"
             >
               <Plus className="w-3.5 h-3.5" /> 재료 추가
             </button>
@@ -15883,7 +16035,7 @@ ${validText}
           <div className="flex items-center justify-between gap-2 bg-stone-100 p-1 rounded-xl">
             <button
               onClick={() => { setFridgeViewMode("list"); setBulkMoveMode(false); setSelectedBulkFridgeIds([]); }}
-              className={`flex-1 py-1.5 rounded-lg text-xs font-extrabold transition ${
+              className={`flex-1 py-1.5 rounded-lg text-[13.5px] font-extrabold transition ${
                 fridgeViewMode === "list" ? "bg-white text-stone-900 shadow-sm" : "text-stone-500"
               }`}
             >
@@ -15891,7 +16043,7 @@ ${validText}
             </button>
             <button
               onClick={() => setFridgeViewMode("visual")}
-              className={`flex-1 py-1.5 rounded-lg text-xs font-extrabold transition ${
+              className={`flex-1 py-1.5 rounded-lg text-[13.5px] font-extrabold transition ${
                 fridgeViewMode === "visual" ? "bg-white text-stone-900 shadow-sm" : "text-stone-500"
               }`}
             >
@@ -15904,7 +16056,7 @@ ${validText}
               <button
                 key={cat}
                 onClick={() => setFridgeCatFilter(cat)}
-                className={`px-2.5 py-1 rounded-full text-[11px] font-bold shrink-0 border ${
+                className={`px-2.5 py-1 rounded-full text-[12.5px] font-bold shrink-0 border ${
                   fridgeCatFilter === cat
                     ? "bg-emerald-600 text-white border-emerald-600"
                     : "bg-white text-stone-600 border-stone-200"
@@ -15922,13 +16074,13 @@ ${validText}
                 value={fridgeSearch}
                 onChange={(e) => setFridgeSearch(e.target.value)}
                 placeholder="🔍 냉장고 재료 검색 (예: 양파, 우유, 소고기...)"
-                className="w-full px-3 py-2 pr-8 rounded-xl border border-stone-200 bg-white text-xs font-semibold text-stone-800 placeholder:text-stone-400"
+                className="w-full px-3 py-2 pr-8 rounded-xl border border-stone-200 bg-white text-[13.5px] font-semibold text-stone-800 placeholder:text-stone-400"
               />
               {fridgeSearch && (
                 <button
                   type="button"
                   onClick={() => setFridgeSearch("")}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-700 text-xs font-black"
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-700 text-[13.5px] font-black"
                 >
                   ✕
                 </button>
@@ -15938,7 +16090,7 @@ ${validText}
               <select
                 value={fridgeSort}
                 onChange={(e) => setFridgeSort(e.target.value)}
-                className="px-2.5 py-2 rounded-xl border border-stone-200 bg-white text-xs font-extrabold text-stone-700 shrink-0"
+                className="px-2.5 py-2 rounded-xl border border-stone-200 bg-white text-[13.5px] font-extrabold text-stone-700 shrink-0"
               >
                 <option value="expiry">임박순</option>
                 <option value="recent">최신순</option>
@@ -15949,12 +16101,12 @@ ${validText}
 
           {fridge.length === 0 ? (
             <div className="bg-white p-6 rounded-2xl border border-stone-200 text-center space-y-2">
-              <div className="text-xs font-bold text-stone-500">
+              <div className="text-[13.5px] font-bold text-stone-500">
                 현재 표시할 냉장고 재료가 없습니다.
               </div>
               <button
                 onClick={handleRestoreAllDeleted}
-                className="px-3 py-1.5 rounded-xl bg-amber-100 text-amber-900 text-xs font-extrabold"
+                className="px-3 py-1.5 rounded-xl bg-amber-100 text-amber-900 text-[13.5px] font-extrabold"
               >
                 숨겨진 기존 냉장고 재료 다시 불러오기
               </button>
@@ -16006,25 +16158,25 @@ ${validText}
                   }`}
                 >
                   <div className="flex items-center justify-between gap-1">
-                    <span className="text-[10px] font-black text-stone-700 truncate">
+                    <span className="text-[11.5px] font-black text-stone-700 truncate">
                       {labelOverride || zoneName}
                     </span>
                     <div className="flex items-center gap-1 shrink-0">
-                      <span className="text-[9px] font-extrabold text-stone-400">
+                      <span className="text-[10.5px] font-extrabold text-stone-400">
                         {zItems.length}
                       </span>
                       <button
                         type="button"
                         onClick={() => handleOpenAddFridgeForZone(zoneName)}
                         title={`${labelOverride || zoneName}에 재료 추가`}
-                        className="w-4 h-4 rounded bg-stone-100 hover:bg-stone-200 text-stone-600 text-[10px] font-black flex items-center justify-center leading-none"
+                        className="w-4 h-4 rounded bg-stone-100 hover:bg-stone-200 text-stone-600 text-[11.5px] font-black flex items-center justify-center leading-none"
                       >
                         +
                       </button>
                     </div>
                   </div>
                   {zItems.length === 0 ? (
-                    <div className="text-[10px] text-stone-300 text-center py-1.5">
+                    <div className="text-[11.5px] text-stone-300 text-center py-1.5">
                       {isDropTarget ? "여기에 놓기" : "비어 있음"}
                     </div>
                   ) : (
@@ -16124,7 +16276,7 @@ ${validText}
                                 setQuickFridgeItem(it);
                               }
                             }}
-                            className={`px-2 py-1 rounded-lg border text-[10px] font-extrabold flex items-center gap-1 transition active:scale-95 select-none ${
+                            className={`px-2 py-1 rounded-lg border text-[11.5px] font-extrabold flex items-center gap-1 transition active:scale-95 select-none ${
                               bulkMoveMode && selectedBulkFridgeIds.includes(it.id)
                                 ? "bg-indigo-600 border-indigo-700 text-white ring-2 ring-indigo-300"
                                 : Number(it.quantity) === 0
@@ -16140,7 +16292,7 @@ ${validText}
                               {Number(it.quantity) === 0 ? "소진" : `${Number(it.quantity) || 0}${it.unit}`}
                             </span>
                             {isUrgent && (
-                              <span className="text-[9px] font-black text-rose-600">
+                              <span className="text-[10.5px] font-black text-rose-600">
                                 {diff < 0 ? "만료" : `D-${diff}`}
                               </span>
                             )}
@@ -16155,7 +16307,7 @@ ${validText}
 
             return (
               <div className="space-y-3">
-                <div className="text-[11px] font-bold text-stone-500 bg-stone-100 px-2.5 py-1.5 rounded-xl space-y-1.5">
+                <div className="text-[12.5px] font-bold text-stone-500 bg-stone-100 px-2.5 py-1.5 rounded-xl space-y-1.5">
                   <div className="flex items-center justify-between gap-1.5">
                     <span className="truncate">
                       {bulkMoveMode ? "☑️ 이동할 재료를 여러 개 탭해 선택하세요" : "👆 탭: 수량·소진 / ✋ 길게 눌러 끌기: 칸 이동"}
@@ -16167,7 +16319,7 @@ ${validText}
                           setBulkMoveMode((v) => !v);
                           setSelectedBulkFridgeIds([]);
                         }}
-                        className={`px-2 py-0.5 rounded-lg text-[10px] font-extrabold border whitespace-nowrap ${
+                        className={`px-2 py-0.5 rounded-lg text-[11.5px] font-extrabold border whitespace-nowrap ${
                           bulkMoveMode
                             ? "bg-indigo-600 text-white border-indigo-600"
                             : "bg-white text-stone-600 border-stone-200"
@@ -16178,7 +16330,7 @@ ${validText}
                       <button
                         type="button"
                         onClick={() => setVisualExpiringOnly((v) => !v)}
-                        className={`px-2 py-0.5 rounded-lg text-[10px] font-extrabold border whitespace-nowrap ${
+                        className={`px-2 py-0.5 rounded-lg text-[11.5px] font-extrabold border whitespace-nowrap ${
                           visualExpiringOnly
                             ? "bg-rose-600 text-white border-rose-600"
                             : "bg-white text-stone-600 border-stone-200"
@@ -16196,14 +16348,14 @@ ${validText}
                           const allIds = filteredFridge.map((f) => f.id);
                           setSelectedBulkFridgeIds((prev) => (prev.length === allIds.length && allIds.length > 0 ? [] : allIds));
                         }}
-                        className="px-2 py-1 rounded-lg bg-white border border-stone-300 text-[10px] font-extrabold text-stone-700 whitespace-nowrap shrink-0"
+                        className="px-2 py-1 rounded-lg bg-white border border-stone-300 text-[11.5px] font-extrabold text-stone-700 whitespace-nowrap shrink-0"
                       >
                         {selectedBulkFridgeIds.length === filteredFridge.length && filteredFridge.length > 0 ? "선택 해제" : "전체 선택"}
                       </button>
                       <select
                         value={bulkTargetZone}
                         onChange={(e) => setBulkTargetZone(e.target.value)}
-                        className="flex-1 px-2 py-1 rounded-lg border border-stone-300 bg-white text-[11px] font-bold text-stone-800"
+                        className="flex-1 px-2 py-1 rounded-lg border border-stone-300 bg-white text-[12.5px] font-bold text-stone-800"
                       >
                         {FRIDGE_SHELF_ZONES.map((z) => (
                           <option key={z} value={z}>{z}</option>
@@ -16213,7 +16365,7 @@ ${validText}
                         type="button"
                         disabled={selectedBulkFridgeIds.length === 0}
                         onClick={() => handleBulkMoveFridgeShelfZone(selectedBulkFridgeIds, bulkTargetZone)}
-                        className="px-2.5 py-1 rounded-lg bg-indigo-600 disabled:opacity-40 text-white text-[11px] font-extrabold whitespace-nowrap shrink-0"
+                        className="px-2.5 py-1 rounded-lg bg-indigo-600 disabled:opacity-40 text-white text-[12.5px] font-extrabold whitespace-nowrap shrink-0"
                       >
                         📦 {selectedBulkFridgeIds.length}개 일괄 이동
                       </button>
@@ -16224,13 +16376,13 @@ ${validText}
                 {/* 1. 4도어 상냉장 · 하냉동 */}
                 {(fridgeLocFilter === "전체" || fridgeLocFilter === "냉장실" || fridgeLocFilter === "메인 냉동실" || fridgeLocFilter === "냉동실") && (
                   <div className="rounded-2xl border-2 border-sky-200 bg-sky-50/40 p-2.5 space-y-2">
-                    <div className="text-xs font-black text-sky-950 flex items-center justify-between px-0.5">
+                    <div className="text-[13.5px] font-black text-sky-950 flex items-center justify-between px-0.5">
                       <span>🧊 4도어 메인 냉장고 (상냉장 · 하냉동)</span>
                     </div>
 
                     {(fridgeLocFilter === "전체" || fridgeLocFilter === "냉장실") && (
                       <div className="space-y-1.5">
-                        <div className="text-[10px] font-extrabold text-sky-800 px-0.5">❄️ 상부 냉장실 (3단 + 채소칸 2개)</div>
+                        <div className="text-[11.5px] font-extrabold text-sky-800 px-0.5">❄️ 상부 냉장실 (3단 + 채소칸 2개)</div>
                         {renderShelfBox("냉장 1단(상단)", "1단 · 상단 (유제품·계란·유아식)", "bg-white border-sky-200")}
                         {renderShelfBox("냉장 2단(중단)", "2단 · 중단 (반찬·김치)", "bg-white border-sky-200")}
                         {renderShelfBox("냉장 3단(하단)", "3단 · 하단 (육류·소스·기타)", "bg-white border-sky-200")}
@@ -16240,7 +16392,7 @@ ${validText}
 
                     {(fridgeLocFilter === "전체" || fridgeLocFilter === "메인 냉동실" || fridgeLocFilter === "냉동실") && (
                       <div className="space-y-1.5 pt-1 border-t border-sky-200/80">
-                        <div className="text-[10px] font-extrabold text-indigo-800 px-0.5">🧊 하부 냉동고 (4칸)</div>
+                        <div className="text-[11.5px] font-extrabold text-indigo-800 px-0.5">🧊 하부 냉동고 (4칸)</div>
                         <div className="grid grid-cols-2 gap-1.5">
                           {renderShelfBox("하부냉동 1칸", "하부 1칸", "bg-indigo-50/60 border-indigo-200")}
                           {renderShelfBox("하부냉동 2칸", "하부 2칸", "bg-indigo-50/60 border-indigo-200")}
@@ -16255,7 +16407,7 @@ ${validText}
                 {/* 2. 별도 4칸짜리 전용 냉동고 */}
                 {(fridgeLocFilter === "전체" || fridgeLocFilter === "별도 냉동고" || fridgeLocFilter === "냉동실") && (
                   <div className="rounded-2xl border-2 border-indigo-200 bg-indigo-50/40 p-2.5 space-y-1.5">
-                    <div className="text-xs font-black text-indigo-950 px-0.5">
+                    <div className="text-[13.5px] font-black text-indigo-950 px-0.5">
                       ❄️ 별도 냉동고 (4칸)
                     </div>
                     <div className="grid grid-cols-2 gap-1.5">
@@ -16270,7 +16422,7 @@ ${validText}
                 {/* 3. 팬트리 (1칸) */}
                 {(fridgeLocFilter === "전체" || fridgeLocFilter === "실온·팬트리") && (
                   <div className="rounded-2xl border-2 border-amber-200 bg-amber-50/40 p-2.5 space-y-1.5">
-                    <div className="text-xs font-black text-amber-950 px-0.5">
+                    <div className="text-[13.5px] font-black text-amber-950 px-0.5">
                       🧺 팬트리 · 실온 (1칸)
                     </div>
                     {renderShelfBox("팬트리", "팬트리 (상온·건어물·양념)", "bg-white border-amber-200")}
@@ -16310,14 +16462,14 @@ ${validText}
                       <div className="flex items-center justify-between gap-2">
                         <div className="min-w-0 flex-1">
                           <div className="flex flex-wrap items-center gap-1 mb-0.5">
-                            <span className="px-1.5 py-0.5 rounded text-[10px] font-extrabold bg-stone-100 text-stone-700 whitespace-nowrap">
+                            <span className="px-1.5 py-0.5 rounded text-[11.5px] font-extrabold bg-stone-100 text-stone-700 whitespace-nowrap">
                               {String(item.location || "").includes("냉동") ? "냉동실" : item.location}
                             </span>
-                            <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 whitespace-nowrap">
+                            <span className="px-1.5 py-0.5 rounded text-[11.5px] font-bold bg-emerald-50 text-emerald-700 whitespace-nowrap">
                               {item.category}
                             </span>
                             <span
-                              className={`px-1.5 py-0.5 rounded text-[10px] font-extrabold whitespace-nowrap ${
+                              className={`px-1.5 py-0.5 rounded text-[11.5px] font-extrabold whitespace-nowrap ${
                                 diff <= 3
                                   ? "bg-red-100 text-red-700"
                                   : "bg-stone-100 text-stone-500"
@@ -16327,14 +16479,14 @@ ${validText}
                             </span>
                           </div>
                           <div className="flex items-baseline gap-2 flex-wrap">
-                            <span className="text-sm font-black text-stone-900">{item.name}</span>
+                            <span className="text-[15.5px] font-black text-stone-900">{item.name}</span>
                             {Number(item.quantity) > 0 && Number(item.quantity) < 1 && (
-                              <span className="px-1.5 py-0.5 rounded bg-[#EEF3EE] text-[#35503C] border border-[#C9D8CC] text-[9px] font-black">
+                              <span className="px-1.5 py-0.5 rounded bg-[#EEF3EE] text-[#35503C] border border-[#C9D8CC] text-[10.5px] font-black">
                                 🌗 반남음
                               </span>
                             )}
                             {Number(item.price) > 0 && (
-                              <span className="text-[10px] font-bold text-stone-400">
+                              <span className="text-[11.5px] font-bold text-stone-400">
                                 {Number(item.price).toLocaleString()}원
                               </span>
                             )}
@@ -16348,7 +16500,7 @@ ${validText}
                           >
                             -
                           </button>
-                          <span className="text-xs font-black px-1 whitespace-nowrap">
+                          <span className="text-[13.5px] font-black px-1 whitespace-nowrap">
                             {Number(item.quantity) || 0}
                             {item.unit}
                           </span>
@@ -16365,26 +16517,26 @@ ${validText}
                         <div className="flex items-center gap-1 flex-nowrap">
                           <button
                             onClick={() => handleHalfEatFridgeItem(item)}
-                            className="px-2 py-1 rounded-lg bg-[#EEF3EE] hover:bg-[#DFE9E0] text-[#35503C] border border-[#C9D8CC] text-[11px] font-extrabold whitespace-nowrap"
+                            className="px-2 py-1 rounded-lg bg-[#EEF3EE] hover:bg-[#DFE9E0] text-[#35503C] border border-[#C9D8CC] text-[12.5px] font-extrabold whitespace-nowrap"
                             title="수량 0.5(또는 절반) 차감"
                           >
                             🌗 반만먹음
                           </button>
                           <button
                             onClick={() => handleConsumeFridgeItem(item, false)}
-                            className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-extrabold flex items-center gap-1 whitespace-nowrap"
+                            className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[12.5px] font-extrabold flex items-center gap-1 whitespace-nowrap"
                           >
                             <Check className="w-3 h-3 shrink-0" /> 다 먹음
                           </button>
                           <button
                             onClick={() => handleConsumeFridgeItem(item, true)}
-                            className="px-2 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 text-[11px] font-extrabold whitespace-nowrap"
+                            className="px-2 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 text-[12.5px] font-extrabold whitespace-nowrap"
                           >
                             + 장보기
                           </button>
                           <button
                             onClick={() => handleWasteFridgeItem(item)}
-                            className="px-2 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-800 border border-rose-200 text-[11px] font-extrabold whitespace-nowrap"
+                            className="px-2 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-800 border border-rose-200 text-[12.5px] font-extrabold whitespace-nowrap"
                             title="폐기 처리 및 손실 기록"
                           >
                             🗑️ 폐기
@@ -16437,20 +16589,20 @@ ${validText}
         <div className="p-4 space-y-4">
           <div className="bg-white p-3.5 rounded-2xl border border-stone-200 shadow-sm space-y-2">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-black text-stone-900">⚡ 카톡 · 음성 장보기 문장 1초 파싱</span>
-              <span className="text-[10px] font-bold text-stone-500">AI + 즉시 분리</span>
+              <span className="text-[13.5px] font-black text-stone-900">⚡ 카톡 · 음성 장보기 문장 1초 파싱</span>
+              <span className="text-[11.5px] font-bold text-stone-500">AI + 즉시 분리</span>
             </div>
             <textarea
               rows={2}
               value={quickShoppingText}
               onChange={(e) => setQuickShoppingText(e.target.value)}
               placeholder="예: 양파 1망, 부침두부 2모, 우유 1L 사와"
-              className="w-full p-2.5 rounded-xl border border-stone-200 bg-stone-50 text-xs font-semibold text-stone-800 resize-none focus:outline-none focus:ring-2 focus:ring-stone-400"
+              className="w-full p-2.5 rounded-xl border border-stone-200 bg-stone-50 text-[13.5px] font-semibold text-stone-800 resize-none focus:outline-none focus:ring-2 focus:ring-stone-400"
             />
             <button
               onClick={handleQuickParseShopping}
               disabled={isQuickParsingShopping}
-              className="w-full py-2 rounded-xl bg-stone-900 hover:bg-stone-800 text-white text-xs font-extrabold flex items-center justify-center gap-1.5"
+              className="w-full py-2 rounded-xl bg-stone-900 hover:bg-stone-800 text-white text-[13.5px] font-extrabold flex items-center justify-center gap-1.5"
             >
               {isQuickParsingShopping ? "파싱 중..." : "⚡ 문장 분석해서 장보기에 바로 담기"}
             </button>
@@ -16458,7 +16610,7 @@ ${validText}
 
           <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-sm space-y-3">
             <div className="flex items-center justify-between gap-2">
-              <h2 className="text-sm font-black text-stone-900 flex items-center gap-1.5">
+              <h2 className="text-[15.5px] font-black text-stone-900 flex items-center gap-1.5">
                 <ShoppingCart className="w-4 h-4 text-emerald-600" />
                 <span>사야 할 재료 / 장보기</span>
               </h2>
@@ -16475,7 +16627,7 @@ ${validText}
                       showToast("⚠️ 클립보드 복사에 실패했습니다.");
                     }
                   }}
-                  className="px-2.5 py-1 rounded-lg bg-[#EEF3EE] text-[#35503C] border border-[#C9D8CC] text-[10px] font-extrabold shrink-0"
+                  className="px-2.5 py-1 rounded-lg bg-[#EEF3EE] text-[#35503C] border border-[#C9D8CC] text-[11.5px] font-extrabold shrink-0"
                 >
                   📋 카톡 복사
                 </button>
@@ -16486,7 +16638,7 @@ ${validText}
               const pct = Math.round((doneCnt / shoppingList.length) * 100);
               return (
                 <div className="space-y-1">
-                  <div className="flex justify-between text-[10px] font-extrabold text-stone-500">
+                  <div className="flex justify-between text-[11.5px] font-extrabold text-stone-500">
                     <span>장보기 진행률 {doneCnt}/{shoppingList.length}건</span>
                     <span className="text-[#35503C]">{pct}%</span>
                   </div>
@@ -16504,14 +16656,14 @@ ${validText}
                 placeholder="품목명 (예: 우유, 대파, 기저귀)"
                 value={shoppingForm.name}
                 onChange={(e) => setShoppingForm({ ...shoppingForm, name: e.target.value })}
-                className="col-span-2 px-3 py-2 rounded-xl border border-stone-200 text-xs font-bold"
+                className="col-span-2 px-3 py-2 rounded-xl border border-stone-200 text-[13.5px] font-bold"
               />
               <input
                 type="text"
                 placeholder="수량 (예: 2팩)"
                 value={shoppingForm.quantity}
                 onChange={(e) => setShoppingForm({ ...shoppingForm, quantity: e.target.value })}
-                className="px-3 py-2 rounded-xl border border-stone-200 text-xs font-bold"
+                className="px-3 py-2 rounded-xl border border-stone-200 text-[13.5px] font-bold"
               />
             </div>
             {shoppingForm.name.trim() && (() => {
@@ -16531,7 +16683,7 @@ ${validText}
                       key={h.name}
                       type="button"
                       onClick={() => setShoppingForm({ ...shoppingForm, name: h.name, category: h.category || shoppingForm.category })}
-                      className="px-2 py-0.5 rounded-full bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-[10px] font-bold text-emerald-800"
+                      className="px-2 py-0.5 rounded-full bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-[11.5px] font-bold text-emerald-800"
                     >
                       ✨ {h.name}
                     </button>
@@ -16544,7 +16696,7 @@ ${validText}
               <select
                 value={shoppingForm.category}
                 onChange={(e) => setShoppingForm({ ...shoppingForm, category: e.target.value })}
-                className="px-2.5 py-2 rounded-xl border border-stone-200 text-xs font-bold bg-stone-50"
+                className="px-2.5 py-2 rounded-xl border border-stone-200 text-[13.5px] font-bold bg-stone-50"
               >
                 {FRIDGE_CATEGORIES.map((c) => (
                   <option key={c} value={c}>
@@ -16557,13 +16709,13 @@ ${validText}
                 placeholder="메모 (예: 시목이 간식용)"
                 value={shoppingForm.memo}
                 onChange={(e) => setShoppingForm({ ...shoppingForm, memo: e.target.value })}
-                className="flex-1 px-3 py-2 rounded-xl border border-stone-200 text-xs"
+                className="flex-1 px-3 py-2 rounded-xl border border-stone-200 text-[13.5px]"
               />
               <button
                 onClick={() =>
                   setShoppingForm({ ...shoppingForm, urgent: !shoppingForm.urgent })
                 }
-                className={`px-2.5 py-2 rounded-xl text-xs font-extrabold border shrink-0 ${
+                className={`px-2.5 py-2 rounded-xl text-[13.5px] font-extrabold border shrink-0 ${
                   shoppingForm.urgent
                     ? "bg-red-500 text-white border-red-500"
                     : "bg-stone-50 text-stone-500 border-stone-200"
@@ -16575,7 +16727,7 @@ ${validText}
 
             <button
               onClick={handleAddShopping}
-              className="w-full py-2.5 rounded-xl bg-stone-900 text-white text-xs font-extrabold"
+              className="w-full py-2.5 rounded-xl bg-stone-900 text-white text-[13.5px] font-extrabold"
             >
               + 장보기 체크리스트에 등록
             </button>
@@ -16590,7 +16742,7 @@ ${validText}
             return (
               <div className="bg-white border border-stone-200 rounded-2xl p-3 space-y-2 shadow-sm">
                 <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2 text-[11px] font-black text-stone-800">
+                  <div className="flex items-center gap-2 text-[12.5px] font-black text-stone-800">
                     <span>남음 {remainCnt}건</span>
                     <span className="text-stone-300">·</span>
                     <span className="text-emerald-700">담음 {doneCnt}건 ({pct}%)</span>
@@ -16611,7 +16763,7 @@ ${validText}
                           showToast("⚠️ 클립보드 복사에 실패했습니다.");
                         }
                       }}
-                      className="px-2 py-1 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 text-[10px] font-extrabold whitespace-nowrap shrink-0"
+                      className="px-2 py-1 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 text-[11.5px] font-extrabold whitespace-nowrap shrink-0"
                     >
                       📋 남은 목록 복사
                     </button>
@@ -16626,20 +16778,20 @@ ${validText}
 
           {shoppingList.some((s) => s.checked) && (
             <div className="flex items-center justify-between gap-1.5 bg-stone-100 px-3 py-2 rounded-xl flex-wrap">
-              <span className="text-[11px] font-bold text-stone-600 whitespace-nowrap">
+              <span className="text-[12.5px] font-bold text-stone-600 whitespace-nowrap">
                 체크 완료 {shoppingList.filter((s) => s.checked).length}건
               </span>
               <div className="flex items-center gap-1.5">
                 <button
                   type="button"
                   onClick={handleMoveCheckedShoppingToFridge}
-                  className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-extrabold whitespace-nowrap"
+                  className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[12.5px] font-extrabold whitespace-nowrap"
                 >
                   ❄️ 냉장고에 바로 넣기
                 </button>
                 <button
                   onClick={handleClearCheckedShopping}
-                  className="px-2.5 py-1 rounded-lg bg-white border border-stone-200 text-[11px] font-extrabold text-rose-600 hover:bg-rose-50 whitespace-nowrap"
+                  className="px-2.5 py-1 rounded-lg bg-white border border-stone-200 text-[12.5px] font-extrabold text-rose-600 hover:bg-rose-50 whitespace-nowrap"
                 >
                   🧹 비우기
                 </button>
@@ -16663,10 +16815,10 @@ ${validText}
             return (
               <div className="bg-sky-50/70 border border-sky-200/80 rounded-2xl p-3 space-y-1.5">
                 <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-black text-sky-900">
+                  <span className="text-[12.5px] font-black text-sky-900">
                     ❄️ 냉장고 부족 · 임박 재료 1탭 담기
                   </span>
-                  <span className="text-[9px] font-bold text-sky-700">잔량 ≤1 · 임박</span>
+                  <span className="text-[10.5px] font-bold text-sky-700">잔량 ≤1 · 임박</span>
                 </div>
                 <div className="flex flex-wrap gap-1.5">
                   {restockCandidates.map((fc) => (
@@ -16674,7 +16826,7 @@ ${validText}
                       key={`restock-${fc.id}`}
                       type="button"
                       onClick={() => handleQuickAddFridgeItemToShopping(fc)}
-                      className="px-2.5 py-1 rounded-full bg-white border border-sky-200 hover:bg-sky-100 text-[10px] font-extrabold text-sky-900 whitespace-nowrap transition active:scale-95"
+                      className="px-2.5 py-1 rounded-full bg-white border border-sky-200 hover:bg-sky-100 text-[11.5px] font-extrabold text-sky-900 whitespace-nowrap transition active:scale-95"
                     >
                       + {fc.name}
                     </button>
@@ -16692,13 +16844,13 @@ ${validText}
                   value={shoppingSearchQuery}
                   onChange={(e) => setShoppingSearchQuery(e.target.value)}
                   placeholder="🔍 장보기 품목·메모 검색..."
-                  className="w-full px-3 py-1.5 pr-7 rounded-xl border border-stone-200 bg-white text-[11px] font-semibold text-stone-800"
+                  className="w-full px-3 py-1.5 pr-7 rounded-xl border border-stone-200 bg-white text-[12.5px] font-semibold text-stone-800"
                 />
                 {shoppingSearchQuery && (
                   <button
                     type="button"
                     onClick={() => setShoppingSearchQuery("")}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-700 text-[10px] font-black"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-700 text-[11.5px] font-black"
                   >
                     ✕
                   </button>
@@ -16714,7 +16866,7 @@ ${validText}
                     key={fOpt.id}
                     type="button"
                     onClick={() => setShoppingStatusFilter(fOpt.id)}
-                    className={`px-2 py-1.5 rounded-xl text-[10px] font-extrabold border whitespace-nowrap ${
+                    className={`px-2 py-1.5 rounded-xl text-[11.5px] font-extrabold border whitespace-nowrap ${
                       shoppingStatusFilter === fOpt.id
                         ? "bg-stone-900 text-white border-stone-900"
                         : "bg-white text-stone-600 border-stone-200"
@@ -16770,22 +16922,22 @@ ${validText}
                   <div className="min-w-0">
                     <div className="flex items-center gap-1.5 flex-wrap">
                       {item.urgent && (
-                        <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-red-100 text-red-700">
+                        <span className="px-1.5 py-0.5 rounded text-[10.5px] font-black bg-red-100 text-red-700">
                           급함
                         </span>
                       )}
                       <span
-                        className={`text-sm font-extrabold break-keep ${
+                        className={`text-[15.5px] font-extrabold break-keep ${
                           item.checked ? "line-through text-stone-400" : "text-stone-900"
                         }`}
                       >
                         {item.name}
                       </span>
-                      <span className="text-xs font-bold text-emerald-700">
+                      <span className="text-[13.5px] font-bold text-emerald-700">
                         ({item.quantity})
                       </span>
                     </div>
-                    {item.memo && <div className="text-[11px] text-stone-500">{item.memo}</div>}
+                    {item.memo && <div className="text-[12.5px] text-stone-500">{item.memo}</div>}
                   </div>
                 </div>
 
@@ -16795,7 +16947,7 @@ ${validText}
                       setStockInItem(item);
                       setStockInPrice("");
                     }}
-                    className="px-2.5 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-[11px] font-extrabold whitespace-nowrap"
+                    className="px-2.5 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-[12.5px] font-extrabold whitespace-nowrap"
                   >
                     ❄️ 입고
                   </button>
@@ -16819,8 +16971,8 @@ ${validText}
         <div className="p-4 space-y-4">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-sm font-black text-stone-900">📌 우리 가족 공지사항 & 메모장</h2>
-              <p className="text-[11px] text-stone-500">
+              <h2 className="text-[15.5px] font-black text-stone-900">📌 우리 가족 공지사항 & 메모장</h2>
+              <p className="text-[12.5px] text-stone-500">
                 육아 일정, 어린이집 준비물, 부부 전달사항을 공유하세요
               </p>
             </div>
@@ -16836,7 +16988,7 @@ ${validText}
                 });
                 setIsNoticeModalOpen(true);
               }}
-              className="px-3 py-2 rounded-xl bg-stone-900 text-white text-xs font-extrabold flex items-center gap-1 whitespace-nowrap shrink-0"
+              className="px-3 py-2 rounded-xl bg-stone-900 text-white text-[13.5px] font-extrabold flex items-center gap-1 whitespace-nowrap shrink-0"
             >
               <Plus className="w-3.5 h-3.5" /> 공지 작성
             </button>
@@ -16844,13 +16996,13 @@ ${validText}
 
           {notices.length > 0 && (
             <div className="flex items-center justify-between gap-2 bg-white border border-stone-200 rounded-2xl px-3 py-2">
-              <span className="text-[11px] font-bold text-stone-600">
+              <span className="text-[12.5px] font-bold text-stone-600">
                 진행 중 {notices.filter((n) => !n.done).length}건 · 완료 {notices.filter((n) => n.done).length}건
               </span>
               <button
                 type="button"
                 onClick={() => setNoticeHideDone((v) => !v)}
-                className={`px-2.5 py-1 rounded-full text-[10px] font-extrabold border whitespace-nowrap ${
+                className={`px-2.5 py-1 rounded-full text-[11.5px] font-extrabold border whitespace-nowrap ${
                   noticeHideDone
                     ? "bg-stone-900 text-white border-stone-900"
                     : "bg-stone-50 text-stone-600 border-stone-200"
@@ -16883,14 +17035,14 @@ ${validText}
                 <div className="flex items-start justify-between gap-2 mb-1.5">
                   <div className="flex items-center gap-1.5 flex-wrap">
                     {n.pinned && (
-                      <span className="px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-indigo-600 text-white flex items-center gap-1">
+                      <span className="px-2 py-0.5 rounded-md text-[11.5px] font-extrabold bg-indigo-600 text-white flex items-center gap-1">
                         <Pin className="w-2.5 h-2.5" /> 상단고정
                       </span>
                     )}
-                    <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-stone-200 text-stone-700">
+                    <span className="px-2 py-0.5 rounded-md text-[11.5px] font-bold bg-stone-200 text-stone-700">
                       {n.category}
                     </span>
-                    <span className="text-[11px] font-bold text-stone-500">
+                    <span className="text-[12.5px] font-bold text-stone-500">
                       작성: {n.author} ({n.createdAt})
                     </span>
                   </div>
@@ -16907,13 +17059,13 @@ ${validText}
                           showToast("⚠️ 복사에 실패했습니다.");
                         }
                       }}
-                      className="px-2 py-0.5 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 text-[10px] font-extrabold whitespace-nowrap"
+                      className="px-2 py-0.5 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 text-[11.5px] font-extrabold whitespace-nowrap"
                     >
                       📋 복사
                     </button>
                     <button
                       onClick={() => handleToggleNoticeDone(n)}
-                      className={`px-2 py-0.5 rounded-lg text-[10px] font-extrabold border whitespace-nowrap ${
+                      className={`px-2 py-0.5 rounded-lg text-[11.5px] font-extrabold border whitespace-nowrap ${
                         n.done
                           ? "bg-emerald-600 text-white border-emerald-600"
                           : "bg-white text-stone-600 border-stone-300"
@@ -16947,14 +17099,14 @@ ${validText}
                 </div>
 
                 <div
-                  className={`text-sm font-black break-keep ${
+                  className={`text-[15.5px] font-black break-keep ${
                     n.done ? "line-through text-stone-500" : "text-stone-900"
                   }`}
                 >
                   {n.title}
                 </div>
                 {n.content && (
-                  <div className="text-xs text-stone-600 mt-1 whitespace-pre-line">{n.content}</div>
+                  <div className="text-[13.5px] text-stone-600 mt-1 whitespace-pre-line">{n.content}</div>
                 )}
               </div>
             ))}
@@ -16970,7 +17122,7 @@ ${validText}
           <div className="grid grid-cols-2 gap-1.5 bg-stone-200/80 p-1 rounded-2xl">
             <button
               onClick={() => setAiSubMode("recipe")}
-              className={`py-2 px-3 rounded-xl text-xs font-extrabold transition ${
+              className={`py-2 px-3 rounded-xl text-[13.5px] font-extrabold transition ${
                 aiSubMode === "recipe"
                   ? "bg-stone-900 text-white shadow-sm"
                   : "text-stone-600 hover:text-stone-900"
@@ -16980,7 +17132,7 @@ ${validText}
             </button>
             <button
               onClick={() => setAiSubMode("plan3d")}
-              className={`py-2 px-3 rounded-xl text-xs font-extrabold transition ${
+              className={`py-2 px-3 rounded-xl text-[13.5px] font-extrabold transition ${
                 aiSubMode === "plan3d"
                   ? "bg-stone-900 text-white shadow-sm"
                   : "text-stone-600 hover:text-stone-900"
@@ -16994,18 +17146,18 @@ ${validText}
             <div className="space-y-3.5">
               <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-sm space-y-3.5">
                 <div>
-                  <h2 className="text-sm font-black text-stone-900 flex items-center gap-1.5">
+                  <h2 className="text-[15.5px] font-black text-stone-900 flex items-center gap-1.5">
                     <CalendarDays className="w-4 h-4 text-amber-600" />
                     <span>AI 날짜·대상별 맞춤 식단표</span>
                   </h2>
-                  <p className="text-[11px] text-stone-500 mt-0.5">
+                  <p className="text-[12.5px] text-stone-500 mt-0.5">
                     원하는 날짜·끼니만 자유롭게 고르고, 성인식·유아식·온가족식을 분리해 완성형 한 끼를 만듭니다.
                   </p>
                 </div>
 
                 {/* 대상 & 성인 식사 목적 선택 */}
                 <div className="space-y-2">
-                  <label className="text-xs font-extrabold text-stone-700">1. 식사 대상 선택</label>
+                  <label className="text-[13.5px] font-extrabold text-stone-700">1. 식사 대상 선택</label>
                   <div className="grid grid-cols-3 gap-1.5">
                     {[
                       { id: "adults", label: "성인식 (2인)" },
@@ -17015,7 +17167,7 @@ ${validText}
                       <button
                         key={opt.id}
                         onClick={() => setPlanTarget(opt.id)}
-                        className={`py-2 px-1.5 rounded-xl text-xs font-extrabold border transition ${
+                        className={`py-2 px-1.5 rounded-xl text-[13.5px] font-extrabold border transition ${
                           planTarget === opt.id
                             ? "bg-stone-900 text-white border-stone-900"
                             : "bg-stone-50 text-stone-700 border-stone-200"
@@ -17031,7 +17183,7 @@ ${validText}
                         <button
                           key={st}
                           onClick={() => setPlanAdultStyle(st)}
-                          className={`px-2.5 py-1 rounded-full text-[11px] font-bold border ${
+                          className={`px-2.5 py-1 rounded-full text-[12.5px] font-bold border ${
                             planAdultStyle === st
                               ? "bg-amber-100 text-amber-900 border-amber-300"
                               : "bg-white text-stone-600 border-stone-200"
@@ -17047,7 +17199,7 @@ ${validText}
                 {/* 날짜 추가 & 날짜별 끼니 개별 선택 */}
                 <div className="space-y-2">
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-xs font-extrabold text-stone-700">
+                    <span className="text-[13.5px] font-extrabold text-stone-700">
                       2. 날짜별 끼니 선택 (총 {Object.values(planScheduleMap).reduce((a, b) => a + toSafeArray(b).length, 0)}끼)
                     </span>
                   </div>
@@ -17056,7 +17208,7 @@ ${validText}
                       type="date"
                       value={planAddDateInput}
                       onChange={(e) => setPlanAddDateInput(e.target.value)}
-                      className="flex-1 px-3 py-1.5 rounded-xl border border-stone-200 text-xs font-bold bg-white"
+                      className="flex-1 px-3 py-1.5 rounded-xl border border-stone-200 text-[13.5px] font-bold bg-white"
                     />
                     <button
                       onClick={() => {
@@ -17067,7 +17219,7 @@ ${validText}
                             : { ...prev, [planAddDateInput]: ["아침", "저녁"] }
                         );
                       }}
-                      className="px-3 py-1.5 rounded-xl bg-stone-800 text-white text-xs font-extrabold shrink-0"
+                      className="px-3 py-1.5 rounded-xl bg-stone-800 text-white text-[13.5px] font-extrabold shrink-0"
                     >
                       + 날짜 추가
                     </button>
@@ -17085,7 +17237,7 @@ ${validText}
                             className="p-2.5 rounded-xl bg-stone-50 border border-stone-200 flex items-center justify-between gap-2 flex-wrap"
                           >
                             <div className="flex items-center gap-1.5">
-                              <span className="text-xs font-black text-stone-800">{dStr}</span>
+                              <span className="text-[13.5px] font-black text-stone-800">{dStr}</span>
                               <button
                                 onClick={() =>
                                   setPlanScheduleMap((prev) => ({
@@ -17093,7 +17245,7 @@ ${validText}
                                     [dStr]: allChecked ? [] : ["아침", "점심", "저녁"]
                                   }))
                                 }
-                                className="text-[10px] font-bold text-amber-700 underline"
+                                className="text-[11.5px] font-bold text-amber-700 underline"
                               >
                                 {allChecked ? "전체해제" : "전체선택"}
                               </button>
@@ -17115,7 +17267,7 @@ ${validText}
                                         };
                                       })
                                     }
-                                    className={`px-2 py-1 rounded-lg text-[11px] font-extrabold border ${
+                                    className={`px-2 py-1 rounded-lg text-[12.5px] font-extrabold border ${
                                       on
                                         ? "bg-stone-900 text-white border-stone-900"
                                         : "bg-white text-stone-500 border-stone-200"
@@ -17146,13 +17298,13 @@ ${validText}
                 </div>
 
                 {planErrorMsg && (
-                  <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-xs font-bold text-rose-800 space-y-2">
+                  <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-[13.5px] font-bold text-rose-800 space-y-2">
                     <div>⚠️ {planErrorMsg}</div>
                     {toSafeArray(planSnapshotMeta?.missingPairs).length > 0 && (
                       <button
                         onClick={handleGenerateMissingPlanSlots}
                         disabled={isPlanLoading}
-                        className="px-3 py-1.5 rounded-lg bg-rose-600 text-white text-[11px] font-extrabold"
+                        className="px-3 py-1.5 rounded-lg bg-rose-600 text-white text-[12.5px] font-extrabold"
                       >
                         🔄 누락된 {planSnapshotMeta.missingPairs.length}끼만 추가 생성
                       </button>
@@ -17163,7 +17315,7 @@ ${validText}
                 <button
                   onClick={handleGenerate3DayPlan}
                   disabled={isPlanLoading}
-                  className={`w-full py-3 rounded-2xl text-white text-xs font-black flex items-center justify-center gap-1.5 shadow-sm ${
+                  className={`w-full py-3 rounded-2xl text-white text-[13.5px] font-black flex items-center justify-center gap-1.5 shadow-sm ${
                     isPlanLoading ? "bg-stone-400" : "bg-stone-900 hover:bg-amber-600"
                   }`}
                 >
@@ -17184,14 +17336,14 @@ ${validText}
                   <div className="space-y-3">
                     {allMissing.length > 0 && (
                       <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-3.5 space-y-2">
-                        <div className="text-xs font-black text-emerald-900">
+                        <div className="text-[13.5px] font-black text-emerald-900">
                           🛒 부족한 최소 재료 ({allMissing.length}종)
                         </div>
                         <div className="flex flex-wrap gap-1.5">
                           {allMissing.map((m) => (
                             <span
                               key={m.name}
-                              className="px-2 py-0.5 rounded-full bg-white border border-emerald-200 text-[11px] font-bold text-emerald-800"
+                              className="px-2 py-0.5 rounded-full bg-white border border-emerald-200 text-[12.5px] font-bold text-emerald-800"
                             >
                               {m.name} ({m.quantity})
                             </span>
@@ -17199,7 +17351,7 @@ ${validText}
                         </div>
                         <button
                           onClick={() => handleAddMissingIngredientsToShopping(allMissing)}
-                          className="w-full py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold"
+                          className="w-full py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-[13.5px] font-extrabold"
                         >
                           🛒 부족한 재료 장보기 목록에 한 번에 담기
                         </button>
@@ -17208,7 +17360,7 @@ ${validText}
 
                     <div className="bg-white p-3.5 rounded-2xl border border-stone-200 shadow-sm space-y-3">
                       <div className="flex items-center justify-between">
-                        <span className="text-xs font-black text-stone-900">
+                        <span className="text-[13.5px] font-black text-stone-900">
                           추천 식단 미리보기 ({planItems.filter((x) => x.selected).length}끼 선택됨)
                         </span>
                         <button
@@ -17216,7 +17368,7 @@ ${validText}
                             const allSel = planItems.every((x) => x.selected);
                             setPlanItems((prev) => prev.map((x) => ({ ...x, selected: !allSel })));
                           }}
-                          className="text-[11px] font-bold text-amber-700 underline"
+                          className="text-[12.5px] font-bold text-amber-700 underline"
                         >
                           {planItems.every((x) => x.selected) ? "전체 해제" : "전체 선택"}
                         </button>
@@ -17224,7 +17376,7 @@ ${validText}
 
                       {groupedDates.map((gDate) => (
                         <div key={gDate} className="space-y-2">
-                          <div className="text-xs font-black text-stone-700 bg-stone-100 px-2.5 py-1 rounded-lg">
+                          <div className="text-[13.5px] font-black text-stone-700 bg-stone-100 px-2.5 py-1 rounded-lg">
                             📅 {gDate}
                           </div>
                           {planItems
@@ -17251,21 +17403,21 @@ ${validText}
                                       className="flex items-center gap-1.5 text-left"
                                     >
                                       <span>{it.selected ? "✅" : "⬜"}</span>
-                                      <span className="text-xs font-black text-stone-900">{it.slot}</span>
-                                      <span className="text-[11px] font-bold text-stone-500">
+                                      <span className="text-[13.5px] font-black text-stone-900">{it.slot}</span>
+                                      <span className="text-[12.5px] font-bold text-stone-500">
                                         · {it.servings}인분 · {it.estimatedMinutes}분
                                       </span>
                                     </button>
                                     <div className="flex items-center gap-1.5">
                                       {hasExisting && (
-                                        <span className="px-1.5 py-0.5 rounded bg-rose-100 text-rose-800 text-[10px] font-extrabold">
+                                        <span className="px-1.5 py-0.5 rounded bg-rose-100 text-rose-800 text-[11.5px] font-extrabold">
                                           기존 식단 있음(추가)
                                         </span>
                                       )}
                                       <button
                                         onClick={() => handleRegenerateSinglePlanSlot(it)}
                                         disabled={regeneratingPlanId === it.id}
-                                        className="px-2 py-1 rounded-lg bg-white border border-stone-200 text-[11px] font-extrabold text-stone-700 hover:bg-stone-100"
+                                        className="px-2 py-1 rounded-lg bg-white border border-stone-200 text-[12.5px] font-extrabold text-stone-700 hover:bg-stone-100"
                                       >
                                         {regeneratingPlanId === it.id ? "추천중..." : "🔄 다시 추천"}
                                       </button>
@@ -17285,10 +17437,10 @@ ${validText}
                                         )
                                       );
                                     }}
-                                    className="w-full px-2.5 py-1.5 rounded-lg bg-white border border-stone-200 text-sm font-extrabold text-stone-900"
+                                    className="w-full px-2.5 py-1.5 rounded-lg bg-white border border-stone-200 text-[15.5px] font-extrabold text-stone-900"
                                   />
                                   {it.completeness && !it.completeness.ok && (
-                                    <div className="text-[11px] font-bold text-rose-700">
+                                    <div className="text-[12.5px] font-bold text-rose-700">
                                       ⚠️ {it.completeness.reason}
                                     </div>
                                   )}
@@ -17298,7 +17450,7 @@ ${validText}
                                       {toSafeArray(it.components).map((c, cIdx) => (
                                         <span
                                           key={cIdx}
-                                          className="px-2 py-0.5 rounded-md bg-white border border-stone-200 text-[11px] font-bold text-stone-700"
+                                          className="px-2 py-0.5 rounded-md bg-white border border-stone-200 text-[12.5px] font-bold text-stone-700"
                                         >
                                           {c.role === "staple" ? "🍚" : c.role === "vegetable" ? "🥬" : "🍖"} {c.name}
                                         </span>
@@ -17307,22 +17459,22 @@ ${validText}
                                   )}
 
                                   {toSafeArray(it.usedIngredientsDisplay).length > 0 && (
-                                    <div className="text-[11px] font-semibold text-emerald-700">
+                                    <div className="text-[12.5px] font-semibold text-emerald-700">
                                       🥬 보유 재료: {it.usedIngredientsDisplay.join(", ")}
                                     </div>
                                   )}
                                   {toSafeArray(it.missingIngredients).length > 0 && (
-                                    <div className="text-[11px] font-semibold text-rose-700">
+                                    <div className="text-[12.5px] font-semibold text-rose-700">
                                       🛒 부족 재료: {it.missingIngredients.map((m) => `${m.name}(${m.quantity})`).join(", ")}
                                     </div>
                                   )}
                                   {it.tip && (
-                                    <div className="text-[11px] font-semibold text-stone-600">
+                                    <div className="text-[12.5px] font-semibold text-stone-600">
                                       💡 조리 팁: {it.tip}
                                     </div>
                                   )}
                                   {!isAdultOnly && it.babyTip && (
-                                    <div className="text-[11px] font-semibold text-amber-900 bg-white/80 p-2 rounded-lg border border-amber-200">
+                                    <div className="text-[12.5px] font-semibold text-amber-900 bg-white/80 p-2 rounded-lg border border-amber-200">
                                       👶 아이 맞춤 팁: {it.babyTip}
                                     </div>
                                   )}
@@ -17335,7 +17487,7 @@ ${validText}
                                             usedIngredients: it.usedIngredients
                                           })
                                         }
-                                        className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-extrabold"
+                                        className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[12.5px] font-extrabold"
                                       >
                                         🍳 이 식단 조리완료(재고 차감)
                                       </button>
@@ -17348,7 +17500,7 @@ ${validText}
                       ))}
 
                       {planSnapshotMeta && (
-                        <div className="text-[11px] font-bold text-stone-500 bg-stone-50 px-2.5 py-2 rounded-xl border border-stone-200 space-y-1.5">
+                        <div className="text-[12.5px] font-bold text-stone-500 bg-stone-50 px-2.5 py-2 rounded-xl border border-stone-200 space-y-1.5">
                           <div>
                             📌 등록 대상(생성 시점 고정): <span className="text-stone-800">{planSnapshotMeta.members.join(", ")}</span>
                           </div>
@@ -17380,7 +17532,7 @@ ${validText}
                       <button
                         onClick={handleApply3DayPlan}
                         disabled={isSavingPlan || planSnapshotMeta?.applied}
-                        className={`w-full py-3 rounded-2xl text-white text-xs font-black ${
+                        className={`w-full py-3 rounded-2xl text-white text-[13.5px] font-black ${
                           isSavingPlan || planSnapshotMeta?.applied
                             ? "bg-stone-400 cursor-not-allowed"
                             : "bg-stone-900 hover:bg-stone-800"
@@ -17404,22 +17556,22 @@ ${validText}
           <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-sm space-y-3.5">
             <div className="flex items-center justify-between">
               <div>
-                <h2 className="text-sm font-black text-stone-900 flex items-center gap-1.5">
+                <h2 className="text-[15.5px] font-black text-stone-900 flex items-center gap-1.5">
                   <Sparkles className="w-4 h-4 text-amber-500" />
                   <span>Gemini 3.8 AI 실시간 맞춤 셰프</span>
                 </h2>
-                <p className="text-[11px] text-stone-500 mt-0.5">
+                <p className="text-[12.5px] text-stone-500 mt-0.5">
                   선택한 냉장고 재료들의 실제 맛 궁합과 조리법을 AI가 설계합니다.
                 </p>
               </div>
-              <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-50 text-emerald-700 border border-emerald-200 shrink-0">
+              <span className="px-2 py-0.5 rounded-full text-[11.5px] font-extrabold bg-emerald-50 text-emerald-700 border border-emerald-200 shrink-0">
                 ⚡ Gemini 직통 활성
               </span>
             </div>
 
             <div>
               <div className="flex items-center justify-between mb-1.5">
-                <span className="text-xs font-extrabold text-stone-700">
+                <span className="text-[13.5px] font-extrabold text-stone-700">
                   Step 1. 사용할 냉장고 재료 선택 ({selectedAiIngredients.length}개 선택됨)
                 </span>
                 <button
@@ -17430,7 +17582,7 @@ ${validText}
                         : expiringItems.slice(0, 3).map((i) => i.name)
                     )
                   }
-                  className="text-[11px] font-bold text-amber-700 underline"
+                  className="text-[12.5px] font-bold text-amber-700 underline"
                 >
                   {selectedAiIngredients.length > 0 ? "선택 초기화" : "임박 재료 자동선택"}
                 </button>
@@ -17449,7 +17601,7 @@ ${validText}
                             : [...prev, item.name]
                         )
                       }
-                      className={`px-2.5 py-1.5 rounded-xl text-xs font-bold border transition ${
+                      className={`px-2.5 py-1.5 rounded-xl text-[13.5px] font-bold border transition ${
                         isSel
                           ? "bg-stone-900 text-white border-stone-900 shadow-sm"
                           : "bg-stone-50 text-stone-700 border-stone-200 hover:bg-stone-100"
@@ -17457,7 +17609,7 @@ ${validText}
                     >
                       {item.name}
                       {diff <= 3 && (
-                        <span className="ml-1 text-[10px] text-orange-400 font-black">
+                        <span className="ml-1 text-[11.5px] text-orange-400 font-black">
                           (임박)
                         </span>
                       )}
@@ -17468,7 +17620,7 @@ ${validText}
             </div>
 
             <div>
-              <div className="text-xs font-extrabold text-stone-700 mb-1.5">
+              <div className="text-[13.5px] font-extrabold text-stone-700 mb-1.5">
                 Step 2. 누구를 위한 식단인가요?
               </div>
               <div className="grid grid-cols-2 gap-1.5">
@@ -17481,7 +17633,7 @@ ${validText}
                   <button
                     key={tg}
                     onClick={() => setAiTargetGroup(tg)}
-                    className={`py-2 px-3 rounded-xl text-xs font-extrabold border transition ${
+                    className={`py-2 px-3 rounded-xl text-[13.5px] font-extrabold border transition ${
                       aiTargetGroup === tg
                         ? "bg-amber-500 text-white border-amber-500"
                         : "bg-stone-50 text-stone-600 border-stone-200"
@@ -17498,11 +17650,11 @@ ${validText}
               placeholder="추가 요청 (예: 매콤한 국물 요리, 에어프라이어 활용, 15분 컷 등)"
               value={aiPromptExtra}
               onChange={(e) => setAiPromptExtra(e.target.value)}
-              className="w-full px-3 py-2 rounded-xl border border-stone-200 text-xs"
+              className="w-full px-3 py-2 rounded-xl border border-stone-200 text-[13.5px]"
             />
 
             {aiErrorMsg && (
-              <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-xs text-red-700 font-bold">
+              <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-[13.5px] text-red-700 font-bold">
                 ⚠️ {aiErrorMsg}
               </div>
             )}
@@ -17510,7 +17662,7 @@ ${validText}
             <button
               onClick={handleRunAiRecommend}
               disabled={isAiLoading}
-              className="w-full py-3 rounded-2xl bg-stone-900 hover:bg-stone-800 text-white font-black text-xs flex items-center justify-center gap-2 shadow-md"
+              className="w-full py-3 rounded-2xl bg-stone-900 hover:bg-stone-800 text-white font-black text-[13.5px] flex items-center justify-center gap-2 shadow-md"
             >
               {isAiLoading ? (
                 <>
@@ -17529,10 +17681,10 @@ ${validText}
           {aiRecipes.length === 0 ? (
             <div className="bg-white p-6 rounded-2xl border border-dashed border-stone-300 text-center space-y-1">
               <div className="text-2xl">👩‍🍳👨‍🍳</div>
-              <div className="text-xs font-extrabold text-stone-700">
+              <div className="text-[13.5px] font-extrabold text-stone-700">
                 위에서 냉장고 재료를 선택하고 AI 추천 버튼을 눌러보세요!
               </div>
-              <div className="text-[11px] text-stone-400">
+              <div className="text-[12.5px] text-stone-400">
                 선택하신 재료들을 바탕으로 즉석에서 조리법과 팁을 설계합니다.
               </div>
             </div>
@@ -17543,25 +17695,25 @@ ${validText}
                   key={rec.id}
                   className="bg-white p-4 rounded-2xl border border-stone-200 shadow-sm space-y-2.5"
                 >
-                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-100 text-amber-900">
+                  <span className="px-2.5 py-0.5 rounded-full text-[11.5px] font-extrabold bg-amber-100 text-amber-900">
                     {rec.target} · ⏱️ {rec.time}
                   </span>
-                  <h3 className="text-base font-black text-stone-900">{rec.title}</h3>
-                  <div className="text-xs font-bold text-emerald-700">
+                  <h3 className="text-[17.5px] font-black text-stone-900">{rec.title}</h3>
+                  <div className="text-[13.5px] font-bold text-emerald-700">
                     🥬 활용 재료: {toSafeArray(rec.usedIngredients).join(", ")}
                   </div>
-                  <div className="space-y-1.5 bg-stone-50 p-3 rounded-xl text-xs text-stone-700 leading-relaxed">
+                  <div className="space-y-1.5 bg-stone-50 p-3 rounded-xl text-[13.5px] text-stone-700 leading-relaxed">
                     {toSafeArray(rec.steps).map((st, i) => (
                       <div key={i}>{st}</div>
                     ))}
                   </div>
                   {rec.tip && (
-                    <div className="text-[11px] font-semibold text-amber-800 bg-amber-50/70 p-2.5 rounded-xl">
+                    <div className="text-[12.5px] font-semibold text-amber-800 bg-amber-50/70 p-2.5 rounded-xl">
                       💡 <b>셰프의 팁:</b> {rec.tip}
                     </div>
                   )}
                   {rec.familyGuide && typeof rec.familyGuide === "object" && (
-                    <div className="grid grid-cols-2 gap-1.5 bg-stone-50 p-2.5 rounded-xl border border-stone-200/80 text-[10px]">
+                    <div className="grid grid-cols-2 gap-1.5 bg-stone-50 p-2.5 rounded-xl border border-stone-200/80 text-[11.5px]">
                       {Object.entries(rec.familyGuide).map(([mem, guide]) => (
                         <div key={mem} className="bg-white px-2 py-1.5 rounded-lg border border-stone-200">
                           <span className="font-black text-stone-900">{mem}: </span>
@@ -17574,13 +17726,13 @@ ${validText}
                   <div className="grid grid-cols-2 gap-1.5">
                     <button
                       onClick={() => handleAddMissingIngredientsToShopping(rec.usedIngredients)}
-                      className="py-2 px-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-[11px] font-extrabold"
+                      className="py-2 px-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-[12.5px] font-extrabold"
                     >
                       🛒 부족재료 장보기 담기
                     </button>
                     <button
                       onClick={() => handleCompleteRecipeCooking(rec)}
-                      className="py-2 px-2 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 text-[11px] font-extrabold"
+                      className="py-2 px-2 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 text-[12.5px] font-extrabold"
                     >
                       🍳 요리완료 (재고 -1)
                     </button>
@@ -17592,7 +17744,7 @@ ${validText}
                       setQuickLogDate(selectedDate);
                       setQuickLogSlot("저녁");
                     }}
-                    className="w-full py-2.5 rounded-xl bg-stone-900 text-white text-xs font-extrabold flex items-center justify-center gap-1.5"
+                    className="w-full py-2.5 rounded-xl bg-stone-900 text-white text-[13.5px] font-extrabold flex items-center justify-center gap-1.5"
                   >
                     <span>이 메뉴를 식단표에 바로 등록하기</span>
                     <ArrowRight className="w-3.5 h-3.5" />
@@ -17607,15 +17759,15 @@ ${validText}
           <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-sm space-y-3">
             <div className="flex items-center justify-between">
               <div>
-                <h2 className="text-sm font-black text-stone-900 flex items-center gap-1.5">
+                <h2 className="text-[15.5px] font-black text-stone-900 flex items-center gap-1.5">
                   <Camera className="w-4 h-4 text-rose-500" />
                   <span>AI 플레이팅 코치 (사진 분석)</span>
                 </h2>
-                <p className="text-[11px] text-stone-500 mt-0.5">
+                <p className="text-[12.5px] text-stone-500 mt-0.5">
                   완성한 요리 사진을 올리면 색감·여백 점수와 그릇·가니쉬 팁을 알려드려요.
                 </p>
               </div>
-              <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-rose-50 text-rose-700 border border-rose-200 shrink-0">
+              <span className="px-2 py-0.5 rounded-full text-[11.5px] font-extrabold bg-rose-50 text-rose-700 border border-rose-200 shrink-0">
                 📸 Vision
               </span>
             </div>
@@ -17631,7 +17783,7 @@ ${validText}
             <div className="grid grid-cols-2 gap-2">
               <button
                 onClick={() => platingFileInputRef.current?.click()}
-                className="py-2.5 px-3 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-800 text-xs font-extrabold flex items-center justify-center gap-1.5 border border-stone-200"
+                className="py-2.5 px-3 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-800 text-[13.5px] font-extrabold flex items-center justify-center gap-1.5 border border-stone-200"
               >
                 <Upload className="w-3.5 h-3.5" />
                 <span>{platingPreviewUrl ? "사진 다시 선택" : "요리 사진 올리기"}</span>
@@ -17641,7 +17793,7 @@ ${validText}
                 placeholder="스타일 (예: 손님상, 아이 식판)"
                 value={platingStyleHint}
                 onChange={(e) => setPlatingStyleHint(e.target.value)}
-                className="px-3 py-2 rounded-xl border border-stone-200 text-xs"
+                className="px-3 py-2 rounded-xl border border-stone-200 text-[13.5px]"
               />
             </div>
 
@@ -17656,7 +17808,7 @@ ${validText}
             )}
 
             {platingErrorMsg && (
-              <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-xs text-red-700 font-bold">
+              <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-[13.5px] text-red-700 font-bold">
                 ⚠️ {platingErrorMsg}
               </div>
             )}
@@ -17664,7 +17816,7 @@ ${validText}
             <button
               onClick={handleAnalyzePlating}
               disabled={isPlatingLoading || !platingImagePart}
-              className={`w-full py-3 rounded-2xl font-black text-xs flex items-center justify-center gap-2 shadow-sm transition ${
+              className={`w-full py-3 rounded-2xl font-black text-[13.5px] flex items-center justify-center gap-2 shadow-sm transition ${
                 !platingImagePart
                   ? "bg-stone-200 text-stone-400 cursor-not-allowed"
                   : "bg-rose-600 hover:bg-rose-700 text-white"
@@ -17686,30 +17838,30 @@ ${validText}
             {platingResult && (
               <div className="p-3.5 rounded-2xl bg-rose-50/60 border border-rose-200 space-y-2.5">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-sm font-black text-stone-900">
+                  <span className="text-[15.5px] font-black text-stone-900">
                     🍽️ {platingResult.dishName}
                   </span>
                   <div className="flex items-center gap-1 shrink-0">
-                    <span className="px-2 py-0.5 rounded-lg bg-white border border-rose-200 text-[10px] font-extrabold text-rose-800">
+                    <span className="px-2 py-0.5 rounded-lg bg-white border border-rose-200 text-[11.5px] font-extrabold text-rose-800">
                       색감 {platingResult.colorScore === "미평가" ? "미평가" : `${platingResult.colorScore}/5`}
                     </span>
-                    <span className="px-2 py-0.5 rounded-lg bg-white border border-rose-200 text-[10px] font-extrabold text-rose-800">
+                    <span className="px-2 py-0.5 rounded-lg bg-white border border-rose-200 text-[11.5px] font-extrabold text-rose-800">
                       구성 {platingResult.layoutScore === "미평가" ? "미평가" : `${platingResult.layoutScore}/5`}
                     </span>
                   </div>
                 </div>
 
-                <div className="text-xs font-bold text-stone-800 leading-snug">
+                <div className="text-[13.5px] font-bold text-stone-800 leading-snug">
                   {platingResult.summary}
                 </div>
 
                 {platingResult.plateAndGarnish && (
-                  <div className="p-2.5 rounded-xl bg-white border border-rose-100 text-[11px] font-semibold text-stone-700">
+                  <div className="p-2.5 rounded-xl bg-white border border-rose-100 text-[12.5px] font-semibold text-stone-700">
                     🥣 <b>추천 그릇·가니쉬:</b> {platingResult.plateAndGarnish}
                   </div>
                 )}
 
-                <div className="space-y-1 bg-white p-2.5 rounded-xl border border-rose-100 text-xs text-stone-700">
+                <div className="space-y-1 bg-white p-2.5 rounded-xl border border-rose-100 text-[13.5px] text-stone-700">
                   {toSafeArray(platingResult.tips).map((tip, idx) => (
                     <div key={idx} className="leading-snug">
                       {tip}
@@ -17719,7 +17871,7 @@ ${validText}
 
                 <button
                   onClick={handleSendPlatingToRecipeBook}
-                  className="w-full py-2 px-3 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-extrabold flex items-center justify-center gap-1.5 shadow-sm"
+                  className="w-full py-2 px-3 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-[13.5px] font-extrabold flex items-center justify-center gap-1.5 shadow-sm"
                 >
                   <span>📖 이 플레이팅 결과로 가족 레시피북에 저장</span>
                 </button>
@@ -17727,7 +17879,7 @@ ${validText}
                 <button
                   onClick={handleGeneratePlatingExampleImage}
                   disabled={isPlatingImageLoading}
-                  className="w-full py-2.5 px-3 rounded-xl bg-stone-900 hover:bg-stone-800 text-white text-xs font-extrabold flex items-center justify-center gap-1.5 shadow-sm"
+                  className="w-full py-2.5 px-3 rounded-xl bg-stone-900 hover:bg-stone-800 text-white text-[13.5px] font-extrabold flex items-center justify-center gap-1.5 shadow-sm"
                 >
                   {isPlatingImageLoading ? (
                     <>
@@ -17741,7 +17893,7 @@ ${validText}
 
                 {platingExampleImageUrl && (
                   <div className="space-y-1 pt-1">
-                    <div className="text-[10px] font-extrabold text-rose-800">
+                    <div className="text-[11.5px] font-extrabold text-rose-800">
                       ✨ AI 추천 플레이팅 예시 이미지
                     </div>
                     <img
@@ -17794,21 +17946,21 @@ ${validText}
           <div className="bg-gradient-to-br from-rose-50 via-white to-amber-50 p-4 rounded-2xl border border-rose-200 shadow-sm space-y-2.5">
             <div className="flex items-center justify-between gap-2">
               <div>
-                <h2 className="text-sm font-black text-stone-900">📖 우리 가족 레시피북 ({filteredRecipes.length})</h2>
-                <p className="text-[11px] font-semibold text-stone-500">
+                <h2 className="text-[15.5px] font-black text-stone-900">📖 우리 가족 레시피북 ({filteredRecipes.length})</h2>
+                <p className="text-[12.5px] font-semibold text-stone-500">
                   카테고리 · 요약 리스트 · 사진 클릭 확대 · 플레이팅 연동
                 </p>
               </div>
               <button
                 onClick={() => openNewRecipeModal()}
-                className="px-3 py-2 rounded-xl bg-stone-900 text-white text-xs font-extrabold shrink-0 whitespace-nowrap"
+                className="px-3 py-2 rounded-xl bg-stone-900 text-white text-[13.5px] font-extrabold shrink-0 whitespace-nowrap"
               >
                 + 레시피 등록
               </button>
             </div>
 
             {!isEditorUnlocked && (
-              <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 flex items-center justify-between gap-2 text-[11px]">
+              <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 flex items-center justify-between gap-2 text-[12.5px]">
                 <span className="font-bold text-amber-900">🔒 가족 사진과 기록 보호를 위해 열람 잠금 중입니다.</span>
                 <button
                   onClick={() => requireEditorAccess()}
@@ -17826,13 +17978,13 @@ ${validText}
                   value={recipeSearch}
                   onChange={(e) => setRecipeSearch(e.target.value)}
                   placeholder="🔍 요리명·재료 검색 (예: 소고기, 무국)"
-                  className="w-full px-3 py-2 pr-8 rounded-xl border border-stone-200 bg-white text-xs font-bold"
+                  className="w-full px-3 py-2 pr-8 rounded-xl border border-stone-200 bg-white text-[13.5px] font-bold"
                 />
                 {recipeSearch && (
                   <button
                     type="button"
                     onClick={() => setRecipeSearch("")}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-700 text-xs font-black"
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-700 text-[13.5px] font-black"
                   >
                     ✕
                   </button>
@@ -17842,7 +17994,7 @@ ${validText}
                 <select
                   value={recipeDiffFilter}
                   onChange={(e) => setRecipeDiffFilter(e.target.value)}
-                  className="flex-1 px-2.5 py-1.5 rounded-xl border border-stone-200 bg-white text-[11px] font-bold"
+                  className="flex-1 px-2.5 py-1.5 rounded-xl border border-stone-200 bg-white text-[12.5px] font-bold"
                 >
                   <option value="전체">난이도 전체</option>
                   <option value="쉬움">쉬움</option>
@@ -17852,7 +18004,7 @@ ${validText}
                 <select
                   value={recipeSort}
                   onChange={(e) => setRecipeSort(e.target.value)}
-                  className="flex-1 px-2.5 py-1.5 rounded-xl border border-stone-200 bg-white text-[11px] font-bold"
+                  className="flex-1 px-2.5 py-1.5 rounded-xl border border-stone-200 bg-white text-[12.5px] font-bold"
                 >
                   <option value="latest">최신순</option>
                   <option value="rating">별점순</option>
@@ -17869,7 +18021,7 @@ ${validText}
                     setRecipeSearch(picked.title || "");
                     showToast(`🎲 오늘의 랜덤 추천: ${picked.title}`);
                   }}
-                  className="px-2.5 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-[11px] font-extrabold whitespace-nowrap shrink-0"
+                  className="px-2.5 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-[12.5px] font-extrabold whitespace-nowrap shrink-0"
                 >
                   🎲 랜덤 추천
                 </button>
@@ -17881,7 +18033,7 @@ ${validText}
                 <button
                   key={cat}
                   onClick={() => setRecipeCatFilter(cat)}
-                  className={`px-2.5 py-1 rounded-full text-[11px] font-bold shrink-0 border ${
+                  className={`px-2.5 py-1 rounded-full text-[12.5px] font-bold shrink-0 border ${
                     recipeCatFilter === cat
                       ? "bg-rose-600 text-white border-rose-600"
                       : "bg-white text-stone-600 border-stone-200"
@@ -17895,7 +18047,7 @@ ${validText}
             <div className="flex items-center gap-1 bg-stone-100 p-1 rounded-xl">
               <button
                 onClick={() => setRecipeViewMode("cards")}
-                className={`flex-1 py-1.5 rounded-lg text-xs font-extrabold transition ${
+                className={`flex-1 py-1.5 rounded-lg text-[13.5px] font-extrabold transition ${
                   recipeViewMode === "cards" ? "bg-white text-stone-900 shadow-sm" : "text-stone-500"
                 }`}
               >
@@ -17903,7 +18055,7 @@ ${validText}
               </button>
               <button
                 onClick={() => setRecipeViewMode("summary")}
-                className={`flex-1 py-1.5 rounded-lg text-xs font-extrabold transition ${
+                className={`flex-1 py-1.5 rounded-lg text-[13.5px] font-extrabold transition ${
                   recipeViewMode === "summary" ? "bg-white text-stone-900 shadow-sm" : "text-stone-500"
                 }`}
               >
@@ -17914,10 +18066,10 @@ ${validText}
 
           {filteredRecipes.length === 0 ? (
             <div className="bg-white p-6 rounded-2xl border border-stone-200 text-center space-y-2">
-              <div className="text-xs font-bold text-stone-500">
+              <div className="text-[13.5px] font-bold text-stone-500">
                 조건에 맞는 가족 레시피가 없습니다.
               </div>
-              <div className="text-[11px] text-stone-400">
+              <div className="text-[12.5px] text-stone-400">
                 직접 등록하거나 AI추천 → 플레이팅 코치 결과를 바로 저장해 보세요!
               </div>
             </div>
@@ -17947,18 +18099,18 @@ ${validText}
                           title="클릭하여 사진 크게 보기"
                         />
                       ) : (
-                        <div className="w-11 h-11 rounded-xl bg-rose-50 border border-rose-100 flex items-center justify-center text-base shrink-0">
+                        <div className="w-11 h-11 rounded-xl bg-rose-50 border border-rose-100 flex items-center justify-center text-[17.5px] shrink-0">
                           🍽️
                         </div>
                       )}
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-1.5 flex-wrap">
-                          <span className="px-1.5 py-0.5 rounded bg-rose-50 text-rose-700 text-[9px] font-extrabold shrink-0">
+                          <span className="px-1.5 py-0.5 rounded bg-rose-50 text-rose-700 text-[10.5px] font-extrabold shrink-0">
                             {r.category || "기타"}
                           </span>
-                          <span className="text-xs font-black text-stone-900 truncate">{r.title}</span>
+                          <span className="text-[13.5px] font-black text-stone-900 truncate">{r.title}</span>
                         </div>
-                        <div className="text-[10px] text-stone-500 font-semibold mt-0.5 truncate">
+                        <div className="text-[11.5px] text-stone-500 font-semibold mt-0.5 truncate">
                           ⏱️ {r.cookTime || "20분"} · {r.difficulty || "쉬움"}
                           {avgRating ? ` · ⭐ ${avgRating}` : ""}
                           {r.ingredientsText ? ` · ${r.ingredientsText}` : ""}
@@ -17968,7 +18120,7 @@ ${validText}
                     <div className="flex items-center gap-1 shrink-0">
                       <button
                         onClick={() => handleApplyRecipeToMeal(r)}
-                        className="px-2 py-1.5 rounded-lg bg-stone-900 text-white text-[10px] font-extrabold"
+                        className="px-2 py-1.5 rounded-lg bg-stone-900 text-white text-[11.5px] font-extrabold"
                         title="오늘 식단으로 재현"
                       >
                         재현
@@ -18023,7 +18175,7 @@ ${validText}
                             alt={r.title}
                             className={`w-full h-full object-cover ${!isEditorUnlocked ? "blur-md" : "group-hover:scale-105 transition"}`}
                           />
-                          <span className="absolute bottom-1 right-1 px-1.5 py-0.5 rounded bg-black/60 text-white text-[9px] font-bold">
+                          <span className="absolute bottom-1 right-1 px-1.5 py-0.5 rounded bg-black/60 text-white text-[10.5px] font-bold">
                             {isEditorUnlocked ? "🔍 확대" : "🔒"}
                           </span>
                         </div>
@@ -18031,10 +18183,10 @@ ${validText}
                       <div className="flex-1 min-w-0 space-y-1.5">
                         <div className="flex items-start justify-between gap-1">
                           <div className="min-w-0">
-                            <span className="inline-block px-2 py-0.5 rounded-md bg-rose-50 text-rose-700 text-[10px] font-extrabold mb-1">
+                            <span className="inline-block px-2 py-0.5 rounded-md bg-rose-50 text-rose-700 text-[11.5px] font-extrabold mb-1">
                               {r.category || "기타"}
                             </span>
-                            <div className="text-sm font-black text-stone-900 break-keep">{r.title}</div>
+                            <div className="text-[15.5px] font-black text-stone-900 break-keep">{r.title}</div>
                           </div>
                           <div className="flex items-center gap-0.5 shrink-0">
                             <button
@@ -18069,14 +18221,14 @@ ${validText}
                         </div>
 
                         <div className="flex items-center gap-1.5 flex-wrap">
-                          <span className="px-2 py-0.5 rounded-md bg-stone-100 text-stone-700 text-[10px] font-bold">
+                          <span className="px-2 py-0.5 rounded-md bg-stone-100 text-stone-700 text-[11.5px] font-bold">
                             ⏱️ {r.cookTime || "20분"}
                           </span>
-                          <span className="px-2 py-0.5 rounded-md bg-amber-50 text-amber-800 text-[10px] font-bold">
+                          <span className="px-2 py-0.5 rounded-md bg-amber-50 text-amber-800 text-[11.5px] font-bold">
                             난이도: {r.difficulty || "쉬움"}
                           </span>
                           {r.platingCoach && (
-                            <span className="px-2 py-0.5 rounded-md bg-rose-50 text-rose-700 text-[10px] font-bold">
+                            <span className="px-2 py-0.5 rounded-md bg-rose-50 text-rose-700 text-[11.5px] font-bold">
                               🎨 플레이팅 연동
                             </span>
                           )}
@@ -18086,7 +18238,7 @@ ${validText}
 
                     {r.ingredientsText && (
                       <div className="bg-stone-50 p-2 rounded-xl space-y-1">
-                        <div className="text-[10px] font-bold text-stone-500">🥕 재료 (부족한 재료 탭 → 바로 장보기 추가)</div>
+                        <div className="text-[11.5px] font-bold text-stone-500">🥕 재료 (부족한 재료 탭 → 바로 장보기 추가)</div>
                         <div className="flex flex-wrap gap-1">
                           {String(r.ingredientsText)
                             .split(/[+,\n]+/)
@@ -18098,7 +18250,7 @@ ${validText}
                               return inFridge ? (
                                 <span
                                   key={`${tok}-${tIdx}`}
-                                  className="px-2 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-800 text-[10px] font-bold"
+                                  className="px-2 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-800 text-[11.5px] font-bold"
                                 >
                                   ✓ {tok}
                                 </span>
@@ -18107,7 +18259,7 @@ ${validText}
                                   key={`${tok}-${tIdx}`}
                                   type="button"
                                   onClick={() => handleQuickAddSingleIngredientToShopping(tok, r.title)}
-                                  className="px-2 py-0.5 rounded-full bg-white hover:bg-emerald-50 border border-stone-200 text-stone-700 text-[10px] font-bold active:scale-95 transition"
+                                  className="px-2 py-0.5 rounded-full bg-white hover:bg-emerald-50 border border-stone-200 text-stone-700 text-[11.5px] font-bold active:scale-95 transition"
                                 >
                                   {tok} 🛒
                                 </button>
@@ -18117,7 +18269,7 @@ ${validText}
                       </div>
                     )}
 
-                    <div className="flex flex-wrap gap-1.5 text-[10px] font-bold">
+                    <div className="flex flex-wrap gap-1.5 text-[11.5px] font-bold">
                       {["수혁", "아리나", "시목", "시율"].map((mName) => {
                         const score = Number(r.ratings?.[mName] || 0);
                         return score > 0 ? (
@@ -18129,12 +18281,12 @@ ${validText}
                     </div>
 
                     {r.stepsText && (
-                      <div className="text-[11px] text-stone-700 bg-amber-50/50 border border-amber-100 p-2 rounded-xl whitespace-pre-line">
+                      <div className="text-[12.5px] text-stone-700 bg-amber-50/50 border border-amber-100 p-2 rounded-xl whitespace-pre-line">
                         <span className="font-black text-amber-900 block mb-0.5">👩‍🍳 조리 순서</span>
                         {r.stepsText}
                       </div>
                     )}
-                    {r.memo && <div className="text-[11px] text-stone-600 whitespace-pre-line">{r.memo}</div>}
+                    {r.memo && <div className="text-[12.5px] text-stone-600 whitespace-pre-line">{r.memo}</div>}
 
                     {toSafeArray(r.ingredients).length > 0 && (() => {
                       const missingCnt = toSafeArray(r.ingredients).filter((ing) => {
@@ -18142,7 +18294,7 @@ ${validText}
                         return n && !matchFridgeItemExactFirst(n, fridge);
                       }).length;
                       return (
-                        <div className={`text-[10px] font-extrabold px-2.5 py-1 rounded-lg inline-block ${
+                        <div className={`text-[11.5px] font-extrabold px-2.5 py-1 rounded-lg inline-block ${
                           missingCnt === 0 ? "bg-emerald-50 text-emerald-800" : "bg-amber-50 text-amber-900"
                         }`}>
                           {missingCnt === 0 ? "✅ 냉장고 재료 100% 보유 (바로 조리 가능)" : `⚠️ 냉장고 부족 재료 ${missingCnt}개`}
@@ -18153,13 +18305,13 @@ ${validText}
                     <div className="grid grid-cols-2 gap-2 pt-1">
                       <button
                         onClick={() => handleApplyRecipeToMeal(r)}
-                        className="py-2 rounded-xl bg-stone-900 text-white text-[11px] font-extrabold"
+                        className="py-2 rounded-xl bg-stone-900 text-white text-[12.5px] font-extrabold"
                       >
                         🍽️ 오늘 식단으로 재현
                       </button>
                       <button
                         onClick={() => handleAddMissingRecipeIngredientsToShopping(r)}
-                        className="py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-[11px] font-extrabold"
+                        className="py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-[12.5px] font-extrabold"
                       >
                         🛒 부족 재료 장보기
                       </button>
@@ -18203,15 +18355,15 @@ ${validText}
                     <div className="flex items-center justify-between">
                       <MemberAvatar id={ch.id} size="lg" />
                       <span
-                        className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full ${
+                        className={`text-[11.5px] font-extrabold px-2 py-0.5 rounded-full ${
                           isSel ? "bg-amber-400 text-stone-900" : "bg-stone-100 text-stone-600"
                         }`}
                       >
                         {ch.badge} · D+{st.days.toLocaleString()}일
                       </span>
                     </div>
-                    <div className="text-sm font-black mt-1">{ch.name}</div>
-                    <div className={`text-[10px] mt-0.5 ${isSel ? "text-stone-300" : "text-stone-500"}`}>
+                    <div className="text-[15.5px] font-black mt-1">{ch.name}</div>
+                    <div className={`text-[11.5px] mt-0.5 ${isSel ? "text-stone-300" : "text-stone-500"}`}>
                       {ch.birthDate}생 · 현재 {st.months}개월
                     </div>
                   </button>
@@ -18237,7 +18389,7 @@ ${validText}
                       setTimeout(() => activityTopRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 80);
                     }
                   }}
-                  className={`py-2 px-1 rounded-xl text-[11px] font-extrabold whitespace-nowrap transition ${
+                  className={`py-2 px-1 rounded-xl text-[12.5px] font-extrabold whitespace-nowrap transition ${
                     babySubTab === st.id
                       ? "bg-white text-stone-900 shadow-sm"
                       : "text-stone-600"
@@ -18286,13 +18438,13 @@ ${validText}
 
                   <div ref={activityTopRef} className="bg-white p-3 rounded-2xl border border-stone-200 shadow-sm space-y-2.5 scroll-mt-4">
                     <div className="flex items-center justify-between gap-2">
-                      <span className="text-xs font-black text-stone-900">
-                        🍼 {activeChild.name} 원탭 기록 (시작 / 종료 재탭)
+                      <span className="text-[13.5px] font-black text-stone-900">
+                        🍼 {activeChild.name} 원탭 (기저귀: 짧게=소변 · 길게=대변)
                       </span>
                       <button
                         type="button"
                         onClick={() => setZipImportPicker("activity")}
-                        className="px-2 py-1 rounded-xl bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-900 text-[10px] font-extrabold whitespace-nowrap shrink-0"
+                        className="px-2 py-1 rounded-xl bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-900 text-[11.5px] font-extrabold whitespace-nowrap shrink-0"
                         title="베이비타임 Activity ZIP을 클라우드에 업로드"
                       >
                         📥 베이비타임(.zip)
@@ -18306,7 +18458,47 @@ ${validText}
                           <button
                             key={t.id}
                             type="button"
-                            onClick={() => handleQuickTapBabyActivity(t.id)}
+                            onPointerDown={() => {
+                              if (t.id !== "기저귀") return;
+                              diaperLongPressedRef.current = false;
+                              if (diaperPressTimerRef.current) clearTimeout(diaperPressTimerRef.current);
+                              diaperPressTimerRef.current = setTimeout(() => {
+                                diaperLongPressedRef.current = true;
+                                handleQuickRecordDiaper("대변");
+                              }, 500);
+                            }}
+                            onPointerUp={() => {
+                              if (t.id === "기저귀" && diaperPressTimerRef.current) {
+                                clearTimeout(diaperPressTimerRef.current);
+                                diaperPressTimerRef.current = null;
+                              }
+                            }}
+                            onPointerLeave={() => {
+                              if (t.id === "기저귀" && diaperPressTimerRef.current) {
+                                clearTimeout(diaperPressTimerRef.current);
+                                diaperPressTimerRef.current = null;
+                              }
+                            }}
+                            onPointerCancel={() => {
+                              if (t.id === "기저귀" && diaperPressTimerRef.current) {
+                                clearTimeout(diaperPressTimerRef.current);
+                                diaperPressTimerRef.current = null;
+                              }
+                            }}
+                            onContextMenu={(e) => {
+                              if (t.id === "기저귀") e.preventDefault();
+                            }}
+                            onClick={() => {
+                              if (t.id === "기저귀") {
+                                if (diaperLongPressedRef.current) {
+                                  diaperLongPressedRef.current = false;
+                                  return;
+                                }
+                                handleQuickRecordDiaper("소변");
+                                return;
+                              }
+                              handleQuickTapBabyActivity(t.id);
+                            }}
                             className="flex flex-col items-center gap-1 shrink-0 group"
                           >
                             <div
@@ -18316,7 +18508,7 @@ ${validText}
                             >
                               {t.emoji}
                             </div>
-                            <span className={`text-[10px] font-extrabold whitespace-nowrap ${isRunning ? "text-emerald-700" : "text-stone-700"}`}>
+                            <span className={`text-[11.5px] font-extrabold whitespace-nowrap ${isRunning ? "text-emerald-700" : "text-stone-700"}`}>
                               {isRunning ? `${t.label}(진행)` : t.label}
                             </span>
                           </button>
@@ -18332,16 +18524,16 @@ ${validText}
                       return (
                         <div key={act.id} className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-300 space-y-2">
                           <div className="flex items-center justify-between gap-2">
-                            <div className="flex items-center gap-1.5 text-xs font-black text-emerald-950">
+                            <div className="flex items-center gap-1.5 text-[13.5px] font-black text-emerald-950">
                               <span>{meta?.emoji} {act.type} 진행 중</span>
-                              <span className="px-2 py-0.5 rounded-lg bg-emerald-600 text-white font-mono text-[11px]">
+                              <span className="px-2 py-0.5 rounded-lg bg-emerald-600 text-white font-mono text-[12.5px]">
                                 {mm}:{ss}
                               </span>
                             </div>
                             <button
                               type="button"
                               onClick={() => handleStopBabyActivityTimer(act)}
-                              className="px-2.5 py-1 rounded-xl bg-stone-900 text-white text-[11px] font-extrabold whitespace-nowrap"
+                              className="px-2.5 py-1 rounded-xl bg-stone-900 text-white text-[12.5px] font-extrabold whitespace-nowrap"
                             >
                               {["모유", "분유", "유축수유"].includes(act.type) ? "⏹️ 지금 다 먹었어요!" : "⏹️ 종료·저장"}
                             </button>
@@ -18356,7 +18548,7 @@ ${validText}
                                   key={b.side}
                                   type="button"
                                   onClick={() => handleSwitchBreastSide(act, b.side)}
-                                  className={`py-1.5 rounded-lg text-[11px] font-extrabold border ${
+                                  className={`py-1.5 rounded-lg text-[12.5px] font-extrabold border ${
                                     (act.activeSide || "left") === b.side
                                       ? "bg-rose-500 text-white border-rose-500"
                                       : "bg-white text-stone-700 border-stone-200"
@@ -18373,23 +18565,23 @@ ${validText}
 
                     <div className="grid grid-cols-3 gap-1.5 pt-1 border-t border-stone-100 text-center">
                       <div className="bg-[#FAF8F3] rounded-xl py-2 px-1 border border-stone-200">
-                        <div className="text-[10px] font-bold text-stone-400">마지막 기저귀</div>
-                        <div className="text-xs font-black text-amber-800 mt-0.5">
+                        <div className="text-[11.5px] font-bold text-stone-400">마지막 기저귀</div>
+                        <div className="text-[13.5px] font-black text-amber-800 mt-0.5">
                           {sum.lastDiaper ? formatElapsedKo(nowMs - sum.lastDiaper.startMs) : "-"}
                         </div>
-                        <div className="text-[10px] font-bold text-stone-500">
+                        <div className="text-[11.5px] font-bold text-stone-500">
                           {sum.lastDiaper?.subType || "-"}
                         </div>
                       </div>
                       <div className="bg-[#FAF8F3] rounded-xl py-2 px-1 border border-stone-200">
-                        <div className="text-[10px] font-bold text-stone-400">마지막 수유</div>
-                        <div className={`text-xs font-black mt-0.5 ${feedMeta ? feedMeta.text : "text-stone-800"}`}>
+                        <div className="text-[11.5px] font-bold text-stone-400">마지막 수유</div>
+                        <div className={`text-[13.5px] font-black mt-0.5 ${feedMeta ? feedMeta.text : "text-stone-800"}`}>
                           {sum.lastFeed ? `${feedMeta?.emoji || ""} ${formatElapsedKo(nowMs - sum.lastFeed.startMs)}` : "-"}
                         </div>
                         {(() => {
                           const prevMeta = sum.prevFeed ? BABY_ACTIVITY_TYPES.find((t) => t.id === sum.prevFeed.type) : null;
                           return (
-                            <div className={`text-[10px] font-bold ${prevMeta ? prevMeta.text : "text-stone-500"}`}>
+                            <div className={`text-[11.5px] font-bold ${prevMeta ? prevMeta.text : "text-stone-500"}`}>
                               {sum.prevFeed
                                 ? `• ${formatElapsedKo(nowMs - sum.prevFeed.startMs)}`
                                 : sum.lastFeed?.type || "-"}
@@ -18398,11 +18590,11 @@ ${validText}
                         })()}
                       </div>
                       <div className="bg-[#FAF8F3] rounded-xl py-2 px-1 border border-stone-200">
-                        <div className="text-[10px] font-bold text-stone-400">마지막 수면</div>
-                        <div className="text-xs font-black text-indigo-700 mt-0.5">
+                        <div className="text-[11.5px] font-bold text-stone-400">마지막 수면</div>
+                        <div className="text-[13.5px] font-black text-indigo-700 mt-0.5">
                           {sum.lastSleep ? formatElapsedKo(nowMs - sum.lastSleep.startMs) : "-"}
                         </div>
-                        <div className="text-[10px] font-bold text-stone-500">
+                        <div className="text-[11.5px] font-bold text-stone-500">
                           {sum.lastSleep?.subType || "-"}
                         </div>
                       </div>
@@ -18416,7 +18608,7 @@ ${validText}
                       const bMin = todayActs.filter((a) => a.type === "모유").reduce((s, a) => s + (Number(a.durationMin) || 0), 0);
                       const dCount = todayActs.filter((a) => a.type === "기저귀").length;
                       return (
-                        <div className="flex items-center justify-between gap-1.5 px-2.5 py-1.5 rounded-xl bg-[#EEF3EE] border border-[#C9D8CC] text-[10px] font-extrabold text-[#35503C] flex-wrap">
+                        <div className="flex items-center justify-between gap-1.5 px-2.5 py-1.5 rounded-xl bg-[#EEF3EE] border border-[#C9D8CC] text-[11.5px] font-extrabold text-[#35503C] flex-wrap">
                           <span>📅 오늘 요약</span>
                           <span>수유 {fCount}회 ({fMl > 0 ? `${fMl}ml` : ""}{fMl > 0 && bMin > 0 ? " + " : ""}{bMin > 0 ? `모유 ${bMin}분` : fMl === 0 ? "0분" : ""}) · 기저귀 {dCount}회</span>
                         </div>
@@ -18438,7 +18630,7 @@ ${validText}
                               key={tf.id}
                               type="button"
                               onClick={() => setActivityTypeFilter(tf.id)}
-                              className={`px-2 py-1 rounded-full text-[10px] font-extrabold border whitespace-nowrap ${
+                              className={`px-2 py-1 rounded-full text-[11.5px] font-extrabold border whitespace-nowrap ${
                                 activityTypeFilter === tf.id
                                   ? "bg-stone-900 text-white border-stone-900"
                                   : "bg-white text-stone-600 border-stone-200"
@@ -18468,14 +18660,14 @@ ${validText}
                                 showToast("⚠️ 복사에 실패했습니다.");
                               }
                             }}
-                            className="px-2 py-1 rounded-full bg-[#EEF3EE] hover:bg-[#DFE9E0] border border-[#C9D8CC] text-[#35503C] text-[10px] font-extrabold whitespace-nowrap"
+                            className="px-2 py-1 rounded-full bg-[#EEF3EE] hover:bg-[#DFE9E0] border border-[#C9D8CC] text-[#35503C] text-[11.5px] font-extrabold whitespace-nowrap"
                           >
                             📋 오늘 요약
                           </button>
                           <select
                             value={activityDateFilter}
                             onChange={(e) => setActivityDateFilter(e.target.value)}
-                            className="px-2 py-1 rounded-full border border-stone-200 bg-white text-[10px] font-extrabold text-stone-700"
+                            className="px-2 py-1 rounded-full border border-stone-200 bg-white text-[11.5px] font-extrabold text-stone-700"
                           >
                             <option value="all">📅 전체</option>
                             {[...new Set(sum.list.map((a) => a.date).filter(Boolean))]
@@ -18511,10 +18703,10 @@ ${validText}
                         return (
                           <div key={grp.date} className="bg-white rounded-2xl border border-stone-200 shadow-sm overflow-hidden">
                             <div className="px-3.5 py-2 bg-[#F3EEE4] border-b border-stone-200 flex items-center justify-between gap-2 flex-wrap">
-                              <span className="text-xs font-black text-stone-900">
+                              <span className="text-[13.5px] font-black text-stone-900">
                                 {grp.date} ({getDayName(grp.date)})
                               </span>
-                              <div className="flex items-center gap-1.5 text-[10px] font-extrabold flex-wrap">
+                              <div className="flex items-center gap-1.5 text-[11.5px] font-extrabold flex-wrap">
                                 {totalFeedMl > 0 && (
                                   <span className="text-stone-800">
                                     {totalFeedMl}ml(
@@ -18551,15 +18743,15 @@ ${validText}
                                     className="px-3.5 py-2.5 flex items-center justify-between gap-2 hover:bg-stone-50 cursor-pointer transition"
                                   >
                                     <div className="flex items-center gap-2.5 min-w-0">
-                                      <div className="w-16 shrink-0 text-[10px] font-bold text-stone-500 leading-tight">
+                                      <div className="w-16 shrink-0 text-[11.5px] font-bold text-stone-500 leading-tight">
                                         <div>{formatTime12Ko(act.startMs)}</div>
                                         {act.endMs && <div className="text-stone-400">~ {formatTime12Ko(act.endMs)}</div>}
                                       </div>
-                                      <div className={`w-7 h-7 rounded-full ${meta.bg} text-white flex items-center justify-center text-xs shrink-0`}>
+                                      <div className={`w-7 h-7 rounded-full ${meta.bg} text-white flex items-center justify-center text-[13.5px] shrink-0`}>
                                         {meta.emoji}
                                       </div>
                                       <div className="min-w-0">
-                                        <div className={`text-xs font-black ${meta.text} flex items-center gap-1.5 flex-wrap`}>
+                                        <div className={`text-[13.5px] font-black ${meta.text} flex items-center gap-1.5 flex-wrap`}>
                                           <span>
                                             {act.type === "기저귀" && act.subType
                                               ? act.subType
@@ -18568,11 +18760,11 @@ ${validText}
                                               : act.type}
                                           </span>
                                           {act.inProgress && (
-                                            <span className="px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 text-[9px]">진행중</span>
+                                            <span className="px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 text-[10.5px]">진행중</span>
                                           )}
                                         </div>
                                         {(detailParts.length > 0 || act.memo) && (
-                                          <div className="text-[11px] font-semibold text-stone-600 truncate">
+                                          <div className="text-[12.5px] font-semibold text-stone-600 truncate">
                                             {[detailParts.join(", "), act.memo].filter(Boolean).join(" · ")}
                                           </div>
                                         )}
@@ -18603,7 +18795,7 @@ ${validText}
                         <button
                           type="button"
                           onClick={() => setActivityShowAllDays((v) => !v)}
-                          className="w-full py-2 rounded-xl bg-white hover:bg-stone-50 border border-stone-200 text-stone-700 text-[11px] font-extrabold"
+                          className="w-full py-2 rounded-xl bg-white hover:bg-stone-50 border border-stone-200 text-stone-700 text-[12.5px] font-extrabold"
                         >
                           {activityShowAllDays
                             ? "▲ 최근 3일만 보기"
@@ -18624,7 +18816,7 @@ ${validText}
                     onClick={() =>
                       currentMilestoneRef.current?.scrollIntoView({ behavior: "smooth", block: "center" })
                     }
-                    className="px-2.5 py-1 rounded-xl bg-amber-100 hover:bg-amber-200 text-amber-900 text-[11px] font-extrabold border border-amber-300"
+                    className="px-2.5 py-1 rounded-xl bg-amber-100 hover:bg-amber-200 text-amber-900 text-[12.5px] font-extrabold border border-amber-300"
                   >
                     📍 {activeChild.id} 현재 시기({ageStats.months}개월)로 이동
                   </button>
@@ -18642,14 +18834,14 @@ ${validText}
                       }`}
                     >
                       <div className="flex items-center justify-between">
-                        <span className="text-xs font-black text-stone-900">{ms.label}</span>
+                        <span className="text-[13.5px] font-black text-stone-900">{ms.label}</span>
                         {isCurrent && (
-                          <span className="px-2 py-0.5 rounded-full bg-amber-500 text-white text-[10px] font-black">
+                          <span className="px-2 py-0.5 rounded-full bg-amber-500 text-white text-[11.5px] font-black">
                             ⭐ 지금 {activeChild.id} 시기
                           </span>
                         )}
                       </div>
-                      <div className="space-y-1 text-xs text-stone-700 leading-snug">
+                      <div className="space-y-1 text-[13.5px] text-stone-700 leading-snug">
                         <div>
                           <b>🏃 신체/운동:</b> {ms.motor}
                         </div>
@@ -18659,11 +18851,11 @@ ${validText}
                         <div>
                           <b>🍼 수유·수면:</b> {ms.feedingSleep}
                         </div>
-                        <div className="p-2 rounded-xl bg-white/80 border border-stone-200/70 text-[11px] font-semibold text-amber-900">
+                        <div className="p-2 rounded-xl bg-white/80 border border-stone-200/70 text-[12.5px] font-semibold text-amber-900">
                           💡 <b>핵심 팁:</b> {ms.tip}
                         </div>
                         {ms.redFlags && (
-                          <div className="p-2 rounded-xl bg-rose-50/90 border border-rose-200 text-[11px] font-semibold text-rose-900">
+                          <div className="p-2 rounded-xl bg-rose-50/90 border border-rose-200 text-[12.5px] font-semibold text-rose-900">
                             ⚠️ <b>소아과 상담 신호:</b> {ms.redFlags}
                           </div>
                         )}
@@ -18679,7 +18871,7 @@ ${validText}
               <div className="space-y-3">
                 <button
                   onClick={() => handleSyncAllUpcomingBabySchedules(activeChild)}
-                  className="w-full py-2.5 px-3 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-extrabold flex items-center justify-center gap-1.5 shadow-sm"
+                  className="w-full py-2.5 px-3 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white text-[13.5px] font-extrabold flex items-center justify-center gap-1.5 shadow-sm"
                 >
                   <CalendarDays className="w-4 h-4" />
                   <span>{activeChild.id} 향후 미완료 접종·검진 일정 달력에 일괄 자동등록</span>
@@ -18718,7 +18910,7 @@ ${validText}
                           <div className="min-w-0">
                             <div className="flex flex-wrap items-center gap-1 mb-0.5">
                               <span
-                                className={`px-1.5 py-0.2 rounded text-[9px] font-black ${
+                                className={`px-1.5 py-0.2 rounded text-[10.5px] font-black ${
                                   item.type === "영유아검진"
                                     ? "bg-indigo-100 text-indigo-800"
                                     : item.type === "선택접종"
@@ -18728,7 +18920,7 @@ ${validText}
                               >
                                 {item.type}
                               </span>
-                              <span className="text-[10px] font-bold text-stone-500">
+                              <span className="text-[11.5px] font-bold text-stone-500">
                                 권장일: {recDate}
                               </span>
                               {isDone && (
@@ -18737,26 +18929,26 @@ ${validText}
                                   value={doneDate || getTodayStr()}
                                   onClick={(e) => e.stopPropagation()}
                                   onChange={(e) => handleUpdateBabyCheckDate(activeChild.id, item.id, e.target.value)}
-                                  className="px-1.5 py-0.5 rounded border border-emerald-300 bg-white text-[10px] font-extrabold text-emerald-700"
+                                  className="px-1.5 py-0.5 rounded border border-emerald-300 bg-white text-[11.5px] font-extrabold text-emerald-700"
                                   title="실제 접종/검진일 수정"
                                 />
                               )}
                             </div>
                             <div
-                              className={`text-xs font-extrabold break-keep ${
+                              className={`text-[13.5px] font-extrabold break-keep ${
                                 isDone ? "line-through text-stone-400" : "text-stone-900"
                               }`}
                             >
                               {item.title}
                             </div>
-                            <div className="text-[10px] text-stone-500 mt-0.5">{item.note}</div>
+                            <div className="text-[11.5px] text-stone-500 mt-0.5">{item.note}</div>
                           </div>
                         </div>
 
                         {!isDone && (
                           <button
                             onClick={() => handleSyncSingleBabySchedule(activeChild, item, recDate)}
-                            className={`px-2 py-1 rounded-xl text-[10px] font-extrabold shrink-0 border ${
+                            className={`px-2 py-1 rounded-xl text-[11.5px] font-extrabold shrink-0 border ${
                               isScheduled
                                 ? "bg-stone-100 text-stone-500 border-stone-200"
                                 : "bg-pink-50 hover:bg-pink-100 text-pink-700 border-pink-200"
@@ -18776,7 +18968,7 @@ ${validText}
             {babySubTab === "growth" && (
               <div className="space-y-3">
                 <div className="bg-white p-3.5 rounded-2xl border border-stone-200 shadow-sm space-y-2.5">
-                  <div className="text-xs font-black text-stone-900">
+                  <div className="text-[13.5px] font-black text-stone-900">
                     📏 {activeChild.name} 성장 측정 기록하기
                   </div>
                   <div className="grid grid-cols-2 gap-2">
@@ -18784,7 +18976,7 @@ ${validText}
                       type="date"
                       value={growthForm.date}
                       onChange={(e) => setGrowthForm({ ...growthForm, date: e.target.value })}
-                      className="px-2.5 py-2 rounded-xl border border-stone-200 text-xs font-bold"
+                      className="px-2.5 py-2 rounded-xl border border-stone-200 text-[13.5px] font-bold"
                     />
                     <input
                       id="baby-growth-height-input"
@@ -18793,7 +18985,7 @@ ${validText}
                       placeholder="키 (cm)"
                       value={growthForm.height}
                       onChange={(e) => setGrowthForm({ ...growthForm, height: e.target.value })}
-                      className="px-2.5 py-2 rounded-xl border border-stone-200 text-xs font-bold"
+                      className="px-2.5 py-2 rounded-xl border border-stone-200 text-[13.5px] font-bold"
                     />
                     <input
                       type="number"
@@ -18801,7 +18993,7 @@ ${validText}
                       placeholder="몸무게 (kg)"
                       value={growthForm.weight}
                       onChange={(e) => setGrowthForm({ ...growthForm, weight: e.target.value })}
-                      className="px-2.5 py-2 rounded-xl border border-stone-200 text-xs font-bold"
+                      className="px-2.5 py-2 rounded-xl border border-stone-200 text-[13.5px] font-bold"
                     />
                     <input
                       type="number"
@@ -18809,7 +19001,7 @@ ${validText}
                       placeholder="머리둘레 (cm, 선택)"
                       value={growthForm.head}
                       onChange={(e) => setGrowthForm({ ...growthForm, head: e.target.value })}
-                      className="px-2.5 py-2 rounded-xl border border-stone-200 text-xs font-bold"
+                      className="px-2.5 py-2 rounded-xl border border-stone-200 text-[13.5px] font-bold"
                     />
                   </div>
                   <input
@@ -18817,11 +19009,11 @@ ${validText}
                     placeholder="메모 (예: 1차 영유아검진 측정치)"
                     value={growthForm.memo}
                     onChange={(e) => setGrowthForm({ ...growthForm, memo: e.target.value })}
-                    className="w-full px-3 py-2 rounded-xl border border-stone-200 text-xs"
+                    className="w-full px-3 py-2 rounded-xl border border-stone-200 text-[13.5px]"
                   />
                   <button
                     onClick={handleAddGrowthLog}
-                    className="w-full py-2.5 rounded-xl bg-stone-900 text-white text-xs font-extrabold"
+                    className="w-full py-2.5 rounded-xl bg-stone-900 text-white text-[13.5px] font-extrabold"
                   >
                     + 성장 기록 저장하기
                   </button>
@@ -18854,9 +19046,9 @@ ${validText}
 
                   return (
                     <div className="bg-white p-3.5 rounded-2xl border border-stone-200 shadow-sm space-y-2">
-                      <div className="flex items-center justify-between text-xs font-black text-stone-900">
+                      <div className="flex items-center justify-between text-[13.5px] font-black text-stone-900">
                         <span>📈 {activeChild.id} 성장 추이 그래프 (최근 {sorted.length}회)</span>
-                        <div className="flex items-center gap-2 text-[10px]">
+                        <div className="flex items-center gap-2 text-[11.5px]">
                           <span className="text-emerald-600 font-extrabold">● 키(cm)</span>
                           <span className="text-indigo-600 font-extrabold">● 몸무게(kg)</span>
                         </div>
@@ -18883,7 +19075,7 @@ ${validText}
                           />
                         )}
                       </svg>
-                      <div className="flex justify-between text-[9px] font-bold text-stone-400 px-1">
+                      <div className="flex justify-between text-[10.5px] font-bold text-stone-400 px-1">
                         <span>{sorted[0]?.date}</span>
                         <span>{sorted[sorted.length - 1]?.date}</span>
                       </div>
@@ -18892,7 +19084,7 @@ ${validText}
                 })()}
 
                 {childGrowth.length === 0 ? (
-                  <div className="text-xs text-stone-400 py-6 text-center bg-white rounded-2xl border border-dashed border-stone-200">
+                  <div className="text-[13.5px] text-stone-400 py-6 text-center bg-white rounded-2xl border border-dashed border-stone-200">
                     아직 기록된 {activeChild.id} 성장 데이터가 없습니다.
                   </div>
                 ) : (
@@ -18909,13 +19101,13 @@ ${validText}
                           className="bg-white p-3 rounded-2xl border border-stone-200 flex items-center justify-between gap-2"
                         >
                           <div>
-                            <div className="text-[11px] font-bold text-stone-500">{g.date}</div>
-                            <div className="text-xs font-black text-stone-900 mt-0.5 flex flex-wrap gap-2">
+                            <div className="text-[12.5px] font-bold text-stone-500">{g.date}</div>
+                            <div className="text-[13.5px] font-black text-stone-900 mt-0.5 flex flex-wrap gap-2">
                               {g.height && (
                                 <span>
                                   📏 {g.height}cm{" "}
                                   {hDiff && (
-                                    <span className="text-emerald-600 text-[10px]">
+                                    <span className="text-emerald-600 text-[11.5px]">
                                       ({Number(hDiff) >= 0 ? `+${hDiff}` : hDiff})
                                     </span>
                                   )}
@@ -18925,7 +19117,7 @@ ${validText}
                                 <span>
                                   ⚖️ {g.weight}kg{" "}
                                   {wDiff && (
-                                    <span className="text-emerald-600 text-[10px]">
+                                    <span className="text-emerald-600 text-[11.5px]">
                                       ({Number(wDiff) >= 0 ? `+${wDiff}` : wDiff})
                                     </span>
                                   )}
@@ -18933,7 +19125,7 @@ ${validText}
                               )}
                               {g.head && <span>🧢 머리 {g.head}cm</span>}
                             </div>
-                            {g.memo && <div className="text-[11px] text-stone-500 mt-0.5">💬 {g.memo}</div>}
+                            {g.memo && <div className="text-[12.5px] text-stone-500 mt-0.5">💬 {g.memo}</div>}
                           </div>
                           <button
                             onClick={() => handleDeleteGrowthLog(g.id)}
@@ -18953,7 +19145,7 @@ ${validText}
             {babySubTab === "medical" && (
               <div className="space-y-3">
                 <div className="bg-white p-3.5 rounded-2xl border border-stone-200 shadow-sm space-y-2.5">
-                  <div className="text-xs font-black text-stone-900">
+                  <div className="text-[13.5px] font-black text-stone-900">
                     🩺 {activeChild.name} 소아과 진료 · 체온 메모
                   </div>
                   <div className="grid grid-cols-2 gap-2">
@@ -18961,7 +19153,7 @@ ${validText}
                       type="date"
                       value={medNoteForm.date}
                       onChange={(e) => setMedNoteForm({ ...medNoteForm, date: e.target.value })}
-                      className="px-2.5 py-2 rounded-xl border border-stone-200 text-xs font-bold"
+                      className="px-2.5 py-2 rounded-xl border border-stone-200 text-[13.5px] font-bold"
                     />
                     <input
                       type="number"
@@ -18969,7 +19161,7 @@ ${validText}
                       placeholder="체온 °C (예: 37.8)"
                       value={medNoteForm.temp}
                       onChange={(e) => setMedNoteForm({ ...medNoteForm, temp: e.target.value })}
-                      className="px-2.5 py-2 rounded-xl border border-stone-200 text-xs font-bold"
+                      className="px-2.5 py-2 rounded-xl border border-stone-200 text-[13.5px] font-bold"
                     />
                   </div>
                   <input
@@ -18977,25 +19169,25 @@ ${validText}
                     placeholder="증상/진료 제목 (예: 접종 후 미열, 콧물 소아과 진료)"
                     value={medNoteForm.title}
                     onChange={(e) => setMedNoteForm({ ...medNoteForm, title: e.target.value })}
-                    className="w-full px-3 py-2 rounded-xl border border-stone-200 text-xs font-bold"
+                    className="w-full px-3 py-2 rounded-xl border border-stone-200 text-[13.5px] font-bold"
                   />
                   <input
                     type="text"
                     placeholder="처방약/해열제 복용시간 등 메모"
                     value={medNoteForm.memo}
                     onChange={(e) => setMedNoteForm({ ...medNoteForm, memo: e.target.value })}
-                    className="w-full px-3 py-2 rounded-xl border border-stone-200 text-xs"
+                    className="w-full px-3 py-2 rounded-xl border border-stone-200 text-[13.5px]"
                   />
                   <button
                     onClick={handleAddMedicalNote}
-                    className="w-full py-2.5 rounded-xl bg-stone-900 text-white text-xs font-extrabold"
+                    className="w-full py-2.5 rounded-xl bg-stone-900 text-white text-[13.5px] font-extrabold"
                   >
                     + 진료·열 체크 저장하기
                   </button>
                 </div>
 
                 {childNotes.length === 0 ? (
-                  <div className="text-xs text-stone-400 py-6 text-center bg-white rounded-2xl border border-dashed border-stone-200">
+                  <div className="text-[13.5px] text-stone-400 py-6 text-center bg-white rounded-2xl border border-dashed border-stone-200">
                     아직 기록된 {activeChild.id} 진료·체온 메모가 없습니다.
                   </div>
                 ) : (
@@ -19011,10 +19203,10 @@ ${validText}
                         >
                           <div>
                             <div className="flex items-center gap-1.5">
-                              <span className="text-[11px] font-bold text-stone-500">{n.date}</span>
+                              <span className="text-[12.5px] font-bold text-stone-500">{n.date}</span>
                               {n.temp && (
                                 <span
-                                  className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+                                  className={`px-2 py-0.5 rounded-full text-[11.5px] font-black ${
                                     isFever
                                       ? "bg-rose-600 text-white"
                                       : "bg-emerald-100 text-emerald-800"
@@ -19024,8 +19216,8 @@ ${validText}
                                 </span>
                               )}
                             </div>
-                            <div className="text-xs font-black text-stone-900 mt-1">{n.title}</div>
-                            {n.memo && <div className="text-[11px] text-stone-600 mt-0.5">💬 {n.memo}</div>}
+                            <div className="text-[13.5px] font-black text-stone-900 mt-1">{n.title}</div>
+                            {n.memo && <div className="text-[12.5px] text-stone-600 mt-0.5">💬 {n.memo}</div>}
                           </div>
                           <button
                             onClick={() => handleDeleteMedicalNote(n.id)}
@@ -19056,9 +19248,9 @@ ${validText}
                       className="hidden"
                     />
                     <div className="flex items-center justify-between gap-2">
-                      <span className="text-xs font-black text-stone-900 flex items-center gap-1.5">
+                      <span className="text-[13.5px] font-black text-stone-900 flex items-center gap-1.5">
                         <span>📖 육아일기 {editingDiaryEntry ? "수정" : "작성"}</span>
-                        <span className="px-1.5 py-0.5 rounded-full bg-[#EEF3EE] text-[#35503C] text-[10px] font-black">
+                        <span className="px-1.5 py-0.5 rounded-full bg-[#EEF3EE] text-[#35503C] text-[11.5px] font-black">
                           {babyDiaryEntries.filter((d) => getDiaryEntryChildIds(d).includes(activeChild.id)).length}편
                         </span>
                       </span>
@@ -19067,7 +19259,7 @@ ${validText}
                           type="button"
                           disabled={Boolean(diaryUploadProgress)}
                           onClick={() => setZipImportPicker("diary")}
-                          className="px-2 py-1 rounded-xl bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-900 text-[10px] font-extrabold whitespace-nowrap shrink-0"
+                          className="px-2 py-1 rounded-xl bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-900 text-[11.5px] font-extrabold whitespace-nowrap shrink-0"
                           title="베이비타임 등 외부 앱에서 내보낸 일기 ZIP 파일을 클라우드에 바로 업로드"
                         >
                           📥 외부일기(.zip)
@@ -19081,7 +19273,7 @@ ${validText}
                             setPendingDiaryPhotoFile(null);
                             setDiaryForm({ date: getTodayStr(), mood: "😊 행복", title: "", content: "", photoUrl: "", photos: [], childIds: [activeChild.id] });
                           }}
-                          className="text-[10px] font-extrabold text-stone-500 underline"
+                          className="text-[11.5px] font-extrabold text-stone-500 underline"
                         >
                           새 일기로
                         </button>
@@ -19089,7 +19281,7 @@ ${validText}
                     </div>
 
                     <div className="flex items-center gap-1.5 flex-wrap">
-                      <span className="text-[10px] font-extrabold text-stone-500">대상:</span>
+                      <span className="text-[11.5px] font-extrabold text-stone-500">대상:</span>
                       {[
                         { id: "single_simok", label: "👦 시목", ids: ["시목"] },
                         { id: "single_siyul", label: "👶 시율", ids: ["시율"] },
@@ -19102,7 +19294,7 @@ ${validText}
                             key={opt.id}
                             type="button"
                             onClick={() => setDiaryForm((p) => ({ ...p, childIds: opt.ids }))}
-                            className={`px-2.5 py-1 rounded-xl text-[11px] font-extrabold border transition ${
+                            className={`px-2.5 py-1 rounded-xl text-[12.5px] font-extrabold border transition ${
                               isAct ? "bg-[#5E7A65] text-white border-[#5E7A65]" : "bg-stone-50 text-stone-600 border-stone-200"
                             }`}
                           >
@@ -19118,7 +19310,7 @@ ${validText}
                           type="date"
                           value={diaryForm.date}
                           onChange={(e) => setDiaryForm((p) => ({ ...p, date: e.target.value }))}
-                          className="w-full px-3 py-2 rounded-xl border border-stone-200 bg-stone-50 text-xs font-bold"
+                          className="w-full px-3 py-2 rounded-xl border border-stone-200 bg-stone-50 text-[13.5px] font-bold"
                         />
                         <div className="flex items-center gap-1">
                           {[
@@ -19129,7 +19321,7 @@ ${validText}
                               key={dOpt.label}
                               type="button"
                               onClick={() => setDiaryForm((p) => ({ ...p, date: dOpt.val }))}
-                              className={`px-2 py-0.5 rounded-lg text-[10px] font-extrabold border ${
+                              className={`px-2 py-0.5 rounded-lg text-[11.5px] font-extrabold border ${
                                 diaryForm.date === dOpt.val
                                   ? "bg-[#5E7A65] text-white border-[#5E7A65]"
                                   : "bg-white text-stone-600 border-stone-200"
@@ -19143,7 +19335,7 @@ ${validText}
                       <select
                         value={diaryForm.mood}
                         onChange={(e) => setDiaryForm((p) => ({ ...p, mood: e.target.value }))}
-                        className="px-3 py-2 rounded-xl border border-stone-200 bg-stone-50 text-xs font-bold"
+                        className="px-3 py-2 rounded-xl border border-stone-200 bg-stone-50 text-[13.5px] font-bold"
                       >
                         {["😊 행복", "🥰 감동", "😴 잘잠", "🍼 잘먹음", "🤒 컨디션관리", "🎉 첫성공"].map((md) => (
                           <option key={md} value={md}>{md}</option>
@@ -19156,7 +19348,7 @@ ${validText}
                       placeholder="오늘의 한 줄 제목 (예: 처음으로 뒤집기 성공!)"
                       value={diaryForm.title}
                       onChange={(e) => setDiaryForm((p) => ({ ...p, title: e.target.value }))}
-                      className="w-full px-3 py-2 rounded-xl border border-stone-200 text-xs font-bold"
+                      className="w-full px-3 py-2 rounded-xl border border-stone-200 text-[13.5px] font-bold"
                     />
                     <div className="relative">
                       <textarea
@@ -19168,9 +19360,9 @@ ${validText}
                         }의 오늘 기록을 자유롭게 남겨보세요...`}
                         value={diaryForm.content}
                         onChange={(e) => setDiaryForm((p) => ({ ...p, content: e.target.value }))}
-                        className="w-full px-3 py-2 pb-6 rounded-xl border border-stone-200 text-xs leading-relaxed"
+                        className="w-full px-3 py-2 pb-6 rounded-xl border border-stone-200 text-[13.5px] leading-relaxed"
                       />
-                      <span className="absolute right-2.5 bottom-2 text-[10px] font-bold text-stone-400">
+                      <span className="absolute right-2.5 bottom-2 text-[11.5px] font-bold text-stone-400">
                         {(diaryForm.content || "").length}자
                       </span>
                     </div>
@@ -19189,7 +19381,7 @@ ${validText}
                           type="button"
                           disabled={(diaryForm.photos?.length || 0) >= 4}
                           onClick={() => diaryPhotoInputRef.current?.click()}
-                          className="py-2 px-2 rounded-xl bg-[#F3EEE4] hover:bg-stone-200 disabled:opacity-50 text-stone-800 text-[11px] font-extrabold flex items-center justify-center gap-1 whitespace-nowrap"
+                          className="py-2 px-2 rounded-xl bg-[#F3EEE4] hover:bg-stone-200 disabled:opacity-50 text-stone-800 text-[12.5px] font-extrabold flex items-center justify-center gap-1 whitespace-nowrap"
                         >
                           <Camera className="w-3.5 h-3.5 shrink-0" />
                           <span>
@@ -19203,7 +19395,7 @@ ${validText}
                         <button
                           type="button"
                           onClick={handleInsertTodayBabySummaryToDiary}
-                          className="py-2 px-2 rounded-xl bg-[#EEF3EE] hover:bg-[#DFE9E0] text-[#35503C] border border-[#C9D8CC] text-[11px] font-extrabold whitespace-nowrap"
+                          className="py-2 px-2 rounded-xl bg-[#EEF3EE] hover:bg-[#DFE9E0] text-[#35503C] border border-[#C9D8CC] text-[12.5px] font-extrabold whitespace-nowrap"
                           title="선택한 날짜의 식단·성장·진료 기록을 본문에 추가"
                         >
                           ✨ 기록 불러오기
@@ -19214,7 +19406,7 @@ ${validText}
                           type="button"
                           disabled={Boolean(diaryUploadProgress)}
                           onClick={handleSaveBabyDiary}
-                          className="flex-1 py-2.5 rounded-xl bg-[#5E7A65] hover:bg-[#4E6855] disabled:opacity-60 text-white text-xs font-extrabold whitespace-nowrap"
+                          className="flex-1 py-2.5 rounded-xl bg-[#5E7A65] hover:bg-[#4E6855] disabled:opacity-60 text-white text-[13.5px] font-extrabold whitespace-nowrap"
                         >
                           {diaryUploadProgress
                             ? `⏳ ${diaryUploadProgress.stepText}`
@@ -19236,7 +19428,7 @@ ${validText}
                                 childIds: [selectedChildId]
                               });
                             }}
-                            className="px-3 py-2.5 rounded-xl bg-stone-200 hover:bg-stone-300 text-stone-700 text-xs font-extrabold whitespace-nowrap"
+                            className="px-3 py-2.5 rounded-xl bg-stone-200 hover:bg-stone-300 text-stone-700 text-[13.5px] font-extrabold whitespace-nowrap"
                           >
                             수정 취소
                           </button>
@@ -19253,7 +19445,7 @@ ${validText}
                         </div>
                       )}
                       {diarySaveWarning && (
-                        <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-[11px] font-bold text-rose-900 flex items-start justify-between gap-2">
+                        <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-[12.5px] font-bold text-rose-900 flex items-start justify-between gap-2">
                           <span className="break-all leading-snug">{diarySaveWarning}</span>
                           <button
                             type="button"
@@ -19268,7 +19460,7 @@ ${validText}
 
                     {Array.isArray(diaryForm.photos) && diaryForm.photos.length > 0 && (
                       <div className="space-y-1.5">
-                        <div className="text-[10px] font-extrabold text-[#35503C] bg-[#EEF3EE] px-2.5 py-1 rounded-lg flex items-center justify-between">
+                        <div className="text-[11.5px] font-extrabold text-[#35503C] bg-[#EEF3EE] px-2.5 py-1 rounded-lg flex items-center justify-between">
                           <span>📸 {diaryForm.photos.length}/4장 첨부됨</span>
                           <span>저장 시 자동 압축 최적화</span>
                         </div>
@@ -19287,7 +19479,7 @@ ${validText}
                                       return { ...prev, photos: arr, photoUrl: arr[0]?.url || "" };
                                     })
                                   }
-                                  className="w-6 h-6 rounded-full bg-black/60 text-white text-[10px] font-black flex items-center justify-center"
+                                  className="w-6 h-6 rounded-full bg-black/60 text-white text-[11.5px] font-black flex items-center justify-center"
                                   title="앞으로 이동"
                                 >
                                   ◀
@@ -19303,7 +19495,7 @@ ${validText}
                                       return { ...prev, photos: arr, photoUrl: arr[0]?.url || "" };
                                     })
                                   }
-                                  className="w-6 h-6 rounded-full bg-black/60 text-white text-[10px] font-black flex items-center justify-center"
+                                  className="w-6 h-6 rounded-full bg-black/60 text-white text-[11.5px] font-black flex items-center justify-center"
                                   title="뒤로 이동"
                                 >
                                   ▶
@@ -19321,7 +19513,7 @@ ${validText}
                                   return { ...prev, photos: next, photoUrl: next[0]?.url || "" };
                                 });
                               }}
-                              className="absolute top-1 right-1 w-6 h-6 rounded-full bg-black/60 text-white text-[10px] font-black flex items-center justify-center"
+                              className="absolute top-1 right-1 w-6 h-6 rounded-full bg-black/60 text-white text-[11.5px] font-black flex items-center justify-center"
                             >
                               ✕
                             </button>
@@ -19340,13 +19532,13 @@ ${validText}
                           value={diarySearchQuery}
                           onChange={(e) => setDiarySearchQuery(e.target.value)}
                           placeholder="🔍 육아일기 검색 (날짜, 제목, 내용...)"
-                          className="w-full px-3 py-2 pr-8 rounded-xl border border-stone-200 bg-white text-xs font-semibold text-stone-800"
+                          className="w-full px-3 py-2 pr-8 rounded-xl border border-stone-200 bg-white text-[13.5px] font-semibold text-stone-800"
                         />
                         {diarySearchQuery && (
                           <button
                             type="button"
                             onClick={() => setDiarySearchQuery("")}
-                            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-700 text-xs font-black"
+                            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-700 text-[13.5px] font-black"
                           >
                             ✕
                           </button>
@@ -19363,7 +19555,7 @@ ${validText}
                               key={cf.id}
                               type="button"
                               onClick={() => setDiaryChildFilter(cf.id)}
-                              className={`px-2.5 py-1 rounded-full text-[10px] font-extrabold border whitespace-nowrap ${
+                              className={`px-2.5 py-1 rounded-full text-[11.5px] font-extrabold border whitespace-nowrap ${
                                 diaryChildFilter === cf.id
                                   ? "bg-stone-900 text-white border-stone-900"
                                   : "bg-white text-stone-600 border-stone-200"
@@ -19377,7 +19569,7 @@ ${validText}
                           <button
                             type="button"
                             onClick={() => setDiaryPhotoOnlyFilter((v) => !v)}
-                            className={`px-2 py-1 rounded-full text-[10px] font-extrabold border whitespace-nowrap ${
+                            className={`px-2 py-1 rounded-full text-[11.5px] font-extrabold border whitespace-nowrap ${
                               diaryPhotoOnlyFilter
                                 ? "bg-[#5E7A65] text-white border-[#5E7A65]"
                                 : "bg-white text-stone-600 border-stone-200"
@@ -19388,7 +19580,7 @@ ${validText}
                           <select
                             value={diaryMonthFilter}
                             onChange={(e) => setDiaryMonthFilter(e.target.value)}
-                            className="px-2 py-1 rounded-full border border-stone-200 bg-white text-[10px] font-extrabold text-stone-700"
+                            className="px-2 py-1 rounded-full border border-stone-200 bg-white text-[11.5px] font-extrabold text-stone-700"
                           >
                           <option value="all">📅 전체 월</option>
                           {[...new Set(babyDiaryEntries.map((d) => String(d.date || "").slice(0, 7)).filter(Boolean))]
@@ -19410,22 +19602,22 @@ ${validText}
                         return (
                           <div className="grid grid-cols-4 gap-1 bg-[#FAF8F3] border border-stone-200 rounded-xl p-2 text-center">
                             <div>
-                              <div className="text-[9px] font-bold text-stone-400">오늘 기록</div>
-                              <div className={`text-[11px] font-black ${wroteToday ? "text-emerald-700" : "text-amber-600"}`}>
+                              <div className="text-[10.5px] font-bold text-stone-400">오늘 기록</div>
+                              <div className={`text-[12.5px] font-black ${wroteToday ? "text-emerald-700" : "text-amber-600"}`}>
                                 {wroteToday ? "완료 ✓" : "미작성"}
                               </div>
                             </div>
                             <div className="border-l border-stone-200">
-                              <div className="text-[9px] font-bold text-stone-400">이번 달</div>
-                              <div className="text-xs font-black text-[#35503C]">{thisMonthCount}편</div>
+                              <div className="text-[10.5px] font-bold text-stone-400">이번 달</div>
+                              <div className="text-[13.5px] font-black text-[#35503C]">{thisMonthCount}편</div>
                             </div>
                             <div className="border-x border-stone-200">
-                              <div className="text-[9px] font-bold text-stone-400">사진 포함</div>
-                              <div className="text-xs font-black text-stone-800">{photoDiaryCount}편</div>
+                              <div className="text-[10.5px] font-bold text-stone-400">사진 포함</div>
+                              <div className="text-[13.5px] font-black text-stone-800">{photoDiaryCount}편</div>
                             </div>
                             <div>
-                              <div className="text-[9px] font-bold text-stone-400">누적 일기</div>
-                              <div className="text-xs font-black text-stone-800">{babyDiaryEntries.length}편</div>
+                              <div className="text-[10.5px] font-bold text-stone-400">누적 일기</div>
+                              <div className="text-[13.5px] font-black text-stone-800">{babyDiaryEntries.length}편</div>
                             </div>
                           </div>
                         );
@@ -19468,11 +19660,11 @@ ${validText}
                             <React.Fragment key={entry.id}>
                               {showMonthHeader && (
                                 <div className="flex items-center justify-between px-2 py-1 rounded-xl bg-[#F3EEE4] border border-stone-200">
-                                  <span className="text-[11px] font-black text-stone-800">
+                                  <span className="text-[12.5px] font-black text-stone-800">
                                     🗓️ {curYm.slice(0, 4)}년 {Number(curYm.slice(5, 7))}월
                                   </span>
                                   <div className="flex items-center gap-1.5">
-                                    <span className="text-[10px] font-extrabold text-[#35503C]">
+                                    <span className="text-[11.5px] font-extrabold text-[#35503C]">
                                       {ymCount}편
                                     </span>
                                     <button
@@ -19496,7 +19688,7 @@ ${validText}
                                           showToast("⚠️ 클립보드 복사에 실패했습니다.");
                                         }
                                       }}
-                                      className="px-2 py-0.5 rounded-lg bg-white border border-stone-200 text-[9px] font-extrabold text-stone-700 hover:bg-stone-50 whitespace-nowrap"
+                                      className="px-2 py-0.5 rounded-lg bg-white border border-stone-200 text-[10.5px] font-extrabold text-stone-700 hover:bg-stone-50 whitespace-nowrap"
                                     >
                                       📋 모아복사
                                     </button>
@@ -19514,14 +19706,14 @@ ${validText}
                             <div className="space-y-1.5">
                               <div className="flex items-center justify-between gap-1.5">
                                 <div className="flex items-center gap-1.5 flex-wrap min-w-0">
-                                  <span className="px-2 py-0.5 rounded-lg bg-[#EEF3EE] text-[#35503C] text-[10px] font-black whitespace-nowrap">
+                                  <span className="px-2 py-0.5 rounded-lg bg-[#EEF3EE] text-[#35503C] text-[11.5px] font-black whitespace-nowrap">
                                     {entry.date} · {formatBabyAgeLabel(activeChild.birthDate, entry.date)}
                                   </span>
-                                  <span className="text-[10px] font-bold text-stone-400 whitespace-nowrap">
+                                  <span className="text-[11.5px] font-bold text-stone-400 whitespace-nowrap">
                                     ({activeChild.birthDate}생)
                                   </span>
                                   {entry.mood && (
-                                    <span className="px-2 py-0.5 rounded-lg bg-white border border-stone-200 text-[10px] font-bold whitespace-nowrap">
+                                    <span className="px-2 py-0.5 rounded-lg bg-white border border-stone-200 text-[11.5px] font-bold whitespace-nowrap">
                                       {entry.mood}
                                     </span>
                                   )}
@@ -19540,14 +19732,14 @@ ${validText}
                                       showToast("📄 육아일기 텍스트가 복사되었습니다!");
                                     } catch (e) {}
                                   }}
-                                  className="px-2.5 py-1 rounded-lg bg-[#F3EEE4] hover:bg-stone-200 text-stone-800 text-[10px] font-extrabold whitespace-nowrap shrink-0"
+                                  className="px-2.5 py-1 rounded-lg bg-[#F3EEE4] hover:bg-stone-200 text-stone-800 text-[11.5px] font-extrabold whitespace-nowrap shrink-0"
                                 >
                                   📄 복사
                                 </button>
                                 <button
                                   type="button"
                                   onClick={() => handleExportDiaryCardImage(entry)}
-                                  className="px-2.5 py-1 rounded-lg bg-[#5E7A65] hover:bg-[#4E6855] text-white text-[10px] font-extrabold whitespace-nowrap shrink-0"
+                                  className="px-2.5 py-1 rounded-lg bg-[#5E7A65] hover:bg-[#4E6855] text-white text-[11.5px] font-extrabold whitespace-nowrap shrink-0"
                                 >
                                   🖼️ 한 장 내보내기
                                 </button>
@@ -19581,19 +19773,19 @@ ${validText}
                             </div>
                             <div className="flex items-center gap-1.5 flex-wrap">
                               {getDiaryEntryChildIds(entry).length >= 2 && (
-                                <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-amber-50 border border-amber-200 text-amber-900 text-[10px] font-black">
+                                <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-amber-50 border border-amber-200 text-amber-900 text-[11.5px] font-black">
                                   👦👶 시목 · 시율 함께 쓴 일기
                                 </div>
                               )}
                               {getDiaryEntryPhotos(entry).length > 0 && (
-                                <span className="inline-flex items-center px-2 py-0.5 rounded-lg bg-[#EEF3EE] text-[#35503C] text-[10px] font-extrabold">
+                                <span className="inline-flex items-center px-2 py-0.5 rounded-lg bg-[#EEF3EE] text-[#35503C] text-[11.5px] font-extrabold">
                                   📸 사진 {getDiaryEntryPhotos(entry).length}장
                                 </span>
                               )}
                             </div>
-                            {entry.title && <div className="text-sm font-black text-stone-900">{entry.title}</div>}
+                            {entry.title && <div className="text-[15.5px] font-black text-stone-900">{entry.title}</div>}
                             {entry.content && (
-                              <div className="text-xs text-stone-700 whitespace-pre-wrap leading-relaxed">{entry.content}</div>
+                              <div className="text-[13.5px] text-stone-700 whitespace-pre-wrap leading-relaxed">{entry.content}</div>
                             )}
                             {getDiaryEntryPhotos(entry).length > 0 && (
                               <div className={getDiaryEntryPhotos(entry).length >= 2 ? "grid grid-cols-2 gap-1.5" : "space-y-1.5"}>
@@ -19612,7 +19804,7 @@ ${validText}
                                 ))}
                               </div>
                             )}
-                            <div className="text-[10px] font-bold text-stone-400 text-right">
+                            <div className="text-[11.5px] font-bold text-stone-400 text-right">
                               작성: {entry.author || "관리자"}
                             </div>
                           </div>
@@ -19628,6 +19820,18 @@ ${validText}
           </div>
         );
       })()}
+
+      {showScrollTop && (
+        <button
+          type="button"
+          onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+          style={{ bottom: "calc(4.75rem + env(safe-area-inset-bottom))" }}
+          className="fixed left-4 z-30 px-3 py-2 rounded-full bg-white/95 hover:bg-stone-100 border border-stone-300 shadow-lg text-[11.5px] font-black text-stone-700 flex items-center gap-1 transition active:scale-95"
+          title="맨 위로 이동"
+        >
+          ⬆️ 위로
+        </button>
+      )}
 
       {/* 스마트 빠른 등록 플로팅 메뉴 & FAB */}
       {isQuickFabOpen && (
@@ -19764,7 +19968,7 @@ ${validText}
               .filter((g) => g.items.length > 0)
               .map((g) => (
                 <div key={g.group} className="space-y-1">
-                  <div className="text-[10px] font-black text-stone-500 px-0.5">{g.group}</div>
+                  <div className="text-[11.5px] font-black text-stone-500 px-0.5">{g.group}</div>
                   <div className="grid grid-cols-2 gap-1.5">
                     {g.items.map((act) => (
                       <button
@@ -19774,7 +19978,7 @@ ${validText}
                           setIsQuickFabOpen(false);
                           act.onClick();
                         }}
-                        className="px-2.5 py-2 rounded-xl bg-[#FAF8F3] hover:bg-[#EEF3EE] border border-stone-200 text-stone-900 text-[11px] font-extrabold text-left truncate transition active:scale-95"
+                        className="px-2.5 py-2 rounded-xl bg-[#FAF8F3] hover:bg-[#EEF3EE] border border-stone-200 text-stone-900 text-[12.5px] font-extrabold text-left truncate transition active:scale-95"
                       >
                         {act.label}
                       </button>
@@ -19819,7 +20023,7 @@ ${validText}
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between">
-              <span className="text-sm font-black text-stone-900">전체 메뉴 바로가기</span>
+              <span className="text-[15.5px] font-black text-stone-900">전체 메뉴 바로가기</span>
               <button
                 ref={moreSheetCloseRef}
                 onClick={() => {
@@ -19851,13 +20055,13 @@ ${validText}
                       setIsMoreNavOpen(false);
                     }
                   }}
-                  className={`py-3 px-2 rounded-2xl border text-xs font-extrabold flex flex-col items-center gap-1 ${
+                  className={`py-3 px-2 rounded-2xl border text-[13.5px] font-extrabold flex flex-col items-center gap-1 ${
                     activeTab === m.id
                       ? "bg-stone-900 text-white border-stone-900"
                       : "bg-stone-50 text-stone-800 border-stone-200 hover:bg-amber-50"
                   }`}
                 >
-                  <span className="text-base">{canViewTab(m.id) ? m.icon : "🔒"}</span>
+                  <span className="text-[17.5px]">{canViewTab(m.id) ? m.icon : "🔒"}</span>
                   <span>{m.label}</span>
                 </button>
               ))}
@@ -19899,7 +20103,7 @@ ${validText}
                 <IconComp className={`w-4 h-4 ${active ? "text-[#5E7A65]" : ""}`} />
                 {item.id === "schedule" && globalTodoBadgeStats.activeCount > 0 && (
                   <span
-                    className={`absolute -top-1.5 -right-2.5 min-w-[16px] h-4 px-1 rounded-full text-[9px] font-black text-white flex items-center justify-center leading-none shadow-sm ${
+                    className={`absolute -top-1.5 -right-2.5 min-w-[16px] h-4 px-1 rounded-full text-[10.5px] font-black text-white flex items-center justify-center leading-none shadow-sm ${
                       globalTodoBadgeStats.urgentCount > 0 ? "bg-rose-600" : "bg-amber-500"
                     }`}
                   >
@@ -19907,7 +20111,7 @@ ${validText}
                   </span>
                 )}
               </div>
-              <span className="text-[10px] mt-0.5 whitespace-nowrap">
+              <span className="text-[11.5px] mt-0.5 whitespace-nowrap">
                 {!canViewTab(item.id) ? "🔒" : ""}{item.label}
               </span>
             </button>
@@ -19929,7 +20133,7 @@ ${validText}
                 : ""
             }`}
           />
-          <span className="text-[10px] mt-0.5 whitespace-nowrap">더보기</span>
+          <span className="text-[11.5px] mt-0.5 whitespace-nowrap">더보기</span>
         </button>
       </nav>
 
@@ -19941,11 +20145,11 @@ ${validText}
           <div className="bg-white rounded-3xl max-w-md w-full p-5 space-y-4 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="text-sm font-black text-stone-900 flex items-center gap-1.5">
+                <h3 className="text-[15.5px] font-black text-stone-900 flex items-center gap-1.5">
                   <ClipboardList className="w-4 h-4 text-amber-600" />
                   <span>우리 가족 식탁 앱 패치노트 (업데이트 기록)</span>
                 </h3>
-                <p className="text-[11px] text-stone-500">
+                <p className="text-[12.5px] text-stone-500">
                   그동안의 기능 보완 내역을 확인하고 새 패치 기록을 남길 수 있습니다.
                 </p>
               </div>
@@ -19956,7 +20160,7 @@ ${validText}
 
             <div className="bg-indigo-50 p-3 rounded-2xl border border-indigo-200 space-y-2">
               <div className="flex items-center justify-between gap-2">
-                <div className="text-[11px] font-extrabold text-indigo-950">
+                <div className="text-[12.5px] font-extrabold text-indigo-950">
                   🔎 현재 실행 코드: <span className="text-indigo-700">{APP_CODE_VERSION}</span> ({APP_BUILD_DATE})
                 </div>
                 <button
@@ -19971,18 +20175,18 @@ ${validText}
                     url.searchParams.set("_v", String(Date.now()));
                     window.location.replace(url.toString());
                   }}
-                  className="px-2.5 py-1 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-extrabold shrink-0"
+                  className="px-2.5 py-1 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-[11.5px] font-extrabold shrink-0"
                 >
                   🔄 캐시 비우고 새로고침
                 </button>
               </div>
-              <div className="text-[10px] text-indigo-800 break-all">
+              <div className="text-[11.5px] text-indigo-800 break-all">
                 접속 도메인: <span className="font-bold">{typeof window !== "undefined" ? window.location.hostname : ""}</span>
               </div>
             </div>
 
             <div className="bg-stone-50 p-3.5 rounded-2xl border border-stone-200 space-y-2">
-              <div className="text-xs font-extrabold text-stone-800">
+              <div className="text-[13.5px] font-extrabold text-stone-800">
                 ✍️ 새 패치노트 기록 추가하기
               </div>
               <div className="grid grid-cols-3 gap-2">
@@ -19991,14 +20195,14 @@ ${validText}
                   placeholder="버전 (예: v5.7)"
                   value={patchForm.version}
                   onChange={(e) => setPatchForm({ ...patchForm, version: e.target.value })}
-                  className="px-2.5 py-1.5 rounded-xl border border-stone-200 text-xs font-black bg-white"
+                  className="px-2.5 py-1.5 rounded-xl border border-stone-200 text-[13.5px] font-black bg-white"
                 />
                 <input
                   type="text"
                   placeholder="패치 제목"
                   value={patchForm.title}
                   onChange={(e) => setPatchForm({ ...patchForm, title: e.target.value })}
-                  className="col-span-2 px-2.5 py-1.5 rounded-xl border border-stone-200 text-xs font-bold bg-white"
+                  className="col-span-2 px-2.5 py-1.5 rounded-xl border border-stone-200 text-[13.5px] font-bold bg-white"
                 />
               </div>
               <textarea
@@ -20006,11 +20210,11 @@ ${validText}
                 placeholder="상세 변경 내역 (줄바꿈으로 여러 줄 입력 가능)"
                 value={patchForm.changesText}
                 onChange={(e) => setPatchForm({ ...patchForm, changesText: e.target.value })}
-                className="w-full px-2.5 py-1.5 rounded-xl border border-stone-200 text-xs bg-white"
+                className="w-full px-2.5 py-1.5 rounded-xl border border-stone-200 text-[13.5px] bg-white"
               />
               <button
                 onClick={handleAddPatchNote}
-                className="w-full py-2 rounded-xl bg-stone-900 text-white text-xs font-extrabold"
+                className="w-full py-2 rounded-xl bg-stone-900 text-white text-[13.5px] font-extrabold"
               >
                 + 패치노트 저장하기
               </button>
@@ -20024,13 +20228,13 @@ ${validText}
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <span className="px-2 py-0.5 rounded-lg bg-amber-500 text-white text-[11px] font-black">
+                      <span className="px-2 py-0.5 rounded-lg bg-amber-500 text-white text-[12.5px] font-black">
                         {pn.version}
                       </span>
-                      <span className="text-xs font-black text-stone-900">{pn.title}</span>
+                      <span className="text-[13.5px] font-black text-stone-900">{pn.title}</span>
                     </div>
                     <div className="flex items-center gap-1.5">
-                      <span className="text-[10px] font-bold text-stone-400">{pn.date}</span>
+                      <span className="text-[11.5px] font-bold text-stone-400">{pn.date}</span>
                       <button
                         onClick={() => handleDeletePatchNote(pn.id)}
                         className="text-stone-300 hover:text-red-500"
@@ -20040,7 +20244,7 @@ ${validText}
                       </button>
                     </div>
                   </div>
-                  <ul className="space-y-1 text-xs text-stone-600 pl-1">
+                  <ul className="space-y-1 text-[13.5px] text-stone-600 pl-1">
                     {toSafeArray(pn.changes).map((line, i) => (
                       <li key={i} className="leading-snug break-keep">
                         • {line}
@@ -20061,7 +20265,7 @@ ${validText}
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-sm w-full p-5 space-y-3 max-h-[88vh] overflow-y-auto">
             <div className="flex items-center justify-between">
-              <h3 className="text-sm font-black text-stone-900">
+              <h3 className="text-[15.5px] font-black text-stone-900">
                 {editingRoutineId ? "🔄 반복 루틴 수정" : "🔄 새 반복 루틴 추가"}
               </h3>
               <button type="button" onClick={handleCancelEditRoutine}>
@@ -20070,7 +20274,7 @@ ${validText}
             </div>
 
             <div>
-              <label className="text-[10px] font-extrabold text-stone-500 block mb-1">
+              <label className="text-[11.5px] font-extrabold text-stone-500 block mb-1">
                 루틴 내용 (쉼표 , 로 여러 단계 구분 가능)
               </label>
               <input
@@ -20085,14 +20289,14 @@ ${validText}
                   }
                 }}
                 placeholder="예: 약먹기, 양치, 코뽑기, 잠옷"
-                className="w-full px-3 py-2.5 rounded-xl border border-stone-200 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-stone-400"
+                className="w-full px-3 py-2.5 rounded-xl border border-stone-200 text-[13.5px] font-bold focus:outline-none focus:ring-2 focus:ring-stone-400"
               />
               {parseRoutineSteps(newRoutineTitle).length >= 2 && (
                 <div className="mt-1.5 flex flex-col gap-1 bg-stone-50 border border-stone-200 rounded-xl p-2">
                   {parseRoutineSteps(newRoutineTitle).map((st, idx) => (
                     <div
                       key={idx}
-                      className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-white border border-stone-200 text-[10px] font-extrabold text-stone-800"
+                      className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-white border border-stone-200 text-[11.5px] font-extrabold text-stone-800"
                     >
                       <span className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full border border-stone-400 text-[8px] font-black shrink-0">
                         {idx + 1}
@@ -20105,7 +20309,7 @@ ${validText}
             </div>
 
             <div>
-              <label className="text-[10px] font-extrabold text-stone-500 block mb-1">대상</label>
+              <label className="text-[11.5px] font-extrabold text-stone-500 block mb-1">대상</label>
               <div className="flex flex-wrap gap-1.5">
                 {[
                   { id: "공통", label: "👨‍👩‍👧‍👦 공통" },
@@ -20119,7 +20323,7 @@ ${validText}
                     key={opt.id}
                     type="button"
                     onClick={() => setNewRoutineAssignee(opt.id)}
-                    className={`px-2.5 py-1.5 rounded-xl text-[11px] font-extrabold border transition whitespace-nowrap ${
+                    className={`px-2.5 py-1.5 rounded-xl text-[12.5px] font-extrabold border transition whitespace-nowrap ${
                       newRoutineAssignee === opt.id
                         ? "bg-stone-900 text-white border-stone-900"
                         : "bg-stone-50 text-stone-600 border-stone-200"
@@ -20132,14 +20336,14 @@ ${validText}
             </div>
 
             <div>
-              <label className="text-[10px] font-extrabold text-stone-500 block mb-1">시간대</label>
+              <label className="text-[11.5px] font-extrabold text-stone-500 block mb-1">시간대</label>
               <div className="flex flex-wrap gap-1.5">
                 {activeRoutineTimeSlots.map((ts) => (
                   <button
                     key={ts}
                     type="button"
                     onClick={() => setNewRoutineTimeSlot(ts)}
-                    className={`px-2.5 py-1.5 rounded-xl text-[11px] font-extrabold border transition whitespace-nowrap ${
+                    className={`px-2.5 py-1.5 rounded-xl text-[12.5px] font-extrabold border transition whitespace-nowrap ${
                       newRoutineTimeSlot === ts
                         ? "bg-stone-900 text-white border-stone-900"
                         : "bg-stone-50 text-stone-600 border-stone-200"
@@ -20153,14 +20357,14 @@ ${validText}
 
             <div>
               <div className="flex items-center justify-between mb-1">
-                <label className="text-[10px] font-extrabold text-stone-500">
+                <label className="text-[11.5px] font-extrabold text-stone-500">
                   수행 시간 태그 (선택 · 예: 17시30분)
                 </label>
                 {newRoutineScheduledTime && (
                   <button
                     type="button"
                     onClick={() => setNewRoutineScheduledTime("")}
-                    className="text-[10px] font-extrabold text-stone-400 hover:text-stone-700"
+                    className="text-[11.5px] font-extrabold text-stone-400 hover:text-stone-700"
                   >
                     지우기
                   </button>
@@ -20171,10 +20375,10 @@ ${validText}
                   type="time"
                   value={newRoutineScheduledTime}
                   onChange={(e) => setNewRoutineScheduledTime(e.target.value)}
-                  className="flex-1 px-3 py-2 rounded-xl border border-stone-200 bg-stone-50 text-xs font-extrabold text-stone-800 focus:outline-none focus:ring-2 focus:ring-stone-400"
+                  className="flex-1 px-3 py-2 rounded-xl border border-stone-200 bg-stone-50 text-[13.5px] font-extrabold text-stone-800 focus:outline-none focus:ring-2 focus:ring-stone-400"
                 />
                 {newRoutineScheduledTime && (
-                  <span className="px-2.5 py-1.5 rounded-xl bg-sky-100 text-sky-800 text-[11px] font-black whitespace-nowrap shrink-0">
+                  <span className="px-2.5 py-1.5 rounded-xl bg-sky-100 text-sky-800 text-[12.5px] font-black whitespace-nowrap shrink-0">
                     ⏰ {formatRoutineTimeLabel(newRoutineScheduledTime)}
                   </span>
                 )}
@@ -20185,7 +20389,7 @@ ${validText}
                     key={preset}
                     type="button"
                     onClick={() => setNewRoutineScheduledTime(preset)}
-                    className={`px-2 py-0.5 rounded-lg text-[10px] font-extrabold border whitespace-nowrap transition ${
+                    className={`px-2 py-0.5 rounded-lg text-[11.5px] font-extrabold border whitespace-nowrap transition ${
                       newRoutineScheduledTime === preset
                         ? "bg-sky-700 text-white border-sky-700"
                         : "bg-stone-50 text-stone-600 border-stone-200 hover:bg-stone-100"
@@ -20198,7 +20402,7 @@ ${validText}
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-[10px] font-extrabold text-stone-500 block">반복 주기</label>
+              <label className="text-[11.5px] font-extrabold text-stone-500 block">반복 주기</label>
               <div className="flex flex-wrap gap-1.5">
                 {[
                   { id: "daily", label: "매일" },
@@ -20211,7 +20415,7 @@ ${validText}
                     key={c.id}
                     type="button"
                     onClick={() => setNewRoutineCycle(c.id)}
-                    className={`px-2.5 py-1.5 rounded-xl text-[11px] font-extrabold border transition whitespace-nowrap ${
+                    className={`px-2.5 py-1.5 rounded-xl text-[12.5px] font-extrabold border transition whitespace-nowrap ${
                       newRoutineCycle === c.id
                         ? "bg-stone-900 text-white border-stone-900"
                         : "bg-stone-50 text-stone-600 border-stone-200"
@@ -20226,7 +20430,7 @@ ${validText}
                 <select
                   value={newRoutineIntervalDays}
                   onChange={(e) => setNewRoutineIntervalDays(Number(e.target.value))}
-                  className="w-full px-3 py-2 rounded-xl border border-stone-200 bg-stone-50 text-xs font-extrabold text-stone-800"
+                  className="w-full px-3 py-2 rounded-xl border border-stone-200 bg-stone-50 text-[13.5px] font-extrabold text-stone-800"
                 >
                   {[2, 3, 4, 5, 6, 7, 10, 14].map((d) => (
                     <option key={d} value={d}>{d}일마다</option>
@@ -20237,7 +20441,7 @@ ${validText}
                 <select
                   value={newRoutineMonthDay}
                   onChange={(e) => setNewRoutineMonthDay(Number(e.target.value))}
-                  className="w-full px-3 py-2 rounded-xl border border-stone-200 bg-stone-50 text-xs font-extrabold text-stone-800"
+                  className="w-full px-3 py-2 rounded-xl border border-stone-200 bg-stone-50 text-[13.5px] font-extrabold text-stone-800"
                 >
                   {Array.from({ length: 31 }, (_, idx) => idx + 1).map((dayNum) => (
                     <option key={dayNum} value={dayNum}>매월 {dayNum}일</option>
@@ -20248,7 +20452,7 @@ ${validText}
                 <select
                   value={newRoutineNthWeek}
                   onChange={(e) => setNewRoutineNthWeek(Number(e.target.value))}
-                  className="w-full px-3 py-2 rounded-xl border border-stone-200 bg-stone-50 text-xs font-extrabold text-stone-800"
+                  className="w-full px-3 py-2 rounded-xl border border-stone-200 bg-stone-50 text-[13.5px] font-extrabold text-stone-800"
                 >
                   <option value={1}>첫째 주</option>
                   <option value={2}>둘째 주</option>
@@ -20261,7 +20465,7 @@ ${validText}
                 <select
                   value={newRoutineWeekDay}
                   onChange={(e) => setNewRoutineWeekDay(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border border-stone-200 bg-stone-50 text-xs font-extrabold text-stone-800"
+                  className="w-full px-3 py-2 rounded-xl border border-stone-200 bg-stone-50 text-[13.5px] font-extrabold text-stone-800"
                 >
                   {newRoutineCycle === "weekly" && <option value="any">요일 무관</option>}
                   {["일", "월", "화", "수", "목", "금", "토"].map((dLabel, dIdx) => (
@@ -20275,14 +20479,14 @@ ${validText}
               <button
                 type="button"
                 onClick={handleCancelEditRoutine}
-                className="flex-1 py-2.5 rounded-xl bg-stone-100 text-stone-600 text-xs font-extrabold"
+                className="flex-1 py-2.5 rounded-xl bg-stone-100 text-stone-600 text-[13.5px] font-extrabold"
               >
                 취소
               </button>
               <button
                 type="button"
                 onClick={handleAddRoutine}
-                className="flex-1 py-2.5 rounded-xl bg-stone-900 text-white text-xs font-extrabold"
+                className="flex-1 py-2.5 rounded-xl bg-stone-900 text-white text-[13.5px] font-extrabold"
               >
                 {editingRoutineId ? "수정 저장" : "저장하기"}
               </button>
@@ -20295,7 +20499,7 @@ ${validText}
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-sm w-full p-5 space-y-3.5 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between">
-              <h3 className="text-sm font-black">
+              <h3 className="text-[15.5px] font-black">
                 {editingSchedule ? "가족 일정 수정" : "새 가족 일정 추가"}
               </h3>
               <button onClick={() => setIsScheduleModalOpen(false)}>
@@ -20308,21 +20512,21 @@ ${validText}
               placeholder="일정 제목 (예: 시목 어린이집상담 2시반, 병원 예약)"
               value={scheduleForm.title}
               onChange={(e) => setScheduleForm({ ...scheduleForm, title: e.target.value })}
-              className="w-full px-3 py-2.5 rounded-xl border border-stone-200 text-xs font-bold"
+              className="w-full px-3 py-2.5 rounded-xl border border-stone-200 text-[13.5px] font-bold"
             />
 
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <label className="text-[10px] font-bold text-stone-500">날짜 (기준일)</label>
+                <label className="text-[11.5px] font-bold text-stone-500">날짜 (기준일)</label>
                 <input
                   type="date"
                   value={scheduleForm.date}
                   onChange={(e) => setScheduleForm({ ...scheduleForm, date: e.target.value })}
-                  className="w-full px-3 py-2 rounded-xl border border-stone-200 text-xs font-bold"
+                  className="w-full px-3 py-2 rounded-xl border border-stone-200 text-[13.5px] font-bold"
                 />
               </div>
               <div>
-                <label className="text-[10px] font-bold text-stone-500">분류</label>
+                <label className="text-[11.5px] font-bold text-stone-500">분류</label>
                 <select
                   value={scheduleForm.category}
                   onChange={(e) => {
@@ -20332,7 +20536,7 @@ ${validText}
                       category: cat
                     });
                   }}
-                  className="w-full px-3 py-2 rounded-xl border border-stone-200 text-xs font-bold"
+                  className="w-full px-3 py-2 rounded-xl border border-stone-200 text-[13.5px] font-bold"
                 >
                   {SCHEDULE_CATEGORIES.map((c) => (
                     <option key={c} value={c}>
@@ -20345,7 +20549,7 @@ ${validText}
 
             <div>
               <div className="flex items-center justify-between mb-1">
-                <span className="text-xs font-bold text-stone-600">누구의 일정인가요?</span>
+                <span className="text-[13.5px] font-bold text-stone-600">누구의 일정인가요?</span>
                 <button
                   type="button"
                   onClick={() =>
@@ -20354,7 +20558,7 @@ ${validText}
                       members: ["수혁", "아리나", "시목", "시율"]
                     })
                   }
-                  className="px-2 py-0.5 rounded bg-stone-100 text-[10px] font-bold"
+                  className="px-2 py-0.5 rounded bg-stone-100 text-[11.5px] font-bold"
                 >
                   온가족 선택
                 </button>
@@ -20373,7 +20577,7 @@ ${validText}
                           members: sel ? cur.filter((id) => id !== m.id) : [...cur, m.id]
                         });
                       }}
-                      className={`py-1.5 rounded-xl text-xs font-extrabold border whitespace-nowrap flex items-center justify-center ${
+                      className={`py-1.5 rounded-xl text-[13.5px] font-extrabold border whitespace-nowrap flex items-center justify-center ${
                         sel
                           ? "bg-stone-900 text-white border-stone-900"
                           : "bg-stone-50 text-stone-500 border-stone-200"
@@ -20387,10 +20591,10 @@ ${validText}
             </div>
 
             <div className="space-y-2 bg-stone-50 p-3 rounded-2xl border border-stone-200">
-              <div className="text-[10px] font-extrabold text-stone-500">
+              <div className="text-[11.5px] font-extrabold text-stone-500">
                 기념일/생일 전용 추가 옵션 (필요할 때만 체크)
               </div>
-              <label className="flex items-center gap-2 text-xs font-bold text-stone-800 cursor-pointer">
+              <label className="flex items-center gap-2 text-[13.5px] font-bold text-stone-800 cursor-pointer">
                 <input
                   type="checkbox"
                   checked={scheduleForm.isAnnual}
@@ -20401,7 +20605,7 @@ ${validText}
                 <span>🔄 매년 같은 월·일에 자동으로 반복 표시하기 (생일/기념일)</span>
               </label>
 
-              <label className="flex items-center gap-2 text-xs font-bold text-stone-800 cursor-pointer">
+              <label className="flex items-center gap-2 text-[13.5px] font-bold text-stone-800 cursor-pointer">
                 <input
                   type="checkbox"
                   checked={scheduleForm.showDday}
@@ -20412,7 +20616,7 @@ ${validText}
                 <span>⭐ 하단 D-Day 카운트다운 보드에 고정 표시하기</span>
               </label>
 
-              <label className="flex items-center gap-2 text-xs font-bold text-stone-800 cursor-pointer">
+              <label className="flex items-center gap-2 text-[13.5px] font-bold text-stone-800 cursor-pointer">
                 <input
                   type="checkbox"
                   checked={scheduleForm.hasOriginYear}
@@ -20429,19 +20633,19 @@ ${validText}
               placeholder="메모 (예: 식당 예약, 준비물, 선물 등)"
               value={scheduleForm.memo}
               onChange={(e) => setScheduleForm({ ...scheduleForm, memo: e.target.value })}
-              className="w-full px-3 py-2 rounded-xl border border-stone-200 text-xs"
+              className="w-full px-3 py-2 rounded-xl border border-stone-200 text-[13.5px]"
             />
 
             <div className="flex gap-2 pt-2">
               <button
                 onClick={() => setIsScheduleModalOpen(false)}
-                className="flex-1 py-2.5 rounded-xl bg-stone-100 text-stone-600 text-xs font-extrabold"
+                className="flex-1 py-2.5 rounded-xl bg-stone-100 text-stone-600 text-[13.5px] font-extrabold"
               >
                 취소
               </button>
               <button
                 onClick={handleSaveSchedule}
-                className="flex-1 py-2.5 rounded-xl bg-stone-900 text-white text-xs font-extrabold"
+                className="flex-1 py-2.5 rounded-xl bg-stone-900 text-white text-[13.5px] font-extrabold"
               >
                 저장하기
               </button>
@@ -20456,10 +20660,10 @@ ${validText}
           <div className="bg-white rounded-3xl max-w-md w-full p-5 space-y-3.5 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="text-sm font-black text-stone-900">
+                <h3 className="text-[15.5px] font-black text-stone-900">
                   📸 식단표 이미지 AI 고속 스캔 (손글씨·인쇄물)
                 </h3>
-                <p className="text-[11px] text-stone-500">
+                <p className="text-[12.5px] text-stone-500">
                   화이트보드 손글씨(아/점/저) 및 인쇄물 식단표를 즉시 해독합니다.
                 </p>
               </div>
@@ -20470,24 +20674,24 @@ ${validText}
 
             <div className="grid grid-cols-3 gap-2 bg-stone-50 p-3 rounded-2xl border border-stone-200">
               <div>
-                <label className="text-[10px] font-extrabold text-stone-500 block mb-1">
+                <label className="text-[11.5px] font-extrabold text-stone-500 block mb-1">
                   적용할 연월
                 </label>
                 <input
                   type="month"
                   value={scanTargetMonth}
                   onChange={(e) => setScanTargetMonth(e.target.value)}
-                  className="w-full px-2 py-1.5 rounded-xl border border-stone-200 text-xs font-black bg-white"
+                  className="w-full px-2 py-1.5 rounded-xl border border-stone-200 text-[13.5px] font-black bg-white"
                 />
               </div>
               <div>
-                <label className="text-[10px] font-extrabold text-stone-500 block mb-1">
+                <label className="text-[11.5px] font-extrabold text-stone-500 block mb-1">
                   식단 대상
                 </label>
                 <select
                   value={scanTargetMember}
                   onChange={(e) => setScanTargetMember(e.target.value)}
-                  className="w-full px-2 py-1.5 rounded-xl border border-stone-200 text-xs font-black bg-white"
+                  className="w-full px-2 py-1.5 rounded-xl border border-stone-200 text-[13.5px] font-black bg-white"
                 >
                   <option value="전체">👨‍👩‍👧‍👦 온가족</option>
                   {FAMILY_MEMBERS.map((m) => (
@@ -20498,7 +20702,7 @@ ${validText}
                 </select>
               </div>
               <div>
-                <label className="text-[10px] font-extrabold text-stone-500 block mb-1">
+                <label className="text-[11.5px] font-extrabold text-stone-500 block mb-1">
                   구분/기관명
                 </label>
                 <input
@@ -20506,7 +20710,7 @@ ${validText}
                   value={scanSchoolName}
                   onChange={(e) => setScanSchoolName(e.target.value)}
                   placeholder="주간식단표"
-                  className="w-full px-2 py-1.5 rounded-xl border border-stone-200 text-xs font-bold bg-white"
+                  className="w-full px-2 py-1.5 rounded-xl border border-stone-200 text-[13.5px] font-bold bg-white"
                 />
               </div>
             </div>
@@ -20522,7 +20726,7 @@ ${validText}
               <button
                 onClick={() => menuFileInputRef.current?.click()}
                 disabled={isMenuScanning}
-                className="w-full py-3.5 px-4 rounded-2xl bg-amber-500 hover:bg-amber-600 text-white font-black text-xs flex items-center justify-center gap-2 shadow-sm transition"
+                className="w-full py-3.5 px-4 rounded-2xl bg-amber-500 hover:bg-amber-600 text-white font-black text-[13.5px] flex items-center justify-center gap-2 shadow-sm transition"
               >
                 {isMenuScanning ? (
                   <>
@@ -20549,14 +20753,14 @@ ${validText}
             )}
 
             {scanErrorMsg && (
-              <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-[11px] text-red-700 font-bold">
+              <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-[12.5px] text-red-700 font-bold">
                 ⚠️ {scanErrorMsg}
               </div>
             )}
 
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-black text-stone-800">
+                <span className="text-[13.5px] font-black text-stone-800">
                   추출된 식단 내역 ({scannedMenuDays.length}일 치)
                 </span>
                 <button
@@ -20576,7 +20780,7 @@ ${validText}
                       }
                     ]);
                   }}
-                  className="px-2.5 py-1 rounded-lg bg-stone-100 hover:bg-stone-200 text-[11px] font-extrabold"
+                  className="px-2.5 py-1 rounded-lg bg-stone-100 hover:bg-stone-200 text-[12.5px] font-extrabold"
                 >
                   + 날짜 행 직접 추가
                 </button>
@@ -20587,7 +20791,7 @@ ${validText}
                   {scannedMenuDays.map((row, idx) => (
                     <div
                       key={idx}
-                      className="p-3 rounded-xl bg-stone-50 border border-stone-200 space-y-1.5 text-xs"
+                      className="p-3 rounded-xl bg-stone-50 border border-stone-200 space-y-1.5 text-[13.5px]"
                     >
                       <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-1.5">
@@ -20599,9 +20803,9 @@ ${validText}
                               copy[idx].date = e.target.value;
                               setScannedMenuDays(copy);
                             }}
-                            className="px-2 py-1 rounded-lg border border-stone-200 font-black text-xs bg-white"
+                            className="px-2 py-1 rounded-lg border border-stone-200 font-black text-[13.5px] bg-white"
                           />
-                          <span className="text-[11px] font-bold text-stone-500">
+                          <span className="text-[12.5px] font-bold text-stone-500">
                             ({getDayName(row.date)})
                           </span>
                         </div>
@@ -20624,7 +20828,7 @@ ${validText}
                           copy[idx].breakfast = e.target.value;
                           setScannedMenuDays(copy);
                         }}
-                        className="w-full px-2.5 py-1.5 rounded-lg border border-stone-200 text-xs bg-white"
+                        className="w-full px-2.5 py-1.5 rounded-lg border border-stone-200 text-[13.5px] bg-white"
                       />
                       <input
                         type="text"
@@ -20635,7 +20839,7 @@ ${validText}
                           copy[idx].mSnack = e.target.value;
                           setScannedMenuDays(copy);
                         }}
-                        className="w-full px-2.5 py-1.5 rounded-lg border border-stone-200 text-xs bg-white"
+                        className="w-full px-2.5 py-1.5 rounded-lg border border-stone-200 text-[13.5px] bg-white"
                       />
                       <input
                         type="text"
@@ -20646,7 +20850,7 @@ ${validText}
                           copy[idx].lunch = e.target.value;
                           setScannedMenuDays(copy);
                         }}
-                        className="w-full px-2.5 py-1.5 rounded-lg border border-stone-200 text-xs font-bold bg-white"
+                        className="w-full px-2.5 py-1.5 rounded-lg border border-stone-200 text-[13.5px] font-bold bg-white"
                       />
                       <input
                         type="text"
@@ -20657,7 +20861,7 @@ ${validText}
                           copy[idx].aSnack = e.target.value;
                           setScannedMenuDays(copy);
                         }}
-                        className="w-full px-2.5 py-1.5 rounded-lg border border-stone-200 text-xs bg-white"
+                        className="w-full px-2.5 py-1.5 rounded-lg border border-stone-200 text-[13.5px] bg-white"
                       />
                       <input
                         type="text"
@@ -20668,7 +20872,7 @@ ${validText}
                           copy[idx].dinner = e.target.value;
                           setScannedMenuDays(copy);
                         }}
-                        className="w-full px-2.5 py-1.5 rounded-lg border border-stone-200 text-xs font-bold bg-white"
+                        className="w-full px-2.5 py-1.5 rounded-lg border border-stone-200 text-[13.5px] font-bold bg-white"
                       />
                     </div>
                   ))}
@@ -20679,7 +20883,7 @@ ${validText}
             {scannedMenuDays.length > 0 && (
               <button
                 onClick={handleSaveScannedMenuDays}
-                className="w-full py-3 rounded-2xl bg-stone-900 text-white text-xs font-black shadow-md"
+                className="w-full py-3 rounded-2xl bg-stone-900 text-white text-[13.5px] font-black shadow-md"
               >
                 ✅ 추출된 식단 ({scannedMenuDays.length}일 치) 달력에 일괄 자동 입력하기
               </button>
@@ -20693,7 +20897,7 @@ ${validText}
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-sm w-full p-5 space-y-3 max-h-[85vh] overflow-y-auto">
             <div className="flex items-center justify-between">
-              <h3 className="text-sm font-black">🧾 마트 영수증 사진 고속 스캔</h3>
+              <h3 className="text-[15.5px] font-black">🧾 마트 영수증 사진 고속 스캔</h3>
               <button onClick={() => setIsReceiptModalOpen(false)}>
                 <X className="w-5 h-5 text-stone-400" />
               </button>
@@ -20709,7 +20913,7 @@ ${validText}
             <button
               onClick={() => receiptFileInputRef.current?.click()}
               disabled={isReceiptScanning}
-              className="w-full py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black flex items-center justify-center gap-2"
+              className="w-full py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white text-[13.5px] font-black flex items-center justify-center gap-2"
             >
               {isReceiptScanning ? (
                 <>
@@ -20725,7 +20929,7 @@ ${validText}
             </button>
 
             {receiptErrorMsg && (
-              <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-xs text-red-700 font-bold">
+              <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-[13.5px] text-red-700 font-bold">
                 ⚠️ {receiptErrorMsg}
               </div>
             )}
@@ -20743,7 +20947,7 @@ ${validText}
                 {scannedReceiptItems.map((it, idx) => (
                   <div
                     key={idx}
-                    className="p-2.5 rounded-xl bg-stone-50 border border-stone-200 text-xs flex justify-between items-center gap-2"
+                    className="p-2.5 rounded-xl bg-stone-50 border border-stone-200 text-[13.5px] flex justify-between items-center gap-2"
                   >
                     <div className="flex-1 min-w-0">
                       <input
@@ -20754,10 +20958,10 @@ ${validText}
                           copy[idx].name = e.target.value;
                           setScannedReceiptItems(copy);
                         }}
-                        className="font-bold bg-white px-2 py-1 rounded border border-stone-200 w-full text-xs"
+                        className="font-bold bg-white px-2 py-1 rounded border border-stone-200 w-full text-[13.5px]"
                       />
                       <div className="flex items-center gap-1 mt-1">
-                        <span className="text-[10px] font-bold text-stone-400 shrink-0">수량</span>
+                        <span className="text-[11.5px] font-bold text-stone-400 shrink-0">수량</span>
                         <input
                           type="number"
                           min="0"
@@ -20768,7 +20972,7 @@ ${validText}
                             copy[idx].quantity = Math.max(0, Number(e.target.value) || 0);
                             setScannedReceiptItems(copy);
                           }}
-                          className={`w-14 px-1.5 py-0.5 rounded border text-[11px] font-extrabold text-center bg-white ${
+                          className={`w-14 px-1.5 py-0.5 rounded border text-[12.5px] font-extrabold text-center bg-white ${
                             it.unit === "개" && Number(it.quantity) >= 10
                               ? "border-amber-400 bg-amber-50 text-amber-800"
                               : "border-stone-200 text-stone-700"
@@ -20782,10 +20986,10 @@ ${validText}
                             copy[idx].unit = e.target.value;
                             setScannedReceiptItems(copy);
                           }}
-                          className="w-10 px-1 py-0.5 rounded border border-stone-200 text-[11px] font-bold text-center bg-white text-stone-600"
+                          className="w-10 px-1 py-0.5 rounded border border-stone-200 text-[12.5px] font-bold text-center bg-white text-stone-600"
                         />
                         {it.unit === "개" && Number(it.quantity) >= 10 && (
-                          <span className="text-[9px] font-black text-amber-700 whitespace-nowrap">
+                          <span className="text-[10.5px] font-black text-amber-700 whitespace-nowrap">
                             ⚠️ 수량 확인
                           </span>
                         )}
@@ -20799,7 +21003,7 @@ ${validText}
                         copy[idx].price = Number(e.target.value);
                         setScannedReceiptItems(copy);
                       }}
-                      className="w-20 font-extrabold text-emerald-700 bg-white px-2 py-1 rounded border border-stone-200 text-xs text-right"
+                      className="w-20 font-extrabold text-emerald-700 bg-white px-2 py-1 rounded border border-stone-200 text-[13.5px] text-right"
                     />
                     <button
                       onClick={() => setScannedReceiptItems((prev) => prev.filter((_, i) => i !== idx))}
@@ -20816,14 +21020,14 @@ ${validText}
                   const recTotal = Number(receiptTotalAmount) || 0;
                   const diff = recTotal > 0 ? itemsSum + exclSum - recTotal : null;
                   return (
-                    <div className="p-3 rounded-2xl bg-stone-50 border border-stone-200 space-y-2 text-xs">
+                    <div className="p-3 rounded-2xl bg-stone-50 border border-stone-200 space-y-2 text-[13.5px]">
                       <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-1.5 flex-wrap">
                           <span className="font-black text-stone-800">
                             🧾 합계 대사 검증 ({scannedReceiptItems.length}건)
                           </span>
                           {receiptEngineUsed && (
-                            <span className="px-1.5 py-0.5 rounded bg-stone-200/80 text-[10px] font-bold text-stone-600">
+                            <span className="px-1.5 py-0.5 rounded bg-stone-200/80 text-[11.5px] font-bold text-stone-600">
                               🤖 {receiptEngineUsed}
                             </span>
                           )}
@@ -20845,7 +21049,7 @@ ${validText}
                                 }
                               ])
                             }
-                            className="px-2 py-1 rounded-lg bg-white border border-stone-200 text-[11px] font-extrabold text-stone-700"
+                            className="px-2 py-1 rounded-lg bg-white border border-stone-200 text-[12.5px] font-extrabold text-stone-700"
                           >
                             + 추가
                           </button>
@@ -20853,14 +21057,14 @@ ${validText}
                             <button
                               onClick={() => runReceiptOcrWithImagePart(lastReceiptImagePart)}
                               disabled={isReceiptScanning}
-                              className="px-2 py-1 rounded-lg bg-amber-100 border border-amber-300 text-[11px] font-extrabold text-amber-900"
+                              className="px-2 py-1 rounded-lg bg-amber-100 border border-amber-300 text-[12.5px] font-extrabold text-amber-900"
                             >
                               🔄 재스캔
                             </button>
                           )}
                         </div>
                       </div>
-                      <div className="grid grid-cols-2 gap-1.5 text-[11px]">
+                      <div className="grid grid-cols-2 gap-1.5 text-[12.5px]">
                         <div className="bg-white p-2 rounded-xl border border-stone-200 flex items-center justify-between">
                           <span className="text-stone-500 font-bold">품목 합계</span>
                           <span className="font-black text-stone-900">{itemsSum.toLocaleString()}원</span>
@@ -20875,7 +21079,7 @@ ${validText}
                           />
                         </div>
                       </div>
-                      <div className="bg-white p-2 rounded-xl border border-stone-200 flex items-center justify-between gap-2 text-[11px]">
+                      <div className="bg-white p-2 rounded-xl border border-stone-200 flex items-center justify-between gap-2 text-[12.5px]">
                         <span className="text-stone-500 font-bold">영수증 결제금액</span>
                         <input
                           type="number"
@@ -20887,7 +21091,7 @@ ${validText}
                       </div>
                       {diff !== null && (
                         <div
-                          className={`px-2.5 py-1.5 rounded-xl text-[11px] font-black text-center ${
+                          className={`px-2.5 py-1.5 rounded-xl text-[12.5px] font-black text-center ${
                             diff === 0
                               ? "bg-emerald-100 text-emerald-800 border border-emerald-200"
                               : "bg-rose-100 text-rose-800 border border-rose-200"
@@ -20899,7 +21103,7 @@ ${validText}
                         </div>
                       )}
                       {recTotal === 0 && (
-                        <div className="px-2.5 py-1.5 rounded-xl bg-amber-50 border border-amber-200 text-[11px] font-bold text-amber-900 text-center">
+                        <div className="px-2.5 py-1.5 rounded-xl bg-amber-50 border border-amber-200 text-[12.5px] font-bold text-amber-900 text-center">
                           ⚠️ 영수증 결제금액 미확인 — 총액을 입력하면 100% 대사 검증됩니다
                         </div>
                       )}
@@ -20907,19 +21111,19 @@ ${validText}
                         <div className="pt-1">
                           <button
                             onClick={() => setShowReceiptRawLines((v) => !v)}
-                            className="text-[11px] font-bold text-stone-500 hover:text-stone-800 underline"
+                            className="text-[12.5px] font-bold text-stone-500 hover:text-stone-800 underline"
                           >
                             {showReceiptRawLines ? "▲ AI가 읽은 원문 줄 접기" : `▼ AI가 읽은 원문 줄 보기 (${receiptRawLines.length}줄)`}
                           </button>
                           {showReceiptRawLines && (
-                            <pre className="mt-1.5 p-2 rounded-xl bg-white border border-stone-200 text-[10px] text-stone-600 whitespace-pre-wrap break-all max-h-32 overflow-y-auto">
+                            <pre className="mt-1.5 p-2 rounded-xl bg-white border border-stone-200 text-[11.5px] text-stone-600 whitespace-pre-wrap break-all max-h-32 overflow-y-auto">
                               {receiptRawLines.join("\n")}
                             </pre>
                           )}
                         </div>
                       )}
                       {receiptSaveError && (
-                        <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-[11px] font-bold text-rose-800">
+                        <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-[12.5px] font-bold text-rose-800">
                           ⚠️ 저장 실패: {receiptSaveError} (입력 내역과 이미지는 유지되었습니다)
                         </div>
                       )}
@@ -21032,7 +21236,7 @@ ${validText}
                       setIsSavingReceipt(false);
                     }
                   }}
-                  className={`w-full py-2.5 rounded-xl text-white text-xs font-extrabold ${
+                  className={`w-full py-2.5 rounded-xl text-white text-[13.5px] font-extrabold ${
                     isSavingReceipt ? "bg-stone-400 cursor-not-allowed" : "bg-stone-900 hover:bg-stone-800"
                   }`}
                 >
@@ -21049,14 +21253,14 @@ ${validText}
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-sm w-full p-5 pt-0 space-y-3.5 max-h-[90vh] overflow-y-auto">
             <div className="sticky top-0 bg-white z-10 pt-4 pb-2.5 border-b border-stone-100 flex items-center justify-between gap-2">
-              <h3 className="text-sm font-black">
+              <h3 className="text-[15.5px] font-black">
                 {editingMeal ? "식단 수정하기" : "새 식단 기록하기"}
               </h3>
               <div className="flex items-center gap-1.5">
                 <button
                   type="button"
                   onClick={handleSaveMeal}
-                  className="px-3 py-1.5 rounded-xl bg-stone-900 text-white text-xs font-extrabold"
+                  className="px-3 py-1.5 rounded-xl bg-stone-900 text-white text-[13.5px] font-extrabold"
                 >
                   💾 저장
                 </button>
@@ -21075,12 +21279,12 @@ ${validText}
                 type="date"
                 value={mealForm.date}
                 onChange={(e) => setMealForm({ ...mealForm, date: e.target.value })}
-                className="px-3 py-2 rounded-xl border border-stone-200 text-xs font-bold"
+                className="px-3 py-2 rounded-xl border border-stone-200 text-[13.5px] font-bold"
               />
               <select
                 value={mealForm.slot}
                 onChange={(e) => setMealForm({ ...mealForm, slot: e.target.value })}
-                className="px-3 py-2 rounded-xl border border-stone-200 text-xs font-bold"
+                className="px-3 py-2 rounded-xl border border-stone-200 text-[13.5px] font-bold"
               >
                 {MEAL_SLOTS.map((s) => (
                   <option key={s.id} value={s.id}>
@@ -21100,7 +21304,7 @@ ${validText}
                     key={st.id}
                     type="button"
                     onClick={() => setMealForm({ ...mealForm, mealStatus: st.id })}
-                    className={`flex-1 py-1 rounded-lg text-[10px] font-extrabold transition ${
+                    className={`flex-1 py-1 rounded-lg text-[11.5px] font-extrabold transition ${
                       (mealForm.mealStatus || "recorded") === st.id
                         ? "bg-white text-stone-900 shadow-sm"
                         : "text-stone-500"
@@ -21115,7 +21319,7 @@ ${validText}
                   <button
                     type="button"
                     onClick={() => handleMoveMealByDays(editingMeal, -1)}
-                    className="px-2 py-1.5 rounded-xl bg-stone-100 hover:bg-stone-200 text-[10px] font-extrabold text-stone-700"
+                    className="px-2 py-1.5 rounded-xl bg-stone-100 hover:bg-stone-200 text-[11.5px] font-extrabold text-stone-700"
                     title="하루 전으로 이동"
                   >
                     ◀ -1일
@@ -21123,7 +21327,7 @@ ${validText}
                   <button
                     type="button"
                     onClick={() => handleMoveMealByDays(editingMeal, 1)}
-                    className="px-2 py-1.5 rounded-xl bg-stone-100 hover:bg-stone-200 text-[10px] font-extrabold text-stone-700"
+                    className="px-2 py-1.5 rounded-xl bg-stone-100 hover:bg-stone-200 text-[11.5px] font-extrabold text-stone-700"
                     title="다음 날로 이동"
                   >
                     +1일 ▶
@@ -21131,7 +21335,7 @@ ${validText}
                   <button
                     type="button"
                     onClick={() => handleCopyMealToDate(editingMeal, getTodayStr())}
-                    className="px-2 py-1.5 rounded-xl bg-[#EEF3EE] text-[#35503C] border border-[#C9D8CC] text-[10px] font-extrabold"
+                    className="px-2 py-1.5 rounded-xl bg-[#EEF3EE] text-[#35503C] border border-[#C9D8CC] text-[11.5px] font-extrabold"
                     title="오늘 날짜로 복사"
                   >
                     📋 오늘복사
@@ -21142,28 +21346,28 @@ ${validText}
 
             <div>
               <div className="flex items-center justify-between mb-1">
-                <span className="text-xs font-bold text-stone-600">식사 대상</span>
+                <span className="text-[13.5px] font-bold text-stone-600">식사 대상</span>
                 <div className="flex gap-1">
                   <button
                     type="button"
                     onClick={() =>
                       setMealForm({ ...mealForm, members: ["수혁", "아리나", "시목", "시율"] })
                     }
-                    className="px-2 py-0.5 rounded bg-stone-100 text-[10px] font-bold"
+                    className="px-2 py-0.5 rounded bg-stone-100 text-[11.5px] font-bold"
                   >
                     온가족
                   </button>
                   <button
                     type="button"
                     onClick={() => setMealForm({ ...mealForm, members: ["수혁", "아리나"] })}
-                    className="px-2 py-0.5 rounded bg-stone-100 text-[10px] font-bold"
+                    className="px-2 py-0.5 rounded bg-stone-100 text-[11.5px] font-bold"
                   >
                     어른
                   </button>
                   <button
                     type="button"
                     onClick={() => setMealForm({ ...mealForm, members: ["시목", "시율"] })}
-                    className="px-2 py-0.5 rounded bg-stone-100 text-[10px] font-bold"
+                    className="px-2 py-0.5 rounded bg-stone-100 text-[11.5px] font-bold"
                   >
                     아이
                   </button>
@@ -21183,7 +21387,7 @@ ${validText}
                           members: sel ? cur.filter((id) => id !== m.id) : [...cur, m.id]
                         });
                       }}
-                      className={`py-1.5 rounded-xl text-xs font-extrabold border whitespace-nowrap flex items-center justify-center ${
+                      className={`py-1.5 rounded-xl text-[13.5px] font-extrabold border whitespace-nowrap flex items-center justify-center ${
                         sel
                           ? "bg-stone-900 text-white border-stone-900"
                           : "bg-stone-50 text-stone-500 border-stone-200"
@@ -21198,7 +21402,7 @@ ${validText}
 
             <div className="space-y-2 bg-stone-50 p-3 rounded-2xl border border-stone-200">
               <div className="flex items-center justify-between">
-                <span className="text-[11px] font-extrabold text-stone-700">메뉴 구성 (자동 + 연결)</span>
+                <span className="text-[12.5px] font-extrabold text-stone-700">메뉴 구성 (자동 + 연결)</span>
                 {mealForm.menu.trim() && (
                   <button
                     type="button"
@@ -21212,7 +21416,7 @@ ${validText}
                       }
                       showToast("⭐ 자주 먹는 조합에 저장했습니다!");
                     }}
-                    className="text-[11px] font-extrabold text-amber-700 hover:text-amber-800"
+                    className="text-[12.5px] font-extrabold text-amber-700 hover:text-amber-800"
                   >
                     ⭐ 조합 즐겨찾기 저장
                   </button>
@@ -21233,7 +21437,7 @@ ${validText}
                       setMealChipInput("");
                     }
                   }}
-                  className="flex-1 px-3 py-2 rounded-xl border border-stone-200 text-xs font-bold bg-white"
+                  className="flex-1 px-3 py-2 rounded-xl border border-stone-200 text-[13.5px] font-bold bg-white"
                 />
                 <button
                   type="button"
@@ -21241,7 +21445,7 @@ ${validText}
                     appendMenuChipToForm(mealChipInput);
                     setMealChipInput("");
                   }}
-                  className="px-3 py-2 rounded-xl bg-stone-900 text-white text-xs font-extrabold shrink-0"
+                  className="px-3 py-2 rounded-xl bg-stone-900 text-white text-[13.5px] font-extrabold shrink-0"
                 >
                   + 추가
                 </button>
@@ -21253,7 +21457,7 @@ ${validText}
                     setMealChipInput("");
                   }}
                   title="입력한 단일 메뉴를 즐겨찾기에 등록"
-                  className="px-2.5 py-2 rounded-xl bg-amber-100 hover:bg-amber-200 disabled:opacity-40 text-amber-900 border border-amber-300 text-xs font-extrabold shrink-0"
+                  className="px-2.5 py-2 rounded-xl bg-amber-100 hover:bg-amber-200 disabled:opacity-40 text-amber-900 border border-amber-300 text-[13.5px] font-extrabold shrink-0"
                 >
                   ⭐
                 </button>
@@ -21287,7 +21491,7 @@ ${validText}
                           appendMenuChipToForm(h);
                           setMealChipInput("");
                         }}
-                        className="px-2 py-0.5 rounded-full bg-amber-50 hover:bg-amber-100 border border-amber-200 text-[10px] font-bold text-amber-900"
+                        className="px-2 py-0.5 rounded-full bg-amber-50 hover:bg-amber-100 border border-amber-200 text-[11.5px] font-bold text-amber-900"
                       >
                         ✨ + {h}
                       </button>
@@ -21306,7 +21510,7 @@ ${validText}
                     .map((chip, cIdx) => (
                       <span
                         key={`${chip}-${cIdx}`}
-                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-100 text-amber-950 border border-amber-300 text-xs font-extrabold"
+                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-100 text-amber-950 border border-amber-300 text-[13.5px] font-extrabold"
                       >
                         <span>{chip}</span>
                         {!favoriteSingleMenus.includes(chip) && (
@@ -21314,7 +21518,7 @@ ${validText}
                             type="button"
                             onClick={() => handleAddFavoriteSingleMenu(chip)}
                             title="이 메뉴를 단일 즐겨찾기에 등록"
-                            className="text-amber-600 hover:text-amber-800 text-[10px]"
+                            className="text-amber-600 hover:text-amber-800 text-[11.5px]"
                           >
                             ⭐
                           </button>
@@ -21344,20 +21548,20 @@ ${validText}
                 placeholder="최종 한 줄 메뉴명 (예: 스무디 + 감)"
                 value={mealForm.menu}
                 onChange={(e) => setMealForm({ ...mealForm, menu: e.target.value })}
-                className="w-full px-3 py-2 rounded-xl border border-stone-200 text-xs font-bold bg-white"
+                className="w-full px-3 py-2 rounded-xl border border-stone-200 text-[13.5px] font-bold bg-white"
               />
 
               {/* 최근 자주 먹은 개별 메뉴 원터치 칩 */}
               {recentSingleMenuChips.length > 0 && (
                 <div className="space-y-1">
-                  <div className="text-[10px] font-bold text-stone-500">⚡ 최근 자주 먹은 메뉴 (터치로 + 추가)</div>
+                  <div className="text-[11.5px] font-bold text-stone-500">⚡ 최근 자주 먹은 메뉴 (터치로 + 추가)</div>
                   <div className="flex flex-wrap gap-1">
                     {recentSingleMenuChips.map((chip) => (
                       <button
                         key={chip}
                         type="button"
                         onClick={() => appendMenuChipToForm(chip)}
-                        className="px-2 py-1 rounded-full bg-white hover:bg-amber-50 border border-stone-200 text-[11px] font-bold text-stone-700"
+                        className="px-2 py-1 rounded-full bg-white hover:bg-amber-50 border border-stone-200 text-[12.5px] font-bold text-stone-700"
                       >
                         + {chip}
                       </button>
@@ -21369,12 +21573,12 @@ ${validText}
               {/* 즐겨찾는 단일 메뉴 (터치로 + 추가) */}
               {favoriteSingleMenus.length > 0 && (
                 <div className="space-y-1 pt-0.5">
-                  <div className="text-[10px] font-bold text-emerald-800">⭐ 즐겨찾는 단일 메뉴 (터치로 + 추가)</div>
+                  <div className="text-[11.5px] font-bold text-emerald-800">⭐ 즐겨찾는 단일 메뉴 (터치로 + 추가)</div>
                   <div className="flex flex-wrap gap-1">
                     {favoriteSingleMenus.map((single) => (
                       <span
                         key={single}
-                        className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-[11px] font-bold text-emerald-900"
+                        className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-[12.5px] font-bold text-emerald-900"
                       >
                         <button
                           type="button"
@@ -21399,14 +21603,14 @@ ${validText}
               {/* 레시피북에서 바로 추가 */}
               {recipes.length > 0 && (
                 <div className="space-y-1 pt-0.5">
-                  <div className="text-[10px] font-bold text-rose-800">📖 레시피북에서 바로 추가 (터치로 + 추가)</div>
+                  <div className="text-[11.5px] font-bold text-rose-800">📖 레시피북에서 바로 추가 (터치로 + 추가)</div>
                   <div className="flex gap-1 overflow-x-auto pb-0.5">
                     {recipes.slice(0, 12).map((rc) => (
                       <button
                         key={rc.id}
                         type="button"
                         onClick={() => appendMenuChipToForm(rc.title)}
-                        className="px-2 py-1 rounded-full bg-rose-50 hover:bg-rose-100 border border-rose-200 text-[11px] font-bold text-rose-900 shrink-0"
+                        className="px-2 py-1 rounded-full bg-rose-50 hover:bg-rose-100 border border-rose-200 text-[12.5px] font-bold text-rose-900 shrink-0"
                       >
                         + {rc.title}
                       </button>
@@ -21418,12 +21622,12 @@ ${validText}
               {/* 즐겨찾기 조합 */}
               {favoriteMealCombos.length > 0 && (
                 <div className="space-y-1 pt-0.5">
-                  <div className="text-[10px] font-bold text-amber-800">⭐ 즐겨찾기 조합 (1초 불러오기)</div>
+                  <div className="text-[11.5px] font-bold text-amber-800">⭐ 즐겨찾기 조합 (1초 불러오기)</div>
                   <div className="flex flex-wrap gap-1">
                     {favoriteMealCombos.map((combo) => (
                       <span
                         key={combo}
-                        className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-amber-50 border border-amber-200 text-[11px] font-bold text-amber-900"
+                        className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-amber-50 border border-amber-200 text-[12.5px] font-bold text-amber-900"
                       >
                         <button
                           type="button"
@@ -21454,7 +21658,7 @@ ${validText}
               <select
                 value={mealForm.sourceType}
                 onChange={(e) => setMealForm({ ...mealForm, sourceType: e.target.value })}
-                className="px-3 py-2 rounded-xl border border-stone-200 text-xs font-bold"
+                className="px-3 py-2 rounded-xl border border-stone-200 text-[13.5px] font-bold"
               >
                 <option value="집밥/온가족식">🏠 집밥/온가족식</option>
                 <option value="유아식/이유식">🍼 유아식/이유식</option>
@@ -21466,7 +21670,7 @@ ${validText}
                 placeholder="외식/배달 지출액(원)"
                 value={mealForm.cost}
                 onChange={(e) => setMealForm({ ...mealForm, cost: e.target.value })}
-                className="px-3 py-2 rounded-xl border border-stone-200 text-xs font-bold"
+                className="px-3 py-2 rounded-xl border border-stone-200 text-[13.5px] font-bold"
               />
             </div>
 
@@ -21475,19 +21679,19 @@ ${validText}
               placeholder="메모"
               value={mealForm.note}
               onChange={(e) => setMealForm({ ...mealForm, note: e.target.value })}
-              className="w-full px-3 py-2 rounded-xl border border-stone-200 text-xs"
+              className="w-full px-3 py-2 rounded-xl border border-stone-200 text-[13.5px]"
             />
 
             <div className="flex gap-2 pt-2">
               <button
                 onClick={() => setIsMealModalOpen(false)}
-                className="flex-1 py-2.5 rounded-xl bg-stone-100 text-stone-600 text-xs font-extrabold"
+                className="flex-1 py-2.5 rounded-xl bg-stone-100 text-stone-600 text-[13.5px] font-extrabold"
               >
                 취소
               </button>
               <button
                 onClick={handleSaveMeal}
-                className="flex-1 py-2.5 rounded-xl bg-stone-900 text-white text-xs font-extrabold"
+                className="flex-1 py-2.5 rounded-xl bg-stone-900 text-white text-[13.5px] font-extrabold"
               >
                 저장하기
               </button>
@@ -21500,7 +21704,7 @@ ${validText}
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-sm w-full p-5 space-y-3">
             <div className="flex items-center justify-between">
-              <h3 className="text-sm font-black">
+              <h3 className="text-[15.5px] font-black">
                 {editingFridge ? "냉장고 재료 수정" : "냉장고 재료 추가"}
               </h3>
               <button onClick={() => { setFridgeConflictData(null); setIsFridgeModalOpen(false); }}>
@@ -21513,7 +21717,7 @@ ${validText}
               placeholder="품목명"
               value={fridgeForm.name}
               onChange={(e) => setFridgeForm({ ...fridgeForm, name: e.target.value })}
-              className="w-full px-3 py-2.5 rounded-xl border border-stone-200 text-xs font-bold"
+              className="w-full px-3 py-2.5 rounded-xl border border-stone-200 text-[13.5px] font-bold"
             />
             {!editingFridge && fridgeForm.name.trim() && (() => {
               const q = fridgeForm.name.trim().toLowerCase();
@@ -21541,7 +21745,7 @@ ${validText}
                           shelfZone: fridgeForm.shelfZone || resolveItemShelfZone({ location: fridgeForm.location, category: nextCat })
                         });
                       }}
-                      className="px-2 py-0.5 rounded-full bg-sky-50 hover:bg-sky-100 border border-sky-200 text-[10px] font-bold text-sky-900"
+                      className="px-2 py-0.5 rounded-full bg-sky-50 hover:bg-sky-100 border border-sky-200 text-[11.5px] font-bold text-sky-900"
                     >
                       ✨ {h.name} ({h.category})
                     </button>
@@ -21564,7 +21768,7 @@ ${validText}
                         : prev.expiryDate
                   }));
                 }}
-                className="px-3 py-2 rounded-xl border border-stone-200 text-xs font-bold"
+                className="px-3 py-2 rounded-xl border border-stone-200 text-[13.5px] font-bold"
               >
                 {STORAGE_LOCATIONS.map((loc) => (
                   <option key={loc} value={loc}>
@@ -21575,7 +21779,7 @@ ${validText}
               <select
                 value={fridgeForm.category}
                 onChange={(e) => setFridgeForm({ ...fridgeForm, category: e.target.value })}
-                className="px-3 py-2 rounded-xl border border-stone-200 text-xs font-bold"
+                className="px-3 py-2 rounded-xl border border-stone-200 text-[13.5px] font-bold"
               >
                 {FRIDGE_CATEGORIES.map((cat) => (
                   <option key={cat} value={cat}>
@@ -21586,11 +21790,11 @@ ${validText}
             </div>
 
             <div>
-              <label className="text-[10px] font-bold text-stone-500 block mb-1">세부 보관 칸 (시각적 냉장고 위치)</label>
+              <label className="text-[11.5px] font-bold text-stone-500 block mb-1">세부 보관 칸 (시각적 냉장고 위치)</label>
               <select
                 value={fridgeForm.shelfZone || ""}
                 onChange={(e) => setFridgeForm({ ...fridgeForm, shelfZone: e.target.value })}
-                className="w-full px-3 py-2 rounded-xl border border-stone-200 text-xs font-bold bg-stone-50"
+                className="w-full px-3 py-2 rounded-xl border border-stone-200 text-[13.5px] font-bold bg-stone-50"
               >
                 <option value="">자동 배치 (보관위치·카테고리 기준)</option>
                 {FRIDGE_SHELF_ZONES.map((z) => (
@@ -21608,20 +21812,20 @@ ${validText}
                 placeholder="수량 (0.5 가능)"
                 value={fridgeForm.quantity}
                 onChange={(e) => setFridgeForm({ ...fridgeForm, quantity: e.target.value })}
-                className="px-3 py-2 rounded-xl border border-stone-200 text-xs font-bold"
+                className="px-3 py-2 rounded-xl border border-stone-200 text-[13.5px] font-bold"
               />
               <input
                 type="text"
                 placeholder="단위 (개, 팩, g)"
                 value={fridgeForm.unit}
                 onChange={(e) => setFridgeForm({ ...fridgeForm, unit: e.target.value })}
-                className="px-3 py-2 rounded-xl border border-stone-200 text-xs font-bold"
+                className="px-3 py-2 rounded-xl border border-stone-200 text-[13.5px] font-bold"
               />
             </div>
 
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <label className="text-[10px] font-bold text-stone-500">소비기한 {!editingFridge && !isExpiryManuallyEdited && <span className="text-amber-600">(임시값·상품 확인)</span>}</label>
+                <label className="text-[11.5px] font-bold text-stone-500">소비기한 {!editingFridge && !isExpiryManuallyEdited && <span className="text-amber-600">(임시값·상품 확인)</span>}</label>
                 <input
                   type="date"
                   value={fridgeForm.expiryDate}
@@ -21629,27 +21833,27 @@ ${validText}
                     setIsExpiryManuallyEdited(true);
                     setFridgeForm({ ...fridgeForm, expiryDate: e.target.value });
                   }}
-                  className="w-full px-3 py-2 rounded-xl border border-stone-200 text-xs font-bold"
+                  className="w-full px-3 py-2 rounded-xl border border-stone-200 text-[13.5px] font-bold"
                 />
               </div>
               <div>
-                <label className="text-[10px] font-bold text-stone-500">구입 금액(원)</label>
+                <label className="text-[11.5px] font-bold text-stone-500">구입 금액(원)</label>
                 <input
                   type="number"
                   placeholder="예: 12000"
                   value={fridgeForm.price}
                   onChange={(e) => setFridgeForm({ ...fridgeForm, price: e.target.value })}
-                  className="w-full px-3 py-2 rounded-xl border border-stone-200 text-xs font-bold"
+                  className="w-full px-3 py-2 rounded-xl border border-stone-200 text-[13.5px] font-bold"
                 />
               </div>
             </div>
 
             {fridgeConflictData && (
               <div className="bg-amber-50 border border-amber-300 rounded-2xl p-3 space-y-2">
-                <div className="text-[11px] font-black text-amber-900">
+                <div className="text-[12.5px] font-black text-amber-900">
                   ⚠️ 다른 기기에서 먼저 수정된 재고입니다
                 </div>
-                <div className="space-y-1 text-[10px] font-bold">
+                <div className="space-y-1 text-[11.5px] font-bold">
                   <div className="bg-white/90 rounded-lg px-2 py-1 border border-amber-200 text-stone-700">
                     서버 최신값: {fridgeConflictData.serverItem?.name} · {fridgeConflictData.serverItem?.quantity}{fridgeConflictData.serverItem?.unit} · {fridgeConflictData.serverItem?.location}
                   </div>
@@ -21679,14 +21883,14 @@ ${validText}
                       setFridgeConflictData(null);
                       showToast("서버 최신값을 불러왔습니다.");
                     }}
-                    className="flex-1 py-1.5 rounded-xl bg-white border border-amber-300 text-amber-900 text-[10px] font-extrabold"
+                    className="flex-1 py-1.5 rounded-xl bg-white border border-amber-300 text-amber-900 text-[11.5px] font-extrabold"
                   >
                     서버값 불러오기
                   </button>
                   <button
                     type="button"
                     onClick={() => handleSaveFridge(fridgeConflictData.serverItem?.updatedAt || "")}
-                    className="flex-1 py-1.5 rounded-xl bg-amber-600 text-white text-[10px] font-extrabold"
+                    className="flex-1 py-1.5 rounded-xl bg-amber-600 text-white text-[11.5px] font-extrabold"
                   >
                     내 수정값으로 저장
                   </button>
@@ -21697,13 +21901,13 @@ ${validText}
             <div className="flex gap-2 pt-2">
               <button
                 onClick={() => { setFridgeConflictData(null); setIsFridgeModalOpen(false); }}
-                className="flex-1 py-2.5 rounded-xl bg-stone-100 text-stone-600 text-xs font-extrabold"
+                className="flex-1 py-2.5 rounded-xl bg-stone-100 text-stone-600 text-[13.5px] font-extrabold"
               >
                 취소
               </button>
               <button
                 onClick={() => handleSaveFridge()}
-                className="flex-1 py-2.5 rounded-xl bg-stone-900 text-white text-xs font-extrabold"
+                className="flex-1 py-2.5 rounded-xl bg-stone-900 text-white text-[13.5px] font-extrabold"
               >
                 저장하기
               </button>
@@ -21715,19 +21919,19 @@ ${validText}
       {stockInItem && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-sm w-full p-5 space-y-3">
-            <h3 className="text-sm font-black">🛒 구매 완료 및 냉장고 입고</h3>
-            <p className="text-xs text-stone-600">
+            <h3 className="text-[15.5px] font-black">🛒 구매 완료 및 냉장고 입고</h3>
+            <p className="text-[13.5px] text-stone-600">
               <b>{stockInItem.name}</b> 품목을 냉장고에 입고합니다. 결제 금액을 입력하면 식비 가계부에도 영구 기록됩니다.
             </p>
             <div className="space-y-1.5">
-              <label className="text-[11px] font-black text-stone-700 block">보관 위치 선택</label>
+              <label className="text-[12.5px] font-black text-stone-700 block">보관 위치 선택</label>
               <div className="grid grid-cols-2 gap-1.5">
                 {STORAGE_LOCATIONS.map((loc) => (
                   <button
                     key={loc}
                     type="button"
                     onClick={() => setStockInLocation(loc)}
-                    className={`py-2 px-2 rounded-xl text-[11px] font-extrabold border transition ${
+                    className={`py-2 px-2 rounded-xl text-[12.5px] font-extrabold border transition ${
                       stockInLocation === loc
                         ? "bg-emerald-600 text-white border-emerald-600"
                         : "bg-stone-50 text-stone-700 border-stone-200"
@@ -21743,18 +21947,18 @@ ${validText}
               placeholder="결제 금액(원) 입력 (선택)"
               value={stockInPrice}
               onChange={(e) => setStockInPrice(e.target.value)}
-              className="w-full px-3 py-2.5 rounded-xl border border-stone-200 text-xs font-bold"
+              className="w-full px-3 py-2.5 rounded-xl border border-stone-200 text-[13.5px] font-bold"
             />
             <div className="flex gap-2">
               <button
                 onClick={() => setStockInItem(null)}
-                className="flex-1 py-2.5 rounded-xl bg-stone-100 text-stone-600 text-xs font-extrabold"
+                className="flex-1 py-2.5 rounded-xl bg-stone-100 text-stone-600 text-[13.5px] font-extrabold"
               >
                 취소
               </button>
               <button
                 onClick={handleConfirmStockIn}
-                className="flex-1 py-2.5 rounded-xl bg-emerald-600 text-white text-xs font-extrabold"
+                className="flex-1 py-2.5 rounded-xl bg-emerald-600 text-white text-[13.5px] font-extrabold"
               >
                 냉장고 입고 완료
               </button>
@@ -21767,7 +21971,7 @@ ${validText}
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-sm w-full p-5 space-y-3">
             <div className="flex items-center justify-between">
-              <h3 className="text-sm font-black">
+              <h3 className="text-[15.5px] font-black">
                 {editingNotice ? "가족 공지 수정" : "새 가족 공지사항 작성"}
               </h3>
               <button onClick={() => setIsNoticeModalOpen(false)}>
@@ -21780,14 +21984,14 @@ ${validText}
               placeholder="제목"
               value={noticeForm.title}
               onChange={(e) => setNoticeForm({ ...noticeForm, title: e.target.value })}
-              className="w-full px-3 py-2.5 rounded-xl border border-stone-200 text-xs font-bold"
+              className="w-full px-3 py-2.5 rounded-xl border border-stone-200 text-[13.5px] font-bold"
             />
 
             <div className="grid grid-cols-2 gap-2">
               <select
                 value={noticeForm.category}
                 onChange={(e) => setNoticeForm({ ...noticeForm, category: e.target.value })}
-                className="px-3 py-2 rounded-xl border border-stone-200 text-xs font-bold"
+                className="px-3 py-2 rounded-xl border border-stone-200 text-[13.5px] font-bold"
               >
                 <option value="육아/아이들">👶 육아/아이들</option>
                 <option value="일정/행사">📅 일정/행사</option>
@@ -21797,7 +22001,7 @@ ${validText}
               <select
                 value={noticeForm.author}
                 onChange={(e) => setNoticeForm({ ...noticeForm, author: e.target.value })}
-                className="px-3 py-2 rounded-xl border border-stone-200 text-xs font-bold"
+                className="px-3 py-2 rounded-xl border border-stone-200 text-[13.5px] font-bold"
               >
                 <option value="김수혁">👨🏻 김수혁</option>
                 <option value="최아리나">👩🏻 최아리나</option>
@@ -21809,10 +22013,10 @@ ${validText}
               placeholder="상세 내용"
               value={noticeForm.content}
               onChange={(e) => setNoticeForm({ ...noticeForm, content: e.target.value })}
-              className="w-full px-3 py-2 rounded-xl border border-stone-200 text-xs"
+              className="w-full px-3 py-2 rounded-xl border border-stone-200 text-[13.5px]"
             />
 
-            <label className="flex items-center gap-2 text-xs font-bold text-stone-700 cursor-pointer">
+            <label className="flex items-center gap-2 text-[13.5px] font-bold text-stone-700 cursor-pointer">
               <input
                 type="checkbox"
                 checked={noticeForm.pinned}
@@ -21824,13 +22028,13 @@ ${validText}
             <div className="flex gap-2 pt-2">
               <button
                 onClick={() => setIsNoticeModalOpen(false)}
-                className="flex-1 py-2.5 rounded-xl bg-stone-100 text-stone-600 text-xs font-extrabold"
+                className="flex-1 py-2.5 rounded-xl bg-stone-100 text-stone-600 text-[13.5px] font-extrabold"
               >
                 취소
               </button>
               <button
                 onClick={handleSaveNotice}
-                className="flex-1 py-2.5 rounded-xl bg-stone-900 text-white text-xs font-extrabold"
+                className="flex-1 py-2.5 rounded-xl bg-stone-900 text-white text-[13.5px] font-extrabold"
               >
                 등록하기
               </button>
@@ -21842,20 +22046,20 @@ ${validText}
       {quickLogRecipe && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-sm w-full p-5 space-y-3">
-            <h3 className="text-sm font-black">식단표에 바로 등록하기</h3>
-            <div className="text-xs font-bold text-stone-700">{quickLogRecipe.title}</div>
+            <h3 className="text-[15.5px] font-black">식단표에 바로 등록하기</h3>
+            <div className="text-[13.5px] font-bold text-stone-700">{quickLogRecipe.title}</div>
             <input
               type="date"
               value={quickLogDate}
               onChange={(e) => setQuickLogDate(e.target.value)}
-              className="w-full px-3 py-2 rounded-xl border border-stone-200 text-xs font-bold"
+              className="w-full px-3 py-2 rounded-xl border border-stone-200 text-[13.5px] font-bold"
             />
             <div className="grid grid-cols-3 gap-1.5">
               {MEAL_SLOTS.map((s) => (
                 <button
                   key={s.id}
                   onClick={() => setQuickLogSlot(s.id)}
-                  className={`py-2 rounded-xl text-xs font-extrabold border ${
+                  className={`py-2 rounded-xl text-[13.5px] font-extrabold border ${
                     quickLogSlot === s.id
                       ? "bg-amber-500 text-white border-amber-500"
                       : "bg-stone-50 text-stone-600 border-stone-200"
@@ -21868,13 +22072,13 @@ ${validText}
             <div className="flex gap-2 pt-1">
               <button
                 onClick={() => setQuickLogRecipe(null)}
-                className="flex-1 py-2.5 rounded-xl bg-stone-100 text-stone-600 font-extrabold text-xs"
+                className="flex-1 py-2.5 rounded-xl bg-stone-100 text-stone-600 font-extrabold text-[13.5px]"
               >
                 취소
               </button>
               <button
                 onClick={handleConfirmQuickLog}
-                className="flex-1 py-2.5 rounded-xl bg-stone-900 text-white font-extrabold text-xs"
+                className="flex-1 py-2.5 rounded-xl bg-stone-900 text-white font-extrabold text-[13.5px]"
               >
                 식단표에 추가하기
               </button>
@@ -21888,23 +22092,23 @@ ${validText}
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-sm w-full p-5 space-y-3.5">
             <div className="flex items-center justify-between">
-              <h3 className="text-sm font-black">🍳 요리 완료 · 재고 차감 확인</h3>
+              <h3 className="text-[15.5px] font-black">🍳 요리 완료 · 재고 차감 확인</h3>
               <button onClick={() => setCookingConfirmModal(null)}>
                 <X className="w-5 h-5 text-stone-400" />
               </button>
             </div>
-            <div className="text-xs font-bold text-stone-700">
+            <div className="text-[13.5px] font-bold text-stone-700">
               <b>{cookingConfirmModal.recipeTitle}</b>에 사용한 냉장고 재료 수량을 확인해 주세요.
             </div>
             <div className="space-y-2 max-h-60 overflow-y-auto">
               {cookingConfirmModal.items.map((entry, idx) => (
                 <div
                   key={entry.item.id}
-                  className="p-2.5 rounded-xl bg-stone-50 border border-stone-200 flex items-center justify-between gap-2 text-xs"
+                  className="p-2.5 rounded-xl bg-stone-50 border border-stone-200 flex items-center justify-between gap-2 text-[13.5px]"
                 >
                   <div>
                     <div className="font-extrabold text-stone-900">{entry.item.name}</div>
-                    <div className="text-[10px] text-stone-500">
+                    <div className="text-[11.5px] text-stone-500">
                       현재고: {entry.item.quantity}{entry.item.unit}
                     </div>
                   </div>
@@ -21915,7 +22119,7 @@ ${validText}
                         copy[idx].deductQty = Math.max(0, copy[idx].deductQty - 1);
                         setCookingConfirmModal({ ...cookingConfirmModal, items: copy });
                       }}
-                      className="w-11 h-11 rounded-xl bg-white border border-stone-200 text-base font-black flex items-center justify-center"
+                      className="w-11 h-11 rounded-xl bg-white border border-stone-200 text-[17.5px] font-black flex items-center justify-center"
                     >
                       -
                     </button>
@@ -21931,7 +22135,7 @@ ${validText}
                         );
                         setCookingConfirmModal({ ...cookingConfirmModal, items: copy });
                       }}
-                      className="w-11 h-11 rounded-xl bg-white border border-stone-200 text-base font-black flex items-center justify-center"
+                      className="w-11 h-11 rounded-xl bg-white border border-stone-200 text-[17.5px] font-black flex items-center justify-center"
                     >
                       +
                     </button>
@@ -21942,14 +22146,14 @@ ${validText}
             <div className="flex gap-2 pt-1">
               <button
                 onClick={() => setCookingConfirmModal(null)}
-                className="flex-1 py-2.5 rounded-xl bg-stone-100 text-stone-600 text-xs font-extrabold"
+                className="flex-1 py-2.5 rounded-xl bg-stone-100 text-stone-600 text-[13.5px] font-extrabold"
               >
                 취소
               </button>
               <button
                 onClick={handleConfirmCookingDeduction}
                 disabled={isCookingDeducting}
-                className={`flex-1 py-2.5 rounded-xl text-white text-xs font-extrabold ${
+                className={`flex-1 py-2.5 rounded-xl text-white text-[13.5px] font-extrabold ${
                   isCookingDeducting ? "bg-stone-400 cursor-not-allowed" : "bg-stone-900 hover:bg-stone-800"
                 }`}
               >
@@ -21965,13 +22169,13 @@ ${validText}
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-sm w-full p-5 space-y-3.5 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between">
-              <h3 className="text-sm font-black">⚙️ 1일 2회 자동백업 · Gmail/Drive · 설정</h3>
+              <h3 className="text-[15.5px] font-black">⚙️ 1일 2회 자동백업 · Gmail/Drive · 설정</h3>
               <button onClick={() => setIsSettingsOpen(false)}>
                 <X className="w-5 h-5 text-stone-400" />
               </button>
             </div>
 
-            <div className="p-3 rounded-2xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-900 space-y-1">
+            <div className="p-3 rounded-2xl bg-emerald-50 border border-emerald-200 text-[13.5px] text-emerald-900 space-y-1">
               <div>
                 ✅ <b>하루 2회(오전/오후) 클라우드 스냅샷:</b> 정상 가동 중
               </div>
@@ -21988,14 +22192,14 @@ ${validText}
                 setIsSettingsOpen(false);
                 setIsPatchModalOpen(true);
               }}
-              className="w-full py-2.5 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-800 border border-stone-300 text-xs font-extrabold flex items-center justify-center gap-1.5"
+              className="w-full py-2.5 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-800 border border-stone-300 text-[13.5px] font-extrabold flex items-center justify-center gap-1.5"
             >
               <ClipboardList className="w-4 h-4 text-amber-600" />
               <span>📝 앱 패치노트 열람 및 새 업데이트 기록하기</span>
             </button>
 
             <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 space-y-2.5">
-              <div className="text-xs font-black text-amber-900 flex items-center gap-1.5">
+              <div className="text-[13.5px] font-black text-amber-900 flex items-center gap-1.5">
                 <CloudUpload className="w-4 h-4 text-amber-700" />
                 <span>Gmail / 구글 드라이브 백업 및 1초 복원</span>
               </div>
@@ -22008,12 +22212,12 @@ ${validText}
                   localStorage.setItem("kim_family_backup_email", e.target.value);
                 }}
                 placeholder="수신받을 네이버/이메일 주소 입력 (선택)"
-                className="w-full px-3 py-2 rounded-xl border border-amber-300 text-xs font-bold bg-white"
+                className="w-full px-3 py-2 rounded-xl border border-amber-300 text-[13.5px] font-bold bg-white"
               />
 
               <button
                 onClick={() => handleSendBackupToGmailOrDrive(false)}
-                className="w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-extrabold flex items-center justify-center gap-1.5 shadow-sm"
+                className="w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-[13.5px] font-extrabold flex items-center justify-center gap-1.5 shadow-sm"
               >
                 <Mail className="w-4 h-4" />
                 <span>전체 백업 보내기 (사진 포함 · 네이버메일/공유)</span>
@@ -22021,14 +22225,14 @@ ${validText}
 
               <button
                 onClick={() => handleSendBackupToGmailOrDrive(true)}
-                className="w-full py-2 rounded-xl bg-white hover:bg-amber-100/60 border border-amber-300 text-amber-900 text-[11px] font-extrabold flex items-center justify-center gap-1.5"
+                className="w-full py-2 rounded-xl bg-white hover:bg-amber-100/60 border border-amber-300 text-amber-900 text-[12.5px] font-extrabold flex items-center justify-center gap-1.5"
               >
                 <span>📄 사진 제외 경량 백업 보내기 (1MB 미만 초고속 공유)</span>
               </button>
 
               <button
                 onClick={handleDownloadJsonBackup}
-                className="w-full py-2.5 rounded-xl bg-stone-900 hover:bg-stone-800 text-white text-xs font-extrabold flex items-center justify-center gap-1.5 shadow-sm"
+                className="w-full py-2.5 rounded-xl bg-stone-900 hover:bg-stone-800 text-white text-[13.5px] font-extrabold flex items-center justify-center gap-1.5 shadow-sm"
               >
                 <FileJson className="w-4 h-4 text-amber-400" />
                 <span>전체 DB 원본(JSON) 1초 백업 다운로드</span>
@@ -22044,7 +22248,7 @@ ${validText}
               <button
                 onClick={() => jsonRestoreInputRef.current?.click()}
                 disabled={isRestoringJson}
-                className="w-full py-2.5 rounded-xl bg-white hover:bg-amber-100 text-amber-900 border border-amber-300 text-xs font-extrabold flex items-center justify-center gap-1.5"
+                className="w-full py-2.5 rounded-xl bg-white hover:bg-amber-100 text-amber-900 border border-amber-300 text-[13.5px] font-extrabold flex items-center justify-center gap-1.5"
               >
                 <RotateCcw className={`w-4 h-4 ${isRestoringJson ? "animate-spin" : ""}`} />
                 <span>
@@ -22057,10 +22261,10 @@ ${validText}
 
             {!isAdminUnlocked ? (
               <div className="bg-amber-50 p-3.5 rounded-2xl border border-amber-200 space-y-2">
-                <div className="text-xs font-extrabold text-amber-900">
+                <div className="text-[13.5px] font-extrabold text-amber-900">
                   🔒 관리자 전용 설정 영역입니다
                 </div>
-                <p className="text-[11px] text-amber-800">
+                <p className="text-[12.5px] text-amber-800">
                   API 키 설정, 육아지원군 비밀번호 관리 및 DB 복원은 관리자 비밀번호로 로그인해야 이용할 수 있습니다.
                 </p>
                 <button
@@ -22068,7 +22272,7 @@ ${validText}
                     setIsSettingsOpen(false);
                     setIsEditorUnlockModalOpen(true);
                   }}
-                  className="px-3 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-extrabold"
+                  className="px-3 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-[13.5px] font-extrabold"
                 >
                   🔑 관리자 로그인
                 </button>
@@ -22077,7 +22281,7 @@ ${validText}
               <>
               <div className="p-3 rounded-2xl bg-sky-50/70 border border-sky-200 space-y-2.5">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-black text-sky-950 flex items-center gap-1">
+                  <span className="text-[13.5px] font-black text-sky-950 flex items-center gap-1">
                     <ShieldCheck className="w-4 h-4 text-sky-700" />
                     3단계 권한 · 비밀번호 · 메뉴별 열람/편집 설정
                   </span>
@@ -22093,7 +22297,7 @@ ${validText}
                       });
                       showToast("권한 및 비밀번호 설정을 기본값으로 복원했습니다.");
                     }}
-                    className="text-[10px] font-extrabold text-sky-700 underline"
+                    className="text-[11.5px] font-extrabold text-sky-700 underline"
                   >
                     기본값 복원
                   </button>
@@ -22101,7 +22305,7 @@ ${validText}
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   <div className="bg-white p-2 rounded-xl border border-emerald-200 space-y-1">
-                    <div className="flex items-center justify-between text-[10px] font-extrabold text-emerald-900">
+                    <div className="flex items-center justify-between text-[11.5px] font-extrabold text-emerald-900">
                       <span>👑 관리자 비밀번호</span>
                       <span>현재: {adminCode}</span>
                     </div>
@@ -22111,7 +22315,7 @@ ${validText}
                         value={adminCodeDraft}
                         onChange={(e) => setAdminCodeDraft(e.target.value)}
                         placeholder="관리자 비밀번호"
-                        className="flex-1 min-w-0 px-2.5 py-1 rounded-lg border border-emerald-200 text-xs font-bold"
+                        className="flex-1 min-w-0 px-2.5 py-1 rounded-lg border border-emerald-200 text-[13.5px] font-bold"
                       />
                       <button
                         type="button"
@@ -22128,7 +22332,7 @@ ${validText}
                           await saveAccessConfigToCloud({ adminCode: nextA });
                           showToast(`👑 관리자 비밀번호가 [${nextA}]로 변경되었습니다!`);
                         }}
-                        className="px-2.5 py-1 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-[11px] font-extrabold shrink-0"
+                        className="px-2.5 py-1 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-[12.5px] font-extrabold shrink-0"
                       >
                         저장
                       </button>
@@ -22136,7 +22340,7 @@ ${validText}
                   </div>
 
                   <div className="bg-white p-2 rounded-xl border border-sky-200 space-y-1">
-                    <div className="flex items-center justify-between text-[10px] font-extrabold text-sky-900">
+                    <div className="flex items-center justify-between text-[11.5px] font-extrabold text-sky-900">
                       <span>🌿 육아지원군 비밀번호</span>
                       <span>현재: {helperCode}</span>
                     </div>
@@ -22146,7 +22350,7 @@ ${validText}
                         value={helperCodeDraft}
                         onChange={(e) => setHelperCodeDraft(e.target.value)}
                         placeholder="육아지원군 비밀번호"
-                        className="flex-1 min-w-0 px-2.5 py-1 rounded-lg border border-sky-200 text-xs font-bold"
+                        className="flex-1 min-w-0 px-2.5 py-1 rounded-lg border border-sky-200 text-[13.5px] font-bold"
                       />
                       <button
                         type="button"
@@ -22163,7 +22367,7 @@ ${validText}
                           await saveAccessConfigToCloud({ helperCode: nextC });
                           showToast(`🌿 육아지원군 비밀번호가 [${nextC}]로 변경되었습니다!`);
                         }}
-                        className="px-2.5 py-1 rounded-lg bg-sky-700 hover:bg-sky-800 text-white text-[11px] font-extrabold shrink-0"
+                        className="px-2.5 py-1 rounded-lg bg-sky-700 hover:bg-sky-800 text-white text-[12.5px] font-extrabold shrink-0"
                       >
                         저장
                       </button>
@@ -22172,7 +22376,7 @@ ${validText}
                 </div>
 
                 <div className="bg-white rounded-xl border border-sky-200 overflow-hidden">
-                  <div className="grid grid-cols-[1fr_54px_54px_54px] items-center bg-sky-100/70 px-2.5 py-1.5 text-[10px] font-black text-sky-950 text-center">
+                  <div className="grid grid-cols-[1fr_54px_54px_54px] items-center bg-sky-100/70 px-2.5 py-1.5 text-[11.5px] font-black text-sky-950 text-center">
                     <span className="text-left">메뉴</span>
                     <span>미로그인</span>
                     <span>지원군열람</span>
@@ -22186,7 +22390,7 @@ ${validText}
                       return (
                         <div
                           key={t.id}
-                          className="grid grid-cols-[1fr_54px_54px_54px] items-center px-2.5 py-1.5 text-[11px] font-bold text-stone-800"
+                          className="grid grid-cols-[1fr_54px_54px_54px] items-center px-2.5 py-1.5 text-[12.5px] font-bold text-stone-800"
                         >
                           <span className="truncate">{t.label}</span>
                           <div className="flex justify-center">
@@ -22198,7 +22402,7 @@ ${validText}
                                   : [...guestAllowedTabs, t.id];
                                 await saveAccessConfigToCloud({ guestAllowedTabs: nextG });
                               }}
-                              className={`w-7 h-5 rounded text-[10px] font-black border ${
+                              className={`w-7 h-5 rounded text-[11.5px] font-black border ${
                                 gView ? "bg-amber-500 text-white border-amber-500" : "bg-stone-100 text-stone-400 border-stone-200"
                               }`}
                             >
@@ -22215,7 +22419,7 @@ ${validText}
                                 const nextE = hView ? helperEditTabs.filter((x) => x !== t.id) : helperEditTabs;
                                 await saveAccessConfigToCloud({ helperViewTabs: nextV, helperEditTabs: nextE });
                               }}
-                              className={`w-7 h-5 rounded text-[10px] font-black border ${
+                              className={`w-7 h-5 rounded text-[11.5px] font-black border ${
                                 hView ? "bg-sky-600 text-white border-sky-600" : "bg-stone-100 text-stone-400 border-stone-200"
                               }`}
                             >
@@ -22232,7 +22436,7 @@ ${validText}
                                 const nextV = !hEdit && !hView ? [...helperAllowedTabs, t.id] : helperAllowedTabs;
                                 await saveAccessConfigToCloud({ helperViewTabs: nextV, helperEditTabs: nextE });
                               }}
-                              className={`w-7 h-5 rounded text-[10px] font-black border ${
+                              className={`w-7 h-5 rounded text-[11.5px] font-black border ${
                                 hEdit ? "bg-emerald-600 text-white border-emerald-600" : "bg-stone-100 text-stone-400 border-stone-200"
                               }`}
                             >
@@ -22257,7 +22461,7 @@ ${validText}
                         showToast(`링크: ${url}`);
                       }
                     }}
-                    className="py-1.5 rounded-xl bg-white hover:bg-emerald-50 text-emerald-800 border border-emerald-200 text-[10px] font-extrabold"
+                    className="py-1.5 rounded-xl bg-white hover:bg-emerald-50 text-emerald-800 border border-emerald-200 text-[11.5px] font-extrabold"
                   >
                     🔗 관리자 링크 복사
                   </button>
@@ -22272,14 +22476,14 @@ ${validText}
                         showToast(`링크: ${url}`);
                       }
                     }}
-                    className="py-1.5 rounded-xl bg-white hover:bg-sky-100 text-sky-800 border border-sky-200 text-[10px] font-extrabold"
+                    className="py-1.5 rounded-xl bg-white hover:bg-sky-100 text-sky-800 border border-sky-200 text-[11.5px] font-extrabold"
                   >
                     🔗 육아지원군 링크 복사
                   </button>
                 </div>
               </div>
             <div className="p-3 rounded-2xl bg-stone-50 border border-stone-200 space-y-2.5">
-              <div className="text-xs font-black text-stone-800">
+              <div className="text-[13.5px] font-black text-stone-800">
                 🤖 듀얼 AI 엔진 설정 (GPT + Gemini)
               </div>
 
@@ -22293,7 +22497,7 @@ ${validText}
                     key={opt.id}
                     type="button"
                     onClick={() => setAiProvider(opt.id)}
-                    className={`py-1.5 rounded-xl text-[10px] font-extrabold border ${
+                    className={`py-1.5 rounded-xl text-[11.5px] font-extrabold border ${
                       aiProvider === opt.id
                         ? "bg-stone-900 text-white border-stone-900"
                         : "bg-white text-stone-600 border-stone-300"
@@ -22306,10 +22510,10 @@ ${validText}
 
               <div>
                 <div className="flex items-center justify-between mb-1">
-                  <label className="text-[10px] font-bold text-stone-600">
+                  <label className="text-[11.5px] font-bold text-stone-600">
                     🟢 OpenAI GPT API 키
                   </label>
-                  <span className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded ${openaiApiKey ? "bg-emerald-100 text-emerald-800" : "bg-stone-200 text-stone-500"}`}>
+                  <span className={`text-[10.5px] font-extrabold px-1.5 py-0.5 rounded ${openaiApiKey ? "bg-emerald-100 text-emerald-800" : "bg-stone-200 text-stone-500"}`}>
                     {openaiApiKey ? "✅ 저장됨" : "미입력"}
                   </span>
                 </div>
@@ -22318,16 +22522,16 @@ ${validText}
                   value={tempOpenaiKeyInput}
                   onChange={(e) => setTempOpenaiKeyInput(e.target.value)}
                   placeholder="sk-proj-... 또는 sk-... 입력"
-                  className="w-full px-3 py-2 rounded-xl border border-stone-300 text-xs font-bold bg-white"
+                  className="w-full px-3 py-2 rounded-xl border border-stone-300 text-[13.5px] font-bold bg-white"
                 />
               </div>
 
               <div>
                 <div className="flex items-center justify-between mb-1">
-                  <label className="text-[10px] font-bold text-stone-600">
+                  <label className="text-[11.5px] font-bold text-stone-600">
                     🔵 Google Gemini API 키
                   </label>
-                  <span className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded ${geminiApiKey ? "bg-emerald-100 text-emerald-800" : "bg-stone-200 text-stone-500"}`}>
+                  <span className={`text-[10.5px] font-extrabold px-1.5 py-0.5 rounded ${geminiApiKey ? "bg-emerald-100 text-emerald-800" : "bg-stone-200 text-stone-500"}`}>
                     {geminiApiKey ? "✅ 저장됨" : "미입력"}
                   </span>
                 </div>
@@ -22336,12 +22540,12 @@ ${validText}
                   value={tempKeyInput}
                   onChange={(e) => setTempKeyInput(e.target.value)}
                   placeholder="Gemini API 키 입력"
-                  className="w-full px-3 py-2 rounded-xl border border-stone-300 text-xs font-bold bg-white"
+                  className="w-full px-3 py-2 rounded-xl border border-stone-300 text-[13.5px] font-bold bg-white"
                 />
               </div>
 
               {aiDiagStatus && (
-                <div className="p-2.5 rounded-xl bg-white border-2 border-amber-300 text-[11px] font-bold text-stone-800 whitespace-pre-line shadow-sm">
+                <div className="p-2.5 rounded-xl bg-white border-2 border-amber-300 text-[12.5px] font-bold text-stone-800 whitespace-pre-line shadow-sm">
                   {aiDiagStatus}
                 </div>
               )}
@@ -22352,13 +22556,13 @@ ${validText}
                     handleSaveApiKey(tempKeyInput, tempOpenaiKeyInput, aiProvider);
                     setAiDiagStatus(`✅ 설정이 저장되었습니다! (엔진: ${aiProvider}, OpenAI: ${tempOpenaiKeyInput ? "입력됨" : "없음"}, Gemini: ${tempKeyInput ? "입력됨" : "없음"})`);
                   }}
-                  className="py-2 rounded-xl bg-stone-800 text-white text-xs font-extrabold"
+                  className="py-2 rounded-xl bg-stone-800 text-white text-[13.5px] font-extrabold"
                 >
                   AI 설정 저장
                 </button>
                 <button
                   onClick={handleRunAiDiagnostic}
-                  className="py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-extrabold"
+                  className="py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-[13.5px] font-extrabold"
                 >
                   AI 연결 자가진단
                 </button>
@@ -22370,10 +22574,10 @@ ${validText}
             {aiCallLogs.length > 0 && (
               <div className="p-3 rounded-2xl bg-stone-50 border border-stone-200 space-y-1.5">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-black text-stone-800">🩺 AI 오류센터 (최근 호출 기록)</span>
+                  <span className="text-[13.5px] font-black text-stone-800">🩺 AI 오류센터 (최근 호출 기록)</span>
                   <button
                     onClick={() => setAiCallLogs([])}
-                    className="text-[10px] font-bold text-stone-400 hover:text-stone-700"
+                    className="text-[11.5px] font-bold text-stone-400 hover:text-stone-700"
                   >
                     지우기
                   </button>
@@ -22382,7 +22586,7 @@ ${validText}
                   {aiCallLogs.map((log) => (
                     <div
                       key={log.id}
-                      className={`p-2 rounded-xl text-[10px] border ${
+                      className={`p-2 rounded-xl text-[11.5px] border ${
                         log.ok
                           ? "bg-emerald-50 border-emerald-200 text-emerald-900"
                           : "bg-rose-50 border-rose-200 text-rose-900"
@@ -22400,23 +22604,23 @@ ${validText}
 
             <div className="p-3 rounded-2xl bg-stone-50 border border-stone-200 space-y-2">
               <div className="flex items-center justify-between gap-2">
-                <span className="text-xs font-black text-stone-800">
+                <span className="text-[13.5px] font-black text-stone-800">
                   🧪 핵심 로직 자가진단 (단위·날짜·매칭·완성도)
                 </span>
                 <button
                   onClick={runCoreLogicSelfTests}
-                  className="px-2.5 py-1 rounded-lg bg-stone-900 text-white text-[11px] font-extrabold shrink-0"
+                  className="px-2.5 py-1 rounded-lg bg-stone-900 text-white text-[12.5px] font-extrabold shrink-0"
                 >
                   테스트 실행
                 </button>
               </div>
               {selfTestResults && (
                 <div className="space-y-1">
-                  <div className="text-[11px] font-black text-emerald-700">
+                  <div className="text-[12.5px] font-black text-emerald-700">
                     결과: {selfTestResults.passed}/{selfTestResults.total} 통과
                   </div>
                   {selfTestResults.cases.map((c, idx) => (
-                    <div key={idx} className="text-[11px] font-semibold text-stone-700">
+                    <div key={idx} className="text-[12.5px] font-semibold text-stone-700">
                       {c.pass ? "✅" : "❌"} {c.name}
                     </div>
                   ))}
@@ -22427,7 +22631,7 @@ ${validText}
             {isAdminUnlocked && (
               <div className="p-3 rounded-2xl bg-stone-50 border border-stone-200 space-y-2">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-black text-stone-800">
+                  <span className="text-[13.5px] font-black text-stone-800">
                     🗑️ 최근 삭제 로그 ({deletedLogs.length}건)
                   </span>
                   {deletedLogs.length > 0 && (
@@ -22439,14 +22643,14 @@ ${validText}
                         } catch (e) {}
                         showToast("삭제 로그가 비워졌습니다.");
                       }}
-                      className="text-[11px] font-bold text-stone-400 hover:text-stone-700"
+                      className="text-[12.5px] font-bold text-stone-400 hover:text-stone-700"
                     >
                       비우기
                     </button>
                   )}
                 </div>
                 {deletedLogs.length === 0 ? (
-                  <div className="text-[11px] text-stone-400">최근 삭제된 기록이 없습니다.</div>
+                  <div className="text-[12.5px] text-stone-400">최근 삭제된 기록이 없습니다.</div>
                 ) : (
                   <div className="space-y-1.5 max-h-36 overflow-y-auto">
                     {deletedLogs.map((log) => (
@@ -22455,15 +22659,15 @@ ${validText}
                         className="p-2 rounded-xl bg-white border border-stone-200 flex items-center justify-between gap-2"
                       >
                         <div className="min-w-0">
-                          <div className="text-xs font-bold text-stone-800 truncate">{log.label}</div>
-                          <div className="text-[11px] text-stone-400">
+                          <div className="text-[13.5px] font-bold text-stone-800 truncate">{log.label}</div>
+                          <div className="text-[12.5px] text-stone-400">
                             {log.type === "meal" ? "식단" : log.type === "fridge" ? "냉장고" : "일정"} · {log.deletedAt}
                           </div>
                         </div>
                         <button
                           onClick={() => restoreDeletedLogEntry(log)}
                           disabled={restoringLogIds.includes(log.logId)}
-                          className={`px-3 py-1.5 rounded-lg text-xs font-extrabold shrink-0 ${
+                          className={`px-3 py-1.5 rounded-lg text-[13.5px] font-extrabold shrink-0 ${
                             restoringLogIds.includes(log.logId)
                               ? "bg-stone-200 text-stone-400"
                               : "bg-amber-100 hover:bg-amber-200 text-amber-900"
@@ -22480,7 +22684,7 @@ ${validText}
 
             <button
               onClick={handleRestoreAllDeleted}
-              className="w-full py-2.5 rounded-xl bg-stone-200 hover:bg-stone-300 text-stone-800 text-xs font-extrabold flex items-center justify-center gap-1.5"
+              className="w-full py-2.5 rounded-xl bg-stone-200 hover:bg-stone-300 text-stone-800 text-[13.5px] font-extrabold flex items-center justify-center gap-1.5"
             >
               <Database className="w-4 h-4" />
               <span>숨겨지거나 삭제된 기존 데이터 전체 다시 불러오기</span>
@@ -22488,7 +22692,7 @@ ${validText}
 
             <button
               onClick={handleExportCsv}
-              className="w-full py-2.5 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-extrabold flex items-center justify-center gap-1.5"
+              className="w-full py-2.5 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white text-[13.5px] font-extrabold flex items-center justify-center gap-1.5"
             >
               <Download className="w-4 h-4" />
               <span>엑셀 열람용(CSV) 통합 파일 다운로드</span>
@@ -22505,11 +22709,11 @@ ${validText}
                 <Bell className="w-3.5 h-3.5" />
               </span>
               <div className="min-w-0">
-                <div className="text-[11px] font-black text-stone-900 truncate">
+                <div className="text-[12.5px] font-black text-stone-900 truncate">
                   [{liveActivityPopup.actor}] {liveActivityPopup.category} {liveActivityPopup.action}
                 </div>
                 {liveActivityPopup.detail && (
-                  <div className="text-[11px] text-stone-700 truncate">{liveActivityPopup.detail}</div>
+                  <div className="text-[12.5px] text-stone-700 truncate">{liveActivityPopup.detail}</div>
                 )}
               </div>
             </div>
@@ -22530,14 +22734,14 @@ ${validText}
                 try { localStorage.setItem("kim_last_seen_activity_ms_v1", String(nowMs)); } catch (e) {}
                 setLiveActivityPopup(null);
               }}
-              className="px-2.5 py-1 rounded-lg bg-stone-100 text-stone-700 text-[10px] font-extrabold"
+              className="px-2.5 py-1 rounded-lg bg-stone-100 text-stone-700 text-[11.5px] font-extrabold"
             >
               확인
             </button>
             <button
               type="button"
               onClick={() => handleNavigateFromActivity(liveActivityPopup)}
-              className="px-2.5 py-1 rounded-lg bg-[#5E7A65] text-white text-[10px] font-extrabold"
+              className="px-2.5 py-1 rounded-lg bg-[#5E7A65] text-white text-[11.5px] font-extrabold"
             >
               바로 보기
             </button>
@@ -22550,7 +22754,7 @@ ${validText}
                 setLiveActivityPopup(null);
                 setIsActivityModalOpen(true);
               }}
-              className="px-2.5 py-1 rounded-lg bg-stone-800 text-white text-[10px] font-extrabold"
+              className="px-2.5 py-1 rounded-lg bg-stone-800 text-white text-[11.5px] font-extrabold"
             >
               내역
             </button>
@@ -22579,7 +22783,7 @@ ${validText}
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex items-center justify-between">
-                <h3 className="text-sm font-black text-stone-900">📋 식단 골라서 복사하기</h3>
+                <h3 className="text-[15.5px] font-black text-stone-900">📋 식단 골라서 복사하기</h3>
                 <button type="button" onClick={() => setIsMealCopyModalOpen(false)}>
                   <X className="w-5 h-5 text-stone-400" />
                 </button>
@@ -22587,12 +22791,12 @@ ${validText}
 
               <div className="p-3 rounded-2xl bg-[#FAF8F3] border border-stone-200 space-y-2">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-xs font-black text-stone-900">1. 복사할 날짜 · 끼니 선택</span>
+                  <span className="text-[13.5px] font-black text-stone-900">1. 복사할 날짜 · 끼니 선택</span>
                   <input
                     type="date"
                     value={copyFromDate}
                     onChange={(e) => e.target.value && setFromAndSelect(e.target.value)}
-                    className="px-2 py-1 rounded-lg border border-stone-200 bg-white text-[11px] font-bold"
+                    className="px-2 py-1 rounded-lg border border-stone-200 bg-white text-[12.5px] font-bold"
                   />
                 </div>
                 <div className="flex flex-wrap gap-1">
@@ -22605,7 +22809,7 @@ ${validText}
                       key={q.label}
                       type="button"
                       onClick={() => setFromAndSelect(q.date)}
-                      className={`px-2.5 py-1 rounded-lg text-[10px] font-extrabold border ${
+                      className={`px-2.5 py-1 rounded-lg text-[11.5px] font-extrabold border ${
                         copyFromDate === q.date
                           ? "bg-stone-900 text-white border-stone-900"
                           : "bg-white text-stone-600 border-stone-200"
@@ -22622,7 +22826,7 @@ ${validText}
                           selectedCopyMealIds.length === srcMeals.length ? [] : srcMeals.map((m) => m.id)
                         )
                       }
-                      className="ml-auto px-2 py-1 rounded-lg bg-[#EEF3EE] text-[#35503C] text-[10px] font-extrabold"
+                      className="ml-auto px-2 py-1 rounded-lg bg-[#EEF3EE] text-[#35503C] text-[11.5px] font-extrabold"
                     >
                       {selectedCopyMealIds.length === srcMeals.length ? "전체 해제" : "전체 선택"}
                     </button>
@@ -22631,7 +22835,7 @@ ${validText}
 
                 <div className="max-h-40 overflow-y-auto space-y-1">
                   {srcMeals.length === 0 ? (
-                    <div className="py-4 text-center text-[11px] font-bold text-stone-400">
+                    <div className="py-4 text-center text-[12.5px] font-bold text-stone-400">
                       {copyFromDate}에 등록된 식단이 없습니다.
                     </div>
                   ) : (
@@ -22653,15 +22857,15 @@ ${validText}
                           }`}
                         >
                           <span
-                            className={`w-4 h-4 rounded flex items-center justify-center text-[10px] font-black shrink-0 ${
+                            className={`w-4 h-4 rounded flex items-center justify-center text-[11.5px] font-black shrink-0 ${
                               checked ? "bg-[#5E7A65] text-white" : "border border-stone-300 bg-white"
                             }`}
                           >
                             {checked ? "✓" : ""}
                           </span>
-                          <span className="text-[10px] font-black text-stone-500 shrink-0">{m.slot}</span>
-                          <span className="text-xs font-extrabold truncate flex-1">{m.menu}</span>
-                          <span className="text-[10px] font-bold text-stone-400 shrink-0">
+                          <span className="text-[11.5px] font-black text-stone-500 shrink-0">{m.slot}</span>
+                          <span className="text-[13.5px] font-extrabold truncate flex-1">{m.menu}</span>
+                          <span className="text-[11.5px] font-bold text-stone-400 shrink-0">
                             {toSafeArray(m.members).join(",")}
                           </span>
                         </button>
@@ -22673,12 +22877,12 @@ ${validText}
 
               <div className="p-3 rounded-2xl bg-[#F3EEE4]/60 border border-stone-200 space-y-2">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-xs font-black text-stone-900">2. 붙여넣을 날짜 선택</span>
+                  <span className="text-[13.5px] font-black text-stone-900">2. 붙여넣을 날짜 선택</span>
                   <input
                     type="date"
                     value={copyToDate}
                     onChange={(e) => e.target.value && setCopyToDate(e.target.value)}
-                    className="px-2 py-1 rounded-lg border border-stone-200 bg-white text-[11px] font-bold"
+                    className="px-2 py-1 rounded-lg border border-stone-200 bg-white text-[12.5px] font-bold"
                   />
                 </div>
                 <div className="flex flex-wrap gap-1">
@@ -22692,7 +22896,7 @@ ${validText}
                       key={q.label}
                       type="button"
                       onClick={() => setCopyToDate(q.date)}
-                      className={`px-2.5 py-1 rounded-lg text-[10px] font-extrabold border ${
+                      className={`px-2.5 py-1 rounded-lg text-[11.5px] font-extrabold border ${
                         copyToDate === q.date
                           ? "bg-stone-900 text-white border-stone-900"
                           : "bg-white text-stone-600 border-stone-200"
@@ -22711,7 +22915,7 @@ ${validText}
                       key={st.id}
                       type="button"
                       onClick={() => setCopyTargetStatus(st.id)}
-                      className={`flex-1 py-1 rounded-lg text-[10px] font-extrabold ${
+                      className={`flex-1 py-1 rounded-lg text-[11.5px] font-extrabold ${
                         copyTargetStatus === st.id ? "bg-[#5E7A65] text-white" : "text-stone-500"
                       }`}
                     >
@@ -22724,7 +22928,7 @@ ${validText}
               <button
                 type="button"
                 onClick={handleExecuteSelectedMealCopy}
-                className="w-full py-2.5 rounded-xl bg-[#5E7A65] hover:bg-[#4E6855] text-white text-xs font-extrabold"
+                className="w-full py-2.5 rounded-xl bg-[#5E7A65] hover:bg-[#4E6855] text-white text-[13.5px] font-extrabold"
               >
                 📋 선택한 {selectedCopyMealIds.length}끼 ({copyToDate})에 붙여넣기
               </button>
@@ -22744,10 +22948,10 @@ ${validText}
           >
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="text-sm font-black text-stone-900">
+                <h3 className="text-[15.5px] font-black text-stone-900">
                   {weatherInfo.emoji} {weatherInfo.location} 상세 날씨
                 </h3>
-                <div className="text-[10px] font-bold text-stone-400">
+                <div className="text-[11.5px] font-bold text-stone-400">
                   업데이트 {weatherInfo.updatedTime} · 현재 {weatherInfo.temp}°C (최저 {weatherInfo.min}° / 최고 {weatherInfo.max}°)
                 </div>
               </div>
@@ -22755,7 +22959,7 @@ ${validText}
                 <button
                   type="button"
                   onClick={fetchSeoulJungGuWeather}
-                  className="px-2 py-1 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 text-[10px] font-extrabold"
+                  className="px-2 py-1 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 text-[11.5px] font-extrabold"
                 >
                   ↻ 갱신
                 </button>
@@ -22768,7 +22972,7 @@ ${validText}
                       showToast("📋 날씨 요약이 복사되었습니다!");
                     } catch (e) {}
                   }}
-                  className="px-2 py-1 rounded-lg bg-[#EEF3EE] text-[#35503C] text-[10px] font-extrabold"
+                  className="px-2 py-1 rounded-lg bg-[#EEF3EE] text-[#35503C] text-[11.5px] font-extrabold"
                 >
                   📋 복사
                 </button>
@@ -22779,7 +22983,7 @@ ${validText}
             </div>
 
             <div
-              className={`p-3 rounded-2xl border text-xs font-extrabold ${
+              className={`p-3 rounded-2xl border text-[13.5px] font-extrabold ${
                 weatherInfo.hasUpcomingRain
                   ? "bg-sky-50 border-sky-200 text-sky-900"
                   : "bg-[#EEF3EE] border-[#C9D8CC] text-[#35503C]"
@@ -22790,7 +22994,7 @@ ${validText}
 
             {Array.isArray(weatherInfo.todayHourly) && weatherInfo.todayHourly.length > 0 && (
               <div className="space-y-1.5">
-                <div className="text-[11px] font-black text-stone-800">⏰ 오늘 시간대별 예보 (강수확률·강수량)</div>
+                <div className="text-[12.5px] font-black text-stone-800">⏰ 오늘 시간대별 예보 (강수확률·강수량)</div>
                 <div className="flex gap-1.5 overflow-x-auto pb-1">
                   {weatherInfo.todayHourly
                     .filter((h) => h.hour >= new Date().getHours())
@@ -22801,33 +23005,33 @@ ${validText}
                           h.isRainy ? "bg-sky-50 border-sky-200" : "bg-stone-50 border-stone-200"
                         }`}
                       >
-                        <div className="text-[10px] font-black text-stone-500">{h.hour}시</div>
-                        <div className="text-base leading-none">{h.emoji}</div>
-                        <div className="text-xs font-black text-stone-900">{h.temp}°</div>
-                        <div className={`text-[10px] font-extrabold ${h.rainProb >= 40 ? "text-sky-700" : "text-stone-400"}`}>
+                        <div className="text-[11.5px] font-black text-stone-500">{h.hour}시</div>
+                        <div className="text-[17.5px] leading-none">{h.emoji}</div>
+                        <div className="text-[13.5px] font-black text-stone-900">{h.temp}°</div>
+                        <div className={`text-[11.5px] font-extrabold ${h.rainProb >= 40 ? "text-sky-700" : "text-stone-400"}`}>
                           ☔ {h.rainProb}%
                         </div>
-                        {h.rainMm > 0 && <div className="text-[9px] font-bold text-sky-600">{h.rainMm}mm</div>}
+                        {h.rainMm > 0 && <div className="text-[10.5px] font-bold text-sky-600">{h.rainMm}mm</div>}
                       </div>
                     ))}
                 </div>
               </div>
             )}
 
-            <div className="p-2.5 rounded-2xl bg-[#FAF8F3] border border-stone-200 flex items-center justify-between text-xs font-bold text-stone-700">
+            <div className="p-2.5 rounded-2xl bg-[#FAF8F3] border border-stone-200 flex items-center justify-between text-[13.5px] font-bold text-stone-700">
               <span>😷 미세먼지 {weatherInfo.pm10} ({weatherInfo.dust?.label || "-"})</span>
               <span>초미세 {weatherInfo.pm25}</span>
             </div>
 
             {Array.isArray(weatherInfo.weekly) && weatherInfo.weekly.length > 0 && (
               <div className="space-y-1">
-                <div className="text-[11px] font-black text-stone-800">📅 이번 주간 예보</div>
+                <div className="text-[12.5px] font-black text-stone-800">📅 이번 주간 예보</div>
                 <div className="divide-y divide-stone-100 rounded-2xl border border-stone-200 bg-white">
                   {weatherInfo.weekly.map((w) => (
-                    <div key={w.date} className={`px-3 py-1.5 flex items-center justify-between text-xs ${w.rainProb >= 40 ? "bg-sky-50/50" : ""}`}>
+                    <div key={w.date} className={`px-3 py-1.5 flex items-center justify-between text-[13.5px] ${w.rainProb >= 40 ? "bg-sky-50/50" : ""}`}>
                       <span className="font-extrabold text-stone-800 w-16">{w.dayName}</span>
-                      <span className="text-base">{w.emoji}</span>
-                      <span className={`text-[11px] font-extrabold ${w.rainProb >= 40 ? "text-sky-700" : "text-stone-400"}`}>
+                      <span className="text-[17.5px]">{w.emoji}</span>
+                      <span className={`text-[12.5px] font-extrabold ${w.rainProb >= 40 ? "text-sky-700" : "text-stone-400"}`}>
                         ☔ {w.rainProb}%
                       </span>
                       <span className="font-black text-stone-800">
@@ -22843,7 +23047,7 @@ ${validText}
               href="https://weather.naver.com/today/09140104"
               target="_blank"
               rel="noopener noreferrer"
-              className="w-full py-2.5 rounded-xl bg-stone-900 hover:bg-stone-800 text-white text-xs font-extrabold flex items-center justify-center gap-1.5"
+              className="w-full py-2.5 rounded-xl bg-stone-900 hover:bg-stone-800 text-white text-[13.5px] font-extrabold flex items-center justify-center gap-1.5"
             >
               🔗 네이버 날씨에서 더 자세히 보기
             </a>
@@ -22883,14 +23087,14 @@ ${validText}
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between">
-              <h3 className="text-sm font-black text-stone-900">
+              <h3 className="text-[15.5px] font-black text-stone-900">
                 {zipImportPicker === "diary" ? "📥 외부 육아일기(.zip) 가져오기" : "📥 베이비타임 활동(.zip) 가져오기"}
               </h3>
               <button type="button" onClick={() => setZipImportPicker(null)}>
                 <X className="w-5 h-5 text-stone-400" />
               </button>
             </div>
-            <p className="text-xs font-semibold text-stone-600">
+            <p className="text-[13.5px] font-semibold text-stone-600">
               어느 아이의 기록으로 저장할까요? (ZIP 여러 개 동시 선택 가능)
             </p>
             <div className="grid grid-cols-2 gap-2">
@@ -22914,8 +23118,8 @@ ${validText}
                       : "bg-stone-50 border-stone-200"
                   }`}
                 >
-                  <div className="text-sm font-black text-stone-900">{ch.label}</div>
-                  <div className="text-[10px] font-bold text-stone-500 mt-0.5">{ch.sub}</div>
+                  <div className="text-[15.5px] font-black text-stone-900">{ch.label}</div>
+                  <div className="text-[11.5px] font-bold text-stone-500 mt-0.5">{ch.sub}</div>
                 </button>
               ))}
             </div>
@@ -22973,7 +23177,7 @@ ${validText}
                 <button type="button" onClick={() => setActivityEditModal(null)} className="p-0.5 hover:opacity-80">
                   <X className="w-5 h-5" />
                 </button>
-                <h3 className="text-sm font-black">
+                <h3 className="text-[15.5px] font-black">
                   {actMeta.emoji} {activityEditModal.type}
                 </h3>
               </div>
@@ -22991,7 +23195,7 @@ ${validText}
                 <button
                   type="button"
                   onClick={handleSaveActivityModal}
-                  className="px-3 py-1 rounded-xl bg-white/20 hover:bg-white/30 text-xs font-black"
+                  className="px-3 py-1 rounded-xl bg-white/20 hover:bg-white/30 text-[13.5px] font-black"
                 >
                   저장
                 </button>
@@ -23013,7 +23217,7 @@ ${validText}
                       const newMs = new Date(`${nd}T${hh}:${mm}:00`).getTime();
                       setActivityEditModal((p) => ({ ...p, date: nd, startMs: newMs }));
                     }}
-                    className="text-xs font-extrabold text-stone-600 bg-stone-50 px-2 py-1 rounded-lg border border-stone-200"
+                    className="text-[13.5px] font-extrabold text-stone-600 bg-stone-50 px-2 py-1 rounded-lg border border-stone-200"
                   />
                   <input
                     type="time"
@@ -23030,12 +23234,12 @@ ${validText}
                         });
                       }
                     }}
-                    className="text-sm font-black text-stone-900 bg-stone-50 px-2 py-1 rounded-lg border border-stone-200"
+                    className="text-[15.5px] font-black text-stone-900 bg-stone-50 px-2 py-1 rounded-lg border border-stone-200"
                   />
                   <button
                     type="button"
                     onClick={handleFinishedNow}
-                    className="text-[11px] font-extrabold text-[#35503C] hover:underline whitespace-nowrap"
+                    className="text-[12.5px] font-extrabold text-[#35503C] hover:underline whitespace-nowrap"
                   >
                     {endMsVal ? `~ ${formatTime12Ko(endMsVal)}` : "+ 완료 시간"}
                   </button>
@@ -23054,7 +23258,7 @@ ${validText}
                       key={b.label}
                       type="button"
                       onClick={() => shiftStartMin(b.min)}
-                      className="py-1.5 rounded-full border border-stone-200 bg-stone-50 hover:bg-stone-100 text-[10px] font-extrabold text-stone-700"
+                      className="py-1.5 rounded-full border border-stone-200 bg-stone-50 hover:bg-stone-100 text-[11.5px] font-extrabold text-stone-700"
                     >
                       {b.label}
                     </button>
@@ -23066,13 +23270,13 @@ ${validText}
               {(actMeta.timed || Number(activityEditModal.durationMin) > 0) && (
                 <div className="space-y-2.5 pb-3 border-b border-stone-100">
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-xs font-extrabold text-stone-600">
+                    <span className="text-[13.5px] font-extrabold text-stone-600">
                       {isFeed ? "수유 시간" : "소요 시간"}
                     </span>
                     <button
                       type="button"
                       onClick={handleFinishedNow}
-                      className="px-3 py-1 rounded-full border border-stone-300 bg-white hover:bg-[#EEF3EE] hover:border-[#5E7A65] text-[11px] font-black text-stone-800 shadow-sm active:scale-95 transition"
+                      className="px-3 py-1 rounded-full border border-stone-300 bg-white hover:bg-[#EEF3EE] hover:border-[#5E7A65] text-[12.5px] font-black text-stone-800 shadow-sm active:scale-95 transition"
                     >
                       {isFeed ? "지금 다 먹었어요!" : "지금 끝났어요!"}
                     </button>
@@ -23081,32 +23285,32 @@ ${validText}
                     <button
                       type="button"
                       onClick={() => adjustDurMin(-5)}
-                      className="flex-1 py-1.5 rounded-full border border-stone-200 bg-stone-50 hover:bg-stone-100 text-[11px] font-extrabold text-stone-700"
+                      className="flex-1 py-1.5 rounded-full border border-stone-200 bg-stone-50 hover:bg-stone-100 text-[12.5px] font-extrabold text-stone-700"
                     >
                       -5분
                     </button>
                     <button
                       type="button"
                       onClick={() => adjustDurMin(-1)}
-                      className="flex-1 py-1.5 rounded-full border border-stone-200 bg-stone-50 hover:bg-stone-100 text-[11px] font-extrabold text-stone-700"
+                      className="flex-1 py-1.5 rounded-full border border-stone-200 bg-stone-50 hover:bg-stone-100 text-[12.5px] font-extrabold text-stone-700"
                     >
                       -1분
                     </button>
                     <div className="px-2 text-center min-w-[60px]">
                       <span className="text-lg font-black text-stone-900">{activityEditModal.durationMin ?? 0}</span>
-                      <span className="text-xs font-bold text-stone-500 ml-0.5">분</span>
+                      <span className="text-[13.5px] font-bold text-stone-500 ml-0.5">분</span>
                     </div>
                     <button
                       type="button"
                       onClick={() => adjustDurMin(1)}
-                      className="flex-1 py-1.5 rounded-full border border-stone-200 bg-stone-50 hover:bg-stone-100 text-[11px] font-extrabold text-stone-700"
+                      className="flex-1 py-1.5 rounded-full border border-stone-200 bg-stone-50 hover:bg-stone-100 text-[12.5px] font-extrabold text-stone-700"
                     >
                       +1분
                     </button>
                     <button
                       type="button"
                       onClick={() => adjustDurMin(5)}
-                      className="flex-1 py-1.5 rounded-full border border-stone-200 bg-stone-50 hover:bg-stone-100 text-[11px] font-extrabold text-stone-700"
+                      className="flex-1 py-1.5 rounded-full border border-stone-200 bg-stone-50 hover:bg-stone-100 text-[12.5px] font-extrabold text-stone-700"
                     >
                       +5분
                     </button>
@@ -23117,7 +23321,7 @@ ${validText}
               {/* 모유 먹인 위치 */}
               {activityEditModal.type === "모유" && (
                 <div className="space-y-2 pb-3 border-b border-stone-100">
-                  <div className="text-xs font-extrabold text-stone-600">모유 먹인 위치</div>
+                  <div className="text-[13.5px] font-extrabold text-stone-600">모유 먹인 위치</div>
                   <div className="flex flex-wrap gap-1.5">
                     {["모름", "왼쪽", "오른쪽", "양쪽", "왼쪽 후 오른쪽", "오른쪽 후 왼쪽"].map((pos) => {
                       const curPos = activityEditModal.breastOrder || activityEditModal.subType || "모름";
@@ -23127,7 +23331,7 @@ ${validText}
                           key={pos}
                           type="button"
                           onClick={() => setActivityEditModal((p) => ({ ...p, breastOrder: pos === "모름" ? "" : pos, subType: pos === "모름" ? "" : pos }))}
-                          className={`px-3 py-1.5 rounded-full text-[11px] font-extrabold border transition ${
+                          className={`px-3 py-1.5 rounded-full text-[12.5px] font-extrabold border transition ${
                             activePos
                               ? "bg-stone-800 text-white border-stone-800"
                               : "bg-white text-stone-700 border-stone-200 hover:bg-stone-50"
@@ -23140,21 +23344,21 @@ ${validText}
                   </div>
                   <div className="grid grid-cols-2 gap-2 pt-1">
                     <div>
-                      <label className="text-[10px] font-bold text-stone-400">왼쪽 (분)</label>
+                      <label className="text-[11.5px] font-bold text-stone-400">왼쪽 (분)</label>
                       <input
                         type="number"
                         value={activityEditModal.leftMin ?? 0}
                         onChange={(e) => setActivityEditModal((p) => ({ ...p, leftMin: e.target.value }))}
-                        className="w-full px-2.5 py-1.5 rounded-xl border border-stone-200 text-xs font-bold"
+                        className="w-full px-2.5 py-1.5 rounded-xl border border-stone-200 text-[13.5px] font-bold"
                       />
                     </div>
                     <div>
-                      <label className="text-[10px] font-bold text-stone-400">오른쪽 (분)</label>
+                      <label className="text-[11.5px] font-bold text-stone-400">오른쪽 (분)</label>
                       <input
                         type="number"
                         value={activityEditModal.rightMin ?? 0}
                         onChange={(e) => setActivityEditModal((p) => ({ ...p, rightMin: e.target.value }))}
-                        className="w-full px-2.5 py-1.5 rounded-xl border border-stone-200 text-xs font-bold"
+                        className="w-full px-2.5 py-1.5 rounded-xl border border-stone-200 text-[13.5px] font-bold"
                       />
                     </div>
                   </div>
@@ -23169,7 +23373,7 @@ ${validText}
                       key={sub}
                       type="button"
                       onClick={() => setActivityEditModal((p) => ({ ...p, subType: sub }))}
-                      className={`py-2 rounded-xl text-xs font-extrabold border ${
+                      className={`py-2 rounded-xl text-[13.5px] font-extrabold border ${
                         activityEditModal.subType === sub
                           ? "bg-amber-700 text-white border-amber-700"
                           : "bg-stone-50 text-stone-700 border-stone-200"
@@ -23188,7 +23392,7 @@ ${validText}
                       key={sub}
                       type="button"
                       onClick={() => setActivityEditModal((p) => ({ ...p, subType: sub }))}
-                      className={`py-2 rounded-xl text-xs font-extrabold border ${
+                      className={`py-2 rounded-xl text-[13.5px] font-extrabold border ${
                         activityEditModal.subType === sub
                           ? "bg-indigo-600 text-white border-indigo-600"
                           : "bg-stone-50 text-stone-700 border-stone-200"
@@ -23203,7 +23407,7 @@ ${validText}
               {/* 용량 (ml / g) */}
               {actMeta.hasMl && (
                 <div className="space-y-1.5 pb-2 border-b border-stone-100">
-                  <label className="text-xs font-extrabold text-stone-600">
+                  <label className="text-[13.5px] font-extrabold text-stone-600">
                     용량 ({actMeta.unit || "ml"})
                   </label>
                   <input
@@ -23211,7 +23415,7 @@ ${validText}
                     value={activityEditModal.amountMl || ""}
                     placeholder="예: 40"
                     onChange={(e) => setActivityEditModal((p) => ({ ...p, amountMl: e.target.value }))}
-                    className="w-full px-3 py-2 rounded-xl border border-stone-200 text-xs font-bold"
+                    className="w-full px-3 py-2 rounded-xl border border-stone-200 text-[13.5px] font-bold"
                   />
                   <div className="flex flex-wrap gap-1">
                     {[20, 30, 40, 60, 80, 100, 120].map((v) => (
@@ -23219,7 +23423,7 @@ ${validText}
                         key={v}
                         type="button"
                         onClick={() => setActivityEditModal((p) => ({ ...p, amountMl: v }))}
-                        className="px-2.5 py-1 rounded-full bg-stone-100 hover:bg-stone-200 text-[10px] font-extrabold text-stone-700"
+                        className="px-2.5 py-1 rounded-full bg-stone-100 hover:bg-stone-200 text-[11.5px] font-extrabold text-stone-700"
                       >
                         {v}
                       </button>
@@ -23230,14 +23434,14 @@ ${validText}
 
               {/* 메모 + 사진 + 빠른 태그 칩 */}
               <div className="space-y-2">
-                <div className="text-xs font-extrabold text-stone-600">메모</div>
+                <div className="text-[13.5px] font-extrabold text-stone-600">메모</div>
                 <div className="flex items-center gap-2">
                   <input
                     type="text"
                     value={activityEditModal.memo || ""}
                     placeholder="메모 입력 (예: 트림 함, 유산균)"
                     onChange={(e) => setActivityEditModal((p) => ({ ...p, memo: e.target.value }))}
-                    className="flex-1 px-3 py-2 rounded-xl border border-stone-200 text-xs font-bold"
+                    className="flex-1 px-3 py-2 rounded-xl border border-stone-200 text-[13.5px] font-bold"
                   />
                   <input
                     ref={activityPhotoInputRef}
@@ -23279,7 +23483,7 @@ ${validText}
                           memo: p.memo ? (p.memo.includes(tag) ? p.memo : `${p.memo} · ${tag}`) : tag
                         }))
                       }
-                      className="px-2.5 py-1 rounded-full bg-sky-50 hover:bg-sky-100 border border-sky-200 text-[10px] font-extrabold text-sky-900"
+                      className="px-2.5 py-1 rounded-full bg-sky-50 hover:bg-sky-100 border border-sky-200 text-[11.5px] font-extrabold text-sky-900"
                     >
                       + {tag}
                     </button>
@@ -23290,7 +23494,7 @@ ${validText}
               <button
                 type="button"
                 onClick={handleSaveActivityModal}
-                className="w-full py-2.5 rounded-2xl bg-[#5E7A65] hover:bg-[#4E6855] text-white text-sm font-black shadow-sm"
+                className="w-full py-2.5 rounded-2xl bg-[#5E7A65] hover:bg-[#4E6855] text-white text-[15.5px] font-black shadow-sm"
               >
                 저장
               </button>
@@ -23311,8 +23515,8 @@ ${validText}
           >
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="text-sm font-black text-stone-900">✨ 불러올 기록 선택</h3>
-                <p className="text-[10px] font-bold text-stone-500">
+                <h3 className="text-[15.5px] font-black text-stone-900">✨ 불러올 기록 선택</h3>
+                <p className="text-[11.5px] font-bold text-stone-500">
                   {diaryImportModal.date} · {diaryImportModal.childLabel}
                 </p>
               </div>
@@ -23320,7 +23524,7 @@ ${validText}
                 <X className="w-5 h-5 text-stone-400" />
               </button>
             </div>
-            <div className="flex items-center justify-between text-[10px] font-extrabold">
+            <div className="flex items-center justify-between text-[11.5px] font-extrabold">
               <span className="text-stone-500">원하는 항목만 체크해서 일기에 추가하세요</span>
               <div className="flex items-center gap-1.5">
                 <button
@@ -23353,10 +23557,10 @@ ${validText}
             <div className="flex-1 overflow-y-auto space-y-2 pr-0.5">
               {diaryImportModal.items.length === 0 ? (
                 <div className="p-3 rounded-2xl bg-stone-50 border border-stone-200 text-center space-y-1">
-                  <div className="text-xs font-extrabold text-stone-700">
+                  <div className="text-[13.5px] font-extrabold text-stone-700">
                     {diaryImportModal.date}에 등록된 식단·진료·일정 기록이 없습니다
                   </div>
-                  <div className="text-[10px] font-semibold text-stone-500">
+                  <div className="text-[11.5px] font-semibold text-stone-500">
                     아래에서 성장 수치(키·몸무게)를 바로 입력해 저장하고 일기에 넣을 수 있어요!
                   </div>
                 </div>
@@ -23380,18 +23584,18 @@ ${validText}
                   }`}
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-xs font-black text-stone-900">
+                    <span className="text-[13.5px] font-black text-stone-900">
                       {item.icon} {item.label}
                     </span>
                     <span
-                      className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black ${
+                      className={`w-5 h-5 rounded-full flex items-center justify-center text-[11.5px] font-black ${
                         item.selected ? "bg-[#5E7A65] text-white" : "bg-stone-200 text-stone-500"
                       }`}
                     >
                       {item.selected ? "✓" : ""}
                     </span>
                   </div>
-                  <div className="text-[11px] font-semibold text-stone-600 line-clamp-2 whitespace-pre-wrap">
+                  <div className="text-[12.5px] font-semibold text-stone-600 line-clamp-2 whitespace-pre-wrap">
                     {item.text}
                   </div>
                 </button>
@@ -23400,7 +23604,7 @@ ${validText}
 
               <div className="p-3 rounded-2xl bg-[#FAF8F3] border border-[#C9D8CC] space-y-2">
                 <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-black text-[#35503C]">
+                  <span className="text-[12.5px] font-black text-[#35503C]">
                     📏 바로 성장 기록 입력 후 불러오기 ({diaryImportModal.childId})
                   </span>
                 </div>
@@ -23411,7 +23615,7 @@ ${validText}
                     placeholder="키 (cm)"
                     value={diaryImportModal.quickHeight || ""}
                     onChange={(e) => setDiaryImportModal((prev) => ({ ...prev, quickHeight: e.target.value }))}
-                    className="px-2 py-1.5 rounded-xl border border-stone-200 bg-white text-[11px] font-bold"
+                    className="px-2 py-1.5 rounded-xl border border-stone-200 bg-white text-[12.5px] font-bold"
                   />
                   <input
                     type="number"
@@ -23419,7 +23623,7 @@ ${validText}
                     placeholder="몸무게 (kg)"
                     value={diaryImportModal.quickWeight || ""}
                     onChange={(e) => setDiaryImportModal((prev) => ({ ...prev, quickWeight: e.target.value }))}
-                    className="px-2 py-1.5 rounded-xl border border-stone-200 bg-white text-[11px] font-bold"
+                    className="px-2 py-1.5 rounded-xl border border-stone-200 bg-white text-[12.5px] font-bold"
                   />
                   <input
                     type="number"
@@ -23427,7 +23631,7 @@ ${validText}
                     placeholder="머리둘레"
                     value={diaryImportModal.quickHead || ""}
                     onChange={(e) => setDiaryImportModal((prev) => ({ ...prev, quickHead: e.target.value }))}
-                    className="px-2 py-1.5 rounded-xl border border-stone-200 bg-white text-[11px] font-bold"
+                    className="px-2 py-1.5 rounded-xl border border-stone-200 bg-white text-[12.5px] font-bold"
                   />
                 </div>
                 <button
@@ -23474,7 +23678,7 @@ ${validText}
                     setDiaryImportModal(null);
                     showToast(`📏 ${gChild} 성장 기록을 저장하고 일기에 넣었습니다!`);
                   }}
-                  className="w-full py-1.5 rounded-xl bg-stone-900 hover:bg-stone-800 text-white text-[11px] font-extrabold"
+                  className="w-full py-1.5 rounded-xl bg-stone-900 hover:bg-stone-800 text-white text-[12.5px] font-extrabold"
                 >
                   📏 성장 저장 후 일기에 바로 넣기
                 </button>
@@ -23484,7 +23688,7 @@ ${validText}
               <button
                 type="button"
                 onClick={() => setDiaryImportModal(null)}
-                className="flex-1 py-2 rounded-xl bg-stone-100 text-stone-700 text-xs font-extrabold"
+                className="flex-1 py-2 rounded-xl bg-stone-100 text-stone-700 text-[13.5px] font-extrabold"
               >
                 취소
               </button>
@@ -23504,7 +23708,7 @@ ${validText}
                   setDiaryImportModal(null);
                   showToast(`✨ 선택한 ${chosen.length}개 항목을 일기 본문에 불러왔습니다!`);
                 }}
-                className="flex-[2] py-2 rounded-xl bg-[#5E7A65] hover:bg-[#4E6855] text-white text-xs font-extrabold"
+                className="flex-[2] py-2 rounded-xl bg-[#5E7A65] hover:bg-[#4E6855] text-white text-[13.5px] font-extrabold"
               >
                 📥 선택한 기록 넣기 ({(diaryImportModal.items || []).filter((it) => it.selected).length})
               </button>
@@ -23523,7 +23727,7 @@ ${validText}
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between">
-              <h3 className="text-sm font-black text-stone-900">🖼️ 예쁜 육아일기 한 장</h3>
+              <h3 className="text-[15.5px] font-black text-stone-900">🖼️ 예쁜 육아일기 한 장</h3>
               <button type="button" onClick={() => setDiaryExportPreviewUrl("")}>
                 <X className="w-5 h-5 text-stone-400" />
               </button>
@@ -23532,7 +23736,7 @@ ${validText}
               <img src={diaryExportPreviewUrl} alt="육아일기 내보내기" className="w-full h-auto block" />
             </div>
             <div className="flex items-center justify-between gap-2">
-              <span className="text-[10px] font-bold text-stone-500">
+              <span className="text-[11.5px] font-bold text-stone-500">
                 이미지를 길게 눌러 사진첩에 저장할 수도 있어요
               </span>
               <div className="flex items-center gap-1.5 shrink-0">
@@ -23551,7 +23755,7 @@ ${validText}
                         }
                       } catch (e) {}
                     }}
-                    className="px-3 py-1.5 rounded-xl bg-stone-900 text-white text-xs font-extrabold"
+                    className="px-3 py-1.5 rounded-xl bg-stone-900 text-white text-[13.5px] font-extrabold"
                   >
                     📤 공유
                   </button>
@@ -23559,7 +23763,7 @@ ${validText}
                 <a
                   href={diaryExportPreviewUrl}
                   download={diaryExportFilename}
-                  className="px-3 py-1.5 rounded-xl bg-[#5E7A65] text-white text-xs font-extrabold"
+                  className="px-3 py-1.5 rounded-xl bg-[#5E7A65] text-white text-[13.5px] font-extrabold"
                 >
                   다운로드
                 </a>
@@ -23579,7 +23783,7 @@ ${validText}
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between">
-              <h3 className="text-sm font-black text-stone-900 flex items-center gap-1.5">
+              <h3 className="text-[15.5px] font-black text-stone-900 flex items-center gap-1.5">
                 <Bell className="w-4 h-4 text-sky-600" />
                 최근 수정 알림 내역 ({visibleRecentActivities.length}건)
               </h3>
@@ -23595,7 +23799,7 @@ ${validText}
                     }
                     showToast(nextVal ? "🔔 새 수정 알림 팝업이 켜졌습니다." : "🔕 새 수정 알림 팝업이 꺼졌습니다.");
                   }}
-                  className={`px-2 py-1 rounded-lg text-[10px] font-extrabold border ${
+                  className={`px-2 py-1 rounded-lg text-[11.5px] font-extrabold border ${
                     activityPopupEnabled
                       ? "bg-[#EEF3EE] text-[#35503C] border-[#C9D8CC]"
                       : "bg-stone-100 text-stone-500 border-stone-200"
@@ -23614,7 +23818,7 @@ ${validText}
                       }
                       showToast("최근 수정 알림 내역을 비웠습니다.");
                     }}
-                    className="px-2 py-1 rounded-lg bg-stone-100 hover:bg-rose-50 text-stone-600 hover:text-rose-700 text-[10px] font-bold"
+                    className="px-2 py-1 rounded-lg bg-stone-100 hover:bg-rose-50 text-stone-600 hover:text-rose-700 text-[11.5px] font-bold"
                   >
                     비우기
                   </button>
@@ -23631,7 +23835,7 @@ ${validText}
                   key={cat}
                   type="button"
                   onClick={() => setActivityFilter(cat)}
-                  className={`px-2.5 py-1 rounded-full text-[10px] font-extrabold border whitespace-nowrap shrink-0 ${
+                  className={`px-2.5 py-1 rounded-full text-[11.5px] font-extrabold border whitespace-nowrap shrink-0 ${
                     activityFilter === cat
                       ? "bg-stone-900 text-white border-stone-900"
                       : "bg-stone-50 text-stone-600 border-stone-200"
@@ -23647,13 +23851,13 @@ ${validText}
               if (actors.length <= 1) return null;
               return (
                 <div className="flex items-center gap-1 overflow-x-auto pb-1">
-                  <span className="text-[10px] font-extrabold text-stone-400 shrink-0 mr-0.5">수정자:</span>
+                  <span className="text-[11.5px] font-extrabold text-stone-400 shrink-0 mr-0.5">수정자:</span>
                   {["전체", ...actors].map((ac) => (
                     <button
                       key={ac}
                       type="button"
                       onClick={() => setActivityActorFilter(ac)}
-                      className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold border whitespace-nowrap shrink-0 ${
+                      className={`px-2 py-0.5 rounded-full text-[11.5px] font-extrabold border whitespace-nowrap shrink-0 ${
                         activityActorFilter === ac
                           ? "bg-sky-700 text-white border-sky-700"
                           : "bg-white text-stone-600 border-stone-200"
@@ -23672,7 +23876,7 @@ ${validText}
                   (activityFilter === "전체" || a.category === activityFilter) &&
                   (activityActorFilter === "전체" || a.actor === activityActorFilter)
               ).length === 0 ? (
-                <div className="py-10 text-center text-xs font-bold text-stone-400">
+                <div className="py-10 text-center text-[13.5px] font-bold text-stone-400">
                   기록된 수정 내역이 없습니다.
                 </div>
               ) : (
@@ -23691,7 +23895,7 @@ ${validText}
                       <div className="min-w-0 space-y-0.5">
                         <div className="flex items-center gap-1.5 flex-wrap">
                           <span
-                            className={`px-1.5 py-0.5 rounded-md text-[10px] font-black ${
+                            className={`px-1.5 py-0.5 rounded-md text-[11.5px] font-black ${
                               act.role === "admin"
                                 ? "bg-emerald-100 text-emerald-800"
                                 : "bg-sky-100 text-sky-800"
@@ -23699,15 +23903,15 @@ ${validText}
                           >
                             {act.actor}
                           </span>
-                          <span className="text-[11px] font-black text-stone-800">
+                          <span className="text-[12.5px] font-black text-stone-800">
                             {act.category} {act.action}
                           </span>
                         </div>
                         {act.detail && (
-                          <div className="text-[11px] text-stone-700 font-semibold break-keep">{act.detail}</div>
+                          <div className="text-[12.5px] text-stone-700 font-semibold break-keep">{act.detail}</div>
                         )}
                         {(act.beforeText || act.afterText) && (
-                          <div className="mt-1 space-y-0.5 text-[10px] rounded-xl bg-white border border-stone-200 p-1.5">
+                          <div className="mt-1 space-y-0.5 text-[11.5px] rounded-xl bg-white border border-stone-200 p-1.5">
                             {act.beforeText && (
                               <div className="text-rose-700 bg-rose-50/70 px-1.5 py-0.5 rounded">
                                 <span className="font-black mr-1">변경 전:</span>{act.beforeText}
@@ -23722,11 +23926,11 @@ ${validText}
                         )}
                       </div>
                       <div className="flex flex-col items-end gap-1 shrink-0">
-                        <span className="text-[10px] font-bold text-stone-500 whitespace-nowrap">
+                        <span className="text-[11.5px] font-bold text-stone-500 whitespace-nowrap">
                           {formatActivityTime(act.atMs)}
                         </span>
                         {act.atMs && (
-                          <span className="text-[9px] text-stone-400 whitespace-nowrap">
+                          <span className="text-[10.5px] text-stone-400 whitespace-nowrap">
                             {new Date(act.atMs).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false })}
                           </span>
                         )}
@@ -23751,7 +23955,7 @@ ${validText}
                                 e.stopPropagation();
                                 handleNavigateFromActivity(act);
                               }}
-                              className="px-1.5 py-0.5 rounded bg-white border border-stone-200 text-[9px] font-extrabold text-sky-700 hover:bg-sky-50"
+                              className="px-1.5 py-0.5 rounded bg-white border border-stone-200 text-[10.5px] font-extrabold text-sky-700 hover:bg-sky-50"
                             >
                               이동 →
                             </button>
@@ -23770,7 +23974,7 @@ ${validText}
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-sm w-full p-5 space-y-4 shadow-xl">
             <div className="flex items-center justify-between">
-              <h3 className="text-sm font-black text-stone-900">
+              <h3 className="text-[15.5px] font-black text-stone-900">
                 {isAdminUnlocked
                   ? "👑 관리자 권한 활성화됨"
                   : isHelperUnlocked
@@ -23785,7 +23989,7 @@ ${validText}
             {isEditorUnlocked ? (
               <div className="space-y-3">
                 <div className="p-3 rounded-2xl bg-stone-50 border border-stone-200 space-y-2">
-                  <div className="text-[11px] font-extrabold text-stone-600">
+                  <div className="text-[12.5px] font-extrabold text-stone-600">
                     현재 수정자 이름 (홈 최근 수정 알림에 기록됩니다)
                   </div>
                   <div className="flex flex-wrap gap-1.5">
@@ -23798,7 +24002,7 @@ ${validText}
                           try { localStorage.setItem("family_actor_name_v1", nm); } catch (e) {}
                           showToast(`수정자 이름이 [${nm}]로 설정되었습니다.`);
                         }}
-                        className={`px-3 py-1.5 rounded-xl text-xs font-extrabold border ${
+                        className={`px-3 py-1.5 rounded-xl text-[13.5px] font-extrabold border ${
                           actorName === nm
                             ? "bg-stone-900 text-white border-stone-900"
                             : "bg-white text-stone-700 border-stone-200"
@@ -23814,7 +24018,7 @@ ${validText}
                       value={actorNameDraft}
                       onChange={(e) => setActorNameDraft(e.target.value)}
                       placeholder="직접 입력 (예: 친정엄마, 이모님)"
-                      className="flex-1 min-w-0 px-2.5 py-1 rounded-lg border border-stone-200 bg-white text-[11px] font-bold"
+                      className="flex-1 min-w-0 px-2.5 py-1 rounded-lg border border-stone-200 bg-white text-[12.5px] font-bold"
                     />
                     <button
                       type="button"
@@ -23826,7 +24030,7 @@ ${validText}
                         try { localStorage.setItem("family_actor_name_v1", custom); } catch (e) {}
                         showToast(`수정자 이름이 [${custom}]로 설정되었습니다.`);
                       }}
-                      className="px-2.5 py-1 rounded-lg bg-stone-800 text-white text-[10px] font-extrabold shrink-0"
+                      className="px-2.5 py-1 rounded-lg bg-stone-800 text-white text-[11.5px] font-extrabold shrink-0"
                     >
                       적용
                     </button>
@@ -23835,7 +24039,7 @@ ${validText}
 
                 {isAdminUnlocked ? (
                   <>
-                    <p className="text-xs text-stone-600 leading-relaxed">
+                    <p className="text-[13.5px] text-stone-600 leading-relaxed">
                       모든 메뉴 열람·편집과 설정(API 키, 백업, 육아지원군 비밀번호 변경)이 가능합니다.
                     </p>
                     <button
@@ -23848,27 +24052,27 @@ ${validText}
                           showToast(`초대 링크: ${inviteUrl}`);
                         }
                       }}
-                      className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold"
+                      className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-[13.5px] font-extrabold"
                     >
                       🔗 관리자 초대 링크 복사하기
                     </button>
                   </>
                 ) : (
-                  <p className="text-xs text-stone-600 leading-relaxed">
+                  <p className="text-[13.5px] text-stone-600 leading-relaxed">
                     허용된 메뉴({helperAllowedTabs.filter((x) => x !== "home").length}개)의 열람 및 편집이 가능합니다.
                   </p>
                 )}
 
                 <button
                   onClick={logoutToGuest}
-                  className="w-full py-2 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-xs font-bold"
+                  className="w-full py-2 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-[13.5px] font-bold"
                 >
                   🔒 로그아웃 (미로그인 상태로 전환)
                 </button>
               </div>
             ) : (
               <div className="space-y-3">
-                <div className="bg-stone-50 p-3 rounded-2xl border border-stone-200 space-y-1 text-[11px] text-stone-600">
+                <div className="bg-stone-50 p-3 rounded-2xl border border-stone-200 space-y-1 text-[12.5px] text-stone-600">
                   <div>· <strong className="text-stone-800">미로그인</strong>: 가족사진 및 식단·레시피 일부만 열람</div>
                   <div>· <strong className="text-sky-800">육아지원군</strong>: 허용 메뉴 열람 및 편집 가능</div>
                   <div>· <strong className="text-emerald-800">관리자</strong>: 전체 메뉴·설정·비밀번호 관리</div>
@@ -23882,11 +24086,11 @@ ${validText}
                   onKeyDown={(e) => {
                     if (e.key === "Enter") applyLoginCode(editorCodeInput);
                   }}
-                  className="w-full px-3 py-2.5 rounded-xl border border-stone-300 text-sm font-bold text-center tracking-widest"
+                  className="w-full px-3 py-2.5 rounded-xl border border-stone-300 text-[15.5px] font-bold text-center tracking-widest"
                 />
                 <button
                   onClick={() => applyLoginCode(editorCodeInput)}
-                  className="w-full py-2.5 rounded-xl bg-stone-900 hover:bg-stone-800 text-white text-xs font-extrabold"
+                  className="w-full py-2.5 rounded-xl bg-stone-900 hover:bg-stone-800 text-white text-[13.5px] font-extrabold"
                 >
                   로그인하기
                 </button>
@@ -23901,7 +24105,7 @@ ${validText}
           <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
             <div className="bg-white rounded-3xl max-w-md w-full p-5 space-y-3.5 max-h-[90vh] flex flex-col">
               <div className="flex items-center justify-between">
-                <h3 className="text-sm font-black text-stone-900">
+                <h3 className="text-[15.5px] font-black text-stone-900">
                   📤 식단 · 전체 재고 통합 내보내기
                 </h3>
                 <button
@@ -23912,16 +24116,16 @@ ${validText}
                 </button>
               </div>
 
-              <div className="space-y-2 bg-stone-50 p-3 rounded-2xl border border-stone-200 text-xs">
+              <div className="space-y-2 bg-stone-50 p-3 rounded-2xl border border-stone-200 text-[13.5px]">
                 <div className="grid grid-cols-3 gap-2">
                   <div className={exportScope === "fridge_only" ? "col-span-3" : "col-span-2"}>
-                    <label className="text-[10px] font-extrabold text-stone-500 block mb-1">
+                    <label className="text-[11.5px] font-extrabold text-stone-500 block mb-1">
                       내보낼 항목 선택
                     </label>
                     <select
                       value={exportScope}
                       onChange={(e) => setExportScope(e.target.value)}
-                      className="w-full px-2.5 py-2 rounded-xl border border-stone-200 bg-white font-extrabold text-stone-900 text-xs"
+                      className="w-full px-2.5 py-2 rounded-xl border border-stone-200 bg-white font-extrabold text-stone-900 text-[13.5px]"
                     >
                       <option value="all">🍱 식단 + 전체 재고 통합</option>
                       <option value="meals_only">📅 일별 식단만</option>
@@ -23930,13 +24134,13 @@ ${validText}
                   </div>
                   {exportScope !== "fridge_only" && (
                     <div>
-                      <label className="text-[10px] font-extrabold text-stone-500 block mb-1">
+                      <label className="text-[11.5px] font-extrabold text-stone-500 block mb-1">
                         식단 기간
                       </label>
                       <select
                         value={exportMealDays}
                         onChange={(e) => setExportMealDays(Number(e.target.value))}
-                        className="w-full px-2 py-2 rounded-xl border border-stone-200 bg-white font-extrabold text-stone-900 text-xs"
+                        className="w-full px-2 py-2 rounded-xl border border-stone-200 bg-white font-extrabold text-stone-900 text-[13.5px]"
                       >
                         <option value={3}>최근 3일</option>
                         <option value={7}>최근 7일</option>
@@ -23949,13 +24153,13 @@ ${validText}
                 <div className="grid grid-cols-2 gap-2">
                   {exportScope !== "fridge_only" && (
                     <div>
-                      <label className="text-[10px] font-extrabold text-stone-500 block mb-1">
+                      <label className="text-[11.5px] font-extrabold text-stone-500 block mb-1">
                         식단 대상자 (인별)
                       </label>
                       <select
                         value={exportMealMember}
                         onChange={(e) => setExportMealMember(e.target.value)}
-                        className="w-full px-2 py-1.5 rounded-xl border border-stone-200 bg-white font-bold text-xs"
+                        className="w-full px-2 py-1.5 rounded-xl border border-stone-200 bg-white font-bold text-[13.5px]"
                       >
                         <option value="전체">👨‍👩‍👧‍👦 가족 전체(인별)</option>
                         {FAMILY_MEMBERS.map((m) => (
@@ -23968,13 +24172,13 @@ ${validText}
                   )}
                   {exportScope !== "meals_only" && (
                     <div className={exportScope === "fridge_only" ? "col-span-2" : ""}>
-                      <label className="text-[10px] font-extrabold text-stone-500 block mb-1">
+                      <label className="text-[11.5px] font-extrabold text-stone-500 block mb-1">
                         재고 보관 위치
                       </label>
                       <select
                         value={exportFridgeLoc}
                         onChange={(e) => setExportFridgeLoc(e.target.value)}
-                        className="w-full px-2 py-1.5 rounded-xl border border-stone-200 bg-white font-bold text-xs"
+                        className="w-full px-2 py-1.5 rounded-xl border border-stone-200 bg-white font-bold text-[13.5px]"
                       >
                         <option value="전체">전체 (냉장·냉동·실온)</option>
                         {STORAGE_LOCATIONS.map((loc) => (
@@ -23989,12 +24193,12 @@ ${validText}
               </div>
 
               {exportIncludeAiPrompt && (
-                <div className="bg-amber-50/70 p-2.5 rounded-2xl border border-amber-200 flex items-center justify-between gap-2 text-xs">
+                <div className="bg-amber-50/70 p-2.5 rounded-2xl border border-amber-200 flex items-center justify-between gap-2 text-[13.5px]">
                   <label className="font-extrabold text-amber-950 shrink-0">🎯 AI 요청 목표</label>
                   <select
                     value={exportMealGoal}
                     onChange={(e) => setExportMealGoal(e.target.value)}
-                    className="flex-1 px-2.5 py-1.5 rounded-xl border border-amber-300 bg-white font-bold text-stone-900 text-xs"
+                    className="flex-1 px-2.5 py-1.5 rounded-xl border border-amber-300 bg-white font-bold text-stone-900 text-[13.5px]"
                   >
                     {EXPORT_MEAL_GOALS.map((g) => (
                       <option key={g} value={g}>{g}</option>
@@ -24003,7 +24207,7 @@ ${validText}
                 </div>
               )}
 
-              <div className="flex items-center gap-3 flex-wrap text-xs font-bold text-stone-700">
+              <div className="flex items-center gap-3 flex-wrap text-[13.5px] font-bold text-stone-700">
                 <label className="inline-flex items-center gap-1.5 cursor-pointer">
                   <input
                     type="checkbox"
@@ -24037,7 +24241,7 @@ ${validText}
                 readOnly
                 value={exportText}
                 rows={12}
-                className="w-full p-3 rounded-2xl bg-stone-50 border border-stone-200 text-[11px] font-mono text-stone-800 leading-relaxed resize-none"
+                className="w-full p-3 rounded-2xl bg-stone-50 border border-stone-200 text-[12.5px] font-mono text-stone-800 leading-relaxed resize-none"
               />
 
               <div className="grid grid-cols-3 gap-1.5">
@@ -24050,7 +24254,7 @@ ${validText}
                       showToast("⚠️ 클립보드 복사 권한이 없어 TXT 다운로드를 이용해 주세요.");
                     }
                   }}
-                  className="py-2.5 rounded-xl bg-stone-900 text-white text-xs font-extrabold"
+                  className="py-2.5 rounded-xl bg-stone-900 text-white text-[13.5px] font-extrabold"
                 >
                   📋 복사하기
                 </button>
@@ -24067,7 +24271,7 @@ ${validText}
                     URL.revokeObjectURL(url);
                     showToast("📄 TXT 파일이 다운로드되었습니다!");
                   }}
-                  className="py-2.5 rounded-xl bg-amber-600 text-white text-xs font-extrabold"
+                  className="py-2.5 rounded-xl bg-amber-600 text-white text-[13.5px] font-extrabold"
                 >
                   📄 TXT 저장
                 </button>
@@ -24093,7 +24297,7 @@ ${validText}
                     URL.revokeObjectURL(url);
                     showToast("공유 기능이 제한되어 TXT 파일로 저장했습니다.");
                   }}
-                  className="py-2.5 rounded-xl bg-emerald-600 text-white text-xs font-extrabold"
+                  className="py-2.5 rounded-xl bg-emerald-600 text-white text-[13.5px] font-extrabold"
                 >
                   📤 공유하기
                 </button>
@@ -24112,14 +24316,14 @@ ${validText}
             onClick={(e) => e.stopPropagation()}
           >
             <div className="sticky top-0 bg-white z-10 pt-4 pb-2.5 border-b border-stone-100 flex items-center justify-between gap-2">
-              <h3 className="text-sm font-black text-stone-900">
+              <h3 className="text-[15.5px] font-black text-stone-900">
                 📖 {editingRecipe ? "가족 레시피 수정" : "새 가족 레시피 등록"}
               </h3>
               <div className="flex items-center gap-1.5">
                 <button
                   type="button"
                   onClick={handleSaveRecipe}
-                  className="px-3 py-1.5 rounded-xl bg-stone-900 text-white text-xs font-extrabold"
+                  className="px-3 py-1.5 rounded-xl bg-stone-900 text-white text-[13.5px] font-extrabold"
                 >
                   💾 저장
                 </button>
@@ -24139,12 +24343,12 @@ ${validText}
                 value={recipeForm.title}
                 onChange={(e) => setRecipeForm({ ...recipeForm, title: e.target.value })}
                 placeholder="요리명 (예: 소고기 무국)"
-                className="col-span-2 px-3 py-2 rounded-xl border border-stone-200 text-xs font-bold"
+                className="col-span-2 px-3 py-2 rounded-xl border border-stone-200 text-[13.5px] font-bold"
               />
               <select
                 value={recipeForm.category || "메인반찬"}
                 onChange={(e) => setRecipeForm({ ...recipeForm, category: e.target.value })}
-                className="px-2 py-2 rounded-xl border border-stone-200 text-xs font-bold bg-stone-50"
+                className="px-2 py-2 rounded-xl border border-stone-200 text-[13.5px] font-bold bg-stone-50"
               >
                 {RECIPE_CATEGORIES.map((c) => (
                   <option key={c} value={c}>{c}</option>
@@ -24163,14 +24367,14 @@ ${validText}
               <div className="flex gap-2">
                 <button
                   onClick={() => recipePhotoInputRef.current?.click()}
-                  className="flex-1 py-2 rounded-xl bg-stone-100 hover:bg-stone-200 text-xs font-extrabold text-stone-700"
+                  className="flex-1 py-2 rounded-xl bg-stone-100 hover:bg-stone-200 text-[13.5px] font-extrabold text-stone-700"
                 >
                   📷 {recipeForm.photoDataUrl ? "사진 변경" : "완성 사진 올리기"}
                 </button>
                 {recipeForm.photoDataUrl && (
                   <button
                     onClick={() => openCropModalWithUrl(recipeForm.photoDataUrl)}
-                    className="px-3 py-2 rounded-xl bg-rose-50 hover:bg-rose-100 border border-rose-200 text-xs font-extrabold text-rose-700 shrink-0"
+                    className="px-3 py-2 rounded-xl bg-rose-50 hover:bg-rose-100 border border-rose-200 text-[13.5px] font-extrabold text-rose-700 shrink-0"
                   >
                     ✂️ 사진 자르기
                   </button>
@@ -24183,7 +24387,7 @@ ${validText}
 
             <div className="space-y-2 bg-stone-50 p-3 rounded-2xl border border-stone-200">
               <div className="flex items-center justify-between">
-                <span className="text-[11px] font-black text-stone-700">🥕 재료 하나씩 입력 (+ 자동 연결)</span>
+                <span className="text-[12.5px] font-black text-stone-700">🥕 재료 하나씩 입력 (+ 자동 연결)</span>
                 {String(recipeForm.ingredientsText || "").trim() && (
                   <button
                     type="button"
@@ -24191,7 +24395,7 @@ ${validText}
                       title: recipeForm.title || "새 레시피",
                       ingredients: String(recipeForm.ingredientsText || "").split(/[+,\n]+/).map((s) => s.trim()).filter(Boolean)
                     })}
-                    className="text-[10px] font-extrabold text-emerald-700 hover:text-emerald-800"
+                    className="text-[11.5px] font-extrabold text-emerald-700 hover:text-emerald-800"
                   >
                     🛒 부족 재료 일괄 장보기
                   </button>
@@ -24210,7 +24414,7 @@ ${validText}
                     }
                   }}
                   placeholder="재료 1개 입력 후 + (예: 소고기 250g)"
-                  className="flex-1 px-3 py-2 rounded-xl border border-stone-200 text-xs font-bold bg-white"
+                  className="flex-1 px-3 py-2 rounded-xl border border-stone-200 text-[13.5px] font-bold bg-white"
                 />
                 <button
                   type="button"
@@ -24218,7 +24422,7 @@ ${validText}
                     appendRecipeIngredientChip(recipeIngredientInput);
                     setRecipeIngredientInput("");
                   }}
-                  className="px-3 py-2 rounded-xl bg-stone-900 text-white text-xs font-extrabold shrink-0"
+                  className="px-3 py-2 rounded-xl bg-stone-900 text-white text-[13.5px] font-extrabold shrink-0"
                 >
                   + 추가
                 </button>
@@ -24243,7 +24447,7 @@ ${validText}
                           appendRecipeIngredientChip(h.name);
                           setRecipeIngredientInput("");
                         }}
-                        className="px-2 py-0.5 rounded-full bg-rose-50 hover:bg-rose-100 border border-rose-200 text-[10px] font-bold text-rose-900"
+                        className="px-2 py-0.5 rounded-full bg-rose-50 hover:bg-rose-100 border border-rose-200 text-[11.5px] font-bold text-rose-900"
                       >
                         ✨ + {h.name}
                       </button>
@@ -24260,7 +24464,7 @@ ${validText}
                     .map((chip, cIdx) => (
                       <span
                         key={`${chip}-${cIdx}`}
-                        className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-white text-stone-800 border border-stone-200 text-[11px] font-bold"
+                        className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-white text-stone-800 border border-stone-200 text-[12.5px] font-bold"
                       >
                         <span>{chip}</span>
                         <button
@@ -24294,7 +24498,7 @@ ${validText}
                 value={recipeForm.ingredientsText}
                 onChange={(e) => setRecipeForm({ ...recipeForm, ingredientsText: e.target.value })}
                 placeholder="최종 연결된 재료 (예: 소고기 250g + 무 200g + 대파 1단)"
-                className="w-full px-3 py-1.5 rounded-xl border border-stone-200 text-[11px] font-semibold bg-white text-stone-600"
+                className="w-full px-3 py-1.5 rounded-xl border border-stone-200 text-[12.5px] font-semibold bg-white text-stone-600"
               />
             </div>
 
@@ -24304,12 +24508,12 @@ ${validText}
                 value={recipeForm.cookTime}
                 onChange={(e) => setRecipeForm({ ...recipeForm, cookTime: e.target.value })}
                 placeholder="조리시간 (예: 25분)"
-                className="px-3 py-2 rounded-xl border border-stone-200 text-xs font-bold"
+                className="px-3 py-2 rounded-xl border border-stone-200 text-[13.5px] font-bold"
               />
               <select
                 value={recipeForm.difficulty}
                 onChange={(e) => setRecipeForm({ ...recipeForm, difficulty: e.target.value })}
-                className="px-3 py-2 rounded-xl border border-stone-200 text-xs font-bold bg-stone-50"
+                className="px-3 py-2 rounded-xl border border-stone-200 text-[13.5px] font-bold bg-stone-50"
               >
                 <option value="쉬움">난이도: 쉬움</option>
                 <option value="보통">난이도: 보통</option>
@@ -24318,10 +24522,10 @@ ${validText}
             </div>
 
             <div className="p-2.5 rounded-xl bg-amber-50/70 border border-amber-200 space-y-1.5">
-              <div className="text-[11px] font-black text-amber-900">가족별 선호도</div>
+              <div className="text-[12.5px] font-black text-amber-900">가족별 선호도</div>
               <div className="grid grid-cols-2 gap-2">
                 {["수혁", "아리나", "시목", "시율"].map((mName) => (
-                  <div key={mName} className="flex items-center justify-between bg-white px-2 py-1 rounded-lg border border-amber-100 text-[11px]">
+                  <div key={mName} className="flex items-center justify-between bg-white px-2 py-1 rounded-lg border border-amber-100 text-[12.5px]">
                     <span className="font-bold text-stone-700">{mName}</span>
                     <select
                       value={recipeForm.ratings?.[mName] ?? 0}
@@ -24350,19 +24554,19 @@ ${validText}
               value={recipeForm.stepsText || ""}
               onChange={(e) => setRecipeForm({ ...recipeForm, stepsText: e.target.value })}
               placeholder="👩‍🍳 조리 순서 (예: 1. 소고기 핏물 빼고 볶기 / 2. 무 넣고 끓이기)"
-              className="w-full px-3 py-2 rounded-xl border border-stone-200 text-xs resize-none"
+              className="w-full px-3 py-2 rounded-xl border border-stone-200 text-[13.5px] resize-none"
             />
             <textarea
               rows={3}
               value={recipeForm.memo}
               onChange={(e) => setRecipeForm({ ...recipeForm, memo: e.target.value })}
               placeholder="조리 팁, 간 맞추기 노하우 등"
-              className="w-full px-3 py-2 rounded-xl border border-stone-200 text-xs resize-none"
+              className="w-full px-3 py-2 rounded-xl border border-stone-200 text-[13.5px] resize-none"
             />
 
             <button
               onClick={handleSaveRecipe}
-              className="w-full py-2.5 rounded-xl bg-stone-900 text-white text-xs font-extrabold"
+              className="w-full py-2.5 rounded-xl bg-stone-900 text-white text-[13.5px] font-extrabold"
             >
               💾 가족 레시피북에 저장
             </button>
@@ -24374,8 +24578,8 @@ ${validText}
           <div className="bg-white w-full max-w-md rounded-3xl p-4 space-y-3 shadow-2xl">
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="text-sm font-black text-stone-900">✂️ 한상차림 사진 자르기 (자유비율)</h3>
-                <p className="text-[11px] text-stone-500">사각형을 드래그해 이동하고 모서리 핸들로 크기를 조절하세요.</p>
+                <h3 className="text-[15.5px] font-black text-stone-900">✂️ 한상차림 사진 자르기 (자유비율)</h3>
+                <p className="text-[12.5px] text-stone-500">사각형을 드래그해 이동하고 모서리 핸들로 크기를 조절하세요.</p>
               </div>
               <button
                 onClick={() => setCropModal(null)}
@@ -24405,7 +24609,7 @@ ${validText}
                       setCropRect((prev) => ({ ...prev, h: newH }));
                     }
                   }}
-                  className={`px-2.5 py-1 rounded-full text-[11px] font-extrabold border ${
+                  className={`px-2.5 py-1 rounded-full text-[12.5px] font-extrabold border ${
                     cropAspect === ar.id
                       ? "bg-stone-900 text-white border-stone-900"
                       : "bg-stone-50 text-stone-600 border-stone-200"
@@ -24419,7 +24623,7 @@ ${validText}
                   setCropAspect("free");
                   setCropRect({ x: 0, y: 0, w: 1, h: 1 });
                 }}
-                className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-50 text-amber-800 border border-amber-200 ml-auto"
+                className="px-2.5 py-1 rounded-full text-[12.5px] font-bold bg-amber-50 text-amber-800 border border-amber-200 ml-auto"
               >
                 전체 선택
               </button>
@@ -24477,13 +24681,13 @@ ${validText}
                   setRecipeForm((prev) => ({ ...prev, photoDataUrl: safeUrl || cropModal.srcUrl }));
                   setCropModal(null);
                 }}
-                className="py-2.5 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-xs font-extrabold"
+                className="py-2.5 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-[13.5px] font-extrabold"
               >
                 원본 그대로 사용
               </button>
               <button
                 onClick={handleApplyCrop}
-                className="py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-extrabold"
+                className="py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-[13.5px] font-extrabold"
               >
                 ✂️ 이 영역 잘라서 적용
               </button>
@@ -24498,7 +24702,7 @@ ${validText}
           onClick={() => setZoomedRecipePhoto(null)}
         >
           <div className="w-full max-w-md flex items-center justify-between text-white mb-2 px-1">
-            <span className="text-sm font-black truncate">{zoomedRecipePhoto.title}</span>
+            <span className="text-[15.5px] font-black truncate">{zoomedRecipePhoto.title}</span>
             <button
               onClick={() => setZoomedRecipePhoto(null)}
               className="p-1.5 rounded-full bg-white/15 hover:bg-white/25 text-white"
@@ -24512,7 +24716,7 @@ ${validText}
             className="max-w-full max-h-[78vh] rounded-2xl object-contain shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           />
-          <span className="text-[11px] text-white/70 mt-2">바깥 영역을 누르면 닫힙니다</span>
+          <span className="text-[12.5px] text-white/70 mt-2">바깥 영역을 누르면 닫힙니다</span>
         </div>
       )}
       {quickFridgeItem && (
@@ -24528,9 +24732,9 @@ ${validText}
               <div>
                 <div className="flex items-center gap-1.5">
                   <span className="text-lg">{getFridgeCategoryIcon(quickFridgeItem.category)}</span>
-                  <span className="text-base font-black text-stone-900">{quickFridgeItem.name}</span>
+                  <span className="text-[17.5px] font-black text-stone-900">{quickFridgeItem.name}</span>
                 </div>
-                <div className="text-[11px] font-bold text-stone-500 mt-0.5">
+                <div className="text-[12.5px] font-bold text-stone-500 mt-0.5">
                   {resolveItemShelfZone(quickFridgeItem)} · 소비기한 {quickFridgeItem.expiryDate} (
                   {getDaysDiff(quickFridgeItem.expiryDate) < 0
                     ? `${Math.abs(getDaysDiff(quickFridgeItem.expiryDate))}일 지남`
@@ -24547,7 +24751,7 @@ ${validText}
             </div>
 
             <div className="flex items-center justify-between bg-stone-50 p-3 rounded-2xl border border-stone-200">
-              <span className="text-xs font-extrabold text-stone-700">현재 수량</span>
+              <span className="text-[13.5px] font-extrabold text-stone-700">현재 수량</span>
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => {
@@ -24560,7 +24764,7 @@ ${validText}
                 >
                   -
                 </button>
-                <span className="text-sm font-black px-2">
+                <span className="text-[15.5px] font-black px-2">
                   {Number(quickFridgeItem.quantity) || 0}{quickFridgeItem.unit}
                 </span>
                 <button
@@ -24578,11 +24782,11 @@ ${validText}
             </div>
 
             <div className="space-y-1">
-              <label className="text-[11px] font-black text-stone-700 block">📦 보관 칸 이동</label>
+              <label className="text-[12.5px] font-black text-stone-700 block">📦 보관 칸 이동</label>
               <select
                 value={resolveItemShelfZone(quickFridgeItem)}
                 onChange={(e) => handleMoveFridgeShelfZone(quickFridgeItem, e.target.value)}
-                className="w-full px-3 py-2 rounded-xl border border-stone-200 bg-stone-50 text-xs font-bold"
+                className="w-full px-3 py-2 rounded-xl border border-stone-200 bg-stone-50 text-[13.5px] font-bold"
               >
                 {FRIDGE_SHELF_ZONES.map((z) => (
                   <option key={z} value={z}>{z}</option>
@@ -24597,7 +24801,7 @@ ${validText}
                   setQuickFridgeItem(null);
                   handleHalfEatFridgeItem(target);
                 }}
-                className="py-2.5 rounded-xl bg-[#EEF3EE] text-[#35503C] border border-[#C9D8CC] text-xs font-extrabold"
+                className="py-2.5 rounded-xl bg-[#EEF3EE] text-[#35503C] border border-[#C9D8CC] text-[13.5px] font-extrabold"
               >
                 🌗 반만먹음
               </button>
@@ -24607,7 +24811,7 @@ ${validText}
                   setQuickFridgeItem(null);
                   handleConsumeFridgeItem(target, false);
                 }}
-                className="py-2.5 rounded-xl bg-emerald-600 text-white text-xs font-extrabold"
+                className="py-2.5 rounded-xl bg-emerald-600 text-white text-[13.5px] font-extrabold"
               >
                 ✓ 다 먹음
               </button>
@@ -24617,7 +24821,7 @@ ${validText}
                   setQuickFridgeItem(null);
                   handleConsumeFridgeItem(target, true);
                 }}
-                className="py-2.5 rounded-xl bg-amber-100 text-amber-900 text-xs font-extrabold"
+                className="py-2.5 rounded-xl bg-amber-100 text-amber-900 text-[13.5px] font-extrabold"
               >
                 + 장보기
               </button>
@@ -24627,7 +24831,7 @@ ${validText}
                   setQuickFridgeItem(null);
                   handleWasteFridgeItem(target);
                 }}
-                className="py-2.5 rounded-xl bg-rose-100 text-rose-800 text-xs font-extrabold"
+                className="py-2.5 rounded-xl bg-rose-100 text-rose-800 text-[13.5px] font-extrabold"
               >
                 🗑️ 폐기
               </button>
@@ -24639,7 +24843,7 @@ ${validText}
       {draggingChip && (
         <div
           style={{ left: draggingChip.x, top: draggingChip.y }}
-          className="fixed -translate-x-1/2 -translate-y-1/2 z-[70] pointer-events-none px-3 py-1.5 rounded-xl bg-stone-900 text-white text-xs font-black shadow-2xl flex items-center gap-1.5 opacity-95"
+          className="fixed -translate-x-1/2 -translate-y-1/2 z-[70] pointer-events-none px-3 py-1.5 rounded-xl bg-stone-900 text-white text-[13.5px] font-black shadow-2xl flex items-center gap-1.5 opacity-95"
         >
           <span>{getFridgeCategoryIcon(draggingChip.item.category)}</span>
           <span>{draggingChip.item.name}</span>
