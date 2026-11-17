@@ -1212,7 +1212,7 @@ const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.65) =>
     img.src = dataUrl;
   });
 
-const APP_CODE_VERSION = "v11.69";
+const APP_CODE_VERSION = "v11.70";
 
 const formatRoutineTimeLabel = (hhmm) => {
   const m = String(hhmm || "").trim().match(/^(\d{2}):(\d{2})$/);
@@ -1290,6 +1290,16 @@ const formatTime12Ko = (ms) => {
 };
 
 const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v11.70",
+    version: "v11.70",
+    date: "2026-11-18",
+    title: "육아 서브메뉴 한눈에 보기(3x2 그리드 · 일기→성장기록 순) & 성장 추이 그래프 X·Y축 눈금 추가",
+    changes: [
+      "육아 서브메뉴 개편: 가로 스크롤 없이 6개 탭을 한눈에 볼 수 있는 3열 2줄 그리드로 변경하고 [📖 일기] 바로 오른쪽에 [📏 성장기록] 배치",
+      "성장 추이 그래프 고도화: 왼쪽 Y축(키 cm), 오른쪽 Y축(몸무게 kg), 하단 X축(측정일 MM/DD), 가로 점선 눈금 및 데이터 포인트 마커 추가"
+    ]
+  },
   {
     id: "patch-v11.69",
     version: "v11.69",
@@ -18717,14 +18727,14 @@ ${validText}
               })}
             </div>
 
-            {/* 육아수첩 서브 탭 (육아일기는 관리자 전용) */}
-            <div className="flex gap-1 bg-stone-200 p-1 rounded-2xl overflow-x-auto">
+            {/* 육아수첩 서브 탭 (가로 스크롤 없이 한눈에 보기, 일기 오른쪽에 성장기록 배치) */}
+            <div className="grid grid-cols-3 gap-1 bg-stone-200 p-1 rounded-2xl">
               {[
                 { id: "activity", label: "🍼 수유·생활" },
                 ...(isAdminUnlocked ? [{ id: "diary", label: "📖 일기" }] : []),
+                { id: "growth", label: "📏 성장기록" },
                 { id: "milestones", label: "🌱 발달" },
                 { id: "vaccines", label: "💉 접종·검진" },
-                { id: "growth", label: "📏 성장기록" },
                 { id: "medical", label: "🩺 진료·열" }
               ].map((st) => (
                 <button
@@ -18735,10 +18745,10 @@ ${validText}
                       setTimeout(() => activityTopRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 80);
                     }
                   }}
-                  className={`py-2 px-2 rounded-xl text-[11px] font-extrabold whitespace-nowrap shrink-0 transition ${
+                  className={`py-2 px-1.5 rounded-xl text-[11.5px] font-extrabold whitespace-nowrap text-center transition ${
                     babySubTab === st.id
                       ? "bg-white text-stone-900 shadow-sm"
-                      : "text-stone-600"
+                      : "text-stone-600 hover:text-stone-900"
                   }`}
                 >
                   {st.label}
@@ -19451,62 +19461,120 @@ ${validText}
                   const sorted = [...childGrowth].reverse().slice(-8);
                   const weights = sorted.map((g) => Number(g.weight || 0)).filter((v) => v > 0);
                   const heights = sorted.map((g) => Number(g.height || 0)).filter((v) => v > 0);
-                  const minW = weights.length ? Math.min(...weights) - 0.5 : 0;
-                  const maxW = weights.length ? Math.max(...weights) + 0.5 : 10;
-                  const minH = heights.length ? Math.min(...heights) - 2 : 40;
-                  const maxH = heights.length ? Math.max(...heights) + 2 : 100;
-                  const W = 280;
-                  const H = 90;
-                  const makePoints = (arr, key, minV, maxV) =>
-                    arr
-                      .map((item, i) => {
-                        const val = Number(item[key] || 0);
-                        if (!val) return null;
-                        const x = arr.length === 1 ? W / 2 : (i / (arr.length - 1)) * (W - 24) + 12;
-                        const y = H - 14 - ((val - minV) / Math.max(0.1, maxV - minV)) * (H - 28);
-                        return `${x.toFixed(1)},${y.toFixed(1)}`;
-                      })
-                      .filter(Boolean)
-                      .join(" ");
+                  const minW = weights.length ? Math.max(0, Math.floor((Math.min(...weights) - 0.5) * 2) / 2) : 0;
+                  const maxW = weights.length ? Math.ceil((Math.max(...weights) + 0.5) * 2) / 2 : 10;
+                  const minH = heights.length ? Math.max(0, Math.floor(Math.min(...heights) - 2)) : 40;
+                  const maxH = heights.length ? Math.ceil(Math.max(...heights) + 2) : 100;
+                  const W = 330;
+                  const H = 165;
+                  const padL = 36;
+                  const padR = 36;
+                  const padT = 18;
+                  const padB = 28;
+                  const plotW = W - padL - padR;
+                  const plotH = H - padT - padB;
+                  const getX = (i) => (sorted.length === 1 ? padL + plotW / 2 : padL + (i / (sorted.length - 1)) * plotW);
+                  const getY = (val, minV, maxV) => padT + plotH - ((val - minV) / Math.max(0.1, maxV - minV)) * plotH;
 
-                  const weightPts = makePoints(sorted, "weight", minW, maxW);
-                  const heightPts = makePoints(sorted, "height", minH, maxH);
+                  const heightCoords = sorted
+                    .map((item, i) => {
+                      const val = Number(item.height || 0);
+                      return val > 0 ? { x: getX(i), y: getY(val, minH, maxH), val, date: item.date } : null;
+                    })
+                    .filter(Boolean);
+                  const weightCoords = sorted
+                    .map((item, i) => {
+                      const val = Number(item.weight || 0);
+                      return val > 0 ? { x: getX(i), y: getY(val, minW, maxW), val, date: item.date } : null;
+                    })
+                    .filter(Boolean);
+
+                  const yRatios = [0, 0.5, 1];
+                  const showTickIdx = (i) =>
+                    sorted.length <= 4 || i === 0 || i === sorted.length - 1 || i === Math.floor((sorted.length - 1) / 2);
 
                   return (
                     <div className="bg-white p-3.5 rounded-2xl border border-stone-200 shadow-sm space-y-2">
-                      <div className="flex items-center justify-between text-[13.5px] font-black text-stone-900">
-                        <span>📈 {activeChild.id} 성장 추이 그래프 (최근 {sorted.length}회)</span>
-                        <div className="flex items-center gap-2 text-[11.5px]">
+                      <div className="flex items-center justify-between text-[13px] font-black text-stone-900 gap-1">
+                        <span className="truncate">📈 {activeChild.id} 성장 추이 ({sorted.length}회)</span>
+                        <div className="flex items-center gap-2 text-[11px] shrink-0">
                           <span className="text-emerald-600 font-extrabold">● 키(cm)</span>
                           <span className="text-indigo-600 font-extrabold">● 몸무게(kg)</span>
                         </div>
                       </div>
-                      <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-24 bg-stone-50 rounded-xl border border-stone-100">
-                        {heightPts && (
+                      <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-44 bg-stone-50/70 rounded-xl border border-stone-100">
+                        {/* Y축 단위 라벨 */}
+                        <text x={padL - 4} y={11} textAnchor="end" fontSize="8.5" fontWeight="800" fill="#059669">키(cm)</text>
+                        <text x={W - padR + 4} y={11} textAnchor="start" fontSize="8.5" fontWeight="800" fill="#4f46e5">체중(kg)</text>
+
+                        {/* 가로 눈금선 & 좌/우 Y축 눈금 */}
+                        {yRatios.map((r) => {
+                          const y = padT + plotH * (1 - r);
+                          const hTick = (minH + (maxH - minH) * r).toFixed(1);
+                          const wTick = (minW + (maxW - minW) * r).toFixed(1);
+                          return (
+                            <g key={`yg-${r}`}>
+                              <line x1={padL} y1={y} x2={W - padR} y2={y} stroke="#e7e5e4" strokeWidth="1" strokeDasharray={r === 0 ? undefined : "3 3"} />
+                              <line x1={padL - 3} y1={y} x2={padL} y2={y} stroke="#a8a29e" strokeWidth="1" />
+                              <line x1={W - padR} y1={y} x2={W - padR + 3} y2={y} stroke="#a8a29e" strokeWidth="1" />
+                              <text x={padL - 5} y={y + 3} textAnchor="end" fontSize="8.5" fontWeight="700" fill="#059669">{hTick}</text>
+                              <text x={W - padR + 5} y={y + 3} textAnchor="start" fontSize="8.5" fontWeight="700" fill="#4f46e5">{wTick}</text>
+                            </g>
+                          );
+                        })}
+
+                        {/* 좌·우 Y축 및 하단 X축 실선 */}
+                        <line x1={padL} y1={padT} x2={padL} y2={padT + plotH} stroke="#d6d3d1" strokeWidth="1.2" />
+                        <line x1={W - padR} y1={padT} x2={W - padR} y2={padT + plotH} stroke="#d6d3d1" strokeWidth="1.2" />
+                        <line x1={padL} y1={padT + plotH} x2={W - padR} y2={padT + plotH} stroke="#a8a29e" strokeWidth="1.2" />
+
+                        {/* X축 눈금 & 날짜(MM/DD) */}
+                        {sorted.map((item, i) => {
+                          const x = getX(i);
+                          const mmdd = String(item.date || "").slice(5).replace("-", "/");
+                          return (
+                            <g key={`xt-${item.id || i}`}>
+                              <line x1={x} y1={padT + plotH} x2={x} y2={padT + plotH + 3.5} stroke="#78716c" strokeWidth="1" />
+                              {showTickIdx(i) && (
+                                <text x={x} y={padT + plotH + 13} textAnchor="middle" fontSize="8.5" fontWeight="700" fill="#78716c">
+                                  {mmdd}
+                                </text>
+                              )}
+                            </g>
+                          );
+                        })}
+                        <text x={W / 2} y={H - 3} textAnchor="middle" fontSize="8" fontWeight="700" fill="#a8a29e">측정일 (월/일)</text>
+
+                        {/* 키 추이 선 & 포인트 */}
+                        {heightCoords.length >= 2 && (
                           <polyline
                             fill="none"
                             stroke="#059669"
-                            strokeWidth="2.5"
+                            strokeWidth="2.2"
                             strokeLinecap="round"
                             strokeLinejoin="round"
-                            points={heightPts}
+                            points={heightCoords.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ")}
                           />
                         )}
-                        {weightPts && (
+                        {heightCoords.map((p, idx) => (
+                          <circle key={`hc-${idx}`} cx={p.x} cy={p.y} r="3" fill="#059669" stroke="#ffffff" strokeWidth="1.2" />
+                        ))}
+
+                        {/* 몸무게 추이 선 & 포인트 */}
+                        {weightCoords.length >= 2 && (
                           <polyline
                             fill="none"
                             stroke="#4f46e5"
-                            strokeWidth="2.5"
+                            strokeWidth="2.2"
                             strokeLinecap="round"
                             strokeLinejoin="round"
-                            points={weightPts}
+                            points={weightCoords.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ")}
                           />
                         )}
+                        {weightCoords.map((p, idx) => (
+                          <circle key={`wc-${idx}`} cx={p.x} cy={p.y} r="3" fill="#4f46e5" stroke="#ffffff" strokeWidth="1.2" />
+                        ))}
                       </svg>
-                      <div className="flex justify-between text-[10.5px] font-bold text-stone-400 px-1">
-                        <span>{sorted[0]?.date}</span>
-                        <span>{sorted[sorted.length - 1]?.date}</span>
-                      </div>
                     </div>
                   );
                 })()}
