@@ -1212,7 +1212,7 @@ const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.65) =>
     img.src = dataUrl;
   });
 
-const APP_CODE_VERSION = "v11.70";
+const APP_CODE_VERSION = "v11.72";
 
 const formatRoutineTimeLabel = (hhmm) => {
   const m = String(hhmm || "").trim().match(/^(\d{2}):(\d{2})$/);
@@ -1290,6 +1290,27 @@ const formatTime12Ko = (ms) => {
 };
 
 const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v11.72",
+    version: "v11.72",
+    date: "2026-11-18",
+    title: "6개월 식비 추이 막대 금액 라벨·클릭 월이동 고도화 & 공지 헤더 슬림화",
+    changes: [
+      "월간·식비 추이 고도화: 최근 6개월 막대 그래프 위에 만원 단위 금액 라벨을 표시하고, 막대를 누르면 해당 월 가계부로 바로 이동하도록 개선",
+      "가족공지 헤더 슬림화: 공지 제목과 부제목을 1줄로 간결하게 정리해 시각적 피로도 감소"
+    ]
+  },
+  {
+    id: "patch-v11.71",
+    version: "v11.71",
+    date: "2026-11-18",
+    title: "일정·To-Do·루틴 줄바꿈 교정 및 카드 슬림화 (1줄 정렬)",
+    changes: [
+      "To-Do 빠른 입력 바: [제목 + 추가 버튼]을 1줄로, [날짜 + 오늘/내일/주말]을 2줄로 깔끔하게 분리해 버튼 꺾임 제거",
+      "To-Do 헤더·카드 슬림화: To-Do 제목·표시 안내·날짜/카테고리/담당자 줄이 두 줄로 넘치지 않도록 whitespace-nowrap 및 축약 문구 적용",
+      "반복 루틴 헤더 정돈: 루틴 제목과 남은 건수 배지가 1줄에 유지되도록 조정"
+    ]
+  },
   {
     id: "patch-v11.70",
     version: "v11.70",
@@ -14569,18 +14590,30 @@ ${validText}
                         </div>
                       )}
                       <div className="space-y-1">
-                        <div className="text-[11.5px] font-bold text-stone-400">📅 최근 6개월 월별 식비 추이</div>
-                        <div className="grid grid-cols-6 gap-1.5 items-end h-14 pt-1">
+                        <div className="flex items-center justify-between text-[11px] font-bold text-stone-400">
+                          <span>📅 최근 6개월 식비 추이</span>
+                          <span className="text-[10px] text-stone-500">막대 탭 → 월 이동</span>
+                        </div>
+                        <div className="grid grid-cols-6 gap-1.5 items-end h-20 pt-1">
                           {trendMonths.map((tm) => {
-                            const hPct = tm.total > 0 ? Math.max(12, Math.round((tm.total / maxTrend) * 100)) : 6;
+                            const hPct = tm.total > 0 ? Math.max(14, Math.round((tm.total / maxTrend) * 100)) : 6;
                             const isSel = tm.ym === currentMonth;
+                            const manLabel = tm.total >= 10000 ? `${Math.round(tm.total / 10000)}만` : tm.total > 0 ? `${Math.round(tm.total / 1000)}천` : "-";
                             return (
-                              <div key={tm.ym} className="flex flex-col items-center gap-0.5 h-full justify-end">
+                              <button
+                                key={tm.ym}
+                                type="button"
+                                onClick={() => setCurrentMonth(tm.ym)}
+                                title={`${tm.ym}: ${tm.total.toLocaleString()}원`}
+                                className="flex flex-col items-center gap-0.5 h-full justify-end cursor-pointer group"
+                              >
+                                <span className={`text-[9.5px] font-extrabold whitespace-nowrap ${isSel ? "text-amber-300" : "text-stone-400"}`}>
+                                  {manLabel}
+                                </span>
                                 <div className="w-full flex items-end justify-center h-9">
                                   <div
-                                    title={`${tm.ym}: ${tm.total.toLocaleString()}원`}
                                     className={`w-full max-w-[20px] rounded-t-md transition-all ${
-                                      isSel ? "bg-amber-400" : tm.total > 0 ? "bg-stone-500" : "bg-stone-700"
+                                      isSel ? "bg-amber-400" : tm.total > 0 ? "bg-stone-500 group-hover:bg-stone-400" : "bg-stone-700"
                                     }`}
                                     style={{ height: `${hPct}%` }}
                                   />
@@ -14588,7 +14621,7 @@ ${validText}
                                 <span className={`text-[10.5px] font-bold ${isSel ? "text-amber-300" : "text-stone-400"}`}>
                                   {Number(tm.ym.slice(5))}월
                                 </span>
-                              </div>
+                              </button>
                             );
                           })}
                         </div>
@@ -15271,14 +15304,14 @@ ${validText}
           <div id="routine-board-section" className="bg-white p-4 rounded-2xl border border-stone-200 shadow-sm space-y-3">
             <div className="flex items-center justify-between gap-2">
               <div className="min-w-0">
-                <h3 className="text-[13.5px] font-black text-stone-900 flex flex-wrap items-center gap-1.5">
-                  <span className="whitespace-nowrap">🔄 반복 루틴</span>
-                  <span className="px-2 py-0.5 rounded-full bg-stone-100 text-stone-800 text-[11.5px] font-black whitespace-nowrap shrink-0">
+                <h3 className="text-[13.5px] font-black text-stone-900 flex items-center gap-1.5 whitespace-nowrap">
+                  <span>🔄 반복 루틴</span>
+                  <span className="px-2 py-0.5 rounded-full bg-stone-100 text-stone-800 text-[11px] font-black shrink-0">
                     남은 {familyRoutines.filter((r) => !isRoutineDoneNow(r)).length}건
                   </span>
                 </h3>
-                <p className="text-[11.5px] text-stone-500 font-semibold mt-0.5">
-                  현재({isWeekendNow() ? "주말" : "평일"}): <span className="text-stone-900 font-extrabold">{getCurrentRoutineTimeSlot(routineTimeRanges, liveMinuteTick, routineSlotDefs)}</span> · 자정·월요일 자동 리셋
+                <p className="text-[11px] text-stone-500 font-semibold mt-0.5 whitespace-nowrap truncate">
+                  {isWeekendNow() ? "주말" : "평일"} · <span className="text-stone-900 font-extrabold">{getCurrentRoutineTimeSlot(routineTimeRanges, liveMinuteTick, routineSlotDefs)}</span> · 자동 리셋
                 </p>
                 {familyRoutines.length > 0 && (() => {
                   const doneCnt = familyRoutines.filter((r) => isRoutineDoneNow(r)).length;
@@ -15896,8 +15929,8 @@ ${validText}
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-1.5 min-w-0">
                   <ListTodo className="w-4 h-4 text-emerald-600 shrink-0" />
-                  <h3 className="text-[13.5px] font-black text-stone-900 leading-snug">
-                    ✅ 전체 To-Do 체크리스트 ({todoStats.activeCount}건 남음 / 완료 {todoStats.doneCount}건)
+                  <h3 className="text-[13.5px] font-black text-stone-900 whitespace-nowrap truncate">
+                    ✅ To-Do ({todoStats.activeCount} 남음 · 완료 {todoStats.doneCount})
                   </h3>
                 </div>
               </div>
@@ -15935,18 +15968,18 @@ ${validText}
             </div>
 
             <div className="flex items-center justify-between gap-2">
-              <span className="text-[12.5px] font-semibold text-stone-500">
-                {todoIncludeOtherCats ? "할일 + 육아/병원·가족행사 함께 표시 중" : "할일(To-Do)만 표시 중"}
+              <span className="text-[11.5px] font-semibold text-stone-500 whitespace-nowrap truncate">
+                {todoIncludeOtherCats ? "표시: 할일 + 병원·행사" : "표시: 할일만"}
               </span>
               <button
                 onClick={() => setTodoIncludeOtherCats((v) => !v)}
-                className={`px-2.5 py-1 rounded-lg text-[12.5px] font-extrabold border transition whitespace-nowrap ${
+                className={`px-2.5 py-1 rounded-lg text-[11.5px] font-extrabold border transition whitespace-nowrap shrink-0 ${
                   todoIncludeOtherCats
                     ? "bg-amber-100 text-amber-900 border-amber-300"
                     : "bg-stone-100 text-stone-600 border-stone-200 hover:bg-stone-200"
                 }`}
               >
-                {todoIncludeOtherCats ? "🏥 병원·행사 포함 ON" : "🏥 병원·행사 포함"}
+                {todoIncludeOtherCats ? "🏥 병원·행사 ON" : "🏥 병원·행사 포함"}
               </button>
             </div>
 
@@ -15992,22 +16025,30 @@ ${validText}
 
             {/* 체크리스트 인라인 빠른 할 일 추가 바 */}
             <div className="bg-stone-50 p-2 rounded-xl border border-stone-200 space-y-1.5">
-              <input
-                type="text"
-                placeholder="할 일 빠른 입력 (예: 시목이 상담, 예방접종)"
-                value={quickTodoTitle}
-                onChange={(e) => setQuickTodoTitle(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") handleQuickAddTodo();
-                }}
-                className="w-full px-2.5 py-1.5 rounded-lg border border-stone-200 text-[13.5px] font-bold bg-white"
-              />
-              <div className="flex items-center justify-between gap-1.5 flex-wrap">
+              <div className="flex items-center gap-1.5">
+                <input
+                  type="text"
+                  placeholder="할 일 입력 (예: 시목이 상담, 예방접종)"
+                  value={quickTodoTitle}
+                  onChange={(e) => setQuickTodoTitle(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") handleQuickAddTodo();
+                  }}
+                  className="flex-1 min-w-0 px-2.5 py-1.5 rounded-lg border border-stone-200 text-[13px] font-bold bg-white"
+                />
+                <button
+                  onClick={handleQuickAddTodo}
+                  className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[12.5px] font-extrabold whitespace-nowrap shrink-0"
+                >
+                  + 추가
+                </button>
+              </div>
+              <div className="flex items-center justify-between gap-1">
                 <input
                   type="date"
                   value={quickTodoDate}
                   onChange={(e) => setQuickTodoDate(e.target.value)}
-                  className="px-2 py-1.5 rounded-lg border border-stone-200 text-[12.5px] font-bold bg-white flex-1 min-w-[120px]"
+                  className="px-2 py-1 rounded-lg border border-stone-200 text-[11.5px] font-bold bg-white min-w-0 flex-1"
                 />
                 <div className="flex items-center gap-1 shrink-0">
                   {[
@@ -16027,7 +16068,7 @@ ${validText}
                         key={dOpt.label}
                         type="button"
                         onClick={() => setQuickTodoDate(targetDate)}
-                        className={`px-2 py-1.5 rounded-lg text-[11.5px] font-extrabold border whitespace-nowrap ${
+                        className={`px-2 py-1 rounded-lg text-[11px] font-extrabold border whitespace-nowrap ${
                           quickTodoDate === targetDate
                             ? "bg-stone-900 text-white border-stone-900"
                             : "bg-white text-stone-600 border-stone-200"
@@ -16038,12 +16079,6 @@ ${validText}
                     );
                   })}
                 </div>
-                <button
-                  onClick={handleQuickAddTodo}
-                  className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[13.5px] font-extrabold whitespace-nowrap shrink-0"
-                >
-                  + 추가
-                </button>
               </div>
             </div>
 
@@ -16069,7 +16104,7 @@ ${validText}
                   {visibleTodoItems.map((todo) => (
                   <div
                     key={todo.id}
-                    className={`p-3 rounded-xl border transition flex items-center justify-between gap-2 ${
+                    className={`p-2.5 rounded-xl border transition flex items-center justify-between gap-2 ${
                       todo.done
                         ? "bg-stone-100 border-stone-200 opacity-70"
                         : "bg-white border-stone-200 shadow-sm"
@@ -16110,18 +16145,16 @@ ${validText}
                             </span>
                           )}
                         </div>
-                        <div className="flex items-center gap-1.5 text-[11.5px] text-stone-500 mt-0.5">
-                          <span>
-                            📅 {todo.date} ({getDayName(todo.date)})
+                        <div className="flex items-center gap-1.5 text-[11px] text-stone-500 mt-0.5 whitespace-nowrap overflow-hidden">
+                          <span className="shrink-0">
+                            📅 {todo.date}({getDayName(todo.date)})
                           </span>
-                          <span>· {todo.category}</span>
-                          <span>
-                            ·{" "}
-                            <span className="inline-flex items-center gap-0.5 align-middle">
-                              {toSafeArray(todo.members).map((m) => (
-                                <MemberAvatar key={m} id={m} size="sm" />
-                              ))}
-                            </span>
+                          <span className="shrink-0">· {todo.category}</span>
+                          <span className="inline-flex items-center gap-0.5 shrink-0">
+                            ·
+                            {toSafeArray(todo.members).map((m) => (
+                              <MemberAvatar key={m} id={m} size="sm" />
+                            ))}
                           </span>
                         </div>
                       </div>
@@ -17321,10 +17354,10 @@ ${validText}
       {activeTab === "notices" && (!canViewTab("notices") ? renderLockedTabScreen("📌 가족공지") : (
         <div className="p-4 space-y-4">
           <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-[15.5px] font-black text-stone-900">📌 우리 가족 공지사항 & 메모장</h2>
-              <p className="text-[12.5px] text-stone-500">
-                육아 일정, 어린이집 준비물, 부부 전달사항을 공유하세요
+            <div className="min-w-0">
+              <h2 className="text-[15px] font-black text-stone-900 whitespace-nowrap">📌 가족 공지 · 메모</h2>
+              <p className="text-[11.5px] text-stone-500 whitespace-nowrap truncate">
+                준비물 · 전달사항을 공유하세요
               </p>
             </div>
             <button
