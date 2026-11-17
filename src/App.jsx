@@ -35,7 +35,10 @@ import {
   ListTodo,
   CalendarRange,
   Baby,
-  LayoutGrid
+  LayoutGrid,
+  Bell,
+  Lock,
+  ShieldCheck
 } from "lucide-react";
 import { initializeApp, getApps, getApp } from "firebase/app";
 import {
@@ -180,16 +183,61 @@ const DEFAULT_ROUTINE_TIME_RANGES = {
   자기전: "20:30"
 };
 
+const DEFAULT_ROUTINE_SLOT_DEFS = [
+  { id: "아침", label: "아침", startTime: "05:00", weekday: true, weekend: true },
+  { id: "점심", label: "점심", startTime: "11:00", weekday: true, weekend: false },
+  { id: "오후", label: "오후", startTime: "12:00", weekday: false, weekend: true },
+  { id: "하원후", label: "하원후", startTime: "15:00", weekday: true, weekend: false },
+  { id: "저녁", label: "저녁", startTime: "18:00", weekday: true, weekend: true },
+  { id: "자기전", label: "자기전", startTime: "20:30", weekday: true, weekend: true }
+];
+
+const normalizeRoutineSlotDefs = (rawList, fallbackRanges = DEFAULT_ROUTINE_TIME_RANGES) => {
+  if (!Array.isArray(rawList) || rawList.length === 0) {
+    return DEFAULT_ROUTINE_SLOT_DEFS.map((s) => ({
+      ...s,
+      startTime: formatMinutesHHMM(toTimeMinutes(fallbackRanges?.[s.label] ?? s.startTime))
+    }));
+  }
+  const seen = new Set();
+  const out = [];
+  rawList.forEach((item, idx) => {
+    const label = String(item?.label || "").trim();
+    if (!label || label === "상시" || seen.has(label)) return;
+    seen.add(label);
+    out.push({
+      id: String(item?.id || label || `slot-${idx}`),
+      label,
+      startTime: formatMinutesHHMM(toTimeMinutes(item?.startTime ?? fallbackRanges?.[label] ?? "09:00")),
+      weekday: item?.weekday !== false,
+      weekend: item?.weekend !== false
+    });
+  });
+  return out.length > 0 ? out : DEFAULT_ROUTINE_SLOT_DEFS;
+};
+
 const ROUTINE_WEEKDAY_SLOTS = ["아침", "점심", "하원후", "저녁", "자기전"];
 const ROUTINE_WEEKEND_SLOTS = ["아침", "오후", "저녁", "자기전"];
 const ROUTINE_ORDERED_SLOTS = ["아침", "점심", "하원후", "오후", "저녁", "자기전"];
 
 const isWeekendNow = () => [0, 6].includes(new Date().getDay());
 
-const getCurrentRoutineTimeSlot = (ranges = DEFAULT_ROUTINE_TIME_RANGES, minuteOverride = null) => {
+const getCurrentRoutineTimeSlot = (ranges = DEFAULT_ROUTINE_TIME_RANGES, minuteOverride = null, slotDefs = null) => {
   const now = new Date();
   const curMin = typeof minuteOverride === "number" ? minuteOverride : now.getHours() * 60 + now.getMinutes();
   const isWknd = [0, 6].includes(now.getDay());
+  if (Array.isArray(slotDefs) && slotDefs.length > 0) {
+    const active = slotDefs
+      .filter((s) => (isWknd ? s.weekend : s.weekday))
+      .sort((a, b) => toTimeMinutes(a.startTime) - toTimeMinutes(b.startTime));
+    const list = active.length > 0 ? active : [...slotDefs].sort((a, b) => toTimeMinutes(a.startTime) - toTimeMinutes(b.startTime));
+    for (let i = 0; i < list.length; i++) {
+      const s = list[i];
+      const nxt = list[(i + 1) % list.length];
+      if (isMinuteInRange(curMin, toTimeMinutes(s.startTime), toTimeMinutes(nxt.startTime))) return s.label;
+    }
+    return list[list.length - 1]?.label || "상시";
+  }
   const slots = isWknd ? ROUTINE_WEEKEND_SLOTS : ROUTINE_WEEKDAY_SLOTS;
   const r = { ...DEFAULT_ROUTINE_TIME_RANGES, ...(ranges || {}) };
   for (let i = 0; i < slots.length; i++) {
@@ -1116,11 +1164,59 @@ const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.65) =>
     img.src = dataUrl;
   });
 
-const APP_CODE_VERSION = "v10.91";
-const APP_BUILD_DATE = "2026-11-17 11:02";
+const APP_CODE_VERSION = "v10.94";
+const APP_BUILD_DATE = "2026-11-17 13:50";
 const EDITOR_INVITE_CODE = "0402";
+const DEFAULT_HELPER_CODE = "1234";
+const GUEST_ALLOWED_TABS = ["home", "daily", "recipes"];
+const DEFAULT_HELPER_TABS = ["home", "daily", "fridge", "shopping", "notices", "recipes"];
+const HELPER_CONFIGURABLE_TABS = [
+  { id: "daily", label: "🍽️ 식단" },
+  { id: "fridge", label: "❄️ 냉장고" },
+  { id: "shopping", label: "🛒 장보기" },
+  { id: "notices", label: "📌 가족공지" },
+  { id: "recipes", label: "📖 레시피북" },
+  { id: "baby", label: "👶 육아수첩" },
+  { id: "schedule", label: "🗓️ 일정·루틴" },
+  { id: "ai", label: "✨ AI추천" },
+  { id: "monthly", label: "💰 월간·식비" }
+];
 
 const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v10.94",
+    version: "v10.94",
+    date: "2026-11-17",
+    title: "권한 가드 교차 검증 강화 · 홈 편집/빠른추가 권한 연동 · 알림 바로가기 · JSON 백업 확장",
+    changes: [
+      "홈 화면에서 루틴/할일/빠른추가 실행 시에도 해당 메뉴(일정·식단·냉장고 등)의 실제 편집 권한을 교차 검증하도록 보안 강화",
+      "미로그인 상태에서 [+] 빠른 추가 버튼을 숨기고, [✏️ 홈 편집]은 관리자(0402)에게만 노출되도록 정리",
+      "최근 수정 알림 내역 항목에 [바로가기 →] 버튼을 추가해 수정된 탭으로 1탭 이동 가능",
+      "전체 JSON 백업·복원에 사용자 지정 반복 루틴 시간대(routineSlotDefs)까지 포함"
+    ]
+  },
+  {
+    id: "patch-v10.93",
+    version: "v10.93",
+    date: "2026-11-17",
+    title: "권한별 비밀번호·열람/편집 세부 매트릭스 관리 · 반복 루틴 시간대 자유 추가/수정/삭제",
+    changes: [
+      "⚙️설정에서 관리자 비밀번호와 산후도우미·가족 비밀번호를 모두 직접 변경 가능",
+      "메뉴별 권한 매트릭스로 [미로그인(열람)], [도우미·가족(열람)], [도우미·가족(편집)] 여부를 관리자가 자유롭게 선택",
+      "일정 → 반복 루틴 [⏰ 시간대]에서 시간대 항목(예: 오후·새벽 등)을 새로 추가·이름 수정·삭제하고 평일/주말 적용 여부까지 자유롭게 변경 가능"
+    ]
+  },
+  {
+    id: "patch-v10.92",
+    version: "v10.92",
+    date: "2026-11-17",
+    title: "홈 상단 최근 수정 알림창 · 3단계 권한(미로그인 / 산후도우미·가족 / 관리자) 및 비밀번호 관리",
+    changes: [
+      "홈 화면 맨 위에 최근 누가·언제·무엇을 수정했는지 실시간으로 확인하는 [최근 수정 알림창] 및 전체 내역 모달 추가",
+      "권한을 3단계로 분리: ① 미로그인(가족사진·식단·레시피 일부만 열람, 그 외 열람 불가) ② 산후도우미·가족(허용 메뉴 열람·편집) ③ 관리자(0402 전체 권한)",
+      "관리자(0402)가 ⚙️설정에서 산후도우미·가족용 비밀번호 변경 및 접근 허용 메뉴를 직접 설정하고 실시간 동기화"
+    ]
+  },
   {
     id: "patch-v10.91",
     version: "v10.91",
@@ -3014,6 +3110,23 @@ function MainApp() {
   }, []);
   const [isHomeEditMode, setIsHomeEditMode] = useState(false);
   const [isRoutineRangeEditOpen, setIsRoutineRangeEditOpen] = useState(false);
+  const [routineSlotDefs, setRoutineSlotDefs] = useState(() => {
+    try {
+      const rawDefs = localStorage.getItem("kim_routine_slot_defs_v1");
+      if (rawDefs) return normalizeRoutineSlotDefs(JSON.parse(rawDefs));
+      const rawRanges = localStorage.getItem("kim_routine_time_ranges_v1");
+      if (rawRanges) return normalizeRoutineSlotDefs(null, JSON.parse(rawRanges));
+    } catch (e) {}
+    return DEFAULT_ROUTINE_SLOT_DEFS;
+  });
+  const [newSlotLabelInput, setNewSlotLabelInput] = useState("");
+  const [newSlotTimeInput, setNewSlotTimeInput] = useState("14:00");
+  const [newSlotWeekday, setNewSlotWeekday] = useState(true);
+  const [newSlotWeekend, setNewSlotWeekend] = useState(true);
+  const activeRoutineTimeSlots = useMemo(
+    () => [...[...routineSlotDefs].sort((a, b) => toTimeMinutes(a.startTime) - toTimeMinutes(b.startTime)).map((s) => s.label), "상시"],
+    [routineSlotDefs]
+  );
   const [routineTimeRanges, setRoutineTimeRanges] = useState(() => {
     try {
       const raw = localStorage.getItem("kim_routine_time_ranges_v1");
@@ -3030,7 +3143,7 @@ function MainApp() {
   const homeDragOverRef = useRef("");
   const [homeDragOverKey, setHomeDragOverKey] = useState("");
 
-  const syncHomeSettingsToCloud = async (nextLayout, nextRanges, nextRoutineRanges = null) => {
+  const syncHomeSettingsToCloud = async (nextLayout, nextRanges, nextRoutineRanges = null, nextSlotDefs = null) => {
     if (!user || !db || !isEditorUnlocked) return;
     try {
       await setDoc(
@@ -3039,6 +3152,7 @@ function MainApp() {
           ...(nextLayout ? { layout: nextLayout } : {}),
           ...(nextRanges ? { timeRanges: nextRanges } : {}),
           ...(nextRoutineRanges ? { routineRanges: nextRoutineRanges } : {}),
+          ...(Array.isArray(nextSlotDefs) ? { routineSlotDefs: nextSlotDefs } : {}),
           updatedAt: new Date().toISOString()
         },
         { merge: true }
@@ -3157,24 +3271,119 @@ function MainApp() {
   const toastTimerRef = useRef(null);
   const moreNavBtnRef = useRef(null);
   const moreSheetCloseRef = useRef(null);
-  const [isEditorUnlocked, setIsEditorUnlocked] = useState(() => {
+  const [adminCode, setAdminCode] = useState(() => {
+    try {
+      return localStorage.getItem("family_admin_code_v1") || EDITOR_INVITE_CODE;
+    } catch (e) {
+      return EDITOR_INVITE_CODE;
+    }
+  });
+  const [adminCodeDraft, setAdminCodeDraft] = useState(() => {
+    try {
+      return localStorage.getItem("family_admin_code_v1") || EDITOR_INVITE_CODE;
+    } catch (e) {
+      return EDITOR_INVITE_CODE;
+    }
+  });
+  const [helperCode, setHelperCode] = useState(() => {
+    try {
+      return localStorage.getItem("family_helper_code_v1") || DEFAULT_HELPER_CODE;
+    } catch (e) {
+      return DEFAULT_HELPER_CODE;
+    }
+  });
+  const [guestAllowedTabs, setGuestAllowedTabs] = useState(() => {
+    try {
+      const raw = localStorage.getItem("family_guest_tabs_v1");
+      const parsed = raw ? JSON.parse(raw) : null;
+      return Array.isArray(parsed) ? parsed : GUEST_ALLOWED_TABS;
+    } catch (e) {
+      return GUEST_ALLOWED_TABS;
+    }
+  });
+  const [helperAllowedTabs, setHelperAllowedTabs] = useState(() => {
+    try {
+      const raw = localStorage.getItem("family_helper_tabs_v1");
+      const parsed = raw ? JSON.parse(raw) : null;
+      return Array.isArray(parsed) && parsed.length > 0 ? parsed : DEFAULT_HELPER_TABS;
+    } catch (e) {
+      return DEFAULT_HELPER_TABS;
+    }
+  });
+  const [helperEditTabs, setHelperEditTabs] = useState(() => {
+    try {
+      const raw = localStorage.getItem("family_helper_edit_tabs_v1");
+      const parsed = raw ? JSON.parse(raw) : null;
+      if (Array.isArray(parsed)) return parsed;
+      const rawView = localStorage.getItem("family_helper_tabs_v1");
+      const parsedView = rawView ? JSON.parse(rawView) : null;
+      return Array.isArray(parsedView) && parsedView.length > 0 ? parsedView : DEFAULT_HELPER_TABS;
+    } catch (e) {
+      return DEFAULT_HELPER_TABS;
+    }
+  });
+  const [helperCodeDraft, setHelperCodeDraft] = useState(() => {
+    try {
+      return localStorage.getItem("family_helper_code_v1") || DEFAULT_HELPER_CODE;
+    } catch (e) {
+      return DEFAULT_HELPER_CODE;
+    }
+  });
+  const [accessRole, setAccessRole] = useState(() => {
     try {
       const params = new URLSearchParams(window.location.search);
-      if (params.get("invite") === EDITOR_INVITE_CODE) {
+      const inv = params.get("invite");
+      const savedAdmin = localStorage.getItem("family_admin_code_v1") || EDITOR_INVITE_CODE;
+      const savedHelper = localStorage.getItem("family_helper_code_v1") || DEFAULT_HELPER_CODE;
+      if (inv && inv === savedAdmin) {
+        localStorage.setItem("family_access_role_v1", "admin");
         localStorage.setItem("family_editor_unlocked_v1", "true");
         params.delete("invite");
         const cleanQuery = params.toString();
         const cleanUrl = window.location.pathname + (cleanQuery ? `?${cleanQuery}` : "") + window.location.hash;
         window.history.replaceState({}, "", cleanUrl);
-        return true;
+        return "admin";
       }
-      return localStorage.getItem("family_editor_unlocked_v1") === "true";
+      if (inv && inv === savedHelper) {
+        localStorage.setItem("family_access_role_v1", "helper");
+        localStorage.removeItem("family_editor_unlocked_v1");
+        params.delete("invite");
+        const cleanQuery = params.toString();
+        const cleanUrl = window.location.pathname + (cleanQuery ? `?${cleanQuery}` : "") + window.location.hash;
+        window.history.replaceState({}, "", cleanUrl);
+        return "helper";
+      }
+      const savedRole = localStorage.getItem("family_access_role_v1");
+      if (savedRole === "admin" || savedRole === "helper" || savedRole === "guest") return savedRole;
+      if (localStorage.getItem("family_editor_unlocked_v1") === "true") return "admin";
+      return "guest";
     } catch (e) {
-      return false;
+      return "guest";
     }
   });
+  const [actorName, setActorName] = useState(() => {
+    try {
+      return localStorage.getItem("family_actor_name_v1") || "수혁";
+    } catch (e) {
+      return "수혁";
+    }
+  });
+  const isAdminUnlocked = accessRole === "admin";
+  const isHelperUnlocked = accessRole === "helper";
+  const isEditorUnlocked = isAdminUnlocked || isHelperUnlocked;
   const [isEditorUnlockModalOpen, setIsEditorUnlockModalOpen] = useState(false);
   const [editorCodeInput, setEditorCodeInput] = useState("");
+  const [recentActivities, setRecentActivities] = useState(() => {
+    try {
+      const raw = localStorage.getItem("kim_recent_activities_v1");
+      const parsed = raw ? JSON.parse(raw) : [];
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (e) {
+      return [];
+    }
+  });
+  const [isActivityModalOpen, setIsActivityModalOpen] = useState(false);
+  const [activityFilter, setActivityFilter] = useState("전체");
   const [patchForm, setPatchForm] = useState({
     version: "",
     title: "",
@@ -3456,7 +3665,7 @@ function MainApp() {
   };
 
   const handleToggleRoutine = (rtId) => {
-    if (!requireEditorAccess()) return;
+    if (!requireEditorAccess("schedule")) return;
     const todayKey = getTodayStr();
     if (todayKey !== currentDayKey) setCurrentDayKey(todayKey);
     let wasDone = false;
@@ -3483,6 +3692,7 @@ function MainApp() {
       };
     });
     setFamilyRoutines(nextList);
+    recordActivity("루틴", wasDone ? "해제" : "완료", targetTitle);
     showToast(wasDone ? `↩️ '${targetTitle}' 완료를 취소했습니다.` : `✅ '${targetTitle}' 루틴 완료!`);
     const updatedItem = nextList.find((r) => r.id === rtId);
     syncRoutinesToCloud(nextList, updatedItem ? { type: "upsert", item: updatedItem } : null);
@@ -3498,7 +3708,7 @@ function MainApp() {
   };
 
   const handleToggleRoutineSubStep = (rtId, stepIdx, totalSteps) => {
-    if (!requireEditorAccess()) return;
+    if (!requireEditorAccess("schedule")) return;
     const todayKey = getTodayStr();
     if (todayKey !== currentDayKey) setCurrentDayKey(todayKey);
     let completedAll = false;
@@ -3552,7 +3762,7 @@ function MainApp() {
     if (!requireEditorAccess()) return;
     setEditingRoutineId(null);
     setNewRoutineTitle("");
-    setNewRoutineTimeSlot(getCurrentRoutineTimeSlot(routineTimeRanges, liveMinuteTick));
+    setNewRoutineTimeSlot(getCurrentRoutineTimeSlot(routineTimeRanges, liveMinuteTick, routineSlotDefs));
     setNewRoutineCycle("daily");
     setNewRoutineIntervalDays(2);
     setNewRoutineMonthDay(1);
@@ -3569,7 +3779,7 @@ function MainApp() {
   };
 
   const handleAddRoutine = () => {
-    if (!requireEditorAccess()) return;
+    if (!requireEditorAccess("schedule")) return;
     const title = newRoutineTitle.trim();
     if (!title) return;
     const cycleVal = ["daily", "interval", "weekly", "monthly", "monthly_weekday"].includes(newRoutineCycle)
@@ -3640,13 +3850,16 @@ function MainApp() {
     setNewRoutineTitle("");
     setIsRoutineModalOpen(false);
     syncRoutinesToCloud(nextList, { type: "upsert", item: nextItem });
+    recordActivity("루틴", "추가", title);
     showToast(`🔄 '${title}' 루틴이 추가되었습니다!`);
   };
 
   const handleDeleteRoutine = (rtId) => {
-    if (!requireEditorAccess()) return;
+    if (!requireEditorAccess("schedule")) return;
     const nextList = familyRoutines.filter((r) => r.id !== rtId);
     setFamilyRoutines(nextList);
+    const delTarget = familyRoutines.find((r) => r.id === rtId);
+    if (delTarget) recordActivity("루틴", "삭제", delTarget.title || "");
     syncRoutinesToCloud(nextList, { type: "delete", id: rtId });
   };
 
@@ -3982,12 +4195,216 @@ function MainApp() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [toastMsg, setToastMsg] = useState("");
 
-  const requireEditorAccess = () => {
-    if (isEditorUnlocked) return true;
-    showToast("🔒 열람 전용 모드입니다. 초대 코드를 입력하면 편집할 수 있어요.");
+  const canViewTab = (tabId) => {
+    if (isAdminUnlocked) return true;
+    if (isHelperUnlocked) return tabId === "home" || helperAllowedTabs.includes(tabId);
+    return tabId === "home" || guestAllowedTabs.includes(tabId);
+  };
+
+  const canEditTab = (tabId = activeTab) => {
+    if (isAdminUnlocked) return true;
+    if (isHelperUnlocked) return tabId === "home" ? true : helperEditTabs.includes(tabId);
+    return false;
+  };
+
+  const requireEditorAccess = (targetTab = activeTab) => {
+    if (canEditTab(targetTab)) return true;
+    if (accessRole === "guest") {
+      showToast("🔒 미로그인 상태입니다. 로그인 후 편집할 수 있어요.");
+    } else if (canViewTab(targetTab)) {
+      showToast("🔒 이 메뉴는 열람만 허용되어 있습니다. 편집은 관리자 권한이 필요합니다.");
+    } else {
+      showToast("🔒 관리자 전용 메뉴·기능입니다.");
+    }
     setIsEditorUnlockModalOpen(true);
     return false;
   };
+
+  const formatActivityTime = (atMs) => {
+    if (!atMs) return "";
+    const diffSec = Math.floor((Date.now() - atMs) / 1000);
+    if (diffSec < 60) return "방금 전";
+    if (diffSec < 3600) return `${Math.floor(diffSec / 60)}분 전`;
+    const d = new Date(atMs);
+    const today = new Date();
+    const hh = String(d.getHours()).padStart(2, "0");
+    const mm = String(d.getMinutes()).padStart(2, "0");
+    if (d.toDateString() === today.toDateString()) return `오늘 ${hh}:${mm}`;
+    const yest = new Date(today);
+    yest.setDate(today.getDate() - 1);
+    if (d.toDateString() === yest.toDateString()) return `어제 ${hh}:${mm}`;
+    return `${d.getMonth() + 1}/${d.getDate()} ${hh}:${mm}`;
+  };
+
+  const recordActivity = (category, action, detail = "") => {
+    if (accessRole === "guest") return;
+    const who = (actorName || (isAdminUnlocked ? "관리자" : "산후도우미/가족")).trim();
+    const entry = {
+      id: `act-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      actor: who,
+      role: accessRole,
+      category,
+      action,
+      detail: String(detail || "").trim().slice(0, 80),
+      atMs: Date.now()
+    };
+    setRecentActivities((prev) => {
+      const top = prev[0];
+      if (
+        top &&
+        top.actor === entry.actor &&
+        top.category === entry.category &&
+        top.action === entry.action &&
+        top.detail === entry.detail &&
+        entry.atMs - (top.atMs || 0) < 2500
+      ) {
+        return prev;
+      }
+      const next = [entry, ...prev].slice(0, 30);
+      try {
+        localStorage.setItem("kim_recent_activities_v1", JSON.stringify(next));
+      } catch (e) {}
+      if (user && db) {
+        setDoc(
+          getDocRef("family_meta_v4", "recent_activity"),
+          { items: next, updatedAtMs: Date.now() },
+          { merge: true }
+        ).catch(() => {});
+      }
+      return next;
+    });
+  };
+
+  const saveAccessConfigToCloud = async (cfg = {}) => {
+    const nextAdmin = String(cfg.adminCode ?? adminCode).trim() || EDITOR_INVITE_CODE;
+    const nextHelper = String(cfg.helperCode ?? helperCode).trim() || DEFAULT_HELPER_CODE;
+    const nextGuest = Array.isArray(cfg.guestAllowedTabs)
+      ? Array.from(new Set(["home", ...cfg.guestAllowedTabs]))
+      : guestAllowedTabs;
+    const nextView = Array.isArray(cfg.helperViewTabs)
+      ? Array.from(new Set(["home", ...cfg.helperViewTabs]))
+      : helperAllowedTabs;
+    const nextEditRaw = Array.isArray(cfg.helperEditTabs) ? cfg.helperEditTabs : helperEditTabs;
+    const nextEdit = nextEditRaw.filter((t) => t !== "home" && nextView.includes(t));
+
+    setAdminCode(nextAdmin);
+    setAdminCodeDraft(nextAdmin);
+    setHelperCode(nextHelper);
+    setHelperCodeDraft(nextHelper);
+    setGuestAllowedTabs(nextGuest);
+    setHelperAllowedTabs(nextView);
+    setHelperEditTabs(nextEdit);
+    try {
+      localStorage.setItem("family_admin_code_v1", nextAdmin);
+      localStorage.setItem("family_helper_code_v1", nextHelper);
+      localStorage.setItem("family_guest_tabs_v1", JSON.stringify(nextGuest));
+      localStorage.setItem("family_helper_tabs_v1", JSON.stringify(nextView));
+      localStorage.setItem("family_helper_edit_tabs_v1", JSON.stringify(nextEdit));
+    } catch (e) {}
+    if (user && db && isAdminUnlocked) {
+      beginWrite();
+      try {
+        await setDoc(
+          getDocRef("family_meta_v4", "access_config"),
+          {
+            adminCode: nextAdmin,
+            helperCode: nextHelper,
+            guestAllowedTabs: nextGuest,
+            helperAllowedTabs: nextView,
+            helperEditTabs: nextEdit,
+            updatedAtMs: Date.now()
+          },
+          { merge: true }
+        );
+        endWrite(true);
+      } catch (e) {
+        endWrite(false);
+      }
+    }
+  };
+
+  const applyLoginCode = (rawCode) => {
+    const code = String(rawCode || "").trim();
+    if (!code) {
+      showToast("비밀번호를 입력해 주세요.");
+      return false;
+    }
+    if (code === adminCode) {
+      const nextActor = actorName && actorName !== "산후도우미/가족" ? actorName : "수혁";
+      try {
+        localStorage.setItem("family_access_role_v1", "admin");
+        localStorage.setItem("family_editor_unlocked_v1", "true");
+        localStorage.setItem("family_actor_name_v1", nextActor);
+      } catch (e) {}
+      setAccessRole("admin");
+      setActorName(nextActor);
+      setEditorCodeInput("");
+      setIsEditorUnlockModalOpen(false);
+      showToast(`👑 관리자(${nextActor}) 권한으로 로그인되었습니다!`);
+      return true;
+    }
+    if (code === helperCode) {
+      const nextActor = actorName && !["수혁", "아리나"].includes(actorName) ? actorName : "산후도우미/가족";
+      try {
+        localStorage.setItem("family_access_role_v1", "helper");
+        localStorage.removeItem("family_editor_unlocked_v1");
+        localStorage.setItem("family_actor_name_v1", nextActor);
+      } catch (e) {}
+      setAccessRole("helper");
+      setActorName(nextActor);
+      setEditorCodeInput("");
+      setIsEditorUnlockModalOpen(false);
+      showToast(`🌿 ${nextActor} 권한(일부 메뉴 편집)으로 로그인되었습니다!`);
+      return true;
+    }
+    showToast("❌ 비밀번호가 일치하지 않습니다.");
+    return false;
+  };
+
+  const logoutToGuest = () => {
+    try {
+      localStorage.setItem("family_access_role_v1", "guest");
+      localStorage.removeItem("family_editor_unlocked_v1");
+    } catch (e) {}
+    setAccessRole("guest");
+    setIsEditorUnlockModalOpen(false);
+    if (!guestAllowedTabs.includes(activeTab)) setActiveTab("home");
+    showToast("🔒 로그아웃되어 열람 제한 모드로 전환되었습니다.");
+  };
+
+  const renderLockedTabScreen = (tabLabel) => (
+    <div className="p-4">
+      <div className="bg-white rounded-3xl border border-stone-200 p-6 text-center space-y-3 shadow-sm">
+        <div className="w-12 h-12 rounded-2xl bg-amber-50 border border-amber-200 text-amber-700 flex items-center justify-center mx-auto">
+          <Lock className="w-6 h-6" />
+        </div>
+        <div className="space-y-1">
+          <h3 className="text-sm font-black text-stone-900">{tabLabel} 메뉴는 잠겨 있습니다</h3>
+          <p className="text-xs text-stone-500 leading-relaxed">
+            {accessRole === "guest"
+              ? "미로그인 상태에서는 가족사진과 일부 메뉴(식단·레시피)만 볼 수 있습니다. 가족 또는 산후도우미 비밀번호로 로그인해 주세요."
+              : "현재 계정에서는 접근이 제한된 메뉴입니다. 관리자(0402) 비밀번호로 로그인하거나 설정에서 허용 메뉴를 변경할 수 있습니다."}
+          </p>
+        </div>
+        <div className="flex items-center justify-center gap-2 pt-1">
+          <button
+            type="button"
+            onClick={() => setIsEditorUnlockModalOpen(true)}
+            className="px-4 py-2 rounded-xl bg-stone-900 hover:bg-stone-800 text-white text-xs font-extrabold"
+          >
+            🔑 로그인 / 권한 변경
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("home")}
+            className="px-3.5 py-2 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-xs font-bold"
+          >
+            🏠 홈으로
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 
   const showToast = (msg, undoAction = null) => {
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
@@ -4449,6 +4866,40 @@ function MainApp() {
                 localStorage.setItem("kim_family_backup_email", d.data().email);
               }
             }
+            if (d.id === "access_config") {
+              if (d.data().adminCode) {
+                const ac = String(d.data().adminCode).trim();
+                setAdminCode(ac);
+                setAdminCodeDraft(ac);
+                try { localStorage.setItem("family_admin_code_v1", ac); } catch (e) {}
+              }
+              if (d.data().helperCode) {
+                const c = String(d.data().helperCode).trim();
+                setHelperCode(c);
+                setHelperCodeDraft(c);
+                try { localStorage.setItem("family_helper_code_v1", c); } catch (e) {}
+              }
+              if (Array.isArray(d.data().guestAllowedTabs)) {
+                const gTabs = toSafeArray(d.data().guestAllowedTabs);
+                setGuestAllowedTabs(gTabs);
+                try { localStorage.setItem("family_guest_tabs_v1", JSON.stringify(gTabs)); } catch (e) {}
+              }
+              if (Array.isArray(d.data().helperAllowedTabs)) {
+                const tabs = toSafeArray(d.data().helperAllowedTabs);
+                setHelperAllowedTabs(tabs);
+                try { localStorage.setItem("family_helper_tabs_v1", JSON.stringify(tabs)); } catch (e) {}
+              }
+              if (Array.isArray(d.data().helperEditTabs)) {
+                const eTabs = toSafeArray(d.data().helperEditTabs);
+                setHelperEditTabs(eTabs);
+                try { localStorage.setItem("family_helper_edit_tabs_v1", JSON.stringify(eTabs)); } catch (e) {}
+              }
+            }
+            if (d.id === "recent_activity" && Array.isArray(d.data().items)) {
+              const acts = toSafeArray(d.data().items).slice(0, 30);
+              setRecentActivities(acts);
+              try { localStorage.setItem("kim_recent_activities_v1", JSON.stringify(acts)); } catch (e) {}
+            }
           });
         },
         () => {}
@@ -4610,6 +5061,11 @@ function MainApp() {
             const mergedR = { ...DEFAULT_ROUTINE_TIME_RANGES, ...d.routineRanges };
             setRoutineTimeRanges(mergedR);
             try { localStorage.setItem("kim_routine_time_ranges_v1", JSON.stringify(mergedR)); } catch (e) {}
+          }
+          if (Array.isArray(d?.routineSlotDefs) && d.routineSlotDefs.length > 0) {
+            const normSlots = normalizeRoutineSlotDefs(d.routineSlotDefs, d.routineRanges || DEFAULT_ROUTINE_TIME_RANGES);
+            setRoutineSlotDefs(normSlots);
+            try { localStorage.setItem("kim_routine_slot_defs_v1", JSON.stringify(normSlots)); } catch (e) {}
           }
         },
         () => {}
@@ -4807,7 +5263,7 @@ function MainApp() {
 
   // 하루 2번(오전 AM / 오후 PM) + 전체 컬렉션 내용 해시(FNV-1a) 변경 감지 자동 클라우드 스냅샷 백업 엔진
   useEffect(() => {
-    if (!isEditorUnlocked || !user || !db || meals.length === 0) return;
+    if (!isAdminUnlocked || !user || !db || meals.length === 0) return;
     const currentSlot = getTwiceDailySlotKey();
     const backupDataObj = {
       meals,
@@ -4876,7 +5332,7 @@ function MainApp() {
     return () => clearTimeout(timer);
   }, [
     user,
-    isEditorUnlocked,
+    isAdminUnlocked,
     meals,
     fridge,
     expenses,
@@ -5050,6 +5506,7 @@ function MainApp() {
         homeLayoutConfig,
         homeTimeRanges,
         routineTimeRanges
+      routineSlotDefs,
       }
     };
     return JSON.stringify(fullSnapshot, null, 2);
@@ -5184,11 +5641,16 @@ function MainApp() {
         try { localStorage.setItem("kim_home_time_ranges_v1", JSON.stringify(payload.homeTimeRanges)); } catch (e) {}
         syncHomeSettingsToCloud(null, payload.homeTimeRanges, null);
       }
-      if (payload.routineTimeRanges && (typeof payload.routineTimeRanges["아침"] === "number" || typeof payload.routineTimeRanges["아침"] === "string")) {
+      if (payload.routineTimeRanges && typeof payload.routineTimeRanges === "object") {
         const normR = { ...DEFAULT_ROUTINE_TIME_RANGES, ...payload.routineTimeRanges };
         setRoutineTimeRanges(normR);
         try { localStorage.setItem("kim_routine_time_ranges_v1", JSON.stringify(normR)); } catch (e) {}
-        syncHomeSettingsToCloud(null, null, normR);
+        const normDefs = Array.isArray(payload.routineSlotDefs) ? normalizeRoutineSlotDefs(payload.routineSlotDefs, normR) : null;
+        if (normDefs) {
+          setRoutineSlotDefs(normDefs);
+          try { localStorage.setItem("kim_routine_slot_defs_v1", JSON.stringify(normDefs)); } catch (e) {}
+        }
+        syncHomeSettingsToCloud(null, null, normR, normDefs);
       }
       if (Array.isArray(payload.notices)) setNotices(payload.notices);
       if (Array.isArray(payload.schedules)) setSchedules(payload.schedules);
@@ -5429,6 +5891,7 @@ function MainApp() {
     }
     setBabyGrowthLogs((prev) => [payload, ...prev]);
     setGrowthForm({ date: getTodayStr(), height: "", weight: "", head: "", memo: "" });
+    recordActivity("육아", "성장기록", `${selectedChildId} · ${growthForm.date || ""}`);
     showToast(`${selectedChildId} 성장 기록이 저장되었습니다!`);
   };
 
@@ -5482,7 +5945,7 @@ function MainApp() {
   };
 
   const handleSaveSchedule = async () => {
-    if (!requireEditorAccess()) return;
+    if (!requireEditorAccess("schedule")) return;
     if (!scheduleForm.title.trim()) return;
     const id = editingSchedule ? editingSchedule.id : `sch-${Date.now()}`;
     const safeMembers = toSafeArray(scheduleForm.members);
@@ -5522,12 +5985,13 @@ function MainApp() {
         return;
       }
     }
+    recordActivity("일정", editingSchedule ? "수정" : "등록", `${scheduleForm.title || ""}`);
     showToast(editingSchedule ? "일정이 수정되었습니다." : "새 가족 일정이 등록되었습니다.");
   };
 
   // [신규] 체크리스트에서 1초 만에 할 일(To-Do) 빠른 등록
   const handleQuickAddTodo = async () => {
-    if (!requireEditorAccess()) return;
+    if (!requireEditorAccess("schedule")) return;
     if (!quickTodoTitle.trim()) return;
     const id = `sch-${Date.now()}`;
     const targetMembers =
@@ -5561,13 +6025,15 @@ function MainApp() {
         return;
       }
     }
+    recordActivity("할일", "등록", `${quickTodoTitle || ""}`);
     showToast("To-Do 체크리스트에 새 할 일이 추가되었습니다!");
   };
 
   const handleToggleScheduleDone = async (item) => {
-    if (!requireEditorAccess()) return;
+    if (!requireEditorAccess("schedule")) return;
     const updated = { ...item, done: !item.done };
     setSchedules((prev) => prev.map((s) => (s.id === item.id ? updated : s)));
+    recordActivity(item.type === "todo" ? "할일" : "일정", updated.done ? "완료" : "미완료", `${item.title || ""}`);
     showToast(updated.done ? `✅ '${item.title}' 완료!` : `↩️ '${item.title}' 진행중으로 변경`);
     if (user && db) {
       try {
@@ -5592,7 +6058,7 @@ function MainApp() {
   });
 
   const handleDeleteSchedule = async (item) => {
-    if (!requireEditorAccess()) return;
+    if (!requireEditorAccess("schedule")) return;
     if (!user || !db) {
       showToast("⚠️ 서버 연결 후 삭제할 수 있습니다.");
       return;
@@ -7076,6 +7542,7 @@ ${validText}
       }
     }
 
+    recordActivity("식단", "AI스캔 등록", `${entries.length}끼 일괄 등록`);
     showToast(`총 ${entries.length}끼 식단이 달력에 일괄 입력되었습니다!`);
   };
 
@@ -7200,7 +7667,7 @@ ${validText}
   // 10. 냉장고·식단·장보기·공지사항 핸들러
   // ==========================================
   const handleSaveFridge = async (overrideUpdatedAt = null) => {
-    if (!requireEditorAccess()) return;
+    if (!requireEditorAccess("fridge")) return;
     if (!fridgeForm.name.trim()) return;
     const rawQtyStr = String(fridgeForm.quantity ?? "").trim();
     const parsedQty = rawQtyStr === "" ? 1 : Number(rawQtyStr);
@@ -7280,6 +7747,7 @@ ${validText}
       setIsFridgeModalOpen(false);
       setEditingFridge(null);
       ok = true;
+      recordActivity("냉장고", editingFridge ? "수정" : "입고", `${fridgeForm.name || ""}`);
       showToast(editingFridge ? "냉장고 재료가 수정되었습니다." : "냉장고에 새 재료가 입고되었습니다.");
     } catch (e) {
       errMsg = e.message;
@@ -7388,6 +7856,7 @@ ${validText}
         endWrite(ok, errMsg);
       }
     }
+    recordActivity("냉장고", "이동", `${item.name} → ${newZone}`);
     showToast(`📦 '${item.name}' → [${newZone}] 이동 완료`);
   };
 
@@ -7653,7 +8122,7 @@ ${validText}
   };
 
   const handleConsumeFridgeItem = async (item, addToShopping = false) => {
-    if (!requireEditorAccess()) return;
+    if (!requireEditorAccess("fridge")) return;
     if (user && db && Number(item.price) > 0) {
       const expId = `exp-${item.id}`;
       try {
@@ -7725,6 +8194,7 @@ ${validText}
         showToast(`'${item.name}' 소진 완료! (이미 장보기 목록에 있어 중복 추가 제외)`);
       }
     } else {
+      recordActivity("냉장고", "소진", `${item.name}`);
       showToast(`'${item.name}' 다 먹음 처리 완료! (이번 달 지출 식비는 그대로 유지됩니다)`);
     }
   };
@@ -7764,7 +8234,7 @@ ${validText}
   };
 
   const handleSaveMeal = async () => {
-    if (!requireEditorAccess()) return;
+    if (!requireEditorAccess("daily")) return;
     const pendingChip = String(mealChipInput || "").trim();
     const baseParts = String(mealForm.menu || "")
       .split(/\s*\+\s*/)
@@ -7834,6 +8304,7 @@ ${validText}
       setIsMealModalOpen(false);
       setEditingMeal(null);
       ok = true;
+      recordActivity("식단", editingMeal ? "수정" : "등록", `${mealForm.date} ${mealForm.slot} · ${mealForm.menu}`);
       showToast("식단이 저장되었습니다.");
     } catch (e) {
       errMsg = e.message;
@@ -7844,7 +8315,7 @@ ${validText}
   };
 
   const handleDeleteMeal = async (meal) => {
-    if (!requireEditorAccess()) return;
+    if (!requireEditorAccess("daily")) return;
     if (!user || !db) {
       showToast("⚠️ 서버 연결 후 삭제할 수 있습니다.");
       return;
@@ -7868,6 +8339,7 @@ ${validText}
       });
       setDeletedLogs((prev) => [entry, ...prev.filter((x) => x.logId !== entry.logId)].slice(0, 30));
       ok = true;
+      recordActivity("식단", "삭제", `${meal.date} ${meal.slot} · ${meal.menu || ""}`);
       showToast(`'${meal.menu || "식단"}' 삭제됨`, () => restoreDeletedLogEntry(entry));
     } catch (e) {
       errMsg = e.message;
@@ -8176,7 +8648,7 @@ ${validText}
   };
 
   const handleSaveRecipe = async () => {
-    if (!requireEditorAccess()) return;
+    if (!requireEditorAccess("recipes")) return;
     if (!recipeForm.title.trim()) {
       showToast("요리명을 입력해 주세요.");
       return;
@@ -8241,6 +8713,7 @@ ${validText}
         endWrite(ok, errMsg);
       }
     }
+    recordActivity("레시피", editingRecipe ? "수정" : "등록", `${recipeForm.title || ""}`);
     showToast("📖 가족 레시피북에 저장되었습니다!");
   };
 
@@ -8255,6 +8728,7 @@ ${validText}
         setSyncErrorMsg(e?.message || "레시피 삭제 동기화 오류");
       }
     }
+    recordActivity("레시피", "삭제", "레시피 삭제");
     showToast("레시피가 삭제되었습니다.");
   };
 
@@ -8360,7 +8834,7 @@ ${validText}
   };
 
   const handleAddShopping = async () => {
-    if (!requireEditorAccess()) return;
+    if (!requireEditorAccess("shopping")) return;
     if (!shoppingForm.name.trim()) return;
     const id = `sh-${Date.now()}`;
     const payload = {
@@ -8381,6 +8855,7 @@ ${validText}
         setSyncErrorMsg(e?.message || "장보기 추가 동기화 오류");
       }
     }
+    recordActivity("장보기", "등록", `${shoppingForm.name || ""}`);
     showToast("장보기 메모에 추가되었습니다.");
   };
 
@@ -8500,7 +8975,7 @@ ${validText}
   };
 
   const handleSaveNotice = async () => {
-    if (!requireEditorAccess()) return;
+    if (!requireEditorAccess("notices")) return;
     if (!noticeForm.title.trim()) return;
     const id = editingNotice ? editingNotice.id : `nt-${Date.now()}`;
     const payload = {
@@ -8531,6 +9006,7 @@ ${validText}
         setSyncErrorMsg(e?.message || "공지 추가 동기화 오류");
       }
     }
+    recordActivity("공지", "등록", `${noticeForm.title || ""}`);
     showToast("가족 공지사항이 등록되었습니다.");
   };
 
@@ -8591,6 +9067,7 @@ ${validText}
       }
     }
     setQuickLogRecipe(null);
+    recordActivity("식단", "빠른등록", `${quickLogDate} ${quickLogSlot}`);
     showToast(`${quickLogDate} ${quickLogSlot} 식단표에 등록되었습니다!`);
   };
 
@@ -8833,13 +9310,21 @@ ${validText}
             <button
               onClick={() => setIsEditorUnlockModalOpen(true)}
               className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold border inline-flex items-center gap-1 whitespace-nowrap shrink-0 ${
-                isEditorUnlocked
+                isAdminUnlocked
                   ? "bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border-emerald-200"
+                  : isHelperUnlocked
+                  ? "bg-sky-50 hover:bg-sky-100 text-sky-700 border-sky-200"
                   : "bg-amber-50 hover:bg-amber-100 text-amber-800 border-amber-200"
               }`}
-              title={isEditorUnlocked ? "편집 가능 (초대 링크/잠금)" : "열람 전용 모드 (초대 코드 입력)"}
+              title="권한 및 사용자 전환"
             >
-              <span>{isEditorUnlocked ? "✏️ 편집가능" : "🔒 열람전용"}</span>
+              <span>
+                {isAdminUnlocked
+                  ? `👑 관리자 · ${actorName}`
+                  : isHelperUnlocked
+                  ? `🌿 도우미 · ${actorName}`
+                  : "🔒 미로그인"}
+              </span>
             </button>
           </div>
           <button
@@ -8926,7 +9411,39 @@ ${validText}
               </button>
             </div>
 
-            {pinnedNotices.length > 0 && (
+            {accessRole !== "guest" && (
+              <div
+                onClick={() => setIsActivityModalOpen(true)}
+                className="mt-2 bg-sky-50/80 hover:bg-sky-50 border border-sky-200 rounded-xl px-3 py-2 cursor-pointer flex items-center justify-between gap-2 transition"
+              >
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <Bell className="w-3.5 h-3.5 text-sky-600 shrink-0" />
+                  {recentActivities.length > 0 ? (
+                    <div className="text-[11px] leading-snug truncate text-stone-800">
+                      <span className="font-black text-sky-800 mr-1">[{recentActivities[0].actor}]</span>
+                      <span className="font-bold text-stone-700">
+                        {recentActivities[0].category} {recentActivities[0].action}
+                      </span>
+                      {recentActivities[0].detail && (
+                        <span className="text-stone-600"> · {recentActivities[0].detail}</span>
+                      )}
+                      <span className="text-[10px] font-bold text-sky-700 ml-1.5">
+                        ({formatActivityTime(recentActivities[0].atMs)})
+                      </span>
+                    </div>
+                  ) : (
+                    <span className="text-[11px] font-bold text-sky-800 truncate">
+                      최근 수정 알림 · 아직 기록된 변경 내역이 없습니다
+                    </span>
+                  )}
+                </div>
+                <span className="text-[10px] font-extrabold text-sky-700 shrink-0">
+                  {recentActivities.length > 0 ? `내역(${recentActivities.length}) >` : "알림 >"}
+                </span>
+              </div>
+            )}
+
+            {accessRole !== "guest" && pinnedNotices.length > 0 && canViewTab("notices") && (
               <div
                 onClick={() => setActiveTab("notices")}
                 className="mt-2 bg-white hover:bg-stone-50 border border-stone-200 rounded-xl px-3 py-2 cursor-pointer flex items-start justify-between gap-2 transition"
@@ -9026,7 +9543,7 @@ ${validText}
         const mealPreviewText = targetMealObj
           ? `${targetMealObj.slot}: ${String(targetMealObj.menu || "").replace(/\[.*?\]\s*/, "")}`
           : `${targetMealSlot} 미기록 · 눌러서 등록`;
-        const curSlot = getCurrentRoutineTimeSlot(routineTimeRanges, liveMinuteTick);
+        const curSlot = getCurrentRoutineTimeSlot(routineTimeRanges, liveMinuteTick, routineSlotDefs);
         const wkndNow = isWeekendNow();
         const activeRoutines = familyRoutines.filter((r) => !isRoutineDoneNow(r));
 
@@ -9179,6 +9696,7 @@ ${validText}
         const renderHomeBlock = (blockId) => {
           if (hiddenBlocks.includes(blockId)) return null;
           if (blockId === "action_feed") {
+            if (accessRole === "guest" || !canViewTab("schedule")) return null;
             const padCls = blockPadClass("action_feed");
             return (
               <div key="action_feed" className="bg-white border border-stone-200 rounded-2xl shadow-sm divide-y divide-stone-200 overflow-hidden">
@@ -9325,7 +9843,7 @@ ${validText}
                   <div className="flex items-center gap-1 overflow-x-auto pb-0.5">
                     {[
                       { id: "auto", label: `자동(${curSlot})` },
-                      ...ROUTINE_TIME_SLOTS.map((s) => ({ id: s, label: s })),
+                      ...activeRoutineTimeSlots.map((s) => ({ id: s, label: s })),
                       { id: "전체", label: `전체(${activeRoutines.length})` }
                     ].map((opt) => (
                       <button
@@ -9516,7 +10034,11 @@ ${validText}
           }
 
           if (blockId === "menu_grid") {
-            const visibleMenuIds = menuOrder.filter((id) => MENU_DEFS[id] && !hiddenMenus.includes(id));
+            const visibleMenuIds = menuOrder.filter((id) => {
+              if (!MENU_DEFS[id] || hiddenMenus.includes(id)) return false;
+              const targetTab = id === "routine_tab" ? "schedule" : id;
+              return canViewTab(targetTab);
+            });
             const gridPad = blockSizes.menu_grid === "compact" ? "gap-1.5" : blockSizes.menu_grid === "large" ? "gap-2.5" : "gap-2";
             return (
               <div key="menu_grid" className={`grid grid-cols-2 ${gridPad}`}>
@@ -9575,17 +10097,19 @@ ${validText}
                   </button>
                 ))}
               </div>
-              <button
-                type="button"
-                onClick={() => setIsHomeEditMode((v) => !v)}
-                className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold border whitespace-nowrap shrink-0 transition ${
-                  isHomeEditMode
-                    ? "bg-emerald-600 text-white border-emerald-600"
-                    : "bg-white text-stone-700 border-stone-200"
-                }`}
-              >
-                {isHomeEditMode ? "✅ 편집 완료" : "✏️ 홈 편집"}
-              </button>
+              {isAdminUnlocked && (
+                <button
+                  type="button"
+                  onClick={() => setIsHomeEditMode((v) => !v)}
+                  className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold border whitespace-nowrap shrink-0 transition ${
+                    isHomeEditMode
+                      ? "bg-emerald-600 text-white border-emerald-600"
+                      : "bg-white text-stone-700 border-stone-200"
+                  }`}
+                >
+                  {isHomeEditMode ? "✅ 편집 완료" : "✏️ 홈 편집"}
+                </button>
+              )}
             </div>
 
             {isHomeEditMode && (
@@ -9997,6 +10521,29 @@ ${validText}
 
 
 
+            {accessRole === "guest" && (
+              <div className="bg-white border border-amber-200 rounded-2xl p-3.5 shadow-sm flex items-center justify-between gap-3">
+                <div className="flex items-start gap-2.5 min-w-0">
+                  <div className="w-8 h-8 rounded-xl bg-amber-50 border border-amber-200 text-amber-700 flex items-center justify-center shrink-0">
+                    <Lock className="w-4 h-4" />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="text-xs font-black text-stone-900">미로그인 상태 (일부 메뉴만 공개)</div>
+                    <p className="text-[11px] text-stone-500 leading-snug">
+                      가족사진과 식단·레시피 일부만 열람 가능합니다. 전체 메뉴 열람·편집은 로그인해 주세요.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsEditorUnlockModalOpen(true)}
+                  className="px-3 py-1.5 rounded-xl bg-stone-900 hover:bg-stone-800 text-white text-[11px] font-extrabold shrink-0"
+                >
+                  🔑 로그인
+                </button>
+              </div>
+            )}
+
             {blockOrder.map((blockId) => renderHomeBlock(blockId))}
           </div>
         );
@@ -10340,7 +10887,7 @@ ${validText}
       {/* ==========================================
           탭 3: 월간 식단·식비 가계부
       ========================================== */}
-      {activeTab === "monthly" && (
+      {activeTab === "monthly" && (!canViewTab("monthly") ? renderLockedTabScreen("💰 월간·식비") : (
         <div className="p-4 space-y-4">
           <div className="flex items-center justify-between bg-white px-3 py-2 rounded-2xl border border-stone-200 shadow-sm">
             <button
@@ -10609,12 +11156,12 @@ ${validText}
             </div>
           )}
         </div>
-      )}
+      ))}
 
       {/* ==========================================
           탭 4: 일정 (1. 월간 달력 -> 2. 선택일 상세일정 -> 3. [신규] 주간 일정 요약 -> 4. [신규] 전체 To-Do 체크리스트 -> 5. 최하단 D-Day 보드)
       ========================================== */}
-      {activeTab === "schedule" && (
+      {activeTab === "schedule" && (!canViewTab("schedule") ? renderLockedTabScreen("🗓️ 일정·루틴") : (
         <div className="p-4 space-y-4">
           <div className="flex items-center justify-between gap-2">
             <div className="min-w-0">
@@ -11169,7 +11716,7 @@ ${validText}
                   </span>
                 </h3>
                 <p className="text-[10px] text-stone-500 font-semibold mt-0.5">
-                  현재({isWeekendNow() ? "주말" : "평일"}): <span className="text-stone-900 font-extrabold">{getCurrentRoutineTimeSlot(routineTimeRanges, liveMinuteTick)}</span> · 자정·월요일 자동 리셋
+                  현재({isWeekendNow() ? "주말" : "평일"}): <span className="text-stone-900 font-extrabold">{getCurrentRoutineTimeSlot(routineTimeRanges, liveMinuteTick, routineSlotDefs)}</span> · 자정·월요일 자동 리셋
                 </p>
               </div>
               <div className="flex items-center gap-1 shrink-0">
@@ -11194,102 +11741,244 @@ ${validText}
               </div>
             </div>
 
-            {isRoutineRangeEditOpen && (
-              <div className="bg-indigo-50/70 border border-indigo-200 rounded-xl p-2.5 space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-extrabold text-indigo-950">
-                    루틴 시간대 시작 시각 설정 (홈 자동 표출 연동)
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setRoutineTimeRanges(DEFAULT_ROUTINE_TIME_RANGES);
-                      try { localStorage.setItem("kim_routine_time_ranges_v1", JSON.stringify(DEFAULT_ROUTINE_TIME_RANGES)); } catch (e) {}
-                      syncHomeSettingsToCloud(null, null, DEFAULT_ROUTINE_TIME_RANGES);
-                      showToast("루틴 시간대를 기본값으로 초기화했습니다.");
-                    }}
-                    className="text-[10px] font-extrabold text-indigo-700 underline"
-                  >
-                    기본값 초기화
-                  </button>
-                </div>
-                <div className="space-y-2">
-                  <div>
-                    <div className="text-[10px] font-extrabold text-indigo-900 mb-1">
-                      평일 (월~금 · 오후 제외):{" "}
+            {isRoutineRangeEditOpen && (() => {
+              const sortedSlots = [...routineSlotDefs].sort((a, b) => toTimeMinutes(a.startTime) - toTimeMinutes(b.startTime));
+              const wdList = sortedSlots.filter((s) => s.weekday);
+              const weList = sortedSlots.filter((s) => s.weekend);
+              const persistSlots = (nextDefs) => {
+                const norm = normalizeRoutineSlotDefs(nextDefs);
+                const nextRanges = {};
+                norm.forEach((s) => { nextRanges[s.label] = s.startTime; });
+                setRoutineSlotDefs(norm);
+                setRoutineTimeRanges(nextRanges);
+                try {
+                  localStorage.setItem("kim_routine_slot_defs_v1", JSON.stringify(norm));
+                  localStorage.setItem("kim_routine_time_ranges_v1", JSON.stringify(nextRanges));
+                } catch (err) {}
+                syncHomeSettingsToCloud(null, null, nextRanges, norm);
+              };
+              const hasDupWd = new Set(wdList.map((s) => toTimeMinutes(s.startTime))).size < wdList.length;
+              const hasDupWe = new Set(weList.map((s) => toTimeMinutes(s.startTime))).size < weList.length;
+
+              return (
+                <div className="bg-indigo-50/70 border border-indigo-200 rounded-xl p-2.5 space-y-2.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[10px] font-extrabold text-indigo-950">
+                      루틴 시간대 추가·수정·삭제 및 평일/주말 설정
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!requireEditorAccess("schedule")) return;
+                        persistSlots(DEFAULT_ROUTINE_SLOT_DEFS);
+                        showToast("루틴 시간대를 기본값으로 초기화했습니다.");
+                      }}
+                      className="text-[10px] font-extrabold text-indigo-700 underline shrink-0"
+                    >
+                      기본값 초기화
+                    </button>
+                  </div>
+
+                  <div className="text-[10px] text-indigo-900 space-y-0.5 bg-white/80 border border-indigo-100 rounded-lg px-2 py-1.5">
+                    <div>
+                      <span className="font-black">평일:</span>{" "}
                       <span className="font-semibold text-indigo-700">
-                        {ROUTINE_WEEKDAY_SLOTS.map((s, idx) => {
-                          const nxt = ROUTINE_WEEKDAY_SLOTS[(idx + 1) % ROUTINE_WEEKDAY_SLOTS.length];
-                          return `${s} ${formatMinutesHHMM(toTimeMinutes(routineTimeRanges[s]))}~${formatMinutesHHMM(toTimeMinutes(routineTimeRanges[nxt]))}`;
-                        }).join(" · ")}
+                        {wdList.length > 0
+                          ? wdList.map((s, idx) => `${s.label} ${s.startTime}~${wdList[(idx + 1) % wdList.length].startTime}`).join(" · ")
+                          : "지정된 시간대 없음"}
                       </span>
                     </div>
-                    <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5">
-                      {ROUTINE_WEEKDAY_SLOTS.map((slot) => (
-                        <label key={`wd-${slot}`} className="block">
-                          <span className="text-[10px] font-bold text-indigo-900 block mb-0.5">{slot} 시작</span>
-                          <input
-                            type="time"
-                            value={formatMinutesHHMM(toTimeMinutes(routineTimeRanges[slot], toTimeMinutes(DEFAULT_ROUTINE_TIME_RANGES[slot]) / 60))}
-                            onChange={(e) => {
-                              const val = e.target.value;
-                              if (!val) return;
-                              setRoutineTimeRanges((prev) => {
-                                const next = { ...prev, [slot]: val };
-                                try { localStorage.setItem("kim_routine_time_ranges_v1", JSON.stringify(next)); } catch (err) {}
-                                syncHomeSettingsToCloud(null, null, next);
-                                return next;
-                              });
-                            }}
-                            className="w-full px-2 py-1 rounded-lg border border-indigo-200 bg-white text-[11px] font-black text-stone-800"
-                          />
-                        </label>
-                      ))}
+                    <div>
+                      <span className="font-black text-teal-800">주말:</span>{" "}
+                      <span className="font-semibold text-teal-700">
+                        {weList.length > 0
+                          ? weList.map((s, idx) => `${s.label} ${s.startTime}~${weList[(idx + 1) % weList.length].startTime}`).join(" · ")
+                          : "지정된 시간대 없음"}
+                      </span>
                     </div>
                   </div>
 
-                  <div>
-                    <div className="text-[10px] font-extrabold text-teal-900 mb-1">
-                      주말 (토·일 · 하원후 제외):{" "}
-                      <span className="font-semibold text-teal-700">
-                        {ROUTINE_WEEKEND_SLOTS.map((s, idx) => {
-                          const nxt = ROUTINE_WEEKEND_SLOTS[(idx + 1) % ROUTINE_WEEKEND_SLOTS.length];
-                          return `${s} ${formatMinutesHHMM(toTimeMinutes(routineTimeRanges[s]))}~${formatMinutesHHMM(toTimeMinutes(routineTimeRanges[nxt]))}`;
-                        }).join(" · ")}
-                      </span>
-                    </div>
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
-                      {ROUTINE_WEEKEND_SLOTS.map((slot) => (
-                        <label key={`we-${slot}`} className="block">
-                          <span className="text-[10px] font-bold text-teal-900 block mb-0.5">{slot} 시작</span>
-                          <input
-                            type="time"
-                            value={formatMinutesHHMM(toTimeMinutes(routineTimeRanges[slot], toTimeMinutes(DEFAULT_ROUTINE_TIME_RANGES[slot]) / 60))}
-                            onChange={(e) => {
-                              const val = e.target.value;
-                              if (!val) return;
-                              setRoutineTimeRanges((prev) => {
-                                const next = { ...prev, [slot]: val };
-                                try { localStorage.setItem("kim_routine_time_ranges_v1", JSON.stringify(next)); } catch (err) {}
-                                syncHomeSettingsToCloud(null, null, next);
-                                return next;
-                              });
+                  <div className="space-y-1.5">
+                    {sortedSlots.map((slot) => (
+                      <div
+                        key={slot.id}
+                        className="flex flex-wrap items-center gap-1.5 bg-white border border-indigo-100 rounded-xl p-1.5"
+                      >
+                        <input
+                          type="text"
+                          defaultValue={slot.label}
+                          onBlur={(e) => {
+                            const nextLabel = e.target.value.trim();
+                            if (!nextLabel || nextLabel === slot.label) {
+                              e.target.value = slot.label;
+                              return;
+                            }
+                            if (nextLabel === "상시" || routineSlotDefs.some((x) => x.id !== slot.id && x.label === nextLabel)) {
+                              showToast("이미 존재하는 시간대 이름입니다.");
+                              e.target.value = slot.label;
+                              return;
+                            }
+                            if (!requireEditorAccess("schedule")) {
+                              e.target.value = slot.label;
+                              return;
+                            }
+                            const nextDefs = routineSlotDefs.map((x) =>
+                              x.id === slot.id ? { ...x, label: nextLabel } : x
+                            );
+                            persistSlots(nextDefs);
+                            const migratedRoutines = familyRoutines.map((r) =>
+                              r.timeSlot === slot.label ? { ...r, timeSlot: nextLabel } : r
+                            );
+                            setFamilyRoutines(migratedRoutines);
+                            syncRoutinesToCloud(migratedRoutines);
+                            recordActivity("루틴", "시간대 수정", `${slot.label} → ${nextLabel}`);
+                            showToast(`시간대 [${slot.label}] → [${nextLabel}] 변경 완료`);
+                          }}
+                          className="w-20 px-2 py-1 rounded-lg border border-stone-200 text-[11px] font-black text-stone-900 bg-stone-50"
+                          title="시간대 이름 수정"
+                        />
+                        <input
+                          type="time"
+                          value={slot.startTime}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            if (!val || !requireEditorAccess("schedule")) return;
+                            persistSlots(
+                              routineSlotDefs.map((x) => (x.id === slot.id ? { ...x, startTime: val } : x))
+                            );
+                          }}
+                          className="px-2 py-1 rounded-lg border border-indigo-200 bg-white text-[11px] font-black text-stone-800"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (!requireEditorAccess("schedule")) return;
+                            persistSlots(
+                              routineSlotDefs.map((x) => (x.id === slot.id ? { ...x, weekday: !x.weekday } : x))
+                            );
+                          }}
+                          className={`px-2 py-1 rounded-lg text-[10px] font-extrabold border ${
+                            slot.weekday
+                              ? "bg-indigo-600 text-white border-indigo-600"
+                              : "bg-stone-50 text-stone-400 border-stone-200"
+                          }`}
+                        >
+                          평일
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (!requireEditorAccess("schedule")) return;
+                            persistSlots(
+                              routineSlotDefs.map((x) => (x.id === slot.id ? { ...x, weekend: !x.weekend } : x))
+                            );
+                          }}
+                          className={`px-2 py-1 rounded-lg text-[10px] font-extrabold border ${
+                            slot.weekend
+                              ? "bg-teal-600 text-white border-teal-600"
+                              : "bg-stone-50 text-stone-400 border-stone-200"
+                          }`}
+                        >
+                          주말
+                        </button>
+                        {routineSlotDefs.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (!requireEditorAccess("schedule")) return;
+                              const nextDefs = routineSlotDefs.filter((x) => x.id !== slot.id);
+                              persistSlots(nextDefs);
+                              const migratedRoutines = familyRoutines.map((r) =>
+                                r.timeSlot === slot.label ? { ...r, timeSlot: "상시" } : r
+                              );
+                              setFamilyRoutines(migratedRoutines);
+                              syncRoutinesToCloud(migratedRoutines);
+                              recordActivity("루틴", "시간대 삭제", slot.label);
+                              showToast(`[${slot.label}] 시간대가 삭제되었습니다.`);
                             }}
-                            className="w-full px-2 py-1 rounded-lg border border-teal-200 bg-white text-[11px] font-black text-stone-800"
-                          />
-                        </label>
-                      ))}
+                            className="ml-auto px-2 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 text-[10px] font-extrabold"
+                          >
+                            삭제
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-1.5 pt-1 border-t border-indigo-200">
+                    <input
+                      type="text"
+                      value={newSlotLabelInput}
+                      onChange={(e) => setNewSlotLabelInput(e.target.value)}
+                      placeholder="새 시간대 (예: 새벽·오전)"
+                      className="flex-1 min-w-[110px] px-2.5 py-1.5 rounded-lg border border-indigo-200 bg-white text-[11px] font-bold"
+                    />
+                    <input
+                      type="time"
+                      value={newSlotTimeInput}
+                      onChange={(e) => setNewSlotTimeInput(e.target.value)}
+                      className="px-2 py-1.5 rounded-lg border border-indigo-200 bg-white text-[11px] font-black"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setNewSlotWeekday((v) => !v)}
+                      className={`px-2 py-1 rounded-lg text-[10px] font-extrabold border ${
+                        newSlotWeekday ? "bg-indigo-600 text-white border-indigo-600" : "bg-white text-stone-400 border-stone-200"
+                      }`}
+                    >
+                      평일
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setNewSlotWeekend((v) => !v)}
+                      className={`px-2 py-1 rounded-lg text-[10px] font-extrabold border ${
+                        newSlotWeekend ? "bg-teal-600 text-white border-teal-600" : "bg-white text-stone-400 border-stone-200"
+                      }`}
+                    >
+                      주말
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!requireEditorAccess("schedule")) return;
+                        const lbl = newSlotLabelInput.trim();
+                        if (!lbl) {
+                          showToast("추가할 시간대 이름을 입력해 주세요.");
+                          return;
+                        }
+                        if (lbl === "상시" || routineSlotDefs.some((s) => s.label === lbl)) {
+                          showToast("이미 존재하는 시간대 이름입니다.");
+                          return;
+                        }
+                        const nextDefs = [
+                          ...routineSlotDefs,
+                          {
+                            id: `slot-${Date.now()}`,
+                            label: lbl,
+                            startTime: newSlotTimeInput || "14:00",
+                            weekday: newSlotWeekday,
+                            weekend: newSlotWeekend
+                          }
+                        ];
+                        persistSlots(nextDefs);
+                        setNewSlotLabelInput("");
+                        recordActivity("루틴", "시간대 추가", `${lbl} (${newSlotTimeInput || "14:00"})`);
+                        showToast(`⏰ [${lbl}] 시간대가 추가되었습니다!`);
+                      }}
+                      className="px-2.5 py-1.5 rounded-lg bg-indigo-700 hover:bg-indigo-800 text-white text-[10px] font-extrabold"
+                    >
+                      + 추가
+                    </button>
+                  </div>
+
+                  {(hasDupWd || hasDupWe) && (
+                    <div className="text-[10px] font-extrabold text-rose-600">
+                      ⚠️ 같은 요일 그룹 내 시작 시각이 중복된 시간대가 있습니다.
                     </div>
-                  </div>
+                  )}
                 </div>
-                {(new Set(ROUTINE_WEEKDAY_SLOTS.map((s) => toTimeMinutes(routineTimeRanges[s]))).size < ROUTINE_WEEKDAY_SLOTS.length ||
-                  new Set(ROUTINE_WEEKEND_SLOTS.map((s) => toTimeMinutes(routineTimeRanges[s]))).size < ROUTINE_WEEKEND_SLOTS.length) && (
-                  <div className="text-[10px] font-extrabold text-rose-600">
-                    ⚠️ 같은 요일 그룹 내 시작 시각이 중복된 시간대가 있습니다.
-                  </div>
-                )}
-              </div>
-            )}
+              );
+            })()}
 
             <div className="flex gap-1 overflow-x-auto">
               {[
@@ -11316,7 +12005,7 @@ ${validText}
             </div>
 
             <div className="flex gap-1 overflow-x-auto pb-0.5">
-              {["전체", ...ROUTINE_TIME_SLOTS].map((ts) => (
+              {["전체", ...activeRoutineTimeSlots].map((ts) => (
                 <button
                   key={ts}
                   type="button"
@@ -11345,7 +12034,7 @@ ${validText}
                     const bDone = Number(isRoutineDoneNow(b));
                     if (aDone !== bDone) return aDone - bDone;
                     const slotIdx = (r) => {
-                      const idx = ROUTINE_TIME_SLOTS.indexOf(r.timeSlot || "상시");
+                      const idx = activeRoutineTimeSlots.indexOf(r.timeSlot || "상시");
                       return idx === -1 ? 99 : idx;
                     };
                     if (slotIdx(a) !== slotIdx(b)) return slotIdx(a) - slotIdx(b);
@@ -11787,12 +12476,12 @@ ${validText}
           </div>
           )}
         </div>
-      )}
+      ))}
 
       {/* ==========================================
           탭 5: 스마트 냉장고
       ========================================== */}
-      {activeTab === "fridge" && (
+      {activeTab === "fridge" && (!canViewTab("fridge") ? renderLockedTabScreen("❄️ 냉장고") : (
         <div className="p-4 space-y-3.5">
           <button
             onClick={() => setIsReceiptModalOpen(true)}
@@ -12412,12 +13101,12 @@ ${validText}
             </div>
           )}
         </div>
-      )}
+      ))}
 
       {/* ==========================================
           탭 6: 장보기 메모
       ========================================== */}
-      {activeTab === "shopping" && (
+      {activeTab === "shopping" && (!canViewTab("shopping") ? renderLockedTabScreen("🛒 장보기") : (
         <div className="p-4 space-y-4">
           <div className="bg-white p-3.5 rounded-2xl border border-stone-200 shadow-sm space-y-2">
             <div className="flex items-center justify-between">
@@ -12616,12 +13305,12 @@ ${validText}
             ))}
           </div>
         </div>
-      )}
+      ))}
 
       {/* ==========================================
           탭 7: 가족 공지사항
       ========================================== */}
-      {activeTab === "notices" && (
+      {activeTab === "notices" && (!canViewTab("notices") ? renderLockedTabScreen("📌 가족공지") : (
         <div className="p-4 space-y-4">
           <div className="flex items-center justify-between">
             <div>
@@ -12731,12 +13420,12 @@ ${validText}
             ))}
           </div>
         </div>
-      )}
+      ))}
 
       {/* ==========================================
           탭 8: AI 추천
       ========================================== */}
-      {activeTab === "ai" && (
+      {activeTab === "ai" && (!canViewTab("ai") ? renderLockedTabScreen("✨ AI추천") : (
         <div className="p-4 space-y-4">
           <div className="grid grid-cols-2 gap-1.5 bg-stone-200/80 p-1 rounded-2xl">
             <button
@@ -13528,7 +14217,7 @@ ${validText}
           </>
           )}
         </div>
-      )}
+      ))}
 
       {/* ==========================================
           탭 8-2: 📖 가족 레시피북
@@ -13920,6 +14609,7 @@ ${validText}
           탭 9: 👶 육아수첩 (월령별 발달 · 예방접종/영유아검진 · 성장 기록 · 진료/열 체크)
       ========================================== */}
       {activeTab === "baby" && (() => {
+        if (!canViewTab("baby")) return renderLockedTabScreen("👶 육아수첩");
         const activeChild = CHILDREN_INFO.find((c) => c.id === selectedChildId) || CHILDREN_INFO[1];
         const ageStats = getChildAgeStats(activeChild.birthDate);
         const childGrowth = babyGrowthLogs.filter((g) => g.childId === activeChild.id);
@@ -14543,18 +15233,20 @@ ${validText}
         </>
       )}
 
-      <button
-        type="button"
-        onClick={() => setIsQuickFabOpen((v) => !v)}
-        style={{ bottom: "calc(4.75rem + env(safe-area-inset-bottom))" }}
-        className={`fixed right-4 z-40 w-12 h-12 rounded-full text-white shadow-xl flex items-center justify-center transition active:scale-95 ${
-          isQuickFabOpen ? "bg-rose-600 rotate-45" : "bg-stone-900 hover:bg-amber-600"
-        }`}
-        title="스마트 빠른 등록"
-        aria-label="스마트 빠른 등록"
-      >
-        <Plus className="w-6 h-6" />
-      </button>
+      {isEditorUnlocked && (
+        <button
+          type="button"
+          onClick={() => setIsQuickFabOpen((v) => !v)}
+          style={{ bottom: "calc(4.75rem + env(safe-area-inset-bottom))" }}
+          className={`fixed right-4 z-40 w-12 h-12 rounded-full text-white shadow-xl flex items-center justify-center transition active:scale-95 ${
+            isQuickFabOpen ? "bg-rose-600 rotate-45" : "bg-stone-900 hover:bg-amber-600"
+          }`}
+          title="스마트 빠른 등록"
+          aria-label="스마트 빠른 등록"
+        >
+          <Plus className="w-6 h-6" />
+        </button>
+      )}
 
       {/* 하단 더보기 메뉴 시트 (접근성·Safe Area 적용) */}
       {isMoreNavOpen && (
@@ -14608,7 +15300,7 @@ ${validText}
                       : "bg-stone-50 text-stone-800 border-stone-200 hover:bg-amber-50"
                   }`}
                 >
-                  <span className="text-base">{m.icon}</span>
+                  <span className="text-base">{canViewTab(m.id) ? m.icon : "🔒"}</span>
                   <span>{m.label}</span>
                 </button>
               ))}
@@ -14652,7 +15344,9 @@ ${validText}
                   </span>
                 )}
               </div>
-              <span className="text-[10px] mt-0.5 whitespace-nowrap">{item.label}</span>
+              <span className="text-[10px] mt-0.5 whitespace-nowrap">
+                {!canViewTab(item.id) ? "🔒" : ""}{item.label}
+              </span>
             </button>
           );
         })}
@@ -14877,7 +15571,7 @@ ${validText}
             <div>
               <label className="text-[10px] font-extrabold text-stone-500 block mb-1">시간대</label>
               <div className="flex flex-wrap gap-1.5">
-                {ROUTINE_TIME_SLOTS.map((ts) => (
+                {activeRoutineTimeSlots.map((ts) => (
                   <button
                     key={ts}
                     type="button"
@@ -16692,13 +17386,13 @@ ${validText}
               </button>
             </div>
 
-            {!isEditorUnlocked ? (
+            {!isAdminUnlocked ? (
               <div className="bg-amber-50 p-3.5 rounded-2xl border border-amber-200 space-y-2">
                 <div className="text-xs font-extrabold text-amber-900">
-                  🔒 열람 전용 모드입니다
+                  🔒 관리자(0402) 전용 설정 영역입니다
                 </div>
                 <p className="text-[11px] text-amber-800">
-                  API 키 설정과 데이터 편집·복원은 초대 비밀코드를 입력한 가족만 사용할 수 있습니다.
+                  API 키 설정, 산후도우미/가족 비밀번호 관리 및 DB 복원은 관리자 비밀번호(0402)로 로그인해야 이용할 수 있습니다.
                 </p>
                 <button
                   onClick={() => {
@@ -16707,10 +17401,214 @@ ${validText}
                   }}
                   className="px-3 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-extrabold"
                 >
-                  🔑 초대 코드 입력하기
+                  🔑 관리자 로그인
                 </button>
               </div>
             ) : (
+              <>
+              <div className="p-3 rounded-2xl bg-sky-50/70 border border-sky-200 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-black text-sky-950 flex items-center gap-1">
+                    <ShieldCheck className="w-4 h-4 text-sky-700" />
+                    3단계 권한 · 비밀번호 · 메뉴별 열람/편집 설정
+                  </span>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      await saveAccessConfigToCloud({
+                        adminCode: EDITOR_INVITE_CODE,
+                        helperCode: DEFAULT_HELPER_CODE,
+                        guestAllowedTabs: GUEST_ALLOWED_TABS,
+                        helperViewTabs: DEFAULT_HELPER_TABS,
+                        helperEditTabs: DEFAULT_HELPER_TABS
+                      });
+                      showToast("권한 및 비밀번호 설정을 기본값으로 복원했습니다.");
+                    }}
+                    className="text-[10px] font-extrabold text-sky-700 underline"
+                  >
+                    기본값 복원
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <div className="bg-white p-2 rounded-xl border border-emerald-200 space-y-1">
+                    <div className="flex items-center justify-between text-[10px] font-extrabold text-emerald-900">
+                      <span>👑 관리자 비밀번호</span>
+                      <span>현재: {adminCode}</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <input
+                        type="text"
+                        value={adminCodeDraft}
+                        onChange={(e) => setAdminCodeDraft(e.target.value)}
+                        placeholder="관리자 비밀번호"
+                        className="flex-1 min-w-0 px-2.5 py-1 rounded-lg border border-emerald-200 text-xs font-bold"
+                      />
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          const nextA = adminCodeDraft.trim();
+                          if (nextA.length < 4) {
+                            showToast("비밀번호는 4자리 이상으로 입력해 주세요.");
+                            return;
+                          }
+                          if (nextA === helperCode) {
+                            showToast("도우미/가족 비밀번호와 다른 번호를 입력해 주세요.");
+                            return;
+                          }
+                          await saveAccessConfigToCloud({ adminCode: nextA });
+                          showToast(`👑 관리자 비밀번호가 [${nextA}]로 변경되었습니다!`);
+                        }}
+                        className="px-2.5 py-1 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-[11px] font-extrabold shrink-0"
+                      >
+                        저장
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="bg-white p-2 rounded-xl border border-sky-200 space-y-1">
+                    <div className="flex items-center justify-between text-[10px] font-extrabold text-sky-900">
+                      <span>🌿 도우미·가족 비밀번호</span>
+                      <span>현재: {helperCode}</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <input
+                        type="text"
+                        value={helperCodeDraft}
+                        onChange={(e) => setHelperCodeDraft(e.target.value)}
+                        placeholder="도우미/가족 비밀번호"
+                        className="flex-1 min-w-0 px-2.5 py-1 rounded-lg border border-sky-200 text-xs font-bold"
+                      />
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          const nextC = helperCodeDraft.trim();
+                          if (nextC.length < 4) {
+                            showToast("비밀번호는 4자리 이상으로 입력해 주세요.");
+                            return;
+                          }
+                          if (nextC === adminCode) {
+                            showToast("관리자 비밀번호와 다른 번호를 입력해 주세요.");
+                            return;
+                          }
+                          await saveAccessConfigToCloud({ helperCode: nextC });
+                          showToast(`🌿 도우미/가족 비밀번호가 [${nextC}]로 변경되었습니다!`);
+                        }}
+                        className="px-2.5 py-1 rounded-lg bg-sky-700 hover:bg-sky-800 text-white text-[11px] font-extrabold shrink-0"
+                      >
+                        저장
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-white rounded-xl border border-sky-200 overflow-hidden">
+                  <div className="grid grid-cols-[1fr_54px_54px_54px] items-center bg-sky-100/70 px-2.5 py-1.5 text-[10px] font-black text-sky-950 text-center">
+                    <span className="text-left">메뉴</span>
+                    <span>미로그인</span>
+                    <span>도우미열람</span>
+                    <span>도우미편집</span>
+                  </div>
+                  <div className="divide-y divide-stone-100">
+                    {HELPER_CONFIGURABLE_TABS.map((t) => {
+                      const gView = guestAllowedTabs.includes(t.id);
+                      const hView = helperAllowedTabs.includes(t.id);
+                      const hEdit = helperEditTabs.includes(t.id);
+                      return (
+                        <div
+                          key={t.id}
+                          className="grid grid-cols-[1fr_54px_54px_54px] items-center px-2.5 py-1.5 text-[11px] font-bold text-stone-800"
+                        >
+                          <span className="truncate">{t.label}</span>
+                          <div className="flex justify-center">
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                const nextG = gView
+                                  ? guestAllowedTabs.filter((x) => x !== t.id)
+                                  : [...guestAllowedTabs, t.id];
+                                await saveAccessConfigToCloud({ guestAllowedTabs: nextG });
+                              }}
+                              className={`w-7 h-5 rounded text-[10px] font-black border ${
+                                gView ? "bg-amber-500 text-white border-amber-500" : "bg-stone-100 text-stone-400 border-stone-200"
+                              }`}
+                            >
+                              {gView ? "O" : "-"}
+                            </button>
+                          </div>
+                          <div className="flex justify-center">
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                const nextV = hView
+                                  ? helperAllowedTabs.filter((x) => x !== t.id)
+                                  : [...helperAllowedTabs, t.id];
+                                const nextE = hView ? helperEditTabs.filter((x) => x !== t.id) : helperEditTabs;
+                                await saveAccessConfigToCloud({ helperViewTabs: nextV, helperEditTabs: nextE });
+                              }}
+                              className={`w-7 h-5 rounded text-[10px] font-black border ${
+                                hView ? "bg-sky-600 text-white border-sky-600" : "bg-stone-100 text-stone-400 border-stone-200"
+                              }`}
+                            >
+                              {hView ? "O" : "-"}
+                            </button>
+                          </div>
+                          <div className="flex justify-center">
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                const nextE = hEdit
+                                  ? helperEditTabs.filter((x) => x !== t.id)
+                                  : [...helperEditTabs, t.id];
+                                const nextV = !hEdit && !hView ? [...helperAllowedTabs, t.id] : helperAllowedTabs;
+                                await saveAccessConfigToCloud({ helperViewTabs: nextV, helperEditTabs: nextE });
+                              }}
+                              className={`w-7 h-5 rounded text-[10px] font-black border ${
+                                hEdit ? "bg-emerald-600 text-white border-emerald-600" : "bg-stone-100 text-stone-400 border-stone-200"
+                              }`}
+                            >
+                              {hEdit ? "O" : "-"}
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-1.5">
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const url = `${window.location.origin}/?invite=${adminCode}`;
+                      try {
+                        await navigator.clipboard.writeText(url);
+                        showToast("🔗 관리자 접속 링크 복사 완료!");
+                      } catch (e) {
+                        showToast(`링크: ${url}`);
+                      }
+                    }}
+                    className="py-1.5 rounded-xl bg-white hover:bg-emerald-50 text-emerald-800 border border-emerald-200 text-[10px] font-extrabold"
+                  >
+                    🔗 관리자 링크 복사
+                  </button>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const url = `${window.location.origin}/?invite=${helperCode}`;
+                      try {
+                        await navigator.clipboard.writeText(url);
+                        showToast("🔗 도우미/가족 링크 복사 완료!");
+                      } catch (e) {
+                        showToast(`링크: ${url}`);
+                      }
+                    }}
+                    className="py-1.5 rounded-xl bg-white hover:bg-sky-100 text-sky-800 border border-sky-200 text-[10px] font-extrabold"
+                  >
+                    🔗 도우미/가족 링크 복사
+                  </button>
+                </div>
+              </div>
             <div className="p-3 rounded-2xl bg-stone-50 border border-stone-200 space-y-2.5">
               <div className="text-xs font-black text-stone-800">
                 🤖 듀얼 AI 엔진 설정 (GPT + Gemini)
@@ -16797,6 +17695,7 @@ ${validText}
                 </button>
               </div>
             </div>
+            </>
             )}
 
             {aiCallLogs.length > 0 && (
@@ -16856,7 +17755,7 @@ ${validText}
               )}
             </div>
 
-            {isEditorUnlocked && (
+            {isAdminUnlocked && (
               <div className="p-3 rounded-2xl bg-stone-50 border border-stone-200 space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-black text-stone-800">
@@ -16929,12 +17828,142 @@ ${validText}
         </div>
       )}
 
+      {isActivityModalOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+          onClick={() => setIsActivityModalOpen(false)}
+        >
+          <div
+            className="bg-white rounded-3xl max-w-md w-full p-5 space-y-3 max-h-[85vh] flex flex-col shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-black text-stone-900 flex items-center gap-1.5">
+                <Bell className="w-4 h-4 text-sky-600" />
+                최근 수정 알림 내역
+              </h3>
+              <div className="flex items-center gap-1.5">
+                {isAdminUnlocked && recentActivities.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      setRecentActivities([]);
+                      try { localStorage.removeItem("kim_recent_activities_v1"); } catch (e) {}
+                      if (user && db) {
+                        await setDoc(getDocRef("family_meta_v4", "recent_activity"), { items: [], updatedAtMs: Date.now() }, { merge: true }).catch(() => {});
+                      }
+                      showToast("최근 수정 알림 내역을 비웠습니다.");
+                    }}
+                    className="px-2 py-1 rounded-lg bg-stone-100 hover:bg-rose-50 text-stone-600 hover:text-rose-700 text-[10px] font-bold"
+                  >
+                    비우기
+                  </button>
+                )}
+                <button type="button" onClick={() => setIsActivityModalOpen(false)}>
+                  <X className="w-5 h-5 text-stone-400" />
+                </button>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-1 overflow-x-auto pb-1">
+              {["전체", "식단", "냉장고", "일정", "할일", "루틴", "육아", "장보기", "공지", "레시피"].map((cat) => (
+                <button
+                  key={cat}
+                  type="button"
+                  onClick={() => setActivityFilter(cat)}
+                  className={`px-2.5 py-1 rounded-full text-[10px] font-extrabold border whitespace-nowrap shrink-0 ${
+                    activityFilter === cat
+                      ? "bg-stone-900 text-white border-stone-900"
+                      : "bg-stone-50 text-stone-600 border-stone-200"
+                  }`}
+                >
+                  {cat}
+                </button>
+              ))}
+            </div>
+
+            <div className="flex-1 overflow-y-auto space-y-1.5 pr-0.5">
+              {recentActivities.filter((a) => activityFilter === "전체" || a.category === activityFilter).length === 0 ? (
+                <div className="py-10 text-center text-xs font-bold text-stone-400">
+                  기록된 수정 내역이 없습니다.
+                </div>
+              ) : (
+                recentActivities
+                  .filter((a) => activityFilter === "전체" || a.category === activityFilter)
+                  .map((act) => (
+                    <div
+                      key={act.id}
+                      className="p-2.5 rounded-2xl bg-stone-50 border border-stone-200 flex items-start justify-between gap-2"
+                    >
+                      <div className="min-w-0 space-y-0.5">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span
+                            className={`px-1.5 py-0.5 rounded-md text-[10px] font-black ${
+                              act.role === "admin"
+                                ? "bg-emerald-100 text-emerald-800"
+                                : "bg-sky-100 text-sky-800"
+                            }`}
+                          >
+                            {act.actor}
+                          </span>
+                          <span className="text-[11px] font-black text-stone-800">
+                            {act.category} {act.action}
+                          </span>
+                        </div>
+                        {act.detail && (
+                          <div className="text-[11px] text-stone-600 break-keep">{act.detail}</div>
+                        )}
+                      </div>
+                      <div className="flex flex-col items-end gap-1 shrink-0">
+                        <span className="text-[10px] font-bold text-stone-400 whitespace-nowrap">
+                          {formatActivityTime(act.atMs)}
+                        </span>
+                        {(() => {
+                          const catTabMap = {
+                            "식단": "daily",
+                            "냉장고": "fridge",
+                            "일정": "schedule",
+                            "할일": "schedule",
+                            "루틴": "schedule",
+                            "육아": "baby",
+                            "장보기": "shopping",
+                            "공지": "notices",
+                            "레시피": "recipes"
+                          };
+                          const targetT = catTabMap[act.category];
+                          if (!targetT || !canViewTab(targetT)) return null;
+                          return (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setIsActivityModalOpen(false);
+                                setActiveTab(targetT);
+                              }}
+                              className="px-1.5 py-0.5 rounded bg-white border border-stone-200 text-[9px] font-extrabold text-sky-700 hover:bg-sky-50"
+                            >
+                              이동 →
+                            </button>
+                          );
+                        })()}
+                      </div>
+                    </div>
+                  ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {isEditorUnlockModalOpen && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-sm w-full p-5 space-y-4 shadow-xl">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-black text-stone-900">
-                {isEditorUnlocked ? "✏️ 가족 편집 권한 활성화됨" : "🔐 초대 비밀코드 입력"}
+                {isAdminUnlocked
+                  ? "👑 관리자 권한 활성화됨"
+                  : isHelperUnlocked
+                  ? "🌿 산후도우미·가족 권한 활성화됨"
+                  : "🔐 가족 / 도우미 로그인"}
               </h3>
               <button onClick={() => setIsEditorUnlockModalOpen(false)}>
                 <X className="w-5 h-5 text-stone-400" />
@@ -16943,86 +17972,88 @@ ${validText}
 
             {isEditorUnlocked ? (
               <div className="space-y-3">
-                <p className="text-xs text-stone-600 leading-relaxed">
-                  현재 기기에서는 식단·냉장고·일정·육아수첩 편집이 가능합니다. 가족에게 아래 초대 링크를 공유하면 링크 접속만으로 편집 권한이 바로 열립니다.
-                </p>
-                <div className="bg-stone-50 p-3 rounded-2xl border border-stone-200 space-y-1.5">
-                  <div className="text-[11px] font-bold text-stone-500">초대 비밀코드</div>
-                  <div className="text-base font-black text-stone-900 tracking-widest">{EDITOR_INVITE_CODE}</div>
+                <div className="p-3 rounded-2xl bg-stone-50 border border-stone-200 space-y-2">
+                  <div className="text-[11px] font-extrabold text-stone-600">
+                    현재 수정자 이름 (홈 최근 수정 알림에 기록됩니다)
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {(isAdminUnlocked ? ["수혁", "아리나"] : ["산후도우미", "가족"]).map((nm) => (
+                      <button
+                        key={nm}
+                        type="button"
+                        onClick={() => {
+                          setActorName(nm);
+                          try { localStorage.setItem("family_actor_name_v1", nm); } catch (e) {}
+                          showToast(`수정자 이름이 [${nm}]로 설정되었습니다.`);
+                        }}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-extrabold border ${
+                          actorName === nm
+                            ? "bg-stone-900 text-white border-stone-900"
+                            : "bg-white text-stone-700 border-stone-200"
+                        }`}
+                      >
+                        {nm}
+                      </button>
+                    ))}
+                  </div>
                 </div>
+
+                {isAdminUnlocked ? (
+                  <>
+                    <p className="text-xs text-stone-600 leading-relaxed">
+                      모든 메뉴 열람·편집과 설정(API 키, 백업, 도우미 비밀번호 변경)이 가능합니다.
+                    </p>
+                    <button
+                      onClick={async () => {
+                        const inviteUrl = `${window.location.origin}/?invite=${adminCode}`;
+                        try {
+                          await navigator.clipboard.writeText(inviteUrl);
+                          showToast("🔗 관리자 초대 링크가 복사되었습니다!");
+                        } catch (e) {
+                          showToast(`초대 링크: ${inviteUrl}`);
+                        }
+                      }}
+                      className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold"
+                    >
+                      🔗 관리자 초대 링크 복사하기
+                    </button>
+                  </>
+                ) : (
+                  <p className="text-xs text-stone-600 leading-relaxed">
+                    허용된 메뉴({helperAllowedTabs.filter((x) => x !== "home").length}개)의 열람 및 편집이 가능합니다.
+                  </p>
+                )}
+
                 <button
-                  onClick={async () => {
-                    const inviteUrl = `${window.location.origin}/?invite=${EDITOR_INVITE_CODE}`;
-                    try {
-                      await navigator.clipboard.writeText(inviteUrl);
-                      showToast("🔗 가족 초대 링크가 복사되었습니다!");
-                    } catch (e) {
-                      showToast(`초대 링크: ${inviteUrl}`);
-                    }
-                  }}
-                  className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold"
-                >
-                  🔗 가족 초대 링크 복사하기
-                </button>
-                <button
-                  onClick={() => {
-                    try {
-                      localStorage.removeItem("family_editor_unlocked_v1");
-                    } catch (e) {}
-                    setIsEditorUnlocked(false);
-                    setIsEditorUnlockModalOpen(false);
-                    showToast("🔒 열람 전용 모드로 전환되었습니다.");
-                  }}
+                  onClick={logoutToGuest}
                   className="w-full py-2 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-xs font-bold"
                 >
-                  🔒 열람 전용 모드로 잠그기
+                  🔒 로그아웃 (미로그인 상태로 전환)
                 </button>
               </div>
             ) : (
               <div className="space-y-3">
-                <p className="text-xs text-stone-600 leading-relaxed">
-                  누구나 내용을 열람할 수 있지만, 추가·수정·삭제는 초대 비밀코드를 입력한 가족만 가능합니다.
-                </p>
+                <div className="bg-stone-50 p-3 rounded-2xl border border-stone-200 space-y-1 text-[11px] text-stone-600">
+                  <div>· <strong className="text-stone-800">미로그인</strong>: 가족사진 및 식단·레시피 일부만 열람</div>
+                  <div>· <strong className="text-sky-800">산후도우미·가족</strong>: 허용 메뉴 열람 및 편집 가능</div>
+                  <div>· <strong className="text-emerald-800">관리자(0402)</strong>: 전체 메뉴·설정·비밀번호 관리</div>
+                </div>
                 <input
                   type="password"
                   inputMode="numeric"
-                  placeholder="초대 비밀코드 입력"
+                  placeholder="관리자(0402) 또는 도우미/가족 비밀번호 입력"
                   value={editorCodeInput}
                   onChange={(e) => setEditorCodeInput(e.target.value)}
                   onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      if (editorCodeInput.trim() === EDITOR_INVITE_CODE) {
-                        try {
-                          localStorage.setItem("family_editor_unlocked_v1", "true");
-                        } catch (e2) {}
-                        setIsEditorUnlocked(true);
-                        setEditorCodeInput("");
-                        setIsEditorUnlockModalOpen(false);
-                        showToast("✅ 편집 권한이 활성화되었습니다!");
-                      } else {
-                        showToast("❌ 초대 코드가 일치하지 않습니다.");
-                      }
-                    }
+                    if (e.key === "Enter") applyLoginCode(editorCodeInput);
                   }}
                   className="w-full px-3 py-2.5 rounded-xl border border-stone-300 text-sm font-bold text-center tracking-widest"
                 />
                 <button
-                  onClick={() => {
-                    if (editorCodeInput.trim() === EDITOR_INVITE_CODE) {
-                      try {
-                        localStorage.setItem("family_editor_unlocked_v1", "true");
-                      } catch (e) {}
-                      setIsEditorUnlocked(true);
-                      setEditorCodeInput("");
-                      setIsEditorUnlockModalOpen(false);
-                      showToast("✅ 편집 권한이 활성화되었습니다!");
-                    } else {
-                      showToast("❌ 초대 코드가 일치하지 않습니다.");
-                    }
-                  }}
+                  onClick={() => applyLoginCode(editorCodeInput)}
                   className="w-full py-2.5 rounded-xl bg-stone-900 hover:bg-stone-800 text-white text-xs font-extrabold"
                 >
-                  편집 권한 잠금 해제
+                  로그인하기
                 </button>
               </div>
             )}
