@@ -1212,7 +1212,7 @@ const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.65) =>
     img.src = dataUrl;
   });
 
-const APP_CODE_VERSION = "v11.65";
+const APP_CODE_VERSION = "v11.67";
 
 const formatRoutineTimeLabel = (hhmm) => {
   const m = String(hhmm || "").trim().match(/^(\d{2}):(\d{2})$/);
@@ -1290,6 +1290,26 @@ const formatTime12Ko = (ms) => {
 };
 
 const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v11.67",
+    version: "v11.67",
+    date: "2026-11-18",
+    title: "수면 원탭 버튼 [🌞 낮잠 / 🌙 밤잠] 분리 (홈·육아 탭 동시 적용)",
+    changes: [
+      "낮잠·밤잠 분리 버튼: 홈 화면 시율 케어 현황(6버튼 1줄)과 육아수첩 원탭 기록에서 [🌞 낮잠]과 [🌙 밤잠]을 각각 독립 버튼으로 분리",
+      "줄바꿈 최적화: 홈 6칸 버튼 라벨(유축수유 포함)이 좁은 화면에서도 2줄로 꺾이지 않도록 간격·자간(tracking-tighter) 조정"
+    ]
+  },
+  {
+    id: "patch-v11.66",
+    version: "v11.66",
+    date: "2026-11-18",
+    title: "중복 위치 필터 제거 · 긴 안내 문구/버튼 텍스트 슬림화 & 시각화 정돈",
+    changes: [
+      "냉장고 중복 버튼 정리: 리스트 뷰에서 상단 3칸 구역 카드(냉장실·냉동실·실온)와 겹치던 중복 위치 필터 바를 제거하고 [전체 보기] + [+ 재료 추가] 1줄로 단순화",
+      "긴 문구 슬림화: 장보기(빠른 장보기 입력, 자동 분석해서 담기), 냉장고 검색·헤더, 열람 전용 배너, 육아수첩 입력 힌트를 짧고 직관적인 문구로 정돈"
+    ]
+  },
   {
     id: "patch-v11.65",
     version: "v11.65",
@@ -10277,7 +10297,7 @@ ${validText}
     showToast(`${subType === "대변" ? "💩" : "🧷"} ${targetChild} ${subType}이 즉시 기록되었습니다!`);
   };
 
-  const handleQuickTapBabyActivity = async (typeId, childOverride = null) => {
+  const handleQuickTapBabyActivity = async (typeId, childOverride = null, subTypeOverride = null) => {
     if (!requireEditorAccess()) return;
     if (!user || !db) {
       showToast("⚠️ 서버 연결 후 기록할 수 있습니다.");
@@ -10289,6 +10309,13 @@ ${validText}
 
     const activeItem = babyActivities.find((a) => a.childId === targetChild && a.type === typeId && a.inProgress);
     if (activeItem) {
+      if (typeId === "수면" && subTypeOverride && (activeItem.subType || "낮잠") !== subTypeOverride) {
+        const updated = { ...activeItem, subType: subTypeOverride, updatedAt: new Date().toISOString() };
+        setBabyActivities((prev) => prev.map((x) => (x.id === activeItem.id ? updated : x)));
+        await setDoc(getDocRef("family_baby_activities_v1", activeItem.id), updated);
+        showToast(`${subTypeOverride === "밤잠" ? "🌙" : "🌞"} 진행 중인 수면을 ${subTypeOverride}으로 전환했습니다.`);
+        return;
+      }
       await handleStopBabyActivityTimer(activeItem);
       return;
     }
@@ -10357,9 +10384,7 @@ ${validText}
     const hr = new Date(nowMs).getHours();
     const defaultSub =
       typeId === "수면"
-        ? hr >= 7 && hr < 19
-          ? "낮잠"
-          : "밤잠"
+        ? subTypeOverride || (hr >= 7 && hr < 19 ? "낮잠" : "밤잠")
         : typeId === "모유"
         ? "왼쪽"
         : "";
@@ -12327,7 +12352,14 @@ ${validText}
           const sum = computeActivitySummaryForChild("시율");
           const nowMs = activityTimerTick || Date.now();
           const feedMeta = sum.lastFeed ? BABY_ACTIVITY_TYPES.find((t) => t.id === sum.lastFeed.type) : null;
-          const homeQuickIds = ["모유", "기저귀", "수면", "유축", "유축수유"];
+          const homeQuickButtons = [
+            { id: "모유", label: "모유", emoji: "🤱" },
+            { id: "기저귀", label: "기저귀", emoji: "🧷" },
+            { id: "수면", subType: "낮잠", label: "낮잠", emoji: "🌞" },
+            { id: "수면", subType: "밤잠", label: "밤잠", emoji: "🌙" },
+            { id: "유축", label: "유축", emoji: "🧴" },
+            { id: "유축수유", label: "유축수유", emoji: "💚" }
+          ];
           return (
             <div
               onClick={() => {
@@ -12348,7 +12380,7 @@ ${validText}
                     const sec = Math.max(0, Math.floor((nowMs - (Number(running.startMs) || nowMs)) / 1000));
                     return (
                       <span className="px-1.5 py-0.5 rounded-md bg-emerald-600 text-white font-mono text-[10.5px] animate-pulse">
-                        ⏱️ {running.type} {String(Math.floor(sec / 60)).padStart(2, "0")}:{String(sec % 60).padStart(2, "0")}
+                        ⏱️ {running.type === "수면" ? (running.subType || "수면") : running.type} {String(Math.floor(sec / 60)).padStart(2, "0")}:{String(sec % 60).padStart(2, "0")}
                       </span>
                     );
                   })()}
@@ -12416,14 +12448,15 @@ ${validText}
                   </div>
                 );
               })()}
-              <div className="grid grid-cols-5 gap-1 pt-0.5">
-                {homeQuickIds.map((qId) => {
-                  const tm = BABY_ACTIVITY_TYPES.find((t) => t.id === qId);
-                  if (!tm) return null;
-                  const isRunning = sum.list.some((a) => a.type === qId && a.inProgress);
+              <div className="grid grid-cols-6 gap-1 pt-0.5">
+                {homeQuickButtons.map((qb) => {
+                  const qId = qb.id;
+                  const isRunning = sum.list.some(
+                    (a) => a.type === qId && a.inProgress && (!qb.subType || (a.subType || "낮잠") === qb.subType)
+                  );
                   return (
                     <button
-                      key={`hq-${qId}`}
+                      key={`hq-${qId}-${qb.subType || ""}`}
                       type="button"
                       onPointerDown={(e) => {
                         if (qId !== "기저귀") return;
@@ -12468,17 +12501,17 @@ ${validText}
                           handleQuickRecordDiaper("소변", "시율");
                           return;
                         }
-                        handleQuickTapBabyActivity(qId, "시율");
+                        handleQuickTapBabyActivity(qId, "시율", qb.subType || null);
                       }}
-                      className={`py-1.5 px-0.5 rounded-xl border text-[10.5px] font-extrabold flex flex-col items-center gap-0.5 transition active:scale-95 ${
+                      className={`py-1.5 px-0.5 rounded-xl border text-[9.5px] font-extrabold tracking-tighter flex flex-col items-center gap-0.5 transition active:scale-95 ${
                         isRunning
                           ? "bg-emerald-600 text-white border-emerald-600 animate-pulse"
                           : "bg-white hover:bg-stone-50 text-stone-800 border-stone-200"
                       }`}
                     >
-                      <span className="text-[15.5px] leading-none">{tm.emoji}</span>
-                      <span className="truncate w-full text-center leading-tight">
-                        {isRunning ? "종료" : tm.label}
+                      <span className="text-[15px] leading-none">{qb.emoji}</span>
+                      <span className="whitespace-nowrap w-full text-center leading-tight">
+                        {isRunning ? "종료" : qb.label}
                       </span>
                     </button>
                   );
@@ -12521,7 +12554,7 @@ ${validText}
       {activeTab !== "home" && canViewTab(activeTab) && !canEditTab(activeTab) && (
         <div className="mx-3 mt-2 px-3 py-1.5 rounded-xl bg-amber-50 border border-amber-200 flex items-center justify-between gap-2">
           <span className="text-[12.5px] font-extrabold text-amber-900">
-            👁️ 현재 메뉴는 열람 전용입니다 (편집 권한 필요)
+            👁️ 열람 전용 모드
           </span>
           <button
             type="button"
@@ -16063,7 +16096,7 @@ ${validText}
             <div className="bg-orange-50 border border-orange-200 rounded-2xl p-3">
               <div className="flex items-center gap-1.5 text-[13.5px] font-black text-orange-900 mb-1.5">
                 <AlertCircle className="w-4 h-4 text-orange-600" />
-                <span>소비기한 임박/경과 재료 ({expiringItems.length}건)</span>
+                <span>임박·경과 재료 ({expiringItems.length}건)</span>
               </div>
               <div className="flex flex-wrap gap-1.5">
                 {expiringItems.map((item) => (
@@ -16117,31 +16150,35 @@ ${validText}
           )}
 
           <div className="flex items-center justify-between gap-2">
-            <div className="flex gap-1 bg-stone-200 p-1 rounded-xl overflow-x-auto">
-              {(fridgeViewMode === "list"
-                ? ["전체", "냉장실", "냉동실", "실온·팬트리"]
-                : ["전체", ...STORAGE_LOCATIONS]
-              ).map((loc) => {
-                const isActive =
-                  fridgeLocFilter === loc ||
-                  (fridgeViewMode === "list" &&
-                    loc === "냉동실" &&
-                    (fridgeLocFilter === "메인 냉동실" || fridgeLocFilter === "별도 냉동고"));
-                return (
+            {fridgeViewMode === "visual" ? (
+              <div className="flex gap-1 bg-stone-200 p-1 rounded-xl overflow-x-auto">
+                {["전체", ...STORAGE_LOCATIONS].map((loc) => (
                   <button
                     key={loc}
                     onClick={() => setFridgeLocFilter(loc)}
                     className={`px-2 py-1 rounded-lg text-[11px] font-extrabold whitespace-nowrap transition ${
-                      isActive
+                      fridgeLocFilter === loc
                         ? "bg-white text-stone-900 shadow-sm"
                         : "text-stone-600"
                     }`}
                   >
                     {loc}
                   </button>
-                );
-              })}
-            </div>
+                ))}
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setFridgeLocFilter("전체")}
+                className={`px-2.5 py-1.5 rounded-xl border text-[11.5px] font-extrabold whitespace-nowrap transition ${
+                  fridgeLocFilter === "전체"
+                    ? "bg-stone-900 text-white border-stone-900"
+                    : "bg-white text-stone-700 border-stone-200 hover:bg-stone-50"
+                }`}
+              >
+                전체 ({fridge.length})
+              </button>
+            )}
             <button
               onClick={openAddFridgeModal}
               className="px-2.5 py-1.5 rounded-xl bg-stone-900 text-white text-[11.5px] font-extrabold flex items-center gap-1 shrink-0 whitespace-nowrap"
@@ -16191,7 +16228,7 @@ ${validText}
                 type="text"
                 value={fridgeSearch}
                 onChange={(e) => setFridgeSearch(e.target.value)}
-                placeholder="🔍 냉장고 재료 검색 (예: 양파, 우유, 소고기...)"
+                placeholder="🔍 재료 검색 (양파, 우유 등)"
                 className="w-full px-3 py-2 pr-8 rounded-xl border border-stone-200 bg-white text-[13.5px] font-semibold text-stone-800 placeholder:text-stone-400"
               />
               {fridgeSearch && (
@@ -16508,7 +16545,7 @@ ${validText}
                 {(fridgeLocFilter === "전체" || fridgeLocFilter === "냉장실" || fridgeLocFilter === "메인 냉동실" || fridgeLocFilter === "냉동실") && (
                   <div className="rounded-2xl border-2 border-sky-200 bg-sky-50/40 p-2.5 space-y-2">
                     <div className="text-[13.5px] font-black text-sky-950 flex items-center justify-between px-0.5">
-                      <span>🧊 4도어 메인 냉장고 (상냉장 · 하냉동)</span>
+                      <span>🧊 4도어 메인 냉장고</span>
                     </div>
 
                     {(fridgeLocFilter === "전체" || fridgeLocFilter === "냉장실") && (
@@ -16748,8 +16785,8 @@ ${validText}
         <div className="p-4 space-y-4">
           <div className="bg-white p-3.5 rounded-2xl border border-stone-200 shadow-sm space-y-2">
             <div className="flex items-center justify-between">
-              <span className="text-[13.5px] font-black text-stone-900">⚡ 카톡 · 음성 장보기 문장 1초 파싱</span>
-              <span className="text-[11.5px] font-bold text-stone-500">AI + 즉시 분리</span>
+              <span className="text-[13.5px] font-black text-stone-900">⚡ 빠른 장보기 입력</span>
+              <span className="text-[11.5px] font-bold text-stone-500">AI 자동 분리</span>
             </div>
             <textarea
               rows={2}
@@ -16763,7 +16800,7 @@ ${validText}
               disabled={isQuickParsingShopping}
               className="w-full py-2 rounded-xl bg-stone-900 hover:bg-stone-800 text-white text-[13.5px] font-extrabold flex items-center justify-center gap-1.5"
             >
-              {isQuickParsingShopping ? "파싱 중..." : "⚡ 문장 분석해서 장보기에 바로 담기"}
+              {isQuickParsingShopping ? "분석 중..." : "⚡ 자동 분석해서 담기"}
             </button>
           </div>
 
@@ -16771,7 +16808,7 @@ ${validText}
             <div className="flex items-center justify-between gap-2">
               <h2 className="text-[15.5px] font-black text-stone-900 flex items-center gap-1.5">
                 <ShoppingCart className="w-4 h-4 text-emerald-600" />
-                <span>사야 할 재료 / 장보기</span>
+                <span>장보기 목록</span>
               </h2>
               {shoppingList.filter((s) => !s.checked).length > 0 && (
                 <button
@@ -16812,7 +16849,7 @@ ${validText}
               <input
                 id="shopping-item-input"
                 type="text"
-                placeholder="품목명 (예: 우유, 대파, 기저귀)"
+                placeholder="품목명 (우유, 대파 등)"
                 value={shoppingForm.name}
                 onChange={(e) => setShoppingForm({ ...shoppingForm, name: e.target.value })}
                 className="col-span-2 px-3 py-2 rounded-xl border border-stone-200 text-[13.5px] font-bold"
@@ -18621,11 +18658,20 @@ ${validText}
                     </div>
 
                     <div className="flex items-center gap-2.5 overflow-x-auto pb-1">
-                      {BABY_ACTIVITY_TYPES.map((t) => {
-                        const isRunning = activeTimers.some((a) => a.type === t.id);
+                      {BABY_ACTIVITY_TYPES.flatMap((t) =>
+                        t.id === "수면"
+                          ? [
+                              { ...t, subType: "낮잠", label: "낮잠", emoji: "🌞", bg: "bg-indigo-400" },
+                              { ...t, subType: "밤잠", label: "밤잠", emoji: "🌙", bg: "bg-indigo-600" }
+                            ]
+                          : [t]
+                      ).map((t) => {
+                        const isRunning = activeTimers.some(
+                          (a) => a.type === t.id && (!t.subType || (a.subType || "낮잠") === t.subType)
+                        );
                         return (
                           <button
-                            key={t.id}
+                            key={`${t.id}-${t.subType || ""}`}
                             type="button"
                             onPointerDown={() => {
                               if (t.id !== "기저귀") return;
@@ -18666,7 +18712,7 @@ ${validText}
                                 handleQuickRecordDiaper("소변");
                                 return;
                               }
-                              handleQuickTapBabyActivity(t.id);
+                              handleQuickTapBabyActivity(t.id, null, t.subType || null);
                             }}
                             className="flex flex-col items-center gap-1 shrink-0 group"
                           >
@@ -19335,7 +19381,7 @@ ${validText}
                   </div>
                   <input
                     type="text"
-                    placeholder="증상/진료 제목 (예: 접종 후 미열, 콧물 소아과 진료)"
+                    placeholder="증상·진료명 (예: 미열, 소아과)"
                     value={medNoteForm.title}
                     onChange={(e) => setMedNoteForm({ ...medNoteForm, title: e.target.value })}
                     className="w-full px-3 py-2 rounded-xl border border-stone-200 text-[13.5px] font-bold"
@@ -19518,7 +19564,7 @@ ${validText}
 
                     <input
                       type="text"
-                      placeholder="오늘의 한 줄 제목 (예: 처음으로 뒤집기 성공!)"
+                      placeholder="오늘의 한 줄 (예: 첫 뒤집기!)"
                       value={diaryForm.title}
                       onChange={(e) => setDiaryForm((p) => ({ ...p, title: e.target.value }))}
                       className="w-full px-3 py-2 rounded-xl border border-stone-200 text-[13.5px] font-bold"
