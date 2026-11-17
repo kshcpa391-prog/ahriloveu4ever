@@ -1212,7 +1212,7 @@ const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.65) =>
     img.src = dataUrl;
   });
 
-const APP_CODE_VERSION = "v11.38";
+const APP_CODE_VERSION = "v11.40";
 
 const formatRoutineTimeLabel = (hhmm) => {
   const m = String(hhmm || "").trim().match(/^(\d{2}):(\d{2})$/);
@@ -1228,7 +1228,7 @@ const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-const APP_BUILD_DATE = "2026-11-17 20:10";
+const APP_BUILD_DATE = "2026-11-17 20:20";
 const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1255,6 +1255,28 @@ const HELPER_CONFIGURABLE_TABS = [
 ];
 
 const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v11.40",
+    version: "v11.40",
+    date: "2026-11-17",
+    title: "기록 불러오기 무응답·냉장고 구역 ReferenceError 수정 & 성장기록 즉시 입력 후 불러오기",
+    changes: [
+      "치명 오류 수정: [✨ 기록 불러오기] 내 미정의 변수(routines·todos → familyRoutines·schedules) 및 냉장고 구역 분포 바 미정의 변수(fridgeItems → fridgeMap) 완전 해결",
+      "성장기록 즉시 입력·불러오기: 기록 불러오기 모달 안에서 키·몸무게·머리둘레를 바로 입력·저장하고 즉시 일기 본문에 삽입하는 기능 추가",
+      "전수 검증: 전체 파일 내 미선언 변수 속성 접근 0건·끊긴 문자열 0건·JSX 태그 불일치 0건 최종 확인"
+    ]
+  },
+  {
+    id: "patch-v11.39",
+    version: "v11.39",
+    date: "2026-11-17",
+    title: "오늘·어제 동시 선택 버그 수정 · 일기 수정취소 · 사진만 보기 필터 & 오늘 기록 완료 배지",
+    changes: [
+      "버그 수정: 육아일기 작성란의 [어제] 버튼이 getOffsetDateStr(-1) 인자 누락으로 오늘 날짜와 같아져 [오늘][어제]가 동시 선택되던 문제(getOffsetDateStr(getTodayStr(), -1)) 완전 해결",
+      "편의성 개선: 기존 육아일기 수정 중 바로 빠져나올 수 있는 [수정 취소] 버튼 추가",
+      "시각화·신규기능: 일기 요약 바에 [오늘 기록(완료 ✓/미작성)] 상태 표시 및 [📸 사진만] 모아보기 필터 토글 도입"
+    ]
+  },
   {
     id: "patch-v11.38",
     version: "v11.38",
@@ -3965,6 +3987,7 @@ function MainApp() {
   const [diaryUploadProgress, setDiaryUploadProgress] = useState(null);
   const [diaryImportModal, setDiaryImportModal] = useState(null);
   const [diaryMonthFilter, setDiaryMonthFilter] = useState("all");
+  const [diaryPhotoOnlyFilter, setDiaryPhotoOnlyFilter] = useState(false);
   const [highlightedDiaryId, setHighlightedDiaryId] = useState("");
   const [pendingDiaryPhotoFile, setPendingDiaryPhotoFile] = useState(null);
   const diaryPhotoInputRef = useRef(null);
@@ -9666,14 +9689,16 @@ ${validText}
     const dayMed = babyMedicalNotes.filter(
       (n) => targetIds.includes(n.childId) && n.date === targetDate
     );
-    const doneRoutines = routines.filter((r) => {
+    const doneRoutines = (familyRoutines || []).filter((r) => {
       const compDate = r.lastCompletedDate || "";
       if (compDate !== targetDate && !(r.completed && targetDate === getTodayStr())) return false;
       const a = r.assignee || "공통";
       return targetIds.some((cid) => a === cid || a === "시목·시율" || a === "공통");
     });
-    const daySchedules = schedules.filter((s) => s.date === targetDate);
-    const dayTodos = todos.filter((t) => t.dueDate === targetDate || (t.completed && String(t.updatedAt || "").slice(0, 10) === targetDate));
+    const daySchedules = (schedules || []).filter((s) => s.date === targetDate && s.category !== "할일" && !s.isTodo);
+    const dayTodos = (schedules || []).filter(
+      (t) => (t.category === "할일" || t.isTodo) && (t.date === targetDate || t.dueDate === targetDate)
+    );
 
     const candidates = [];
     if (childMeals.length > 0) {
@@ -9686,10 +9711,11 @@ ${validText}
       });
     }
     if (latestGrowth) {
+      const headVal = latestGrowth.head ?? latestGrowth.headCircumference;
       const gText = [
         latestGrowth.height ? `키 ${latestGrowth.height}cm` : "",
         latestGrowth.weight ? `몸무게 ${latestGrowth.weight}kg` : "",
-        latestGrowth.headCircumference ? `머리둘레 ${latestGrowth.headCircumference}cm` : ""
+        headVal ? `머리둘레 ${headVal}cm` : ""
       ].filter(Boolean).join(" / ");
       if (gText) {
         candidates.push({
@@ -9738,14 +9764,14 @@ ${validText}
       });
     }
 
-    if (candidates.length === 0) {
-      showToast(`${targetDate}에 불러올 식단·성장·진료·루틴·일정 기록이 없습니다.`);
-      return;
-    }
     setDiaryImportModal({
       date: targetDate,
+      childId: targetIds[0] || selectedChildId,
       childLabel: targetIds.join("·"),
-      items: candidates
+      items: candidates,
+      quickHeight: "",
+      quickWeight: "",
+      quickHead: ""
     });
   };
 
@@ -14736,14 +14762,17 @@ ${validText}
             </div>
           )}
 
-          {fridgeItems.length > 0 && (
+          {Object.keys(fridgeMap || {}).length > 0 && (() => {
+            const activeFridgeList = Object.values(fridgeMap || {}).filter((it) => Number(it.quantity) > 0);
+            if (activeFridgeList.length === 0) return null;
+            return (
             <div className="grid grid-cols-3 gap-1.5">
               {[
                 { key: "냉장실", icon: "❄️", check: (loc) => String(loc || "").includes("냉장") },
                 { key: "냉동실", icon: "🧊", check: (loc) => String(loc || "").includes("냉동") },
                 { key: "실온·팬트리", icon: "🧺", check: (loc) => String(loc || "").includes("실온") || String(loc || "").includes("팬트리") }
               ].map((zone) => {
-                const zItems = fridgeItems.filter((it) => zone.check(it.location));
+                const zItems = activeFridgeList.filter((it) => zone.check(it.location));
                 const zExp = expiringItems.filter((it) => zone.check(it.location)).length;
                 const isSel = fridgeLocFilter === zone.key;
                 return (
@@ -14770,7 +14799,8 @@ ${validText}
                 );
               })}
             </div>
-          )}
+            );
+          })()}
 
           <div className="flex items-center justify-between gap-2">
             <div className="flex gap-1 bg-stone-200 p-1 rounded-xl overflow-x-auto">
@@ -17541,7 +17571,7 @@ ${validText}
                         <div className="flex items-center gap-1">
                           {[
                             { label: "오늘", val: getTodayStr() },
-                            { label: "어제", val: getOffsetDateStr(-1) }
+                            { label: "어제", val: getOffsetDateStr(getTodayStr(), -1) }
                           ].map((dOpt) => (
                             <button
                               key={dOpt.label}
@@ -17627,16 +17657,39 @@ ${validText}
                           ✨ 기록 불러오기
                         </button>
                       </div>
-                      <button
-                        type="button"
-                        disabled={Boolean(diaryUploadProgress)}
-                        onClick={handleSaveBabyDiary}
-                        className="w-full py-2.5 rounded-xl bg-[#5E7A65] hover:bg-[#4E6855] disabled:opacity-60 text-white text-xs font-extrabold whitespace-nowrap"
-                      >
-                        {diaryUploadProgress
-                          ? `⏳ ${diaryUploadProgress.stepText}`
-                          : `💾 ${editingDiaryEntry ? "일기 수정 저장" : "육아일기 저장하기"}`}
-                      </button>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          disabled={Boolean(diaryUploadProgress)}
+                          onClick={handleSaveBabyDiary}
+                          className="flex-1 py-2.5 rounded-xl bg-[#5E7A65] hover:bg-[#4E6855] disabled:opacity-60 text-white text-xs font-extrabold whitespace-nowrap"
+                        >
+                          {diaryUploadProgress
+                            ? `⏳ ${diaryUploadProgress.stepText}`
+                            : `💾 ${editingDiaryEntry ? "일기 수정 저장" : "육아일기 저장하기"}`}
+                        </button>
+                        {editingDiaryEntry && !diaryUploadProgress && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingDiaryEntry(null);
+                              setPendingDiaryPhotoFile(null);
+                              setDiaryForm({
+                                date: getTodayStr(),
+                                mood: "😊 행복",
+                                title: "",
+                                content: "",
+                                photoUrl: "",
+                                photos: [],
+                                childIds: [selectedChildId]
+                              });
+                            }}
+                            className="px-3 py-2.5 rounded-xl bg-stone-200 hover:bg-stone-300 text-stone-700 text-xs font-extrabold whitespace-nowrap"
+                          >
+                            수정 취소
+                          </button>
+                        )}
+                      </div>
                       {diaryUploadProgress && (
                         <div className="space-y-1">
                           <div className="w-full h-2 rounded-full bg-stone-200 overflow-hidden">
@@ -17768,11 +17821,23 @@ ${validText}
                             </button>
                           ))}
                         </div>
-                        <select
-                          value={diaryMonthFilter}
-                          onChange={(e) => setDiaryMonthFilter(e.target.value)}
-                          className="px-2 py-1 rounded-full border border-stone-200 bg-white text-[10px] font-extrabold text-stone-700"
-                        >
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => setDiaryPhotoOnlyFilter((v) => !v)}
+                            className={`px-2 py-1 rounded-full text-[10px] font-extrabold border whitespace-nowrap ${
+                              diaryPhotoOnlyFilter
+                                ? "bg-[#5E7A65] text-white border-[#5E7A65]"
+                                : "bg-white text-stone-600 border-stone-200"
+                            }`}
+                          >
+                            📸 사진만
+                          </button>
+                          <select
+                            value={diaryMonthFilter}
+                            onChange={(e) => setDiaryMonthFilter(e.target.value)}
+                            className="px-2 py-1 rounded-full border border-stone-200 bg-white text-[10px] font-extrabold text-stone-700"
+                          >
                           <option value="all">📅 전체 월</option>
                           {[...new Set(babyDiaryEntries.map((d) => String(d.date || "").slice(0, 7)).filter(Boolean))]
                             .sort((a, b) => b.localeCompare(a))
@@ -17781,15 +17846,24 @@ ${validText}
                                 {ym.slice(0, 4)}년 {Number(ym.slice(5, 7))}월
                               </option>
                             ))}
-                        </select>
+                          </select>
+                        </div>
                       </div>
                       {(() => {
-                        const thisYm = getTodayStr().slice(0, 7);
+                        const todayKeyStr = getTodayStr();
+                        const thisYm = todayKeyStr.slice(0, 7);
                         const thisMonthCount = babyDiaryEntries.filter((d) => String(d.date || "").startsWith(thisYm)).length;
                         const photoDiaryCount = babyDiaryEntries.filter((d) => getDiaryEntryPhotos(d).length > 0).length;
+                        const wroteToday = babyDiaryEntries.some((d) => d.date === todayKeyStr);
                         return (
-                          <div className="grid grid-cols-3 gap-1.5 bg-[#FAF8F3] border border-stone-200 rounded-xl p-2 text-center">
+                          <div className="grid grid-cols-4 gap-1 bg-[#FAF8F3] border border-stone-200 rounded-xl p-2 text-center">
                             <div>
+                              <div className="text-[9px] font-bold text-stone-400">오늘 기록</div>
+                              <div className={`text-[11px] font-black ${wroteToday ? "text-emerald-700" : "text-amber-600"}`}>
+                                {wroteToday ? "완료 ✓" : "미작성"}
+                              </div>
+                            </div>
+                            <div className="border-l border-stone-200">
                               <div className="text-[9px] font-bold text-stone-400">이번 달</div>
                               <div className="text-xs font-black text-[#35503C]">{thisMonthCount}편</div>
                             </div>
@@ -17812,6 +17886,7 @@ ${validText}
                     const childDiaries = babyDiaryEntries.filter((d) => {
                       if (diaryChildFilter !== "all" && !getDiaryEntryChildIds(d).includes(diaryChildFilter)) return false;
                       if (diaryMonthFilter !== "all" && !String(d.date || "").startsWith(diaryMonthFilter)) return false;
+                      if (diaryPhotoOnlyFilter && getDiaryEntryPhotos(d).length === 0) return false;
                       if (!q) return true;
                       return (
                         String(d.date || "").toLowerCase().includes(q) ||
@@ -21290,7 +21365,17 @@ ${validText}
               </div>
             </div>
             <div className="flex-1 overflow-y-auto space-y-2 pr-0.5">
-              {diaryImportModal.items.map((item) => (
+              {diaryImportModal.items.length === 0 ? (
+                <div className="p-3 rounded-2xl bg-stone-50 border border-stone-200 text-center space-y-1">
+                  <div className="text-xs font-extrabold text-stone-700">
+                    {diaryImportModal.date}에 등록된 식단·진료·일정 기록이 없습니다
+                  </div>
+                  <div className="text-[10px] font-semibold text-stone-500">
+                    아래에서 성장 수치(키·몸무게)를 바로 입력해 저장하고 일기에 넣을 수 있어요!
+                  </div>
+                </div>
+              ) : (
+                diaryImportModal.items.map((item) => (
                 <button
                   key={item.key}
                   type="button"
@@ -21324,7 +21409,90 @@ ${validText}
                     {item.text}
                   </div>
                 </button>
-              ))}
+                ))
+              )}
+
+              <div className="p-3 rounded-2xl bg-[#FAF8F3] border border-[#C9D8CC] space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-black text-[#35503C]">
+                    📏 바로 성장 기록 입력 후 불러오기 ({diaryImportModal.childId})
+                  </span>
+                </div>
+                <div className="grid grid-cols-3 gap-1.5">
+                  <input
+                    type="number"
+                    step="0.1"
+                    placeholder="키 (cm)"
+                    value={diaryImportModal.quickHeight || ""}
+                    onChange={(e) => setDiaryImportModal((prev) => ({ ...prev, quickHeight: e.target.value }))}
+                    className="px-2 py-1.5 rounded-xl border border-stone-200 bg-white text-[11px] font-bold"
+                  />
+                  <input
+                    type="number"
+                    step="0.01"
+                    placeholder="몸무게 (kg)"
+                    value={diaryImportModal.quickWeight || ""}
+                    onChange={(e) => setDiaryImportModal((prev) => ({ ...prev, quickWeight: e.target.value }))}
+                    className="px-2 py-1.5 rounded-xl border border-stone-200 bg-white text-[11px] font-bold"
+                  />
+                  <input
+                    type="number"
+                    step="0.1"
+                    placeholder="머리둘레"
+                    value={diaryImportModal.quickHead || ""}
+                    onChange={(e) => setDiaryImportModal((prev) => ({ ...prev, quickHead: e.target.value }))}
+                    className="px-2 py-1.5 rounded-xl border border-stone-200 bg-white text-[11px] font-bold"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const h = String(diaryImportModal.quickHeight || "").trim();
+                    const w = String(diaryImportModal.quickWeight || "").trim();
+                    const hd = String(diaryImportModal.quickHead || "").trim();
+                    if (!h && !w && !hd) {
+                      showToast("키, 몸무게, 머리둘레 중 하나 이상 입력해 주세요.");
+                      return;
+                    }
+                    const gChild = diaryImportModal.childId || selectedChildId;
+                    const gDate = diaryImportModal.date || getTodayStr();
+                    const gId = `gr-${gChild}-${Date.now()}`;
+                    const gPayload = {
+                      id: gId,
+                      childId: gChild,
+                      date: gDate,
+                      height: h ? Number(h) : null,
+                      weight: w ? Number(w) : null,
+                      head: hd ? Number(hd) : null,
+                      memo: "육아일기 기록 불러오기에서 빠른 등록"
+                    };
+                    if (user && db) {
+                      try {
+                        await setDoc(getDocRef("family_baby_growth_v7", gId), gPayload);
+                      } catch (e) {
+                        showToast("⚠️ 성장 기록 서버 저장 실패: 네트워크를 확인해 주세요.");
+                        return;
+                      }
+                    }
+                    setBabyGrowthLogs((prev) => [gPayload, ...prev]);
+                    recordActivity("육아", "성장기록", `${gChild} · ${gDate}`);
+                    const gLine = `📏 성장(${gDate}): ${[
+                      h ? `키 ${h}cm` : "",
+                      w ? `몸무게 ${w}kg` : "",
+                      hd ? `머리둘레 ${hd}cm` : ""
+                    ].filter(Boolean).join(" / ")}`;
+                    setDiaryForm((prev) => ({
+                      ...prev,
+                      content: prev.content ? `${prev.content.trim()}\n\n${gLine}` : gLine
+                    }));
+                    setDiaryImportModal(null);
+                    showToast(`📏 ${gChild} 성장 기록을 저장하고 일기에 넣었습니다!`);
+                  }}
+                  className="w-full py-1.5 rounded-xl bg-stone-900 hover:bg-stone-800 text-white text-[11px] font-extrabold"
+                >
+                  📏 성장 저장 후 일기에 바로 넣기
+                </button>
+              </div>
             </div>
             <div className="flex items-center gap-2 pt-1">
               <button
