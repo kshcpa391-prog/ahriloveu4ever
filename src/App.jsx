@@ -1203,7 +1203,7 @@ const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.65) =>
     img.src = dataUrl;
   });
 
-const APP_CODE_VERSION = "v11.28";
+const APP_CODE_VERSION = "v11.30";
 
 const formatRoutineTimeLabel = (hhmm) => {
   const m = String(hhmm || "").trim().match(/^(\d{2}):(\d{2})$/);
@@ -1246,6 +1246,27 @@ const HELPER_CONFIGURABLE_TABS = [
 ];
 
 const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v11.30",
+    version: "v11.30",
+    date: "2026-11-17",
+    title: "오류 원인 경고 배너 표시 강화 · 알림에서 육아일기 클릭 시 해당 일기로 바로 이동",
+    changes: [
+      "오류 경고 강화: 동기화·Storage·저장 오류 발생 시 상단 경고 배너 및 육아일기 폼 내 경고 박스에 정확한 오류 원인이 함께 표시되도록 개선",
+      "알림 바로가기: 최근 수정 알림 모달 및 실시간 알림 팝업에서 육아일기 항목을 누르면 해당 아이·일기 카드 위치로 즉시 이동 및 강조 표시"
+    ]
+  },
+  {
+    id: "patch-v11.29",
+    version: "v11.29",
+    date: "2026-11-17",
+    title: "Firebase Storage 꺼짐 상태에서도 육아일기 다중 사진(1MB 이하 자동 압축) 100% 저장 수정",
+    changes: [
+      "버그 수정: Base64 폴백 저장 시 photoUrl과 photoUrls에 사진이 중복(2배 용량) 저장되어 Firestore 1MB 제한을 초과하던 문제 해결",
+      "용량 최적화: 첨부 사진 장수에 맞춰 장당 목표 용량(총 720KB 이내)으로 해상도·화질을 자동 조절해 Storage 없이도 여러 장 안정 저장",
+      "타임아웃 보완: Storage 업로드에 8초 타임아웃을 적용해 미활성화 환경에서 대기 없이 즉시 압축 폴백 저장되도록 개선"
+    ]
+  },
   {
     id: "patch-v11.28",
     version: "v11.28",
@@ -3843,6 +3864,8 @@ function MainApp() {
   const [isWeatherModalOpen, setIsWeatherModalOpen] = useState(false);
   const weatherLastFetchedMsRef = useRef(0);
   const [isPolishingDiary, setIsPolishingDiary] = useState(false);
+  const [diarySaveWarning, setDiarySaveWarning] = useState("");
+  const [highlightedDiaryId, setHighlightedDiaryId] = useState("");
   const [pendingDiaryPhotoFile, setPendingDiaryPhotoFile] = useState(null);
   const diaryPhotoInputRef = useRef(null);
   useEffect(() => {
@@ -4820,6 +4843,9 @@ function MainApp() {
       detail: String(detail || "").trim().slice(0, 120),
       beforeText: extra?.beforeText ? String(extra.beforeText).slice(0, 120) : "",
       afterText: extra?.afterText ? String(extra.afterText).slice(0, 120) : "",
+      targetSubTab: extra?.targetSubTab || "",
+      targetId: extra?.targetId || "",
+      targetChildId: extra?.targetChildId || "",
       atMs: Date.now()
     };
     localLastActIdRef.current = entry.id;
@@ -4849,6 +4875,33 @@ function MainApp() {
       }
       return next;
     });
+  };
+
+  const handleNavigateFromActivity = (act) => {
+    if (!act) return;
+    const targetT = ACTIVITY_CAT_TAB_MAP[act.category];
+    if (!targetT || !canViewTab(targetT)) return;
+    const nowMs = Date.now();
+    setLastSeenActivityMs(nowMs);
+    try { localStorage.setItem("kim_last_seen_activity_ms_v1", String(nowMs)); } catch (e) {}
+    setIsActivityModalOpen(false);
+    setLiveActivityPopup(null);
+    setActiveTab(targetT);
+    if (act.category === "육아" && (act.targetSubTab === "diary" || String(act.action || "").includes("일기"))) {
+      setBabySubTab("diary");
+      setDiaryChildFilter("all");
+      setDiarySearchQuery("");
+      if (act.targetChildId && ["시목", "시율"].includes(act.targetChildId)) {
+        setSelectedChildId(act.targetChildId);
+      }
+      if (act.targetId) {
+        setHighlightedDiaryId(act.targetId);
+        setTimeout(() => {
+          document.getElementById(`diary-entry-${act.targetId}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+        }, 220);
+        setTimeout(() => setHighlightedDiaryId(""), 3500);
+      }
+    }
   };
 
   const saveAccessConfigToCloud = async (cfg = {}) => {
@@ -9332,6 +9385,24 @@ ${validText}
     }
   };
 
+  const compressDiaryPhotoToBudget = async (file, maxChars = 650000) => {
+    const presets = [
+      { maxSide: 800, quality: 0.7 },
+      { maxSide: 640, quality: 0.58 },
+      { maxSide: 480, quality: 0.48 },
+      { maxSide: 360, quality: 0.4 }
+    ];
+    let bestUrl = "";
+    for (const p of presets) {
+      const { previewUrl, base64, mimeType } = await fileToBase64(file, p);
+      const dataUrl = previewUrl || (base64 ? `data:${mimeType || "image/jpeg"};base64,${base64}` : "");
+      if (!dataUrl) continue;
+      bestUrl = dataUrl;
+      if (dataUrl.length <= maxChars) return dataUrl;
+    }
+    return bestUrl;
+  };
+
   const handleSaveBabyDiary = async () => {
     if (!isAdminUnlocked) {
       showToast("🔒 육아일기는 관리자만 작성·열람할 수 있습니다.");
@@ -9356,8 +9427,15 @@ ${validText}
         : [selectedChildId];
     const primaryChildLabel = targetChildIds.length >= 2 ? "시목·시율" : targetChildIds[0];
     const id = editingDiaryEntry ? editingDiaryEntry.id : `bd-${Date.now()}`;
+    const existingDataLen = formPhotos
+      .filter((p) => !p?.file && p?.url && String(p.url).startsWith("data:"))
+      .reduce((acc, p) => acc + String(p.url).length, 0);
+    const newFilesCount = Math.max(1, formPhotos.filter((p) => p?.file).length);
+    const perPhotoBudget = Math.max(90000, Math.floor((720000 - existingDataLen) / newFilesCount));
+    setDiarySaveWarning("");
     beginWrite();
     let ok = false;
+    let storageWarnReason = "";
     try {
       const finalUrls = [];
       let usedFallbackCompress = false;
@@ -9369,18 +9447,23 @@ ${validText}
             try {
               const safeName = String(pItem.file.name || "photo.jpg").replace(/[^a-zA-Z0-9._-]/g, "_");
               const sRef = storageRef(storage, `artifacts/${APP_ID}/baby_diary/${primaryChildLabel}/${id}_${idx}_${safeName}`);
-              await uploadBytes(sRef, pItem.file, {
-                contentType: pItem.file.type || "image/jpeg"
-              });
+              await Promise.race([
+                uploadBytes(sRef, pItem.file, {
+                  contentType: pItem.file.type || "image/jpeg"
+                }),
+                new Promise((_, reject) => setTimeout(() => reject(new Error("Storage 응답 시간 초과(8초)")), 8000))
+              ]);
               uploadedUrl = await getDownloadURL(sRef);
             } catch (storageErr) {
-              const { previewUrl, base64, mimeType } = await fileToBase64(pItem.file, { maxSide: 900, quality: 0.72 });
-              uploadedUrl = previewUrl || (base64 ? `data:${mimeType || "image/jpeg"};base64,${base64}` : "");
+              storageWarnReason = storageErr?.code
+                ? `${storageErr.code}: ${storageErr.message || ""}`
+                : (storageErr?.message || "Storage 연결/권한 오류");
+              uploadedUrl = await compressDiaryPhotoToBudget(pItem.file, perPhotoBudget);
               usedFallbackCompress = true;
             }
           } else {
-            const { previewUrl, base64, mimeType } = await fileToBase64(pItem.file, { maxSide: 900, quality: 0.72 });
-            uploadedUrl = previewUrl || (base64 ? `data:${mimeType || "image/jpeg"};base64,${base64}` : "");
+            storageWarnReason = "Firebase Storage 미초기화";
+            uploadedUrl = await compressDiaryPhotoToBudget(pItem.file, perPhotoBudget);
             usedFallbackCompress = true;
           }
           if (uploadedUrl) finalUrls.push(uploadedUrl);
@@ -9396,7 +9479,7 @@ ${validText}
         mood: diaryForm.mood || "😊 행복",
         title: (diaryForm.title || "").trim(),
         content: (diaryForm.content || "").trim(),
-        photoUrl: finalUrls[0] || "",
+        photoUrl: finalUrls[0] && String(finalUrls[0]).startsWith("http") ? finalUrls[0] : "",
         photoUrls: finalUrls,
         author: actorName || "관리자",
         createdAtMs: editingDiaryEntry?.createdAtMs || Date.now(),
@@ -9414,15 +9497,25 @@ ${validText}
         photos: [],
         childIds: [selectedChildId]
       });
-      recordActivity("육아", editingDiaryEntry ? "일기수정" : "일기등록", `${primaryChildLabel} · ${payload.date}`);
+      if (storageWarnReason) {
+        setDiarySaveWarning(`⚠️ Storage 원본 업로드 실패(${storageWarnReason}) → 자동 압축으로 저장되었습니다.`);
+      }
+      recordActivity("육아", editingDiaryEntry ? "일기수정" : "일기등록", `${primaryChildLabel} · ${payload.date}`, {
+        targetSubTab: "diary",
+        targetId: id,
+        targetChildId: targetChildIds[0] || selectedChildId
+      });
       showToast(
         usedFallbackCompress
-          ? "📖 저장 완료! (Firebase Storage 미활성화 상태라 고화질 압축 저장됨)"
+          ? `⚠️ Storage 실패(${storageWarnReason}) → 사진 ${finalUrls.length}장 압축 저장됨`
           : `📖 ${primaryChildLabel} 육아일기(사진 ${finalUrls.length}장)가 저장되었습니다!`
       );
       ok = true;
     } catch (e) {
-      showToast("⚠️ 육아일기 저장 실패: 네트워크 또는 Storage 권한을 확인해 주세요.");
+      const errDetail = e?.code ? `[${e.code}] ${e.message || ""}` : (e?.message || "용량 또는 네트워크 오류");
+      setDiarySaveWarning(`❌ 육아일기 저장 실패 원인: ${errDetail}`);
+      setSyncErrorMsg(`육아일기 저장 실패: ${errDetail}`);
+      showToast(`❌ 육아일기 저장 실패: ${errDetail}`);
     } finally {
       endWrite(ok);
     }
@@ -10963,6 +11056,22 @@ ${validText}
           </>
         )}
       </header>
+
+      {syncErrorMsg && (
+        <div className="mx-3 mt-2 px-3 py-2 rounded-2xl bg-rose-50 border border-rose-300 text-rose-900 flex items-start justify-between gap-2 shadow-sm">
+          <div className="text-[11px] font-bold leading-snug break-all">
+            <span className="font-black mr-1">⚠️ 오류 발생:</span>
+            <span>{syncErrorMsg}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setSyncErrorMsg("")}
+            className="text-rose-500 hover:text-rose-800 text-xs font-black shrink-0"
+          >
+            ✕
+          </button>
+        </div>
+      )}
 
       {isInitialLoading && (
         <div className="mx-3 mt-2">
@@ -17175,6 +17284,18 @@ ${validText}
                       >
                         💾 {editingDiaryEntry ? "일기 수정 저장" : "육아일기 저장하기"}
                       </button>
+                      {diarySaveWarning && (
+                        <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-[11px] font-bold text-rose-900 flex items-start justify-between gap-2">
+                          <span className="break-all leading-snug">{diarySaveWarning}</span>
+                          <button
+                            type="button"
+                            onClick={() => setDiarySaveWarning("")}
+                            className="text-rose-500 font-black shrink-0"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      )}
                     </div>
 
                     {Array.isArray(diaryForm.photos) && diaryForm.photos.length > 0 && (
@@ -17322,7 +17443,12 @@ ${validText}
                                 </div>
                               )}
                           <div
-                            className="bg-[#FAF8F3] border border-[#C9D8CC] rounded-2xl p-3.5 shadow-sm space-y-2"
+                            id={`diary-entry-${entry.id}`}
+                            className={`bg-[#FAF8F3] border rounded-2xl p-3.5 shadow-sm space-y-2 transition ${
+                              highlightedDiaryId === entry.id
+                                ? "border-amber-500 ring-2 ring-amber-400 bg-amber-50/40"
+                                : "border-[#C9D8CC]"
+                            }`}
                           >
                             <div className="flex items-center justify-between gap-2">
                               <div className="flex items-center gap-1.5 flex-wrap">
@@ -20333,6 +20459,13 @@ ${validText}
             </button>
             <button
               type="button"
+              onClick={() => handleNavigateFromActivity(liveActivityPopup)}
+              className="px-2.5 py-1 rounded-lg bg-[#5E7A65] text-white text-[10px] font-extrabold"
+            >
+              바로 보기
+            </button>
+            <button
+              type="button"
               onClick={() => {
                 const nowMs = Date.now();
                 setLastSeenActivityMs(nowMs);
@@ -20340,9 +20473,9 @@ ${validText}
                 setLiveActivityPopup(null);
                 setIsActivityModalOpen(true);
               }}
-              className="px-2.5 py-1 rounded-lg bg-[#5E7A65] text-white text-[10px] font-extrabold"
+              className="px-2.5 py-1 rounded-lg bg-stone-800 text-white text-[10px] font-extrabold"
             >
-              내역 보기
+              내역
             </button>
           </div>
         </div>
@@ -20835,7 +20968,8 @@ ${validText}
                   .map((act) => (
                     <div
                       key={act.id}
-                      className="p-2.5 rounded-2xl bg-stone-50 border border-stone-200 flex items-start justify-between gap-2"
+                      onClick={() => handleNavigateFromActivity(act)}
+                      className="p-2.5 rounded-2xl bg-stone-50 hover:bg-stone-100 border border-stone-200 flex items-start justify-between gap-2 cursor-pointer transition"
                     >
                       <div className="min-w-0 space-y-0.5">
                         <div className="flex items-center gap-1.5 flex-wrap">
@@ -20896,9 +21030,9 @@ ${validText}
                           return (
                             <button
                               type="button"
-                              onClick={() => {
-                                setIsActivityModalOpen(false);
-                                setActiveTab(targetT);
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleNavigateFromActivity(act);
                               }}
                               className="px-1.5 py-0.5 rounded bg-white border border-stone-200 text-[9px] font-extrabold text-sky-700 hover:bg-sky-50"
                             >
