@@ -1212,7 +1212,7 @@ const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.65) =>
     img.src = dataUrl;
   });
 
-const APP_CODE_VERSION = "v11.63";
+const APP_CODE_VERSION = "v11.65";
 
 const formatRoutineTimeLabel = (hhmm) => {
   const m = String(hhmm || "").trim().match(/^(\d{2}):(\d{2})$/);
@@ -1290,6 +1290,26 @@ const formatTime12Ko = (ms) => {
 };
 
 const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v11.65",
+    version: "v11.65",
+    date: "2026-11-18",
+    title: "냉장고 항목 하단 액션 버튼(반만·다먹음·+장보기·폐기) 1줄 슬림 정렬",
+    changes: [
+      "냉장고 리스트 뷰: [🌗 반만], [다먹음], [+장보기], [🗑️ 폐기] 버튼과 수정·삭제 아이콘이 모바일에서도 2줄로 넘치지 않고 1줄에 깔끔하게 들어가도록 간격·라벨 슬림화"
+    ]
+  },
+  {
+    id: "patch-v11.64",
+    version: "v11.64",
+    date: "2026-11-18",
+    title: "시율 케어 현황 테두리 통일·오늘 요약 추가 · 냉장고 냉장실 줄바꿈 교정 & 임박 필터 버그 수정",
+    changes: [
+      "시율 케어 현황 시각화: 마지막 기저귀·수유·수면 3칸 카드의 제각각이던 상단 색상 테두리를 차분한 통일 테두리(#FAF8F3)로 정돈하고 라벨 옆 작은 색상 점과 오늘 요약(수유·기저귀 횟수) 추가",
+      "냉장고 줄바꿈 교정: 상단 3칸 구역 카드의 ❄️ 냉장실 / 🧊 냉동실 / 🧺 실온 라벨과 임박 배지가 좁은 화면에서도 두 줄로 꺾이지 않도록 whitespace-nowrap 적용",
+      "냉장고 임박 필터 수정 및 편의성 개선: 리스트 뷰에서 [⏰ 임박만] 필터가 실제로 반영되도록 수정하고, 필터 초기화·결과 건수 표시 바 추가"
+    ]
+  },
   {
     id: "patch-v11.63",
     version: "v11.63",
@@ -12336,18 +12356,24 @@ ${validText}
                 </div>
               </div>
               <div className="grid grid-cols-3 gap-1.5 text-center">
-                <div className="bg-white rounded-xl py-1.5 px-1 border border-stone-200/80 border-t-2 border-t-amber-600">
-                  <div className="text-[10.5px] font-bold text-stone-400">마지막 기저귀</div>
-                  <div className="text-[11px] font-black text-amber-800 mt-0.5 whitespace-nowrap">
+                <div className="bg-[#FAF8F3] rounded-xl py-2 px-1 border border-stone-200/80">
+                  <div className="text-[10.5px] font-bold text-stone-500 flex items-center justify-center gap-1 whitespace-nowrap">
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-600 shrink-0" />
+                    <span>마지막 기저귀</span>
+                  </div>
+                  <div className="text-[11.5px] font-black text-amber-800 mt-0.5 whitespace-nowrap">
                     {sum.lastDiaper ? formatElapsedKo(nowMs - sum.lastDiaper.startMs) : "-"}
                   </div>
-                  <div className="text-[10.5px] font-bold text-stone-500">
+                  <div className="text-[10.5px] font-bold text-stone-500 whitespace-nowrap">
                     {sum.lastDiaper?.subType || "기록없음"}
                   </div>
                 </div>
-                <div className="bg-white rounded-xl py-1.5 px-1 border border-stone-200/80 border-t-2 border-t-rose-500">
-                  <div className="text-[10.5px] font-bold text-stone-400">마지막 수유</div>
-                  <div className={`text-[11px] font-black mt-0.5 whitespace-nowrap ${feedMeta ? feedMeta.text : "text-stone-800"}`}>
+                <div className="bg-[#FAF8F3] rounded-xl py-2 px-1 border border-stone-200/80">
+                  <div className="text-[10.5px] font-bold text-stone-500 flex items-center justify-center gap-1 whitespace-nowrap">
+                    <span className="w-1.5 h-1.5 rounded-full bg-rose-500 shrink-0" />
+                    <span>마지막 수유</span>
+                  </div>
+                  <div className={`text-[11.5px] font-black mt-0.5 whitespace-nowrap ${feedMeta ? feedMeta.text : "text-stone-800"}`}>
                     {sum.lastFeed ? `${feedMeta?.emoji || ""} ${formatElapsedKo(nowMs - sum.lastFeed.startMs)}` : "-"}
                   </div>
                   {(() => {
@@ -12361,16 +12387,35 @@ ${validText}
                     );
                   })()}
                 </div>
-                <div className="bg-white rounded-xl py-1.5 px-1 border border-stone-200/80 border-t-2 border-t-indigo-500">
-                  <div className="text-[10.5px] font-bold text-stone-400">마지막 수면</div>
-                  <div className="text-[11px] font-black text-indigo-700 mt-0.5 whitespace-nowrap">
+                <div className="bg-[#FAF8F3] rounded-xl py-2 px-1 border border-stone-200/80">
+                  <div className="text-[10.5px] font-bold text-stone-500 flex items-center justify-center gap-1 whitespace-nowrap">
+                    <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 shrink-0" />
+                    <span>마지막 수면</span>
+                  </div>
+                  <div className="text-[11.5px] font-black text-indigo-700 mt-0.5 whitespace-nowrap">
                     {sum.lastSleep ? formatElapsedKo(nowMs - sum.lastSleep.startMs) : "-"}
                   </div>
-                  <div className="text-[10.5px] font-bold text-stone-500">
+                  <div className="text-[10.5px] font-bold text-stone-500 whitespace-nowrap">
                     {sum.lastSleep?.subType || "기록없음"}
                   </div>
                 </div>
               </div>
+              {(() => {
+                const todayKey = getTodayStr();
+                const todayActs = sum.list.filter((a) => a.date === todayKey);
+                const fCount = todayActs.filter((a) => ["모유", "분유", "유축수유"].includes(a.type)).length;
+                const fMl = todayActs.filter((a) => a.type === "분유" || a.type === "유축수유").reduce((s, a) => s + (Number(a.amountMl) || 0), 0);
+                const bMin = todayActs.filter((a) => a.type === "모유").reduce((s, a) => s + (Number(a.durationMin) || 0), 0);
+                const dCount = todayActs.filter((a) => a.type === "기저귀").length;
+                return (
+                  <div className="flex items-center justify-between gap-1.5 px-2.5 py-1 rounded-xl bg-[#EEF3EE]/70 border border-[#C9D8CC]/80 text-[10.5px] font-extrabold text-[#35503C]">
+                    <span className="whitespace-nowrap">📅 오늘 요약</span>
+                    <span className="truncate">
+                      수유 {fCount}회{fMl > 0 || bMin > 0 ? ` (${fMl > 0 ? `${fMl}ml` : ""}${fMl > 0 && bMin > 0 ? "+" : ""}${bMin > 0 ? `${bMin}분` : ""})` : ""} · 기저귀 {dCount}회
+                    </span>
+                  </div>
+                );
+              })()}
               <div className="grid grid-cols-5 gap-1 pt-0.5">
                 {homeQuickIds.map((qId) => {
                   const tm = BABY_ACTIVITY_TYPES.find((t) => t.id === qId);
@@ -16054,10 +16099,10 @@ ${validText}
                       isSel ? "bg-stone-900 text-white border-stone-900 shadow-sm" : "bg-white text-stone-800 border-stone-200 hover:bg-stone-50"
                     }`}
                   >
-                    <div className="flex items-center justify-between text-[11.5px] font-extrabold">
-                      <span>{zone.icon} {zone.key.replace("·팬트리", "")}</span>
+                    <div className="flex items-center justify-between gap-1 text-[11.5px] font-extrabold">
+                      <span className="whitespace-nowrap shrink-0">{zone.icon} {zone.key.replace("·팬트리", "")}</span>
                       {zExp > 0 && (
-                        <span className={`px-1.5 py-0.2 rounded-full text-[10.5px] font-black ${isSel ? "bg-amber-400 text-stone-900" : "bg-orange-100 text-orange-800"}`}>
+                        <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-black whitespace-nowrap shrink-0 ${isSel ? "bg-amber-400 text-stone-900" : "bg-orange-100 text-orange-800"}`}>
                           임박 {zExp}
                         </span>
                       )}
@@ -16518,12 +16563,40 @@ ${validText}
             );
           })() : (
             <div className="space-y-2">
+              {(visualExpiringOnly || fridgeLocFilter !== "전체" || fridgeCatFilter !== "전체" || debouncedFridgeSearch.trim()) && (
+                <div className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-xl bg-stone-100 text-[11.5px] font-bold text-stone-600">
+                  <span className="truncate">
+                    필터 적용 중 ({fridge.filter((i) => {
+                      const qFridge = debouncedFridgeSearch.trim().toLowerCase();
+                      return (
+                        matchesFridgeLocFilter(i.location, fridgeLocFilter) &&
+                        (fridgeCatFilter === "전체" || i.category === fridgeCatFilter) &&
+                        (!visualExpiringOnly || getDaysDiff(i.expiryDate) <= 3) &&
+                        (!qFridge || String(i.name || "").toLowerCase().includes(qFridge) || String(i.category || "").toLowerCase().includes(qFridge))
+                      );
+                    }).length}개)
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFridgeLocFilter("전체");
+                      setFridgeCatFilter("전체");
+                      setVisualExpiringOnly(false);
+                      setFridgeSearch("");
+                    }}
+                    className="text-emerald-700 font-extrabold whitespace-nowrap shrink-0 hover:underline"
+                  >
+                    전체 초기화
+                  </button>
+                </div>
+              )}
               {fridge
                 .filter((i) => {
                   const qFridge = debouncedFridgeSearch.trim().toLowerCase();
                   return (
                     matchesFridgeLocFilter(i.location, fridgeLocFilter) &&
                     (fridgeCatFilter === "전체" || i.category === fridgeCatFilter) &&
+                    (!visualExpiringOnly || getDaysDiff(i.expiryDate) <= 3) &&
                     (!qFridge || String(i.name || "").toLowerCase().includes(qFridge) || String(i.category || "").toLowerCase().includes(qFridge))
                   );
                 })
@@ -16600,36 +16673,36 @@ ${validText}
                       </div>
 
                       <div className="flex items-center justify-between pt-1.5 border-t border-stone-100 gap-1">
-                        <div className="flex items-center gap-1 flex-wrap">
+                        <div className="flex items-center gap-1 flex-nowrap min-w-0 overflow-x-auto">
                           <button
                             onClick={() => handleHalfEatFridgeItem(item)}
-                            className="px-2 py-1 rounded-lg bg-[#EEF3EE] hover:bg-[#DFE9E0] text-[#35503C] border border-[#C9D8CC] text-[11px] px-1.5 font-extrabold whitespace-nowrap"
+                            className="px-1.5 py-1 rounded-lg bg-[#EEF3EE] hover:bg-[#DFE9E0] text-[#35503C] border border-[#C9D8CC] text-[10.5px] font-extrabold whitespace-nowrap shrink-0"
                             title="수량 0.5(또는 절반) 차감"
                           >
-                            🌗 반만먹음
+                            🌗 반만
                           </button>
                           <button
                             onClick={() => handleConsumeFridgeItem(item, false)}
-                            className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] px-1.5 font-extrabold flex items-center gap-1 whitespace-nowrap"
+                            className="px-1.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[10.5px] font-extrabold flex items-center gap-0.5 whitespace-nowrap shrink-0"
                           >
-                            <Check className="w-3 h-3 shrink-0" /> 다 먹음
+                            <Check className="w-3 h-3 shrink-0" /> 다먹음
                           </button>
                           <button
                             onClick={() => handleConsumeFridgeItem(item, true)}
-                            className="px-2 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 text-[11px] px-1.5 font-extrabold whitespace-nowrap"
+                            className="px-1.5 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 text-[10.5px] font-extrabold whitespace-nowrap shrink-0"
                           >
-                            + 장보기
+                            +장보기
                           </button>
                           <button
                             onClick={() => handleWasteFridgeItem(item)}
-                            className="px-2 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-800 border border-rose-200 text-[11px] px-1.5 font-extrabold whitespace-nowrap"
+                            className="px-1.5 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-800 border border-rose-200 text-[10.5px] font-extrabold whitespace-nowrap shrink-0"
                             title="폐기 처리 및 손실 기록"
                           >
-                            🗑️ 폐기
+                            🗑️폐기
                           </button>
                         </div>
 
-                        <div className="flex items-center gap-1">
+                        <div className="flex items-center gap-0.5 shrink-0">
                           <button
                             onClick={() => {
                               setEditingFridge(item);
