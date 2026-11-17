@@ -1116,11 +1116,32 @@ const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.65) =>
     img.src = dataUrl;
   });
 
-const APP_CODE_VERSION = "v10.88";
-const APP_BUILD_DATE = "2026-11-17 10:38";
+const APP_CODE_VERSION = "v10.90";
+const APP_BUILD_DATE = "2026-11-17 10:52";
 const EDITOR_INVITE_CODE = "0402";
 
 const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v10.90",
+    version: "v10.90",
+    date: "2026-11-17",
+    title: "식단 고정 인원 바 틀고정(Header Pin) 겹침 방지 & 인별 하루 보기 [오늘] 버튼 추가",
+    changes: [
+      "상단 헤더 틀고정(isHeaderPinned) 상태에서도 식단 인원 전환 바가 헤더 아래에 가려지지 않도록 sticky top 위치 자동 조정",
+      "인별 하루 집중 보기 바에 [< 이전날 | 오늘 | 다음날 >] 1탭 오늘 복귀 버튼 추가"
+    ]
+  },
+  {
+    id: "patch-v10.89",
+    version: "v10.89",
+    date: "2026-11-17",
+    title: "통합 식단: 인별 선택 시 1일 집중 보기 · 상단 고정(Sticky) 빠른 인원 전환 · 끼니수 제거 슬림화",
+    changes: [
+      "식단 탭의 가족 인원 선택 바를 스크롤 시에도 따라오는 상단 고정(sticky) 1줄 칩 바(전체·수혁·아리나·시목·시율)로 개편하고 불필요한 [N끼] 텍스트를 제거해 공간 확보",
+      "특정 구성원(예: 시목·아리나) 선택 시 7일 전체 대신 해당 날짜(오늘/조회일) 하루 6끼가 한눈에 들어오도록 1일 집중 뷰 + [< 이전날 | 오늘 | 다음날 >] 이동 지원",
+      "전체 선택 시에는 기존과 동일하게 조회일 ±3일(7일) 주간 식단 피드 유지"
+    ]
+  },
   {
     id: "patch-v10.88",
     version: "v10.88",
@@ -10078,11 +10099,23 @@ ${validText}
               </button>
             </div>
 
-            <div className="grid grid-cols-4 gap-1.5">
+          </div>
+
+          {/* 상단 고정(Sticky) 1줄 인원 빠른 전환 바 (끼니수 제거로 슬림화) */}
+          <div className={`sticky z-20 bg-white/95 backdrop-blur border border-stone-200 rounded-2xl px-2 py-1.5 shadow-sm space-y-1.5 ${isHeaderPinned ? "top-[82px]" : "top-1"}`}>
+            <div className="flex items-center gap-1 overflow-x-auto">
+              <button
+                type="button"
+                onClick={() => setSelectedMember("전체")}
+                className={`px-2.5 py-1.5 rounded-xl text-[11px] font-extrabold border whitespace-nowrap shrink-0 transition ${
+                  selectedMember === "전체"
+                    ? "bg-stone-900 text-white border-stone-900"
+                    : "bg-stone-50 text-stone-600 border-stone-200"
+                }`}
+              >
+                👨‍👩‍👧‍👦 전체(±3일)
+              </button>
               {FAMILY_MEMBERS.map((mem) => {
-                const cnt = meals.filter(
-                  (m) => weekDates.includes(m.date) && toSafeArray(m.members).includes(mem.id)
-                ).length;
                 const isSel = selectedMember === mem.id;
                 return (
                   <button
@@ -10090,45 +10123,79 @@ ${validText}
                     type="button"
                     onClick={() => {
                       const today = getTodayStr();
-                      setSelectedMember(isSel ? "전체" : mem.id);
-                      setSelectedDate(today);
-                      setCurrentMonth(today.slice(0, 7));
-                      setTimeout(() => {
-                        document.getElementById(`weekly-day-${today}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
-                      }, 120);
+                      if (isSel) {
+                        setSelectedMember("전체");
+                      } else {
+                        setSelectedMember(mem.id);
+                        setSelectedDate(today);
+                        setCurrentMonth(today.slice(0, 7));
+                        setTimeout(() => {
+                          document.getElementById(`weekly-day-${today}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+                        }, 80);
+                      }
                     }}
-                    className={`p-2 rounded-xl border text-center transition ${
+                    className={`px-2.5 py-1.5 rounded-xl text-[11px] font-extrabold border whitespace-nowrap shrink-0 inline-flex items-center gap-1 transition ${
                       isSel
                         ? "bg-stone-900 text-white border-stone-900"
-                        : "bg-stone-50 border-stone-200 text-stone-800"
+                        : "bg-stone-50 text-stone-700 border-stone-200"
                     }`}
                   >
-                    <div className="flex justify-center mb-0.5"><MemberAvatar member={mem} size="md" /></div>
-                    <div className="text-[11px] font-extrabold mt-0.5 whitespace-nowrap">{mem.name}</div>
-                    <div className="text-[10px] opacity-75">{cnt}끼</div>
+                    <MemberAvatar member={mem} size="sm" />
+                    <span>{mem.id}</span>
                   </button>
                 );
               })}
             </div>
+
             {selectedMember !== "전체" && (
-              <div className="flex items-center justify-between bg-stone-50 border border-stone-200 rounded-xl px-2.5 py-1">
-                <span className="text-[11px] font-bold text-stone-700">
-                  👤 {selectedMember} 식단만 표시 중
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setSelectedMember("전체")}
-                  className="text-[10px] font-extrabold text-stone-900 underline"
-                >
-                  전체 보기
-                </button>
+              <div className="flex items-center justify-between gap-1.5 px-1 text-[10px] font-extrabold text-stone-600">
+                <span>👤 {selectedMember} 하루 식단 집중 보기</span>
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const d = new Date(selectedDate + "T00:00:00");
+                      d.setDate(d.getDate() - 1);
+                      const nextStr = formatDate(d);
+                      setSelectedDate(nextStr);
+                      setCurrentMonth(nextStr.slice(0, 7));
+                    }}
+                    className="px-2 py-0.5 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700"
+                  >
+                    &lt; 이전날
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const today = getTodayStr();
+                      setSelectedDate(today);
+                      setCurrentMonth(today.slice(0, 7));
+                    }}
+                    className="px-2 py-0.5 rounded-lg bg-stone-900 text-white"
+                  >
+                    오늘
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const d = new Date(selectedDate + "T00:00:00");
+                      d.setDate(d.getDate() + 1);
+                      const nextStr = formatDate(d);
+                      setSelectedDate(nextStr);
+                      setCurrentMonth(nextStr.slice(0, 7));
+                    }}
+                    className="px-2 py-0.5 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700"
+                  >
+                    다음날 &gt;
+                  </button>
+                </div>
               </div>
             )}
           </div>
 
           <div className="bg-white rounded-2xl border border-stone-200 overflow-hidden shadow-sm">
             <div className="divide-y divide-stone-200">
-              {weekDates.map((d) => {
+              {(selectedMember === "전체" ? weekDates : [selectedDate]).map((d) => {
                 const dayMeals = meals.filter(
                   (m) =>
                     m.date === d &&
