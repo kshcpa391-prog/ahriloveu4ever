@@ -1172,8 +1172,8 @@ const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.65) =>
     img.src = dataUrl;
   });
 
-const APP_CODE_VERSION = "v11.09";
-const APP_BUILD_DATE = "2026-11-17 15:12";
+const APP_CODE_VERSION = "v11.10";
+const APP_BUILD_DATE = "2026-11-17 15:15";
 const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1200,6 +1200,15 @@ const HELPER_CONFIGURABLE_TABS = [
 ];
 
 const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v11.10",
+    version: "v11.10",
+    date: "2026-11-17",
+    title: "화면 복구 오류(Cannot access 'uu' before initialization) 근본 수정",
+    changes: [
+      "visibleRecentActivities(useMemo)가 canViewTab 함수 선언보다 위에서 먼저 실행되던 선언 순서(TDZ) 오류를 바로잡아 초기화 충돌 해결"
+    ]
+  },
   {
     id: "patch-v11.09",
     version: "v11.09",
@@ -3618,25 +3627,6 @@ function MainApp() {
   const lastPopupActIdRef = useRef("");
   const activityPopupTimerRef = useRef(null);
   const [actorNameDraft, setActorNameDraft] = useState("");
-  const ACTIVITY_CAT_TAB_MAP = {
-    "식단": "daily",
-    "냉장고": "fridge",
-    "일정": "schedule",
-    "할일": "schedule",
-    "루틴": "schedule",
-    "육아": "baby",
-    "장보기": "shopping",
-    "공지": "notices",
-    "레시피": "recipes"
-  };
-  const visibleRecentActivities = useMemo(() => {
-    if (isAdminUnlocked) return recentActivities;
-    if (accessRole === "guest") return [];
-    return recentActivities.filter((a) => {
-      const tab = ACTIVITY_CAT_TAB_MAP[a.category];
-      return !tab || canViewTab(tab);
-    });
-  }, [recentActivities, isAdminUnlocked, accessRole, helperAllowedTabs, guestAllowedTabs]);
   const [patchForm, setPatchForm] = useState({
     version: "",
     title: "",
@@ -4473,6 +4463,27 @@ function MainApp() {
     if (isHelperUnlocked) return tabId === "home" ? true : helperEditTabs.includes(tabId);
     return false;
   };
+
+  const ACTIVITY_CAT_TAB_MAP = {
+    "식단": "daily",
+    "냉장고": "fridge",
+    "일정": "schedule",
+    "할일": "schedule",
+    "루틴": "schedule",
+    "육아": "baby",
+    "장보기": "shopping",
+    "공지": "notices",
+    "레시피": "recipes"
+  };
+  const visibleRecentActivities = useMemo(() => {
+    if (isAdminUnlocked) return recentActivities;
+    if (accessRole === "guest") return [];
+    return recentActivities.filter((a) => {
+      const tab = ACTIVITY_CAT_TAB_MAP[a.category];
+      return !tab || canViewTab(tab);
+    });
+  }, [recentActivities, isAdminUnlocked, accessRole, helperAllowedTabs, guestAllowedTabs]);
+
 
   const requireEditorAccess = (targetTab = activeTab) => {
     if (canEditTab(targetTab)) return true;
