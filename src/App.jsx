@@ -1203,8 +1203,8 @@ const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.65) =>
     img.src = dataUrl;
   });
 
-const APP_CODE_VERSION = "v11.18";
-const APP_BUILD_DATE = "2026-11-17 16:05";
+const APP_CODE_VERSION = "v11.20";
+const APP_BUILD_DATE = "2026-11-17 16:18";
 const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1231,6 +1231,28 @@ const HELPER_CONFIGURABLE_TABS = [
 ];
 
 const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v11.20",
+    version: "v11.20",
+    date: "2026-11-17",
+    title: "육아일기 전체 모아보기 필터 · [📄 텍스트 복사] 도입 · 전체 코드 최종 무결성 검증",
+    changes: [
+      "육아일기 검색창 아래에 [전체 | 시목 | 시율] 필터 칩을 추가해 두 아이 일기를 한 타임라인으로 모아볼 수 있도록 개선",
+      "각 육아일기 카드에 [📄 복사] 버튼을 추가해 날짜·월령·제목·내용을 카톡/블로그용 텍스트로 1탭 복사 가능",
+      "전체 코드(21,200+행) TDZ·JSX·JS 구문·중복 상태 최종 검증 완료"
+    ]
+  },
+  {
+    id: "patch-v11.19",
+    version: "v11.19",
+    date: "2026-11-17",
+    title: "육아일기 버튼 줄바꿈 수정 · 홈 날씨 잘림 해소(2줄 전체표시) · 동시대상 안내 및 글자수 표시",
+    changes: [
+      "육아일기 작성 하단 버튼(사진첨부·기록불러오기·AI다듬기·일기저장)이 세로로 찌그러지던 줄바꿈을 2단 레이아웃으로 깔끔하게 수정",
+      "홈 화면 날씨 바의 말줄임(truncate)을 제거하고 기온·비 예보·미세·초미세먼지 핵심 정보가 잘리지 않고 모두 보이도록 2줄 구성으로 개선",
+      "[시목·시율 함께] 선택 시 입력 안내 문구 자동 연동 및 일기 본문 글자 수 카운터 추가"
+    ]
+  },
   {
     id: "patch-v11.18",
     version: "v11.18",
@@ -3713,6 +3735,7 @@ function MainApp() {
   const [diaryExportPreviewUrl, setDiaryExportPreviewUrl] = useState("");
   const [diaryExportFilename, setDiaryExportFilename] = useState("육아일기.png");
   const [diarySearchQuery, setDiarySearchQuery] = useState("");
+  const [diaryChildFilter, setDiaryChildFilter] = useState("all");
   const [diaryLightboxUrl, setDiaryLightboxUrl] = useState("");
   const [isWeatherModalOpen, setIsWeatherModalOpen] = useState(false);
   const weatherLastFetchedMsRef = useRef(0);
@@ -10712,11 +10735,23 @@ ${validText}
               }`}
               title="클릭하여 오늘 시간대별·주간 상세 날씨 보기"
             >
-              <span className="text-[11px] font-bold truncate">
-                {weatherInfo
-                  ? `${weatherInfo.emoji} ${weatherInfo.temp}°C (${weatherInfo.min}°/${weatherInfo.max}°) · ${weatherInfo.rainBarText || "☔ 0%"} · 미세 ${weatherInfo.pm10}(${weatherInfo.dust?.label || "-"})`
-                  : "🌤️ 서울 중구 날씨 불러오는 중..."}
-              </span>
+              <div className="min-w-0 flex-1 space-y-0.5">
+                {weatherInfo ? (
+                  <>
+                    <div className="text-[11px] font-black leading-snug break-keep">
+                      {weatherInfo.emoji} {weatherInfo.temp}°C ({weatherInfo.min}°/{weatherInfo.max}°) ·{" "}
+                      <span className={weatherInfo.hasUpcomingRain ? "text-sky-700" : "text-stone-700"}>
+                        {weatherInfo.rainBarText || "☔ 0%"}
+                      </span>
+                    </div>
+                    <div className="text-[10px] font-bold opacity-85 leading-snug">
+                      미세 {weatherInfo.pm10}({weatherInfo.dust?.label || "-"}) · 초미세 {weatherInfo.pm25}
+                    </div>
+                  </>
+                ) : (
+                  <span className="text-[11px] font-bold">🌤️ 서울 중구 날씨 불러오는 중...</span>
+                )}
+              </div>
               <div className="flex items-center gap-1 shrink-0">
                 <span className="text-[10px] font-extrabold opacity-60">상세 &gt;</span>
                 <button
@@ -16094,7 +16129,7 @@ ${validText}
                 <button
                   key={st.id}
                   onClick={() => setBabySubTab(st.id)}
-                  className={`py-2 rounded-xl text-[11px] font-extrabold transition ${
+                  className={`py-2 px-1 rounded-xl text-[11px] font-extrabold whitespace-nowrap transition ${
                     babySubTab === st.id
                       ? "bg-white text-stone-900 shadow-sm"
                       : "text-stone-600"
@@ -16607,15 +16642,24 @@ ${validText}
                       onChange={(e) => setDiaryForm((p) => ({ ...p, title: e.target.value }))}
                       className="w-full px-3 py-2 rounded-xl border border-stone-200 text-xs font-bold"
                     />
-                    <textarea
-                      rows={4}
-                      placeholder={`${activeChild.name}의 오늘 기록을 자유롭게 남겨보세요...`}
-                      value={diaryForm.content}
-                      onChange={(e) => setDiaryForm((p) => ({ ...p, content: e.target.value }))}
-                      className="w-full px-3 py-2 rounded-xl border border-stone-200 text-xs leading-relaxed"
-                    />
+                    <div className="relative">
+                      <textarea
+                        rows={4}
+                        placeholder={`${
+                          Array.isArray(diaryForm.childIds) && diaryForm.childIds.length >= 2
+                            ? "시목·시율"
+                            : (diaryForm.childIds?.[0] || activeChild.name)
+                        }의 오늘 기록을 자유롭게 남겨보세요...`}
+                        value={diaryForm.content}
+                        onChange={(e) => setDiaryForm((p) => ({ ...p, content: e.target.value }))}
+                        className="w-full px-3 py-2 pb-6 rounded-xl border border-stone-200 text-xs leading-relaxed"
+                      />
+                      <span className="absolute right-2.5 bottom-2 text-[10px] font-bold text-stone-400">
+                        {(diaryForm.content || "").length}자
+                      </span>
+                    </div>
 
-                    <div className="flex items-center gap-2">
+                    <div className="space-y-2">
                       <input
                         ref={diaryPhotoInputRef}
                         type="file"
@@ -16624,46 +16668,39 @@ ${validText}
                         onChange={handleDiaryPhotoSelect}
                         className="hidden"
                       />
-                      <button
-                        type="button"
-                        onClick={() => diaryPhotoInputRef.current?.click()}
-                        className="px-3 py-2 rounded-xl bg-[#F3EEE4] hover:bg-stone-200 text-stone-800 text-xs font-extrabold flex items-center gap-1.5"
-                      >
-                        <Camera className="w-3.5 h-3.5" />
-                        <span>{(diaryForm.photos?.length || 0) > 0 ? `+ 사진 추가 (${diaryForm.photos.length}장)` : "사진 첨부 (여러 장 가능)"}</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={handleInsertTodayBabySummaryToDiary}
-                        className="px-2.5 py-2 rounded-xl bg-[#EEF3EE] hover:bg-[#DFE9E0] text-[#35503C] border border-[#C9D8CC] text-[11px] font-extrabold"
-                        title="선택한 날짜의 식단·성장·진료 기록을 본문에 추가"
-                      >
-                        ✨ 기록 불러오기
-                      </button>
-                      <button
-                        type="button"
-                        onClick={handlePolishBabyDiaryWithAi}
-                        disabled={isPolishingDiary}
-                        className="px-2.5 py-2 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 text-[11px] font-extrabold disabled:opacity-50"
-                        title="짧은 메모를 따뜻한 육아일기 문장으로 다듬기"
-                      >
-                        {isPolishingDiary ? "다듬는중..." : "✨ AI 다듬기"}
-                      </button>
-                      {diaryForm.photoUrl && (
+                      <div className="grid grid-cols-3 gap-1.5">
                         <button
                           type="button"
-                          onClick={() => { setPendingDiaryPhotoFile(null); setDiaryForm((p) => ({ ...p, photoUrl: "" })); }}
-                          className="px-2.5 py-2 rounded-xl bg-rose-50 text-rose-700 text-xs font-bold"
+                          onClick={() => diaryPhotoInputRef.current?.click()}
+                          className="py-2 px-1.5 rounded-xl bg-[#F3EEE4] hover:bg-stone-200 text-stone-800 text-[11px] font-extrabold flex items-center justify-center gap-1 whitespace-nowrap"
                         >
-                          사진 제거
+                          <Camera className="w-3.5 h-3.5 shrink-0" />
+                          <span>{(diaryForm.photos?.length || 0) > 0 ? `사진(${diaryForm.photos.length})` : "사진 첨부"}</span>
                         </button>
-                      )}
+                        <button
+                          type="button"
+                          onClick={handleInsertTodayBabySummaryToDiary}
+                          className="py-2 px-1.5 rounded-xl bg-[#EEF3EE] hover:bg-[#DFE9E0] text-[#35503C] border border-[#C9D8CC] text-[11px] font-extrabold whitespace-nowrap"
+                          title="선택한 날짜의 식단·성장·진료 기록을 본문에 추가"
+                        >
+                          ✨ 기록 불러오기
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handlePolishBabyDiaryWithAi}
+                          disabled={isPolishingDiary}
+                          className="py-2 px-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 text-[11px] font-extrabold whitespace-nowrap disabled:opacity-50"
+                          title="짧은 메모를 따뜻한 육아일기 문장으로 다듬기"
+                        >
+                          {isPolishingDiary ? "다듬는중..." : "✨ AI 다듬기"}
+                        </button>
+                      </div>
                       <button
                         type="button"
                         onClick={handleSaveBabyDiary}
-                        className="ml-auto px-4 py-2 rounded-xl bg-[#5E7A65] hover:bg-[#4E6855] text-white text-xs font-extrabold"
+                        className="w-full py-2.5 rounded-xl bg-[#5E7A65] hover:bg-[#4E6855] text-white text-xs font-extrabold whitespace-nowrap"
                       >
-                        💾 일기 저장
+                        💾 {editingDiaryEntry ? "일기 수정 저장" : "육아일기 저장하기"}
                       </button>
                     </div>
 
@@ -16727,31 +16764,53 @@ ${validText}
                     )}
                   </div>
 
-                  {babyDiaryEntries.filter((d) => getDiaryEntryChildIds(d).includes(activeChild.id)).length > 0 && (
-                    <div className="relative">
-                      <input
-                        type="text"
-                        value={diarySearchQuery}
-                        onChange={(e) => setDiarySearchQuery(e.target.value)}
-                        placeholder="🔍 육아일기 검색 (날짜, 제목, 내용...)"
-                        className="w-full px-3 py-2 pr-8 rounded-xl border border-stone-200 bg-white text-xs font-semibold text-stone-800"
-                      />
-                      {diarySearchQuery && (
-                        <button
-                          type="button"
-                          onClick={() => setDiarySearchQuery("")}
-                          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-700 text-xs font-black"
-                        >
-                          ✕
-                        </button>
-                      )}
+                  {babyDiaryEntries.length > 0 && (
+                    <div className="space-y-1.5">
+                      <div className="relative">
+                        <input
+                          type="text"
+                          value={diarySearchQuery}
+                          onChange={(e) => setDiarySearchQuery(e.target.value)}
+                          placeholder="🔍 육아일기 검색 (날짜, 제목, 내용...)"
+                          className="w-full px-3 py-2 pr-8 rounded-xl border border-stone-200 bg-white text-xs font-semibold text-stone-800"
+                        />
+                        {diarySearchQuery && (
+                          <button
+                            type="button"
+                            onClick={() => setDiarySearchQuery("")}
+                            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-700 text-xs font-black"
+                          >
+                            ✕
+                          </button>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1">
+                        {[
+                          { id: "all", label: `전체(${babyDiaryEntries.length})` },
+                          { id: "시목", label: "👦 시목" },
+                          { id: "시율", label: "👶 시율" }
+                        ].map((cf) => (
+                          <button
+                            key={cf.id}
+                            type="button"
+                            onClick={() => setDiaryChildFilter(cf.id)}
+                            className={`px-2.5 py-1 rounded-full text-[10px] font-extrabold border whitespace-nowrap ${
+                              diaryChildFilter === cf.id
+                                ? "bg-stone-900 text-white border-stone-900"
+                                : "bg-white text-stone-600 border-stone-200"
+                            }`}
+                          >
+                            {cf.label}
+                          </button>
+                        ))}
+                      </div>
                     </div>
                   )}
 
                   {(() => {
                     const q = diarySearchQuery.trim().toLowerCase();
                     const childDiaries = babyDiaryEntries.filter((d) => {
-                      if (!getDiaryEntryChildIds(d).includes(activeChild.id)) return false;
+                      if (diaryChildFilter !== "all" && !getDiaryEntryChildIds(d).includes(diaryChildFilter)) return false;
                       if (!q) return true;
                       return (
                         String(d.date || "").toLowerCase().includes(q) ||
@@ -16807,6 +16866,22 @@ ${validText}
                                 )}
                               </div>
                               <div className="flex items-center gap-1">
+                                <button
+                                  type="button"
+                                  onClick={async () => {
+                                    const cIds = getDiaryEntryChildIds(entry);
+                                    const metas = cIds.map((cid) => CHILDREN_INFO.find((c) => c.id === cid)).filter(Boolean);
+                                    const ageTxt = metas.map((m) => `${m.name}(${formatBabyAgeLabel(m.birthDate, entry.date)})`).join(" · ");
+                                    const copyTxt = `[${entry.date} · ${ageTxt}] ${entry.mood || ""}\n${entry.title ? `${entry.title}\n` : ""}${entry.content || ""}`.trim();
+                                    try {
+                                      await navigator.clipboard.writeText(copyTxt);
+                                      showToast("📄 육아일기 텍스트가 복사되었습니다!");
+                                    } catch (e) {}
+                                  }}
+                                  className="px-2 py-1 rounded-lg bg-[#F3EEE4] hover:bg-stone-200 text-stone-800 text-[10px] font-extrabold"
+                                >
+                                  📄 복사
+                                </button>
                                 <button
                                   type="button"
                                   onClick={() => handleExportDiaryCardImage(entry)}
