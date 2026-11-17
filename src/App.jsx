@@ -1212,7 +1212,7 @@ const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.65) =>
     img.src = dataUrl;
   });
 
-const APP_CODE_VERSION = "v11.37";
+const APP_CODE_VERSION = "v11.38";
 
 const formatRoutineTimeLabel = (hhmm) => {
   const m = String(hhmm || "").trim().match(/^(\d{2}):(\d{2})$/);
@@ -1228,7 +1228,7 @@ const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-const APP_BUILD_DATE = "2026-11-17 20:05";
+const APP_BUILD_DATE = "2026-11-17 20:10";
 const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1255,6 +1255,16 @@ const HELPER_CONFIGURABLE_TABS = [
 ];
 
 const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v11.38",
+    version: "v11.38",
+    date: "2026-11-17",
+    title: "Vercel 배포 빌드 오류(줄바꿈 문자열 리터럴 3건) 완전 수정 및 전체 구문 검증",
+    changes: [
+      "빌드 수정: 월간 원장 복사(13088행)·월별 일기 모아복사(17858행)·기록 선택 불러오기(21345행) 내 줄바꿈 문자열 리터럴(\"\\n\") 깨짐 3건 완전 복구",
+      "전수 검증: 전체 파일 내 끊긴 문자열 리터럴 0건·중복 useState 0건·미사용 상태/아이콘 0건 최종 확인"
+    ]
+  },
   {
     id: "patch-v11.37",
     version: "v11.37",
@@ -13084,9 +13094,7 @@ ${validText}
                             const lines = filteredLedger.map(
                               (ex) => `- ${ex.date} | ${ex.category || "기타"} | ${ex.title} : ${(Number(ex.amount) || 0).toLocaleString()}원`
                             );
-                            const txt = `🧾 ${currentMonth} 식비 원장 (${filteredLedger.length}건 · 합계 ${filteredSum.toLocaleString()}원)
-${lines.join("
-")}`;
+                            const txt = `🧾 ${currentMonth} 식비 원장 (${filteredLedger.length}건 · 합계 ${filteredSum.toLocaleString()}원)\n${lines.join("\n")}`;
                             try {
                               await navigator.clipboard.writeText(txt);
                               showToast(`📋 지출 원장 ${filteredLedger.length}건을 복사했습니다!`);
@@ -17850,20 +17858,12 @@ ${lines.join("
                                         const text = monthItems
                                           .map((it) => {
                                             const cIds = getDiaryEntryChildIds(it);
-                                            const titleLine = it.title ? `${it.title}
-` : "";
-                                            return `[${it.date} · ${cIds.join("·")}] ${it.mood || ""}
-${titleLine}${it.content || ""}`.trim();
+                                            const titleLine = it.title ? `${it.title}\n` : "";
+                                            return `[${it.date} · ${cIds.join("·")}] ${it.mood || ""}\n${titleLine}${it.content || ""}`.trim();
                                           })
-                                          .join("
-
----
-
-");
+                                          .join("\n\n---\n\n");
                                         try {
-                                          await navigator.clipboard.writeText(`📖 ${curYm} 육아일기 모아보기 (${monthItems.length}편)
-
-${text}`);
+                                          await navigator.clipboard.writeText(`📖 ${curYm} 육아일기 모아보기 (${monthItems.length}편)\n\n${text}`);
                                           showToast(`📋 ${curYm} 육아일기 ${monthItems.length}편을 복사했습니다!`);
                                         } catch (e) {
                                           showToast("⚠️ 클립보드 복사에 실패했습니다.");
@@ -21342,13 +21342,10 @@ ${text}`);
                     showToast("불러올 항목을 1개 이상 선택해 주세요.");
                     return;
                   }
-                  const summaryBlock = chosen.map((c) => c.text).join("
-");
+                  const summaryBlock = chosen.map((c) => c.text).join("\n");
                   setDiaryForm((prev) => ({
                     ...prev,
-                    content: prev.content ? `${prev.content.trim()}
-
-${summaryBlock}` : summaryBlock
+                    content: prev.content ? `${prev.content.trim()}\n\n${summaryBlock}` : summaryBlock
                   }));
                   setDiaryImportModal(null);
                   showToast(`✨ 선택한 ${chosen.length}개 항목을 일기 본문에 불러왔습니다!`);
