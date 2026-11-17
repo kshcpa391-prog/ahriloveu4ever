@@ -1212,7 +1212,7 @@ const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.65) =>
     img.src = dataUrl;
   });
 
-const APP_CODE_VERSION = "v11.41";
+const APP_CODE_VERSION = "v11.43";
 
 const formatRoutineTimeLabel = (hhmm) => {
   const m = String(hhmm || "").trim().match(/^(\d{2}):(\d{2})$/);
@@ -1228,7 +1228,7 @@ const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-const APP_BUILD_DATE = "2026-11-17 20:35";
+const APP_BUILD_DATE = "2026-11-17 20:45";
 const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1255,6 +1255,26 @@ const HELPER_CONFIGURABLE_TABS = [
 ];
 
 const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v11.43",
+    version: "v11.43",
+    date: "2026-11-17",
+    title: "장보기 진행률 바·남은 목록 1탭 복사 · 체크 품목 냉장고 일괄 입고 & 냉장고 구역 바 정합성 개선",
+    changes: [
+      "오류·정합성 개선: 냉장고 구역 분포 바가 표준 fridge 배열을 직접 참조하도록 통일해 qty/quantity 불일치 가능성 제거",
+      "시각화·편의 개선: 장보기 탭 상단에 [남음/담음(%)/긴급] 진행률 바 및 [📋 남은 목록 복사] 1탭 버튼 추가",
+      "신규 기능: 장보기 체크 완료 품목을 영수증 스캔 없이도 즉시 냉장고 재고로 일괄 이동하는 [❄️ 냉장고에 바로 넣기] 기능 도입"
+    ]
+  },
+  {
+    id: "patch-v11.42",
+    version: "v11.42",
+    date: "2026-11-17",
+    title: "네이버 메일 백업 전송(파일 다운로드 후 네이버 메일 작성 창 열기)으로 전환",
+    changes: [
+      "백업 메일 변경: 클립보드 복사 실패를 없애고, 백업 JSON 파일을 즉시 다운로드한 뒤 네이버 메일 작성 창(mail.naver.com/v2/new)을 바로 열어 파일 첨부하도록 개선"
+    ]
+  },
   {
     id: "patch-v11.41",
     version: "v11.41",
@@ -6423,6 +6443,7 @@ function MainApp() {
     const jsonFile = new File([jsonString], jsonFileName, { type: "application/json" });
     const txtFile = new File([jsonString], txtFileName, { type: "text/plain" });
 
+    // 1) 모바일 Web Share API 지원 시 파일 첨부 공유 창 실행 (네이버 메일 / 드라이브 등 선택 가능)
     const shareCandidate =
       navigator.canShare && navigator.canShare({ files: [jsonFile] })
         ? jsonFile
@@ -6437,31 +6458,23 @@ function MainApp() {
           text: `식단 ${meals.length}건, 냉장고 ${Object.keys(fridgeMap || {}).length}건, 일정 ${schedules.length}건 전체 백업 파일입니다.`,
           files: [shareCandidate]
         });
-        showToast("📎 백업 파일이 첨부된 공유 창(Gmail·드라이브)이 열렸습니다!");
+        showToast("📎 백업 파일이 첨부된 공유 창이 열렸습니다!");
         return;
       } catch (e) {
         if (e?.name === "AbortError") return;
       }
     }
 
+    // 2) 그 외 환경: 백업 파일(.json) 즉시 다운로드 + 네이버 메일 작성 창 열기
+    handleDownloadJsonBackup();
     const targetMail = backupEmail.trim() || "";
     const subject = encodeURIComponent(`[가족식탁 자동백업] ${getTodayStr()} 전체 데이터베이스 백업본`);
-    let copiedOk = false;
-    try {
-      await navigator.clipboard.writeText(jsonString);
-      copiedOk = true;
-    } catch (e) {}
-
-    const bodyText = copiedOk
-      ? `수혁·아리나·시목·시율네 식탁 데이터베이스 백업입니다.\n\n• 백업 일시: ${new Date().toLocaleString()}\n• 식단: ${meals.length}건 / 일정: ${schedules.length}건\n\n※ 전체 백업 데이터가 클립보드에 복사되었습니다. 아래에 붙여넣기(Ctrl+V / 길게 눌러 붙여넣기) 하시거나 파일 다운로드 버튼을 이용해 첨부해 주세요.`
-      : `수혁·아리나·시목·시율네 식탁 데이터베이스 백업입니다.\n\n• 백업 일시: ${new Date().toLocaleString()}\n• 식단: ${meals.length}건 / 일정: ${schedules.length}건`;
-    const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(targetMail)}&su=${subject}&body=${encodeURIComponent(bodyText)}`;
-    window.open(gmailUrl, "_blank");
-    showToast(
-      copiedOk
-        ? "📧 백업 데이터를 클립보드에 복사하고 Gmail 작성 창을 열었습니다!"
-        : "📧 Gmail 작성 창을 열었습니다. (파일 첨부가 필요하면 아래 JSON 백업 다운로드를 이용해 주세요)"
+    const bodyText = encodeURIComponent(
+      `수혁·아리나·시목·시율네 식탁 데이터베이스 백업입니다.\n\n• 백업 일시: ${new Date().toLocaleString()}\n• 식단: ${meals.length}건 / 냉장고: ${Object.keys(fridgeMap || {}).length}건 / 가족일정: ${schedules.length}건\n\n방금 다운로드된 '${jsonFileName}' 파일을 첨부해 주세요.`
     );
+    const naverComposeUrl = `https://mail.naver.com/v2/new?to=${encodeURIComponent(targetMail)}&subject=${subject}&body=${bodyText}`;
+    window.open(naverComposeUrl, "_blank");
+    showToast("📥 백업 파일 다운로드 완료! 열린 네이버 메일에서 파일을 첨부해 보내세요.");
   };
 
   const handleRestoreFromJsonFile = async (e) => {
@@ -10649,6 +10662,58 @@ ${validText}
     }
   };
 
+  const handleMoveCheckedShoppingToFridge = async () => {
+    if (!requireEditorAccess()) return;
+    const checkedItems = shoppingList.filter((s) => s.checked);
+    if (checkedItems.length === 0) return;
+    const todayStr = getTodayStr();
+    const defaultExp = getOffsetDateStr(todayStr, 7);
+    const createdItems = [];
+    checkedItems.forEach((s, idx) => {
+      const fId = `f-shop-${Date.now()}-${idx}`;
+      const cat = s.category || "기타";
+      const loc = cat === "냉동식품" ? "메인 냉동실" : cat === "양념·오일" || cat === "곡물·면" ? "실온·팬트리" : "냉장실";
+      createdItems.push({
+        id: fId,
+        name: s.name,
+        category: cat,
+        location: loc,
+        qty: 1,
+        quantity: 1,
+        unit: "개",
+        expiryDate: defaultExp,
+        purchaseDate: todayStr,
+        memo: s.memo || "장보기 완료 자동입고",
+        updatedAt: new Date().toISOString()
+      });
+    });
+    const checkedIds = new Set(checkedItems.map((s) => s.id));
+    setFridgeMap((prev) => {
+      const next = { ...prev };
+      createdItems.forEach((it) => { next[it.id] = it; });
+      return next;
+    });
+    setShoppingList((prev) => prev.filter((s) => !checkedIds.has(s.id)));
+    if (user && db) {
+      beginWrite();
+      try {
+        const batch = writeBatch(db);
+        createdItems.forEach((it) => batch.set(getDocRef("family_fridge_v4", it.id), it));
+        checkedItems.forEach((s) => batch.delete(getDocRef("family_shopping_v4", s.id)));
+        await batch.commit();
+        recordActivity("냉장고", "장보기입고", `${createdItems.length}건 냉장고 이동`);
+        showToast(`❄️ 담은 품목 ${createdItems.length}건을 냉장고에 바로 넣었습니다!`);
+      } catch (e) {
+        setSyncErrorMsg(e?.message || "장보기 냉장고 이동 오류");
+        showToast("⚠️ 냉장고 일괄 입고 중 오류가 발생했습니다.");
+      } finally {
+        endWrite();
+      }
+    } else {
+      showToast(`❄️ 담은 품목 ${createdItems.length}건을 냉장고에 넣었습니다!`);
+    }
+  };
+
   const handleConfirmStockIn = async () => {
     if (!requireEditorAccess()) return;
     if (!stockInItem) return;
@@ -14807,17 +14872,14 @@ ${validText}
             </div>
           )}
 
-          {Object.keys(fridgeMap || {}).length > 0 && (() => {
-            const activeFridgeList = Object.values(fridgeMap || {}).filter((it) => Number(it.quantity) > 0);
-            if (activeFridgeList.length === 0) return null;
-            return (
+          {fridge.length > 0 && (
             <div className="grid grid-cols-3 gap-1.5">
               {[
                 { key: "냉장실", icon: "❄️", check: (loc) => String(loc || "").includes("냉장") },
                 { key: "냉동실", icon: "🧊", check: (loc) => String(loc || "").includes("냉동") },
                 { key: "실온·팬트리", icon: "🧺", check: (loc) => String(loc || "").includes("실온") || String(loc || "").includes("팬트리") }
               ].map((zone) => {
-                const zItems = activeFridgeList.filter((it) => zone.check(it.location));
+                const zItems = fridge.filter((it) => zone.check(it.location));
                 const zExp = expiringItems.filter((it) => zone.check(it.location)).length;
                 const isSel = fridgeLocFilter === zone.key;
                 return (
@@ -14844,8 +14906,7 @@ ${validText}
                 );
               })}
             </div>
-            );
-          })()}
+          )}
 
           <div className="flex items-center justify-between gap-2">
             <div className="flex gap-1 bg-stone-200 p-1 rounded-xl overflow-x-auto">
@@ -15582,17 +15643,69 @@ ${validText}
             </button>
           </div>
 
+          {shoppingList.length > 0 && (() => {
+            const totalCnt = shoppingList.length;
+            const doneCnt = shoppingList.filter((s) => s.checked).length;
+            const remainCnt = totalCnt - doneCnt;
+            const urgentCnt = shoppingList.filter((s) => !s.checked && s.urgent).length;
+            const pct = Math.round((doneCnt / totalCnt) * 100);
+            return (
+              <div className="bg-white border border-stone-200 rounded-2xl p-3 space-y-2 shadow-sm">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 text-[11px] font-black text-stone-800">
+                    <span>남음 {remainCnt}건</span>
+                    <span className="text-stone-300">·</span>
+                    <span className="text-emerald-700">담음 {doneCnt}건 ({pct}%)</span>
+                    {urgentCnt > 0 && <span className="text-rose-600">· 🚨 {urgentCnt}</span>}
+                  </div>
+                  {remainCnt > 0 && (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        const remainList = shoppingList.filter((s) => !s.checked);
+                        const txt = remainList
+                          .map((s) => `${s.urgent ? "🚨 " : "- "}${s.name}${s.memo ? ` (${s.memo})` : ""}`)
+                          .join("\n");
+                        try {
+                          await navigator.clipboard.writeText(`🛒 남은 장보기 (${remainList.length}건)\n${txt}`);
+                          showToast(`📋 남은 장보기 ${remainList.length}건을 복사했습니다!`);
+                        } catch (e) {
+                          showToast("⚠️ 클립보드 복사에 실패했습니다.");
+                        }
+                      }}
+                      className="px-2 py-1 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 text-[10px] font-extrabold whitespace-nowrap shrink-0"
+                    >
+                      📋 남은 목록 복사
+                    </button>
+                  )}
+                </div>
+                <div className="w-full h-1.5 rounded-full bg-stone-100 overflow-hidden">
+                  <div className="h-full bg-emerald-500 transition-all duration-300" style={{ width: `${pct}%` }} />
+                </div>
+              </div>
+            );
+          })()}
+
           {shoppingList.some((s) => s.checked) && (
-            <div className="flex items-center justify-between bg-stone-100 px-3 py-2 rounded-xl">
-              <span className="text-[11px] font-bold text-stone-600">
+            <div className="flex items-center justify-between gap-1.5 bg-stone-100 px-3 py-2 rounded-xl flex-wrap">
+              <span className="text-[11px] font-bold text-stone-600 whitespace-nowrap">
                 체크 완료 {shoppingList.filter((s) => s.checked).length}건
               </span>
-              <button
-                onClick={handleClearCheckedShopping}
-                className="px-2.5 py-1 rounded-lg bg-white border border-stone-200 text-[11px] font-extrabold text-rose-600 hover:bg-rose-50"
-              >
-                🧹 체크 완료 비우기
-              </button>
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={handleMoveCheckedShoppingToFridge}
+                  className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-extrabold whitespace-nowrap"
+                >
+                  ❄️ 냉장고에 바로 넣기
+                </button>
+                <button
+                  onClick={handleClearCheckedShopping}
+                  className="px-2.5 py-1 rounded-lg bg-white border border-stone-200 text-[11px] font-extrabold text-rose-600 hover:bg-rose-50 whitespace-nowrap"
+                >
+                  🧹 비우기
+                </button>
+              </div>
             </div>
           )}
 
@@ -20500,7 +20613,7 @@ ${validText}
                   setBackupEmail(e.target.value);
                   localStorage.setItem("kim_family_backup_email", e.target.value);
                 }}
-                placeholder="수신받을 내 Gmail 주소 입력 (선택)"
+                placeholder="수신받을 네이버/이메일 주소 입력 (선택)"
                 className="w-full px-3 py-2 rounded-xl border border-amber-300 text-xs font-bold bg-white"
               />
 
@@ -20509,7 +20622,7 @@ ${validText}
                 className="w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-extrabold flex items-center justify-center gap-1.5 shadow-sm"
               >
                 <Mail className="w-4 h-4" />
-                <span>내 Gmail / 구글 드라이브로 백업 즉시 보내기</span>
+                <span>네이버 메일 / 드라이브로 백업 보내기 (다운로드 후 첨부)</span>
               </button>
 
               <button
