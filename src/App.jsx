@@ -63,6 +63,8 @@ import {
 import {
   getStorage,
   ref as storageRef,
+  uploadBytes,
+  getDownloadURL,
   deleteObject
 } from "firebase/storage";
 
@@ -1212,7 +1214,7 @@ const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.65) =>
     img.src = dataUrl;
   });
 
-const APP_CODE_VERSION = "v11.34";
+const APP_CODE_VERSION = "v11.35";
 
 const formatRoutineTimeLabel = (hhmm) => {
   const m = String(hhmm || "").trim().match(/^(\d{2}):(\d{2})$/);
@@ -1228,7 +1230,7 @@ const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-const APP_BUILD_DATE = "2026-11-17 16:45";
+const APP_BUILD_DATE = "2026-11-17 17:10";
 const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1255,6 +1257,17 @@ const HELPER_CONFIGURABLE_TABS = [
 ];
 
 const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v11.35",
+    version: "v11.35",
+    date: "2026-11-17",
+    title: "육아일기 저장 진행률(92% 고정) 버그 수정 & 3초 Storage 원본 시도 후 자동압축",
+    changes: [
+      "버그 수정: 육아일기 저장 완료 후에도 상단/버튼 진행률(92%)이 사라지지 않던 문제(finally 초기화 누락 및 서버 ACK 대기) 완전 해결",
+      "사진 저장 개선: 사진마다 최대 3초간 Firebase Storage 원본 업로드를 먼저 시도하고, 3초 초과·미사용 시 즉시 고화질 자동 압축으로 전환",
+      "진행 현황 표시: 원본 업로드 시도(1/N장 · 최대 3초) → 자동 압축 전환 → 서버 저장 → 완료 단계를 실시간 퍼센트와 안내 문구로 표시"
+    ]
+  },
   {
     id: "patch-v11.34",
     version: "v11.34",
@@ -9504,9 +9517,12 @@ ${validText}
     setDiarySaveWarning("");
     const totalFilesToUpload = cappedPhotos.filter((p) => p?.file).length;
     let uploadedFileSeq = 0;
+    let storageOkCount = 0;
+    let compressedCount = 0;
+    const storageFallbackReasons = [];
     setDiaryUploadProgress({
-      stepText: totalFilesToUpload > 0 ? `사진 자동 압축 중... (0/${totalFilesToUpload}장)` : "육아일기 저장 중...",
-      pct: totalFilesToUpload > 0 ? 15 : 60
+      stepText: totalFilesToUpload > 0 ? `원본 Storage 업로드 준비 중... (0/${totalFilesToUpload}장)` : "육아일기 저장 중...",
+      pct: totalFilesToUpload > 0 ? 10 : 60
     });
     beginWrite();
     let ok = false;
@@ -9516,12 +9532,52 @@ ${validText}
         const pItem = cappedPhotos[idx];
         if (pItem?.file) {
           uploadedFileSeq += 1;
-          setDiaryUploadProgress({
-            stepText: `사진 자동 압축 중... (${uploadedFileSeq}/${totalFilesToUpload}장)`,
-            pct: Math.min(85, Math.round((uploadedFileSeq / totalFilesToUpload) * 80))
-          });
-          const uploadedUrl = await compressDiaryPhotoToBudget(pItem.file, perPhotoBudget);
-          if (uploadedUrl) finalUrls.push(uploadedUrl);
+          const basePct = Math.round(((uploadedFileSeq - 1) / totalFilesToUpload) * 75) + 10;
+          const donePct = Math.min(86, Math.round((uploadedFileSeq / totalFilesToUpload) * 80) + 5);
+          let resolvedUrl = "";
+
+          if (storage) {
+            setDiaryUploadProgress({
+              stepText: `☁️ 원본 Storage 업로드 시도 중... (${uploadedFileSeq}/${totalFilesToUpload}장 · 최대 3초)`,
+              pct: Math.min(82, basePct + 4)
+            });
+            try {
+              const extMatch = String(pItem.file.name || "").match(/\.([a-zA-Z0-9]+)$/);
+              const ext = extMatch ? extMatch[1].toLowerCase() : "jpg";
+              const photoRef = storageRef(storage, `baby_diary/${APP_ID}/${id}_${uploadedFileSeq}_${Date.now()}.${ext}`);
+              const uploadPromise = uploadBytes(photoRef, pItem.file, {
+                contentType: pItem.file.type || "image/jpeg"
+              }).then(() => getDownloadURL(photoRef));
+              const timeoutPromise = new Promise((_, reject) =>
+                setTimeout(() => reject(new Error("Storage 3초 시간초과")), 3000)
+              );
+              resolvedUrl = await Promise.race([uploadPromise, timeoutPromise]);
+              if (resolvedUrl) storageOkCount += 1;
+            } catch (storageErr) {
+              const reason = storageErr?.code
+                ? `[${storageErr.code}]`
+                : storageErr?.message || "원본 업로드 실패";
+              storageFallbackReasons.push(reason);
+            }
+          } else {
+            storageFallbackReasons.push("Storage 미설정");
+          }
+
+          if (!resolvedUrl) {
+            setDiaryUploadProgress({
+              stepText: `🗜️ 자동 압축 변환 중... (${uploadedFileSeq}/${totalFilesToUpload}장)`,
+              pct: donePct
+            });
+            resolvedUrl = await compressDiaryPhotoToBudget(pItem.file, perPhotoBudget);
+            if (resolvedUrl) compressedCount += 1;
+          } else {
+            setDiaryUploadProgress({
+              stepText: `☁️ 원본 업로드 완료 (${uploadedFileSeq}/${totalFilesToUpload}장)`,
+              pct: donePct
+            });
+          }
+
+          if (resolvedUrl) finalUrls.push(resolvedUrl);
         } else if (pItem?.url && !pItem.url.startsWith("blob:")) {
           finalUrls.push(pItem.url);
         }
@@ -9544,7 +9600,14 @@ ${validText}
         createdAtMs: editingDiaryEntry?.createdAtMs || Date.now(),
         updatedAt: new Date().toISOString()
       };
-      await setDoc(getDocRef("family_baby_diary_v8", id), payload);
+      const saveResult = await Promise.race([
+        setDoc(getDocRef("family_baby_diary_v8", id), payload).then(() => ({ timedOut: false })),
+        new Promise((resolve) => setTimeout(() => resolve({ timedOut: true }), 6000))
+      ]);
+      setDiaryUploadProgress({
+        stepText: saveResult?.timedOut ? "로컬 저장 완료 (백그라운드 동기화)" : "저장 완료!",
+        pct: 100
+      });
       setEditingDiaryEntry(null);
       setPendingDiaryPhotoFile(null);
       setDiaryForm({
@@ -9561,9 +9624,23 @@ ${validText}
         targetId: id,
         targetChildId: targetChildIds[0] || selectedChildId
       });
+      if (compressedCount > 0 && storageFallbackReasons.length > 0) {
+        const firstReason = storageFallbackReasons[0];
+        setDiarySaveWarning(
+          `ℹ️ Storage 원본 업로드(${firstReason})가 3초 내 완료되지 않아 사진 ${compressedCount}장을 고화질 자동 압축으로 안전하게 저장했습니다.`
+        );
+      }
+      const modeDesc =
+        storageOkCount > 0 && compressedCount > 0
+          ? `원본 ${storageOkCount}장 + 압축 ${compressedCount}장`
+          : storageOkCount > 0
+          ? `원본 ${storageOkCount}장`
+          : compressedCount > 0
+          ? `자동압축 ${compressedCount}장`
+          : `사진 ${finalUrls.length}장`;
       showToast(
         finalUrls.length > 0
-          ? `📖 ${primaryChildLabel} 육아일기(사진 ${finalUrls.length}장 자동압축)가 저장되었습니다!`
+          ? `📖 ${primaryChildLabel} 육아일기(${modeDesc})가 저장되었습니다!`
           : `📖 ${primaryChildLabel} 육아일기가 저장되었습니다!`
       );
       ok = true;
@@ -9573,6 +9650,7 @@ ${validText}
       setSyncErrorMsg(`육아일기 저장 실패: ${errDetail}`);
       showToast(`❌ 육아일기 저장 실패: ${errDetail}`);
     } finally {
+      setDiaryUploadProgress(null);
       endWrite(ok);
     }
   };
