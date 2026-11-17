@@ -1212,7 +1212,7 @@ const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.65) =>
     img.src = dataUrl;
   });
 
-const APP_CODE_VERSION = "v11.59";
+const APP_CODE_VERSION = "v11.60";
 
 const formatRoutineTimeLabel = (hhmm) => {
   const m = String(hhmm || "").trim().match(/^(\d{2}):(\d{2})$/);
@@ -1228,7 +1228,7 @@ const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-const APP_BUILD_DATE = "2026-11-17 23:08";
+const APP_BUILD_DATE = "2026-11-17 23:28";
 const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1290,6 +1290,17 @@ const formatTime12Ko = (ms) => {
 };
 
 const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v11.60",
+    version: "v11.60",
+    date: "2026-11-17",
+    title: "상단 헤더 겹침 해소 · 홈편집 팝업 모달 전환 & 전체 줄바꿈·간격 정상화",
+    changes: [
+      "헤더 겹침 수정: 상단 상태 배지(연결됨·버전·관리자)와 [✏️ 편집] 버튼 크기·여백을 10px/px-1.5로 정돈해 왼쪽 배지가 가려지지 않도록 개선",
+      "홈편집 팝업화: [✏️ 편집] 클릭 시 인라인 밀림 없이 깔끔한 팝업 모달(스크롤·[✅ 편집 완료])로 홈 화면을 편집하도록 개편",
+      "줄바꿈·간격 정상화: 하단 탭 바·홈 5종 버튼·육아 서브탭·필터 칩의 폰트/패딩을 균형 있게 조정해 어색한 줄바꿈 해소"
+    ]
+  },
   {
     id: "patch-v11.59",
     version: "v11.59",
@@ -12025,9 +12036,9 @@ ${validText}
         )}
 
         <div className="mb-2 flex items-center justify-between gap-1">
-          <div className="flex items-center gap-1 min-w-0 overflow-x-auto">
+          <div className="flex items-center gap-1 min-w-0 flex-1 overflow-x-auto">
             <span
-              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[12.5px] font-bold border whitespace-nowrap shrink-0 ${
+              className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-bold border whitespace-nowrap shrink-0 ${
                 syncStatus === "offline" || syncStatus === "error"
                   ? "bg-rose-50 text-rose-700 border-rose-200"
                   : syncStatus === "saving" || syncStatus === "connecting"
@@ -12050,15 +12061,15 @@ ${validText}
             </span>
             <button
               onClick={() => setIsPatchModalOpen(true)}
-              className="px-2 py-0.5 rounded-full text-[11.5px] font-extrabold bg-stone-100 hover:bg-stone-200 text-stone-700 border border-stone-200 inline-flex items-center gap-1 whitespace-nowrap shrink-0"
+              className="px-1.5 py-0.5 rounded-full text-[10px] font-extrabold bg-stone-100 hover:bg-stone-200 text-stone-700 border border-stone-200 inline-flex items-center gap-0.5 whitespace-nowrap shrink-0"
               title="패치노트 기록 및 히스토리"
             >
-              <ClipboardList className="w-3 h-3 text-stone-600 shrink-0" />
-              <span>패치노트 {APP_CODE_VERSION}</span>
+              <ClipboardList className="w-2.5 h-2.5 text-stone-600 shrink-0" />
+              <span>{APP_CODE_VERSION}</span>
             </button>
             <button
               onClick={() => setIsEditorUnlockModalOpen(true)}
-              className={`px-2 py-0.5 rounded-full text-[11.5px] font-extrabold border inline-flex items-center gap-1 whitespace-nowrap shrink-0 ${
+              className={`px-1.5 py-0.5 rounded-full text-[10px] font-extrabold border inline-flex items-center gap-0.5 whitespace-nowrap shrink-0 ${
                 isAdminUnlocked
                   ? "bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border-emerald-200"
                   : isHelperUnlocked
@@ -12081,14 +12092,14 @@ ${validText}
               <button
                 type="button"
                 onClick={() => setIsHomeEditMode((v) => !v)}
-                className={`px-2 py-1 rounded-full text-[11.5px] font-extrabold border whitespace-nowrap shrink-0 transition ${
+                className={`px-1.5 py-0.5 rounded-full text-[10px] font-extrabold border whitespace-nowrap shrink-0 transition ${
                   isHomeEditMode
                     ? "bg-emerald-600 text-white border-emerald-600"
                     : "bg-stone-100 hover:bg-stone-200 text-stone-700 border-stone-200"
                 }`}
                 title="홈 화면 구성 편집"
               >
-                {isHomeEditMode ? "✅ 완료" : "✏️ 홈편집"}
+                {isHomeEditMode ? "✅ 완료" : "✏️ 편집"}
               </button>
             )}
             {accessRole !== "guest" && (
@@ -12370,7 +12381,7 @@ ${validText}
                         }
                         handleQuickTapBabyActivity(qId, "시율");
                       }}
-                      className={`py-1.5 px-1 rounded-xl border text-[11.5px] font-extrabold flex flex-col items-center gap-0.5 transition active:scale-95 ${
+                      className={`py-1.5 px-0.5 rounded-xl border text-[10.5px] font-extrabold flex flex-col items-center gap-0.5 transition active:scale-95 ${
                         isRunning
                           ? "bg-emerald-600 text-white border-emerald-600 animate-pulse"
                           : "bg-white hover:bg-stone-50 text-stone-800 border-stone-200"
@@ -13110,22 +13121,39 @@ ${validText}
             </div>
 
             {isHomeEditMode && (
-              <div className="bg-white border border-stone-300 rounded-2xl p-3 shadow-sm space-y-2.5">
-                <div className="flex items-center justify-between">
-                  <span className="text-[13.5px] font-black text-stone-900">
-                    🛠️ {modeMeta.label} 홈 화면 구성 편집
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      saveHomeLayout(() => ({ ...DEFAULT_HOME_LAYOUT[activeHomeTimeMode] }));
-                      showToast(`${modeMeta.label} 기본 구성으로 초기화했습니다.`);
-                    }}
-                    className="px-2 py-0.5 rounded-lg bg-stone-100 text-stone-600 text-[11.5px] font-extrabold"
-                  >
-                    기본값 초기화
-                  </button>
-                </div>
+              <div
+                className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+                onClick={() => setIsHomeEditMode(false)}
+              >
+                <div
+                  className="bg-white border border-stone-300 rounded-3xl max-w-md w-full p-4 shadow-2xl max-h-[88vh] flex flex-col gap-3"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="flex items-center justify-between gap-2 pb-2 border-b border-stone-100 shrink-0">
+                    <span className="text-[14.5px] font-black text-stone-900">
+                      🛠️ {modeMeta.label} 홈 화면 구성 편집
+                    </span>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          saveHomeLayout(() => ({ ...DEFAULT_HOME_LAYOUT[activeHomeTimeMode] }));
+                          showToast(`${modeMeta.label} 기본 구성으로 초기화했습니다.`);
+                        }}
+                        className="px-2 py-1 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-600 text-[11px] font-extrabold whitespace-nowrap"
+                      >
+                        기본값 초기화
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setIsHomeEditMode(false)}
+                        className="p-1 rounded-full hover:bg-stone-100 text-stone-500"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                  <div className="overflow-y-auto flex-1 space-y-2.5 pr-0.5">
 
                 <div className="bg-stone-50 border border-stone-200 rounded-xl p-2.5 space-y-1.5">
                   <div className="flex items-center justify-between">
@@ -13475,6 +13503,15 @@ ${validText}
                       );
                     })}
                   </div>
+                </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsHomeEditMode(false)}
+                    className="w-full py-2.5 rounded-2xl bg-[#5E7A65] hover:bg-[#4E6855] text-white text-[13.5px] font-black shrink-0"
+                  >
+                    ✅ 편집 완료
+                  </button>
                 </div>
               </div>
             )}
@@ -18389,7 +18426,7 @@ ${validText}
                       setTimeout(() => activityTopRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 80);
                     }
                   }}
-                  className={`py-2 px-1 rounded-xl text-[12.5px] font-extrabold whitespace-nowrap transition ${
+                  className={`py-2 px-2 rounded-xl text-[11px] font-extrabold whitespace-nowrap shrink-0 transition ${
                     babySubTab === st.id
                       ? "bg-white text-stone-900 shadow-sm"
                       : "text-stone-600"
@@ -18630,7 +18667,7 @@ ${validText}
                               key={tf.id}
                               type="button"
                               onClick={() => setActivityTypeFilter(tf.id)}
-                              className={`px-2 py-1 rounded-full text-[11.5px] font-extrabold border whitespace-nowrap ${
+                              className={`px-2 py-1 rounded-full text-[11px] font-extrabold border whitespace-nowrap shrink-0 ${
                                 activityTypeFilter === tf.id
                                   ? "bg-stone-900 text-white border-stone-900"
                                   : "bg-white text-stone-600 border-stone-200"
@@ -19569,7 +19606,7 @@ ${validText}
                           <button
                             type="button"
                             onClick={() => setDiaryPhotoOnlyFilter((v) => !v)}
-                            className={`px-2 py-1 rounded-full text-[11.5px] font-extrabold border whitespace-nowrap ${
+                            className={`px-2 py-1 rounded-full text-[11px] font-extrabold border whitespace-nowrap shrink-0 ${
                               diaryPhotoOnlyFilter
                                 ? "bg-[#5E7A65] text-white border-[#5E7A65]"
                                 : "bg-white text-stone-600 border-stone-200"
@@ -20111,7 +20148,7 @@ ${validText}
                   </span>
                 )}
               </div>
-              <span className="text-[11.5px] mt-0.5 whitespace-nowrap">
+              <span className="text-[10.5px] mt-0.5 whitespace-nowrap">
                 {!canViewTab(item.id) ? "🔒" : ""}{item.label}
               </span>
             </button>
@@ -20133,7 +20170,7 @@ ${validText}
                 : ""
             }`}
           />
-          <span className="text-[11.5px] mt-0.5 whitespace-nowrap">더보기</span>
+          <span className="text-[10.5px] mt-0.5 whitespace-nowrap">더보기</span>
         </button>
       </nav>
 
