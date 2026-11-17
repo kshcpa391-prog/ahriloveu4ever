@@ -1212,7 +1212,7 @@ const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.65) =>
     img.src = dataUrl;
   });
 
-const APP_CODE_VERSION = "v11.62";
+const APP_CODE_VERSION = "v11.63";
 
 const formatRoutineTimeLabel = (hhmm) => {
   const m = String(hhmm || "").trim().match(/^(\d{2}):(\d{2})$/);
@@ -1228,7 +1228,7 @@ const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-const APP_BUILD_DATE = "2026-11-18 06:25";
+const APP_BUILD_DATE = "2026-11-18 06:45";
 const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1290,6 +1290,18 @@ const formatTime12Ko = (ms) => {
 };
 
 const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v11.63",
+    version: "v11.63",
+    date: "2026-11-18",
+    title: "메뉴별 맞춤 헤더 문구 · 냉장고 1줄 슬림화 · 대소변 안내 소형화 & 일기 대상 선택 일원화",
+    changes: [
+      "메뉴별 귀여운 헤더: '우리 가족 식탁' 대신 각 탭 성격에 맞는 귀여운 문구(오늘 뭐 먹지? 식탁, 쑥쑥 시목·시율 육아수첩 등) 적용",
+      "대소변 안내 & 아이카드 정돈: 기저귀 안내 문구를 연한 회색 1줄(10.5px)로 축소하고 상단 아이 카드 '15개월' 줄바꿈 수정",
+      "냉장고 1줄 슬림화: 영수증 AI 스캔과 식단·재고 내보내기를 깔끔한 1줄 2칸 버튼으로 축약",
+      "일기 직관화: 상단 김시목/김시율 카드 선택에 맞춰 일기 작성·열람 대상이 자동 연동되며 [+ 형제 함께 쓰기]·[전체 보기] 토글만 남도록 단순화"
+    ]
+  },
   {
     id: "patch-v11.62",
     version: "v11.62",
@@ -4237,7 +4249,7 @@ function MainApp() {
   const [diaryExportPreviewUrl, setDiaryExportPreviewUrl] = useState("");
   const [diaryExportFilename, setDiaryExportFilename] = useState("육아일기.png");
   const [diarySearchQuery, setDiarySearchQuery] = useState("");
-  const [diaryChildFilter, setDiaryChildFilter] = useState("all");
+  const [diaryChildFilter, setDiaryChildFilter] = useState("active");
   const [mealSearchQuery, setMealSearchQuery] = useState("");
   const [diaryLightboxUrl, setDiaryLightboxUrl] = useState("");
   const [isWeatherModalOpen, setIsWeatherModalOpen] = useState(false);
@@ -12174,7 +12186,18 @@ ${validText}
 
         <div className="flex items-center justify-between gap-1">
           <h1 className="text-[15.5px] font-black tracking-tight text-stone-900 whitespace-nowrap">
-            {activeTab === "home" ? "우리 가족 홈 ♡" : "우리 가족 식탁 🍽️"}
+            {{
+              home: "우리 가족 홈 ♡",
+              daily: "오늘 뭐 먹지? 우리집 식탁 🍽️",
+              schedule: "알콩달콩 일정·루틴 🗓️",
+              baby: "쑥쑥 시목·시율 육아수첩 👶",
+              fridge: "든든한 우리집 냉장고 ❄️",
+              shopping: "똑똑한 장보기 바구니 🛒",
+              monthly: "한눈에 월간·식비 💰",
+              notices: "다정한 가족 공지사항 📌",
+              recipes: "보글보글 가족 레시피북 📖",
+              ai: "똑똑한 AI 식단·요리 ✨"
+            }[activeTab] || "우리 가족 홈 ♡"}
           </h1>
 
           {activeTab !== "home" && (
@@ -15972,33 +15995,25 @@ ${validText}
       ========================================== */}
       {activeTab === "fridge" && (!canViewTab("fridge") ? renderLockedTabScreen("❄️ 냉장고") : (
         <div className="p-4 space-y-3.5">
-          <button
-            onClick={() => setIsReceiptModalOpen(true)}
-            className="w-full p-3 rounded-2xl bg-emerald-50 border border-emerald-200 text-left hover:bg-emerald-100 transition flex items-center justify-between gap-2.5"
-          >
-            <div className="flex items-center gap-2.5 min-w-0">
-              <div className="p-2 rounded-xl bg-emerald-600 text-white shrink-0">
-                <Receipt className="w-4 h-4" />
-              </div>
-              <div className="min-w-0">
-                <div className="text-[13.5px] font-black text-emerald-900 leading-tight">
-                  마트 영수증 AI 스캔
-                </div>
-                <div className="text-[12.5px] font-semibold text-emerald-700 leading-tight mt-0.5">
-                  사진 1장으로 냉장고 + 가계부 자동입고
-                </div>
-              </div>
-            </div>
-            <span className="text-[13.5px] font-extrabold text-emerald-700 shrink-0">스캔 &gt;</span>
-          </button>
-
-          <button
-            onClick={() => setIsInventoryExportOpen(true)}
-            className="w-full py-2.5 px-3 rounded-2xl bg-stone-100 hover:bg-stone-200/80 border border-stone-200 text-stone-800 text-[13.5px] font-extrabold flex items-center justify-between"
-          >
-            <span>📤 1주일 식단 · 전체 재고 내보내기 (드롭다운 선택)</span>
-            <span className="text-stone-500">열기 &gt;</span>
-          </button>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              onClick={() => setIsReceiptModalOpen(true)}
+              className="py-2 px-2.5 rounded-2xl bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-900 text-[11.5px] font-extrabold flex items-center justify-between gap-1 whitespace-nowrap"
+            >
+              <span className="flex items-center gap-1 truncate">
+                <Receipt className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
+                <span>영수증 AI 스캔</span>
+              </span>
+              <span className="text-[10.5px] text-emerald-700 shrink-0">&gt;</span>
+            </button>
+            <button
+              onClick={() => setIsInventoryExportOpen(true)}
+              className="py-2 px-2.5 rounded-2xl bg-stone-100 hover:bg-stone-200/80 border border-stone-200 text-stone-800 text-[11.5px] font-extrabold flex items-center justify-between gap-1 whitespace-nowrap"
+            >
+              <span className="truncate">📤 식단·재고 내보내기</span>
+              <span className="text-[10.5px] text-stone-500 shrink-0">&gt;</span>
+            </button>
+          </div>
           {expiringItems.length > 0 && (
             <div className="bg-orange-50 border border-orange-200 rounded-2xl p-3">
               <div className="flex items-center gap-1.5 text-[13.5px] font-black text-orange-900 mb-1.5">
@@ -18416,7 +18431,12 @@ ${validText}
                 return (
                   <button
                     key={ch.id}
-                    onClick={() => setSelectedChildId(ch.id)}
+                    onClick={() => {
+                      setSelectedChildId(ch.id);
+                      if (!editingDiaryEntry) {
+                        setDiaryForm((p) => ({ ...p, childIds: [ch.id] }));
+                      }
+                    }}
                     className={`p-3 rounded-2xl border text-left transition ${
                       isSel
                         ? "bg-stone-900 text-white border-stone-900 shadow-md"
@@ -18434,7 +18454,7 @@ ${validText}
                       </span>
                     </div>
                     <div className="text-[15.5px] font-black mt-1">{ch.name}</div>
-                    <div className={`text-[11.5px] mt-0.5 ${isSel ? "text-stone-300" : "text-stone-500"}`}>
+                    <div className={`text-[10.5px] mt-0.5 whitespace-nowrap ${isSel ? "text-stone-300" : "text-stone-500"}`}>
                       {ch.birthDate}생 · 현재 {st.months}개월
                     </div>
                   </button>
@@ -18508,18 +18528,23 @@ ${validText}
                   />
 
                   <div ref={activityTopRef} className="bg-white p-3 rounded-2xl border border-stone-200 shadow-sm space-y-2.5 scroll-mt-4">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-[13.5px] font-black text-stone-900">
-                        🍼 {activeChild.name} 원탭 (기저귀: 짧게=소변 · 길게=대변)
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => setZipImportPicker("activity")}
-                        className="px-2 py-1 rounded-xl bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-900 text-[11.5px] font-extrabold whitespace-nowrap shrink-0"
-                        title="베이비타임 Activity ZIP을 클라우드에 업로드"
-                      >
-                        📥 베이비타임(.zip)
-                      </button>
+                    <div className="space-y-0.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-[13.5px] font-black text-stone-900 whitespace-nowrap">
+                          🍼 {activeChild.name} 원탭 기록
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setZipImportPicker("activity")}
+                          className="px-2 py-1 rounded-xl bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-900 text-[11px] font-extrabold whitespace-nowrap shrink-0"
+                          title="베이비타임 Activity ZIP을 클라우드에 업로드"
+                        >
+                          📥 베이비타임(.zip)
+                        </button>
+                      </div>
+                      <div className="text-[10.5px] font-semibold text-stone-400 whitespace-nowrap truncate">
+                        기저귀: 짧게 누르면 소변 · 길게(0.5초) 누르면 대변
+                      </div>
                     </div>
 
                     <div className="flex items-center gap-2.5 overflow-x-auto pb-1">
@@ -19351,29 +19376,33 @@ ${validText}
                       )}
                     </div>
 
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      <span className="text-[11.5px] font-extrabold text-stone-500">대상:</span>
-                      {[
-                        { id: "single_simok", label: "👦 시목", ids: ["시목"] },
-                        { id: "single_siyul", label: "👶 시율", ids: ["시율"] },
-                        { id: "both", label: "👦👶 시목·시율 함께", ids: ["시목", "시율"] }
-                      ].map((opt) => {
-                        const curIds = Array.isArray(diaryForm.childIds) && diaryForm.childIds.length > 0 ? diaryForm.childIds : [activeChild.id];
-                        const isAct = opt.ids.length === curIds.length && opt.ids.every((x) => curIds.includes(x));
-                        return (
+                    {(() => {
+                      const curIds = Array.isArray(diaryForm.childIds) && diaryForm.childIds.length > 0 ? diaryForm.childIds : [activeChild.id];
+                      const isBoth = curIds.length >= 2;
+                      return (
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-[12px] font-extrabold text-[#35503C]">
+                            ✍️ 작성 대상: {isBoth ? "👦👶 시목·시율 함께" : activeChild.name}
+                          </span>
                           <button
-                            key={opt.id}
                             type="button"
-                            onClick={() => setDiaryForm((p) => ({ ...p, childIds: opt.ids }))}
-                            className={`px-2.5 py-1 rounded-xl text-[12.5px] font-extrabold border transition ${
-                              isAct ? "bg-[#5E7A65] text-white border-[#5E7A65]" : "bg-stone-50 text-stone-600 border-stone-200"
+                            onClick={() =>
+                              setDiaryForm((p) => ({
+                                ...p,
+                                childIds: isBoth ? [activeChild.id] : ["시목", "시율"]
+                              }))
+                            }
+                            className={`px-2.5 py-1 rounded-full text-[11px] font-extrabold border whitespace-nowrap transition ${
+                              isBoth
+                                ? "bg-[#5E7A65] text-white border-[#5E7A65]"
+                                : "bg-stone-50 text-stone-600 border-stone-200 hover:bg-stone-100"
                             }`}
                           >
-                            {opt.label}
+                            {isBoth ? "✓ 형제 함께 쓰는 중" : "+ 형제 함께 쓰기"}
                           </button>
-                        );
-                      })}
-                    </div>
+                        </div>
+                      );
+                    })()}
 
                     <div className="grid grid-cols-2 gap-2">
                       <div className="space-y-1">
@@ -19617,24 +19646,19 @@ ${validText}
                       </div>
                       <div className="flex items-center justify-between gap-1.5 flex-wrap">
                         <div className="flex items-center gap-1">
-                          {[
-                            { id: "all", label: `전체(${babyDiaryEntries.length})` },
-                            { id: "시목", label: "👦 시목" },
-                            { id: "시율", label: "👶 시율" }
-                          ].map((cf) => (
-                            <button
-                              key={cf.id}
-                              type="button"
-                              onClick={() => setDiaryChildFilter(cf.id)}
-                              className={`px-2.5 py-1 rounded-full text-[11.5px] font-extrabold border whitespace-nowrap ${
-                                diaryChildFilter === cf.id
-                                  ? "bg-stone-900 text-white border-stone-900"
-                                  : "bg-white text-stone-600 border-stone-200"
-                              }`}
-                            >
-                              {cf.label}
-                            </button>
-                          ))}
+                          <button
+                            type="button"
+                            onClick={() => setDiaryChildFilter((prev) => (prev === "all" ? "active" : "all"))}
+                            className={`px-2.5 py-1 rounded-full text-[11px] font-extrabold border whitespace-nowrap ${
+                              diaryChildFilter === "all"
+                                ? "bg-stone-900 text-white border-stone-900"
+                                : "bg-white text-stone-700 border-stone-200"
+                            }`}
+                          >
+                            {diaryChildFilter === "all"
+                              ? `🌐 전체 보는 중 (${babyDiaryEntries.length})`
+                              : `${activeChild.id === "시목" ? "👦" : "👶"} ${activeChild.name} 일기만`}
+                          </button>
                         </div>
                         <div className="flex items-center gap-1">
                           <button
@@ -19699,7 +19723,8 @@ ${validText}
                   {(() => {
                     const q = diarySearchQuery.trim().toLowerCase();
                     const childDiaries = babyDiaryEntries.filter((d) => {
-                      if (diaryChildFilter !== "all" && !getDiaryEntryChildIds(d).includes(diaryChildFilter)) return false;
+                      const targetFilterChild = diaryChildFilter === "active" ? activeChild.id : diaryChildFilter;
+                      if (targetFilterChild !== "all" && !getDiaryEntryChildIds(d).includes(targetFilterChild)) return false;
                       if (diaryMonthFilter !== "all" && !String(d.date || "").startsWith(diaryMonthFilter)) return false;
                       if (diaryPhotoOnlyFilter && getDiaryEntryPhotos(d).length === 0) return false;
                       if (!q) return true;
