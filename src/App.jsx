@@ -1203,8 +1203,8 @@ const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.65) =>
     img.src = dataUrl;
   });
 
-const APP_CODE_VERSION = "v11.20";
-const APP_BUILD_DATE = "2026-11-17 16:18";
+const APP_CODE_VERSION = "v11.22";
+const APP_BUILD_DATE = "2026-11-17 16:38";
 const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1231,6 +1231,26 @@ const HELPER_CONFIGURABLE_TABS = [
 ];
 
 const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v11.22",
+    version: "v11.22",
+    date: "2026-11-17",
+    title: "반복 루틴 오늘 달성률(%) 프로그레스 바 추가 및 전체 코드 최종 검증",
+    changes: [
+      "반복 루틴 상단에 오늘 전체 루틴 완료율(N/M건 · %) 세이지그린 프로그레스 바 추가",
+      "전체 21,300+행 TDZ·JS 구문·JSX 태그·중복 상태 최종 검증 완료"
+    ]
+  },
+  {
+    id: "patch-v11.21",
+    version: "v11.21",
+    date: "2026-11-17",
+    title: "반복 루틴 완료 상태 덮어쓰기 방지 · [🌅 아침 루틴 일괄 완료] 1탭 복구 버튼 추가",
+    changes: [
+      "syncRoutinesToCloud 일괄 동기화 시 서버에 이미 완료된 오늘/이번주/이번달 루틴 기록(lastDoneKey·stepDoneKey)이 실수로 초기화되지 않도록 서버 완료 상태 보존 병합 로직 적용",
+      "오전 시간이 지난 뒤 미완료된 아침 루틴이 남아있을 경우 1탭으로 일괄 완료 복구할 수 있는 [🌅 아침 일괄완료] 버튼 추가"
+    ]
+  },
   {
     id: "patch-v11.20",
     version: "v11.20",
@@ -4024,6 +4044,28 @@ function MainApp() {
             } else if (op.type === "delete" && op.id) {
               merged = serverItems.filter((r) => r.id !== op.id);
             }
+          } else if (serverItems && !op) {
+            const todayStr = getTodayStr();
+            const serverMap = new Map(serverItems.map((s) => [s.id, s]));
+            merged = nextList.map((item) => {
+              const srv = serverMap.get(item.id);
+              if (!srv) return item;
+              const resetK =
+                item.cycle === "weekly"
+                  ? getIsoWeekKey(todayStr)
+                  : item.cycle === "monthly" || item.cycle === "monthly_weekday"
+                  ? todayStr.slice(0, 7)
+                  : todayStr;
+              if (!item.lastDoneKey && srv.lastDoneKey === resetK) {
+                return {
+                  ...item,
+                  lastDoneKey: srv.lastDoneKey,
+                  stepDoneKey: srv.stepDoneKey || item.stepDoneKey || "",
+                  stepDoneIndices: Array.isArray(srv.stepDoneIndices) ? srv.stepDoneIndices : (item.stepDoneIndices || [])
+                };
+              }
+              return item;
+            });
           }
           tx.set(
             ref,
@@ -4108,6 +4150,32 @@ function MainApp() {
     showToast(wasDone ? `↩️ '${targetTitle}' 완료를 취소했습니다.` : `✅ '${targetTitle}' 루틴 완료!`);
     const updatedItem = nextList.find((r) => r.id === rtId);
     syncRoutinesToCloud(nextList, updatedItem ? { type: "upsert", item: updatedItem } : null);
+  };
+
+  const handleBulkCompleteSlotRoutines = (slotName = "아침") => {
+    if (!requireEditorAccess("schedule")) return;
+    const todayKey = getTodayStr();
+    if (todayKey !== currentDayKey) setCurrentDayKey(todayKey);
+    let count = 0;
+    const nextList = familyRoutines.map((r) => {
+      if ((r.timeSlot || "상시") !== slotName || isRoutineDoneNow(r)) return r;
+      count += 1;
+      const steps = parseRoutineSteps(r.title);
+      const targetKey = r.cycle === "interval" ? todayKey : getRoutineResetKey(r, todayKey);
+      return {
+        ...r,
+        lastDoneKey: targetKey,
+        ...(steps.length >= 2 ? { stepDoneKey: targetKey, stepDoneIndices: steps.map((_, idx) => idx) } : {})
+      };
+    });
+    if (count === 0) {
+      showToast(`이미 모든 ${slotName} 루틴이 완료되어 있습니다.`);
+      return;
+    }
+    setFamilyRoutines(nextList);
+    recordActivity("루틴", "일괄완료", `${slotName} 루틴 ${count}건`);
+    syncRoutinesToCloud(nextList);
+    showToast(`✅ ${slotName} 루틴 ${count}건을 일괄 완료 처리했습니다!`);
   };
 
   const getRoutineSubStepDoneSet = (rt) => {
@@ -13100,8 +13168,32 @@ ${validText}
                 <p className="text-[10px] text-stone-500 font-semibold mt-0.5">
                   현재({isWeekendNow() ? "주말" : "평일"}): <span className="text-stone-900 font-extrabold">{getCurrentRoutineTimeSlot(routineTimeRanges, liveMinuteTick, routineSlotDefs)}</span> · 자정·월요일 자동 리셋
                 </p>
+                {familyRoutines.length > 0 && (() => {
+                  const doneCnt = familyRoutines.filter((r) => isRoutineDoneNow(r)).length;
+                  const pct = Math.round((doneCnt / familyRoutines.length) * 100);
+                  return (
+                    <div className="mt-1.5 flex items-center gap-2">
+                      <div className="flex-1 h-1.5 rounded-full bg-stone-100 overflow-hidden">
+                        <div className="h-full bg-[#5E7A65] transition-all" style={{ width: `${pct}%` }} />
+                      </div>
+                      <span className="text-[10px] font-black text-[#35503C] whitespace-nowrap">
+                        달성 {doneCnt}/{familyRoutines.length} ({pct}%)
+                      </span>
+                    </div>
+                  );
+                })()}
               </div>
               <div className="flex items-center gap-1 shrink-0">
+                {familyRoutines.some((r) => (r.timeSlot || "상시") === "아침" && !isRoutineDoneNow(r)) && (
+                  <button
+                    type="button"
+                    onClick={() => handleBulkCompleteSlotRoutines("아침")}
+                    className="px-2 py-1.5 rounded-xl bg-[#EEF3EE] hover:bg-[#DFE9E0] text-[#35503C] border border-[#C9D8CC] text-[10px] font-extrabold whitespace-nowrap"
+                    title="미완료된 아침 루틴을 한 번에 완료 상태로 복구합니다"
+                  >
+                    🌅 아침 일괄완료
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => setIsRoutineRangeEditOpen((v) => !v)}
