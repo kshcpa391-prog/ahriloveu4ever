@@ -1212,7 +1212,7 @@ const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.65) =>
     img.src = dataUrl;
   });
 
-const APP_CODE_VERSION = "v11.45";
+const APP_CODE_VERSION = "v11.46";
 
 const formatRoutineTimeLabel = (hhmm) => {
   const m = String(hhmm || "").trim().match(/^(\d{2}):(\d{2})$/);
@@ -1228,7 +1228,7 @@ const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-const APP_BUILD_DATE = "2026-11-17 20:52";
+const APP_BUILD_DATE = "2026-11-17 21:25";
 const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1255,6 +1255,18 @@ const HELPER_CONFIGURABLE_TABS = [
 ];
 
 const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v11.46",
+    version: "v11.46",
+    date: "2026-11-17",
+    title: "레시피북 모바일 검색·필터 2단 정돈, 검색어 지우기 & [🎲 랜덤 추천] 도입",
+    changes: [
+      "시각화 개선: 레시피북 검색창이 좁아지지 않도록 검색창(1행)과 난이도·정렬(2행)을 깔끔하게 분리",
+      "편의성 개선: 레시피 검색창 우측 [✕] 빠른 초기화 버튼 추가",
+      "신규 기능: 현재 조건에 맞는 레시피 중 하나를 즉시 골라주는 [🎲 랜덤 추천] 버튼 도입",
+      "전수 검증: V8(node --check) 구문 검증 및 JSX·상태·아이콘 오류 0건 재확인"
+    ]
+  },
   {
     id: "patch-v11.45",
     version: "v11.45",
@@ -16899,7 +16911,7 @@ ${validText}
               </div>
               <button
                 onClick={() => openNewRecipeModal()}
-                className="px-3 py-2 rounded-xl bg-stone-900 text-white text-xs font-extrabold shrink-0"
+                className="px-3 py-2 rounded-xl bg-stone-900 text-white text-xs font-extrabold shrink-0 whitespace-nowrap"
               >
                 + 레시피 등록
               </button>
@@ -16917,33 +16929,61 @@ ${validText}
               </div>
             )}
 
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={recipeSearch}
-                onChange={(e) => setRecipeSearch(e.target.value)}
-                placeholder="요리명·재료 검색 (예: 소고기, 무국)"
-                className="flex-1 px-3 py-2 rounded-xl border border-stone-200 bg-white text-xs font-bold"
-              />
-              <select
-                value={recipeDiffFilter}
-                onChange={(e) => setRecipeDiffFilter(e.target.value)}
-                className="px-2.5 py-2 rounded-xl border border-stone-200 bg-white text-xs font-bold"
-              >
-                <option value="전체">난이도 전체</option>
-                <option value="쉬움">쉬움</option>
-                <option value="보통">보통</option>
-                <option value="어려움">어려움</option>
-              </select>
-              <select
-                value={recipeSort}
-                onChange={(e) => setRecipeSort(e.target.value)}
-                className="px-2 py-2 rounded-xl border border-stone-200 bg-white text-xs font-bold"
-              >
-                <option value="latest">최신순</option>
-                <option value="rating">별점순</option>
-                <option value="time">조리시간순</option>
-              </select>
+            <div className="space-y-2">
+              <div className="relative">
+                <input
+                  type="text"
+                  value={recipeSearch}
+                  onChange={(e) => setRecipeSearch(e.target.value)}
+                  placeholder="🔍 요리명·재료 검색 (예: 소고기, 무국)"
+                  className="w-full px-3 py-2 pr-8 rounded-xl border border-stone-200 bg-white text-xs font-bold"
+                />
+                {recipeSearch && (
+                  <button
+                    type="button"
+                    onClick={() => setRecipeSearch("")}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-700 text-xs font-black"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+              <div className="flex items-center gap-1.5">
+                <select
+                  value={recipeDiffFilter}
+                  onChange={(e) => setRecipeDiffFilter(e.target.value)}
+                  className="flex-1 px-2.5 py-1.5 rounded-xl border border-stone-200 bg-white text-[11px] font-bold"
+                >
+                  <option value="전체">난이도 전체</option>
+                  <option value="쉬움">쉬움</option>
+                  <option value="보통">보통</option>
+                  <option value="어려움">어려움</option>
+                </select>
+                <select
+                  value={recipeSort}
+                  onChange={(e) => setRecipeSort(e.target.value)}
+                  className="flex-1 px-2.5 py-1.5 rounded-xl border border-stone-200 bg-white text-[11px] font-bold"
+                >
+                  <option value="latest">최신순</option>
+                  <option value="rating">별점순</option>
+                  <option value="time">조리시간순</option>
+                </select>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (filteredRecipes.length === 0) {
+                      showToast("추천할 레시피가 없습니다.");
+                      return;
+                    }
+                    const picked = filteredRecipes[Math.floor(Math.random() * filteredRecipes.length)];
+                    setRecipeSearch(picked.title || "");
+                    showToast(`🎲 오늘의 랜덤 추천: ${picked.title}`);
+                  }}
+                  className="px-2.5 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-[11px] font-extrabold whitespace-nowrap shrink-0"
+                >
+                  🎲 랜덤 추천
+                </button>
+              </div>
             </div>
 
             <div className="flex gap-1.5 overflow-x-auto pb-0.5">
