@@ -1164,8 +1164,8 @@ const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.65) =>
     img.src = dataUrl;
   });
 
-const APP_CODE_VERSION = "v10.94";
-const APP_BUILD_DATE = "2026-11-17 13:50";
+const APP_CODE_VERSION = "v10.95";
+const APP_BUILD_DATE = "2026-11-17 13:56";
 const EDITOR_INVITE_CODE = "0402";
 const DEFAULT_HELPER_CODE = "1234";
 const GUEST_ALLOWED_TABS = ["home", "daily", "recipes"];
@@ -1183,6 +1183,16 @@ const HELPER_CONFIGURABLE_TABS = [
 ];
 
 const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v10.95",
+    version: "v10.95",
+    date: "2026-11-17",
+    title: "Vercel 배포 빌드 오류(JSON 백업 객체 쉼표 누락) 수정 및 전체 JS/JSX 구문 검증 완료",
+    changes: [
+      "buildFullBackupJsonString 내 routineTimeRanges 뒤 쉼표(,) 누락으로 발생하던 빌드 SyntaxError 수정",
+      "전체 JS 구간 node --check 문법 검증 및 JSX 태그/프래그먼트 짝 전수 검사 통과"
+    ]
+  },
   {
     id: "patch-v10.94",
     version: "v10.94",
@@ -5505,8 +5515,8 @@ function MainApp() {
         familyRoutines,
         homeLayoutConfig,
         homeTimeRanges,
-        routineTimeRanges
-      routineSlotDefs,
+        routineTimeRanges,
+        routineSlotDefs
       }
     };
     return JSON.stringify(fullSnapshot, null, 2);
