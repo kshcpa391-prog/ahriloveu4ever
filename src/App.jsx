@@ -1116,11 +1116,21 @@ const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.65) =>
     img.src = dataUrl;
   });
 
-const APP_CODE_VERSION = "v10.81";
-const APP_BUILD_DATE = "2026-11-17 09:55";
+const APP_CODE_VERSION = "v10.82";
+const APP_BUILD_DATE = "2026-11-17 09:58";
 const EDITOR_INVITE_CODE = "0402";
 
 const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v10.82",
+    version: "v10.82",
+    date: "2026-11-17",
+    title: "TDZ(Cannot access 'ye' before initialization) 오류 수정 & JSX IIFE 전수 검증",
+    changes: [
+      "홈 화면 MENU_DEFS 내 [🔄 반복 루틴] 카드가 activeRoutines 선언(9025행)보다 앞(8927행)에서 참조하던 순서를 바로잡아 초기화 오류 해결",
+      "모든 JSX 즉시실행함수(() => {}) 내 선언 순서 전수 검사로 TDZ 위험 0건 확인"
+    ]
+  },
   {
     id: "patch-v10.81",
     version: "v10.81",
@@ -8906,6 +8916,9 @@ ${validText}
         const todayKey = getTodayStr();
         const todayMealsList = meals.filter((m) => m.date === todayKey);
         const firstMealPreview = todayMealsList[0] ? `${todayMealsList[0].slot}: ${todayMealsList[0].menu}` : "아직 기록 없음";
+        const curSlot = getCurrentRoutineTimeSlot(routineTimeRanges, liveMinuteTick);
+        const wkndNow = isWeekendNow();
+        const activeRoutines = familyRoutines.filter((r) => !isRoutineDoneNow(r));
 
         const MENU_DEFS = {
           daily: {
@@ -9020,9 +9033,6 @@ ${validText}
           }
         };
 
-        const curSlot = getCurrentRoutineTimeSlot(routineTimeRanges, liveMinuteTick);
-        const wkndNow = isWeekendNow();
-        const activeRoutines = familyRoutines.filter((r) => !isRoutineDoneNow(r));
         const slotFilteredRoutines =
           homeRoutineSlotFilter === "전체"
             ? activeRoutines
