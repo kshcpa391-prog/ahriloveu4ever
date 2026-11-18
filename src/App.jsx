@@ -60,6 +60,7 @@ import {
   deleteObject
 } from "firebase/storage";
 import {
+  USER_FIREBASE_CONFIG,
   EMBEDDED_GEMINI_KEY,
   auth,
   db,
@@ -5420,7 +5421,6 @@ ${validText}
       const refV4 = getDocRef("family_fridge_v4", item.id);
       const refV3 = getDocRef("family_fridge_v3", item.id);
       let finalServerQty = optimisticNext;
-      let finalUpdatedAt = new Date().toISOString();
       await runTransaction(db, async (tx) => {
         const snapV4 = await tx.get(refV4);
         const snapV3 = await tx.get(refV3);
