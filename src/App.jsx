@@ -12211,7 +12211,7 @@ ${validText}
                               {(() => {
                                 if (rt.cycle === "interval" && intervalInfo) {
                                   return (
-                                    <span className={`px-1.5 py-0.5 rounded text-[10.5px] font-black ${
+                                    <span className={`px-1.5 py-0.5 rounded text-[10.5px] font-black whitespace-nowrap ${
                                       !doneNow ? "bg-teal-100 text-teal-900" : "bg-stone-200 text-stone-600"
                                     }`}>
                                       {intervalInfo.intervalDays}일마다{doneNow ? ` · D-${intervalInfo.daysLeft}` : " · 오늘 할 날"}
@@ -12231,7 +12231,7 @@ ${validText}
                                     ? ` · ${info.dateLabel} (${Math.abs(info.diff)}일 지남)`
                                     : ` · ${info.dateLabel} (D-${info.diff})`;
                                   return (
-                                    <span className={`px-1.5 py-0.5 rounded text-[10.5px] font-black ${
+                                    <span className={`px-1.5 py-0.5 rounded text-[10.5px] font-black whitespace-nowrap ${
                                       !doneNow && info && info.diff <= 0
                                         ? "bg-rose-100 text-rose-800"
                                         : "bg-amber-100 text-amber-900"
@@ -12246,13 +12246,13 @@ ${validText}
                                       ? `매주 ${WEEKDAY_KO[Number(rt.weekDay)] || ""}요일${nextDateInfo ? ` · ${nextDateInfo.dateLabel}` : ""}`
                                       : "매주 리셋";
                                   return (
-                                    <span className="px-1.5 py-0.5 rounded text-[10.5px] font-black bg-purple-100 text-purple-800">
+                                    <span className="px-1.5 py-0.5 rounded text-[10.5px] font-black bg-purple-100 text-purple-800 whitespace-nowrap">
                                       {wkLabel}
                                     </span>
                                   );
                                 }
                                 return (
-                                  <span className="px-1.5 py-0.5 rounded text-[10.5px] font-black bg-sky-100 text-sky-800">
+                                  <span className="px-1.5 py-0.5 rounded text-[10.5px] font-black bg-sky-100 text-sky-800 whitespace-nowrap">
                                     매일 자정 리셋
                                   </span>
                                 );

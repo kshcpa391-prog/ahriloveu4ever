@@ -1091,7 +1091,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
     img.src = dataUrl;
   });
 
-export const APP_CODE_VERSION = "v11.92";
+export const APP_CODE_VERSION = "v11.93";
 
 export const formatRoutineTimeLabel = (hhmm) => {
   const m = String(hhmm || "").trim().match(/^(\d{2}):(\d{2})$/);
@@ -1169,6 +1169,16 @@ export const formatTime12Ko = (ms) => {
 };
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v11.93",
+    version: "v11.93",
+    date: "2026-11-18",
+    title: "반복 루틴 주기 배지 줄바꿈 방지 & 최종 배포 정합성 점검",
+    items: [
+      "반복 루틴 카드의 격일·월간·주간·매일 주기 배지 4종에 whitespace-nowrap 적용",
+      "시율 케어 영역 미수정, 전체 미종료 문자열·문법·대소문자 경로 0건 최종 확인"
+    ]
+  },
   {
     id: "patch-v11.92",
     version: "v11.92",
