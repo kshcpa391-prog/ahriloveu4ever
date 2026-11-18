@@ -1,3 +1,5 @@
+import { EMBEDDED_GEMINI_KEY } from "./Firebase";
+
 // ==========================================
 // 가족 앱 공통 상수 · 기준표 · 초기 시드 데이터
 // ==========================================
@@ -503,7 +505,7 @@ export const extractJsonObject = (rawText) => {
   return null;
 };
 
-async function callOpenAiEngine({ openaiKey, promptText, imagePart = null, temperature = 0.5, expectObject = false }) {
+export async function callOpenAiEngine({ openaiKey, promptText, imagePart = null, temperature = 0.5, expectObject = false }) {
   const cleanKey = String(openaiKey || "").trim();
   if (!cleanKey) throw new Error("OpenAI API 키가 비어 있습니다.");
 
@@ -559,7 +561,7 @@ async function callOpenAiEngine({ openaiKey, promptText, imagePart = null, tempe
   }
 }
 
-async function callReliableAiEngine({
+export async function callReliableAiEngine({
   apiKey,
   openaiApiKey = "",
   aiProvider = "auto",
