@@ -1464,7 +1464,7 @@ function MainApp() {
     title: "",
     content: "",
     category: "육아/아이들",
-    author: "김수혁",
+    author: "수혁",
     pinned: true
   });
 
@@ -1875,6 +1875,34 @@ function MainApp() {
       setToastMsg("");
       setToastUndo(null);
     }, undoAction ? 5000 : 3500);
+  };
+
+  const copyTextSafe = async (text, successMsg = "📋 복사했습니다!") => {
+    const val = String(text ?? "");
+    try {
+      if (navigator?.clipboard?.writeText) {
+        await navigator.clipboard.writeText(val);
+        showToast(successMsg);
+        return true;
+      }
+    } catch (e) {}
+    try {
+      const ta = document.createElement("textarea");
+      ta.value = val;
+      ta.setAttribute("readonly", "");
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.select();
+      const ok = document.execCommand("copy");
+      document.body.removeChild(ta);
+      if (ok) {
+        showToast(successMsg);
+        return true;
+      }
+    } catch (e) {}
+    showToast("⚠️ 복사에 실패했습니다.");
+    return false;
   };
 
   const recordDeletedLog = async (type, label, data, actionType = "delete") => {
@@ -6125,12 +6153,7 @@ ${validText}
       }
     }
     const textOut = linesOut.join("\n");
-    try {
-      await navigator.clipboard.writeText(textOut);
-      showToast("📋 오늘 가족 브리핑이 복사되었습니다! (카톡에 바로 붙여넣기)");
-    } catch (e) {
-      showToast("브리핑 복사 완료");
-    }
+    await copyTextSafe(textOut, "📋 오늘 가족 브리핑이 복사되었습니다! (카톡에 바로 붙여넣기)");
   };
 
   const openBabyTab = () => {
@@ -10012,7 +10035,7 @@ ${validText}
                 <div className="bg-white border border-stone-200 rounded-2xl p-3 space-y-1.5 shadow-sm">
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-[13.5px] font-black text-stone-900">🌅 좋은 아침 · 등원/오전 브리핑</span>
-                    <span className="px-2 py-0.5 rounded-full bg-stone-100 text-stone-600 text-[11.5px] font-extrabold">{modeMeta.rangeLabel}</span>
+                    <span className="px-2 py-0.5 rounded-full bg-stone-100 text-stone-600 text-[11.5px] font-extrabold whitespace-nowrap shrink-0">{modeMeta.rangeLabel}</span>
                   </div>
                   <div className="flex items-center justify-between gap-2 text-[12.5px] font-bold text-stone-600">
                     <span className="truncate">
@@ -10042,7 +10065,7 @@ ${validText}
                 <div className="bg-white border border-stone-200 rounded-2xl p-3 space-y-1.5 shadow-sm">
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-[13.5px] font-black text-stone-900">🌆 오후 · 저녁 준비 &amp; 냉장고 파먹기</span>
-                    <span className="px-2 py-0.5 rounded-full bg-stone-100 text-stone-600 text-[11.5px] font-extrabold">{modeMeta.rangeLabel}</span>
+                    <span className="px-2 py-0.5 rounded-full bg-stone-100 text-stone-600 text-[11.5px] font-extrabold whitespace-nowrap shrink-0">{modeMeta.rangeLabel}</span>
                   </div>
                   <div className="flex flex-wrap items-center gap-1">
                     {expiringItems.length > 0 ? (
@@ -10051,7 +10074,7 @@ ${validText}
                           key={it.id}
                           type="button"
                           onClick={() => setActiveTab("fridge")}
-                          className="px-2 py-0.5 rounded-full bg-rose-50 text-rose-700 border border-rose-200 text-[11.5px] font-extrabold"
+                          className="px-2 py-0.5 rounded-full bg-rose-50 text-rose-700 border border-rose-200 text-[11.5px] font-extrabold whitespace-nowrap shrink-0"
                         >
                           ❄️ {it.name} ({it.diff < 0 ? "만료" : `D-${it.diff}`})
                         </button>
@@ -10847,12 +10870,7 @@ ${validText}
                               (ex) => `- ${ex.date} | ${ex.category || "기타"} | ${ex.title} : ${(Number(ex.amount) || 0).toLocaleString()}원`
                             );
                             const txt = `🧾 ${currentMonth} 식비 원장 (${filteredLedger.length}건 · 합계 ${filteredSum.toLocaleString()}원)\n${lines.join("\n")}`;
-                            try {
-                              await navigator.clipboard.writeText(txt);
-                              showToast(`📋 지출 원장 ${filteredLedger.length}건을 복사했습니다!`);
-                            } catch (e) {
-                              showToast("⚠️ 클립보드 복사에 실패했습니다.");
-                            }
+                            await copyTextSafe(txt, `📋 지출 원장 ${filteredLedger.length}건을 복사했습니다!`);
                           }}
                           className="px-2 py-1 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 text-[11.5px] font-extrabold whitespace-nowrap shrink-0"
                         >
@@ -10994,7 +11012,7 @@ ${validText}
             >
               <span className="whitespace-nowrap">📅 달력·일정</span>
               {imminentSchedulesWithin3Days.length > 0 && (
-                <span className="px-1.5 py-0.5 rounded-full bg-rose-600 text-white text-[10.5px] font-black leading-none">
+                <span className="px-1.5 py-0.5 rounded-full bg-rose-600 text-white text-[10.5px] font-black leading-none whitespace-nowrap shrink-0">
                   {imminentSchedulesWithin3Days.length}
                 </span>
               )}
@@ -11010,7 +11028,7 @@ ${validText}
             >
               <span className="whitespace-nowrap">✅ 할 일</span>
               {globalTodoBadgeStats.activeCount > 0 && (
-                <span className="px-1.5 py-0.5 rounded-full bg-amber-500 text-white text-[10.5px] font-black leading-none">
+                <span className="px-1.5 py-0.5 rounded-full bg-amber-500 text-white text-[10.5px] font-black leading-none whitespace-nowrap shrink-0">
                   {globalTodoBadgeStats.activeCount}
                 </span>
               )}
@@ -11026,7 +11044,7 @@ ${validText}
             >
               <span className="whitespace-nowrap">🔄 반복 루틴</span>
               {familyRoutines.filter((r) => !isRoutineDoneNow(r)).length > 0 && (
-                <span className="px-1.5 py-0.5 rounded-full bg-indigo-600 text-white text-[10.5px] font-black leading-none">
+                <span className="px-1.5 py-0.5 rounded-full bg-indigo-600 text-white text-[10.5px] font-black leading-none whitespace-nowrap shrink-0">
                   {familyRoutines.filter((r) => !isRoutineDoneNow(r)).length}
                 </span>
               )}
@@ -11100,7 +11118,7 @@ ${validText}
                     setScheduleMonth(today.slice(0, 7));
                     setScheduleSelectedDate(today);
                   }}
-                  className="px-2 py-0.5 rounded-full text-[11.5px] font-extrabold bg-stone-100 text-stone-700 hover:bg-stone-200"
+                  className="px-2 py-0.5 rounded-full text-[11.5px] font-extrabold bg-stone-100 text-stone-700 whitespace-nowrap shrink-0 hover:bg-stone-200"
                 >
                   오늘
                 </button>
@@ -13196,12 +13214,7 @@ ${validText}
                   onClick={async () => {
                     const items = shoppingList.filter((s) => !s.checked);
                     const msg = `🛒 장보기 목록 (${items.length}건)\n` + items.map((s) => `- ${s.name}${s.quantity ? ` (${s.quantity})` : ""}`).join("\n");
-                    try {
-                      await navigator.clipboard.writeText(msg);
-                      showToast("📋 장보기 목록이 복사되었습니다!");
-                    } catch (e) {
-                      showToast("⚠️ 클립보드 복사에 실패했습니다.");
-                    }
+                    await copyTextSafe(msg, "📋 장보기 목록이 복사되었습니다!");
                   }}
                   className="px-2.5 py-1 rounded-lg bg-[#EEF3EE] text-[#35503C] border border-[#C9D8CC] text-[11.5px] font-extrabold shrink-0"
                 >
@@ -13332,12 +13345,7 @@ ${validText}
                         const txt = remainList
                           .map((s) => `${s.urgent ? "🚨 " : "- "}${s.name}${s.memo ? ` (${s.memo})` : ""}`)
                           .join("\n");
-                        try {
-                          await navigator.clipboard.writeText(`🛒 남은 장보기 (${remainList.length}건)\n${txt}`);
-                          showToast(`📋 남은 장보기 ${remainList.length}건을 복사했습니다!`);
-                        } catch (e) {
-                          showToast("⚠️ 클립보드 복사에 실패했습니다.");
-                        }
+                        await copyTextSafe(`🛒 남은 장보기 (${remainList.length}건)\n${txt}`, `📋 남은 장보기 ${remainList.length}건을 복사했습니다!`);
                       }}
                       className="px-2 py-1 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 text-[11.5px] font-extrabold whitespace-nowrap shrink-0"
                     >
@@ -13559,7 +13567,7 @@ ${validText}
                   title: "",
                   content: "",
                   category: "육아/아이들",
-                  author: "김수혁",
+                  author: "수혁",
                   pinned: true
                 });
                 setIsNoticeModalOpen(true);
@@ -13628,12 +13636,7 @@ ${validText}
                       type="button"
                       onClick={async () => {
                         const txt = `[${n.category}] ${n.title}\n${n.content || ""}`.trim();
-                        try {
-                          await navigator.clipboard.writeText(txt);
-                          showToast("📋 공지 내용이 복사되었습니다!");
-                        } catch (e) {
-                          showToast("⚠️ 복사에 실패했습니다.");
-                        }
+                        await copyTextSafe(txt, "📋 공지 내용이 복사되었습니다!");
                       }}
                       className="px-2 py-0.5 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 text-[11.5px] font-extrabold whitespace-nowrap"
                     >
@@ -14271,7 +14274,7 @@ ${validText}
                   key={rec.id}
                   className="bg-white p-4 rounded-2xl border border-stone-200 shadow-sm space-y-2.5"
                 >
-                  <span className="px-2.5 py-0.5 rounded-full text-[11.5px] font-extrabold bg-amber-100 text-amber-900">
+                  <span className="px-2.5 py-0.5 rounded-full text-[11.5px] font-extrabold bg-amber-100 text-amber-900 whitespace-nowrap shrink-0">
                     {rec.target} · ⏱️ {rec.time}
                   </span>
                   <h3 className="text-[17.5px] font-black text-stone-900">{rec.title}</h3>
@@ -15022,14 +15025,39 @@ ${validText}
                       <span className="text-[11px] font-medium text-stone-400 whitespace-nowrap truncate">
                         기저귀: 짧게 소변 · 길게(0.5초) 대변
                       </span>
-                      <button
-                        type="button"
-                        onClick={() => setZipImportPicker("activity")}
-                        className="px-2 py-0.5 rounded-full bg-stone-50 hover:bg-stone-100 border border-stone-200 text-stone-600 text-[10.5px] font-bold whitespace-nowrap shrink-0"
-                        title="베이비타임 Activity ZIP을 클라우드에 업로드"
-                      >
-                        📥 베이비타임(.zip)
-                      </button>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const nowT = Date.now();
+                            setActivityEditModal({
+                              isNew: true,
+                              id: `act-${activeChild.id}-${nowT}`,
+                              childId: activeChild.id,
+                              type: "분유",
+                              subType: "",
+                              date: getTodayStr(),
+                              startMs: nowT,
+                              endMs: null,
+                              durationMin: 0,
+                              amountMl: 0,
+                              memo: "",
+                              author: currentProfileName || "수혁"
+                            });
+                          }}
+                          className="px-2 py-0.5 rounded-full bg-[#EEF3EE] hover:bg-[#DFE9E0] border border-[#C9D8CC] text-[#35503C] text-[10.5px] font-bold whitespace-nowrap shrink-0"
+                        >
+                          + 직접 기록
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setZipImportPicker("activity")}
+                          className="px-2 py-0.5 rounded-full bg-stone-50 hover:bg-stone-100 border border-stone-200 text-stone-600 text-[10.5px] font-bold whitespace-nowrap shrink-0"
+                          title="베이비타임 Activity ZIP을 클라우드에 업로드"
+                        >
+                          📥 베이비타임(.zip)
+                        </button>
+                      </div>
                     </div>
 
                     <div className="flex items-center gap-3 overflow-x-auto px-3.5 py-2">
@@ -15202,10 +15230,12 @@ ${validText}
                       const fMl = todayActs.filter((a) => a.type === "분유" || a.type === "유축수유").reduce((s, a) => s + (Number(a.amountMl) || 0), 0);
                       const bMin = todayActs.filter((a) => a.type === "모유").reduce((s, a) => s + (Number(a.durationMin) || 0), 0);
                       const dCount = todayActs.filter((a) => a.type === "기저귀").length;
+                      const sMin = todayActs.filter((a) => a.type === "수면").reduce((s, a) => s + (Number(a.durationMin) || 0), 0);
+                      const sTxt = sMin >= 60 ? `${Math.floor(sMin / 60)}h${sMin % 60}m` : `${sMin}분`;
                       return (
                         <div className="flex items-center justify-between gap-1.5 px-3.5 py-1.5 bg-[#F8F9FA] border-t border-stone-100 text-[11px] font-semibold text-stone-600 flex-wrap">
                           <span>📅 오늘 요약</span>
-                          <span>수유 {fCount}회 ({fMl > 0 ? `${fMl}ml` : ""}{fMl > 0 && bMin > 0 ? " + " : ""}{bMin > 0 ? `모유 ${bMin}분` : fMl === 0 ? "0분" : ""}) · 기저귀 {dCount}회</span>
+                          <span>수유 {fCount}회 ({fMl > 0 ? `${fMl}ml` : ""}{fMl > 0 && bMin > 0 ? " + " : ""}{bMin > 0 ? `모유 ${bMin}분` : fMl === 0 ? "0분" : ""}) · 기저귀 {dCount}회 · 수면 {sTxt}</span>
                         </div>
                       );
                     })()}
@@ -15250,12 +15280,7 @@ ${validText}
                               const sTxt = sMin >= 60 ? `${Math.floor(sMin / 60)}시간 ${sMin % 60}분` : `${sMin}분`;
                               const lastF = sum.lastFeed ? `${formatTime12Ko(sum.lastFeed.startMs)} ${sum.lastFeed.type}` : "-";
                               const txt = `👶 ${activeChild.name} 오늘 케어 요약 (${todayKey})\n• 수유: ${fCnt}회 (분유·유축 ${fMl}ml / 모유 ${bMin}분)\n• 마지막 수유 시작: ${lastF}\n• 기저귀: 소변 ${pCnt}회 · 대변 ${dCnt}회\n• 총 수면: ${sTxt}`;
-                              try {
-                                await navigator.clipboard.writeText(txt);
-                                showToast("📋 오늘 케어 요약을 복사했습니다!");
-                              } catch (e) {
-                                showToast("⚠️ 복사에 실패했습니다.");
-                              }
+                              await copyTextSafe(txt, "📋 오늘 케어 요약을 복사했습니다!");
                             }}
                             className="px-2 py-1 rounded-full bg-[#EEF3EE] hover:bg-[#DFE9E0] border border-[#C9D8CC] text-[#35503C] text-[11.5px] font-extrabold whitespace-nowrap"
                           >
@@ -15281,11 +15306,29 @@ ${validText}
                   )}
 
                   {groupedByDate.length === 0 ? (
-                    renderStatusState({
-                      type: "empty",
-                      title: `${activeChild.name} 수유·생활 기록이 없습니다`,
-                      description: "위 아이콘으로 바로 기록하거나 [📥 베이비타임(.zip)]으로 불러오세요."
-                    })
+                    <div className="space-y-2">
+                      {renderStatusState({
+                        type: "empty",
+                        title: `${activeChild.name} 수유·생활 기록이 없습니다`,
+                        description: (activityDateFilter !== "all" || activityTypeFilter !== "all")
+                          ? "선택한 필터 조건에 맞는 기록이 없습니다."
+                          : "위 아이콘으로 바로 기록하거나 [📥 베이비타임(.zip)]으로 불러오세요."
+                      })}
+                      {(activityDateFilter !== "all" || activityTypeFilter !== "all") && (
+                        <div className="flex justify-center">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setActivityDateFilter("all");
+                              setActivityTypeFilter("all");
+                            }}
+                            className="px-3 py-1.5 rounded-full bg-stone-900 text-white text-[12px] font-bold whitespace-nowrap"
+                          >
+                            🔄 필터 초기화
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   ) : (
                     <div className="space-y-2.5">
                       {(activityShowAllDays || activityDateFilter !== "all" ? groupedByDate : groupedByDate.slice(0, 3)).map((grp) => {
@@ -16423,12 +16466,7 @@ ${validText}
                                             return `[${it.date} · ${cIds.join("·")}] ${it.mood || ""}\n${titleLine}${it.content || ""}`.trim();
                                           })
                                           .join("\n\n---\n\n");
-                                        try {
-                                          await navigator.clipboard.writeText(`📖 ${curYm} 육아일기 모아보기 (${monthItems.length}편)\n\n${text}`);
-                                          showToast(`📋 ${curYm} 육아일기 ${monthItems.length}편을 복사했습니다!`);
-                                        } catch (e) {
-                                          showToast("⚠️ 클립보드 복사에 실패했습니다.");
-                                        }
+                                        await copyTextSafe(`📖 ${curYm} 육아일기 모아보기 (${monthItems.length}편)\n\n${text}`, `📋 ${curYm} 육아일기 ${monthItems.length}편을 복사했습니다!`);
                                       }}
                                       className="px-2 py-0.5 rounded-lg bg-white border border-stone-200 text-[10.5px] font-extrabold text-stone-700 hover:bg-stone-50 whitespace-nowrap"
                                     >
@@ -16469,10 +16507,7 @@ ${validText}
                                     const metas = cIds.map((cid) => CHILDREN_INFO.find((c) => c.id === cid)).filter(Boolean);
                                     const ageTxt = metas.map((m) => `${m.name}(${formatBabyAgeLabel(m.birthDate, entry.date)})`).join(" · ");
                                     const copyTxt = `[${entry.date} · ${ageTxt}] ${entry.mood || ""}\n${entry.title ? `${entry.title}\n` : ""}${entry.content || ""}`.trim();
-                                    try {
-                                      await navigator.clipboard.writeText(copyTxt);
-                                      showToast("📄 육아일기 텍스트가 복사되었습니다!");
-                                    } catch (e) {}
+                                    await copyTextSafe(copyTxt, "📄 육아일기 텍스트가 복사되었습니다!");
                                   }}
                                   className="px-2.5 py-1 rounded-lg bg-[#F3EEE4] hover:bg-stone-200 text-stone-800 text-[11.5px] font-extrabold whitespace-nowrap shrink-0"
                                 >
@@ -19196,12 +19231,7 @@ ${validText}
                     type="button"
                     onClick={async () => {
                       const url = `${window.location.origin}/?invite=${adminCode}`;
-                      try {
-                        await navigator.clipboard.writeText(url);
-                        showToast("🔗 관리자 접속 링크 복사 완료!");
-                      } catch (e) {
-                        showToast(`링크: ${url}`);
-                      }
+                      await copyTextSafe(url, "🔗 관리자 접속 링크 복사 완료!");
                     }}
                     className="py-1.5 rounded-xl bg-white hover:bg-emerald-50 text-emerald-800 border border-emerald-200 text-[11.5px] font-extrabold"
                   >
@@ -19211,12 +19241,7 @@ ${validText}
                     type="button"
                     onClick={async () => {
                       const url = `${window.location.origin}/?invite=${helperCode}`;
-                      try {
-                        await navigator.clipboard.writeText(url);
-                        showToast("🔗 육아지원군 링크 복사 완료!");
-                      } catch (e) {
-                        showToast(`링크: ${url}`);
-                      }
+                      await copyTextSafe(url, "🔗 육아지원군 링크 복사 완료!");
                     }}
                     className="py-1.5 rounded-xl bg-white hover:bg-sky-100 text-sky-800 border border-sky-200 text-[11.5px] font-extrabold"
                   >
@@ -19709,12 +19734,9 @@ ${validText}
                   type="button"
                   onClick={async () => {
                     const txt = `🌤️ ${weatherInfo.location} (${weatherInfo.updatedTime})\n현재 ${weatherInfo.temp}°C (${weatherInfo.min}°/${weatherInfo.max}°) · ${weatherInfo.rainAlertText}\n미세먼지 ${weatherInfo.pm10}(${weatherInfo.dust?.label || "-"}) / 초미세 ${weatherInfo.pm25}`;
-                    try {
-                      await navigator.clipboard.writeText(txt);
-                      showToast("📋 날씨 요약이 복사되었습니다!");
-                    } catch (e) {}
+                    await copyTextSafe(txt, "📋 날씨 요약이 복사되었습니다!");
                   }}
-                  className="px-2 py-1 rounded-lg bg-[#EEF3EE] text-[#35503C] text-[11.5px] font-extrabold"
+                  className="px-2 py-1 rounded-lg bg-[#EEF3EE] text-[#35503C] text-[11.5px] font-extrabold whitespace-nowrap shrink-0"
                 >
                   📋 복사
                 </button>
@@ -19945,6 +19967,30 @@ ${validText}
             </div>
 
             <div className="p-4 space-y-3.5 overflow-y-auto flex-1">
+              {activityEditModal.isNew && (
+                <div className="flex items-center gap-1.5 overflow-x-auto pb-1.5 border-b border-stone-100">
+                  {BABY_ACTIVITY_TYPES.map((tp) => (
+                    <button
+                      key={tp.id}
+                      type="button"
+                      onClick={() =>
+                        setActivityEditModal((p) => ({
+                          ...p,
+                          type: tp.id,
+                          subType: tp.id === "기저귀" ? "소변" : tp.id === "수면" ? "낮잠" : ""
+                        }))
+                      }
+                      className={`px-2.5 py-1 rounded-full text-[11.5px] font-bold border whitespace-nowrap shrink-0 transition ${
+                        activityEditModal.type === tp.id
+                          ? `${tp.bg} text-white border-transparent`
+                          : "bg-stone-50 text-stone-600 border-stone-200"
+                      }`}
+                    >
+                      {tp.emoji} {tp.label}
+                    </button>
+                  ))}
+                </div>
+              )}
               {/* 시작 시간 + 빠른 -1H / -10분 / -1분 / +1분 / +10분 / +1H */}
               <div className="space-y-2 pb-3 border-b border-stone-100">
                 <div className="flex items-center justify-between gap-2">
@@ -20787,12 +20833,7 @@ ${validText}
                     <button
                       onClick={async () => {
                         const inviteUrl = `${window.location.origin}/?invite=${adminCode}`;
-                        try {
-                          await navigator.clipboard.writeText(inviteUrl);
-                          showToast("🔗 관리자 초대 링크가 복사되었습니다!");
-                        } catch (e) {
-                          showToast(`초대 링크: ${inviteUrl}`);
-                        }
+                        await copyTextSafe(inviteUrl, "🔗 관리자 초대 링크가 복사되었습니다!");
                       }}
                       className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-[13.5px] font-extrabold"
                     >
@@ -20989,12 +21030,7 @@ ${validText}
               <div className="grid grid-cols-3 gap-1.5">
                 <button
                   onClick={async () => {
-                    try {
-                      await navigator.clipboard.writeText(exportText);
-                      showToast("📋 전체 재고 텍스트가 복사되었습니다!");
-                    } catch (e) {
-                      showToast("⚠️ 클립보드 복사 권한이 없어 TXT 다운로드를 이용해 주세요.");
-                    }
+                    await copyTextSafe(exportText, "📋 전체 재고 텍스트가 복사되었습니다!");
                   }}
                   className="py-2.5 rounded-xl bg-stone-900 text-white text-[13.5px] font-extrabold"
                 >

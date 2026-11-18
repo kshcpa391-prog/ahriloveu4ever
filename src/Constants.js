@@ -1091,7 +1091,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
     img.src = dataUrl;
   });
 
-export const APP_CODE_VERSION = "v11.76";
+export const APP_CODE_VERSION = "v11.78";
 
 export const formatRoutineTimeLabel = (hhmm) => {
   const m = String(hhmm || "").trim().match(/^(\d{2}):(\d{2})$/);
@@ -1169,6 +1169,28 @@ export const formatTime12Ko = (ms) => {
 };
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v11.78",
+    version: "v11.78",
+    date: "2026-11-18",
+    title: "클립보드 100% 통합 · 필터 초기화 버튼 · 모바일 배지 줄바꿈 최종 정리",
+    items: [
+      "브리핑·육아일기·날씨 모달 잔여 복사 코드 3곳까지 copyTextSafe()로 100% 통합",
+      "수유·생활 필터 결과 0건일 때 원탭 [🔄 필터 초기화] 버튼 추가",
+      "모바일 소형 배지·칩 10여 곳 whitespace-nowrap 보강 및 최종 문법·배포 점검 완료"
+    ]
+  },
+  {
+    id: "patch-v11.77",
+    version: "v11.77",
+    date: "2026-11-18",
+    title: "모바일 복사 폴백 통합 · 수유 직접 기록 추가 · 배지 줄바꿈 최종 정리",
+    items: [
+      "13곳의 중복 클립보드 복사 코드를 copyTextSafe()로 통합하고 iOS/모바일 폴백(execCommand) 추가",
+      "수유·생활 탭 [+ 직접 기록] 버튼 및 모달 내 종류 선택 칩 추가, 오늘 요약에 총 수면 시간 표시",
+      "일정·할일·루틴 탭 숫자 배지 whitespace-nowrap 적용 및 잔여 '김수혁' 기본값 2글자 정리"
+    ]
+  },
   {
     id: "patch-v11.76",
     version: "v11.76",
