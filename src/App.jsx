@@ -15017,32 +15017,27 @@ ${validText}
                     className="hidden"
                   />
 
-                  <div ref={activityTopRef} className="bg-white p-3 rounded-2xl border border-stone-200 shadow-sm space-y-2.5 scroll-mt-4">
-                    <div className="space-y-0.5">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-[13.5px] font-black text-stone-900 whitespace-nowrap">
-                          🍼 {activeChild.name} 원탭 기록
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => setZipImportPicker("activity")}
-                          className="px-2 py-1 rounded-xl bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-900 text-[11px] font-extrabold whitespace-nowrap shrink-0"
-                          title="베이비타임 Activity ZIP을 클라우드에 업로드"
-                        >
-                          📥 베이비타임(.zip)
-                        </button>
-                      </div>
-                      <div className="text-[10.5px] font-semibold text-stone-400 whitespace-nowrap truncate">
-                        기저귀: 짧게 누르면 소변 · 길게(0.5초) 누르면 대변
-                      </div>
+                  <div ref={activityTopRef} className="bg-white rounded-2xl border border-stone-200/80 shadow-sm overflow-hidden scroll-mt-4">
+                    <div className="px-3.5 pt-2.5 pb-1 flex items-center justify-between gap-2">
+                      <span className="text-[11px] font-medium text-stone-400 whitespace-nowrap truncate">
+                        기저귀: 짧게 소변 · 길게(0.5초) 대변
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setZipImportPicker("activity")}
+                        className="px-2 py-0.5 rounded-full bg-stone-50 hover:bg-stone-100 border border-stone-200 text-stone-600 text-[10.5px] font-bold whitespace-nowrap shrink-0"
+                        title="베이비타임 Activity ZIP을 클라우드에 업로드"
+                      >
+                        📥 베이비타임(.zip)
+                      </button>
                     </div>
 
-                    <div className="flex items-center gap-2.5 overflow-x-auto pb-1">
+                    <div className="flex items-center gap-3 overflow-x-auto px-3.5 py-2">
                       {BABY_ACTIVITY_TYPES.flatMap((t) =>
                         t.id === "수면"
                           ? [
-                              { ...t, subType: "낮잠", label: "낮잠", emoji: "🌞", bg: "bg-indigo-400" },
-                              { ...t, subType: "밤잠", label: "밤잠", emoji: "🌙", bg: "bg-indigo-600" }
+                              { ...t, subType: "낮잠", label: "낮잠", emoji: "🌞", bg: "bg-[#6C6CB4]" },
+                              { ...t, subType: "밤잠", label: "밤잠", emoji: "🌙", bg: "bg-[#5C5CA8]" }
                             ]
                           : [t]
                       ).map((t) => {
@@ -15094,16 +15089,16 @@ ${validText}
                               }
                               handleQuickTapBabyActivity(t.id, null, t.subType || null);
                             }}
-                            className="flex flex-col items-center gap-1 shrink-0 group"
+                            className="flex flex-col items-center gap-1.5 shrink-0 group"
                           >
                             <div
-                              className={`w-11 h-11 rounded-full ${t.bg} text-white flex items-center justify-center text-lg shadow-sm transition active:scale-95 ${
+                              className={`w-12 h-12 rounded-full ${t.bg} text-white flex items-center justify-center text-[20px] transition active:scale-95 ${
                                 isRunning ? "ring-4 ring-emerald-400 animate-pulse" : "group-hover:opacity-90"
                               }`}
                             >
                               {t.emoji}
                             </div>
-                            <span className={`text-[11.5px] font-extrabold whitespace-nowrap ${isRunning ? "text-emerald-700" : "text-stone-700"}`}>
+                            <span className={`text-[11.5px] font-semibold whitespace-nowrap ${isRunning ? "text-emerald-700 font-bold" : "text-stone-500"}`}>
                               {isRunning ? `${t.label}(진행)` : t.label}
                             </span>
                           </button>
@@ -15117,7 +15112,7 @@ ${validText}
                       const ss = String(secElapsed % 60).padStart(2, "0");
                       const meta = BABY_ACTIVITY_TYPES.find((t) => t.id === act.type);
                       return (
-                        <div key={act.id} className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-300 space-y-2">
+                        <div key={act.id} className="mx-3 mb-2 p-2.5 rounded-xl bg-emerald-50 border border-emerald-300 space-y-2">
                           <div className="flex items-center justify-between gap-2">
                             <div className="flex items-center gap-1.5 text-[13.5px] font-black text-emerald-950">
                               <span>{meta?.emoji} {act.type} 진행 중</span>
@@ -15145,7 +15140,7 @@ ${validText}
                                   onClick={() => handleSwitchBreastSide(act, b.side)}
                                   className={`py-1.5 rounded-lg text-[12.5px] font-extrabold border ${
                                     (act.activeSide || "left") === b.side
-                                      ? "bg-rose-500 text-white border-rose-500"
+                                      ? "bg-[#F46A6A] text-white border-[#F46A6A]"
                                       : "bg-white text-stone-700 border-stone-200"
                                   }`}
                                 >
@@ -15158,25 +15153,30 @@ ${validText}
                       );
                     })}
 
-                    <div className="grid grid-cols-3 gap-1.5 pt-1 border-t border-stone-100 text-center">
-                      <div className="bg-[#FAF8F3] rounded-xl py-2 px-1 border border-stone-200">
-                        <div className="text-[11.5px] font-bold text-stone-400">마지막 기저귀</div>
-                        <div className="text-[12px] font-black text-amber-800 mt-0.5 whitespace-nowrap">
+                    <div className="grid grid-cols-3 divide-x divide-stone-100 py-2.5 border-t border-stone-100 text-center">
+                      <div className="px-1">
+                        <div className="text-[11px] font-medium text-stone-500">마지막 기저귀</div>
+                        <div className="text-[13.5px] font-extrabold text-[#9E6B40] mt-0.5 whitespace-nowrap">
                           {sum.lastDiaper ? formatElapsedKo(nowMs - sum.lastDiaper.startMs) : "-"}
                         </div>
-                        <div className="text-[11.5px] font-bold text-stone-500">
+                        <div className="text-[11px] font-medium text-stone-400 mt-0.5">
                           {sum.lastDiaper?.subType || "-"}
                         </div>
                       </div>
-                      <div className="bg-[#FAF8F3] rounded-xl py-2 px-1 border border-stone-200">
-                        <div className="text-[11.5px] font-bold text-stone-400">마지막 수유</div>
-                        <div className={`text-[12px] font-black mt-0.5 whitespace-nowrap ${feedMeta ? feedMeta.text : "text-stone-800"}`}>
-                          {sum.lastFeed ? `${feedMeta?.emoji || ""} ${formatElapsedKo(nowMs - sum.lastFeed.startMs)}` : "-"}
+                      <div className="px-1">
+                        <div className="text-[11px] font-medium text-stone-500">마지막 수유</div>
+                        <div className={`text-[13.5px] font-extrabold mt-0.5 whitespace-nowrap flex items-center justify-center gap-1 ${feedMeta ? feedMeta.text : "text-stone-800"}`}>
+                          {sum.lastFeed && feedMeta && (
+                            <span className={`w-4 h-4 rounded-full ${feedMeta.bg} text-white inline-flex items-center justify-center text-[9px] shrink-0`}>
+                              {feedMeta.emoji}
+                            </span>
+                          )}
+                          <span>{sum.lastFeed ? formatElapsedKo(nowMs - sum.lastFeed.startMs) : "-"}</span>
                         </div>
                         {(() => {
                           const prevMeta = sum.prevFeed ? BABY_ACTIVITY_TYPES.find((t) => t.id === sum.prevFeed.type) : null;
                           return (
-                            <div className={`text-[11.5px] font-bold ${prevMeta ? prevMeta.text : "text-stone-500"}`}>
+                            <div className={`text-[11px] font-medium mt-0.5 ${prevMeta ? prevMeta.text : "text-stone-400"}`}>
                               {sum.prevFeed
                                 ? `• ${formatElapsedKo(nowMs - sum.prevFeed.startMs)}`
                                 : sum.lastFeed?.type || "-"}
@@ -15184,12 +15184,12 @@ ${validText}
                           );
                         })()}
                       </div>
-                      <div className="bg-[#FAF8F3] rounded-xl py-2 px-1 border border-stone-200">
-                        <div className="text-[11.5px] font-bold text-stone-400">마지막 수면</div>
-                        <div className="text-[12px] font-black text-indigo-700 mt-0.5 whitespace-nowrap">
+                      <div className="px-1">
+                        <div className="text-[11px] font-medium text-stone-500">마지막 수면</div>
+                        <div className="text-[13.5px] font-extrabold text-[#6464AC] mt-0.5 whitespace-nowrap">
                           {sum.lastSleep ? formatElapsedKo(nowMs - sum.lastSleep.startMs) : "-"}
                         </div>
-                        <div className="text-[11.5px] font-bold text-stone-500">
+                        <div className="text-[11px] font-medium text-stone-400 mt-0.5">
                           {sum.lastSleep?.subType || "-"}
                         </div>
                       </div>
@@ -15203,7 +15203,7 @@ ${validText}
                       const bMin = todayActs.filter((a) => a.type === "모유").reduce((s, a) => s + (Number(a.durationMin) || 0), 0);
                       const dCount = todayActs.filter((a) => a.type === "기저귀").length;
                       return (
-                        <div className="flex items-center justify-between gap-1.5 px-2.5 py-1.5 rounded-xl bg-[#EEF3EE] border border-[#C9D8CC] text-[11.5px] font-extrabold text-[#35503C] flex-wrap">
+                        <div className="flex items-center justify-between gap-1.5 px-3.5 py-1.5 bg-[#F8F9FA] border-t border-stone-100 text-[11px] font-semibold text-stone-600 flex-wrap">
                           <span>📅 오늘 요약</span>
                           <span>수유 {fCount}회 ({fMl > 0 ? `${fMl}ml` : ""}{fMl > 0 && bMin > 0 ? " + " : ""}{bMin > 0 ? `모유 ${bMin}분` : fMl === 0 ? "0분" : ""}) · 기저귀 {dCount}회</span>
                         </div>
@@ -15298,26 +15298,26 @@ ${validText}
                         const pooCnt = grp.items.filter((x) => x.type === "기저귀" && String(x.subType).includes("대변")).length;
 
                         return (
-                          <div key={grp.date} className="bg-white rounded-2xl border border-stone-200 shadow-sm overflow-hidden">
-                            <div className="px-3.5 py-2 bg-[#F3EEE4] border-b border-stone-200 flex items-center justify-between gap-2 flex-wrap">
-                              <span className="text-[13.5px] font-black text-stone-900">
+                          <div key={grp.date} className="bg-white rounded-2xl border border-stone-200/80 shadow-sm overflow-hidden">
+                            <div className="px-3.5 py-1.5 bg-[#F5F6F8] border-b border-stone-200/70 flex items-center justify-between gap-2 flex-wrap">
+                              <span className="text-[12.5px] font-bold text-stone-700">
                                 {grp.date} ({getDayName(grp.date)})
                               </span>
-                              <div className="flex items-center gap-1.5 text-[11.5px] font-extrabold flex-wrap">
+                              <div className="flex items-center gap-1.5 text-[11px] font-bold flex-wrap">
                                 {totalFeedMl > 0 && (
-                                  <span className="text-stone-800">
+                                  <span className="text-stone-700">
                                     {totalFeedMl}ml(
-                                    <span className="text-amber-700">분{formulaMl}</span>
-                                    {pumpedFeedMl > 0 && <span className="text-lime-700">·유{pumpedFeedMl}</span>}
+                                    <span className="text-[#E5A000]">분{formulaMl}</span>
+                                    {pumpedFeedMl > 0 && <span className="text-[#689F38]">·유{pumpedFeedMl}</span>}
                                     )
                                   </span>
                                 )}
-                                {breastMin > 0 && <span className="text-rose-600">모유 {breastMin}분</span>}
+                                {breastMin > 0 && <span className="text-[#E85B5B]">모유 {breastMin}분</span>}
                                 {sleepMin > 0 && (
-                                  <span className="text-indigo-600">😴 {Math.floor(sleepMin / 60)}h{sleepMin % 60}m</span>
+                                  <span className="text-[#6464AC]">😴 {Math.floor(sleepMin / 60)}h{sleepMin % 60}m</span>
                                 )}
                                 {(peeCnt > 0 || pooCnt > 0) && (
-                                  <span className="text-amber-800">🧷 소{peeCnt}·대{pooCnt}</span>
+                                  <span className="text-[#9E6B40]">🧷 소{peeCnt}·대{pooCnt}</span>
                                 )}
                               </div>
                             </div>
@@ -15333,22 +15333,30 @@ ${validText}
                                 }
                                 if (act.subType && act.type !== "기저귀" && act.type !== "수면") detailParts.push(act.subType);
 
+                                const startParts = formatTime12Ko(act.startMs).split(" ");
+                                const endTimeOnly = act.endMs ? formatTime12Ko(act.endMs).split(" ")[0] : "";
+
                                 return (
                                   <div
                                     key={act.id}
                                     onClick={() => setActivityEditModal({ ...act, isNew: false })}
-                                    className="px-3.5 py-2.5 flex items-center justify-between gap-2 hover:bg-stone-50 cursor-pointer transition"
+                                    className="px-3.5 py-2.5 flex items-center justify-between gap-2 hover:bg-stone-50/70 cursor-pointer transition"
                                   >
-                                    <div className="flex items-center gap-2.5 min-w-0">
-                                      <div className="w-16 shrink-0 text-[11.5px] font-bold text-stone-500 leading-tight">
-                                        <div>{formatTime12Ko(act.startMs)}</div>
-                                        {act.endMs && <div className="text-stone-400">~ {formatTime12Ko(act.endMs)}</div>}
+                                    <div className="flex items-center gap-3 min-w-0">
+                                      <div className="w-[62px] shrink-0 text-right leading-tight">
+                                        <div>
+                                          <span className="text-[13px] font-bold text-stone-800 tabular-nums">{startParts[0]}</span>
+                                          <span className="text-[10px] font-semibold text-stone-500 ml-0.5">{startParts[1]}</span>
+                                        </div>
+                                        {endTimeOnly && (
+                                          <div className="text-[11px] font-medium text-stone-400 tabular-nums">~ {endTimeOnly}</div>
+                                        )}
                                       </div>
-                                      <div className={`w-7 h-7 rounded-full ${meta.bg} text-white flex items-center justify-center text-[13.5px] shrink-0`}>
+                                      <div className={`w-6 h-6 rounded-full ${meta.bg} text-white flex items-center justify-center text-[12px] shrink-0`}>
                                         {meta.emoji}
                                       </div>
                                       <div className="min-w-0">
-                                        <div className={`text-[13.5px] font-black ${meta.text} flex items-center gap-1.5 flex-wrap`}>
+                                        <div className={`text-[14px] font-bold ${meta.text} flex items-center gap-1.5 flex-wrap`}>
                                           <span>
                                             {act.type === "기저귀" && act.subType
                                               ? act.subType
@@ -15357,11 +15365,11 @@ ${validText}
                                               : act.type}
                                           </span>
                                           {act.inProgress && (
-                                            <span className="px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 text-[10.5px]">진행중</span>
+                                            <span className="px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 text-[10px] font-bold">진행중</span>
                                           )}
                                         </div>
                                         {(detailParts.length > 0 || act.memo) && (
-                                          <div className="text-[12.5px] font-semibold text-stone-600 truncate">
+                                          <div className="text-[12px] font-medium text-stone-500 truncate mt-0.5">
                                             {[detailParts.join(", "), act.memo].filter(Boolean).join(" · ")}
                                           </div>
                                         )}
@@ -15379,7 +15387,7 @@ ${validText}
                                           className="w-8 h-8 rounded-lg object-cover border border-stone-200"
                                         />
                                       )}
-                                      <ChevronRight className="w-3.5 h-3.5 text-stone-300" />
+                                      <ChevronRight className="w-4 h-4 text-stone-300" />
                                     </div>
                                   </div>
                                 );
@@ -20516,12 +20524,12 @@ ${validText}
             className="bg-white rounded-3xl max-w-md w-full p-5 space-y-3 max-h-[85vh] flex flex-col shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between">
-              <h3 className="text-[15.5px] font-black text-stone-900 flex items-center gap-1.5">
-                <Bell className="w-4 h-4 text-sky-600" />
-                최근 수정 알림 내역 ({visibleRecentActivities.length}건)
+            <div className="flex items-center justify-between gap-2 shrink-0">
+              <h3 className="text-[15px] font-black text-stone-900 flex items-center gap-1.5 whitespace-nowrap shrink-0">
+                <Bell className="w-4 h-4 text-sky-600 shrink-0" />
+                수정 알림 ({visibleRecentActivities.length})
               </h3>
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-1 shrink-0">
                 <button
                   type="button"
                   onClick={() => {
@@ -20533,13 +20541,13 @@ ${validText}
                     }
                     showToast(nextVal ? "🔔 새 수정 알림 팝업이 켜졌습니다." : "🔕 새 수정 알림 팝업이 꺼졌습니다.");
                   }}
-                  className={`px-2 py-1 rounded-lg text-[11.5px] font-extrabold border ${
+                  className={`px-2 py-1 rounded-lg text-[11px] font-extrabold border whitespace-nowrap shrink-0 ${
                     activityPopupEnabled
                       ? "bg-[#EEF3EE] text-[#35503C] border-[#C9D8CC]"
                       : "bg-stone-100 text-stone-500 border-stone-200"
                   }`}
                 >
-                  {activityPopupEnabled ? "🔔 팝업 ON" : "🔕 팝업 OFF"}
+                  {activityPopupEnabled ? "🔔 팝업ON" : "🔕 팝업OFF"}
                 </button>
                 {isAdminUnlocked && recentActivities.length > 0 && (
                   <button
@@ -20552,18 +20560,18 @@ ${validText}
                       }
                       showToast("최근 수정 알림 내역을 비웠습니다.");
                     }}
-                    className="px-2 py-1 rounded-lg bg-stone-100 hover:bg-rose-50 text-stone-600 hover:text-rose-700 text-[11.5px] font-bold"
+                    className="px-2 py-1 rounded-lg bg-stone-100 hover:bg-rose-50 text-stone-600 hover:text-rose-700 text-[11px] font-bold whitespace-nowrap shrink-0"
                   >
                     비우기
                   </button>
                 )}
-                <button type="button" onClick={() => setIsActivityModalOpen(false)}>
+                <button type="button" onClick={() => setIsActivityModalOpen(false)} className="p-0.5 shrink-0">
                   <X className="w-5 h-5 text-stone-400" />
                 </button>
               </div>
             </div>
 
-            <div className="flex items-center gap-1 overflow-x-auto pb-1">
+            <div className="flex items-center gap-1 overflow-x-auto py-0.5 shrink-0">
               {["전체", "식단", "냉장고", "일정", "할일", "루틴", "육아", "장보기", "공지", "레시피"].map((cat) => (
                 <button
                   key={cat}
@@ -20581,11 +20589,11 @@ ${validText}
             </div>
 
             {(() => {
-              const actors = Array.from(new Set(visibleRecentActivities.map((a) => a.actor).filter(Boolean)));
+              const actors = Array.from(new Set(visibleRecentActivities.map((a) => (a.actor === "아리나" ? "아리" : a.actor)).filter(Boolean)));
               if (actors.length <= 1) return null;
               return (
-                <div className="flex items-center gap-1 overflow-x-auto pb-1">
-                  <span className="text-[11.5px] font-extrabold text-stone-400 shrink-0 mr-0.5">수정자:</span>
+                <div className="flex items-center gap-1 overflow-x-auto py-0.5 shrink-0">
+                  <span className="text-[11.5px] font-extrabold text-stone-400 shrink-0 mr-0.5 whitespace-nowrap">수정자:</span>
                   {["전체", ...actors].map((ac) => (
                     <button
                       key={ac}
@@ -20608,7 +20616,7 @@ ${validText}
               {visibleRecentActivities.filter(
                 (a) =>
                   (activityFilter === "전체" || a.category === activityFilter) &&
-                  (activityActorFilter === "전체" || a.actor === activityActorFilter)
+                  (activityActorFilter === "전체" || (a.actor === "아리나" ? "아리" : a.actor) === activityActorFilter)
               ).length === 0 ? (
                 <div className="py-10 text-center text-[13.5px] font-bold text-stone-400">
                   기록된 수정 내역이 없습니다.
@@ -20618,7 +20626,7 @@ ${validText}
                   .filter(
                     (a) =>
                       (activityFilter === "전체" || a.category === activityFilter) &&
-                      (activityActorFilter === "전체" || a.actor === activityActorFilter)
+                      (activityActorFilter === "전체" || (a.actor === "아리나" ? "아리" : a.actor) === activityActorFilter)
                   )
                   .map((act) => (
                     <div
@@ -20629,13 +20637,13 @@ ${validText}
                       <div className="min-w-0 space-y-0.5">
                         <div className="flex items-center gap-1.5 flex-wrap">
                           <span
-                            className={`px-1.5 py-0.5 rounded-md text-[11.5px] font-black ${
+                            className={`px-1.5 py-0.5 rounded-md text-[11.5px] font-black whitespace-nowrap ${
                               act.role === "admin"
                                 ? "bg-emerald-100 text-emerald-800"
                                 : "bg-sky-100 text-sky-800"
                             }`}
                           >
-                            {act.actor}
+                            {act.actor === "아리나" ? "아리" : act.actor}
                           </span>
                           <span className="text-[12.5px] font-black text-stone-800">
                             {act.category} {act.action}
@@ -20647,12 +20655,12 @@ ${validText}
                         {(act.beforeText || act.afterText) && (
                           <div className="mt-1 space-y-0.5 text-[11.5px] rounded-xl bg-white border border-stone-200 p-1.5">
                             {act.beforeText && (
-                              <div className="text-rose-700 bg-rose-50/70 px-1.5 py-0.5 rounded">
+                              <div className="text-rose-700 bg-rose-50/70 px-1.5 py-0.5 rounded break-keep">
                                 <span className="font-black mr-1">변경 전:</span>{act.beforeText}
                               </div>
                             )}
                             {act.afterText && (
-                              <div className="text-emerald-800 bg-emerald-50/70 px-1.5 py-0.5 rounded">
+                              <div className="text-emerald-800 bg-emerald-50/70 px-1.5 py-0.5 rounded break-keep">
                                 <span className="font-black mr-1">변경 후:</span>{act.afterText}
                               </div>
                             )}

@@ -1091,7 +1091,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
     img.src = dataUrl;
   });
 
-export const APP_CODE_VERSION = "v11.75";
+export const APP_CODE_VERSION = "v11.76";
 
 export const formatRoutineTimeLabel = (hhmm) => {
   const m = String(hhmm || "").trim().match(/^(\d{2}):(\d{2})$/);
@@ -1134,17 +1134,17 @@ export const HELPER_CONFIGURABLE_TABS = [
 ];
 
 export const BABY_ACTIVITY_TYPES = [
-  { id: "모유", label: "모유", emoji: "🤱", timed: true, isFeed: true, bg: "bg-rose-500", soft: "bg-rose-50 text-rose-700 border-rose-200", text: "text-rose-600" },
-  { id: "분유", label: "분유", emoji: "🍼", timed: true, isFeed: true, hasMl: true, bg: "bg-amber-500", soft: "bg-amber-50 text-amber-800 border-amber-200", text: "text-amber-600" },
-  { id: "유축수유", label: "유축수유", emoji: "💚", timed: true, isFeed: true, hasMl: true, bg: "bg-lime-600", soft: "bg-lime-50 text-lime-800 border-lime-200", text: "text-lime-700" },
-  { id: "이유식", label: "이유식", emoji: "🥣", timed: true, hasMl: true, unit: "g", bg: "bg-teal-500", soft: "bg-teal-50 text-teal-800 border-teal-200", text: "text-teal-600" },
-  { id: "기저귀", label: "기저귀", emoji: "🧷", timed: false, bg: "bg-amber-700", soft: "bg-orange-50 text-amber-900 border-orange-200", text: "text-amber-700" },
-  { id: "수면", label: "수면", emoji: "😴", timed: true, bg: "bg-indigo-500", soft: "bg-indigo-50 text-indigo-800 border-indigo-200", text: "text-indigo-600" },
-  { id: "유축", label: "유축", emoji: "🧴", timed: true, hasMl: true, bg: "bg-pink-500", soft: "bg-pink-50 text-pink-800 border-pink-200", text: "text-pink-600" },
-  { id: "목욕", label: "목욕", emoji: "🛁", timed: false, bg: "bg-sky-500", soft: "bg-sky-50 text-sky-800 border-sky-200", text: "text-sky-600" },
-  { id: "터미타임", label: "터미타임", emoji: "🧸", timed: true, bg: "bg-violet-500", soft: "bg-violet-50 text-violet-800 border-violet-200", text: "text-violet-600" },
-  { id: "투약", label: "투약", emoji: "💊", timed: false, bg: "bg-red-500", soft: "bg-red-50 text-red-800 border-red-200", text: "text-red-600" },
-  { id: "기타", label: "기타", emoji: "📝", timed: false, bg: "bg-stone-600", soft: "bg-stone-100 text-stone-700 border-stone-200", text: "text-stone-700" }
+  { id: "모유", label: "모유", emoji: "🤱", timed: true, isFeed: true, bg: "bg-[#F46A6A]", soft: "bg-rose-50 text-[#E85B5B] border-rose-200", text: "text-[#E85B5B]" },
+  { id: "분유", label: "분유", emoji: "🍼", timed: true, isFeed: true, hasMl: true, bg: "bg-[#F4B400]", soft: "bg-amber-50 text-[#E5A000] border-amber-200", text: "text-[#E5A000]" },
+  { id: "이유식", label: "이유식", emoji: "🥣", timed: true, hasMl: true, unit: "g", bg: "bg-[#2BBBAD]", soft: "bg-teal-50 text-[#25A99B] border-teal-200", text: "text-[#25A99B]" },
+  { id: "기저귀", label: "기저귀", emoji: "🧷", timed: false, bg: "bg-[#B67B48]", soft: "bg-orange-50 text-[#A86D3B] border-orange-200", text: "text-[#A86D3B]" },
+  { id: "수면", label: "수면", emoji: "😴", timed: true, bg: "bg-[#6C6CB4]", soft: "bg-indigo-50 text-[#6464AC] border-indigo-200", text: "text-[#6464AC]" },
+  { id: "유축", label: "유축", emoji: "🧴", timed: true, hasMl: true, bg: "bg-[#F078B8]", soft: "bg-pink-50 text-[#E065A7] border-pink-200", text: "text-[#E065A7]" },
+  { id: "유축수유", label: "유축수유", emoji: "💚", timed: true, isFeed: true, hasMl: true, bg: "bg-[#7CB342]", soft: "bg-lime-50 text-[#689F38] border-lime-200", text: "text-[#689F38]" },
+  { id: "목욕", label: "목욕", emoji: "🛁", timed: false, bg: "bg-[#4FC3F7]", soft: "bg-sky-50 text-[#2998D0] border-sky-200", text: "text-[#2998D0]" },
+  { id: "터미타임", label: "터미타임", emoji: "🧸", timed: true, bg: "bg-[#4EA1E0]", soft: "bg-sky-50 text-[#4EA1E0] border-sky-200", text: "text-[#4EA1E0]" },
+  { id: "투약", label: "투약", emoji: "💊", timed: false, bg: "bg-[#EF5350]", soft: "bg-red-50 text-[#E53935] border-red-200", text: "text-[#E53935]" },
+  { id: "기타", label: "기타", emoji: "📝", timed: false, bg: "bg-[#78909C]", soft: "bg-stone-100 text-[#607D8B] border-stone-200", text: "text-[#607D8B]" }
 ];
 
 export const formatElapsedKo = (msDiff) => {
@@ -1169,6 +1169,16 @@ export const formatTime12Ko = (ms) => {
 };
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v11.76",
+    version: "v11.76",
+    date: "2026-11-18",
+    title: "알림창 1줄 정리 & 수유·생활 베이비타임 스타일 개편",
+    items: [
+      "수정 알림 모달 헤더 1줄 고정, 필터 칩 상단 잘림 해소 및 '아리' 이름 통일",
+      "수유·생활 탭을 베이비타임 색감·여백·구분선·타임라인 레이아웃으로 개편 (기능 100% 유지)"
+    ]
+  },
   {
     id: "patch-v11.75",
     version: "v11.75",
