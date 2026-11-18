@@ -305,6 +305,7 @@ function MainApp() {
     if (activeTab !== "home") setIsHomeEditMode(false);
   }, [activeTab]);
 
+  const [homeRoutineDayOffset, setHomeRoutineDayOffset] = useState(0);
   const [homeRoutineSlotFilter, setHomeRoutineSlotFilter] = useState(() => {
     try { return localStorage.getItem("kim_home_routine_slot_v1") || "auto"; } catch (e) { return "auto"; }
   });
@@ -1078,6 +1079,56 @@ function MainApp() {
       return targetStr <= dStr;
     }
     return true;
+  };
+
+  const isRoutineDueOnExactDay = (rt, dayStr) => {
+    if (!rt) return false;
+    const dStr = String(dayStr || "").slice(0, 10);
+    if (rt.startDate && String(rt.startDate).slice(0, 10) > dStr) return false;
+    if (!rt.cycle || rt.cycle === "daily") return true;
+    const base = new Date(dStr + "T00:00:00");
+    if (Number.isNaN(base.getTime())) return true;
+    if (rt.cycle === "weekly" && rt.weekDay !== undefined && rt.weekDay !== null) {
+      return Number(rt.weekDay) === base.getDay();
+    }
+    if (rt.cycle === "monthly") {
+      const lastDay = new Date(base.getFullYear(), base.getMonth() + 1, 0).getDate();
+      const tgtDay = Math.min(Math.max(1, Number(rt.monthDay) || 1), lastDay);
+      return tgtDay === base.getDate();
+    }
+    if (rt.cycle === "monthly_weekday") {
+      const targetStr = getNthWeekdayDateStr(
+        base.getFullYear(),
+        base.getMonth() + 1,
+        Number(rt.nthWeek) || 1,
+        Number(rt.weekDay ?? 6)
+      );
+      return targetStr === dStr;
+    }
+    if (rt.cycle === "interval") {
+      if (!rt.lastDoneKey) return true;
+      const intervalDays = Math.max(2, Number(rt.intervalDays) || 2);
+      const lastD = new Date(String(rt.lastDoneKey).slice(0, 10) + "T00:00:00");
+      if (Number.isNaN(lastD.getTime())) return true;
+      const elapsed = Math.floor((base - lastD) / 86400000);
+      return elapsed === 0 || elapsed >= intervalDays;
+    }
+    return true;
+  };
+
+  const isRoutineDoneOnDay = (rt, dayStr) => {
+    if (!rt) return false;
+    const dStr = String(dayStr || "").slice(0, 10);
+    if (rt.cycle === "interval") {
+      if (!rt.lastDoneKey) return false;
+      const intervalDays = Math.max(2, Number(rt.intervalDays) || 2);
+      const lastD = new Date(String(rt.lastDoneKey).slice(0, 10) + "T00:00:00");
+      const curD = new Date(dStr + "T00:00:00");
+      if (Number.isNaN(lastD.getTime()) || Number.isNaN(curD.getTime())) return false;
+      const elapsed = Math.floor((curD - lastD) / 86400000);
+      return elapsed >= 0 && elapsed < intervalDays;
+    }
+    return rt.lastDoneKey === getRoutineResetKey(rt, dStr);
   };
 
   const handleToggleRoutine = (rtId) => {
@@ -9152,8 +9203,23 @@ ${validText}
           : `${targetMealSlot} 미기록 · 눌러서 등록`;
         const curSlot = getCurrentRoutineTimeSlot(routineTimeRanges, liveMinuteTick, routineSlotDefs);
         const wkndNow = isWeekendNow();
-        const dueRoutines = familyRoutines.filter((r) => isRoutineDueTodayOrPast(r, currentDayKey));
-        const activeRoutines = dueRoutines.filter((r) => !isRoutineDoneNow(r));
+        const homeRoutineDayStr = (() => {
+          const dt = new Date(String(currentDayKey).slice(0, 10) + "T00:00:00");
+          if (Number.isNaN(dt.getTime())) return currentDayKey;
+          dt.setDate(dt.getDate() + homeRoutineDayOffset);
+          return formatDate(dt);
+        })();
+        const isHomeDayWeekend = (() => {
+          const dt = new Date(homeRoutineDayStr + "T00:00:00");
+          const dow = dt.getDay();
+          return dow === 0 || dow === 6;
+        })();
+        const dueRoutines = homeRoutineDayOffset === 0
+          ? familyRoutines.filter((r) => isRoutineDueTodayOrPast(r, currentDayKey))
+          : familyRoutines.filter((r) => isRoutineDueOnExactDay(r, homeRoutineDayStr));
+        const activeRoutines = homeRoutineDayOffset === 0
+          ? dueRoutines.filter((r) => !isRoutineDoneNow(r))
+          : dueRoutines;
 
         const MENU_DEFS = {
           daily: {
@@ -9271,9 +9337,10 @@ ${validText}
             : homeRoutineSlotFilter === "auto"
             ? activeRoutines.filter((r) => {
                 const s = r.timeSlot || "상시";
-                if (wkndNow && s === "하원후") return false;
-                if (!wkndNow && s === "오후") return false;
-                return s === curSlot || s === "상시";
+                const useWknd = homeRoutineDayOffset === 0 ? wkndNow : isHomeDayWeekend;
+                if (useWknd && s === "하원후") return false;
+                if (!useWknd && s === "오후") return false;
+                return homeRoutineDayOffset === 0 ? (s === curSlot || s === "상시") : true;
               })
             : activeRoutines.filter((r) => (r.timeSlot || "상시") === homeRoutineSlotFilter);
         const visibleRoutineList = slotFilteredRoutines
@@ -9387,8 +9454,11 @@ ${validText}
                 {/* 2) 지금 시간대 + 상시 루틴 */}
                 <div className={`${padCls} space-y-1.5`}>
                   {(() => {
+                    if (homeRoutineDayOffset === 1) return null;
                     const totalRt = dueRoutines.length;
-                    const doneRt = totalRt - activeRoutines.length;
+                    const doneRt = homeRoutineDayOffset === -1
+                      ? dueRoutines.filter((r) => isRoutineDoneOnDay(r, homeRoutineDayStr)).length
+                      : totalRt - activeRoutines.length;
                     const pctRt = totalRt > 0 ? Math.round((doneRt / totalRt) * 100) : 0;
                     if (totalRt === 0) return null;
                     return (
@@ -9407,9 +9477,37 @@ ${validText}
                   })()}
                   <div className="flex items-center justify-between gap-1.5 flex-wrap">
                     <span className="text-[13.5px] font-black text-stone-900 truncate">
-                      🔄 {homeRoutineSlotFilter === "auto" ? `지금(${curSlot}) 루틴` : homeRoutineSlotFilter === "전체" ? "오늘 남은 루틴" : `${homeRoutineSlotFilter} 루틴`} ({visibleRoutineList.length}건)
+                      🔄 {homeRoutineDayOffset === -1
+                        ? "어제 루틴"
+                        : homeRoutineDayOffset === 1
+                        ? "내일 예정 루틴"
+                        : homeRoutineSlotFilter === "auto"
+                        ? `지금(${curSlot}) 루틴`
+                        : homeRoutineSlotFilter === "전체"
+                        ? "오늘 남은 루틴"
+                        : `${homeRoutineSlotFilter} 루틴`} ({visibleRoutineList.length}건)
                     </span>
                     <div className="flex items-center gap-1 shrink-0">
+                      <div className="flex items-center bg-stone-100 rounded-lg p-0.5 border border-stone-200">
+                        {[
+                          { off: -1, lbl: "어제" },
+                          { off: 0, lbl: "오늘" },
+                          { off: 1, lbl: "내일" }
+                        ].map((dOpt) => (
+                          <button
+                            key={dOpt.off}
+                            type="button"
+                            onClick={() => setHomeRoutineDayOffset(dOpt.off)}
+                            className={`px-1.5 py-0.5 rounded-md text-[10.5px] font-extrabold whitespace-nowrap transition ${
+                              homeRoutineDayOffset === dOpt.off
+                                ? "bg-white text-stone-900 shadow-sm"
+                                : "text-stone-500 hover:text-stone-800"
+                            }`}
+                          >
+                            {dOpt.lbl}
+                          </button>
+                        ))}
+                      </div>
                       {(homeRoutineSlotFilter !== "auto" || homeRoutineTargetFilter !== "전체") && (
                         <button
                           type="button"
@@ -9494,7 +9592,11 @@ ${validText}
                     </div>
                   ) : visibleRoutineList.length === 0 ? (
                     <div className="text-[12.5px] font-bold text-stone-500 bg-stone-50 rounded-xl px-2.5 py-1.5">
-                      ✅ 선택한 조건의 루틴을 모두 완료했습니다.
+                      {homeRoutineDayOffset === -1
+                        ? "어제 해당 조건의 루틴이 없습니다."
+                        : homeRoutineDayOffset === 1
+                        ? "내일 예정된 루틴이 없습니다."
+                        : "✅ 선택한 조건의 루틴을 모두 완료했습니다."}
                     </div>
                   ) : (
                     <div className="space-y-1">
@@ -9507,12 +9609,30 @@ ${validText}
                             key={rt.id}
                             className="w-full p-2 rounded-xl bg-stone-50/70 border border-stone-200 flex items-start gap-2 text-left"
                           >
-                            <button
-                              type="button"
-                              onClick={() => handleToggleRoutine(rt.id)}
-                              className="w-4 h-4 mt-0.5 rounded border border-stone-400 bg-white hover:bg-stone-100 shrink-0"
-                              title="전체 완료"
-                            />
+                            {homeRoutineDayOffset === 0 ? (
+                              <button
+                                type="button"
+                                onClick={() => handleToggleRoutine(rt.id)}
+                                className="w-4 h-4 mt-0.5 rounded border border-stone-400 bg-white hover:bg-stone-100 shrink-0"
+                                title="전체 완료"
+                              />
+                            ) : (
+                              <span
+                                className={`px-1.5 py-0.5 mt-0.5 rounded text-[10px] font-extrabold whitespace-nowrap shrink-0 ${
+                                  homeRoutineDayOffset === -1
+                                    ? isRoutineDoneOnDay(rt, homeRoutineDayStr)
+                                      ? "bg-emerald-100 text-emerald-800"
+                                      : "bg-stone-200 text-stone-600"
+                                    : "bg-sky-100 text-sky-800"
+                                }`}
+                              >
+                                {homeRoutineDayOffset === -1
+                                  ? isRoutineDoneOnDay(rt, homeRoutineDayStr)
+                                    ? "✓ 완료"
+                                    : "미완료"
+                                  : "예정"}
+                              </span>
+                            )}
                             <div className="min-w-0 flex-1">
                               {steps.length >= 2 ? (
                                 <div className="flex flex-col gap-1">

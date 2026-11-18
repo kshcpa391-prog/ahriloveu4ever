@@ -1091,7 +1091,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
     img.src = dataUrl;
   });
 
-export const APP_CODE_VERSION = "v11.93";
+export const APP_CODE_VERSION = "v11.95";
 
 export const formatRoutineTimeLabel = (hhmm) => {
   const m = String(hhmm || "").trim().match(/^(\d{2}):(\d{2})$/);
@@ -1169,6 +1169,27 @@ export const formatTime12Ko = (ms) => {
 };
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v11.95",
+    version: "v11.95",
+    date: "2026-11-18",
+    title: "홈 어제·내일 루틴 달성률 및 빈 상태 문구 정확도 개선",
+    items: [
+      "홈 루틴 [어제] 보기 시 실제 어제 완료 건수 기준으로 달성률 바 정확히 계산 (내일 보기에서는 불필요한 0% 바 숨김)",
+      "[어제/내일] 루틴이 없을 때 상황에 맞는 안내 문구 표시 (시율 케어 영역 미수정)"
+    ]
+  },
+  {
+    id: "patch-v11.94",
+    version: "v11.94",
+    date: "2026-11-18",
+    title: "홈 화면 루틴 [어제 · 오늘 · 내일] 간편 전환 추가",
+    items: [
+      "홈 루틴 상단에 [어제 | 오늘 | 내일] 미니 전환 버튼 추가 (시율 케어 영역 미수정)",
+      "어제 루틴 완료/미완료 결과 조회 및 내일 도래 예정 루틴(주말/평일 시간대 자동 반영) 미리보기 지원",
+      "전체 문법, 미종료 문자열 0건, ./Firebase·./Constants 대소문자 일치 및 배포 정합성 최종 확인"
+    ]
+  },
   {
     id: "patch-v11.93",
     version: "v11.93",
