@@ -3487,28 +3487,33 @@ function MainApp() {
       showToast("키, 몸무게, 머리둘레 중 하나 이상을 입력해 주세요.");
       return;
     }
+    const lockKey = "add-baby-growth-log";
+    if (inFlightOpsRef.current.has(lockKey)) return;
+    inFlightOpsRef.current.add(lockKey);
     const id = `gr-${selectedChildId}-${Date.now()}`;
+    const targetDate = growthForm.date || getTodayStr();
     const payload = {
       id,
       childId: selectedChildId,
-      date: growthForm.date || getTodayStr(),
+      date: targetDate,
       height: growthForm.height ? Number(growthForm.height) : null,
       weight: growthForm.weight ? Number(growthForm.weight) : null,
       head: growthForm.head ? Number(growthForm.head) : null,
       memo: growthForm.memo || ""
     };
-    if (user && db) {
-      try {
-        await setDoc(getDocRef("family_baby_growth_v7", id), payload);
-      } catch (e) {
-        showToast("⚠️ 성장 기록 서버 저장 실패: 네트워크를 확인해 주세요.");
-        return;
-      }
-    }
-    setBabyGrowthLogs((prev) => [payload, ...prev]);
     setGrowthForm({ date: getTodayStr(), height: "", weight: "", head: "", memo: "" });
-    recordActivity("육아", "성장기록", `${selectedChildId} · ${growthForm.date || ""}`);
-    showToast(`${selectedChildId} 성장 기록이 저장되었습니다!`);
+    try {
+      if (user && db) {
+        await setDoc(getDocRef("family_baby_growth_v7", id), payload);
+      }
+      setBabyGrowthLogs((prev) => [payload, ...prev.filter((x) => x.id !== id)]);
+      recordActivity("육아", "성장기록", `${selectedChildId} · ${targetDate}`);
+      showToast(`${selectedChildId} 성장 기록이 저장되었습니다!`);
+    } catch (e) {
+      showToast("⚠️ 성장 기록 서버 저장 실패: 네트워크를 확인해 주세요.");
+    } finally {
+      inFlightOpsRef.current.delete(lockKey);
+    }
   };
 
   const handleDeleteGrowthLog = async (id) => {
@@ -5430,17 +5435,17 @@ ${validText}
         }
         finalServerQty = next;
         if (snapV4.exists()) {
-          tx.update(refV4, { quantity: next, updatedAt: finalUpdatedAt });
+          tx.update(refV4, { quantity: next });
         } else {
-          tx.set(refV4, { ...item, quantity: next, updatedAt: finalUpdatedAt });
+          tx.set(refV4, { ...item, quantity: next });
         }
         if (snapV3.exists()) {
-          tx.update(refV3, { quantity: next, updatedAt: finalUpdatedAt });
+          tx.update(refV3, { quantity: next });
         }
       });
       setFridgeMap((prev) => ({
         ...prev,
-        local: { ...(prev.local || {}), [item.id]: { ...item, quantity: finalServerQty, updatedAt: finalUpdatedAt } }
+        local: { ...(prev.local || {}), [item.id]: { ...item, quantity: finalServerQty } }
       }));
       recordActivity(
         "냉장고",
@@ -13011,14 +13016,16 @@ ${validText}
                 })
                 .sort((a, b) => {
                   if (fridgeSort === "name") {
-                    return String(a.name || "").localeCompare(String(b.name || ""), "ko");
+                    return String(a.name || "").localeCompare(String(b.name || ""), "ko") || String(a.id || "").localeCompare(String(b.id || ""));
                   }
                   if (fridgeSort === "recent") {
-                    return String(b.updatedAt || b.purchaseDate || b.id || "").localeCompare(
-                      String(a.updatedAt || a.purchaseDate || a.id || "")
-                    );
+                    return String(b.createdAt || b.purchaseDate || b.id || "").localeCompare(
+                      String(a.createdAt || a.purchaseDate || a.id || "")
+                    ) || String(a.name || "").localeCompare(String(b.name || ""), "ko");
                   }
-                  return getDaysDiff(a.expiryDate) - getDaysDiff(b.expiryDate);
+                  const diffCmp = getDaysDiff(a.expiryDate) - getDaysDiff(b.expiryDate);
+                  if (diffCmp !== 0) return diffCmp;
+                  return String(a.name || "").localeCompare(String(b.name || ""), "ko") || String(a.id || "").localeCompare(String(b.id || ""));
                 })
                 .map((item) => {
                   const diff = getDaysDiff(item.expiryDate);

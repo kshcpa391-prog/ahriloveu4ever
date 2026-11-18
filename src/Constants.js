@@ -1089,7 +1089,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
     img.src = dataUrl;
   });
 
-export const APP_CODE_VERSION = "v11.73";
+export const APP_CODE_VERSION = "v11.74";
 
 export const formatRoutineTimeLabel = (hhmm) => {
   const m = String(hhmm || "").trim().match(/^(\d{2}):(\d{2})$/);
@@ -1167,6 +1167,16 @@ export const formatTime12Ko = (ms) => {
 };
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v11.74",
+    version: "v11.74",
+    date: "2026-11-18",
+    title: "성장기록 중복 업로드 방지 & 냉장고 수량 차감 시 목록 위치 고정 수정",
+    changes: [
+      "성장기록 중복 저장 방지: 저장 버튼 연타/더블탭 및 onSnapshot 동시 반영으로 같은 성장기록이 2건씩 올라가던 현상을 inFlight 락 + ID 중복 제거로 차단",
+      "냉장고 재고 차감 위치 고정: 수량 - / + / 반만먹음 시 같은 소비기한·최신순 정렬에서 목록 순서가 갑자기 바뀌던 현상을 안정적 정렬(이름·ID 보조기준) 및 수량만 업데이트하도록 수정"
+    ]
+  },
   {
     id: "patch-v11.73",
     version: "v11.73",
