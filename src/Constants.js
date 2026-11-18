@@ -1091,7 +1091,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
     img.src = dataUrl;
   });
 
-export const APP_CODE_VERSION = "v11.95";
+export const APP_CODE_VERSION = "v11.96";
 
 export const formatRoutineTimeLabel = (hhmm) => {
   const m = String(hhmm || "").trim().match(/^(\d{2}):(\d{2})$/);
@@ -1169,6 +1169,17 @@ export const formatTime12Ko = (ms) => {
 };
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v11.96",
+    version: "v11.96",
+    date: "2026-11-18",
+    title: "홈 [어제·내일] 루틴 체크상태·시간 지남 배지 오류 수정",
+    items: [
+      "내일 루틴 보기에서 오늘 체크한 하위 단계(약먹기·양치 등)가 완료로 뜨던 오류 수정",
+      "내일·어제 루틴 보기에서 현재 시각 기준 [· 지남] 배지가 표시되지 않도록 수정",
+      "어제·내일 보기 중 실수로 오늘 루틴이 토글되지 않도록 조회 전용 잠금 및 날짜 기준 계산 일치"
+    ]
+  },
   {
     id: "patch-v11.95",
     version: "v11.95",

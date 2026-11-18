@@ -9588,7 +9588,11 @@ ${validText}
 
                   {activeRoutines.length === 0 ? (
                     <div className="text-[12.5px] font-bold text-emerald-700 bg-stone-50 rounded-xl px-2.5 py-1.5">
-                      🎉 오늘 예정된 모든 루틴을 완료했습니다!
+                      {homeRoutineDayOffset === -1
+                        ? "어제 예정된 루틴이 없습니다."
+                        : homeRoutineDayOffset === 1
+                        ? "내일 예정된 루틴이 없습니다."
+                        : "🎉 오늘 예정된 모든 루틴을 완료했습니다!"}
                     </div>
                   ) : visibleRoutineList.length === 0 ? (
                     <div className="text-[12.5px] font-bold text-stone-500 bg-stone-50 rounded-xl px-2.5 py-1.5">
@@ -9601,9 +9605,17 @@ ${validText}
                   ) : (
                     <div className="space-y-1">
                       {visibleRoutineList.map((rt) => {
-                        const nextInfo = getRoutineNextDateInfo(rt, currentDayKey);
+                        const targetRefDay = homeRoutineDayOffset === 0 ? currentDayKey : homeRoutineDayStr;
+                        const nextInfo = getRoutineNextDateInfo(rt, targetRefDay);
                         const steps = parseRoutineSteps(rt.title);
-                        const stepDoneSet = getRoutineSubStepDoneSet(rt);
+                        const stepDoneSet = (() => {
+                          if (homeRoutineDayOffset === 0) return getRoutineSubStepDoneSet(rt);
+                          if (homeRoutineDayOffset === 1) return new Set();
+                          const targetKey = rt.cycle === "interval" ? homeRoutineDayStr : getRoutineResetKey(rt, homeRoutineDayStr);
+                          if (rt.lastDoneKey === targetKey) return new Set(steps.map((_, idx) => idx));
+                          if (rt.stepDoneKey === targetKey && Array.isArray(rt.stepDoneIndices)) return new Set(rt.stepDoneIndices);
+                          return new Set();
+                        })();
                         return (
                           <div
                             key={rt.id}
@@ -9642,7 +9654,7 @@ ${validText}
                                       <button
                                         key={sIdx}
                                         type="button"
-                                        onClick={() => handleToggleRoutineSubStep(rt.id, sIdx, steps.length)}
+                                        onClick={() => { if (homeRoutineDayOffset === 0) handleToggleRoutineSubStep(rt.id, sIdx, steps.length); }}
                                         className={`w-full flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-[12.5px] font-extrabold border text-left transition active:scale-[0.99] ${
                                           sDone
                                             ? "bg-emerald-50 border-emerald-300 text-emerald-800"
@@ -9668,7 +9680,7 @@ ${validText}
                               ) : (
                                 <button
                                   type="button"
-                                  onClick={() => handleToggleRoutine(rt.id)}
+                                  onClick={() => { if (homeRoutineDayOffset === 0) handleToggleRoutine(rt.id); }}
                                   className="text-left text-[13.5px] font-extrabold text-stone-900 whitespace-normal break-words leading-snug w-full"
                                 >
                                   {rt.title}
@@ -9679,7 +9691,7 @@ ${validText}
                                   {rt.timeSlot || "상시"}
                                 </span>
                                 {rt.scheduledTime && (() => {
-                                  const overdue = isRoutineTimeOverdue(rt.scheduledTime);
+                                  const overdue = homeRoutineDayOffset === 0 ? isRoutineTimeOverdue(rt.scheduledTime) : false;
                                   return (
                                     <span
                                       className={`px-1.5 py-0.5 rounded text-[10.5px] font-black ${
@@ -9704,7 +9716,7 @@ ${validText}
                                   <span className={`px-1.5 py-0.5 rounded text-[10.5px] font-bold whitespace-nowrap ${
                                     nextInfo.diff === 0 ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-900"
                                   }`}>
-                                    {nextInfo.diff === 0 ? `오늘 ${nextInfo.dateLabel}` : nextInfo.dateLabel}
+                                    {homeRoutineDayOffset === 0 && nextInfo.diff === 0 ? `오늘 ${nextInfo.dateLabel}` : nextInfo.dateLabel}
                                   </span>
                                 )}
                               </div>
