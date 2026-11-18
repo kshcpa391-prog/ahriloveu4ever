@@ -14521,9 +14521,9 @@ ${validText}
           <div className="bg-gradient-to-br from-rose-50 via-white to-amber-50 p-4 rounded-2xl border border-rose-200 shadow-sm space-y-2.5">
             <div className="flex items-center justify-between gap-2">
               <div>
-                <h2 className="text-[15.5px] font-black text-stone-900">📖 우리 가족 레시피북 ({filteredRecipes.length})</h2>
-                <p className="text-[12.5px] font-semibold text-stone-500">
-                  카테고리 · 요약 리스트 · 사진 클릭 확대 · 플레이팅 연동
+                <h2 className="text-[15px] font-black text-stone-900 whitespace-nowrap">📖 레시피북 ({filteredRecipes.length})</h2>
+                <p className="text-[11.5px] font-semibold text-stone-500 whitespace-nowrap truncate">
+                  요약 · 사진 확대 · 플레이팅 연동
                 </p>
               </div>
               <button
@@ -14536,7 +14536,7 @@ ${validText}
 
             {!isEditorUnlocked && (
               <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 flex items-center justify-between gap-2 text-[12.5px]">
-                <span className="font-bold text-amber-900">🔒 가족 사진과 기록 보호를 위해 열람 잠금 중입니다.</span>
+                <span className="font-bold text-amber-900">🔒 열람 잠금 중입니다.</span>
                 <button
                   onClick={() => requireEditorAccess()}
                   className="px-2.5 py-1 rounded-lg bg-amber-600 text-white font-extrabold shrink-0"

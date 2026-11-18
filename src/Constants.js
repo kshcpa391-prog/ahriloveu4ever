@@ -1089,7 +1089,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
     img.src = dataUrl;
   });
 
-export const APP_CODE_VERSION = "v11.74";
+export const APP_CODE_VERSION = "v11.75";
 
 export const formatRoutineTimeLabel = (hhmm) => {
   const m = String(hhmm || "").trim().match(/^(\d{2}):(\d{2})$/);
@@ -1167,6 +1167,16 @@ export const formatTime12Ko = (ms) => {
 };
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v11.75",
+    version: "v11.75",
+    date: "2026-11-18",
+    title: "레시피북 헤더·잠금 배너 슬림화 & 전체 모듈(firebase·constants·App) 최종 검증",
+    changes: [
+      "문구 슬림화: 레시피북 제목·부제목 및 열람 잠금 배너 문구를 1줄 핵심 문구로 정돈",
+      "모듈·배포 무결성 검증: 미사용 아이콘/상태 0건, 임포트 누락 0건, JSX 태그 밸런스 100% 확인"
+    ]
+  },
   {
     id: "patch-v11.74",
     version: "v11.74",
