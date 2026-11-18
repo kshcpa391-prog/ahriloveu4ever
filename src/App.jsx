@@ -138,6 +138,7 @@ import {
   getChildAgeStats,
   addMonthsToDateStr,
   BABY_MILESTONES,
+  evaluateGrowthMetric,
   BABY_VACCINES_AND_CHECKUPS,
   buildDaycareMeals,
   callReliableAiEngine
@@ -635,6 +636,7 @@ function MainApp() {
   const [diaryUploadProgress, setDiaryUploadProgress] = useState(null);
   const [diaryImportModal, setDiaryImportModal] = useState(null);
   const [diaryMonthFilter, setDiaryMonthFilter] = useState("all");
+  const [magazineMonth, setMagazineMonth] = useState(null);
   const [diaryPhotoOnlyFilter, setDiaryPhotoOnlyFilter] = useState(false);
   const [highlightedDiaryId, setHighlightedDiaryId] = useState("");
   const [pendingDiaryPhotoFile, setPendingDiaryPhotoFile] = useState(null);
@@ -841,6 +843,10 @@ function MainApp() {
   const [expenseCatFilter, setExpenseCatFilter] = useState("전체");
   const [expenseLedgerExpanded, setExpenseLedgerExpanded] = useState(false);
   const [noticeHideDone, setNoticeHideDone] = useState(false);
+  const [bucketList, setBucketList] = useState([]);
+  const [bucketCatFilter, setBucketCatFilter] = useState("전체");
+  const [bucketWeatherOnly, setBucketWeatherOnly] = useState(false);
+  const [bucketForm, setBucketForm] = useState({ title: "", category: "나들이/여행", weather: "무관", memo: "" });
   const [monthlyBudget, setMonthlyBudget] = useState(() => {
     return Number(localStorage.getItem("kim_family_budget") || 800000);
   });
@@ -898,7 +904,8 @@ function MainApp() {
       !isWeatherModalOpen &&
       !liveActivityPopup &&
       !activityEditModal &&
-      !zipImportPicker
+      !zipImportPicker &&
+      !magazineMonth
     ) return;
     const onEsc = (e) => {
       if (e.key === "Escape") {
@@ -913,11 +920,12 @@ function MainApp() {
         setLiveActivityPopup(null);
         setActivityEditModal(null);
         setZipImportPicker(null);
+        setMagazineMonth(null);
       }
     };
     window.addEventListener("keydown", onEsc);
     return () => window.removeEventListener("keydown", onEsc);
-  }, [isQuickFabOpen, isRoutineModalOpen, isActivityModalOpen, isEditorUnlockModalOpen, isMealCopyModalOpen, diaryExportPreviewUrl, diaryLightboxUrl, isWeatherModalOpen, liveActivityPopup, activityEditModal, zipImportPicker]);
+  }, [isQuickFabOpen, isRoutineModalOpen, isActivityModalOpen, isEditorUnlockModalOpen, isMealCopyModalOpen, diaryExportPreviewUrl, diaryLightboxUrl, isWeatherModalOpen, liveActivityPopup, activityEditModal, zipImportPicker, magazineMonth]);
   const [currentDayKey, setCurrentDayKey] = useState(() => getTodayStr());
   useEffect(() => {
     const syncDayKey = () => {
@@ -2730,6 +2738,17 @@ function MainApp() {
 
     unsubscribers.push(
       onSnapshot(
+        getColRef("family_bucket_v1"),
+        (snap) => {
+          const loaded = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+          setBucketList(loaded);
+        },
+        () => {}
+      )
+    );
+
+    unsubscribers.push(
+      onSnapshot(
         getColRef("family_schedules_v4"),
         async (snap) => {
           const loaded = snap.docs.map((d) => ({
@@ -2917,6 +2936,7 @@ function MainApp() {
       shoppingList,
       recipesMeta: recipes.map(({ photoDataUrl, ...rest }) => rest),
       familyRoutines,
+      bucketList,
       mealFavorites: { combos: favoriteMealCombos, singles: favoriteSingleMenus },
       notices,
       schedules,
@@ -3152,6 +3172,7 @@ function MainApp() {
         babyMedicalNotes,
         babyActivities,
         familyRoutines,
+        bucketList,
         homeLayoutConfig,
         homeTimeRanges,
         routineTimeRanges,
@@ -3294,6 +3315,7 @@ function MainApp() {
       }
       if (Array.isArray(payload.expenses)) setExpenses(payload.expenses);
       if (Array.isArray(payload.shoppingList)) setShoppingList(payload.shoppingList);
+      if (Array.isArray(payload.bucketList)) setBucketList(payload.bucketList);
       if (Array.isArray(payload.recipes)) setRecipes(payload.recipes);
       if (payload.mealFavorites && typeof payload.mealFavorites === "object") {
         const rCombos = toSafeArray(payload.mealFavorites.combos);
@@ -8274,6 +8296,61 @@ ${validText}
     showToast("공지사항이 삭제되었습니다.");
   };
 
+  const handleAddBucketItem = async (e) => {
+    e?.preventDefault?.();
+    if (!requireEditorAccess()) return;
+    const title = String(bucketForm.title || "").trim();
+    if (!title) {
+      showToast("버킷리스트 내용을 입력해 주세요.");
+      return;
+    }
+    const id = `bkt-${Date.now()}`;
+    const payload = {
+      id,
+      title,
+      category: bucketForm.category || "나들이/여행",
+      weather: bucketForm.weather || "무관",
+      memo: String(bucketForm.memo || "").trim(),
+      done: false,
+      doneDate: "",
+      author: actorName || "수혁",
+      createdAt: getTodayStr(),
+      updatedAtMs: Date.now()
+    };
+    setBucketList((prev) => [payload, ...prev]);
+    setBucketForm({ title: "", category: bucketForm.category || "나들이/여행", weather: "무관", memo: "" });
+    if (user && db) {
+      await setDoc(getDocRef("family_bucket_v1", id), payload).catch(() => {});
+    }
+    recordActivity("버킷", "추가", title);
+    showToast("🌟 가족 버킷리스트에 추가했습니다!");
+  };
+
+  const handleToggleBucketDone = async (item) => {
+    if (!requireEditorAccess()) return;
+    const nextDone = !item.done;
+    const updated = {
+      ...item,
+      done: nextDone,
+      doneDate: nextDone ? getTodayStr() : "",
+      updatedAtMs: Date.now()
+    };
+    setBucketList((prev) => prev.map((b) => (b.id === item.id ? updated : b)));
+    if (user && db) {
+      await setDoc(getDocRef("family_bucket_v1", item.id), updated, { merge: true }).catch(() => {});
+    }
+    showToast(nextDone ? `🎉 '${item.title}' 버킷리스트 달성!` : "미완료 상태로 되돌렸습니다.");
+  };
+
+  const handleDeleteBucketItem = async (id) => {
+    if (!requireEditorAccess()) return;
+    setBucketList((prev) => prev.filter((b) => b.id !== id));
+    if (user && db) {
+      await deleteDoc(getDocRef("family_bucket_v1", id)).catch(() => {});
+    }
+    showToast("버킷리스트 항목을 삭제했습니다.");
+  };
+
   const handleConfirmQuickLog = async () => {
     if (!requireEditorAccess()) return;
     if (!quickLogRecipe) return;
@@ -13155,6 +13232,7 @@ ${validText}
 
                         <div className="flex items-center gap-1 bg-stone-100 px-1.5 py-0.5 rounded-xl shrink-0">
                           <button
+                            type="button"
                             onClick={() => handleAdjustQuantity(item, Number(item.quantity) > 0 && Number(item.quantity) < 1 ? -Number(item.quantity) : -1)}
                             className="w-6 h-6 rounded-lg bg-white font-black text-stone-700 shadow-sm"
                           >
@@ -13165,6 +13243,7 @@ ${validText}
                             {item.unit}
                           </span>
                           <button
+                            type="button"
                             onClick={() => handleAdjustQuantity(item, 1)}
                             className="w-6 h-6 rounded-lg bg-white font-black text-stone-700 shadow-sm"
                           >
@@ -13633,7 +13712,7 @@ ${validText}
                   title: "",
                   content: "",
                   category: "육아/아이들",
-                  author: "수혁",
+                  author: actorName || "수혁",
                   pinned: true
                 });
                 setIsNoticeModalOpen(true);
@@ -13685,19 +13764,28 @@ ${validText}
                 <div className="flex items-start justify-between gap-2 mb-1.5">
                   <div className="flex items-center gap-1.5 flex-wrap">
                     {n.pinned && (
-                      <span className="px-2 py-0.5 rounded-md text-[11.5px] font-extrabold bg-indigo-600 text-white flex items-center gap-1">
+                      <span className="px-2 py-0.5 rounded-md text-[11.5px] font-extrabold bg-indigo-600 text-white flex items-center gap-1 whitespace-nowrap">
                         <Pin className="w-2.5 h-2.5" /> 상단고정
                       </span>
                     )}
-                    <span className="px-2 py-0.5 rounded-md text-[11.5px] font-bold bg-stone-200 text-stone-700">
+                    <span className="px-2 py-0.5 rounded-md text-[11.5px] font-bold bg-stone-200 text-stone-700 whitespace-nowrap">
                       {n.category}
                     </span>
                     <span className="text-[12.5px] font-bold text-stone-500">
-                      작성: {n.author} ({n.createdAt})
+                      작성: {String(n.author || "수혁").replace("김수혁", "수혁").replace("최아리나", "아리").replace("아리나", "아리")} ({n.createdAt})
                     </span>
                   </div>
 
                   <div className="flex items-center gap-1 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => copyTextSafe(`📌 [${n.category}] ${n.title}
+${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
+                      className="p-1.5 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-600 text-[11px] font-bold"
+                      title="공지 복사"
+                    >
+                      📋
+                    </button>
                     <button
                       type="button"
                       onClick={async () => {
@@ -14559,6 +14647,232 @@ ${validText}
       {/* ==========================================
           탭 8-2: 📖 가족 레시피북
       ========================================== */}
+      {activeTab === "bucket" && (() => {
+        const isBadWeather = Boolean(
+          weatherInfo &&
+          (String(weatherInfo.rainAlertText || "").includes("비") ||
+            String(weatherInfo.rainAlertText || "").includes("눈") ||
+            Number(weatherInfo.pm10 || 0) > 80)
+        );
+        const weatherRecType = isBadWeather ? "실내" : "맑음";
+        const doneCount = bucketList.filter((b) => b.done).length;
+        const pct = bucketList.length > 0 ? Math.round((doneCount / bucketList.length) * 100) : 0;
+        const filtered = [...bucketList]
+          .filter((b) => bucketCatFilter === "전체" || (b.category || "나들이/여행") === bucketCatFilter)
+          .filter((b) => !bucketWeatherOnly || b.weather === weatherRecType || b.weather === "무관")
+          .sort((a, b) => {
+            if (Boolean(a.done) !== Boolean(b.done)) return a.done ? 1 : -1;
+            return (Number(b.updatedAtMs) || 0) - (Number(a.updatedAtMs) || 0);
+          });
+
+        return (
+          <div className="space-y-3">
+            <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-sm space-y-2.5">
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <h2 className="text-[16px] font-black text-stone-900">🌟 가족 버킷리스트</h2>
+                  <p className="text-[11.5px] font-semibold text-stone-500">
+                    가보고 싶은 곳·해보고 싶은 일을 모아두고 날씨 맞춰 떠나보세요.
+                  </p>
+                </div>
+                <div className="flex items-center gap-1 shrink-0">
+                  {doneCount > 0 && (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        if (!requireEditorAccess()) return;
+                        const doneIds = bucketList.filter((b) => b.done).map((b) => b.id);
+                        setBucketList((prev) => prev.filter((b) => !b.done));
+                        if (user && db) {
+                          await Promise.all(doneIds.map((bid) => deleteDoc(getDocRef("family_bucket_v1", bid)).catch(() => {})));
+                        }
+                        showToast(`🧹 완료된 버킷리스트 ${doneIds.length}건을 정리했습니다.`);
+                      }}
+                      className="px-2 py-1 rounded-full bg-stone-100 hover:bg-rose-50 text-stone-600 hover:text-rose-700 text-[11px] font-extrabold whitespace-nowrap"
+                    >
+                      🧹 완료정리
+                    </button>
+                  )}
+                  <span className="px-2.5 py-1 rounded-full bg-[#EEF3EE] text-[#35503C] text-[11.5px] font-black whitespace-nowrap">
+                    달성 {doneCount}/{bucketList.length} ({pct}%)
+                  </span>
+                </div>
+              </div>
+
+              {bucketList.length > 0 && (
+                <div className="h-1.5 rounded-full bg-stone-100 overflow-hidden">
+                  <div className="h-full bg-[#5E7A65] transition-all" style={{ width: `${pct}%` }} />
+                </div>
+              )}
+
+              {weatherInfo && (
+                <div className="flex items-center justify-between gap-2 px-3 py-2 rounded-xl bg-[#FAF8F3] border border-stone-200 text-[11.5px]">
+                  <span className="font-bold text-stone-700 truncate">
+                    {isBadWeather ? "☔ 오늘 날씨엔 실내 코스 추천!" : "☀️ 오늘 날씨엔 야외 나들이 추천!"}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setBucketWeatherOnly((v) => !v)}
+                    className={`px-2.5 py-1 rounded-full text-[11px] font-extrabold border whitespace-nowrap shrink-0 ${
+                      bucketWeatherOnly
+                        ? "bg-stone-900 text-white border-stone-900"
+                        : "bg-white text-stone-700 border-stone-200"
+                    }`}
+                  >
+                    {bucketWeatherOnly ? "날씨 맞춤 ON" : `${weatherRecType} 모아보기`}
+                  </button>
+                </div>
+              )}
+
+              <form onSubmit={handleAddBucketItem} className="space-y-2 pt-1">
+                <div className="flex gap-1.5">
+                  <input
+                    type="text"
+                    value={bucketForm.title}
+                    onChange={(e) => setBucketForm((p) => ({ ...p, title: e.target.value }))}
+                    placeholder="예: 에버랜드 사파리, 양평 딸기체험"
+                    className="flex-1 px-3 py-2 rounded-xl border border-stone-200 text-[13px] font-bold bg-stone-50 focus:bg-white"
+                  />
+                  <button
+                    type="submit"
+                    className="px-3.5 py-2 rounded-xl bg-stone-900 text-white text-[12.5px] font-extrabold whitespace-nowrap shrink-0"
+                  >
+                    + 추가
+                  </button>
+                </div>
+                <div className="grid grid-cols-3 gap-1.5">
+                  <select
+                    value={bucketForm.category}
+                    onChange={(e) => setBucketForm((p) => ({ ...p, category: e.target.value }))}
+                    className="px-2 py-1.5 rounded-xl border border-stone-200 text-[11.5px] font-bold bg-white"
+                  >
+                    {["나들이/여행", "키즈카페/체험", "맛집", "우리집 목표"].map((c) => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
+                  </select>
+                  <select
+                    value={bucketForm.weather}
+                    onChange={(e) => setBucketForm((p) => ({ ...p, weather: e.target.value }))}
+                    className="px-2 py-1.5 rounded-xl border border-stone-200 text-[11.5px] font-bold bg-white"
+                  >
+                    <option value="무관">🌤️ 날씨 무관</option>
+                    <option value="맑음">☀️ 맑은 날</option>
+                    <option value="실내">🏠 실내/비오는날</option>
+                  </select>
+                  <input
+                    type="text"
+                    value={bucketForm.memo}
+                    onChange={(e) => setBucketForm((p) => ({ ...p, memo: e.target.value }))}
+                    placeholder="지역/메모"
+                    className="px-2.5 py-1.5 rounded-xl border border-stone-200 text-[11.5px] font-bold bg-white"
+                  />
+                </div>
+              </form>
+
+              <div className="flex items-center gap-1 overflow-x-auto pb-0.5">
+                {["전체", "나들이/여행", "키즈카페/체험", "맛집", "우리집 목표"].map((cat) => (
+                  <button
+                    key={cat}
+                    type="button"
+                    onClick={() => setBucketCatFilter(cat)}
+                    className={`px-2.5 py-1 rounded-full text-[11.5px] font-extrabold border whitespace-nowrap shrink-0 ${
+                      bucketCatFilter === cat
+                        ? "bg-stone-900 text-white border-stone-900"
+                        : "bg-stone-50 text-stone-600 border-stone-200"
+                    }`}
+                  >
+                    {cat}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {filtered.length === 0 ? (
+              renderStatusState({
+                type: "empty",
+                title: "등록된 버킷리스트가 없어요",
+                description: "위 입력창에 가족이 함께 가고 싶은 곳이나 목표를 추가해 보세요."
+              })
+            ) : (
+              <div className="space-y-2">
+                {filtered.map((item) => (
+                  <div
+                    key={item.id}
+                    className={`p-3 rounded-2xl border flex items-start justify-between gap-2.5 transition ${
+                      item.done ? "bg-stone-50 border-stone-200 opacity-70" : "bg-white border-stone-200 shadow-sm"
+                    }`}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => handleToggleBucketDone(item)}
+                      className={`w-5 h-5 mt-0.5 rounded-lg border flex items-center justify-center shrink-0 ${
+                        item.done ? "bg-[#5E7A65] border-[#5E7A65] text-white" : "bg-white border-stone-300"
+                      }`}
+                    >
+                      {item.done && <Check className="w-3.5 h-3.5" />}
+                    </button>
+                    <div className="flex-1 min-w-0 space-y-1">
+                      <div className={`text-[13.5px] font-black break-keep ${item.done ? "line-through text-stone-400" : "text-stone-900"}`}>
+                        {item.title}
+                      </div>
+                      <div className="flex items-center gap-1 flex-wrap text-[10.5px] font-bold">
+                        <span className="px-1.5 py-0.5 rounded bg-stone-100 text-stone-700 whitespace-nowrap">{item.category || "나들이/여행"}</span>
+                        {item.weather && item.weather !== "무관" && (
+                          <span className={`px-1.5 py-0.5 rounded whitespace-nowrap ${item.weather === "맑음" ? "bg-amber-50 text-amber-800" : "bg-sky-50 text-sky-800"}`}>
+                            {item.weather === "맑음" ? "☀️ 야외" : "🏠 실내"}
+                          </span>
+                        )}
+                        {item.memo && <span className="text-stone-500 truncate">{item.memo}</span>}
+                        {item.doneDate && <span className="text-emerald-700 whitespace-nowrap">✓ {item.doneDate}</span>}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingSchedule(null);
+                          setScheduleForm({
+                            title: item.title,
+                            date: getTodayStr(),
+                            category: "가족행사",
+                            members: ["수혁", "아리나", "시목", "시율"],
+                            isAnnual: false,
+                            showDday: true,
+                            hasOriginYear: false,
+                            memo: item.memo || ""
+                          });
+                          setIsScheduleModalOpen(true);
+                        }}
+                        className="px-2 py-1 rounded-lg bg-[#EEF3EE] text-[#35503C] text-[10.5px] font-extrabold whitespace-nowrap"
+                        title="일정으로 잡기"
+                      >
+                        📅 일정
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => copyTextSafe(`🌟 [가족 버킷리스트] ${item.title}${item.memo ? ` (${item.memo})` : ""}`, "📋 버킷리스트를 복사했습니다!")}
+                        className="p-1.5 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-600 text-[10.5px]"
+                        title="복사"
+                      >
+                        📋
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteBucketItem(item.id)}
+                        className="p-1.5 rounded-lg hover:bg-rose-50 text-stone-400 hover:text-rose-600"
+                        title="삭제"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })()}
+
       {activeTab === "recipes" && (() => {
         const filteredRecipes = recipes
           .filter((r) => {
@@ -14750,7 +15064,7 @@ ${validText}
                       )}
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-1.5 flex-wrap">
-                          <span className="px-1.5 py-0.5 rounded bg-rose-50 text-rose-700 text-[10.5px] font-extrabold shrink-0">
+                          <span className="px-1.5 py-0.5 rounded bg-rose-50 text-rose-700 text-[10.5px] font-extrabold whitespace-nowrap shrink-0">
                             {r.category || "기타"}
                           </span>
                           <span className="text-[13.5px] font-black text-stone-900 truncate">{r.title}</span>
@@ -14764,8 +15078,17 @@ ${validText}
                     </div>
                     <div className="flex items-center gap-1 shrink-0">
                       <button
+                        type="button"
+                        onClick={() => copyTextSafe(`🍽️ [${r.category || "레시피"}] ${r.title}\n⏱️ ${r.cookTime || "20분"} · ${r.difficulty || "쉬움"}${r.ingredientsText ? `\n🧂 재료: ${r.ingredientsText}` : ""}${r.memo ? `\n📝 메모: ${r.memo}` : ""}`, "📋 레시피를 복사했습니다!")}
+                        className="p-1.5 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-600 text-[11px] font-bold"
+                        title="레시피 복사"
+                      >
+                        📋
+                      </button>
+                      <button
+                        type="button"
                         onClick={() => handleApplyRecipeToMeal(r)}
-                        className="px-2 py-1.5 rounded-lg bg-stone-900 text-white text-[11.5px] font-extrabold"
+                        className="px-2 py-1.5 rounded-lg bg-stone-900 text-white text-[11.5px] font-extrabold whitespace-nowrap"
                         title="오늘 식단으로 재현"
                       >
                         재현
@@ -15295,13 +15618,15 @@ ${validText}
                       const fCount = todayActs.filter((a) => ["모유", "분유", "유축수유"].includes(a.type)).length;
                       const fMl = todayActs.filter((a) => a.type === "분유" || a.type === "유축수유").reduce((s, a) => s + (Number(a.amountMl) || 0), 0);
                       const bMin = todayActs.filter((a) => a.type === "모유").reduce((s, a) => s + (Number(a.durationMin) || 0), 0);
+                      const dPee = todayActs.filter((a) => a.type === "기저귀" && String(a.subType).includes("소변")).length;
+                      const dPoo = todayActs.filter((a) => a.type === "기저귀" && String(a.subType).includes("대변")).length;
                       const dCount = todayActs.filter((a) => a.type === "기저귀").length;
                       const sMin = todayActs.filter((a) => a.type === "수면").reduce((s, a) => s + (Number(a.durationMin) || 0), 0);
                       const sTxt = sMin >= 60 ? `${Math.floor(sMin / 60)}h${sMin % 60}m` : `${sMin}분`;
                       return (
                         <div className="flex items-center justify-between gap-1.5 px-3.5 py-1.5 bg-[#F8F9FA] border-t border-stone-100 text-[11px] font-semibold text-stone-600 flex-wrap">
                           <span>📅 오늘 요약</span>
-                          <span>수유 {fCount}회 ({fMl > 0 ? `${fMl}ml` : ""}{fMl > 0 && bMin > 0 ? " + " : ""}{bMin > 0 ? `모유 ${bMin}분` : fMl === 0 ? "0분" : ""}) · 기저귀 {dCount}회 · 수면 {sTxt}</span>
+                          <span>수유 {fCount}회 ({fMl > 0 ? `${fMl}ml` : ""}{fMl > 0 && bMin > 0 ? " + " : ""}{bMin > 0 ? `모유 ${bMin}분` : fMl === 0 ? "0분" : ""}) · 기저귀 {dCount}회(소{dPee}·대{dPoo}) · 수면 {sTxt}</span>
                         </div>
                       );
                     })()}
@@ -16427,6 +16752,13 @@ ${validText}
                         <div className="flex items-center gap-1">
                           <button
                             type="button"
+                            onClick={() => setMagazineMonth(diaryMonthFilter !== "all" ? diaryMonthFilter : getTodayStr().slice(0, 7))}
+                            className="px-2 py-1 rounded-full text-[11px] font-extrabold border border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-900 whitespace-nowrap shrink-0"
+                          >
+                            📰 매거진
+                          </button>
+                          <button
+                            type="button"
                             onClick={() => setDiaryPhotoOnlyFilter((v) => !v)}
                             className={`px-2 py-1 rounded-full text-[11px] font-extrabold border whitespace-nowrap shrink-0 ${
                               diaryPhotoOnlyFilter
@@ -16452,6 +16784,27 @@ ${validText}
                           </select>
                         </div>
                       </div>
+                      {(() => {
+                        const nowD = new Date();
+                        const lastDayOfM = new Date(nowD.getFullYear(), nowD.getMonth() + 1, 0).getDate();
+                        const daysToEnd = lastDayOfM - nowD.getDate();
+                        const curYmStr = getTodayStr().slice(0, 7);
+                        if (daysToEnd > 2) return null;
+                        return (
+                          <div className="flex items-center justify-between gap-2 px-3 py-2 rounded-xl bg-gradient-to-r from-amber-50 to-[#EEF3EE] border border-amber-200 text-[11.5px]">
+                            <span className="font-bold text-stone-800 truncate">
+                              📰 {Number(curYmStr.slice(5, 7))}월 성장 매거진이 준비됐어요!
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => setMagazineMonth(curYmStr)}
+                              className="px-2.5 py-1 rounded-full bg-stone-900 text-white text-[11px] font-extrabold whitespace-nowrap shrink-0"
+                            >
+                              열어보기
+                            </button>
+                          </div>
+                        );
+                      })()}
                       {(() => {
                         const todayKeyStr = getTodayStr();
                         const thisYm = todayKeyStr.slice(0, 7);
@@ -16895,7 +17248,8 @@ ${validText}
                 { id: "shopping", label: "장보기", icon: "🛒" },
                 { id: "notices", label: "가족공지", icon: "📌" },
                 { id: "ai", label: "AI추천", icon: "✨" },
-                { id: "recipes", label: "레시피북", icon: "📖" }
+                { id: "recipes", label: "레시피북", icon: "📖" },
+                { id: "bucket", label: "버킷리스트", icon: "🌟" }
               ].map((m) => (
                 <button
                   key={m.id}
@@ -18126,24 +18480,55 @@ ${validText}
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-2">
-              <input
-                type="date"
-                value={mealForm.date}
-                onChange={(e) => setMealForm({ ...mealForm, date: e.target.value })}
-                className="px-3 py-2 rounded-xl border border-stone-200 text-[13.5px] font-bold"
-              />
-              <select
-                value={mealForm.slot}
-                onChange={(e) => setMealForm({ ...mealForm, slot: e.target.value })}
-                className="px-3 py-2 rounded-xl border border-stone-200 text-[13.5px] font-bold"
-              >
+            <div className="space-y-2">
+              <div className="flex items-center gap-1.5">
+                <input
+                  type="date"
+                  value={mealForm.date}
+                  onChange={(e) => setMealForm({ ...mealForm, date: e.target.value })}
+                  className="flex-1 min-w-0 px-3 py-2 rounded-xl border border-stone-200 text-[13px] font-bold bg-white"
+                />
+                {[
+                  { label: "어제", delta: -1 },
+                  { label: "오늘", delta: 0 },
+                  { label: "내일", delta: 1 }
+                ].map((dBtn) => {
+                  const dt = new Date();
+                  dt.setDate(dt.getDate() + dBtn.delta);
+                  const targetStr = formatDate(dt);
+                  return (
+                    <button
+                      key={dBtn.label}
+                      type="button"
+                      onClick={() => setMealForm({ ...mealForm, date: targetStr })}
+                      className={`px-2.5 py-2 rounded-xl text-[11.5px] font-extrabold border whitespace-nowrap shrink-0 transition ${
+                        mealForm.date === targetStr
+                          ? "bg-stone-900 text-white border-stone-900"
+                          : "bg-stone-50 text-stone-600 border-stone-200 hover:bg-stone-100"
+                      }`}
+                    >
+                      {dBtn.label}
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="grid grid-cols-4 gap-1.5">
                 {MEAL_SLOTS.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.icon} {s.label}
-                  </option>
+                  <button
+                    key={s.id}
+                    type="button"
+                    onClick={() => setMealForm({ ...mealForm, slot: s.id })}
+                    className={`py-2 px-1 rounded-xl text-[12px] font-extrabold border whitespace-nowrap transition flex items-center justify-center gap-1 ${
+                      mealForm.slot === s.id
+                        ? "bg-stone-900 text-white border-stone-900 shadow-sm"
+                        : "bg-stone-50 text-stone-700 border-stone-200 hover:bg-stone-100"
+                    }`}
+                  >
+                    <span>{s.icon}</span>
+                    <span>{s.label}</span>
+                  </button>
                 ))}
-              </select>
+              </div>
             </div>
 
             <div className="flex items-center justify-between gap-1.5">
@@ -18289,7 +18674,7 @@ ${validText}
                       setMealChipInput("");
                     }
                   }}
-                  className="flex-1 px-3 py-2 rounded-xl border border-stone-200 text-[13.5px] font-bold bg-white"
+                  className="flex-1 min-w-0 px-3 py-2 rounded-xl border border-stone-200 text-[13.5px] font-bold bg-white"
                 />
                 <button
                   type="button"
@@ -20662,6 +21047,245 @@ ${validText}
         </div>
       )}
 
+      {magazineMonth && (() => {
+        const ym = String(magazineMonth).slice(0, 7);
+        const yearNum = Number(ym.slice(0, 4)) || new Date().getFullYear();
+        const monthNum = Number(ym.slice(5, 7)) || (new Date().getMonth() + 1);
+        const ymEndDate = `${ym}-31`;
+
+        const monthDiaries = [...babyDiaryEntries]
+          .filter((d) => String(d.date || "").startsWith(ym))
+          .sort((a, b) => String(a.date || "").localeCompare(String(b.date || "")));
+        const monthPhotoCount = monthDiaries.reduce((acc, d) => acc + getDiaryEntryPhotos(d).length, 0);
+        const monthActivities = babyActivities.filter((a) => String(a.date || "").startsWith(ym));
+        const monthMilestones = CHILDREN_INFO.flatMap((c) =>
+          BABY_MILESTONES.filter((ms) => {
+            const chk = babyChecks[`${c.id}_${ms.id}`];
+            return chk?.done && String(chk.doneDate || "").startsWith(ym);
+          }).map((ms) => ({
+            childName: c.name,
+            childId: c.id,
+            title: ms.title,
+            date: babyChecks[`${c.id}_${ms.id}`]?.doneDate || ""
+          }))
+        ).sort((a, b) => String(a.date).localeCompare(String(b.date)));
+
+        const growthSnapshots = CHILDREN_INFO.map((c) => {
+          const logs = [...babyGrowthLogs]
+            .filter((g) => g.childId === c.id && String(g.date || "") <= ymEndDate)
+            .sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")));
+          const latest = logs[0] || null;
+          const birth = new Date(c.birthDate + "T00:00:00");
+          const refD = new Date(`${ym}-15T00:00:00`);
+          const ageM = Math.max(0, (refD.getFullYear() - birth.getFullYear()) * 12 + (refD.getMonth() - birth.getMonth()));
+          const hEval = latest?.heightCm ? evaluateGrowthMetric(c.id, ageM, "height", Number(latest.heightCm)) : null;
+          const wEval = latest?.weightKg ? evaluateGrowthMetric(c.id, ageM, "weight", Number(latest.weightKg)) : null;
+          return { child: c, ageM, latest, hEval, wEval };
+        });
+
+        const buildMagazineHtml = () => {
+          const escHtml = (s) => String(s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+          const growthHtml = growthSnapshots.map((gs) => {
+            if (!gs.latest) return `<div class="card"><strong>${escHtml(gs.child.name)} (${gs.ageM}개월)</strong><p>아직 기록된 성장 측정치가 없어요.</p></div>`;
+            return `<div class="card"><strong>${escHtml(gs.child.name)} (${gs.ageM}개월 · ${escHtml(gs.latest.date)})</strong><p>키 ${escHtml(gs.latest.heightCm || "-")}cm${gs.hEval ? ` (상위 ${Math.max(1, 100 - Math.round(gs.hEval.percentile))}%)` : ""} · 몸무게 ${escHtml(gs.latest.weightKg || "-")}kg${gs.wEval ? ` (상위 ${Math.max(1, 100 - Math.round(gs.wEval.percentile))}%)` : ""}</p></div>`;
+          }).join("");
+          const msHtml = monthMilestones.length > 0
+            ? monthMilestones.map((m) => `<li><strong>[${escHtml(m.childName)}]</strong> ${escHtml(m.title)} <span>(${escHtml(m.date)})</span></li>`).join("")
+            : "<li>이달에 체크된 첫 발달 기록이 없어요.</li>";
+          const diaryHtml = monthDiaries.length > 0
+            ? monthDiaries.map((d) => {
+                const cNames = getDiaryEntryChildIds(d).join(" · ");
+                const imgs = getDiaryEntryPhotos(d).map((p) => `<img src="${escHtml(p.url)}" alt="사진" />`).join("");
+                return `<article class="entry"><div class="meta">${escHtml(d.date)} · ${escHtml(cNames)} ${escHtml(d.mood || "")}</div>${d.title ? `<h3>${escHtml(d.title)}</h3>` : ""}<p>${escHtml(d.content).replace(/\n/g, "<br/>")}</p>${imgs ? `<div class="photos">${imgs}</div>` : ""}</article>`;
+              }).join("")
+            : "<p>이달에 작성된 육아일기가 없어요.</p>";
+          return `<!doctype html><html lang="ko"><head><meta charset="utf-8"/><title>김씨네 성장 매거진 ${yearNum}년 ${monthNum}월호</title><style>body{font-family:-apple-system,BlinkMacSystemFont,'Apple SD Gothic Neo',sans-serif;max-width:760px;margin:0 auto;padding:28px 20px;color:#1c1917;background:#faf8f3;line-height:1.6}header{text-align:center;border-bottom:2px solid #35503c;padding-bottom:16px;margin-bottom:20px}.kicker{font-size:11px;letter-spacing:2px;color:#5e7a65;font-weight:800}h1{margin:6px 0;font-size:26px}.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:16px 0}.stat{background:#fff;border:1px solid #e7e5e4;border-radius:12px;padding:10px;text-align:center}.stat b{display:block;font-size:18px;color:#35503c}h2{font-size:16px;border-left:4px solid #5e7a65;padding-left:8px;margin:22px 0 10px}.card,.entry{background:#fff;border:1px solid #e7e5e4;border-radius:12px;padding:14px;margin-bottom:10px}.meta{font-size:12px;color:#78716c;font-weight:700;margin-bottom:4px}.photos{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px;margin-top:10px}.photos img{width:100%;height:160px;object-fit:cover;border-radius:8px}@media print{body{background:#fff;padding:0}.entry,.card{break-inside:avoid}}</style></head><body><header><div class="kicker">KIM FAMILY TIME CAPSULE</div><h1>시목·시율 성장 매거진 ${yearNum}년 ${monthNum}월호</h1></header><div class="stats"><div class="stat"><b>${monthDiaries.length}편</b><span>육아일기</span></div><div class="stat"><b>${monthPhotoCount}장</b><span>추억 사진</span></div><div class="stat"><b>${monthMilestones.length}건</b><span>첫 발달</span></div><div class="stat"><b>${monthActivities.length}회</b><span>수유·케어</span></div></div><h2>🌱 성장 스냅샷</h2>${growthHtml}<h2>✨ 이달의 첫 발달</h2><ul>${msHtml}</ul><h2>📖 이달의 육아일기</h2>${diaryHtml}</body></html>`;
+        };
+
+        const shiftMagazineMonth = (delta) => {
+          const dt = new Date(yearNum, monthNum - 1 + delta, 1);
+          setMagazineMonth(`${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}`);
+        };
+
+        return (
+          <div className="fixed inset-0 bg-black/55 z-50 flex items-center justify-center p-3" onClick={() => setMagazineMonth(null)}>
+            <div className="bg-[#FAF8F3] rounded-3xl max-w-lg w-full max-h-[90vh] flex flex-col overflow-hidden shadow-2xl border border-stone-200" onClick={(e) => e.stopPropagation()}>
+              <div className="bg-[#35503C] text-white px-4 py-3 flex items-center justify-between gap-2 shrink-0">
+                <div className="min-w-0">
+                  <div className="text-[10px] tracking-widest font-bold text-emerald-200 uppercase">Family Time Capsule</div>
+                  <div className="text-[15.5px] font-black truncate">📰 {yearNum}년 {monthNum}월 성장 매거진</div>
+                </div>
+                <div className="flex items-center gap-1 shrink-0">
+                  <button type="button" onClick={() => shiftMagazineMonth(-1)} className="px-2 py-1 rounded-lg bg-white/15 hover:bg-white/25 text-[12px] font-bold">◀</button>
+                  <button
+                    type="button"
+                    disabled={ym >= getTodayStr().slice(0, 7)}
+                    onClick={() => shiftMagazineMonth(1)}
+                    className={`px-2 py-1 rounded-lg text-[12px] font-bold ${
+                      ym >= getTodayStr().slice(0, 7) ? "bg-white/5 text-white/30 cursor-not-allowed" : "bg-white/15 hover:bg-white/25"
+                    }`}
+                  >
+                    ▶
+                  </button>
+                  <button type="button" onClick={() => setMagazineMonth(null)} className="p-1 hover:opacity-80"><X className="w-5 h-5" /></button>
+                </div>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-4 space-y-3.5">
+                <div className="grid grid-cols-4 gap-1.5 text-center">
+                  {[
+                    { val: `${monthDiaries.length}편`, lbl: "육아일기" },
+                    { val: `${monthPhotoCount}장`, lbl: "추억 사진" },
+                    { val: `${monthMilestones.length}건`, lbl: "첫 발달" },
+                    { val: `${monthActivities.length}회`, lbl: "수유·케어" }
+                  ].map((k) => (
+                    <div key={k.lbl} className="bg-white rounded-xl p-2 border border-stone-200">
+                      <div className="text-[14px] font-black text-[#35503C]">{k.val}</div>
+                      <div className="text-[10.5px] font-bold text-stone-400">{k.lbl}</div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="bg-white rounded-2xl p-3 border border-stone-200 space-y-2">
+                  <div className="text-[12.5px] font-black text-stone-900">📏 {monthNum}월 성장 스냅샷</div>
+                  <div className="grid grid-cols-2 gap-2">
+                    {growthSnapshots.map((gs) => (
+                      <div key={gs.child.id} className="p-2.5 rounded-xl bg-[#FAF8F3] border border-stone-200/80 space-y-0.5">
+                        <div className="text-[12px] font-black text-stone-800">{gs.child.name} · {gs.ageM}개월</div>
+                        {gs.latest ? (
+                          <div className="text-[11px] font-semibold text-stone-600">
+                            <div>키 {gs.latest.heightCm || "-"}cm {gs.hEval ? `(${Math.round(gs.hEval.percentile)}백분위)` : ""}</div>
+                            <div>체중 {gs.latest.weightKg || "-"}kg {gs.wEval ? `(${Math.round(gs.wEval.percentile)}백분위)` : ""}</div>
+                          </div>
+                        ) : (
+                          <div className="text-[11px] text-stone-400">측정 기록 없음</div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {monthActivities.length > 0 && (() => {
+                  const mFeedMl = monthActivities.filter((a) => a.type === "분유" || a.type === "유축수유").reduce((s, a) => s + (Number(a.amountMl) || 0), 0);
+                  const mBreastMin = monthActivities.filter((a) => a.type === "모유").reduce((s, a) => s + (Number(a.durationMin) || 0), 0);
+                  const mSleepHrs = Math.round(monthActivities.filter((a) => a.type === "수면").reduce((s, a) => s + (Number(a.durationMin) || 0), 0) / 60);
+                  const mDiapers = monthActivities.filter((a) => a.type === "기저귀").length;
+                  return (
+                    <div className="bg-white rounded-2xl p-3 border border-stone-200 flex items-center justify-between gap-2 flex-wrap text-[11.5px] font-bold text-stone-700">
+                      <span className="font-black text-stone-900">🍼 이달 케어 합계</span>
+                      <span>
+                        분유·유축 {mFeedMl.toLocaleString()}ml · 모유 {mBreastMin}분 · 수면 {mSleepHrs}시간 · 기저귀 {mDiapers}회
+                      </span>
+                    </div>
+                  );
+                })()}
+
+                {monthMilestones.length > 0 && (
+                  <div className="bg-white rounded-2xl p-3 border border-stone-200 space-y-1.5">
+                    <div className="text-[12.5px] font-black text-stone-900">🌱 이달의 첫 발달 ({monthMilestones.length}건)</div>
+                    {monthMilestones.map((m, idx) => (
+                      <div key={`${m.childId}-${idx}`} className="flex items-center justify-between gap-2 text-[12px] py-1 border-b border-stone-100 last:border-0">
+                        <span className="font-bold text-stone-800 truncate">
+                          <span className="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-800 text-[10.5px] mr-1.5">{m.childName}</span>
+                          {m.title}
+                        </span>
+                        <span className="text-[11px] font-semibold text-stone-400 shrink-0">{m.date}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <div className="space-y-2">
+                  <div className="text-[12.5px] font-black text-stone-900 px-0.5">📖 이달의 육아일기 ({monthDiaries.length}편)</div>
+                  {monthDiaries.length === 0 ? (
+                    <div className="bg-white rounded-2xl p-6 text-center text-[12.5px] font-bold text-stone-400 border border-stone-200">
+                      {yearNum}년 {monthNum}월에 기록된 육아일기가 없어요.
+                    </div>
+                  ) : (
+                    monthDiaries.map((d) => {
+                      const photos = getDiaryEntryPhotos(d);
+                      return (
+                        <div key={d.id} className="bg-white rounded-2xl p-3 border border-stone-200 space-y-1.5">
+                          <div className="flex items-center justify-between gap-2 text-[11px] font-bold text-stone-400">
+                            <span>{d.date} · {getDiaryEntryChildIds(d).join(" · ")}</span>
+                            <span>{d.mood || ""}</span>
+                          </div>
+                          {d.title && <div className="text-[13.5px] font-black text-stone-900">{d.title}</div>}
+                          <div className="text-[12.5px] text-stone-700 whitespace-pre-wrap leading-relaxed">{d.content}</div>
+                          {photos.length > 0 && (
+                            <div className="grid grid-cols-2 gap-1.5 pt-1">
+                              {photos.map((p, idx) => (
+                                <img key={idx} src={p.url} alt="일기 사진" loading="lazy" className="w-full h-28 object-cover rounded-xl border border-stone-100" />
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+
+              <div className="p-3 bg-white border-t border-stone-200 grid grid-cols-3 gap-1.5 shrink-0">
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const lines = [
+                      `📰 [김씨네 ${yearNum}년 ${monthNum}월 성장 매거진]`,
+                      `• 일기 ${monthDiaries.length}편 · 사진 ${monthPhotoCount}장 · 첫 발달 ${monthMilestones.length}건 · 케어 ${monthActivities.length}회`,
+                      ...growthSnapshots.filter((g) => g.latest).map((g) => `• ${g.child.name}(${g.ageM}m): ${g.latest.heightCm || "-"}cm / ${g.latest.weightKg || "-"}kg`),
+                      ...(monthMilestones.length > 0 ? ["", "🌱 이달의 첫 발달", ...monthMilestones.map((m) => `- ${m.childName}: ${m.title} (${m.date})`)] : []),
+                      ...(monthDiaries.length > 0 ? ["", "📖 이달의 하이라이트", ...monthDiaries.slice(0, 5).map((d) => `- ${d.date} ${d.title || String(d.content || "").slice(0, 35)}`)] : [])
+                    ];
+                    await copyTextSafe(lines.join("
+"), `💬 ${monthNum}월 성장 매거진 요약을 복사했습니다!`);
+                  }}
+                  className="py-2 rounded-xl bg-[#EEF3EE] hover:bg-[#DFE9E0] text-[#35503C] text-[11.5px] font-extrabold whitespace-nowrap"
+                >
+                  💬 카톡 공유복사
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const html = buildMagazineHtml();
+                    const w = window.open("", "_blank");
+                    if (w) {
+                      w.document.open();
+                      w.document.write(html);
+                      w.document.close();
+                      setTimeout(() => { try { w.print(); } catch (e) {} }, 400);
+                    } else {
+                      showToast("팝업 차단을 해제하거나 HTML 저장을 이용해 주세요.");
+                    }
+                  }}
+                  className="py-2 rounded-xl bg-stone-900 hover:bg-stone-800 text-white text-[11.5px] font-extrabold whitespace-nowrap"
+                >
+                  🖨️ 인쇄 · PDF
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const html = buildMagazineHtml();
+                    const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement("a");
+                    a.href = url;
+                    a.download = `김씨네_성장매거진_${ym}.html`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                    showToast(`💾 ${ym} 매거진 HTML 파일을 저장했습니다!`);
+                  }}
+                  className="py-2 rounded-xl bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-900 text-[11.5px] font-extrabold whitespace-nowrap"
+                >
+                  💾 HTML 저장
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
       {isActivityModalOpen && (
         <div
           className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
