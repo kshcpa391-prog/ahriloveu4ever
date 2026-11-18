@@ -1091,7 +1091,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
     img.src = dataUrl;
   });
 
-export const APP_CODE_VERSION = "v11.78";
+export const APP_CODE_VERSION = "v11.82";
 
 export const formatRoutineTimeLabel = (hhmm) => {
   const m = String(hhmm || "").trim().match(/^(\d{2}):(\d{2})$/);
@@ -1169,6 +1169,50 @@ export const formatTime12Ko = (ms) => {
 };
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v11.82",
+    version: "v11.82",
+    date: "2026-11-18",
+    title: "오늘 도래 루틴 강조 · 미래 예정 배지 구분 · 홈 버튼 줄바꿈 방지",
+    items: [
+      "홈 루틴 카드에서 오늘 도래한 루틴(diff===0) 날짜 배지를 에메랄드 강조로 즉시 구분",
+      "반복 루틴 탭에서 [예정 포함] 활성화 시 아직 도래 전인 미래 루틴에 [예정] 배지 표시",
+      "홈 할 일 [+ 추가]·[전체 >]·진행률 배지 whitespace-nowrap 보강 및 최종 점검 완료"
+    ]
+  },
+  {
+    id: "patch-v11.81",
+    version: "v11.81",
+    date: "2026-11-18",
+    title: "미래 예정 루틴 자동 숨김 (과거·오늘 도래분만 표시)",
+    items: [
+      "아직 날짜가 도래하지 않은 주간·월간·격일 미래 루틴을 홈, 브리핑, 남은 건수 배지에서 자동 제외",
+      "일정 → 반복 루틴 탭에서도 기본은 오늘·지난 루틴만 표시하고 [예정 포함] 토글로 미래 루틴 관리 가능",
+      "루틴 시간대 필터 칩 whitespace-nowrap 보강 및 최종 문법·배포 점검 완료"
+    ]
+  },
+  {
+    id: "patch-v11.80",
+    version: "v11.80",
+    date: "2026-11-18",
+    title: "모유 좌·우 시간 수정 시 총 시간 자동 합산 · 이미지 지연 로딩 적용",
+    items: [
+      "모유 수정 모달에서 왼쪽/오른쪽 분 입력 시 총 수유 시간(durationMin)과 종료 시각 자동 동기화",
+      "육아일기·수유 타임라인 첨부 사진에 loading='lazy' 적용으로 모바일 스크롤 속도 개선",
+      "전체 문법·모듈 대소문자·중복 상태 최종 점검 완료"
+    ]
+  },
+  {
+    id: "patch-v11.79",
+    version: "v11.79",
+    date: "2026-11-18",
+    title: "시크릿모드 localStorage 크래시 방지 · 수유 타임라인 오늘/어제 표기 · ESC 닫기 확장",
+    items: [
+      "초기 렌더링 localStorage 접근부 try/catch 보강으로 Safari 시크릿모드·웹뷰 크래시 방지",
+      "수유·생활 타임라인 날짜 헤더를 '오늘 · 11월 18일 (수)' / '어제 · 11월 17일 (화)' 형식으로 직관화",
+      "전역 ESC 키 닫기 대상에 수유 수정 모달(activityEditModal)과 ZIP 선택 팝업 추가"
+    ]
+  },
   {
     id: "patch-v11.78",
     version: "v11.78",

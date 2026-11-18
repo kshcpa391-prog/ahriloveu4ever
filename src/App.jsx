@@ -305,7 +305,7 @@ function MainApp() {
   }, [activeTab]);
 
   const [homeRoutineSlotFilter, setHomeRoutineSlotFilter] = useState(() => {
-    return localStorage.getItem("kim_home_routine_slot_v1") || "auto";
+    try { return localStorage.getItem("kim_home_routine_slot_v1") || "auto"; } catch (e) { return "auto"; }
   });
   const [homeTimeModeOverride, setHomeTimeModeOverride] = useState("auto");
   const [liveMinuteTick, setLiveMinuteTick] = useState(() => {
@@ -435,7 +435,7 @@ function MainApp() {
 
   // 상단 바 틀고정(Sticky) 해제 상태
   const [isHeaderPinned, setIsHeaderPinned] = useState(() => {
-    return localStorage.getItem("kim_header_pinned") === "true";
+    try { return localStorage.getItem("kim_header_pinned") === "true"; } catch (e) { return false; }
   });
 
   // 실시간 서울 중구 날씨 & 미세먼지 상태
@@ -822,10 +822,10 @@ function MainApp() {
   });
 
   const [lastAutoBackupSlot, setLastAutoBackupSlot] = useState(() => {
-    return localStorage.getItem("kim_twice_daily_backup_slot") || "";
+    try { return localStorage.getItem("kim_twice_daily_backup_slot") || ""; } catch (e) { return ""; }
   });
   const [backupEmail, setBackupEmail] = useState(() => {
-    return localStorage.getItem("kim_family_backup_email") || "";
+    try { return localStorage.getItem("kim_family_backup_email") || ""; } catch (e) { return ""; }
   });
   const [backupBannerDismissedMonth, setBackupBannerDismissedMonth] = useState(() => {
     return localStorage.getItem("kim_backup_done_month") || "";
@@ -874,6 +874,7 @@ function MainApp() {
   const [newRoutineIntervalDays, setNewRoutineIntervalDays] = useState(2);
   const [newRoutineNthWeek, setNewRoutineNthWeek] = useState(1);
   const [routineTimeFilter, setRoutineTimeFilter] = useState("전체");
+  const [routineShowFuture, setRoutineShowFuture] = useState(false);
   const [routineTargetFilter, setRoutineTargetFilter] = useState("전체");
   const [homeRoutineTargetFilter, setHomeRoutineTargetFilter] = useState(() => {
     try {
@@ -895,7 +896,9 @@ function MainApp() {
       !diaryExportPreviewUrl &&
       !diaryLightboxUrl &&
       !isWeatherModalOpen &&
-      !liveActivityPopup
+      !liveActivityPopup &&
+      !activityEditModal &&
+      !zipImportPicker
     ) return;
     const onEsc = (e) => {
       if (e.key === "Escape") {
@@ -908,11 +911,13 @@ function MainApp() {
         setDiaryLightboxUrl("");
         setIsWeatherModalOpen(false);
         setLiveActivityPopup(null);
+        setActivityEditModal(null);
+        setZipImportPicker(null);
       }
     };
     window.addEventListener("keydown", onEsc);
     return () => window.removeEventListener("keydown", onEsc);
-  }, [isQuickFabOpen, isRoutineModalOpen, isActivityModalOpen, isEditorUnlockModalOpen, isMealCopyModalOpen, diaryExportPreviewUrl, diaryLightboxUrl, isWeatherModalOpen, liveActivityPopup]);
+  }, [isQuickFabOpen, isRoutineModalOpen, isActivityModalOpen, isEditorUnlockModalOpen, isMealCopyModalOpen, diaryExportPreviewUrl, diaryLightboxUrl, isWeatherModalOpen, liveActivityPopup, activityEditModal, zipImportPicker]);
   const [currentDayKey, setCurrentDayKey] = useState(() => getTodayStr());
   useEffect(() => {
     const syncDayKey = () => {
@@ -1029,6 +1034,42 @@ function MainApp() {
       return Boolean(getIntervalRoutineInfo(rt, currentDayKey)?.done);
     }
     return rt.lastDoneKey === getRoutineResetKey(rt, currentDayKey);
+  };
+
+  const isRoutineDueTodayOrPast = (rt, dayStr = currentDayKey) => {
+    if (!rt) return false;
+    const dStr = String(dayStr || "").slice(0, 10);
+    if (rt.startDate && String(rt.startDate).slice(0, 10) > dStr) return false;
+    if (!rt.cycle || rt.cycle === "daily") return true;
+    if (rt.cycle === "interval") {
+      const info = getIntervalRoutineInfo(rt, dStr);
+      if (info?.done && rt.lastDoneKey !== dStr) return false;
+      return true;
+    }
+    const base = new Date(dStr + "T00:00:00");
+    if (Number.isNaN(base.getTime())) return true;
+    if (rt.cycle === "weekly" && rt.weekDay !== undefined && rt.weekDay !== null) {
+      const curIso = base.getDay() === 0 ? 7 : base.getDay();
+      const tgtIso = Number(rt.weekDay) === 0 ? 7 : Number(rt.weekDay);
+      return tgtIso <= curIso;
+    }
+    if (rt.cycle === "monthly") {
+      const y = base.getFullYear();
+      const m = base.getMonth() + 1;
+      const lastDay = new Date(y, m, 0).getDate();
+      const tgtDay = Math.min(Math.max(1, Number(rt.monthDay) || 1), lastDay);
+      return tgtDay <= base.getDate();
+    }
+    if (rt.cycle === "monthly_weekday") {
+      const targetStr = getNthWeekdayDateStr(
+        base.getFullYear(),
+        base.getMonth() + 1,
+        Number(rt.nthWeek) || 1,
+        Number(rt.weekDay ?? 6)
+      );
+      return targetStr <= dStr;
+    }
+    return true;
   };
 
   const handleToggleRoutine = (rtId) => {
@@ -1470,12 +1511,10 @@ function MainApp() {
 
   // AI 추천 상태
   const [geminiApiKey, setGeminiApiKey] = useState(() => {
-    const saved = localStorage.getItem("kim_family_gemini_key");
-    return saved && (saved.startsWith("AIzaSy") || saved.startsWith("AQ.")) ? saved : EMBEDDED_GEMINI_KEY;
+    try { const saved = localStorage.getItem("kim_family_gemini_key"); return saved && (saved.startsWith("AIzaSy") || saved.startsWith("AQ.")) ? saved : EMBEDDED_GEMINI_KEY; } catch (e) { return EMBEDDED_GEMINI_KEY; }
   });
   const [tempKeyInput, setTempKeyInput] = useState(() => {
-    const saved = localStorage.getItem("kim_family_gemini_key");
-    return saved && (saved.startsWith("AIzaSy") || saved.startsWith("AQ.")) ? saved : EMBEDDED_GEMINI_KEY;
+    try { const saved = localStorage.getItem("kim_family_gemini_key"); return saved && (saved.startsWith("AIzaSy") || saved.startsWith("AQ.")) ? saved : EMBEDDED_GEMINI_KEY; } catch (e) { return EMBEDDED_GEMINI_KEY; }
   });
   const [openaiApiKey, setOpenaiApiKey] = useState(() => {
     return localStorage.getItem("kim_family_openai_key") || "";
@@ -9036,7 +9075,8 @@ ${validText}
           : `${targetMealSlot} 미기록 · 눌러서 등록`;
         const curSlot = getCurrentRoutineTimeSlot(routineTimeRanges, liveMinuteTick, routineSlotDefs);
         const wkndNow = isWeekendNow();
-        const activeRoutines = familyRoutines.filter((r) => !isRoutineDoneNow(r));
+        const dueRoutines = familyRoutines.filter((r) => isRoutineDueTodayOrPast(r, currentDayKey));
+        const activeRoutines = dueRoutines.filter((r) => !isRoutineDoneNow(r));
 
         const MENU_DEFS = {
           daily: {
@@ -9211,7 +9251,7 @@ ${validText}
                           });
                           setIsScheduleModalOpen(true);
                         }}
-                        className="px-1.5 py-0.5 rounded bg-stone-100 hover:bg-stone-200 text-stone-700 text-[11.5px] font-extrabold"
+                        className="px-1.5 py-0.5 rounded bg-stone-100 hover:bg-stone-200 text-stone-700 text-[11.5px] font-extrabold whitespace-nowrap"
                       >
                         + 추가
                       </button>
@@ -9221,7 +9261,7 @@ ${validText}
                           setScheduleSubTab("calendar");
                           setActiveTab("schedule");
                         }}
-                        className="text-[11.5px] font-extrabold text-stone-500"
+                        className="text-[11.5px] font-extrabold text-stone-500 whitespace-nowrap"
                       >
                         전체 &gt;
                       </button>
@@ -9270,7 +9310,7 @@ ${validText}
                 {/* 2) 지금 시간대 + 상시 루틴 */}
                 <div className={`${padCls} space-y-1.5`}>
                   {(() => {
-                    const totalRt = familyRoutines.length;
+                    const totalRt = dueRoutines.length;
                     const doneRt = totalRt - activeRoutines.length;
                     const pctRt = totalRt > 0 ? Math.round((doneRt / totalRt) * 100) : 0;
                     if (totalRt === 0) return null;
@@ -9459,13 +9499,15 @@ ${validText}
                                   {rt.assignee || "공통"}
                                 </span>
                                 {steps.length >= 2 && (
-                                  <span className="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 text-[10.5px] font-black">
+                                  <span className="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 text-[10.5px] font-black whitespace-nowrap">
                                     진행 {stepDoneSet.size}/{steps.length}
                                   </span>
                                 )}
                                 {nextInfo && (
-                                  <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 text-[10.5px] font-bold">
-                                    {nextInfo.dateLabel}
+                                  <span className={`px-1.5 py-0.5 rounded text-[10.5px] font-bold whitespace-nowrap ${
+                                    nextInfo.diff === 0 ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-900"
+                                  }`}>
+                                    {nextInfo.diff === 0 ? `오늘 ${nextInfo.dateLabel}` : nextInfo.dateLabel}
                                   </span>
                                 )}
                               </div>
@@ -9500,7 +9542,7 @@ ${validText}
                           });
                           setIsScheduleModalOpen(true);
                         }}
-                        className="px-1.5 py-0.5 rounded bg-stone-100 hover:bg-stone-200 text-stone-700 text-[11.5px] font-extrabold"
+                        className="px-1.5 py-0.5 rounded bg-stone-100 hover:bg-stone-200 text-stone-700 text-[11.5px] font-extrabold whitespace-nowrap"
                       >
                         + 추가
                       </button>
@@ -9510,7 +9552,7 @@ ${validText}
                           setScheduleSubTab("todo");
                           setActiveTab("schedule");
                         }}
-                        className="text-[11.5px] font-extrabold text-stone-500"
+                        className="text-[11.5px] font-extrabold text-stone-500 whitespace-nowrap"
                       >
                         전체 &gt;
                       </button>
@@ -9729,7 +9771,7 @@ ${validText}
                 </div>
 
                 <div className="space-y-1">
-                  <div className="text-[11.5px] font-extrabold text-stone-500">1) 주요 영역 순서(⋮⋮ 드래그 / ▲▼) · 크기 · 표시</div>
+                  <div className="text-[11.5px] font-extrabold text-stone-500 whitespace-nowrap">1) 주요 영역 순서(⋮⋮ 드래그 / ▲▼) · 크기 · 표시</div>
                   {blockOrder.map((bId, idx) => {
                     const isHidden = hiddenBlocks.includes(bId);
                     const bSize = blockSizes[bId] || "normal";
@@ -9886,7 +9928,7 @@ ${validText}
                 </div>
 
                 <div className="space-y-1">
-                  <div className="text-[11.5px] font-extrabold text-stone-500">2) 바로가기 카드 순서(⋮⋮ 드래그 / ▲▼) · 크기 · 표시</div>
+                  <div className="text-[11.5px] font-extrabold text-stone-500 whitespace-nowrap">2) 바로가기 카드 순서(⋮⋮ 드래그 / ▲▼) · 크기 · 표시</div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-1">
                     {menuOrder.map((mId, idx) => {
                       const def = MENU_DEFS[mId];
@@ -11043,9 +11085,9 @@ ${validText}
               }`}
             >
               <span className="whitespace-nowrap">🔄 반복 루틴</span>
-              {familyRoutines.filter((r) => !isRoutineDoneNow(r)).length > 0 && (
+              {familyRoutines.filter((r) => isRoutineDueTodayOrPast(r, currentDayKey) && !isRoutineDoneNow(r)).length > 0 && (
                 <span className="px-1.5 py-0.5 rounded-full bg-indigo-600 text-white text-[10.5px] font-black leading-none whitespace-nowrap shrink-0">
-                  {familyRoutines.filter((r) => !isRoutineDoneNow(r)).length}
+                  {familyRoutines.filter((r) => isRoutineDueTodayOrPast(r, currentDayKey) && !isRoutineDoneNow(r)).length}
                 </span>
               )}
             </button>
@@ -11515,22 +11557,24 @@ ${validText}
                 <h3 className="text-[13.5px] font-black text-stone-900 flex items-center gap-1.5 whitespace-nowrap">
                   <span>🔄 반복 루틴</span>
                   <span className="px-2 py-0.5 rounded-full bg-stone-100 text-stone-800 text-[11px] font-black shrink-0">
-                    남은 {familyRoutines.filter((r) => !isRoutineDoneNow(r)).length}건
+                    남은 {familyRoutines.filter((r) => isRoutineDueTodayOrPast(r, currentDayKey) && !isRoutineDoneNow(r)).length}건
                   </span>
                 </h3>
                 <p className="text-[11px] text-stone-500 font-semibold mt-0.5 whitespace-nowrap truncate">
                   {isWeekendNow() ? "주말" : "평일"} · <span className="text-stone-900 font-extrabold">{getCurrentRoutineTimeSlot(routineTimeRanges, liveMinuteTick, routineSlotDefs)}</span> · 자동 리셋
                 </p>
-                {familyRoutines.length > 0 && (() => {
-                  const doneCnt = familyRoutines.filter((r) => isRoutineDoneNow(r)).length;
-                  const pct = Math.round((doneCnt / familyRoutines.length) * 100);
+                {(() => {
+                  const dueList = familyRoutines.filter((r) => isRoutineDueTodayOrPast(r, currentDayKey));
+                  if (dueList.length === 0) return null;
+                  const doneCnt = dueList.filter((r) => isRoutineDoneNow(r)).length;
+                  const pct = Math.round((doneCnt / dueList.length) * 100);
                   return (
                     <div className="mt-1.5 flex items-center gap-2">
                       <div className="flex-1 h-1.5 rounded-full bg-stone-100 overflow-hidden">
                         <div className="h-full bg-[#5E7A65] transition-all" style={{ width: `${pct}%` }} />
                       </div>
                       <span className="text-[11.5px] font-black text-[#35503C] whitespace-nowrap">
-                        달성 {doneCnt}/{familyRoutines.length} ({pct}%)
+                        달성 {doneCnt}/{dueList.length} ({pct}%)
                       </span>
                     </div>
                   );
@@ -11868,7 +11912,7 @@ ${validText}
                   key={ts}
                   type="button"
                   onClick={() => setRoutineTimeFilter(ts)}
-                  className={`px-2 py-0.5 rounded-full text-[11.5px] font-extrabold border shrink-0 ${
+                  className={`px-2 py-0.5 rounded-full text-[11.5px] font-extrabold border whitespace-nowrap shrink-0 ${
                     routineTimeFilter === ts
                       ? "bg-stone-900 text-white border-stone-900"
                       : "bg-stone-50 text-stone-600 border-stone-200"
@@ -11877,11 +11921,28 @@ ${validText}
                   {ts}
                 </button>
               ))}
+              {(() => {
+                const futureCnt = familyRoutines.filter((r) => !isRoutineDueTodayOrPast(r, currentDayKey)).length;
+                if (futureCnt === 0) return null;
+                return (
+                  <button
+                    type="button"
+                    onClick={() => setRoutineShowFuture((v) => !v)}
+                    className={`px-2 py-0.5 rounded-full text-[11.5px] font-extrabold border whitespace-nowrap shrink-0 ${
+                      routineShowFuture
+                        ? "bg-amber-600 text-white border-amber-600"
+                        : "bg-amber-50 text-amber-800 border-amber-200"
+                    }`}
+                  >
+                    {routineShowFuture ? `예정 포함(${futureCnt})` : `+ 예정(${futureCnt})`}
+                  </button>
+                );
+              })()}
             </div>
 
             {(() => {
               const timedRoutines = familyRoutines
-                .filter((rt) => rt.scheduledTime && matchesRoutineTarget(rt, routineTargetFilter))
+                .filter((rt) => rt.scheduledTime && isRoutineDueTodayOrPast(rt, currentDayKey) && matchesRoutineTarget(rt, routineTargetFilter))
                 .sort((a, b) => String(a.scheduledTime || "").localeCompare(String(b.scheduledTime || "")));
               if (timedRoutines.length === 0) return null;
               return (
@@ -11927,7 +11988,7 @@ ${validText}
             ) : (
               <div className="space-y-1.5">
                 {[...familyRoutines]
-                  .filter((rt) => (routineTimeFilter === "전체" || (rt.timeSlot || "상시") === routineTimeFilter) && matchesRoutineTarget(rt, routineTargetFilter))
+                  .filter((rt) => (routineShowFuture || isRoutineDueTodayOrPast(rt, currentDayKey)) && (routineTimeFilter === "전체" || (rt.timeSlot || "상시") === routineTimeFilter) && matchesRoutineTarget(rt, routineTargetFilter))
                   .sort((a, b) => {
                     const aDone = Number(isRoutineDoneNow(a));
                     const bDone = Number(isRoutineDoneNow(b));
@@ -11951,13 +12012,18 @@ ${validText}
                   })
                   .map((rt) => {
                     const doneNow = isRoutineDoneNow(rt);
+                    const isDueNow = isRoutineDueTodayOrPast(rt, currentDayKey);
                     const nextDateInfo = getRoutineNextDateInfo(rt, currentDayKey);
                     const intervalInfo = getIntervalRoutineInfo(rt, currentDayKey);
                     return (
                       <div
                         key={rt.id}
                         className={`p-2.5 rounded-xl border flex items-start justify-between gap-2 transition ${
-                          doneNow ? "bg-stone-50 border-stone-200 opacity-65" : "bg-stone-50/70 border-stone-200"
+                          doneNow
+                            ? "bg-stone-50 border-stone-200 opacity-65"
+                            : !isDueNow
+                            ? "bg-amber-50/30 border-amber-200/70 opacity-75"
+                            : "bg-stone-50/70 border-stone-200"
                         }`}
                       >
                         <div className="flex items-start gap-2.5 flex-1 text-left min-w-0">
@@ -15343,8 +15409,17 @@ ${validText}
                         return (
                           <div key={grp.date} className="bg-white rounded-2xl border border-stone-200/80 shadow-sm overflow-hidden">
                             <div className="px-3.5 py-1.5 bg-[#F5F6F8] border-b border-stone-200/70 flex items-center justify-between gap-2 flex-wrap">
-                              <span className="text-[12.5px] font-bold text-stone-700">
-                                {grp.date} ({getDayName(grp.date)})
+                              <span className="text-[12.5px] font-bold text-stone-700 flex items-center gap-1.5">
+                                {(() => {
+                                  const todayKey = getTodayStr();
+                                  const yestDate = new Date();
+                                  yestDate.setDate(yestDate.getDate() - 1);
+                                  const yestKey = formatDate(yestDate);
+                                  const parts = String(grp.date || "").split("-");
+                                  const mmdd = parts.length === 3 ? `${Number(parts[1])}월 ${Number(parts[2])}일` : grp.date;
+                                  const prefix = grp.date === todayKey ? "오늘 · " : grp.date === yestKey ? "어제 · " : "";
+                                  return `${prefix}${mmdd} (${getDayName(grp.date)})`;
+                                })()}
                               </span>
                               <div className="flex items-center gap-1.5 text-[11px] font-bold flex-wrap">
                                 {totalFeedMl > 0 && (
@@ -16256,7 +16331,7 @@ ${validText}
                         <div className="grid grid-cols-2 gap-2">
                         {diaryForm.photos.map((pItem, pIdx) => (
                           <div key={pIdx} className="relative rounded-xl overflow-hidden border border-stone-200 bg-stone-50">
-                            <img src={pItem.url} alt={`첨부 ${pIdx + 1}`} className="w-full h-32 object-cover" />
+                            <img src={pItem.url} alt={`첨부 ${pIdx + 1}`} loading="lazy" className="w-full h-32 object-cover" />
                             <div className="absolute top-1 left-1 flex items-center gap-0.5">
                               {pIdx > 0 && (
                                 <button
@@ -17134,7 +17209,7 @@ ${validText}
 
             <div>
               <div className="flex items-center justify-between mb-1">
-                <label className="text-[11.5px] font-extrabold text-stone-500">
+                <label className="text-[11.5px] font-extrabold text-stone-500 whitespace-nowrap">
                   수행 시간 태그 (선택 · 예: 17시30분)
                 </label>
                 {newRoutineScheduledTime && (
@@ -17368,7 +17443,7 @@ ${validText}
             </div>
 
             <div className="space-y-2 bg-stone-50 p-3 rounded-2xl border border-stone-200">
-              <div className="text-[11.5px] font-extrabold text-stone-500">
+              <div className="text-[11.5px] font-extrabold text-stone-500 whitespace-nowrap">
                 기념일/생일 전용 추가 옵션 (필요할 때만 체크)
               </div>
               <label className="flex items-center gap-2 text-[13.5px] font-bold text-stone-800 cursor-pointer">
@@ -20135,8 +20210,21 @@ ${validText}
                       <label className="text-[11.5px] font-bold text-stone-400">왼쪽 (분)</label>
                       <input
                         type="number"
+                        min="0"
                         value={activityEditModal.leftMin ?? 0}
-                        onChange={(e) => setActivityEditModal((p) => ({ ...p, leftMin: e.target.value }))}
+                        onChange={(e) =>
+                          setActivityEditModal((p) => {
+                            const lVal = Math.max(0, Number(e.target.value) || 0);
+                            const rVal = Math.max(0, Number(p.rightMin) || 0);
+                            const nextDur = lVal + rVal;
+                            return {
+                              ...p,
+                              leftMin: e.target.value,
+                              durationMin: nextDur,
+                              endMs: p.startMs ? Number(p.startMs) + nextDur * 60000 : p.endMs
+                            };
+                          })
+                        }
                         className="w-full px-2.5 py-1.5 rounded-xl border border-stone-200 text-[13.5px] font-bold"
                       />
                     </div>
@@ -20144,8 +20232,21 @@ ${validText}
                       <label className="text-[11.5px] font-bold text-stone-400">오른쪽 (분)</label>
                       <input
                         type="number"
+                        min="0"
                         value={activityEditModal.rightMin ?? 0}
-                        onChange={(e) => setActivityEditModal((p) => ({ ...p, rightMin: e.target.value }))}
+                        onChange={(e) =>
+                          setActivityEditModal((p) => {
+                            const lVal = Math.max(0, Number(p.leftMin) || 0);
+                            const rVal = Math.max(0, Number(e.target.value) || 0);
+                            const nextDur = lVal + rVal;
+                            return {
+                              ...p,
+                              rightMin: e.target.value,
+                              durationMin: nextDur,
+                              endMs: p.startMs ? Number(p.startMs) + nextDur * 60000 : p.endMs
+                            };
+                          })
+                        }
                         className="w-full px-2.5 py-1.5 rounded-xl border border-stone-200 text-[13.5px] font-bold"
                       />
                     </div>
