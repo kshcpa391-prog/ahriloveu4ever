@@ -1091,7 +1091,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
     img.src = dataUrl;
   });
 
-export const APP_CODE_VERSION = "v11.91";
+export const APP_CODE_VERSION = "v11.92";
 
 export const formatRoutineTimeLabel = (hhmm) => {
   const m = String(hhmm || "").trim().match(/^(\d{2}):(\d{2})$/);
@@ -1169,6 +1169,16 @@ export const formatTime12Ko = (ms) => {
 };
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v11.92",
+    version: "v11.92",
+    date: "2026-11-18",
+    title: "Vercel 빌드 오류(21259행 미종료 문자열) 수정",
+    items: [
+      "월간 매거진 카톡 공유 복사 구문(lines.join('\n'))의 줄바꿈 이스케이프 오류 수정",
+      "전체 파일 내 동일 패턴 미종료 문자열 0건 재검증 완료"
+    ]
+  },
   {
     id: "patch-v11.91",
     version: "v11.91",

@@ -21256,8 +21256,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                       ...(monthMilestones.length > 0 ? ["", "🌱 이달의 첫 발달", ...monthMilestones.map((m) => `- ${m.childName}: ${m.title} (${m.date})`)] : []),
                       ...(monthDiaries.length > 0 ? ["", "📖 이달의 하이라이트", ...monthDiaries.slice(0, 5).map((d) => `- ${d.date} ${d.title || String(d.content || "").slice(0, 35)}`)] : [])
                     ];
-                    await copyTextSafe(lines.join("
-"), `💬 ${monthNum}월 성장 매거진 요약을 복사했습니다!`);
+                    await copyTextSafe(lines.join("\n"), `💬 ${monthNum}월 성장 매거진 요약을 복사했습니다!`);
                   }}
                   className="py-2 rounded-xl bg-[#EEF3EE] hover:bg-[#DFE9E0] text-[#35503C] text-[11.5px] font-extrabold whitespace-nowrap"
                 >
