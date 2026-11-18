@@ -10636,35 +10636,52 @@ ${validText}
       ========================================== */}
       {activeTab === "monthly" && (!canViewTab("monthly") ? renderLockedTabScreen("💰 월간·식비") : (
         <div className="p-4 space-y-4">
-          <div className="flex items-center justify-between bg-white px-3 py-2 rounded-2xl border border-stone-200 shadow-sm">
+          <div className="flex items-center justify-between gap-2 bg-white px-3 py-2 rounded-2xl border border-stone-200 shadow-sm">
             <button
+              type="button"
               onClick={() => {
                 const prevM = shiftYearMonth(currentMonth, -1);
                 setCurrentMonth(prevM);
                 setSelectedDate(`${prevM}-01`);
               }}
-              className="p-1.5 rounded-xl bg-stone-100 hover:bg-stone-200"
+              className="p-1.5 rounded-xl bg-stone-100 hover:bg-stone-200 shrink-0"
             >
               <ChevronLeft className="w-4 h-4" />
             </button>
-            <input
-              type="month"
-              value={currentMonth}
-              onChange={(e) => {
-                if (e.target.value) {
-                  setCurrentMonth(e.target.value);
-                  setSelectedDate(`${e.target.value}-01`);
-                }
-              }}
-              className="text-[15.5px] font-black text-stone-900 bg-transparent focus:outline-none"
-            />
+            <div className="flex items-center gap-1.5 min-w-0">
+              <input
+                type="month"
+                value={currentMonth}
+                onChange={(e) => {
+                  if (e.target.value) {
+                    setCurrentMonth(e.target.value);
+                    setSelectedDate(`${e.target.value}-01`);
+                  }
+                }}
+                className="text-[15px] font-black text-stone-900 bg-transparent focus:outline-none"
+              />
+              {currentMonth !== getCurrentYearMonth() && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const curM = getCurrentYearMonth();
+                    setCurrentMonth(curM);
+                    setSelectedDate(getTodayStr());
+                  }}
+                  className="px-2 py-0.5 rounded-full bg-[#EEF3EE] text-[#35503C] text-[11px] font-extrabold whitespace-nowrap shrink-0"
+                >
+                  이번 달
+                </button>
+              )}
+            </div>
             <button
+              type="button"
               onClick={() => {
                 const nextM = shiftYearMonth(currentMonth, 1);
                 setCurrentMonth(nextM);
                 setSelectedDate(`${nextM}-01`);
               }}
-              className="p-1.5 rounded-xl bg-stone-100 hover:bg-stone-200"
+              className="p-1.5 rounded-xl bg-stone-100 hover:bg-stone-200 shrink-0"
             >
               <ChevronRight className="w-4 h-4" />
             </button>
@@ -10672,18 +10689,20 @@ ${validText}
 
           <div className="grid grid-cols-2 gap-1.5 bg-stone-200 p-1 rounded-2xl">
             <button
+              type="button"
               onClick={() => setMonthlySubTab("calendar")}
-              className={`py-2 rounded-xl text-[13.5px] font-extrabold transition ${
+              className={`py-2 px-1 rounded-xl text-[12.5px] font-extrabold whitespace-nowrap transition ${
                 monthlySubTab === "calendar"
                   ? "bg-white text-stone-900 shadow-sm"
                   : "text-stone-600"
               }`}
             >
-              📅 인별 월간 식단현황
+              📅 인별 월간 식단
             </button>
             <button
+              type="button"
               onClick={() => setMonthlySubTab("expense")}
-              className={`py-2 rounded-xl text-[13.5px] font-extrabold transition ${
+              className={`py-2 px-1 rounded-xl text-[12.5px] font-extrabold whitespace-nowrap transition ${
                 monthlySubTab === "expense"
                   ? "bg-white text-stone-900 shadow-sm"
                   : "text-stone-600"

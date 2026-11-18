@@ -1091,7 +1091,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
     img.src = dataUrl;
   });
 
-export const APP_CODE_VERSION = "v11.90";
+export const APP_CODE_VERSION = "v11.91";
 
 export const formatRoutineTimeLabel = (hhmm) => {
   const m = String(hhmm || "").trim().match(/^(\d{2}):(\d{2})$/);
@@ -1169,6 +1169,17 @@ export const formatTime12Ko = (ms) => {
 };
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v11.91",
+    version: "v11.91",
+    date: "2026-11-18",
+    title: "월간·식비 탭 [이번 달] 복귀 버튼 추가 & 버튼 줄바꿈·type 정리",
+    items: [
+      "월간·식비 탭에서 다른 달 조회 시 한 번에 돌아오는 [이번 달] 원탭 버튼 추가",
+      "월간·식비 서브탭·멤버 선택·월 이동 버튼 type='button' 및 whitespace-nowrap 보강",
+      "시율 케어 영역 미수정, 전체 문법·./Firebase·./Constants 대소문자·배포 점검 완료"
+    ]
+  },
   {
     id: "patch-v11.90",
     version: "v11.90",
