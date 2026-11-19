@@ -1176,7 +1176,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v12.20";
+export const APP_CODE_VERSION = "v12.24";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1194,7 +1194,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-20 05:30";
+export const APP_BUILD_DATE = "2026-11-20 06:00";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1261,6 +1261,50 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v12.24",
+    version: "v12.24",
+    date: "2026-11-20",
+    title: "전역 맨위로 버튼 · 가족공지 슬림화/1탭 복사 · 버킷리스트 완료숨김 · 표 복사 · 미사용 연산 제거",
+    items: [
+      "시각적 정리·성능 개선: 미사용 냉장고 예측 연산(fridgeProjectedMap) 제거, 가족공지 상단 중복 제목 제거 및 한 줄 액션바 슬림화, 버킷리스트 [완료 숨김] 토글 추가",
+      "사용자 편의성: 긴 화면(360px 이상 스크롤)에서 자동 노출되는 전역 [⬆️ 맨 위로] 버튼 및 가족공지 [📋 진행중 복사] 추가",
+      "기능 고도화: 가족공유노트 노션 표 툴바에 [📋 표 복사] 추가 및 홈 바로가기 카드에 미완료 체크리스트 잔여 건수 실시간 표시"
+    ]
+  },
+  {
+    id: "patch-v12.23",
+    version: "v12.23",
+    date: "2026-11-20",
+    title: "가족공유노트 글자크기·굵기·색상·형광펜 서식 편집기 · 빠른실행 한눈에 보기(스크롤·말줄임 제거)",
+    items: [
+      "가족공유노트 블록 클릭 시 글자 크기(작게/보통/크게/특대), 굵기(B), 글자색(7색), 형광펜 배경, 블록 유형 전환(체크↔섹션↔메모)을 1탭으로 실시간 편집",
+      "본문·체크리스트에서도 **굵게**·*기울임* 인라인 마크다운 자동 렌더링 지원",
+      "우측 하단 빠른실행(+) 팝업을 스크롤 없이 한 화면에 다 보이도록 컴팩트 타일 그리드로 개편하고 '가족공유노트...' 말줄임 현상 완전 해소"
+    ]
+  },
+  {
+    id: "patch-v12.22",
+    version: "v12.22",
+    date: "2026-11-20",
+    title: "전체 코드 정밀 점검·시각적 피로도 최소화·가족공유노트 표 통합검색/페이지 복제·잠재 오류 수정",
+    items: [
+      "시각적 정리: 더보기 시트 중복 [식단] 제거 및 2그룹 정돈, 빠른작성 중복 타이머 통합, 상단 틀고정 버튼 슬림화, 장보기 AI 문장 입력 접기/펼치기 지원",
+      "편의성·고도화: 가족공유노트 통합검색에 노션 표(Task/비고/메모)·마크다운 표 내용 포함 및 1탭 [페이지 복제] 기능 추가",
+      "잠재 오류 수정: 매월 N째 주 요일 루틴(getNthWeekdayDateStr) 누락 임포트 복구, 육아활동 [+ 직접 기록] 미정의 변수(currentProfileName -> actorName) 수정, 미사용 임포트 제거"
+    ]
+  },
+  {
+    id: "patch-v12.21",
+    version: "v12.21",
+    date: "2026-11-20",
+    title: "가족공유노트 마크다운 표(| 구분 | 내용 |) 붙여넣기 자동 변환 및 인라인 서식(*기울임*·**강조**) 지원",
+    items: [
+      "마크다운 표(| 구분 | 아기 상태 | 대응 방법 |)를 붙여넣으면 노션 스타일 격자 표로 자동 변환 렌더링",
+      "표 바로 위의 '- 제목' 불릿은 노란 하이라이트 소제목(• 제목)으로 자동 강조",
+      "표 셀 내부의 *기울임*(괄호 주석), **굵게**, ** 각주 표기까지 사진 양식 그대로 표현 및 양방향 마크다운 편집/복사 호환"
+    ]
+  },
   {
     id: "patch-v12.20",
     version: "v12.20",
@@ -4498,18 +4542,71 @@ export const PAGE_HEADING_COLORS = [
 ];
 
 
+const splitMarkdownTableRow = (line) => {
+  let s = String(line || "").trim();
+  if (s.startsWith("|")) s = s.slice(1);
+  if (s.endsWith("|")) s = s.slice(0, -1);
+  return s.split("|").map((c) => c.trim());
+};
+
+const isMarkdownTableSeparator = (line) => {
+  const s = String(line || "").trim();
+  if (!s.includes("|") || !s.includes("-")) return false;
+  const cells = splitMarkdownTableRow(s);
+  return cells.length > 0 && cells.every((c) => /^:?-{2,}:?$/.test(c));
+};
+
 export const parseNotionMarkdownToBlocks = (rawText, defaultHeadingColor = "amber") => {
   const lines = String(rawText || "").replace(/\r\n?/g, "\n").split("\n");
   const blocks = [];
   const baseMs = Date.now();
   let seq = 0;
 
-  for (const rawLine of lines) {
+  for (let i = 0; i < lines.length; i++) {
+    const rawLine = lines[i];
     if (!rawLine.trim()) continue;
     const expanded = rawLine.replace(/\t/g, "    ");
     const leadingSpaces = (expanded.match(/^ */)?.[0] || "").length;
     const indent = Math.min(3, Math.floor(leadingSpaces / 2) >= 2 ? Math.floor(leadingSpaces / 4) || 1 : 0);
     const trimmed = expanded.trim();
+
+    // 0. Markdown Pipe Table: | col1 | col2 | followed by | --- | --- |
+    if (trimmed.includes("|") && i + 1 < lines.length && isMarkdownTableSeparator(lines[i + 1])) {
+      const headers = splitMarkdownTableRow(trimmed);
+      const rows = [];
+      i += 2; // skip header & separator
+      while (i < lines.length) {
+        const rowTrimmed = lines[i].trim();
+        if (!rowTrimmed || !rowTrimmed.includes("|")) {
+          i -= 1;
+          break;
+        }
+        const cells = splitMarkdownTableRow(rowTrimmed);
+        while (cells.length < headers.length) cells.push("");
+        rows.push(cells.slice(0, headers.length));
+        i++;
+      }
+      // If the immediately preceding block was a bullet item (- 제목), promote it to a highlighted bullet heading!
+      if (blocks.length > 0) {
+        const prev = blocks[blocks.length - 1];
+        if (prev.type === "text" && prev.text.startsWith("• ")) {
+          blocks[blocks.length - 1] = {
+            id: prev.id,
+            type: "heading",
+            isBullet: true,
+            text: prev.text.slice(2).trim(),
+            color: defaultHeadingColor || "amber"
+          };
+        }
+      }
+      blocks.push({
+        id: `mdtbl-${baseMs}-${seq++}-${Math.random().toString(36).slice(2, 5)}`,
+        type: "md_table",
+        headers,
+        rows
+      });
+      continue;
+    }
 
     // 1. Heading: # / ## / ###
     const headingMatch = trimmed.match(/^#{1,6}\s+(.+)$/);
@@ -4592,9 +4689,26 @@ export const blocksToNotionMarkdown = (blocks = []) => {
   (Array.isArray(blocks) ? blocks : []).forEach((b) => {
     if (!b || b.type === "table") return;
     const pad = "    ".repeat(Math.min(3, Number(b.indent) || 0));
-    if (b.type === "heading") {
+    if (b.type === "md_table") {
+      const headers = Array.isArray(b.headers) ? b.headers : [];
+      const rows = Array.isArray(b.rows) ? b.rows : [];
+      if (headers.length > 0) {
+        if (lines.length > 0 && lines[lines.length - 1] !== "") lines.push("");
+        lines.push(`| ${headers.join(" | ")} |`);
+        lines.push(`| ${headers.map(() => "---").join(" | ")} |`);
+        rows.forEach((r) => {
+          const cells = Array.isArray(r) ? r : [];
+          lines.push(`| ${headers.map((_, idx) => cells[idx] ?? "").join(" | ")} |`);
+        });
+        lines.push("");
+      }
+    } else if (b.type === "heading") {
       if (lines.length > 0 && lines[lines.length - 1] !== "") lines.push("");
-      lines.push(`### ${b.text || ""}`);
+      if (b.isBullet) {
+        lines.push(`- ${b.text || ""}`);
+      } else {
+        lines.push(`### ${b.text || ""}`);
+      }
       lines.push("");
     } else if (b.type === "todo") {
       lines.push(`${pad}- [${b.checked ? "x" : " "}] ${b.text || ""}`);
@@ -4604,3 +4718,29 @@ export const blocksToNotionMarkdown = (blocks = []) => {
   });
   return lines.join("\n").trim();
 };
+
+
+export const PAGE_TEXT_SIZES = [
+  { id: "sm", label: "작게", cls: "text-[12.5px]" },
+  { id: "base", label: "보통", cls: "text-[14.5px]" },
+  { id: "lg", label: "크게", cls: "text-[17px]" },
+  { id: "xl", label: "특대", cls: "text-[20px]" }
+];
+
+export const PAGE_TEXT_COLORS = [
+  { id: "default", label: "기본", cls: "text-stone-800", dot: "bg-stone-800" },
+  { id: "rose", label: "빨강", cls: "text-rose-600", dot: "bg-rose-500" },
+  { id: "sky", label: "파랑", cls: "text-[#2383E2]", dot: "bg-[#2383E2]" },
+  { id: "emerald", label: "초록", cls: "text-emerald-700", dot: "bg-emerald-600" },
+  { id: "amber", label: "주황", cls: "text-amber-700", dot: "bg-amber-500" },
+  { id: "violet", label: "보라", cls: "text-violet-700", dot: "bg-violet-500" },
+  { id: "muted", label: "회색", cls: "text-stone-400", dot: "bg-stone-400" }
+];
+
+export const PAGE_TEXT_BG_COLORS = [
+  { id: "none", label: "없음", cls: "", dot: "bg-white border border-stone-300" },
+  { id: "amber", label: "노랑", cls: "bg-amber-100/85 px-1.5 py-0.5 rounded-md", dot: "bg-amber-200" },
+  { id: "emerald", label: "초록", cls: "bg-emerald-100/85 px-1.5 py-0.5 rounded-md", dot: "bg-emerald-200" },
+  { id: "sky", label: "파랑", cls: "bg-sky-100/85 px-1.5 py-0.5 rounded-md", dot: "bg-sky-200" },
+  { id: "rose", label: "분홍", cls: "bg-rose-100/85 px-1.5 py-0.5 rounded-md", dot: "bg-rose-200" }
+];

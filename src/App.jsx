@@ -55,7 +55,6 @@ import {
   onSnapshot,
   arrayUnion,
   arrayRemove,
-  increment,
   runTransaction,
   writeBatch
 } from "firebase/firestore";
@@ -69,7 +68,6 @@ import {
   auth,
   db,
   storage,
-  APP_ID,
   getColRef,
   getDocRef
 } from "./Firebase";
@@ -146,10 +144,14 @@ import {
   BABY_VACCINES_AND_CHECKUPS,
   buildDaycareMeals,
   callReliableAiEngine,
+  getNthWeekdayDateStr,
   PAGE_EMOJI_PRESETS,
   PAGE_HEADING_COLORS,
   PAGE_COVER_COLORS,
   PAGE_TABLE_PRIORITIES,
+  PAGE_TEXT_SIZES,
+  PAGE_TEXT_COLORS,
+  PAGE_TEXT_BG_COLORS,
   parseNotionMarkdownToBlocks,
   blocksToNotionMarkdown
 } from "./Constants";
@@ -778,6 +780,7 @@ function MainApp() {
   const [shoppingSearchQuery, setShoppingSearchQuery] = useState("");
   const [shoppingStatusFilter, setShoppingStatusFilter] = useState("all");
   const [quickShoppingText, setQuickShoppingText] = useState("");
+  const [isQuickShoppingOpen, setIsQuickShoppingOpen] = useState(false);
   const [isQuickParsingShopping, setIsQuickParsingShopping] = useState(false);
   const [fridgeViewMode, setFridgeViewMode] = useState("list"); // visual | list
   const [fridgeSearch, setFridgeSearch] = useState("");
@@ -889,6 +892,8 @@ function MainApp() {
   const [bucketList, setBucketList] = useState([]);
   const [bucketCatFilter, setBucketCatFilter] = useState("전체");
   const [bucketWeatherOnly, setBucketWeatherOnly] = useState(false);
+  const [bucketHideDone, setBucketHideDone] = useState(false);
+  const [showScrollTopBtn, setShowScrollTopBtn] = useState(false);
   const [bucketForm, setBucketForm] = useState({ title: "", category: "나들이/여행", weather: "무관", memo: "" });
   const [familyPages, setFamilyPages] = useState([]);
   const [selectedPageId, setSelectedPageId] = useState(null);
@@ -8192,20 +8197,6 @@ ${validText}
   };
 
 
-  const fridgeProjectedMap = useMemo(
-    () =>
-      computeFridgeProjectedUsage(
-        fridge,
-        meals,
-        getTodayStr(),
-        addMonthsToDateStr,
-        matchFridgeItemExactFirst,
-        convertUnitQty
-      ),
-    [fridge, meals]
-  );
-
-
   const handleQuickParseShopping = async () => {
     if (!requireEditorAccess()) return;
     const raw = quickShoppingText.trim();
@@ -9328,6 +9319,19 @@ ${validText}
     await savePageToCloud(updated);
   };
 
+  const handleUpdatePageBlockStyle = async (page, blockId, stylePatch) => {
+    if (!requireEditorAccess("pages") || !page) return;
+    const updated = {
+      ...page,
+      blocks: (Array.isArray(page.blocks) ? page.blocks : []).map((b) =>
+        b.id === blockId ? { ...b, ...stylePatch } : b
+      ),
+      updatedAtMs: Date.now()
+    };
+    await savePageToCloud(updated);
+  };
+
+
 
   const handleMovePageBlock = async (page, blockIdx, delta) => {
     if (!requireEditorAccess("pages") || !page) return;
@@ -9425,8 +9429,14 @@ ${validText}
     setPagePasteText("");
     const hCnt = parsed.filter((b) => b.type === "heading").length;
     const tCnt = parsed.filter((b) => b.type === "todo").length;
-    recordActivity("노트", "일괄붙여넣기", `${page.title} (섹션 ${hCnt} · 체크 ${tCnt})`);
-    showToast(`✨ 섹션 ${hCnt}개 · 체크리스트 ${tCnt}개가 자동 반영되었습니다!`);
+    const tblCnt = parsed.filter((b) => b.type === "md_table").length;
+    const summaryParts = [
+      hCnt > 0 ? `섹션 ${hCnt}` : "",
+      tCnt > 0 ? `체크 ${tCnt}` : "",
+      tblCnt > 0 ? `표 ${tblCnt}` : ""
+    ].filter(Boolean).join(" · ") || `${parsed.length}개 블록`;
+    recordActivity("노트", "일괄붙여넣기", `${page.title} (${summaryParts})`);
+    showToast(`✨ ${summaryParts} 자동 반영되었습니다!`);
   };
 
   const handleSaveBulkEdit = async (page) => {
@@ -9559,6 +9569,7 @@ ${validText}
     setTaskModalDraft(null);
     showToast("💾 항목 상세 내용을 저장했습니다!");
   };
+
 
 
 
@@ -9806,6 +9817,16 @@ ${validText}
     window.addEventListener("keydown", onEsc);
     return () => window.removeEventListener("keydown", onEsc);
   }, [isQuickFabOpen, isRoutineModalOpen, isActivityModalOpen, isEditorUnlockModalOpen, isMealCopyModalOpen, diaryExportPreviewUrl, diaryLightboxUrl, isWeatherModalOpen, liveActivityPopup, activityEditModal, zipImportPicker, magazineMonth, isSettingsOpen, isHeroPhotoModalOpen, isPageModalOpen, pageMenuTargetId, isPagePasteModalOpen, activeTableTaskModal]);
+
+  useEffect(() => {
+    const onScroll = () => {
+      const y = window.scrollY || document.documentElement.scrollTop || 0;
+      setShowScrollTopBtn(y > 360);
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
 
 
   const parseCookTimeMinutes = (cookTimeStr) => {
@@ -10135,12 +10156,12 @@ ${validText}
                 {isHeaderPinned ? (
                   <>
                     <Pin className="w-3 h-3 text-amber-700" />
-                    <span>틀고정중</span>
+                    <span>고정</span>
                   </>
                 ) : (
                   <>
                     <PinOff className="w-3 h-3 text-stone-500" />
-                    <span>고정해제됨</span>
+                    <span>해제</span>
                   </>
                 )}
               </button>
@@ -10661,7 +10682,17 @@ ${validText}
             actionLabel: "열기 >",
             actionColor: "text-stone-500",
             borderHover: "hover:border-stone-400",
-            sub: <span className="text-stone-500">페이지 {familyPages.length}개 · 체크리스트</span>,
+            sub: (() => {
+              const remainTodos = familyPages.reduce(
+                (acc, p) => acc + (Array.isArray(p.blocks) ? p.blocks.filter((b) => b.type === "todo" && !b.checked).length : 0),
+                0
+              );
+              return (
+                <span className="text-stone-500">
+                  페이지 {familyPages.length}개{remainTodos > 0 ? ` · 남은 체크 ${remainTodos}건` : ""}
+                </span>
+              );
+            })(),
             onClick: () => {
               setSelectedPageId(null);
               setActiveTab("pages");
@@ -15051,26 +15082,37 @@ ${validText}
       ========================================== */}
       {activeTab === "shopping" && (!canViewTab("shopping") ? renderLockedTabScreen("🛒 장보기") : (
         <div className="p-4 space-y-4">
-          <div className="bg-white p-3.5 rounded-2xl border border-stone-200 shadow-sm space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="text-[13.5px] font-black text-stone-900">⚡ 빠른 장보기 입력</span>
-              <span className="text-[11.5px] font-bold text-stone-500">AI 자동 분리</span>
-            </div>
-            <textarea
-              rows={2}
-              value={quickShoppingText}
-              onChange={(e) => setQuickShoppingText(e.target.value)}
-              placeholder="예: 양파 1망, 부침두부 2모, 우유 1L 사와"
-              className="w-full p-2.5 rounded-xl border border-stone-200 bg-stone-50 text-[13.5px] font-semibold text-stone-800 resize-none focus:outline-none focus:ring-2 focus:ring-stone-400"
-            />
+          <div className="bg-white rounded-2xl border border-stone-200 shadow-sm overflow-hidden">
             <button
               type="button"
-              onClick={handleQuickParseShopping}
-              disabled={isQuickParsingShopping}
-              className="w-full py-2 rounded-xl bg-stone-900 hover:bg-stone-800 text-white text-[13.5px] font-extrabold flex items-center justify-center gap-1.5"
+              onClick={() => setIsQuickShoppingOpen((v) => !v)}
+              className="w-full px-3.5 py-2.5 flex items-center justify-between gap-2 text-left hover:bg-stone-50/70 transition"
             >
-              {isQuickParsingShopping ? "분석 중..." : "⚡ 자동 분석해서 담기"}
+              <span className="text-[13px] font-black text-stone-900">⚡ AI 문장으로 한 번에 담기</span>
+              <span className="text-[11px] font-bold text-stone-500 flex items-center gap-1">
+                <span>{isQuickShoppingOpen ? "접기" : "펼치기"}</span>
+                {isQuickShoppingOpen ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+              </span>
             </button>
+            {isQuickShoppingOpen && (
+              <div className="px-3.5 pb-3.5 space-y-2 border-t border-stone-100 pt-2.5">
+                <textarea
+                  rows={2}
+                  value={quickShoppingText}
+                  onChange={(e) => setQuickShoppingText(e.target.value)}
+                  placeholder="예: 양파 1망, 부침두부 2모, 우유 1L 사와"
+                  className="w-full p-2.5 rounded-xl border border-stone-200 bg-stone-50 text-[13.5px] font-semibold text-stone-800 resize-none focus:outline-none focus:ring-2 focus:ring-stone-400"
+                />
+                <button
+                  type="button"
+                  onClick={handleQuickParseShopping}
+                  disabled={isQuickParsingShopping}
+                  className="w-full py-2 rounded-xl bg-stone-900 hover:bg-stone-800 text-white text-[13px] font-extrabold flex items-center justify-center gap-1.5"
+                >
+                  {isQuickParsingShopping ? "분석 중..." : "⚡ 자동 분석해서 담기"}
+                </button>
+              </div>
+            )}
           </div>
 
 
@@ -15462,12 +15504,38 @@ ${validText}
       ========================================== */}
       {activeTab === "notices" && (!canViewTab("notices") ? renderLockedTabScreen("📌 가족공지") : (
         <div className="p-4 space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="min-w-0">
-              <h2 className="text-[15px] font-black text-stone-900 whitespace-nowrap">📌 가족 공지 · 메모</h2>
-              <p className="text-[11.5px] text-stone-500 whitespace-nowrap truncate">
-                준비물 · 전달사항을 공유하세요
-              </p>
+          <div className="flex items-center justify-between gap-2 bg-white border border-stone-200 rounded-2xl px-3 py-2.5 shadow-sm">
+            <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
+              <span className="text-[12.5px] font-extrabold text-stone-700 whitespace-nowrap">
+                진행 {notices.filter((n) => !n.done).length} · 완료 {notices.filter((n) => n.done).length}
+              </span>
+              {notices.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setNoticeHideDone((v) => !v)}
+                  className={`px-2 py-0.5 rounded-full text-[11px] font-extrabold border whitespace-nowrap ${
+                    noticeHideDone
+                      ? "bg-stone-900 text-white border-stone-900"
+                      : "bg-stone-50 text-stone-600 border-stone-200"
+                  }`}
+                >
+                  {noticeHideDone ? "완료 숨김중" : "완료 숨김"}
+                </button>
+              )}
+              {notices.some((n) => !n.done) && (
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const activeList = notices.filter((n) => !n.done);
+                    const lines = ["📌 가족 진행중 공지", ...activeList.map((n, i) => `${i + 1}. [${n.category || "공지"}] ${n.title}${n.content ? ` - ${n.content}` : ""}`)];
+                    await copyTextSafe(lines.join("\n"), `📋 진행중 공지 ${activeList.length}건을 복사했습니다!`);
+                  }}
+                  className="px-2 py-0.5 rounded-full bg-[#EEF3EE] text-[#35503C] border border-[#C9D8CC] text-[11px] font-extrabold whitespace-nowrap"
+                  title="진행중 공지 카톡 복사용"
+                >
+                  📋 복사
+                </button>
+              )}
             </div>
             <button
               onClick={() => {
@@ -15481,31 +15549,11 @@ ${validText}
                 });
                 setIsNoticeModalOpen(true);
               }}
-              className="px-3 py-2 rounded-xl bg-stone-900 text-white text-[13.5px] font-extrabold flex items-center gap-1 whitespace-nowrap shrink-0"
+              className="px-3 py-1.5 rounded-xl bg-stone-900 text-white text-[12.5px] font-extrabold flex items-center gap-1 whitespace-nowrap shrink-0"
             >
-              <Plus className="w-3.5 h-3.5" /> 공지 작성
+              <Plus className="w-3.5 h-3.5" /> 작성
             </button>
           </div>
-
-
-          {notices.length > 0 && (
-            <div className="flex items-center justify-between gap-2 bg-white border border-stone-200 rounded-2xl px-3 py-2">
-              <span className="text-[12.5px] font-bold text-stone-600">
-                진행 중 {notices.filter((n) => !n.done).length}건 · 완료 {notices.filter((n) => n.done).length}건
-              </span>
-              <button
-                type="button"
-                onClick={() => setNoticeHideDone((v) => !v)}
-                className={`px-2.5 py-1 rounded-full text-[11.5px] font-extrabold border whitespace-nowrap ${
-                  noticeHideDone
-                    ? "bg-stone-900 text-white border-stone-900"
-                    : "bg-stone-50 text-stone-600 border-stone-200"
-                }`}
-              >
-                {noticeHideDone ? "미완료만 보는 중" : "완료 포함 전체"}
-              </button>
-            </div>
-          )}
 
 
           <div className="space-y-2.5">
@@ -16451,6 +16499,7 @@ ${validText}
         const filtered = [...bucketList]
           .filter((b) => bucketCatFilter === "전체" || (b.category || "나들이/여행") === bucketCatFilter)
           .filter((b) => !bucketWeatherOnly || b.weather === weatherRecType || b.weather === "무관")
+          .filter((b) => !bucketHideDone || !b.done)
           .sort((a, b) => {
             if (Boolean(a.done) !== Boolean(b.done)) return a.done ? 1 : -1;
             return (Number(b.updatedAtMs) || 0) - (Number(a.updatedAtMs) || 0);
@@ -16465,6 +16514,18 @@ ${validText}
                   달성 현황 · <span className="text-[#35503C]">{doneCount}/{bucketList.length} ({pct}%)</span>
                 </span>
                 {doneCount > 0 && (
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setBucketHideDone((v) => !v)}
+                      className={`px-2 py-0.5 rounded-full text-[11px] font-extrabold border whitespace-nowrap ${
+                        bucketHideDone
+                          ? "bg-stone-900 text-white border-stone-900"
+                          : "bg-stone-50 text-stone-600 border-stone-200"
+                      }`}
+                    >
+                      {bucketHideDone ? "완료 보기" : "완료 숨김"}
+                    </button>
                   <button
                     type="button"
                     onClick={async () => {
@@ -16481,6 +16542,7 @@ ${validText}
                   >
                     🧹 완료정리
                   </button>
+                  </div>
                 )}
               </div>
 
@@ -16678,11 +16740,47 @@ ${validText}
           ? familyPages
               .map((pg) => {
                 const titleHit = String(pg.title || "").toLowerCase().includes(sq);
-                const matchedBlock = (Array.isArray(pg.blocks) ? pg.blocks : []).find((b) =>
-                  String(b.text || "").toLowerCase().includes(sq)
-                );
-                if (!titleHit && !matchedBlock) return null;
-                return { page: pg, snippet: matchedBlock?.text || "" };
+                let matchedSnippet = "";
+                for (const b of Array.isArray(pg.blocks) ? pg.blocks : []) {
+                  if (String(b.text || "").toLowerCase().includes(sq)) {
+                    matchedSnippet = b.text;
+                    break;
+                  }
+                  if (b.type === "table") {
+                    const hitRow = (Array.isArray(b.rows) ? b.rows : []).find((r) => {
+                      const inName = String(r.taskName || "").toLowerCase().includes(sq);
+                      const inMemo = String(r.memo || "").toLowerCase().includes(sq);
+                      const inVals = Object.values(r.values || {}).some((v) => String(v || "").toLowerCase().includes(sq));
+                      return inName || inMemo || inVals;
+                    });
+                    if (hitRow) {
+                      const extraVal = Object.values(hitRow.values || {}).find((v) => String(v || "").toLowerCase().includes(sq)) || hitRow.memo || "";
+                      matchedSnippet = `📊 ${hitRow.taskName || "표 항목"}${extraVal ? ` · ${extraVal}` : ""}`;
+                      break;
+                    }
+                  }
+                  if (b.type === "md_table") {
+                    const hitHeader = (Array.isArray(b.headers) ? b.headers : []).find((h) => String(h || "").toLowerCase().includes(sq));
+                    if (hitHeader) {
+                      matchedSnippet = `📊 ${hitHeader}`;
+                      break;
+                    }
+                    let hitCell = "";
+                    for (const row of Array.isArray(b.rows) ? b.rows : []) {
+                      const found = (Array.isArray(row) ? row : []).find((c) => String(c || "").toLowerCase().includes(sq));
+                      if (found) {
+                        hitCell = found;
+                        break;
+                      }
+                    }
+                    if (hitCell) {
+                      matchedSnippet = `📊 ${hitCell}`;
+                      break;
+                    }
+                  }
+                }
+                if (!titleHit && !matchedSnippet) return null;
+                return { page: pg, snippet: matchedSnippet };
               })
               .filter(Boolean)
           : [];
@@ -16713,20 +16811,56 @@ ${validText}
             .filter((p) => (p.parentId || null) === (parentId || null))
             .sort((a, b) => (Number(a.order) || 0) - (Number(b.order) || 0) || (Number(a.updatedAtMs) || 0) - (Number(b.updatedAtMs) || 0));
 
+        const renderInlineMarkdownText = (rawText) => {
+          const str = String(rawText || "");
+          if (!str) return null;
+          const tokens = [];
+          const regex = /\*\*([^*]+?)\*\*|\*([^*]+?)\*|(\*\*)/g;
+          let lastIdx = 0;
+          let m;
+          let keyIdx = 0;
+          while ((m = regex.exec(str)) !== null) {
+            if (m.index > lastIdx) {
+              tokens.push(<React.Fragment key={`t-${keyIdx++}`}>{str.slice(lastIdx, m.index)}</React.Fragment>);
+            }
+            if (m[1] !== undefined) {
+              tokens.push(<strong key={`b-${keyIdx++}`} className="font-extrabold text-stone-900">{m[1]}</strong>);
+            } else if (m[2] !== undefined) {
+              tokens.push(<em key={`i-${keyIdx++}`} className="italic text-stone-600">{m[2]}</em>);
+            } else if (m[3] !== undefined) {
+              tokens.push(<span key={`f-${keyIdx++}`} className="text-amber-700 font-extrabold">**</span>);
+            }
+            lastIdx = regex.lastIndex;
+          }
+          if (lastIdx < str.length) {
+            tokens.push(<React.Fragment key={`e-${keyIdx++}`}>{str.slice(lastIdx)}</React.Fragment>);
+          }
+          return tokens;
+        };
+
         const renderHeadingContent = (block) => {
           const colorDef = PAGE_HEADING_COLORS.find((c) => c.id === block.color) || PAGE_HEADING_COLORS[0];
           const raw = String(block.text || "");
+          const hSizeCls = PAGE_TEXT_SIZES.find((s) => s.id === block.fontSize)?.cls || "text-[16px]";
+          const hTxtCls = block.textColor && block.textColor !== "default"
+            ? (PAGE_TEXT_COLORS.find((c) => c.id === block.textColor)?.cls || "text-stone-900")
+            : "text-stone-900";
+          const bulletDot = block.isBullet ? (
+            <span className="inline-block w-1.5 h-1.5 rounded-full bg-stone-900 mr-2 shrink-0" />
+          ) : null;
           const arrowMatch = raw.match(/^(.*?)(\s*(?:->|→)\s*.*)$/);
           if (arrowMatch && arrowMatch[1].trim()) {
             return (
-              <div className="text-[16px] font-black text-stone-900 leading-snug flex flex-wrap items-center gap-1">
+              <div className={`${hSizeCls} font-black ${hTxtCls} leading-snug flex flex-wrap items-center gap-1`}>
+                {bulletDot}
                 <span className={`px-1.5 py-0.5 rounded-md ${colorDef.badge}`}>{arrowMatch[1].trim()}</span>
                 <span>{arrowMatch[2].trim()}</span>
               </div>
             );
           }
           return (
-            <div className="text-[16px] font-black text-stone-900 leading-snug">
+            <div className={`${hSizeCls} font-black ${hTxtCls} leading-snug flex items-center`}>
+              {bulletDot}
               <span className={`px-1.5 py-0.5 rounded-md ${colorDef.badge}`}>{raw}</span>
             </div>
           );
@@ -17274,6 +17408,85 @@ ${validText}
                         if (isPageBulkEditMode && blk.type !== "table") return null;
                         if (hideCompletedPageTodos && blk.type === "todo" && blk.checked) return null;
 
+                        if (blk.type === "md_table") {
+                          const headers = Array.isArray(blk.headers) ? blk.headers : [];
+                          const rows = Array.isArray(blk.rows) ? blk.rows : [];
+                          return (
+                            <div key={blk.id} className="my-2 space-y-1">
+                              <div className="overflow-x-auto rounded-lg border border-stone-200 bg-white">
+                                <table className="w-full border-collapse text-left">
+                                  {headers.length > 0 && (
+                                    <thead>
+                                      <tr className="bg-[#F7F6F3] border-b border-stone-200">
+                                        {headers.map((h, hIdx) => (
+                                          <th
+                                            key={hIdx}
+                                            className={`py-2.5 px-3 text-[13.5px] font-bold text-stone-900 border-r last:border-r-0 border-stone-200 whitespace-nowrap ${
+                                              hIdx === 0 && headers.length >= 3 && String(h).length <= 4
+                                                ? "w-[58px] text-center"
+                                                : hIdx === headers.length - 1
+                                                ? "min-w-[210px]"
+                                                : "min-w-[130px]"
+                                            }`}
+                                          >
+                                            {renderInlineMarkdownText(h)}
+                                          </th>
+                                        ))}
+                                      </tr>
+                                    </thead>
+                                  )}
+                                  <tbody className="divide-y divide-stone-200">
+                                    {rows.map((rowCells, rIdx) => (
+                                      <tr key={rIdx} className="align-top hover:bg-stone-50/50 transition">
+                                        {headers.map((_, cIdx) => {
+                                          const cellVal = Array.isArray(rowCells) ? (rowCells[cIdx] ?? "") : "";
+                                          const isCompactFirst = cIdx === 0 && headers.length >= 3 && String(headers[0]).length <= 4;
+                                          return (
+                                            <td
+                                              key={cIdx}
+                                              className={`py-2.5 px-3 text-[13.5px] text-stone-800 leading-relaxed break-keep border-r last:border-r-0 border-stone-200 ${
+                                                isCompactFirst ? "text-center font-medium text-stone-700 whitespace-nowrap" : ""
+                                              }`}
+                                            >
+                                              {renderInlineMarkdownText(cellVal)}
+                                            </td>
+                                          );
+                                        })}
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                              {canEditTab("pages") && (
+                                <div className="flex items-center justify-end gap-1.5 px-0.5">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setPageBulkEditText(blocksToNotionMarkdown(blocks));
+                                      setIsPageBulkEditMode(true);
+                                    }}
+                                    className="text-[11px] font-bold text-stone-400 hover:text-stone-700"
+                                  >
+                                    ✏️ 표 수정
+                                  </button>
+                                  <span className="text-stone-300 text-[10px]">·</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      if (window.confirm("이 마크다운 표를 삭제할까요?")) {
+                                        handleDeletePageBlock(currentPage, blk.id);
+                                      }
+                                    }}
+                                    className="text-[11px] font-bold text-stone-400 hover:text-rose-600"
+                                  >
+                                    삭제
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        }
+
                         if (blk.type === "table") {
                           const cols = Array.isArray(blk.columns) && blk.columns.length > 0
                             ? blk.columns
@@ -17324,6 +17537,21 @@ ${validText}
                                   </button>
                                 </div>
                                 <div className="flex items-center gap-1">
+                                  <button
+                                    type="button"
+                                    onClick={async () => {
+                                      const hdr = `| Priority | Task name | ${cols.map((c) => c.name).join(" | ")} |`;
+                                      const sep = `| --- | --- | ${cols.map(() => "---").join(" | ")} |`;
+                                      const rLines = filteredRows.map(
+                                        (r) => `| ${r.priority || "-"} | ${r.taskName || ""} | ${cols.map((c) => (r.values?.[c.id] || "")).join(" | ")} |`
+                                      );
+                                      await copyTextSafe([hdr, sep, ...rLines].join("\n"), `📋 표(${filteredRows.length}행)를 복사했습니다!`);
+                                    }}
+                                    className="p-1.5 rounded-lg text-stone-400 hover:text-stone-800 hover:bg-stone-200/70"
+                                    title="표 내용 복사"
+                                  >
+                                    <Copy className="w-3.5 h-3.5" />
+                                  </button>
                                   {canEditTab("pages") && (
                                     <>
                                       <button
@@ -17600,9 +17828,12 @@ ${validText}
                           );
                         }
                         const isEditing = editingBlockId === blk.id;
+                        const sizeMeta = PAGE_TEXT_SIZES.find((s) => s.id === blk.fontSize) || null;
+                        const txtColorMeta = PAGE_TEXT_COLORS.find((c) => c.id === blk.textColor) || PAGE_TEXT_COLORS[0];
+                        const bgColorMeta = PAGE_TEXT_BG_COLORS.find((c) => c.id === blk.bgColor) || PAGE_TEXT_BG_COLORS[0];
                         if (isEditing) {
                           return (
-                            <div key={blk.id} className="p-2.5 rounded-xl bg-stone-50 border border-stone-300 space-y-2">
+                            <div key={blk.id} className="p-2.5 rounded-2xl bg-stone-50 border border-stone-300 space-y-2">
                               <div className="flex items-center gap-1.5">
                                 <input
                                   type="text"
@@ -17613,57 +17844,132 @@ ${validText}
                                     if (e.key === "Enter") handleUpdatePageBlockText(currentPage, blk.id, editingBlockText);
                                     if (e.key === "Escape") setEditingBlockId(null);
                                   }}
-                                  className="flex-1 min-w-0 px-2.5 py-1.5 rounded-lg border border-stone-300 bg-white text-[13.5px] font-bold"
+                                  className={`flex-1 min-w-0 px-2.5 py-1.5 rounded-xl border border-stone-300 bg-white ${sizeMeta ? sizeMeta.cls : "text-[14px]"} ${blk.bold ? "font-black" : "font-semibold"} ${txtColorMeta.cls}`}
                                 />
                                 <button
                                   type="button"
                                   onClick={() => handleUpdatePageBlockText(currentPage, blk.id, editingBlockText)}
-                                  className="px-2.5 py-1.5 rounded-lg bg-stone-900 text-white text-[12px] font-extrabold shrink-0"
+                                  className="px-3 py-1.5 rounded-xl bg-stone-900 text-white text-[12px] font-extrabold shrink-0"
                                 >
-                                  저장
+                                  완료
                                 </button>
                               </div>
-                              <div className="flex items-center justify-between gap-1.5">
-                                {blk.type === "heading" ? (
-                                  <div className="flex items-center gap-1">
-                                    {PAGE_HEADING_COLORS.map((c) => (
+
+                              {/* 서식 편집 바: 크기 · 굵기 · 글자색 · 형광펜 */}
+                              <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+                                <div className="flex items-center gap-0.5 bg-white border border-stone-200 rounded-lg p-0.5">
+                                  {PAGE_TEXT_SIZES.map((sz) => (
+                                    <button
+                                      key={sz.id}
+                                      type="button"
+                                      onClick={() => handleUpdatePageBlockStyle(currentPage, blk.id, { fontSize: sz.id })}
+                                      className={`px-1.5 py-0.5 rounded text-[10.5px] font-extrabold transition ${
+                                        (blk.fontSize || "base") === sz.id ? "bg-stone-900 text-white" : "text-stone-500 hover:bg-stone-100"
+                                      }`}
+                                    >
+                                      {sz.label}
+                                    </button>
+                                  ))}
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => handleUpdatePageBlockStyle(currentPage, blk.id, { bold: !blk.bold })}
+                                  className={`px-2 py-0.5 rounded-lg border text-[11.5px] font-black transition ${
+                                    blk.bold ? "bg-stone-900 text-white border-stone-900" : "bg-white text-stone-700 border-stone-200"
+                                  }`}
+                                  title="굵게"
+                                >
+                                  B
+                                </button>
+                                <div className="flex items-center gap-1 px-1">
+                                  {PAGE_TEXT_COLORS.map((c) => (
+                                    <button
+                                      key={c.id}
+                                      type="button"
+                                      onClick={() => handleUpdatePageBlockStyle(currentPage, blk.id, { textColor: c.id })}
+                                      className={`w-4 h-4 rounded-full ${c.dot} ${
+                                        (blk.textColor || "default") === c.id ? "ring-2 ring-stone-900 ring-offset-1" : "opacity-65 hover:opacity-100"
+                                      }`}
+                                      title={`글자색: ${c.label}`}
+                                    />
+                                  ))}
+                                </div>
+                                {blk.type !== "heading" && (
+                                  <div className="flex items-center gap-1 pl-1 border-l border-stone-200">
+                                    {PAGE_TEXT_BG_COLORS.map((bg) => (
                                       <button
-                                        key={c.id}
+                                        key={bg.id}
                                         type="button"
-                                        onClick={() => handleUpdatePageBlockText(currentPage, blk.id, editingBlockText || blk.text, c.id)}
-                                        className={`w-5 h-5 rounded-full ${c.dot} ${blk.color === c.id ? "ring-2 ring-stone-900 ring-offset-1" : "opacity-70"}`}
-                                        title={c.label}
+                                        onClick={() => handleUpdatePageBlockStyle(currentPage, blk.id, { bgColor: bg.id })}
+                                        className={`w-4 h-4 rounded ${bg.dot} ${
+                                          (blk.bgColor || "none") === bg.id ? "ring-2 ring-stone-900 ring-offset-1" : "opacity-75 hover:opacity-100"
+                                        }`}
+                                        title={`형광펜: ${bg.label}`}
                                       />
                                     ))}
                                   </div>
-                                ) : (
-                                  <div className="flex items-center gap-1">
-                                    <button
-                                      type="button"
-                                      disabled={(Number(blk.indent) || 0) <= 0}
-                                      onClick={() => handleIndentPageBlock(currentPage, blk.id, -1)}
-                                      className="px-2 py-0.5 rounded bg-white border border-stone-200 text-[11px] font-bold disabled:opacity-30"
-                                      title="내어쓰기"
-                                    >
-                                      ←
-                                    </button>
-                                    <button
-                                      type="button"
-                                      disabled={(Number(blk.indent) || 0) >= 3}
-                                      onClick={() => handleIndentPageBlock(currentPage, blk.id, 1)}
-                                      className="px-2 py-0.5 rounded bg-white border border-stone-200 text-[11px] font-bold disabled:opacity-30"
-                                      title="들여쓰기"
-                                    >
-                                      →
-                                    </button>
-                                  </div>
                                 )}
+                              </div>
+
+                              {/* 하단 컨트롤 바: 유형전환/강조색 · 들여쓰기 · 순서 · 삭제 */}
+                              <div className="flex items-center justify-between gap-1.5 pt-1 border-t border-stone-200/70 flex-wrap">
+                                <div className="flex items-center gap-1">
+                                  {blk.type === "heading" ? (
+                                    PAGE_HEADING_COLORS.map((c) => (
+                                      <button
+                                        key={c.id}
+                                        type="button"
+                                        onClick={() => handleUpdatePageBlockStyle(currentPage, blk.id, { color: c.id })}
+                                        className={`w-4 h-4 rounded-full ${c.dot} ${blk.color === c.id ? "ring-2 ring-stone-900 ring-offset-1" : "opacity-70"}`}
+                                        title={`섹션색: ${c.label}`}
+                                      />
+                                    ))
+                                  ) : (
+                                    <>
+                                      <button
+                                        type="button"
+                                        disabled={(Number(blk.indent) || 0) <= 0}
+                                        onClick={() => handleIndentPageBlock(currentPage, blk.id, -1)}
+                                        className="px-1.5 py-0.5 rounded bg-white border border-stone-200 text-[11px] font-bold disabled:opacity-30"
+                                        title="내어쓰기"
+                                      >
+                                        ←
+                                      </button>
+                                      <button
+                                        type="button"
+                                        disabled={(Number(blk.indent) || 0) >= 3}
+                                        onClick={() => handleIndentPageBlock(currentPage, blk.id, 1)}
+                                        className="px-1.5 py-0.5 rounded bg-white border border-stone-200 text-[11px] font-bold disabled:opacity-30"
+                                        title="들여쓰기"
+                                      >
+                                        →
+                                      </button>
+                                    </>
+                                  )}
+                                  <select
+                                    value={blk.type}
+                                    onChange={(e) => {
+                                      const nt = e.target.value;
+                                      handleUpdatePageBlockStyle(currentPage, blk.id, {
+                                        type: nt,
+                                        ...(nt === "todo" ? { checked: Boolean(blk.checked) } : {}),
+                                        ...(nt === "heading" ? { color: blk.color || "amber" } : {})
+                                      });
+                                    }}
+                                    className="px-1.5 py-0.5 rounded bg-white border border-stone-200 text-[10.5px] font-extrabold text-stone-600"
+                                    title="블록 유형 변경"
+                                  >
+                                    <option value="todo">☑️ 체크</option>
+                                    <option value="heading">🏷️ 섹션</option>
+                                    <option value="text">📝 메모</option>
+                                  </select>
+                                </div>
                                 <div className="flex items-center gap-1">
                                   <button
                                     type="button"
                                     disabled={bIdx === 0}
                                     onClick={() => handleMovePageBlock(currentPage, bIdx, -1)}
-                                    className="px-2 py-0.5 rounded bg-white border border-stone-200 text-[11px] font-bold disabled:opacity-30"
+                                    className="px-1.5 py-0.5 rounded bg-white border border-stone-200 text-[11px] font-bold disabled:opacity-30"
                                   >
                                     ▲
                                   </button>
@@ -17671,7 +17977,7 @@ ${validText}
                                     type="button"
                                     disabled={bIdx === blocks.length - 1}
                                     onClick={() => handleMovePageBlock(currentPage, bIdx, 1)}
-                                    className="px-2 py-0.5 rounded bg-white border border-stone-200 text-[11px] font-bold disabled:opacity-30"
+                                    className="px-1.5 py-0.5 rounded bg-white border border-stone-200 text-[11px] font-bold disabled:opacity-30"
                                   >
                                     ▼
                                   </button>
@@ -17681,13 +17987,6 @@ ${validText}
                                     className="px-2 py-0.5 rounded bg-rose-50 border border-rose-200 text-rose-600 text-[11px] font-extrabold"
                                   >
                                     삭제
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => setEditingBlockId(null)}
-                                    className="px-2 py-0.5 rounded bg-stone-200 text-stone-700 text-[11px] font-bold"
-                                  >
-                                    취소
                                   </button>
                                 </div>
                               </div>
@@ -17736,11 +18035,13 @@ ${validText}
                                   setEditingBlockId(blk.id);
                                   setEditingBlockText(blk.text || "");
                                 }}
-                                className={`flex-1 min-w-0 text-[14.5px] leading-snug break-keep cursor-pointer ${
-                                  blk.checked ? "line-through text-stone-400 font-medium" : "text-stone-800 font-medium"
+                                className={`flex-1 min-w-0 ${sizeMeta ? sizeMeta.cls : "text-[14.5px]"} leading-snug break-keep cursor-pointer ${
+                                  blk.checked
+                                    ? "line-through text-stone-400 font-medium"
+                                    : `${txtColorMeta.cls} ${blk.bold ? "font-black" : "font-medium"}`
                                 }`}
                               >
-                                {blk.text}
+                                <span className={bgColorMeta.cls}>{renderInlineMarkdownText(blk.text)}</span>
                               </div>
                             </div>
                           );
@@ -17756,9 +18057,9 @@ ${validText}
                               setEditingBlockId(blk.id);
                               setEditingBlockText(blk.text || "");
                             }}
-                            className="text-[14px] text-stone-700 leading-relaxed whitespace-pre-wrap break-keep py-0.5 cursor-pointer hover:bg-stone-50 rounded-lg px-1 -mx-1"
+                            className={`${sizeMeta ? sizeMeta.cls : "text-[14px]"} ${blk.bold ? "font-black" : "font-normal"} ${txtColorMeta.cls} leading-relaxed whitespace-pre-wrap break-keep py-0.5 cursor-pointer hover:bg-stone-50 rounded-lg px-1 -mx-1`}
                           >
-                            {blk.text}
+                            <span className={bgColorMeta.cls}>{renderInlineMarkdownText(blk.text)}</span>
                           </div>
                         );
                       })}
@@ -17832,7 +18133,7 @@ ${validText}
                               const pasted = e.clipboardData?.getData("text") || "";
                               if (!pasted.includes("\n")) return;
                               e.preventDefault();
-                              if (/^\s*#{1,6}\s+/m.test(pasted) || /^\s*(?:[-*+]\s*)?\[[ xX✓✔]\]/m.test(pasted)) {
+                              if (/^\s*#{1,6}\s+/m.test(pasted) || /^\s*(?:[-*+]\s*)?\[[ xX✓✔]\]/m.test(pasted) || (/\|.*\|/m.test(pasted) && /^\s*\|?\s*:?-{2,}:?\s*\|/m.test(pasted))) {
                                 handleApplyMarkdownPaste(currentPage, pasted, "append", pageQuickAddColor || "amber");
                                 return;
                               }
@@ -18507,7 +18808,7 @@ ${validText}
                               durationMin: 0,
                               amountMl: 0,
                               memo: "",
-                              author: currentProfileName || "수혁"
+                              author: actorName || "수혁"
                             });
                           }}
                           className="px-2 py-0.5 rounded-full bg-[#EEF3EE] hover:bg-[#DFE9E0] border border-[#C9D8CC] text-[#35503C] text-[10.5px] font-bold whitespace-nowrap shrink-0"
@@ -20602,16 +20903,18 @@ ${validText}
             aria-hidden="true"
           />
           <div
-            style={{ bottom: "calc(8.35rem + env(safe-area-inset-bottom))" }}
-            className="fixed right-4 z-40 w-72 max-w-[85vw] bg-white/95 backdrop-blur border border-stone-200 rounded-3xl shadow-2xl p-3 space-y-2.5 max-h-[68vh] overflow-y-auto"
+            style={{ bottom: "calc(8.15rem + env(safe-area-inset-bottom))" }}
+            className="fixed right-3 z-40 w-[340px] max-w-[94vw] bg-white/95 backdrop-blur border border-stone-200 rounded-3xl shadow-2xl p-3 space-y-2"
           >
             {[
               {
-                group: "🍽️ 식단 · 냉장고 · 장보기",
+                group: "🍽️ 식단 · 살림",
+                cols: "grid-cols-3",
                 items: [
                   {
                     tab: "daily",
-                    label: "🍽️ 식단 기록",
+                    icon: "🍽️",
+                    label: "식단 기록",
                     onClick: () => {
                       const h = new Date().getHours();
                       const smartSlot =
@@ -20631,19 +20934,22 @@ ${validText}
                       setIsMealModalOpen(true);
                     }
                   },
-                  { tab: "fridge", label: "❄️ 냉장고 입고", onClick: () => openAddFridgeModal() },
+                  { tab: "fridge", icon: "❄️", label: "냉장고", onClick: () => openAddFridgeModal() },
                   {
                     tab: "shopping",
-                    label: "🛒 장보기 추가",
+                    icon: "🛒",
+                    label: "장보기",
                     onClick: () => {
                       setActiveTab("shopping");
                       setTimeout(() => document.getElementById("shopping-item-input")?.focus(), 180);
                     }
                   },
-                  { tab: "fridge", label: "🧾 영수증 스캔", onClick: () => setIsReceiptModalOpen(true) },
+                  { tab: "fridge", icon: "🧾", label: "영수증", onClick: () => setIsReceiptModalOpen(true) },
+                  { tab: "recipes", icon: "🍳", label: "레시피", onClick: () => openNewRecipeModal() },
                   {
                     tab: "daily",
-                    label: "📤 식단 내보내기",
+                    icon: "📤",
+                    label: "내보내기",
                     onClick: () => {
                       setExportScope("all");
                       setIsInventoryExportOpen(true);
@@ -20652,11 +20958,13 @@ ${validText}
                 ]
               },
               {
-                group: "🗓️ 일정 · 루틴",
+                group: "🗓️ 일정 · 육아",
+                cols: "grid-cols-5",
                 items: [
                   {
                     tab: "schedule",
-                    label: "🗓️ 일정 추가",
+                    icon: "🗓️",
+                    label: "일정",
                     onClick: () => {
                       setEditingSchedule(null);
                       setScheduleForm({
@@ -20674,7 +20982,8 @@ ${validText}
                   },
                   {
                     tab: "schedule",
-                    label: "✅ 할 일 추가",
+                    icon: "✅",
+                    label: "할 일",
                     onClick: () => {
                       setEditingSchedule(null);
                       setScheduleForm({
@@ -20690,16 +20999,12 @@ ${validText}
                       setIsScheduleModalOpen(true);
                     }
                   },
-                  { tab: "schedule", label: "🔄 루틴 추가", onClick: () => openNewRoutineModal() }
-                ]
-              },
-              {
-                group: "👶 육아 · 레시피",
-                items: [
+                  { tab: "schedule", icon: "🔄", label: "루틴", onClick: () => openNewRoutineModal() },
                   {
                     tab: "baby",
                     adminOnly: true,
-                    label: "📖 육아일기",
+                    icon: "📖",
+                    label: "육아일기",
                     onClick: () => {
                       setEditingDiaryEntry(null);
                       setDiaryForm({ date: getTodayStr(), mood: "😊 행복", title: "", content: "", photoUrl: "", photos: [], childIds: [selectedChildId] });
@@ -20710,44 +21015,24 @@ ${validText}
                   },
                   {
                     tab: "baby",
-                    label: "📏 성장기록",
+                    icon: "📏",
+                    label: "성장기록",
                     onClick: () => {
                       setActiveTab("baby");
                       setBabySubTab("growth");
                       setTimeout(() => document.getElementById("baby-growth-height-input")?.focus(), 200);
                     }
-                  },
-                  { tab: "recipes", label: "🍳 레시피 등록", onClick: () => openNewRecipeModal() },
-                  {
-                    tab: "home",
-                    label: "⏲️ 조리 타이머",
-                    onClick: () =>
-                      setKitchenTimer((p) => ({
-                        ...p,
-                        open: true,
-                        mode: "countdown",
-                        label: p.label && p.mode === "countdown" ? p.label : "조리 타이머"
-                      }))
-                  },
-                  {
-                    tab: "home",
-                    label: "⏱️ 요리 스톱워치",
-                    onClick: () =>
-                      setKitchenTimer((p) => ({
-                        ...p,
-                        open: true,
-                        mode: "stopwatch",
-                        label: "요리 스톱워치"
-                      }))
                   }
                 ]
               },
               {
-                group: "🗂️ 가족공유노트 · 버킷리스트",
+                group: "🗂️ 노트 · 버킷 · 도구",
+                cols: "grid-cols-3",
                 items: [
                   {
                     tab: "pages",
-                    label: "🗂️ 가족공유노트 작성",
+                    icon: "🗂️",
+                    label: "가족공유노트",
                     onClick: () => {
                       setActiveTab("pages");
                       openCreatePageModal(null);
@@ -20755,11 +21040,23 @@ ${validText}
                   },
                   {
                     tab: "bucket",
-                    label: "🌟 버킷리스트 추가",
+                    icon: "🌟",
+                    label: "버킷리스트",
                     onClick: () => {
                       setActiveTab("bucket");
                       setTimeout(() => document.getElementById("bucket-title-input")?.focus(), 200);
                     }
+                  },
+                  {
+                    tab: "home",
+                    icon: "⏱️",
+                    label: "조리타이머",
+                    onClick: () =>
+                      setKitchenTimer((p) => ({
+                        ...p,
+                        open: true,
+                        label: p.label || "조리 타이머"
+                      }))
                   }
                 ]
               }
@@ -20771,8 +21068,8 @@ ${validText}
               .filter((g) => g.items.length > 0)
               .map((g) => (
                 <div key={g.group} className="space-y-1">
-                  <div className="text-[11.5px] font-black text-stone-500 px-0.5">{g.group}</div>
-                  <div className="grid grid-cols-2 gap-1.5">
+                  <div className="text-[11px] font-extrabold text-stone-400 px-0.5">{g.group}</div>
+                  <div className={`grid ${g.cols} gap-1.5`}>
                     {g.items.map((act) => (
                       <button
                         key={act.label}
@@ -20781,9 +21078,10 @@ ${validText}
                           setIsQuickFabOpen(false);
                           act.onClick();
                         }}
-                        className="px-2.5 py-2 rounded-xl bg-[#FAF8F3] hover:bg-[#EEF3EE] border border-stone-200 text-stone-900 text-[12.5px] font-extrabold text-left truncate transition active:scale-95"
+                        className="py-1.5 px-1 rounded-xl bg-[#FAF8F3] hover:bg-[#EEF3EE] border border-stone-200/90 text-stone-900 flex flex-col items-center justify-center gap-0.5 transition active:scale-95"
                       >
-                        {act.label}
+                        <span className="text-[15px] leading-none">{act.icon}</span>
+                        <span className="text-[11px] font-extrabold whitespace-nowrap">{act.label}</span>
                       </button>
                     ))}
                   </div>
@@ -20793,6 +21091,19 @@ ${validText}
         </>
       )}
 
+
+      {showScrollTopBtn && !isQuickFabOpen && (
+        <button
+          type="button"
+          onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+          style={{ bottom: "calc(4.75rem + env(safe-area-inset-bottom))" }}
+          className="fixed left-4 z-30 w-9 h-9 rounded-full bg-white/90 hover:bg-white border border-stone-200 text-stone-600 shadow-md flex items-center justify-center text-[13px] font-black transition active:scale-95"
+          title="맨 위로 이동"
+          aria-label="맨 위로 이동"
+        >
+          ↑
+        </button>
+      )}
 
       {isEditorUnlocked && (
         <button
@@ -20841,40 +21152,56 @@ ${validText}
                 <X className="w-4 h-4" />
               </button>
             </div>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="space-y-3">
               {[
-                { id: "daily", label: "식단", icon: "🍽️" },
-                { id: "monthly", label: "월간·식비", icon: "💰" },
-                { id: "shopping", label: "장보기", icon: "🛒" },
-                { id: "notices", label: "가족공지", icon: "📌" },
-                { id: "ai", label: "AI추천", icon: "✨" },
-                { id: "recipes", label: "레시피북", icon: "📖" },
-                { id: "bucket", label: "버킷리스트", icon: "🌟" },
-                { id: "pages", label: "가족공유노트", icon: "🗂️" },
-                { id: "kitchen_timer", label: "조리타이머", icon: "⏱️" }
-              ].map((m) => (
-                <button
-                  key={m.id}
-                  onClick={() => {
-                    if (m.id === "daily") {
-                      openDailyTodayAll();
-                    } else if (m.id === "kitchen_timer") {
-                      setKitchenTimer((p) => ({ ...p, open: true }));
-                      setIsMoreNavOpen(false);
-                    } else {
-                      setActiveTab(m.id);
-                      setIsMoreNavOpen(false);
-                    }
-                  }}
-                  className={`py-3 px-2 rounded-2xl border text-[13.5px] font-extrabold flex flex-col items-center gap-1 ${
-                    activeTab === m.id
-                      ? "bg-stone-900 text-white border-stone-900"
-                      : "bg-stone-50 text-stone-800 border-stone-200 hover:bg-amber-50"
-                  }`}
-                >
-                  <span className="text-[17.5px]">{canViewTab(m.id) ? m.icon : "🔒"}</span>
-                  <span>{m.label}</span>
-                </button>
+                {
+                  title: "🍽️ 살림 · 식비",
+                  items: [
+                    { id: "monthly", label: "월간·식비", icon: "💰" },
+                    { id: "shopping", label: "장보기", icon: "🛒" },
+                    { id: "recipes", label: "레시피북", icon: "📖" },
+                    { id: "ai", label: "AI추천", icon: "✨" }
+                  ]
+                },
+                {
+                  title: "🗂️ 기록 · 소통 · 도구",
+                  items: [
+                    { id: "pages", label: "가족공유노트", icon: "🗂️" },
+                    { id: "notices", label: "가족공지", icon: "📌" },
+                    { id: "bucket", label: "버킷리스트", icon: "🌟" },
+                    { id: "kitchen_timer", label: "조리타이머", icon: "⏱️" }
+                  ]
+                }
+              ].map((grp) => (
+                <div key={grp.title} className="space-y-1.5">
+                  <div className="text-[11px] font-extrabold text-stone-400 px-0.5">{grp.title}</div>
+                  <div className="grid grid-cols-4 gap-1.5">
+                    {grp.items.map((m) => (
+                      <button
+                        key={m.id}
+                        onClick={() => {
+                          if (m.id === "kitchen_timer") {
+                            setKitchenTimer((p) => ({ ...p, open: true }));
+                            setIsMoreNavOpen(false);
+                          } else {
+                            if (m.id === "pages") setSelectedPageId(null);
+                            setActiveTab(m.id);
+                            setIsMoreNavOpen(false);
+                            window.scrollTo({ top: 0, behavior: "instant" });
+                          }
+                        }}
+                        className={`py-2.5 px-1.5 rounded-2xl border text-[12px] font-extrabold flex flex-col items-center gap-1 transition ${
+                          activeTab === m.id
+                            ? "bg-stone-900 text-white border-stone-900"
+                            : "bg-stone-50 text-stone-800 border-stone-200 hover:bg-amber-50"
+                        }`}
+                      >
+                        <span className="text-[17px]">{m.id === "kitchen_timer" || canViewTab(m.id) ? m.icon : "🔒"}</span>
+                        <span className="truncate w-full text-center">{m.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
               ))}
             </div>
           </div>
@@ -26653,6 +26980,7 @@ ${validText}
           : [];
         const previewHeadings = previewBlocks.filter((b) => b.type === "heading").length;
         const previewTodos = previewBlocks.filter((b) => b.type === "todo").length;
+        const previewTables = previewBlocks.filter((b) => b.type === "md_table").length;
         const previewTexts = previewBlocks.filter((b) => b.type === "text").length;
         return (
           <div
@@ -26723,8 +27051,10 @@ ${validText}
                   <div className="px-3 py-2 rounded-xl bg-[#EEF3EE] border border-[#C9D8CC] text-[12px] font-extrabold text-[#35503C] flex items-center justify-between">
                     <span>✨ 자동 인식됨</span>
                     <span>
-                      섹션 {previewHeadings} · 체크리스트 {previewTodos}
-                      {previewTexts > 0 ? ` · 메모 ${previewTexts}` : ""}
+                      {previewHeadings > 0 ? `섹션 ${previewHeadings}` : ""}
+                      {previewTodos > 0 ? `${previewHeadings > 0 ? " · " : ""}체크 ${previewTodos}` : ""}
+                      {previewTables > 0 ? `${(previewHeadings > 0 || previewTodos > 0) ? " · " : ""}표 ${previewTables}` : ""}
+                      {previewTexts > 0 ? `${(previewHeadings > 0 || previewTodos > 0 || previewTables > 0) ? " · " : ""}메모 ${previewTexts}` : ""}
                     </span>
                   </div>
                 )}
