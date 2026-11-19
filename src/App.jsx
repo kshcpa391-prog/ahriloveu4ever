@@ -148,7 +148,10 @@ import {
   callReliableAiEngine,
   PAGE_EMOJI_PRESETS,
   PAGE_HEADING_COLORS,
-  parseNotionMarkdownToBlocks
+  PAGE_COVER_COLORS,
+  PAGE_TABLE_PRIORITIES,
+  parseNotionMarkdownToBlocks,
+  blocksToNotionMarkdown
 } from "./Constants";
 
 
@@ -926,6 +929,15 @@ function MainApp() {
   const [pagePasteText, setPagePasteText] = useState("");
   const [pagePasteColor, setPagePasteColor] = useState("amber");
   const [pagePasteMode, setPagePasteMode] = useState("append");
+  const [isPageBulkEditMode, setIsPageBulkEditMode] = useState(false);
+  const [pageBulkEditText, setPageBulkEditText] = useState("");
+  const [hideCompletedPageTodos, setHideCompletedPageTodos] = useState(false);
+  const [tableFilterState, setTableFilterState] = useState({});
+  const [tableSearchOpenId, setTableSearchOpenId] = useState(null);
+  const [addingColBlockId, setAddingColBlockId] = useState(null);
+  const [newTableColName, setNewTableColName] = useState("");
+  const [activeTableTaskModal, setActiveTableTaskModal] = useState(null);
+  const [taskModalDraft, setTaskModalDraft] = useState(null);
   const [monthlyBudget, setMonthlyBudget] = useState(() => {
     return Number(localStorage.getItem("kim_family_budget") || 800000);
   });
@@ -9067,6 +9079,8 @@ ${validText}
     setEditingBlockId(null);
     setIsEditingPageTitle(false);
     setIsPageEmojiPickerOpen(false);
+    setIsPageBulkEditMode(false);
+    setAddingColBlockId(null);
     setPageSearchQuery("");
     if (!pageId) return;
     setRecentPageIds((prev) => {
@@ -9415,6 +9429,138 @@ ${validText}
     showToast(`✨ 섹션 ${hCnt}개 · 체크리스트 ${tCnt}개가 자동 반영되었습니다!`);
   };
 
+  const handleSaveBulkEdit = async (page) => {
+    if (!requireEditorAccess("pages") || !page) return;
+    const parsed = parseNotionMarkdownToBlocks(pageBulkEditText, pageQuickAddColor || "amber");
+    const existingTables = (Array.isArray(page.blocks) ? page.blocks : []).filter((b) => b.type === "table");
+    const nextBlocks = [...parsed, ...existingTables];
+    await savePageToCloud({
+      ...page,
+      blocks: nextBlocks,
+      updatedAtMs: Date.now()
+    });
+    setIsPageBulkEditMode(false);
+    recordActivity("노트", "일괄편집", page.title);
+    showToast("✨ 변경 사항을 저장했습니다!");
+  };
+
+  const handleIndentPageBlock = async (page, blockId, delta) => {
+    if (!requireEditorAccess("pages") || !page) return;
+    const nextBlocks = (Array.isArray(page.blocks) ? page.blocks : []).map((b) => {
+      if (b.id !== blockId) return b;
+      const nextIndent = Math.max(0, Math.min(3, (Number(b.indent) || 0) + delta));
+      return { ...b, indent: nextIndent };
+    });
+    await savePageToCloud({ ...page, blocks: nextBlocks, updatedAtMs: Date.now() });
+  };
+
+  const handleAddTableBlock = async (page) => {
+    if (!requireEditorAccess("pages") || !page) return;
+    const now = Date.now();
+    const newTable = {
+      id: `tbl-${now}`,
+      type: "table",
+      title: "All Tasks",
+      columns: [{ id: "desc", name: "비고" }],
+      rows: [
+        {
+          id: `row-${now}-1`,
+          priority: "High",
+          taskName: "새 항목",
+          values: { desc: "" },
+          memo: "",
+          attachments: []
+        }
+      ]
+    };
+    const nextBlocks = [...(Array.isArray(page.blocks) ? page.blocks : []), newTable];
+    await savePageToCloud({ ...page, blocks: nextBlocks, updatedAtMs: Date.now() });
+    recordActivity("노트", "표추가", page.title);
+    showToast("📊 노션 스타일 표를 추가했습니다!");
+  };
+
+  const handleUpdateTableBlock = async (page, blockId, updater) => {
+    if (!requireEditorAccess("pages") || !page) return;
+    const nextBlocks = (Array.isArray(page.blocks) ? page.blocks : []).map((b) =>
+      b.id === blockId ? updater(b) : b
+    );
+    await savePageToCloud({ ...page, blocks: nextBlocks, updatedAtMs: Date.now() });
+  };
+
+  const openTableTaskModal = (page, blockId, row) => {
+    setActiveTableTaskModal({ pageId: page.id, blockId, rowId: row.id });
+    setTaskModalDraft({
+      priority: row.priority || "",
+      taskName: row.taskName || "",
+      values: { ...(row.values || {}) },
+      memo: row.memo || "",
+      attachments: Array.isArray(row.attachments) ? row.attachments : []
+    });
+  };
+
+  const handleAttachTaskFiles = async (fileList) => {
+    if (!fileList || fileList.length === 0) return;
+    const added = [];
+    for (const file of Array.from(fileList)) {
+      const isImg = String(file.type || "").startsWith("image/");
+      if (!isImg && file.size > 400 * 1024) {
+        showToast(`⚠️ ${file.name}은(는) 400KB를 초과합니다. 이미지 또는 400KB 이하 파일을 첨부해 주세요.`);
+        continue;
+      }
+      try {
+        const rawDataUrl = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(String(reader.result || ""));
+          reader.onerror = () => reject(new Error("read failed"));
+          reader.readAsDataURL(file);
+        });
+        const finalUrl = isImg ? await compressDataUrlForFirestore(rawDataUrl, 900, 0.72) : rawDataUrl;
+        added.push({
+          id: `att-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          name: file.name,
+          type: file.type || "application/octet-stream",
+          isImage: isImg,
+          size: file.size || 0,
+          url: finalUrl,
+          uploadedAt: getTodayStr()
+        });
+      } catch {
+        showToast(`⚠️ ${file.name} 첨부 중 오류가 발생했습니다.`);
+      }
+    }
+    if (added.length > 0) {
+      setTaskModalDraft((prev) =>
+        prev ? { ...prev, attachments: [...(prev.attachments || []), ...added] } : prev
+      );
+      showToast(`📎 파일 ${added.length}개를 첨부했습니다. 저장을 눌러 반영하세요.`);
+    }
+  };
+
+  const handleSaveTaskModal = async () => {
+    if (!activeTableTaskModal || !taskModalDraft) return;
+    const page = familyPages.find((p) => p.id === activeTableTaskModal.pageId);
+    if (!page) return;
+    await handleUpdateTableBlock(page, activeTableTaskModal.blockId, (tbl) => ({
+      ...tbl,
+      rows: (tbl.rows || []).map((r) =>
+        r.id === activeTableTaskModal.rowId
+          ? {
+              ...r,
+              priority: taskModalDraft.priority || "",
+              taskName: (taskModalDraft.taskName || "").trim() || "제목 없음",
+              values: taskModalDraft.values || {},
+              memo: taskModalDraft.memo || "",
+              attachments: Array.isArray(taskModalDraft.attachments) ? taskModalDraft.attachments : []
+            }
+          : r
+      )
+    }));
+    setActiveTableTaskModal(null);
+    setTaskModalDraft(null);
+    showToast("💾 항목 상세 내용을 저장했습니다!");
+  };
+
+
 
 
 
@@ -9631,7 +9777,8 @@ ${validText}
       !isHeroPhotoModalOpen &&
       !isPageModalOpen &&
       !pageMenuTargetId &&
-      !isPagePasteModalOpen
+      !isPagePasteModalOpen &&
+      !activeTableTaskModal
     ) return;
     const onEsc = (e) => {
       if (e.key === "Escape") {
@@ -9652,11 +9799,13 @@ ${validText}
         setIsPageModalOpen(false);
         setPageMenuTargetId(null);
         setIsPagePasteModalOpen(false);
+        setActiveTableTaskModal(null);
+        setTaskModalDraft(null);
       }
     };
     window.addEventListener("keydown", onEsc);
     return () => window.removeEventListener("keydown", onEsc);
-  }, [isQuickFabOpen, isRoutineModalOpen, isActivityModalOpen, isEditorUnlockModalOpen, isMealCopyModalOpen, diaryExportPreviewUrl, diaryLightboxUrl, isWeatherModalOpen, liveActivityPopup, activityEditModal, zipImportPicker, magazineMonth, isSettingsOpen, isHeroPhotoModalOpen, isPageModalOpen, pageMenuTargetId, isPagePasteModalOpen]);
+  }, [isQuickFabOpen, isRoutineModalOpen, isActivityModalOpen, isEditorUnlockModalOpen, isMealCopyModalOpen, diaryExportPreviewUrl, diaryLightboxUrl, isWeatherModalOpen, liveActivityPopup, activityEditModal, zipImportPicker, magazineMonth, isSettingsOpen, isHeroPhotoModalOpen, isPageModalOpen, pageMenuTargetId, isPagePasteModalOpen, activeTableTaskModal]);
 
 
   const parseCookTimeMinutes = (cookTimeStr) => {
@@ -9966,7 +10115,7 @@ ${validText}
               notices: "다정한 가족 공지사항 📌",
               recipes: "보글보글 가족 레시피북 📖",
               bucket: "설레는 가족 버킷리스트 🌟",
-              pages: "우리 가족 공유 노트 🗂️",
+              pages: "가족공유노트 🗂️",
               ai: "똑똑한 AI 식단·요리 ✨"
             }[activeTab] || "우리 가족 홈 ♡"}
           </h1>
@@ -10508,7 +10657,7 @@ ${validText}
             onClick: () => setActiveTab("notices")
           },
           pages: {
-            title: "🗂️ 공유 노트",
+            title: "🗂️ 가족공유노트",
             actionLabel: "열기 >",
             actionColor: "text-stone-500",
             borderHover: "hover:border-stone-400",
@@ -11058,32 +11207,59 @@ ${validText}
               return canViewTab(targetTab);
             });
             const gridPad = blockSizes.menu_grid === "compact" ? "gap-1.5" : blockSizes.menu_grid === "large" ? "gap-2.5" : "gap-2";
+            const HOME_MENU_GROUPS = [
+              { id: "meal", label: "🍽️ 식단 · 살림", ids: ["daily", "fridge", "shopping", "monthly_cal", "monthly_exp", "recipes", "ai"] },
+              { id: "family", label: "👶 육아 · 일정", ids: ["baby", "routine_tab"] },
+              { id: "notes", label: "🗂️ 가족 기록 · 소통", ids: ["pages", "notices"] }
+            ];
+            const assigned = new Set(HOME_MENU_GROUPS.flatMap((g) => g.ids));
+            const extraIds = visibleMenuIds.filter((id) => !assigned.has(id));
+            const groupedSections = [
+              ...HOME_MENU_GROUPS.map((g) => ({
+                ...g,
+                items: visibleMenuIds.filter((id) => g.ids.includes(id))
+              })),
+              ...(extraIds.length > 0 ? [{ id: "etc", label: "기타", items: extraIds }] : [])
+            ].filter((g) => g.items.length > 0);
+
             return (
-              <div key="menu_grid" className={`grid grid-cols-2 ${gridPad}`}>
-                {visibleMenuIds.map((id) => {
-                  const item = MENU_DEFS[id];
-                  const mSize = menuSizes[id] || "half";
-                  const sizeCls =
-                    mSize === "tall"
-                      ? "col-span-2 p-3.5"
-                      : mSize === "full"
-                      ? "col-span-2 p-2.5"
-                      : "p-2.5";
-                  return (
-                    <button
-                      key={id}
-                      type="button"
-                      onClick={item.onClick}
-                      className={`bg-white border border-stone-200 ${item.borderHover} rounded-2xl ${sizeCls} text-left shadow-sm space-y-0.5 transition`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="text-[13.5px] font-black text-stone-900">{item.title}</span>
-                        <span className={`text-[11.5px] font-extrabold ${item.actionColor}`}>{item.actionLabel}</span>
-                      </div>
-                      <div className="text-[12.5px] font-bold text-stone-600 truncate">{item.sub}</div>
-                    </button>
-                  );
-                })}
+              <div key="menu_grid" className="space-y-3">
+                {groupedSections.map((group) => (
+                  <div key={group.id} className="space-y-1.5">
+                    <div className="text-[11px] font-extrabold text-stone-400 px-1 tracking-tight">{group.label}</div>
+                    <div className={`grid grid-cols-2 ${gridPad}`}>
+                      {group.items.map((id) => {
+                        const item = MENU_DEFS[id];
+                        const mSize = menuSizes[id] || "half";
+                        const sizeCls =
+                          mSize === "tall"
+                            ? "col-span-2 p-3.5"
+                            : mSize === "full"
+                            ? "col-span-2 p-2.5"
+                            : "p-2.5";
+                        const cleanAction = item.actionLabel === "열기 >" ? "" : item.actionLabel.replace(" >", "");
+                        return (
+                          <button
+                            key={id}
+                            type="button"
+                            onClick={item.onClick}
+                            className={`bg-white border border-stone-200/90 ${item.borderHover} rounded-2xl ${sizeCls} text-left shadow-sm space-y-0.5 transition active:scale-[0.99]`}
+                          >
+                            <div className="flex items-center justify-between gap-1">
+                              <span className="text-[13.5px] font-black text-stone-900 truncate">{item.title}</span>
+                              {cleanAction ? (
+                                <span className={`text-[10.5px] font-extrabold shrink-0 ${item.actionColor}`}>{cleanAction}</span>
+                              ) : (
+                                <ChevronRight className="w-3.5 h-3.5 text-stone-300 shrink-0" />
+                              )}
+                            </div>
+                            <div className="text-[12px] font-bold text-stone-500 truncate">{item.sub}</div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
               </div>
             );
           }
@@ -16339,6 +16515,7 @@ ${validText}
               <form onSubmit={handleAddBucketItem} className="space-y-2 pt-1">
                 <div className="flex gap-1.5">
                   <input
+                    id="bucket-title-input"
                     type="text"
                     value={bucketForm.title}
                     onChange={(e) => setBucketForm((p) => ({ ...p, title: e.target.value }))}
@@ -16493,7 +16670,7 @@ ${validText}
       {/* ==========================================
           탭 8-3: 🗂️ 노션 스타일 가족 공유 노트 (계층형 페이지 · 최근 항목 · 체크리스트)
       ========================================== */}
-      {activeTab === "pages" && (!canViewTab("pages") ? renderLockedTabScreen("🗂️ 공유 노트") : (() => {
+      {activeTab === "pages" && (!canViewTab("pages") ? renderLockedTabScreen("🗂️ 가족공유노트") : (() => {
         const currentPage = selectedPageId ? familyPages.find((p) => p.id === selectedPageId) || null : null;
         const sq = pageSearchQuery.trim().toLowerCase();
 
@@ -16816,25 +16993,47 @@ ${validText}
                       className="flex items-center gap-1 text-[13px] font-extrabold text-stone-600 hover:text-stone-900 min-w-0"
                     >
                       <ChevronLeft className="w-4 h-4 shrink-0" />
-                      <span className="truncate">{parentPage ? `${parentPage.icon || "📄"} ${parentPage.title}` : "공유된 페이지"}</span>
+                      <span className="truncate">{parentPage ? `${parentPage.icon || "📄"} ${parentPage.title}` : "가족공유노트"}</span>
                     </button>
                     <div className="flex items-center gap-1 shrink-0">
                       {canEditTab("pages") && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setPagePasteText("");
-                            setPagePasteColor("amber");
-                            setPagePasteMode("append");
-                            setIsPagePasteModalOpen(true);
-                          }}
-                          className="px-2 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-900 text-[11px] font-extrabold whitespace-nowrap"
-                          title="노션 마크다운 통째로 붙여넣기"
-                        >
-                          📥 붙여넣기
-                        </button>
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (!isPageBulkEditMode) {
+                                setPageBulkEditText(blocksToNotionMarkdown(blocks));
+                                setIsPageBulkEditMode(true);
+                                setEditingBlockId(null);
+                              } else {
+                                setIsPageBulkEditMode(false);
+                              }
+                            }}
+                            className={`px-2 py-1 rounded-lg border text-[11px] font-extrabold whitespace-nowrap transition ${
+                              isPageBulkEditMode
+                                ? "bg-stone-900 text-white border-stone-900"
+                                : "bg-stone-50 hover:bg-stone-100 border-stone-200 text-stone-700"
+                            }`}
+                            title="전체 텍스트로 편하게 수정·복사·붙여넣기"
+                          >
+                            {isPageBulkEditMode ? "✓ 편집종료" : "✏️ 편집"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setPagePasteText("");
+                              setPagePasteColor("amber");
+                              setPagePasteMode("append");
+                              setIsPagePasteModalOpen(true);
+                            }}
+                            className="px-2 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-900 text-[11px] font-extrabold whitespace-nowrap"
+                            title="노션 마크다운 통째로 붙여넣기"
+                          >
+                            📥 붙여넣기
+                          </button>
+                        </>
                       )}
-                      {todoBlocks.length > 0 && (
+                      {todoBlocks.length > 0 && !isPageBulkEditMode && (
                         <button
                           type="button"
                           onClick={() => handleResetPageTodos(currentPage)}
@@ -16847,14 +17046,19 @@ ${validText}
                       <button
                         type="button"
                         onClick={async () => {
-                          const lines = [`${currentPage.icon || "📄"} ${currentPage.title}`];
-                          blocks.forEach((b) => {
-                            const pad = "    ".repeat(Number(b.indent) || 0);
-                            if (b.type === "heading") lines.push(`\n### ${b.text}\n`);
-                            else if (b.type === "todo") lines.push(`${pad}- [${b.checked ? "x" : " "}] ${b.text}`);
-                            else lines.push(`${pad}${b.text}`);
-                          });
-                          await copyTextSafe(lines.join("\n"), "📋 노션 마크다운 형식으로 복사했습니다!");
+                          const mdBody = blocksToNotionMarkdown(blocks);
+                          const tableTexts = blocks
+                            .filter((b) => b.type === "table")
+                            .map((t) => {
+                              const cols = Array.isArray(t.columns) ? t.columns : [{ id: "desc", name: "비고" }];
+                              const hdr = `| Priority | Task name | ${cols.map((c) => c.name).join(" | ")} |`;
+                              const rows = (t.rows || []).map(
+                                (r) => `| ${r.priority || "-"} | ${r.taskName || ""} | ${cols.map((c) => (r.values?.[c.id] || "")).join(" | ")} |`
+                              );
+                              return [hdr, ...rows].join("\n");
+                            });
+                          const full = [`${currentPage.icon || "📄"} ${currentPage.title}`, mdBody, ...tableTexts].filter(Boolean).join("\n\n");
+                          await copyTextSafe(full, "📋 노션 마크다운 형식으로 복사했습니다!");
                         }}
                         className="p-1.5 rounded-lg hover:bg-stone-100 text-stone-500 hover:text-stone-800"
                         title="마크다운 복사"
@@ -16871,6 +17075,13 @@ ${validText}
                       </button>
                     </div>
                   </div>
+
+                  {/* 선택형 파스텔 커버 배너 */}
+                  {(() => {
+                    const cov = PAGE_COVER_COLORS.find((c) => c.id === currentPage.coverColor);
+                    if (!cov || !cov.bg) return null;
+                    return <div className={`h-16 w-full ${cov.bg}`} />;
+                  })()}
 
                   {/* 상세 본문 */}
                   <div className="p-4 space-y-4">
@@ -16932,22 +17143,38 @@ ${validText}
                       </div>
 
                       {isPageEmojiPickerOpen && (
-                        <div className="p-2.5 rounded-2xl bg-stone-50 border border-stone-200 flex flex-wrap gap-1.5">
-                          {PAGE_EMOJI_PRESETS.map((em) => (
-                            <button
-                              key={em}
-                              type="button"
-                              onClick={() => {
-                                savePageToCloud({ ...currentPage, icon: em, updatedAtMs: Date.now() });
-                                setIsPageEmojiPickerOpen(false);
-                              }}
-                              className={`w-8 h-8 rounded-xl text-[18px] flex items-center justify-center transition ${
-                                currentPage.icon === em ? "bg-stone-900 scale-105" : "bg-white hover:bg-stone-200"
-                              }`}
-                            >
-                              {em}
-                            </button>
-                          ))}
+                        <div className="p-2.5 rounded-2xl bg-stone-50 border border-stone-200 space-y-2">
+                          <div className="flex flex-wrap gap-1.5">
+                            {PAGE_EMOJI_PRESETS.map((em) => (
+                              <button
+                                key={em}
+                                type="button"
+                                onClick={() => {
+                                  savePageToCloud({ ...currentPage, icon: em, updatedAtMs: Date.now() });
+                                  setIsPageEmojiPickerOpen(false);
+                                }}
+                                className={`w-8 h-8 rounded-xl text-[18px] flex items-center justify-center transition ${
+                                  currentPage.icon === em ? "bg-stone-900 scale-105" : "bg-white hover:bg-stone-200"
+                                }`}
+                              >
+                                {em}
+                              </button>
+                            ))}
+                          </div>
+                          <div className="flex items-center gap-1.5 pt-1.5 border-t border-stone-200/80">
+                            <span className="text-[11px] font-extrabold text-stone-500">커버 배너:</span>
+                            {PAGE_COVER_COLORS.map((cv) => (
+                              <button
+                                key={cv.id}
+                                type="button"
+                                onClick={() => savePageToCloud({ ...currentPage, coverColor: cv.id, updatedAtMs: Date.now() })}
+                                className={`w-5 h-5 rounded-full ${cv.dot} ${
+                                  (currentPage.coverColor || "none") === cv.id ? "ring-2 ring-stone-900 ring-offset-1" : "opacity-75"
+                                }`}
+                                title={cv.label}
+                              />
+                            ))}
+                          </div>
                         </div>
                       )}
 
@@ -16962,6 +17189,15 @@ ${validText}
                           <span className="text-[11.5px] font-extrabold text-[#2383E2] whitespace-nowrap">
                             {doneTodoCount}/{todoBlocks.length} 완료
                           </span>
+                          {doneTodoCount > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => setHideCompletedPageTodos((v) => !v)}
+                              className="px-2 py-0.5 rounded-full bg-stone-100 hover:bg-stone-200 text-stone-600 text-[10.5px] font-extrabold whitespace-nowrap"
+                            >
+                              {hideCompletedPageTodos ? "완료 보기" : "완료 숨김"}
+                            </button>
+                          )}
                         </div>
                       )}
                     </div>
@@ -16989,14 +17225,380 @@ ${validText}
                       </div>
                     )}
 
+                    {/* 원탭 전체 편집 모드 (여러 줄 복사·붙여넣기·수정에 최적화) */}
+                    {isPageBulkEditMode && canEditTab("pages") && (
+                      <div className="space-y-2 p-3 rounded-2xl bg-stone-50 border border-stone-200">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-[12px] font-extrabold text-stone-700">
+                            ✏️ 전체 텍스트 편집 (여러 줄 복사·붙여넣기 가능)
+                          </span>
+                          <span className="text-[10.5px] font-bold text-stone-400">
+                            ### 제목 · - [ ] 체크 · 4칸 들여쓰기
+                          </span>
+                        </div>
+                        <textarea
+                          rows={12}
+                          autoFocus
+                          value={pageBulkEditText}
+                          onChange={(e) => setPageBulkEditText(e.target.value)}
+                          placeholder={"### 세면용품 파우치 -> 캐리어\n- [ ] 칫솔\n- [x] 치약\n    - [ ] 휴대용 칫솔캡"}
+                          className="w-full p-3 rounded-xl border border-stone-200 bg-white text-[13px] font-mono leading-relaxed focus:outline-none focus:border-stone-400"
+                        />
+                        <div className="flex items-center justify-end gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setIsPageBulkEditMode(false)}
+                            className="px-3 py-1.5 rounded-xl bg-white border border-stone-200 text-stone-600 text-[12px] font-extrabold"
+                          >
+                            취소
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleSaveBulkEdit(currentPage)}
+                            className="px-4 py-1.5 rounded-xl bg-stone-900 hover:bg-stone-800 text-white text-[12px] font-extrabold"
+                          >
+                            💾 변경사항 저장
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
                     {/* 노션 스타일 블록 리스트 */}
                     <div className="space-y-2">
-                      {blocks.length === 0 && childPages.length === 0 && (
+                      {!isPageBulkEditMode && blocks.length === 0 && childPages.length === 0 && (
                         <div className="py-6 text-center text-[12.5px] font-semibold text-stone-400 bg-stone-50/70 rounded-2xl border border-dashed border-stone-200">
-                          아래 입력창에서 섹션 제목, 체크리스트, 메모를 추가해 보세요.
+                          아래에서 체크리스트·섹션·메모·표를 추가하거나 여러 줄을 바로 붙여넣어 보세요.
                         </div>
                       )}
                       {blocks.map((blk, bIdx) => {
+                        if (isPageBulkEditMode && blk.type !== "table") return null;
+                        if (hideCompletedPageTodos && blk.type === "todo" && blk.checked) return null;
+
+                        if (blk.type === "table") {
+                          const cols = Array.isArray(blk.columns) && blk.columns.length > 0
+                            ? blk.columns
+                            : [{ id: "desc", name: "비고" }];
+                          const allRows = Array.isArray(blk.rows) ? blk.rows : [];
+                          const fState = tableFilterState[blk.id] || { priority: "ALL", q: "" };
+                          const qLower = (fState.q || "").trim().toLowerCase();
+                          const filteredRows = allRows.filter((r) => {
+                            if (fState.priority !== "ALL" && (r.priority || "") !== fState.priority) return false;
+                            if (!qLower) return true;
+                            const inName = String(r.taskName || "").toLowerCase().includes(qLower);
+                            const inMemo = String(r.memo || "").toLowerCase().includes(qLower);
+                            const inVals = Object.values(r.values || {}).some((v) => String(v || "").toLowerCase().includes(qLower));
+                            return inName || inMemo || inVals;
+                          });
+
+                          return (
+                            <div key={blk.id} className="my-2 rounded-2xl border border-stone-200 bg-white overflow-hidden">
+                              {/* 노션 스타일 표 툴바 */}
+                              <div className="px-3 py-2 bg-stone-50/70 border-b border-stone-200/80 flex items-center justify-between gap-2 flex-wrap">
+                                <div className="flex items-center gap-1.5">
+                                  <select
+                                    value={fState.priority}
+                                    onChange={(e) =>
+                                      setTableFilterState((prev) => ({
+                                        ...prev,
+                                        [blk.id]: { ...fState, priority: e.target.value }
+                                      }))
+                                    }
+                                    className="px-2.5 py-1 rounded-full bg-white border border-stone-200 text-[12px] font-extrabold text-stone-800 shadow-xs"
+                                  >
+                                    <option value="ALL">★ All Tasks ({allRows.length})</option>
+                                    <option value="High">🔴 High</option>
+                                    <option value="Medium">🟡 Medium</option>
+                                    <option value="Low">🔵 Low</option>
+                                  </select>
+                                  <button
+                                    type="button"
+                                    onClick={() => setTableSearchOpenId((cur) => (cur === blk.id ? null : blk.id))}
+                                    className={`p-1.5 rounded-lg transition ${
+                                      tableSearchOpenId === blk.id || fState.q
+                                        ? "bg-stone-200 text-stone-900"
+                                        : "text-stone-500 hover:bg-stone-200/70"
+                                    }`}
+                                    title="표 내 검색"
+                                  >
+                                    <Search className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  {canEditTab("pages") && (
+                                    <>
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          const newRow = {
+                                            id: `row-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`,
+                                            priority: "",
+                                            taskName: "",
+                                            values: Object.fromEntries(cols.map((c) => [c.id, ""])),
+                                            memo: "",
+                                            attachments: []
+                                          };
+                                          handleUpdateTableBlock(currentPage, blk.id, (t) => ({
+                                            ...t,
+                                            rows: [...(t.rows || []), newRow]
+                                          }));
+                                        }}
+                                        className="px-2.5 py-1 rounded-lg bg-[#2383E2] hover:bg-[#1a73cc] text-white text-[12px] font-extrabold flex items-center gap-1 shadow-xs"
+                                        title="새 행 추가"
+                                      >
+                                        <Plus className="w-3.5 h-3.5" /> 행 추가
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          if (window.confirm("이 표를 삭제할까요?")) {
+                                            handleDeletePageBlock(currentPage, blk.id);
+                                          }
+                                        }}
+                                        className="p-1.5 rounded-lg text-stone-400 hover:text-rose-600 hover:bg-rose-50"
+                                        title="표 삭제"
+                                      >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                      </button>
+                                    </>
+                                  )}
+                                </div>
+                              </div>
+
+                              {tableSearchOpenId === blk.id && (
+                                <div className="px-3 py-1.5 bg-stone-50 border-b border-stone-100 flex items-center gap-1.5">
+                                  <Search className="w-3.5 h-3.5 text-stone-400 shrink-0" />
+                                  <input
+                                    type="text"
+                                    autoFocus
+                                    value={fState.q}
+                                    onChange={(e) =>
+                                      setTableFilterState((prev) => ({
+                                        ...prev,
+                                        [blk.id]: { ...fState, q: e.target.value }
+                                      }))
+                                    }
+                                    placeholder="Task name, 비고, 메모 검색..."
+                                    className="flex-1 bg-transparent text-[12px] font-semibold text-stone-800 focus:outline-none"
+                                  />
+                                  {fState.q && (
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        setTableFilterState((prev) => ({
+                                          ...prev,
+                                          [blk.id]: { ...fState, q: "" }
+                                        }))
+                                      }
+                                      className="text-stone-400 hover:text-stone-700"
+                                    >
+                                      <X className="w-3.5 h-3.5" />
+                                    </button>
+                                  )}
+                                </div>
+                              )}
+
+                              {/* 가로 스크롤 가능한 노션 스타일 데이터 테이블 */}
+                              <div className="overflow-x-auto">
+                                <table className="w-full border-collapse text-left min-w-[420px]">
+                                  <thead>
+                                    <tr className="border-b border-stone-200 bg-stone-50/40 text-[11.5px] font-bold text-stone-500">
+                                      <th className="py-2 px-2.5 border-r border-stone-100 w-[86px] whitespace-nowrap">⌄ Priority</th>
+                                      <th className="py-2 px-2.5 border-r border-stone-100 min-w-[165px] whitespace-nowrap">Aa Task name</th>
+                                      {cols.map((col, cIdx) => (
+                                        <th key={col.id} className="py-2 px-2.5 border-r border-stone-100 min-w-[125px] whitespace-nowrap">
+                                          <div className="flex items-center justify-between gap-1">
+                                            <span>≡ {col.name}</span>
+                                            {canEditTab("pages") && cIdx > 0 && (
+                                              <button
+                                                type="button"
+                                                onClick={() => {
+                                                  if (window.confirm(`'${col.name}' 열을 삭제할까요?`)) {
+                                                    handleUpdateTableBlock(currentPage, blk.id, (t) => ({
+                                                      ...t,
+                                                      columns: (t.columns || []).filter((c) => c.id !== col.id)
+                                                    }));
+                                                  }
+                                                }}
+                                                className="text-stone-300 hover:text-rose-500 p-0.5"
+                                                title="열 삭제"
+                                              >
+                                                <X className="w-3 h-3" />
+                                              </button>
+                                            )}
+                                          </div>
+                                        </th>
+                                      ))}
+                                      {canEditTab("pages") && (
+                                        <th className="py-1.5 px-2 whitespace-nowrap w-[74px]">
+                                          {addingColBlockId === blk.id ? (
+                                            <div className="flex items-center gap-1">
+                                              <input
+                                                type="text"
+                                                autoFocus
+                                                value={newTableColName}
+                                                onChange={(e) => setNewTableColName(e.target.value)}
+                                                onKeyDown={(e) => {
+                                                  if (e.key === "Enter" && newTableColName.trim()) {
+                                                    const colName = newTableColName.trim();
+                                                    const colId = `col_${Date.now()}`;
+                                                    handleUpdateTableBlock(currentPage, blk.id, (t) => ({
+                                                      ...t,
+                                                      columns: [...(t.columns || [{ id: "desc", name: "비고" }]), { id: colId, name: colName }]
+                                                    }));
+                                                    setNewTableColName("");
+                                                    setAddingColBlockId(null);
+                                                  }
+                                                  if (e.key === "Escape") {
+                                                    setAddingColBlockId(null);
+                                                    setNewTableColName("");
+                                                  }
+                                                }}
+                                                placeholder="열 이름"
+                                                className="w-20 px-1.5 py-0.5 rounded border border-stone-300 bg-white text-[11px] font-bold text-stone-800"
+                                              />
+                                              <button
+                                                type="button"
+                                                onClick={() => {
+                                                  if (!newTableColName.trim()) return;
+                                                  const colName = newTableColName.trim();
+                                                  const colId = `col_${Date.now()}`;
+                                                  handleUpdateTableBlock(currentPage, blk.id, (t) => ({
+                                                    ...t,
+                                                    columns: [...(t.columns || [{ id: "desc", name: "비고" }]), { id: colId, name: colName }]
+                                                  }));
+                                                  setNewTableColName("");
+                                                  setAddingColBlockId(null);
+                                                }}
+                                                className="px-1.5 py-0.5 rounded bg-stone-900 text-white text-[10.5px] font-extrabold"
+                                              >
+                                                추가
+                                              </button>
+                                            </div>
+                                          ) : (
+                                            <button
+                                              type="button"
+                                              onClick={() => {
+                                                setAddingColBlockId(blk.id);
+                                                setNewTableColName("");
+                                              }}
+                                              className="px-2 py-0.5 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-600 text-[11px] font-extrabold flex items-center gap-0.5"
+                                              title="우측에 새 열 추가"
+                                            >
+                                              <Plus className="w-3 h-3" /> 열 추가
+                                            </button>
+                                          )}
+                                        </th>
+                                      )}
+                                    </tr>
+                                  </thead>
+                                  <tbody className="divide-y divide-stone-100 text-[13px]">
+                                    {filteredRows.length === 0 ? (
+                                      <tr>
+                                        <td colSpan={cols.length + 3} className="py-5 text-center text-[12px] font-semibold text-stone-400">
+                                          표시할 항목이 없습니다.
+                                        </td>
+                                      </tr>
+                                    ) : (
+                                      filteredRows.map((row) => {
+                                        const priMeta =
+                                          PAGE_TABLE_PRIORITIES.find((p) => p.id === (row.priority || "")) ||
+                                          PAGE_TABLE_PRIORITIES[0];
+                                        const attCount = Array.isArray(row.attachments) ? row.attachments.length : 0;
+                                        const hasMemo = Boolean((row.memo || "").trim());
+                                        return (
+                                          <tr key={row.id} className="hover:bg-stone-50/60 transition">
+                                            {/* Priority 셀 (클릭 시 순환) */}
+                                            <td className="py-2 px-2.5 border-r border-stone-100 align-middle">
+                                              <button
+                                                type="button"
+                                                onClick={() => {
+                                                  if (!canEditTab("pages")) return;
+                                                  const order = ["", "High", "Medium", "Low"];
+                                                  const nextPri = order[(order.indexOf(row.priority || "") + 1) % order.length];
+                                                  handleUpdateTableBlock(currentPage, blk.id, (t) => ({
+                                                    ...t,
+                                                    rows: (t.rows || []).map((r) => (r.id === row.id ? { ...r, priority: nextPri } : r))
+                                                  }));
+                                                }}
+                                                className={`px-2 py-0.5 rounded-md text-[11.5px] font-extrabold transition ${
+                                                  row.priority ? priMeta.badge : "text-stone-300 hover:bg-stone-100"
+                                                }`}
+                                                title="눌러서 중요도 변경 (High / Medium / Low)"
+                                              >
+                                                {row.priority || "—"}
+                                              </button>
+                                            </td>
+
+                                            {/* Task name + [열기] 버튼 */}
+                                            <td className="py-1.5 px-2.5 border-r border-stone-100 align-middle">
+                                              <div className="flex items-center justify-between gap-1.5">
+                                                <input
+                                                  type="text"
+                                                  defaultValue={row.taskName || ""}
+                                                  readOnly={!canEditTab("pages")}
+                                                  onBlur={(e) => {
+                                                    const v = e.target.value;
+                                                    if (v === (row.taskName || "")) return;
+                                                    handleUpdateTableBlock(currentPage, blk.id, (t) => ({
+                                                      ...t,
+                                                      rows: (t.rows || []).map((r) => (r.id === row.id ? { ...r, taskName: v } : r))
+                                                    }));
+                                                  }}
+                                                  placeholder="항목명..."
+                                                  className="flex-1 min-w-0 bg-transparent text-[13.5px] font-bold text-stone-900 focus:bg-white focus:outline-none focus:ring-1 focus:ring-stone-300 rounded px-1 py-0.5"
+                                                />
+                                                <button
+                                                  type="button"
+                                                  onClick={() => openTableTaskModal(currentPage, blk.id, row)}
+                                                  className="px-2 py-0.5 rounded-md border border-stone-200 bg-white hover:bg-stone-100 text-stone-600 text-[11px] font-extrabold whitespace-nowrap shrink-0 flex items-center gap-0.5 shadow-2xs"
+                                                  title="메모·파일첨부 열기"
+                                                >
+                                                  열기
+                                                  {(attCount > 0 || hasMemo) && (
+                                                    <span className="text-[10px] text-[#2383E2]">
+                                                      {attCount > 0 ? `📎${attCount}` : "📝"}
+                                                    </span>
+                                                  )}
+                                                </button>
+                                              </div>
+                                            </td>
+
+                                            {/* 비고 및 우측 사용자 추가 열 */}
+                                            {cols.map((col) => (
+                                              <td key={col.id} className="py-1.5 px-2.5 border-r border-stone-100 align-middle">
+                                                <input
+                                                  type="text"
+                                                  defaultValue={row.values?.[col.id] || ""}
+                                                  readOnly={!canEditTab("pages")}
+                                                  onBlur={(e) => {
+                                                    const v = e.target.value;
+                                                    if (v === (row.values?.[col.id] || "")) return;
+                                                    handleUpdateTableBlock(currentPage, blk.id, (t) => ({
+                                                      ...t,
+                                                      rows: (t.rows || []).map((r) =>
+                                                        r.id === row.id
+                                                          ? { ...r, values: { ...(r.values || {}), [col.id]: v } }
+                                                          : r
+                                                      )
+                                                    }));
+                                                  }}
+                                                  placeholder=""
+                                                  className="w-full min-w-[90px] bg-transparent text-[12.5px] font-medium text-stone-700 focus:bg-white focus:outline-none focus:ring-1 focus:ring-stone-300 rounded px-1 py-0.5"
+                                                />
+                                              </td>
+                                            ))}
+
+                                            {canEditTab("pages") && <td className="py-1.5 px-2" />}
+                                          </tr>
+                                        );
+                                      })
+                                    )}
+                                  </tbody>
+                                </table>
+                              </div>
+                            </div>
+                          );
+                        }
                         const isEditing = editingBlockId === blk.id;
                         if (isEditing) {
                           return (
@@ -17035,7 +17637,26 @@ ${validText}
                                     ))}
                                   </div>
                                 ) : (
-                                  <span className="text-[11px] font-bold text-stone-400">순서 이동 / 삭제</span>
+                                  <div className="flex items-center gap-1">
+                                    <button
+                                      type="button"
+                                      disabled={(Number(blk.indent) || 0) <= 0}
+                                      onClick={() => handleIndentPageBlock(currentPage, blk.id, -1)}
+                                      className="px-2 py-0.5 rounded bg-white border border-stone-200 text-[11px] font-bold disabled:opacity-30"
+                                      title="내어쓰기"
+                                    >
+                                      ←
+                                    </button>
+                                    <button
+                                      type="button"
+                                      disabled={(Number(blk.indent) || 0) >= 3}
+                                      onClick={() => handleIndentPageBlock(currentPage, blk.id, 1)}
+                                      className="px-2 py-0.5 rounded bg-white border border-stone-200 text-[11px] font-bold disabled:opacity-30"
+                                      title="들여쓰기"
+                                    >
+                                      →
+                                    </button>
+                                  </div>
                                 )}
                                 <div className="flex items-center gap-1">
                                   <button
@@ -17149,8 +17770,8 @@ ${validText}
                         <div className="flex items-center justify-between gap-1 flex-wrap">
                           <div className="flex items-center gap-1">
                             {[
-                              { id: "todo", label: "☑️ 체크리스트" },
-                              { id: "heading", label: "🏷️ 섹션제목" },
+                              { id: "todo", label: "☑️ 체크" },
+                              { id: "heading", label: "🏷️ 섹션" },
                               { id: "text", label: "📝 메모" }
                             ].map((bt) => (
                               <button
@@ -17166,6 +17787,14 @@ ${validText}
                                 {bt.label}
                               </button>
                             ))}
+                            <button
+                              type="button"
+                              onClick={() => handleAddTableBlock(currentPage)}
+                              className="px-2.5 py-1 rounded-full text-[11.5px] font-extrabold border bg-sky-50 hover:bg-sky-100 text-sky-800 border-sky-200 whitespace-nowrap transition"
+                              title="Priority · Task name · 비고 표 추가"
+                            >
+                              + 📊 표
+                            </button>
                           </div>
                           <button
                             type="button"
@@ -17201,10 +17830,28 @@ ${validText}
                             onChange={(e) => setPageQuickAddText(e.target.value)}
                             onPaste={(e) => {
                               const pasted = e.clipboardData?.getData("text") || "";
-                              if (pasted.includes("\n") && (/^\s*#{1,6}\s+/m.test(pasted) || /^\s*(?:[-*+]\s*)?\[[ xX✓✔]\]/m.test(pasted))) {
-                                e.preventDefault();
+                              if (!pasted.includes("\n")) return;
+                              e.preventDefault();
+                              if (/^\s*#{1,6}\s+/m.test(pasted) || /^\s*(?:[-*+]\s*)?\[[ xX✓✔]\]/m.test(pasted)) {
                                 handleApplyMarkdownPaste(currentPage, pasted, "append", pageQuickAddColor || "amber");
+                                return;
                               }
+                              const plainLines = pasted.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+                              if (plainLines.length === 0) return;
+                              const now = Date.now();
+                              const added = plainLines.map((ln, idx) => ({
+                                id: `blk-${now}-${idx}-${Math.random().toString(36).slice(2, 5)}`,
+                                type: pageQuickAddType,
+                                text: ln,
+                                ...(pageQuickAddType === "todo" ? { checked: false } : {}),
+                                ...(pageQuickAddType === "heading" ? { color: pageQuickAddColor || "amber" } : {})
+                              }));
+                              savePageToCloud({
+                                ...currentPage,
+                                blocks: [...blocks, ...added],
+                                updatedAtMs: now
+                              });
+                              showToast(`✨ ${added.length}줄을 바로 추가했습니다!`);
                             }}
                             onKeyDown={(e) => {
                               if (e.key === "Enter") {
@@ -20094,6 +20741,27 @@ ${validText}
                       }))
                   }
                 ]
+              },
+              {
+                group: "🗂️ 가족공유노트 · 버킷리스트",
+                items: [
+                  {
+                    tab: "pages",
+                    label: "🗂️ 가족공유노트 작성",
+                    onClick: () => {
+                      setActiveTab("pages");
+                      openCreatePageModal(null);
+                    }
+                  },
+                  {
+                    tab: "bucket",
+                    label: "🌟 버킷리스트 추가",
+                    onClick: () => {
+                      setActiveTab("bucket");
+                      setTimeout(() => document.getElementById("bucket-title-input")?.focus(), 200);
+                    }
+                  }
+                ]
               }
             ]
               .map((g) => ({
@@ -20182,7 +20850,7 @@ ${validText}
                 { id: "ai", label: "AI추천", icon: "✨" },
                 { id: "recipes", label: "레시피북", icon: "📖" },
                 { id: "bucket", label: "버킷리스트", icon: "🌟" },
-                { id: "pages", label: "공유노트", icon: "🗂️" },
+                { id: "pages", label: "가족공유노트", icon: "🗂️" },
                 { id: "kitchen_timer", label: "조리타이머", icon: "⏱️" }
               ].map((m) => (
                 <button
@@ -26077,6 +26745,230 @@ ${validText}
                   >
                     ✨ 양식으로 반영 ({previewBlocks.length})
                   </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+
+      {/* 모달: 가족공유노트 표 Task 상세 (메모 · 파일첨부) */}
+      {activeTableTaskModal && taskModalDraft && (() => {
+        const activePg = familyPages.find((p) => p.id === activeTableTaskModal.pageId);
+        const activeTbl = activePg && Array.isArray(activePg.blocks)
+          ? activePg.blocks.find((b) => b.id === activeTableTaskModal.blockId)
+          : null;
+        if (!activePg || !activeTbl) return null;
+        const cols = Array.isArray(activeTbl.columns) && activeTbl.columns.length > 0
+          ? activeTbl.columns
+          : [{ id: "desc", name: "비고" }];
+        const canEdit = canEditTab("pages");
+
+        return (
+          <div
+            className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+            onClick={() => {
+              setActiveTableTaskModal(null);
+              setTaskModalDraft(null);
+            }}
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white rounded-3xl max-w-md w-full p-5 space-y-4 shadow-2xl max-h-[90vh] overflow-y-auto"
+            >
+              <div className="flex items-start justify-between gap-2">
+                <input
+                  type="text"
+                  value={taskModalDraft.taskName}
+                  readOnly={!canEdit}
+                  onChange={(e) => setTaskModalDraft((p) => ({ ...p, taskName: e.target.value }))}
+                  placeholder="Task 이름"
+                  className="flex-1 text-[18px] font-black text-stone-900 bg-transparent border-b border-transparent focus:border-stone-300 focus:outline-none pb-0.5"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveTableTaskModal(null);
+                    setTaskModalDraft(null);
+                  }}
+                >
+                  <X className="w-5 h-5 text-stone-400" />
+                </button>
+              </div>
+
+              {/* 속성 영역: Priority + 비고 + 사용자 추가 열 */}
+              <div className="space-y-2.5 bg-stone-50/80 p-3 rounded-2xl border border-stone-200/80">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[12px] font-extrabold text-stone-500 w-16 shrink-0">Priority</span>
+                  <div className="flex items-center gap-1 flex-wrap flex-1">
+                    {PAGE_TABLE_PRIORITIES.map((pri) => (
+                      <button
+                        key={pri.id || "none"}
+                        type="button"
+                        disabled={!canEdit}
+                        onClick={() => setTaskModalDraft((p) => ({ ...p, priority: pri.id }))}
+                        className={`px-2.5 py-1 rounded-lg text-[11.5px] font-extrabold border transition ${
+                          taskModalDraft.priority === pri.id
+                            ? (pri.id ? `${pri.badge} border-stone-900` : "bg-stone-900 text-white border-stone-900")
+                            : "bg-white text-stone-500 border-stone-200"
+                        }`}
+                      >
+                        {pri.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {cols.map((col) => (
+                  <div key={col.id} className="flex items-center gap-2">
+                    <span className="text-[12px] font-extrabold text-stone-500 w-16 truncate shrink-0" title={col.name}>
+                      {col.name}
+                    </span>
+                    <input
+                      type="text"
+                      value={taskModalDraft.values?.[col.id] || ""}
+                      readOnly={!canEdit}
+                      onChange={(e) =>
+                        setTaskModalDraft((p) => ({
+                          ...p,
+                          values: { ...(p.values || {}), [col.id]: e.target.value }
+                        }))
+                      }
+                      placeholder={`${col.name} 입력...`}
+                      className="flex-1 px-2.5 py-1.5 rounded-xl border border-stone-200 bg-white text-[13px] font-semibold text-stone-800"
+                    />
+                  </div>
+                ))}
+              </div>
+
+              {/* 상세 메모 */}
+              <div className="space-y-1.5">
+                <label className="text-[12px] font-extrabold text-stone-600">📝 메모</label>
+                <textarea
+                  rows={4}
+                  value={taskModalDraft.memo}
+                  readOnly={!canEdit}
+                  onChange={(e) => setTaskModalDraft((p) => ({ ...p, memo: e.target.value }))}
+                  placeholder="준비 방법, 구매처, 참고 사항 등을 자유롭게 적어보세요..."
+                  className="w-full p-3 rounded-2xl border border-stone-200 bg-stone-50 focus:bg-white text-[13px] font-medium leading-relaxed"
+                />
+              </div>
+
+              {/* 파일 / 사진 첨부 */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[12px] font-extrabold text-stone-600">
+                    📎 첨부파일 ({(taskModalDraft.attachments || []).length})
+                  </span>
+                  {canEdit && (
+                    <label className="px-2.5 py-1 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-[11.5px] font-extrabold cursor-pointer">
+                      + 파일/사진 첨부
+                      <input
+                        type="file"
+                        multiple
+                        accept="image/*,.pdf,.txt,.csv,.doc,.docx,.xls,.xlsx"
+                        className="hidden"
+                        onChange={(e) => {
+                          handleAttachTaskFiles(e.target.files);
+                          e.target.value = "";
+                        }}
+                      />
+                    </label>
+                  )}
+                </div>
+
+                {(taskModalDraft.attachments || []).length > 0 && (
+                  <div className="space-y-2">
+                    {(taskModalDraft.attachments || []).map((att) => (
+                      <div key={att.id} className="p-2 rounded-xl border border-stone-200 bg-stone-50/70 flex items-center gap-2.5">
+                        {att.isImage ? (
+                          <img
+                            src={att.url}
+                            alt={att.name}
+                            onClick={() => setDiaryLightboxUrl(att.url)}
+                            className="w-12 h-12 rounded-lg object-cover border border-stone-200 cursor-pointer shrink-0"
+                          />
+                        ) : (
+                          <div className="w-10 h-10 rounded-lg bg-white border border-stone-200 flex items-center justify-center text-[16px] shrink-0">
+                            📄
+                          </div>
+                        )}
+                        <div className="min-w-0 flex-1">
+                          <div className="text-[12.5px] font-bold text-stone-800 truncate">{att.name}</div>
+                          <div className="flex items-center gap-2 text-[11px] text-stone-400 font-semibold">
+                            <span>{att.uploadedAt || ""}</span>
+                            <a
+                              href={att.url}
+                              download={att.name}
+                              className="text-[#2383E2] hover:underline font-extrabold"
+                            >
+                              다운로드
+                            </a>
+                          </div>
+                        </div>
+                        {canEdit && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setTaskModalDraft((p) => ({
+                                ...p,
+                                attachments: (p.attachments || []).filter((x) => x.id !== att.id)
+                              }))
+                            }
+                            className="p-1.5 rounded-lg text-stone-400 hover:text-rose-600 hover:bg-rose-50 shrink-0"
+                            title="첨부 삭제"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* 하단 액션 버튼 */}
+              <div className="flex items-center justify-between gap-2 pt-1">
+                {canEdit ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!window.confirm("이 항목을 표에서 삭제할까요?")) return;
+                      handleUpdateTableBlock(activePg, activeTableTaskModal.blockId, (t) => ({
+                        ...t,
+                        rows: (t.rows || []).filter((r) => r.id !== activeTableTaskModal.rowId)
+                      }));
+                      setActiveTableTaskModal(null);
+                      setTaskModalDraft(null);
+                    }}
+                    className="px-3 py-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-600 text-[12.5px] font-extrabold"
+                  >
+                    행 삭제
+                  </button>
+                ) : (
+                  <div />
+                )}
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveTableTaskModal(null);
+                      setTaskModalDraft(null);
+                    }}
+                    className="px-3.5 py-2 rounded-xl bg-stone-100 text-stone-600 text-[13px] font-extrabold"
+                  >
+                    닫기
+                  </button>
+                  {canEdit && (
+                    <button
+                      type="button"
+                      onClick={handleSaveTaskModal}
+                      className="px-4 py-2 rounded-xl bg-stone-900 hover:bg-stone-800 text-white text-[13px] font-extrabold"
+                    >
+                      저장
+                    </button>
+                  )}
                 </div>
               </div>
             </div>

@@ -1176,7 +1176,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v12.19";
+export const APP_CODE_VERSION = "v12.20";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1194,7 +1194,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-20 05:00";
+export const APP_BUILD_DATE = "2026-11-20 05:30";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1216,7 +1216,7 @@ export const HELPER_CONFIGURABLE_TABS = [
   { id: "recipes", label: "📖 레시피북" },
   { id: "baby", label: "👶 육아수첩" },
   { id: "schedule", label: "🗓️ 일정·루틴" },
-  { id: "pages", label: "🗂️ 공유노트" },
+  { id: "pages", label: "🗂️ 가족공유노트" },
   { id: "ai", label: "✨ AI추천" },
   { id: "monthly", label: "💰 월간·식비" }
 ];
@@ -1261,6 +1261,18 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v12.20",
+    version: "v12.20",
+    date: "2026-11-20",
+    title: "가족공유노트 표(Task/비고/열추가/상세메모·파일첨부) · 일괄편집 · 홈 바로가기 그룹화 · 빠른작성 확장",
+    items: [
+      "메뉴명을 [가족공유노트]로 통일하고 우측 하단 빠른작성(+) 메뉴에 가족공유노트·버킷리스트 바로 추가 지원",
+      "홈 화면 바로가기 카드를 유사 기능(식단·살림 / 육아·일정 / 가족 기록·소통)으로 묶어 시각적 피로도 최소화",
+      "가족공유노트에 노션 스타일 표(Priority·Task name·비고·우측 열 추가·필터/검색) 및 [열기] 상세 모달(메모·사진/파일 첨부) 추가",
+      "원탭 [✏️ 일괄편집] 모드, 일반/마크다운 여러 줄 바로 붙여넣기, 들여쓰기 조절, 완료 항목 숨기기 및 파스텔 커버 배너 추가"
+    ]
+  },
   {
     id: "patch-v12.19",
     version: "v12.19",
@@ -4557,4 +4569,38 @@ export const parseNotionMarkdownToBlocks = (rawText, defaultHeadingColor = "ambe
     });
   }
   return blocks;
+};
+
+
+export const PAGE_COVER_COLORS = [
+  { id: "none", label: "없음", bg: "", dot: "bg-stone-200 border border-stone-300" },
+  { id: "peach", label: "피치", bg: "bg-[#FCECE0]", dot: "bg-[#F5CBA7]" },
+  { id: "sage", label: "세이지", bg: "bg-[#E7F1E8]", dot: "bg-[#A9CCA8]" },
+  { id: "sky", label: "스카이", bg: "bg-[#E6F1FB]", dot: "bg-[#93C5FD]" },
+  { id: "lavender", label: "라벤더", bg: "bg-[#F1ECFA]", dot: "bg-[#C4B5FD]" }
+];
+
+export const PAGE_TABLE_PRIORITIES = [
+  { id: "", label: "없음", badge: "text-stone-300 hover:bg-stone-100" },
+  { id: "High", label: "High", badge: "bg-[#FBE4E4] text-[#B9382C]" },
+  { id: "Medium", label: "Medium", badge: "bg-[#FBF3DB] text-[#9A6700]" },
+  { id: "Low", label: "Low", badge: "bg-[#E7F3F8] text-[#236B8E]" }
+];
+
+export const blocksToNotionMarkdown = (blocks = []) => {
+  const lines = [];
+  (Array.isArray(blocks) ? blocks : []).forEach((b) => {
+    if (!b || b.type === "table") return;
+    const pad = "    ".repeat(Math.min(3, Number(b.indent) || 0));
+    if (b.type === "heading") {
+      if (lines.length > 0 && lines[lines.length - 1] !== "") lines.push("");
+      lines.push(`### ${b.text || ""}`);
+      lines.push("");
+    } else if (b.type === "todo") {
+      lines.push(`${pad}- [${b.checked ? "x" : " "}] ${b.text || ""}`);
+    } else {
+      lines.push(`${pad}${b.text || ""}`);
+    }
+  });
+  return lines.join("\n").trim();
 };
