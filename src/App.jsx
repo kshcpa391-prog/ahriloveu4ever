@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useMemo, useRef } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import {
   Home,
   Utensils,
@@ -38,7 +38,11 @@ import {
   LayoutGrid,
   Bell,
   Lock,
-  ShieldCheck
+  ShieldCheck,
+  ChevronDown,
+  Search,
+  MoreHorizontal,
+  Copy
 } from "lucide-react";
 import {
   signInAnonymously,
@@ -141,7 +145,10 @@ import {
   evaluateGrowthMetric,
   BABY_VACCINES_AND_CHECKUPS,
   buildDaycareMeals,
-  callReliableAiEngine
+  callReliableAiEngine,
+  PAGE_EMOJI_PRESETS,
+  PAGE_HEADING_COLORS,
+  parseNotionMarkdownToBlocks
 } from "./Constants";
 
 
@@ -880,6 +887,45 @@ function MainApp() {
   const [bucketCatFilter, setBucketCatFilter] = useState("전체");
   const [bucketWeatherOnly, setBucketWeatherOnly] = useState(false);
   const [bucketForm, setBucketForm] = useState({ title: "", category: "나들이/여행", weather: "무관", memo: "" });
+  const [familyPages, setFamilyPages] = useState([]);
+  const [selectedPageId, setSelectedPageId] = useState(null);
+  const [pagesRecentOpen, setPagesRecentOpen] = useState(true);
+  const [pagesSharedOpen, setPagesSharedOpen] = useState(true);
+  const [expandedPageIds, setExpandedPageIds] = useState(() => {
+    try {
+      const raw = localStorage.getItem("kim_pages_expanded_v1");
+      const parsed = raw ? JSON.parse(raw) : {};
+      return parsed && typeof parsed === "object" ? parsed : {};
+    } catch (e) {
+      return {};
+    }
+  });
+  const [recentPageIds, setRecentPageIds] = useState(() => {
+    try {
+      const raw = localStorage.getItem("kim_pages_recent_v1");
+      const parsed = raw ? JSON.parse(raw) : [];
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (e) {
+      return [];
+    }
+  });
+  const [pageSearchQuery, setPageSearchQuery] = useState("");
+  const [pageMenuTargetId, setPageMenuTargetId] = useState(null);
+  const [isPageModalOpen, setIsPageModalOpen] = useState(false);
+  const [editingPageMeta, setEditingPageMeta] = useState(null);
+  const [pageMetaForm, setPageMetaForm] = useState({ title: "", icon: "📄", parentId: null });
+  const [pageQuickAddType, setPageQuickAddType] = useState("todo");
+  const [pageQuickAddText, setPageQuickAddText] = useState("");
+  const [pageQuickAddColor, setPageQuickAddColor] = useState("amber");
+  const [editingBlockId, setEditingBlockId] = useState(null);
+  const [editingBlockText, setEditingBlockText] = useState("");
+  const [isEditingPageTitle, setIsEditingPageTitle] = useState(false);
+  const [pageTitleDraft, setPageTitleDraft] = useState("");
+  const [isPageEmojiPickerOpen, setIsPageEmojiPickerOpen] = useState(false);
+  const [isPagePasteModalOpen, setIsPagePasteModalOpen] = useState(false);
+  const [pagePasteText, setPagePasteText] = useState("");
+  const [pagePasteColor, setPagePasteColor] = useState("amber");
+  const [pagePasteMode, setPagePasteMode] = useState("append");
   const [monthlyBudget, setMonthlyBudget] = useState(() => {
     return Number(localStorage.getItem("kim_family_budget") || 800000);
   });
@@ -1875,7 +1921,8 @@ function MainApp() {
     "육아": "baby",
     "장보기": "shopping",
     "공지": "notices",
-    "레시피": "recipes"
+    "레시피": "recipes",
+    "노트": "pages"
   };
   const visibleRecentActivities = useMemo(() => {
     if (isAdminUnlocked) return recentActivities;
@@ -3039,6 +3086,22 @@ function MainApp() {
 
     unsubscribers.push(
       onSnapshot(
+        getColRef("family_pages_v1"),
+        (snap) => {
+          const loaded = snap.docs.map((d) => ({
+            id: d.id,
+            ...d.data(),
+            blocks: Array.isArray(d.data().blocks) ? d.data().blocks : []
+          }));
+          setFamilyPages(loaded);
+        },
+        () => {}
+      )
+    );
+
+
+    unsubscribers.push(
+      onSnapshot(
         getDocRef("family_meta_v4", "hero_photo"),
         (snap) => {
           if (snap.exists()) {
@@ -3259,6 +3322,7 @@ function MainApp() {
       recipesMeta: recipes.map(({ photoDataUrl, ...rest }) => rest),
       familyRoutines,
       bucketList,
+      familyPages,
       mealFavorites: { combos: favoriteMealCombos, singles: favoriteSingleMenus },
       notices,
       schedules,
@@ -3511,6 +3575,7 @@ function MainApp() {
         babyActivities,
         familyRoutines,
         bucketList,
+        familyPages,
         homeLayoutConfig,
         homeTimeRanges,
         routineTimeRanges,
@@ -3668,6 +3733,7 @@ function MainApp() {
       if (Array.isArray(payload.expenses)) setExpenses(payload.expenses);
       if (Array.isArray(payload.shoppingList)) setShoppingList(payload.shoppingList);
       if (Array.isArray(payload.bucketList)) setBucketList(payload.bucketList);
+      if (Array.isArray(payload.familyPages)) setFamilyPages(payload.familyPages);
       if (Array.isArray(payload.recipes)) setRecipes(payload.recipes);
       if (payload.mealFavorites && typeof payload.mealFavorites === "object") {
         const rCombos = toSafeArray(payload.mealFavorites.combos);
@@ -3767,6 +3833,9 @@ function MainApp() {
         });
         (payload.babyMedicalNotes || []).forEach((bm) => {
           if (bm?.id) writePromises.push(setDoc(getDocRef("family_baby_notes_v7", bm.id), bm));
+        });
+        (payload.familyPages || []).forEach((pg) => {
+          if (pg?.id) writePromises.push(setDoc(getDocRef("family_pages_v1", pg.id), pg));
         });
         if (Array.isArray(payload.deletedIds) && payload.deletedIds.length > 0) {
           writePromises.push(
@@ -8993,6 +9062,361 @@ ${validText}
     showToast("버킷리스트 항목을 삭제했습니다.");
   };
 
+  const openFamilyPage = (pageId) => {
+    setSelectedPageId(pageId);
+    setEditingBlockId(null);
+    setIsEditingPageTitle(false);
+    setIsPageEmojiPickerOpen(false);
+    setPageSearchQuery("");
+    if (!pageId) return;
+    setRecentPageIds((prev) => {
+      const next = [pageId, ...prev.filter((id) => id !== pageId)].slice(0, 12);
+      try {
+        localStorage.setItem("kim_pages_recent_v1", JSON.stringify(next));
+      } catch (e) {}
+      return next;
+    });
+  };
+
+
+  const togglePageExpand = (pageId) => {
+    setExpandedPageIds((prev) => {
+      const next = { ...prev, [pageId]: !prev[pageId] };
+      try {
+        localStorage.setItem("kim_pages_expanded_v1", JSON.stringify(next));
+      } catch (e) {}
+      return next;
+    });
+  };
+
+
+  const savePageToCloud = async (pageObj) => {
+    setFamilyPages((prev) => {
+      const exists = prev.some((p) => p.id === pageObj.id);
+      return exists ? prev.map((p) => (p.id === pageObj.id ? pageObj : p)) : [...prev, pageObj];
+    });
+    if (user && db) {
+      await setDoc(getDocRef("family_pages_v1", pageObj.id), pageObj, { merge: true }).catch(() => {});
+    }
+  };
+
+
+  const openCreatePageModal = (parentId = null) => {
+    if (!requireEditorAccess("pages")) return;
+    setEditingPageMeta(null);
+    setPageMetaForm({ title: "", icon: "📄", parentId: parentId || null });
+    setIsPageModalOpen(true);
+  };
+
+
+  const openEditPageMetaModal = (page) => {
+    if (!requireEditorAccess("pages") || !page) return;
+    setEditingPageMeta(page);
+    setPageMetaForm({
+      title: page.title || "",
+      icon: page.icon || "📄",
+      parentId: page.parentId || null
+    });
+    setPageMenuTargetId(null);
+    setIsPageModalOpen(true);
+  };
+
+
+  const handleSavePageMeta = async (e) => {
+    e?.preventDefault?.();
+    if (!requireEditorAccess("pages")) return;
+    const cleanTitle = String(pageMetaForm.title || "").trim();
+    if (!cleanTitle) {
+      showToast("페이지 제목을 입력해 주세요.");
+      return;
+    }
+    const nowMs = Date.now();
+    if (editingPageMeta) {
+      const updated = {
+        ...editingPageMeta,
+        title: cleanTitle,
+        icon: String(pageMetaForm.icon || "📄").trim() || "📄",
+        parentId: pageMetaForm.parentId === editingPageMeta.id ? null : (pageMetaForm.parentId || null),
+        updatedAtMs: nowMs
+      };
+      await savePageToCloud(updated);
+      setIsPageModalOpen(false);
+      setEditingPageMeta(null);
+      recordActivity("노트", "수정", cleanTitle);
+      showToast("✏️ 페이지 정보를 수정했습니다.");
+      return;
+    }
+    const id = `pg-${nowMs}-${Math.random().toString(36).slice(2, 5)}`;
+    const siblings = familyPages.filter((p) => (p.parentId || null) === (pageMetaForm.parentId || null));
+    const newPage = {
+      id,
+      parentId: pageMetaForm.parentId || null,
+      title: cleanTitle,
+      icon: String(pageMetaForm.icon || "📄").trim() || "📄",
+      order: siblings.length,
+      blocks: [],
+      author: actorName || "수혁",
+      createdAt: getTodayStr(),
+      updatedAtMs: nowMs
+    };
+    await savePageToCloud(newPage);
+    if (newPage.parentId) {
+      setExpandedPageIds((prev) => {
+        const next = { ...prev, [newPage.parentId]: true };
+        try {
+          localStorage.setItem("kim_pages_expanded_v1", JSON.stringify(next));
+        } catch (err) {}
+        return next;
+      });
+    }
+    setIsPageModalOpen(false);
+    recordActivity("노트", "생성", cleanTitle);
+    showToast(`📄 '${cleanTitle}' 페이지가 추가되었습니다!`);
+    openFamilyPage(id);
+  };
+
+
+  const handleDuplicateFamilyPage = async (page) => {
+    if (!requireEditorAccess("pages") || !page) return;
+    const nowMs = Date.now();
+    const newId = `pg-${nowMs}-${Math.random().toString(36).slice(2, 5)}`;
+    const clonedBlocks = (Array.isArray(page.blocks) ? page.blocks : []).map((b, idx) => ({
+      ...b,
+      id: `blk-${nowMs}-${idx}-${Math.random().toString(36).slice(2, 4)}`
+    }));
+    const copyPage = {
+      ...page,
+      id: newId,
+      title: `${page.title} (사본)`,
+      blocks: clonedBlocks,
+      createdAt: getTodayStr(),
+      updatedAtMs: nowMs
+    };
+    await savePageToCloud(copyPage);
+    setPageMenuTargetId(null);
+    recordActivity("노트", "복제", copyPage.title);
+    showToast(`📋 '${page.title}' 페이지를 복제했습니다!`);
+  };
+
+
+  const handleDeleteFamilyPage = async (pageId) => {
+    if (!requireEditorAccess("pages") || !pageId) return;
+    const target = familyPages.find((p) => p.id === pageId);
+    if (!target) return;
+    const collectDescendants = (rootId) => {
+      const ids = [rootId];
+      const queue = [rootId];
+      while (queue.length > 0) {
+        const cur = queue.shift();
+        familyPages.forEach((p) => {
+          if (p.parentId === cur && !ids.includes(p.id)) {
+            ids.push(p.id);
+            queue.push(p.id);
+          }
+        });
+      }
+      return ids;
+    };
+    const delIds = collectDescendants(pageId);
+    const msg =
+      delIds.length > 1
+        ? `'${target.title}' 페이지와 하위 페이지 ${delIds.length - 1}개를 모두 삭제할까요?`
+        : `'${target.title}' 페이지를 삭제할까요?`;
+    if (!window.confirm(msg)) return;
+    const delSet = new Set(delIds);
+    setFamilyPages((prev) => prev.filter((p) => !delSet.has(p.id)));
+    setRecentPageIds((prev) => {
+      const next = prev.filter((id) => !delSet.has(id));
+      try {
+        localStorage.setItem("kim_pages_recent_v1", JSON.stringify(next));
+      } catch (e) {}
+      return next;
+    });
+    if (delSet.has(selectedPageId)) setSelectedPageId(target.parentId || null);
+    setPageMenuTargetId(null);
+    if (user && db) {
+      await Promise.all(delIds.map((id) => deleteDoc(getDocRef("family_pages_v1", id)).catch(() => {})));
+    }
+    recordActivity("노트", "삭제", target.title);
+    showToast(`🗑️ '${target.title}' 페이지를 삭제했습니다.`);
+  };
+
+
+  const handleAddPageBlock = async (page) => {
+    if (!requireEditorAccess("pages") || !page) return;
+    const clean = String(pageQuickAddText || "").trim();
+    if (!clean) return;
+    const nowMs = Date.now();
+    const newBlock = {
+      id: `blk-${nowMs}-${Math.random().toString(36).slice(2, 5)}`,
+      type: pageQuickAddType,
+      text: clean,
+      ...(pageQuickAddType === "todo" ? { checked: false } : {}),
+      ...(pageQuickAddType === "heading" ? { color: pageQuickAddColor || "amber" } : {})
+    };
+    const updated = {
+      ...page,
+      blocks: [...(Array.isArray(page.blocks) ? page.blocks : []), newBlock],
+      updatedAtMs: nowMs
+    };
+    setPageQuickAddText("");
+    await savePageToCloud(updated);
+  };
+
+
+  const handleTogglePageBlockTodo = async (page, blockId) => {
+    if (!requireEditorAccess("pages") || !page) return;
+    const updated = {
+      ...page,
+      blocks: (Array.isArray(page.blocks) ? page.blocks : []).map((b) =>
+        b.id === blockId ? { ...b, checked: !b.checked } : b
+      ),
+      updatedAtMs: Date.now()
+    };
+    await savePageToCloud(updated);
+  };
+
+
+  const handleResetPageTodos = async (page) => {
+    if (!requireEditorAccess("pages") || !page) return;
+    const todos = (Array.isArray(page.blocks) ? page.blocks : []).filter((b) => b.type === "todo");
+    if (todos.length === 0) return;
+    const anyChecked = todos.some((b) => b.checked);
+    const updated = {
+      ...page,
+      blocks: (Array.isArray(page.blocks) ? page.blocks : []).map((b) =>
+        b.type === "todo" ? { ...b, checked: !anyChecked } : b
+      ),
+      updatedAtMs: Date.now()
+    };
+    await savePageToCloud(updated);
+    showToast(anyChecked ? "🔄 체크리스트를 모두 해제했습니다." : "✅ 체크리스트를 모두 완료 처리했습니다.");
+  };
+
+
+  const handleUpdatePageBlockText = async (page, blockId, nextText, nextColor = null) => {
+    if (!requireEditorAccess("pages") || !page) return;
+    const clean = String(nextText || "").trim();
+    if (!clean) {
+      setEditingBlockId(null);
+      return;
+    }
+    const updated = {
+      ...page,
+      blocks: (Array.isArray(page.blocks) ? page.blocks : []).map((b) =>
+        b.id === blockId
+          ? { ...b, text: clean, ...(nextColor !== null ? { color: nextColor } : {}) }
+          : b
+      ),
+      updatedAtMs: Date.now()
+    };
+    setEditingBlockId(null);
+    await savePageToCloud(updated);
+  };
+
+
+  const handleMovePageBlock = async (page, blockIdx, delta) => {
+    if (!requireEditorAccess("pages") || !page) return;
+    const arr = [...(Array.isArray(page.blocks) ? page.blocks : [])];
+    const targetIdx = blockIdx + delta;
+    if (targetIdx < 0 || targetIdx >= arr.length) return;
+    [arr[blockIdx], arr[targetIdx]] = [arr[targetIdx], arr[blockIdx]];
+    await savePageToCloud({ ...page, blocks: arr, updatedAtMs: Date.now() });
+  };
+
+
+  const handleDeletePageBlock = async (page, blockId) => {
+    if (!requireEditorAccess("pages") || !page) return;
+    const updated = {
+      ...page,
+      blocks: (Array.isArray(page.blocks) ? page.blocks : []).filter((b) => b.id !== blockId),
+      updatedAtMs: Date.now()
+    };
+    if (editingBlockId === blockId) setEditingBlockId(null);
+    await savePageToCloud(updated);
+  };
+
+
+  const handleCreateSamplePackingPages = async () => {
+    if (!requireEditorAccess("pages")) return;
+    const nowMs = Date.now();
+    const rootId = `pg-root-${nowMs}`;
+    const childId = `pg-pack-${nowMs + 1}`;
+    const rootPage = {
+      id: rootId,
+      parentId: null,
+      title: "우리 가족 육아·생활 가이드",
+      icon: "👼",
+      order: familyPages.filter((p) => !p.parentId).length,
+      blocks: [
+        { id: `blk-${nowMs}-0`, type: "text", text: "가족 준비물, 수면·이유식 가이드, 여행 체크리스트를 모아두는 공간입니다." }
+      ],
+      author: actorName || "수혁",
+      createdAt: getTodayStr(),
+      updatedAtMs: nowMs
+    };
+    const packPage = {
+      id: childId,
+      parentId: rootId,
+      title: "시목 여행준비물",
+      icon: "✈️",
+      order: 0,
+      blocks: [
+        { id: `blk-${nowMs}-1`, type: "heading", text: "세면용품 파우치 -> 캐리어", color: "amber" },
+        { id: `blk-${nowMs}-2`, type: "todo", text: "칫솔", checked: false },
+        { id: `blk-${nowMs}-3`, type: "todo", text: "치약", checked: false },
+        { id: `blk-${nowMs}-4`, type: "todo", text: "로션", checked: false },
+        { id: `blk-${nowMs}-5`, type: "todo", text: "클렌징워터(휴대용)", checked: false },
+        { id: `blk-${nowMs}-6`, type: "heading", text: "분유 파우치 -> 휴대용가방", color: "amber" },
+        { id: `blk-${nowMs}-7`, type: "todo", text: "휴대용분유포트(물채워서)", checked: false },
+        { id: `blk-${nowMs}-8`, type: "todo", text: "분유숟가락", checked: false },
+        { id: `blk-${nowMs}-9`, type: "todo", text: "유산균", checked: false },
+        { id: `blk-${nowMs}-10`, type: "todo", text: "분유 소분통 or 분유통", checked: false },
+        { id: `blk-${nowMs}-11`, type: "todo", text: "비타민D", checked: false },
+        { id: `blk-${nowMs}-12`, type: "heading", text: "이유식 파우치 -> 이유식가방", color: "amber" },
+        { id: `blk-${nowMs}-13`, type: "todo", text: "이유식 & 스푼 · 턱받이", checked: false }
+      ],
+      author: actorName || "수혁",
+      createdAt: getTodayStr(),
+      updatedAtMs: nowMs + 1
+    };
+    await savePageToCloud(rootPage);
+    await savePageToCloud(packPage);
+    setExpandedPageIds((prev) => {
+      const next = { ...prev, [rootId]: true };
+      try {
+        localStorage.setItem("kim_pages_expanded_v1", JSON.stringify(next));
+      } catch (e) {}
+      return next;
+    });
+    recordActivity("노트", "샘플생성", "시목 여행준비물");
+    showToast("✨ 여행준비물 샘플 페이지를 생성했습니다!");
+  };
+
+  const handleApplyMarkdownPaste = async (page, rawMarkdown, mode = "append", headingColor = "amber") => {
+    if (!requireEditorAccess("pages") || !page) return;
+    const parsed = parseNotionMarkdownToBlocks(rawMarkdown, headingColor);
+    if (parsed.length === 0) {
+      showToast("붙여넣을 내용이 비어 있습니다.");
+      return;
+    }
+    const existing = Array.isArray(page.blocks) ? page.blocks : [];
+    const nextBlocks = mode === "replace" ? parsed : [...existing, ...parsed];
+    await savePageToCloud({
+      ...page,
+      blocks: nextBlocks,
+      updatedAtMs: Date.now()
+    });
+    setIsPagePasteModalOpen(false);
+    setPagePasteText("");
+    const hCnt = parsed.filter((b) => b.type === "heading").length;
+    const tCnt = parsed.filter((b) => b.type === "todo").length;
+    recordActivity("노트", "일괄붙여넣기", `${page.title} (섹션 ${hCnt} · 체크 ${tCnt})`);
+    showToast(`✨ 섹션 ${hCnt}개 · 체크리스트 ${tCnt}개가 자동 반영되었습니다!`);
+  };
+
+
+
 
   const handleConfirmQuickLog = async () => {
     if (!requireEditorAccess()) return;
@@ -9204,7 +9628,10 @@ ${validText}
       !zipImportPicker &&
       !magazineMonth &&
       !isSettingsOpen &&
-      !isHeroPhotoModalOpen
+      !isHeroPhotoModalOpen &&
+      !isPageModalOpen &&
+      !pageMenuTargetId &&
+      !isPagePasteModalOpen
     ) return;
     const onEsc = (e) => {
       if (e.key === "Escape") {
@@ -9222,11 +9649,14 @@ ${validText}
         setMagazineMonth(null);
         setIsSettingsOpen(false);
         setIsHeroPhotoModalOpen(false);
+        setIsPageModalOpen(false);
+        setPageMenuTargetId(null);
+        setIsPagePasteModalOpen(false);
       }
     };
     window.addEventListener("keydown", onEsc);
     return () => window.removeEventListener("keydown", onEsc);
-  }, [isQuickFabOpen, isRoutineModalOpen, isActivityModalOpen, isEditorUnlockModalOpen, isMealCopyModalOpen, diaryExportPreviewUrl, diaryLightboxUrl, isWeatherModalOpen, liveActivityPopup, activityEditModal, zipImportPicker, magazineMonth, isSettingsOpen, isHeroPhotoModalOpen]);
+  }, [isQuickFabOpen, isRoutineModalOpen, isActivityModalOpen, isEditorUnlockModalOpen, isMealCopyModalOpen, diaryExportPreviewUrl, diaryLightboxUrl, isWeatherModalOpen, liveActivityPopup, activityEditModal, zipImportPicker, magazineMonth, isSettingsOpen, isHeroPhotoModalOpen, isPageModalOpen, pageMenuTargetId, isPagePasteModalOpen]);
 
 
   const parseCookTimeMinutes = (cookTimeStr) => {
@@ -9536,6 +9966,7 @@ ${validText}
               notices: "다정한 가족 공지사항 📌",
               recipes: "보글보글 가족 레시피북 📖",
               bucket: "설레는 가족 버킷리스트 🌟",
+              pages: "우리 가족 공유 노트 🗂️",
               ai: "똑똑한 AI 식단·요리 ✨"
             }[activeTab] || "우리 가족 홈 ♡"}
           </h1>
@@ -10075,6 +10506,17 @@ ${validText}
             borderHover: "hover:border-stone-400",
             sub: <span className="text-stone-500">미완료 {notices.filter((n) => !n.done).length}건</span>,
             onClick: () => setActiveTab("notices")
+          },
+          pages: {
+            title: "🗂️ 공유 노트",
+            actionLabel: "열기 >",
+            actionColor: "text-stone-500",
+            borderHover: "hover:border-stone-400",
+            sub: <span className="text-stone-500">페이지 {familyPages.length}개 · 체크리스트</span>,
+            onClick: () => {
+              setSelectedPageId(null);
+              setActiveTab("pages");
+            }
           },
           ai: {
             title: "✨ AI추천",
@@ -16046,6 +16488,784 @@ ${validText}
       })()}
 
 
+
+
+      {/* ==========================================
+          탭 8-3: 🗂️ 노션 스타일 가족 공유 노트 (계층형 페이지 · 최근 항목 · 체크리스트)
+      ========================================== */}
+      {activeTab === "pages" && (!canViewTab("pages") ? renderLockedTabScreen("🗂️ 공유 노트") : (() => {
+        const currentPage = selectedPageId ? familyPages.find((p) => p.id === selectedPageId) || null : null;
+        const sq = pageSearchQuery.trim().toLowerCase();
+
+        const searchMatches = sq
+          ? familyPages
+              .map((pg) => {
+                const titleHit = String(pg.title || "").toLowerCase().includes(sq);
+                const matchedBlock = (Array.isArray(pg.blocks) ? pg.blocks : []).find((b) =>
+                  String(b.text || "").toLowerCase().includes(sq)
+                );
+                if (!titleHit && !matchedBlock) return null;
+                return { page: pg, snippet: matchedBlock?.text || "" };
+              })
+              .filter(Boolean)
+          : [];
+
+        const recentPages = (() => {
+          const ordered = [];
+          const seen = new Set();
+          recentPageIds.forEach((id) => {
+            const found = familyPages.find((p) => p.id === id);
+            if (found && !seen.has(found.id)) {
+              seen.add(found.id);
+              ordered.push(found);
+            }
+          });
+          [...familyPages]
+            .sort((a, b) => (Number(b.updatedAtMs) || 0) - (Number(a.updatedAtMs) || 0))
+            .forEach((p) => {
+              if (!seen.has(p.id)) {
+                seen.add(p.id);
+                ordered.push(p);
+              }
+            });
+          return ordered.slice(0, 8);
+        })();
+
+        const getChildrenOf = (parentId) =>
+          familyPages
+            .filter((p) => (p.parentId || null) === (parentId || null))
+            .sort((a, b) => (Number(a.order) || 0) - (Number(b.order) || 0) || (Number(a.updatedAtMs) || 0) - (Number(b.updatedAtMs) || 0));
+
+        const renderHeadingContent = (block) => {
+          const colorDef = PAGE_HEADING_COLORS.find((c) => c.id === block.color) || PAGE_HEADING_COLORS[0];
+          const raw = String(block.text || "");
+          const arrowMatch = raw.match(/^(.*?)(\s*(?:->|→)\s*.*)$/);
+          if (arrowMatch && arrowMatch[1].trim()) {
+            return (
+              <div className="text-[16px] font-black text-stone-900 leading-snug flex flex-wrap items-center gap-1">
+                <span className={`px-1.5 py-0.5 rounded-md ${colorDef.badge}`}>{arrowMatch[1].trim()}</span>
+                <span>{arrowMatch[2].trim()}</span>
+              </div>
+            );
+          }
+          return (
+            <div className="text-[16px] font-black text-stone-900 leading-snug">
+              <span className={`px-1.5 py-0.5 rounded-md ${colorDef.badge}`}>{raw}</span>
+            </div>
+          );
+        };
+
+        const renderTreeNodes = (parentId, depth = 0) => {
+          const children = getChildrenOf(parentId);
+          return children.map((pg) => {
+            const subChildren = getChildrenOf(pg.id);
+            const isExpanded = Boolean(expandedPageIds[pg.id]);
+            const todoBlocks = (Array.isArray(pg.blocks) ? pg.blocks : []).filter((b) => b.type === "todo");
+            const doneTodos = todoBlocks.filter((b) => b.checked).length;
+            const indentPx = Math.min(depth, 4) * 18;
+            return (
+              <React.Fragment key={pg.id}>
+                <div
+                  style={{ paddingLeft: `${8 + indentPx}px` }}
+                  className="pr-2 py-2 flex items-center justify-between gap-1.5 rounded-xl hover:bg-stone-100/80 transition group"
+                >
+                  <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                    <button
+                      type="button"
+                      onClick={() => togglePageExpand(pg.id)}
+                      className="w-6 h-6 rounded-lg hover:bg-stone-200/80 flex items-center justify-center text-stone-400 shrink-0"
+                      aria-label={isExpanded ? "접기" : "펼치기"}
+                    >
+                      {isExpanded ? (
+                        <ChevronDown className="w-4 h-4 text-stone-500" />
+                      ) : (
+                        <ChevronRight className={`w-4 h-4 ${subChildren.length > 0 ? "text-stone-500" : "text-stone-300"}`} />
+                      )}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => openFamilyPage(pg.id)}
+                      className="flex items-center gap-2 min-w-0 flex-1 text-left py-0.5"
+                    >
+                      <span className="text-[17px] leading-none shrink-0">{pg.icon || "📄"}</span>
+                      <span className="text-[14.5px] font-bold text-stone-800 truncate">{pg.title}</span>
+                      {todoBlocks.length > 0 && (
+                        <span className="px-1.5 py-0.5 rounded-full bg-stone-100 text-stone-500 text-[10.5px] font-extrabold whitespace-nowrap shrink-0">
+                          {doneTodos}/{todoBlocks.length}
+                        </span>
+                      )}
+                    </button>
+                  </div>
+                  <div className="flex items-center gap-0.5 shrink-0">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setPageMenuTargetId(pg.id);
+                      }}
+                      className="w-7 h-7 rounded-lg hover:bg-stone-200/80 text-stone-400 hover:text-stone-700 flex items-center justify-center"
+                      title="페이지 옵션"
+                    >
+                      <MoreHorizontal className="w-4 h-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openCreatePageModal(pg.id);
+                      }}
+                      className="w-7 h-7 rounded-lg hover:bg-stone-200/80 text-stone-400 hover:text-stone-700 flex items-center justify-center"
+                      title="하위 페이지 추가"
+                    >
+                      <Plus className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+                {isExpanded && (
+                  <div>
+                    {subChildren.length > 0 ? (
+                      renderTreeNodes(pg.id, depth + 1)
+                    ) : (
+                      <div
+                        style={{ paddingLeft: `${34 + indentPx}px` }}
+                        className="py-1 text-[11.5px] font-semibold text-stone-400"
+                      >
+                        하위 페이지 없음 · 우측 + 로 추가
+                      </div>
+                    )}
+                  </div>
+                )}
+              </React.Fragment>
+            );
+          });
+        };
+
+        return (
+          <div className="p-3.5 space-y-3.5">
+            {!currentPage ? (
+              <>
+                {/* 상단 노션 스타일 퀵 알약 바 */}
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab("home")}
+                    className="flex-1 py-2 px-3 rounded-full bg-stone-100 hover:bg-stone-200/80 text-stone-800 text-[13px] font-extrabold flex items-center justify-center gap-1.5 whitespace-nowrap"
+                  >
+                    <Home className="w-3.5 h-3.5" />
+                    <span>홈</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => openCreatePageModal(null)}
+                    className="flex-1 py-2 px-3 rounded-full bg-stone-900 hover:bg-stone-800 text-white text-[13px] font-extrabold flex items-center justify-center gap-1.5 whitespace-nowrap"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>새 페이지</span>
+                  </button>
+                </div>
+
+                {/* 검색 결과 오버레이 (검색어 입력 시) */}
+                {sq ? (
+                  <div className="bg-white rounded-2xl border border-stone-200 shadow-sm p-3 space-y-2">
+                    <div className="flex items-center justify-between text-[12px] font-extrabold text-stone-500">
+                      <span>🔍 '{pageSearchQuery}' 검색 결과 ({searchMatches.length}건)</span>
+                      <button
+                        type="button"
+                        onClick={() => setPageSearchQuery("")}
+                        className="text-stone-400 hover:text-stone-700"
+                      >
+                        지우기
+                      </button>
+                    </div>
+                    {searchMatches.length === 0 ? (
+                      <div className="py-6 text-center text-[13px] font-bold text-stone-400">
+                        일치하는 페이지나 항목이 없습니다.
+                      </div>
+                    ) : (
+                      <div className="divide-y divide-stone-100">
+                        {searchMatches.map(({ page: pg, snippet }) => (
+                          <button
+                            key={pg.id}
+                            type="button"
+                            onClick={() => openFamilyPage(pg.id)}
+                            className="w-full py-2.5 px-1 text-left hover:bg-stone-50 rounded-xl flex items-start gap-2.5"
+                          >
+                            <span className="text-[18px] leading-none mt-0.5 shrink-0">{pg.icon || "📄"}</span>
+                            <div className="min-w-0 flex-1">
+                              <div className="text-[14px] font-extrabold text-stone-900 truncate">{pg.title}</div>
+                              {snippet && (
+                                <div className="text-[12px] font-semibold text-stone-500 truncate mt-0.5">{snippet}</div>
+                              )}
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <>
+                    {/* 최근 항목 가로 카드 섹션 */}
+                    {recentPages.length > 0 && (
+                      <div className="space-y-2">
+                        <button
+                          type="button"
+                          onClick={() => setPagesRecentOpen((v) => !v)}
+                          className="flex items-center gap-1 text-[12.5px] font-extrabold text-stone-500 hover:text-stone-800 px-0.5"
+                        >
+                          <span>최근 항목</span>
+                          {pagesRecentOpen ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+                        </button>
+                        {pagesRecentOpen && (
+                          <div className="flex gap-2.5 overflow-x-auto pb-1">
+                            {recentPages.map((pg) => (
+                              <button
+                                key={`recent-${pg.id}`}
+                                type="button"
+                                onClick={() => openFamilyPage(pg.id)}
+                                className="w-[136px] shrink-0 rounded-2xl border border-stone-200/90 bg-white hover:border-stone-300 shadow-sm overflow-hidden text-left transition active:scale-[0.98]"
+                              >
+                                <div className="h-11 bg-stone-100/90" />
+                                <div className="px-3 pb-3 -mt-4 space-y-1.5">
+                                  <div className="w-8 h-8 rounded-xl bg-white/95 border border-stone-100 shadow-sm flex items-center justify-center text-[18px]">
+                                    {pg.icon || "📄"}
+                                  </div>
+                                  <div className="text-[13px] font-extrabold text-stone-900 truncate">
+                                    {pg.title}
+                                  </div>
+                                </div>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* 공유된 페이지 트리 섹션 */}
+                    <div className="bg-white rounded-2xl border border-stone-200/90 shadow-sm p-2.5 space-y-1.5">
+                      <div className="flex items-center justify-between px-1.5 py-1">
+                        <button
+                          type="button"
+                          onClick={() => setPagesSharedOpen((v) => !v)}
+                          className="flex items-center gap-1 text-[12.5px] font-extrabold text-stone-500 hover:text-stone-800"
+                        >
+                          <span>공유된 페이지</span>
+                          {pagesSharedOpen ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => openCreatePageModal(null)}
+                          className="px-2 py-0.5 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 text-[11.5px] font-extrabold flex items-center gap-0.5"
+                        >
+                          <Plus className="w-3 h-3" /> 페이지 추가
+                        </button>
+                      </div>
+
+                      {pagesSharedOpen && (
+                        familyPages.length === 0 ? (
+                          <div className="py-8 px-4 text-center space-y-3">
+                            <div className="text-3xl">🗂️</div>
+                            <div className="space-y-1">
+                              <div className="text-[14px] font-black text-stone-800">아직 만든 공유 페이지가 없어요</div>
+                              <p className="text-[12px] font-semibold text-stone-500 leading-relaxed">
+                                출산가방, 여행준비물 체크리스트, 수면·이유식 가이드를 폴더처럼 깔끔하게 정리해 보세요.
+                              </p>
+                            </div>
+                            <div className="flex items-center justify-center gap-2 pt-1 flex-wrap">
+                              <button
+                                type="button"
+                                onClick={handleCreateSamplePackingPages}
+                                className="px-3.5 py-2 rounded-xl bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300 text-[12.5px] font-extrabold"
+                              >
+                                ✨ 여행준비물 샘플 만들기
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => openCreatePageModal(null)}
+                                className="px-3.5 py-2 rounded-xl bg-stone-900 hover:bg-stone-800 text-white text-[12.5px] font-extrabold"
+                              >
+                                + 새 페이지 만들기
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="space-y-0.5">
+                            {renderTreeNodes(null, 0)}
+                          </div>
+                        )
+                      )}
+                    </div>
+                  </>
+                )}
+              </>
+            ) : (() => {
+              const parentPage = currentPage.parentId
+                ? familyPages.find((p) => p.id === currentPage.parentId) || null
+                : null;
+              const childPages = getChildrenOf(currentPage.id);
+              const blocks = Array.isArray(currentPage.blocks) ? currentPage.blocks : [];
+              const todoBlocks = blocks.filter((b) => b.type === "todo");
+              const doneTodoCount = todoBlocks.filter((b) => b.checked).length;
+
+              return (
+                <div className="bg-white rounded-3xl border border-stone-200 shadow-sm overflow-hidden">
+                  {/* 상세 페이지 상단 바 */}
+                  <div className="px-3 py-2.5 border-b border-stone-100 flex items-center justify-between gap-2">
+                    <button
+                      type="button"
+                      onClick={() => openFamilyPage(parentPage ? parentPage.id : null)}
+                      className="flex items-center gap-1 text-[13px] font-extrabold text-stone-600 hover:text-stone-900 min-w-0"
+                    >
+                      <ChevronLeft className="w-4 h-4 shrink-0" />
+                      <span className="truncate">{parentPage ? `${parentPage.icon || "📄"} ${parentPage.title}` : "공유된 페이지"}</span>
+                    </button>
+                    <div className="flex items-center gap-1 shrink-0">
+                      {canEditTab("pages") && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setPagePasteText("");
+                            setPagePasteColor("amber");
+                            setPagePasteMode("append");
+                            setIsPagePasteModalOpen(true);
+                          }}
+                          className="px-2 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-900 text-[11px] font-extrabold whitespace-nowrap"
+                          title="노션 마크다운 통째로 붙여넣기"
+                        >
+                          📥 붙여넣기
+                        </button>
+                      )}
+                      {todoBlocks.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => handleResetPageTodos(currentPage)}
+                          className="px-2 py-1 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 text-[11px] font-extrabold whitespace-nowrap"
+                          title="체크리스트 전체 해제/완료"
+                        >
+                          🔄 {doneTodoCount > 0 ? "초기화" : "전체체크"}
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          const lines = [`${currentPage.icon || "📄"} ${currentPage.title}`];
+                          blocks.forEach((b) => {
+                            const pad = "    ".repeat(Number(b.indent) || 0);
+                            if (b.type === "heading") lines.push(`\n### ${b.text}\n`);
+                            else if (b.type === "todo") lines.push(`${pad}- [${b.checked ? "x" : " "}] ${b.text}`);
+                            else lines.push(`${pad}${b.text}`);
+                          });
+                          await copyTextSafe(lines.join("\n"), "📋 노션 마크다운 형식으로 복사했습니다!");
+                        }}
+                        className="p-1.5 rounded-lg hover:bg-stone-100 text-stone-500 hover:text-stone-800"
+                        title="마크다운 복사"
+                      >
+                        <Copy className="w-4 h-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPageMenuTargetId(currentPage.id)}
+                        className="p-1.5 rounded-lg hover:bg-stone-100 text-stone-500 hover:text-stone-800"
+                        title="페이지 옵션"
+                      >
+                        <MoreHorizontal className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* 상세 본문 */}
+                  <div className="p-4 space-y-4">
+                    {/* 제목 & 이모지 */}
+                    <div className="space-y-2">
+                      <div className="flex items-start gap-2.5">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (!requireEditorAccess("pages")) return;
+                            setIsPageEmojiPickerOpen((v) => !v);
+                          }}
+                          className="text-[28px] leading-none p-1 rounded-xl hover:bg-stone-100 shrink-0"
+                          title="아이콘 변경"
+                        >
+                          {currentPage.icon || "📄"}
+                        </button>
+                        {isEditingPageTitle ? (
+                          <div className="flex-1 flex items-center gap-1.5">
+                            <input
+                              type="text"
+                              autoFocus
+                              value={pageTitleDraft}
+                              onChange={(e) => setPageTitleDraft(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  const nextT = pageTitleDraft.trim();
+                                  if (nextT) savePageToCloud({ ...currentPage, title: nextT, updatedAtMs: Date.now() });
+                                  setIsEditingPageTitle(false);
+                                }
+                              }}
+                              className="flex-1 px-2.5 py-1 rounded-xl border border-stone-300 text-[18px] font-black text-stone-900"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const nextT = pageTitleDraft.trim();
+                                if (nextT) savePageToCloud({ ...currentPage, title: nextT, updatedAtMs: Date.now() });
+                                setIsEditingPageTitle(false);
+                              }}
+                              className="px-2.5 py-1.5 rounded-xl bg-stone-900 text-white text-[12px] font-extrabold shrink-0"
+                            >
+                              저장
+                            </button>
+                          </div>
+                        ) : (
+                          <h2
+                            onClick={() => {
+                              if (!canEditTab("pages")) return;
+                              setPageTitleDraft(currentPage.title || "");
+                              setIsEditingPageTitle(true);
+                            }}
+                            className="text-[21px] font-black text-stone-900 leading-tight break-keep flex-1 pt-0.5 cursor-pointer hover:text-stone-700"
+                            title="눌러서 제목 수정"
+                          >
+                            {currentPage.title}
+                          </h2>
+                        )}
+                      </div>
+
+                      {isPageEmojiPickerOpen && (
+                        <div className="p-2.5 rounded-2xl bg-stone-50 border border-stone-200 flex flex-wrap gap-1.5">
+                          {PAGE_EMOJI_PRESETS.map((em) => (
+                            <button
+                              key={em}
+                              type="button"
+                              onClick={() => {
+                                savePageToCloud({ ...currentPage, icon: em, updatedAtMs: Date.now() });
+                                setIsPageEmojiPickerOpen(false);
+                              }}
+                              className={`w-8 h-8 rounded-xl text-[18px] flex items-center justify-center transition ${
+                                currentPage.icon === em ? "bg-stone-900 scale-105" : "bg-white hover:bg-stone-200"
+                              }`}
+                            >
+                              {em}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+
+                      {todoBlocks.length > 0 && (
+                        <div className="flex items-center gap-2">
+                          <div className="flex-1 h-1.5 rounded-full bg-stone-100 overflow-hidden">
+                            <div
+                              className="h-full bg-[#2383E2] transition-all duration-300"
+                              style={{ width: `${Math.round((doneTodoCount / todoBlocks.length) * 100)}%` }}
+                            />
+                          </div>
+                          <span className="text-[11.5px] font-extrabold text-[#2383E2] whitespace-nowrap">
+                            {doneTodoCount}/{todoBlocks.length} 완료
+                          </span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* 하위 페이지 링크 목록 */}
+                    {childPages.length > 0 && (
+                      <div className="space-y-1 bg-stone-50/80 p-2.5 rounded-2xl border border-stone-200/80">
+                        <div className="text-[11px] font-extrabold text-stone-400 px-1">하위 페이지 ({childPages.length})</div>
+                        {childPages.map((cp) => (
+                          <button
+                            key={cp.id}
+                            type="button"
+                            onClick={() => openFamilyPage(cp.id)}
+                            className="w-full px-2 py-1.5 rounded-xl hover:bg-white flex items-center justify-between gap-2 text-left transition"
+                          >
+                            <span className="flex items-center gap-2 min-w-0">
+                              <span className="text-[16px] shrink-0">{cp.icon || "📄"}</span>
+                              <span className="text-[13.5px] font-bold text-stone-800 underline decoration-stone-300 underline-offset-4 truncate">
+                                {cp.title}
+                              </span>
+                            </span>
+                            <ChevronRight className="w-3.5 h-3.5 text-stone-400 shrink-0" />
+                          </button>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* 노션 스타일 블록 리스트 */}
+                    <div className="space-y-2">
+                      {blocks.length === 0 && childPages.length === 0 && (
+                        <div className="py-6 text-center text-[12.5px] font-semibold text-stone-400 bg-stone-50/70 rounded-2xl border border-dashed border-stone-200">
+                          아래 입력창에서 섹션 제목, 체크리스트, 메모를 추가해 보세요.
+                        </div>
+                      )}
+                      {blocks.map((blk, bIdx) => {
+                        const isEditing = editingBlockId === blk.id;
+                        if (isEditing) {
+                          return (
+                            <div key={blk.id} className="p-2.5 rounded-xl bg-stone-50 border border-stone-300 space-y-2">
+                              <div className="flex items-center gap-1.5">
+                                <input
+                                  type="text"
+                                  autoFocus
+                                  value={editingBlockText}
+                                  onChange={(e) => setEditingBlockText(e.target.value)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter") handleUpdatePageBlockText(currentPage, blk.id, editingBlockText);
+                                    if (e.key === "Escape") setEditingBlockId(null);
+                                  }}
+                                  className="flex-1 min-w-0 px-2.5 py-1.5 rounded-lg border border-stone-300 bg-white text-[13.5px] font-bold"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => handleUpdatePageBlockText(currentPage, blk.id, editingBlockText)}
+                                  className="px-2.5 py-1.5 rounded-lg bg-stone-900 text-white text-[12px] font-extrabold shrink-0"
+                                >
+                                  저장
+                                </button>
+                              </div>
+                              <div className="flex items-center justify-between gap-1.5">
+                                {blk.type === "heading" ? (
+                                  <div className="flex items-center gap-1">
+                                    {PAGE_HEADING_COLORS.map((c) => (
+                                      <button
+                                        key={c.id}
+                                        type="button"
+                                        onClick={() => handleUpdatePageBlockText(currentPage, blk.id, editingBlockText || blk.text, c.id)}
+                                        className={`w-5 h-5 rounded-full ${c.dot} ${blk.color === c.id ? "ring-2 ring-stone-900 ring-offset-1" : "opacity-70"}`}
+                                        title={c.label}
+                                      />
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <span className="text-[11px] font-bold text-stone-400">순서 이동 / 삭제</span>
+                                )}
+                                <div className="flex items-center gap-1">
+                                  <button
+                                    type="button"
+                                    disabled={bIdx === 0}
+                                    onClick={() => handleMovePageBlock(currentPage, bIdx, -1)}
+                                    className="px-2 py-0.5 rounded bg-white border border-stone-200 text-[11px] font-bold disabled:opacity-30"
+                                  >
+                                    ▲
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={bIdx === blocks.length - 1}
+                                    onClick={() => handleMovePageBlock(currentPage, bIdx, 1)}
+                                    className="px-2 py-0.5 rounded bg-white border border-stone-200 text-[11px] font-bold disabled:opacity-30"
+                                  >
+                                    ▼
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeletePageBlock(currentPage, blk.id)}
+                                    className="px-2 py-0.5 rounded bg-rose-50 border border-rose-200 text-rose-600 text-[11px] font-extrabold"
+                                  >
+                                    삭제
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setEditingBlockId(null)}
+                                    className="px-2 py-0.5 rounded bg-stone-200 text-stone-700 text-[11px] font-bold"
+                                  >
+                                    취소
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        }
+
+                        if (blk.type === "heading") {
+                          return (
+                            <div
+                              key={blk.id}
+                              onClick={() => {
+                                if (!canEditTab("pages")) return;
+                                setEditingBlockId(blk.id);
+                                setEditingBlockText(blk.text || "");
+                              }}
+                              className="pt-3 first:pt-0 pb-0.5 flex items-center justify-between gap-2 cursor-pointer group"
+                            >
+                              {renderHeadingContent(blk)}
+                              {canEditTab("pages") && (
+                                <Edit2 className="w-3.5 h-3.5 text-stone-300 group-hover:text-stone-500 shrink-0" />
+                              )}
+                            </div>
+                          );
+                        }
+
+                        if (blk.type === "todo") {
+                          const indentPx = Math.min(3, Number(blk.indent) || 0) * 24;
+                          return (
+                            <div key={blk.id} style={indentPx > 0 ? { paddingLeft: `${indentPx}px` } : undefined} className="flex items-start gap-2.5 py-0.5 group">
+                              <button
+                                type="button"
+                                onClick={() => handleTogglePageBlockTodo(currentPage, blk.id)}
+                                className={`w-[19px] h-[19px] mt-0.5 rounded-[4px] border flex items-center justify-center shrink-0 transition ${
+                                  blk.checked
+                                    ? "bg-[#2383E2] border-[#2383E2] text-white"
+                                    : "bg-white border-stone-400 hover:border-[#2383E2]"
+                                }`}
+                                aria-label="체크 토글"
+                              >
+                                {blk.checked && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+                              </button>
+                              <div
+                                onClick={() => {
+                                  if (!canEditTab("pages")) return;
+                                  setEditingBlockId(blk.id);
+                                  setEditingBlockText(blk.text || "");
+                                }}
+                                className={`flex-1 min-w-0 text-[14.5px] leading-snug break-keep cursor-pointer ${
+                                  blk.checked ? "line-through text-stone-400 font-medium" : "text-stone-800 font-medium"
+                                }`}
+                              >
+                                {blk.text}
+                              </div>
+                            </div>
+                          );
+                        }
+
+                        const textIndentPx = Math.min(3, Number(blk.indent) || 0) * 24;
+                        return (
+                          <div
+                            key={blk.id}
+                            style={textIndentPx > 0 ? { paddingLeft: `${textIndentPx + 4}px` } : undefined}
+                            onClick={() => {
+                              if (!canEditTab("pages")) return;
+                              setEditingBlockId(blk.id);
+                              setEditingBlockText(blk.text || "");
+                            }}
+                            className="text-[14px] text-stone-700 leading-relaxed whitespace-pre-wrap break-keep py-0.5 cursor-pointer hover:bg-stone-50 rounded-lg px-1 -mx-1"
+                          >
+                            {blk.text}
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* 블록 빠른 추가 입력 바 */}
+                    {canEditTab("pages") && (
+                      <div className="pt-3 border-t border-stone-100 space-y-2">
+                        <div className="flex items-center justify-between gap-1 flex-wrap">
+                          <div className="flex items-center gap-1">
+                            {[
+                              { id: "todo", label: "☑️ 체크리스트" },
+                              { id: "heading", label: "🏷️ 섹션제목" },
+                              { id: "text", label: "📝 메모" }
+                            ].map((bt) => (
+                              <button
+                                key={bt.id}
+                                type="button"
+                                onClick={() => setPageQuickAddType(bt.id)}
+                                className={`px-2.5 py-1 rounded-full text-[11.5px] font-extrabold border whitespace-nowrap transition ${
+                                  pageQuickAddType === bt.id
+                                    ? "bg-stone-900 text-white border-stone-900"
+                                    : "bg-stone-50 text-stone-600 border-stone-200"
+                                }`}
+                              >
+                                {bt.label}
+                              </button>
+                            ))}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => openCreatePageModal(currentPage.id)}
+                            className="px-2 py-1 rounded-full bg-[#EEF3EE] text-[#35503C] border border-[#C9D8CC] text-[11px] font-extrabold whitespace-nowrap"
+                          >
+                            + 하위 페이지
+                          </button>
+                        </div>
+
+                        {pageQuickAddType === "heading" && (
+                          <div className="flex items-center gap-1.5 px-0.5">
+                            <span className="text-[11px] font-bold text-stone-400">강조색:</span>
+                            {PAGE_HEADING_COLORS.map((c) => (
+                              <button
+                                key={c.id}
+                                type="button"
+                                onClick={() => setPageQuickAddColor(c.id)}
+                                className={`w-5 h-5 rounded-full ${c.dot} ${
+                                  pageQuickAddColor === c.id ? "ring-2 ring-stone-900 ring-offset-1" : "opacity-65"
+                                }`}
+                                title={c.label}
+                              />
+                            ))}
+                            <span className="text-[10.5px] text-stone-400 ml-auto">'->' 앞부분 자동 강조</span>
+                          </div>
+                        )}
+
+                        <div className="flex items-center gap-1.5">
+                          <input
+                            type="text"
+                            value={pageQuickAddText}
+                            onChange={(e) => setPageQuickAddText(e.target.value)}
+                            onPaste={(e) => {
+                              const pasted = e.clipboardData?.getData("text") || "";
+                              if (pasted.includes("\n") && (/^\s*#{1,6}\s+/m.test(pasted) || /^\s*(?:[-*+]\s*)?\[[ xX✓✔]\]/m.test(pasted))) {
+                                e.preventDefault();
+                                handleApplyMarkdownPaste(currentPage, pasted, "append", pageQuickAddColor || "amber");
+                              }
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                e.preventDefault();
+                                handleAddPageBlock(currentPage);
+                              }
+                            }}
+                            placeholder={
+                              pageQuickAddType === "heading"
+                                ? "예: 세면용품 파우치 -> 캐리어"
+                                : pageQuickAddType === "todo"
+                                ? "체크리스트 항목 입력 후 Enter..."
+                                : "메모 또는 가이드 내용 입력..."
+                            }
+                            className="flex-1 min-w-0 px-3 py-2 rounded-xl border border-stone-200 bg-stone-50 focus:bg-white text-[13.5px] font-semibold"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => handleAddPageBlock(currentPage)}
+                            className="px-3.5 py-2 rounded-xl bg-stone-900 hover:bg-stone-800 text-white text-[13px] font-extrabold whitespace-nowrap shrink-0"
+                          >
+                            + 추가
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* 하단 노션 스타일 통합 검색 바 */}
+            <div className="pt-1">
+              <div className="relative">
+                <Search className="w-4 h-4 text-stone-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <input
+                  type="text"
+                  value={pageSearchQuery}
+                  onChange={(e) => {
+                    setPageSearchQuery(e.target.value);
+                    if (selectedPageId && e.target.value.trim()) setSelectedPageId(null);
+                  }}
+                  placeholder="무엇이든 검색하기..."
+                  className="w-full pl-10 pr-9 py-2.5 rounded-full bg-white border border-stone-200/90 shadow-sm text-[13.5px] font-semibold text-stone-800 placeholder:text-stone-400 focus:outline-none focus:ring-2 focus:ring-stone-300"
+                />
+                {pageSearchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setPageSearchQuery("")}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-700"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })())}
+
+
       {activeTab === "recipes" && (() => {
         const filteredRecipes = recipes
           .filter((r) => {
@@ -18962,6 +20182,7 @@ ${validText}
                 { id: "ai", label: "AI추천", icon: "✨" },
                 { id: "recipes", label: "레시피북", icon: "📖" },
                 { id: "bucket", label: "버킷리스트", icon: "🌟" },
+                { id: "pages", label: "공유노트", icon: "🗂️" },
                 { id: "kitchen_timer", label: "조리타이머", icon: "⏱️" }
               ].map((m) => (
                 <button
@@ -19044,14 +20265,14 @@ ${validText}
           ref={moreNavBtnRef}
           onClick={() => setIsMoreNavOpen((v) => !v)}
           className={`flex flex-col items-center justify-center py-1.5 rounded-xl transition ${
-            ["monthly", "shopping", "notices", "ai", "recipes"].includes(activeTab) || isMoreNavOpen
+            ["monthly", "shopping", "notices", "ai", "recipes", "bucket", "pages"].includes(activeTab) || isMoreNavOpen
               ? "text-[#35503C] font-black bg-[#EEF3EE]"
               : "text-stone-400 font-semibold"
           }`}
         >
           <LayoutGrid
             className={`w-4 h-4 ${
-              ["monthly", "shopping", "notices", "ai", "recipes"].includes(activeTab) || isMoreNavOpen
+              ["monthly", "shopping", "notices", "ai", "recipes", "bucket", "pages"].includes(activeTab) || isMoreNavOpen
                 ? "text-amber-600"
                 : ""
             }`}
@@ -21555,7 +22776,7 @@ ${validText}
                 <code className="text-[11px] font-bold text-emerald-700">{lastAutoBackupSlot || getTwiceDailySlotKey()}</code>
               </div>
               <div className="text-[11.5px] font-semibold text-emerald-800">
-                📦 식단 {meals.length} · 냉장고 {fridge.length} · 일정 {schedules.length} · 버킷 {bucketList.length}
+                📦 식단 {meals.length} · 냉장고 {fridge.length} · 일정 {schedules.length} · 버킷 {bucketList.length} · 노트 {familyPages.length}
               </div>
             </div>
 
@@ -24598,6 +25819,270 @@ ${validText}
         </div>
       )}
 
+
+
+      {/* 모달: 공유 노트 페이지 생성 · 수정 */}
+      {isPageModalOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+          onClick={() => setIsPageModalOpen(false)}
+        >
+          <form
+            onSubmit={handleSavePageMeta}
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-3xl max-w-sm w-full p-5 space-y-3.5 shadow-2xl"
+          >
+            <div className="flex items-center justify-between">
+              <h3 className="text-[15.5px] font-black text-stone-900">
+                {editingPageMeta ? "✏️ 페이지 정보 수정" : "🗂️ 새 공유 페이지 만들기"}
+              </h3>
+              <button type="button" onClick={() => setIsPageModalOpen(false)}>
+                <X className="w-5 h-5 text-stone-400" />
+              </button>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-[11.5px] font-extrabold text-stone-500 block">아이콘 선택</label>
+              <div className="flex flex-wrap gap-1.5 bg-stone-50 p-2 rounded-2xl border border-stone-200">
+                {PAGE_EMOJI_PRESETS.map((em) => (
+                  <button
+                    key={em}
+                    type="button"
+                    onClick={() => setPageMetaForm((p) => ({ ...p, icon: em }))}
+                    className={`w-8 h-8 rounded-xl text-[17px] flex items-center justify-center transition ${
+                      pageMetaForm.icon === em ? "bg-stone-900 scale-105" : "bg-white hover:bg-stone-200"
+                    }`}
+                  >
+                    {em}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-[11.5px] font-extrabold text-stone-500 block">페이지 제목</label>
+              <div className="flex items-center gap-2">
+                <span className="w-10 h-10 rounded-xl bg-stone-100 border border-stone-200 flex items-center justify-center text-[20px] shrink-0">
+                  {pageMetaForm.icon || "📄"}
+                </span>
+                <input
+                  type="text"
+                  autoFocus
+                  value={pageMetaForm.title}
+                  onChange={(e) => setPageMetaForm((p) => ({ ...p, title: e.target.value }))}
+                  placeholder="예: 시목 여행준비물, 출산가방"
+                  className="flex-1 min-w-0 px-3 py-2.5 rounded-xl border border-stone-200 text-[14px] font-bold"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-[11.5px] font-extrabold text-stone-500 block">상위 위치</label>
+              <select
+                value={pageMetaForm.parentId || ""}
+                onChange={(e) => setPageMetaForm((p) => ({ ...p, parentId: e.target.value || null }))}
+                className="w-full px-3 py-2 rounded-xl border border-stone-200 bg-stone-50 text-[13px] font-bold"
+              >
+                <option value="">최상위 (공유된 페이지 바로 아래)</option>
+                {familyPages
+                  .filter((p) => !editingPageMeta || p.id !== editingPageMeta.id)
+                  .map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.icon || "📄"} {p.title} 하위
+                    </option>
+                  ))}
+              </select>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => setIsPageModalOpen(false)}
+                className="py-2.5 rounded-xl bg-stone-100 text-stone-600 text-[13.5px] font-extrabold"
+              >
+                취소
+              </button>
+              <button
+                type="submit"
+                className="py-2.5 rounded-xl bg-stone-900 text-white text-[13.5px] font-extrabold"
+              >
+                {editingPageMeta ? "수정 저장" : "만들기"}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* 모달: 공유 노트 페이지 ... 옵션 시트 */}
+      {pageMenuTargetId && (() => {
+        const targetPg = familyPages.find((p) => p.id === pageMenuTargetId);
+        if (!targetPg) return null;
+        return (
+          <div
+            className="fixed inset-0 bg-black/45 z-50 flex items-end sm:items-center justify-center p-3"
+            onClick={() => setPageMenuTargetId(null)}
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white w-full max-w-sm rounded-3xl p-4 space-y-2 shadow-2xl"
+            >
+              <div className="flex items-center justify-between pb-2 border-b border-stone-100">
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="text-[19px] shrink-0">{targetPg.icon || "📄"}</span>
+                  <span className="text-[14.5px] font-black text-stone-900 truncate">{targetPg.title}</span>
+                </div>
+                <button type="button" onClick={() => setPageMenuTargetId(null)} className="p-1 text-stone-400">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              <button
+                type="button"
+                onClick={() => openEditPageMetaModal(targetPg)}
+                className="w-full py-2.5 px-3 rounded-xl hover:bg-stone-100 text-left text-[13.5px] font-extrabold text-stone-800 flex items-center gap-2"
+              >
+                <Edit2 className="w-4 h-4 text-stone-500" />
+                <span>제목 · 아이콘 · 위치 변경</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setPageMenuTargetId(null);
+                  openCreatePageModal(targetPg.id);
+                }}
+                className="w-full py-2.5 px-3 rounded-xl hover:bg-stone-100 text-left text-[13.5px] font-extrabold text-stone-800 flex items-center gap-2"
+              >
+                <Plus className="w-4 h-4 text-stone-500" />
+                <span>하위 페이지 추가</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleDuplicateFamilyPage(targetPg)}
+                className="w-full py-2.5 px-3 rounded-xl hover:bg-stone-100 text-left text-[13.5px] font-extrabold text-stone-800 flex items-center gap-2"
+              >
+                <Copy className="w-4 h-4 text-stone-500" />
+                <span>페이지 복제 (템플릿 재사용)</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleDeleteFamilyPage(targetPg.id)}
+                className="w-full py-2.5 px-3 rounded-xl hover:bg-rose-50 text-left text-[13.5px] font-extrabold text-rose-600 flex items-center gap-2"
+              >
+                <Trash2 className="w-4 h-4 text-rose-500" />
+                <span>페이지 삭제</span>
+              </button>
+            </div>
+          </div>
+        );
+      })()}
+
+
+      {/* 모달: 노션 마크다운 통째로 붙여넣기 */}
+      {isPagePasteModalOpen && (() => {
+        const activePg = selectedPageId ? familyPages.find((p) => p.id === selectedPageId) : null;
+        if (!activePg) return null;
+        const previewBlocks = pagePasteText.trim()
+          ? parseNotionMarkdownToBlocks(pagePasteText, pagePasteColor)
+          : [];
+        const previewHeadings = previewBlocks.filter((b) => b.type === "heading").length;
+        const previewTodos = previewBlocks.filter((b) => b.type === "todo").length;
+        const previewTexts = previewBlocks.filter((b) => b.type === "text").length;
+        return (
+          <div
+            className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+            onClick={() => setIsPagePasteModalOpen(false)}
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white rounded-3xl max-w-md w-full p-5 space-y-3.5 shadow-2xl max-h-[90vh] flex flex-col"
+            >
+              <div className="flex items-center justify-between gap-2 shrink-0">
+                <div className="min-w-0">
+                  <h3 className="text-[15.5px] font-black text-stone-900">📥 노션 마크다운 붙여넣기</h3>
+                  <p className="text-[11.5px] font-semibold text-stone-500 truncate">
+                    ### 제목 -&gt; 위치 · - [x] / - [ ] 체크리스트 자동 변환
+                  </p>
+                </div>
+                <button type="button" onClick={() => setIsPagePasteModalOpen(false)}>
+                  <X className="w-5 h-5 text-stone-400" />
+                </button>
+              </div>
+
+              <textarea
+                rows={10}
+                autoFocus
+                value={pagePasteText}
+                onChange={(e) => setPagePasteText(e.target.value)}
+                placeholder={"여기에 노션이나 메모장 내용을 그대로 붙여넣으세요!\n\n예시:\n### 세면용품 파우치 -> 캐리어\n- [x] 칫솔\n- [ ] 치약\n    - [ ] 휴대용 칫솔캡"}
+                className="w-full p-3 rounded-2xl border border-stone-200 bg-stone-50 focus:bg-white text-[13px] font-mono leading-relaxed resize-none flex-1"
+              />
+
+              <div className="space-y-2 shrink-0">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[11.5px] font-extrabold text-stone-500">섹션 강조색:</span>
+                    {PAGE_HEADING_COLORS.map((c) => (
+                      <button
+                        key={c.id}
+                        type="button"
+                        onClick={() => setPagePasteColor(c.id)}
+                        className={`w-5 h-5 rounded-full ${c.dot} ${
+                          pagePasteColor === c.id ? "ring-2 ring-stone-900 ring-offset-1" : "opacity-65"
+                        }`}
+                        title={c.label}
+                      />
+                    ))}
+                  </div>
+                  <div className="flex items-center gap-1 bg-stone-100 p-0.5 rounded-xl">
+                    {[
+                      { id: "append", label: "뒤에 추가" },
+                      { id: "replace", label: "덮어쓰기" }
+                    ].map((m) => (
+                      <button
+                        key={m.id}
+                        type="button"
+                        onClick={() => setPagePasteMode(m.id)}
+                        className={`px-2.5 py-1 rounded-lg text-[11px] font-extrabold transition ${
+                          pagePasteMode === m.id ? "bg-white text-stone-900 shadow-sm" : "text-stone-500"
+                        }`}
+                      >
+                        {m.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {previewBlocks.length > 0 && (
+                  <div className="px-3 py-2 rounded-xl bg-[#EEF3EE] border border-[#C9D8CC] text-[12px] font-extrabold text-[#35503C] flex items-center justify-between">
+                    <span>✨ 자동 인식됨</span>
+                    <span>
+                      섹션 {previewHeadings} · 체크리스트 {previewTodos}
+                      {previewTexts > 0 ? ` · 메모 ${previewTexts}` : ""}
+                    </span>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-2 gap-2 pt-0.5">
+                  <button
+                    type="button"
+                    onClick={() => setIsPagePasteModalOpen(false)}
+                    className="py-2.5 rounded-xl bg-stone-100 text-stone-600 text-[13.5px] font-extrabold"
+                  >
+                    취소
+                  </button>
+                  <button
+                    type="button"
+                    disabled={previewBlocks.length === 0}
+                    onClick={() => handleApplyMarkdownPaste(activePg, pagePasteText, pagePasteMode, pagePasteColor)}
+                    className="py-2.5 rounded-xl bg-stone-900 hover:bg-stone-800 disabled:opacity-40 text-white text-[13.5px] font-extrabold"
+                  >
+                    ✨ 양식으로 반영 ({previewBlocks.length})
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
     </div>
   );

@@ -233,6 +233,7 @@ export const DEFAULT_HOME_MENU_ORDER = [
   "baby",
   "recipes",
   "notices",
+  "pages",
   "ai"
 ];
 
@@ -252,7 +253,7 @@ export const DEFAULT_HOME_LAYOUT = {
     hiddenMenus: [],
     blockSizes: {},
     menuSizes: {},
-    menuOrder: ["daily", "fridge", "shopping", "ai", "routine_tab", "monthly_cal", "monthly_exp", "baby", "recipes", "notices"]
+    menuOrder: ["daily", "fridge", "shopping", "ai", "routine_tab", "monthly_cal", "monthly_exp", "baby", "recipes", "notices", "pages"]
   },
   night: {
     blocks: ["action_feed", "menu_grid"],
@@ -260,7 +261,7 @@ export const DEFAULT_HOME_LAYOUT = {
     hiddenMenus: [],
     blockSizes: {},
     menuSizes: {},
-    menuOrder: ["daily", "monthly_exp", "routine_tab", "fridge", "shopping", "monthly_cal", "baby", "recipes", "notices", "ai"]
+    menuOrder: ["daily", "monthly_exp", "routine_tab", "fridge", "shopping", "monthly_cal", "baby", "recipes", "notices", "pages", "ai"]
   }
 };
 
@@ -1175,7 +1176,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v12.17";
+export const APP_CODE_VERSION = "v12.19";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1193,7 +1194,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-18 06:45";
+export const APP_BUILD_DATE = "2026-11-20 05:00";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1215,6 +1216,7 @@ export const HELPER_CONFIGURABLE_TABS = [
   { id: "recipes", label: "📖 레시피북" },
   { id: "baby", label: "👶 육아수첩" },
   { id: "schedule", label: "🗓️ 일정·루틴" },
+  { id: "pages", label: "🗂️ 공유노트" },
   { id: "ai", label: "✨ AI추천" },
   { id: "monthly", label: "💰 월간·식비" }
 ];
@@ -1259,6 +1261,28 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v12.19",
+    version: "v12.19",
+    date: "2026-11-20",
+    title: "공유 노트 마크다운 통째로 붙여넣기(### 섹션·체크박스·들여쓰기 자동 변환) 지원",
+    items: [
+      "노션 마크다운(### 제목 -> 위치, - [x] / - [ ] 체크리스트, 4칸 들여쓰기 하위 항목)을 복사해 붙여넣으면 사진 양식 그대로 자동 변환",
+      "페이지 상단 [📥 붙여넣기] 모달(강조색 선택·뒤에 추가/덮어쓰기·실시간 인식 건수 미리보기) 및 입력창 다중줄 붙여넣기 자동 감지 추가",
+      "하위 들여쓰기 체크리스트 렌더링 및 마크다운 호환 복사 지원"
+    ]
+  },
+  {
+    id: "patch-v12.18",
+    version: "v12.18",
+    date: "2026-11-20",
+    title: "노션 스타일 가족 공유 노트(계층형 페이지·최근 항목·체크리스트·하이라이트 섹션·통합검색) 추가",
+    items: [
+      "더보기·홈 바로가기에 노션(Notion) 스타일의 [🗂️ 공유노트] 메뉴 신설 (Firestore family_pages_v1 실시간 동기화)",
+      "최근 항목 가로 카드, 접기/펼치기 가능한 다단계 하위 페이지 트리, 하단 통합 검색 바('무엇이든 검색하기...') 구현",
+      "페이지 내부 하이라이트 섹션 제목(예: 세면용품 파우치 -> 캐리어), 파란 체크박스 리스트, 텍스트 메모, 체크 일괄 해제 및 카톡 텍스트 복사 지원"
+    ]
+  },
   {
     id: "patch-v12.17",
     version: "v12.17",
@@ -4445,3 +4469,92 @@ export const INITIAL_NOTICES = [
   { id: "nt-1", title: "시목이 어린이집 낮잠이불 세탁해서 보내기", content: "월요일 등원할 때 깨끗한 낮잠이불 챙겨서 보내야 함!", category: "육아/아이들", author: "최아리나", pinned: true, done: false, createdAt: "2026-11-15" },
   { id: "nt-2", title: "시율이 신생아 B형간염 2차 예방접종 확인", content: "소아과 예약 시간 및 아기수첩 챙기기", category: "육아/아이들", author: "김수혁", pinned: true, done: false, createdAt: "2026-11-15" }
 ];
+
+
+export const PAGE_EMOJI_PRESETS = [
+  "📄", "✈️", "💼", "✅", "👶", "🍼", "😴", "👓",
+  "🎒", "🧳", "🏠", "🎁", "🏥", "📝", "💡", "🌟",
+  "🧸", "🍽️", "🛒", "📌", "💊", "🎀", "🏖️", "🚗"
+];
+
+export const PAGE_HEADING_COLORS = [
+  { id: "amber", label: "노랑", badge: "bg-amber-100/90 text-amber-800", dot: "bg-amber-400" },
+  { id: "emerald", label: "초록", badge: "bg-emerald-100/90 text-emerald-800", dot: "bg-emerald-500" },
+  { id: "sky", label: "파랑", badge: "bg-sky-100/90 text-sky-800", dot: "bg-sky-500" },
+  { id: "rose", label: "분홍", badge: "bg-rose-100/90 text-rose-800", dot: "bg-rose-400" },
+  { id: "none", label: "기본", badge: "bg-transparent text-stone-900 px-0", dot: "bg-stone-400" }
+];
+
+
+export const parseNotionMarkdownToBlocks = (rawText, defaultHeadingColor = "amber") => {
+  const lines = String(rawText || "").replace(/\r\n?/g, "\n").split("\n");
+  const blocks = [];
+  const baseMs = Date.now();
+  let seq = 0;
+
+  for (const rawLine of lines) {
+    if (!rawLine.trim()) continue;
+    const expanded = rawLine.replace(/\t/g, "    ");
+    const leadingSpaces = (expanded.match(/^ */)?.[0] || "").length;
+    const indent = Math.min(3, Math.floor(leadingSpaces / 2) >= 2 ? Math.floor(leadingSpaces / 4) || 1 : 0);
+    const trimmed = expanded.trim();
+
+    // 1. Heading: # / ## / ###
+    const headingMatch = trimmed.match(/^#{1,6}\s+(.+)$/);
+    if (headingMatch) {
+      blocks.push({
+        id: `blk-${baseMs}-${seq++}-${Math.random().toString(36).slice(2, 5)}`,
+        type: "heading",
+        text: headingMatch[1].trim(),
+        color: defaultHeadingColor || "amber"
+      });
+      continue;
+    }
+
+    // 2. Markdown checkbox: - [x] / - [ ] / * [x] / ☑ / ☐
+    const todoMatch = trimmed.match(/^(?:[-*+]\s*)?\[([ xX✓✔])\]\s+(.+)$/);
+    if (todoMatch) {
+      blocks.push({
+        id: `blk-${baseMs}-${seq++}-${Math.random().toString(36).slice(2, 5)}`,
+        type: "todo",
+        text: todoMatch[2].trim(),
+        checked: todoMatch[1] !== " ",
+        ...(indent > 0 ? { indent } : {})
+      });
+      continue;
+    }
+
+    const symTodoMatch = trimmed.match(/^([☑✅☐⬜])\s+(.+)$/);
+    if (symTodoMatch) {
+      blocks.push({
+        id: `blk-${baseMs}-${seq++}-${Math.random().toString(36).slice(2, 5)}`,
+        type: "todo",
+        text: symTodoMatch[2].trim(),
+        checked: symTodoMatch[1] === "☑" || symTodoMatch[1] === "✅",
+        ...(indent > 0 ? { indent } : {})
+      });
+      continue;
+    }
+
+    // 3. Bullet item (- text / * text)
+    const bulletMatch = trimmed.match(/^[-*+]\s+(.+)$/);
+    if (bulletMatch) {
+      blocks.push({
+        id: `blk-${baseMs}-${seq++}-${Math.random().toString(36).slice(2, 5)}`,
+        type: "text",
+        text: `• ${bulletMatch[1].trim()}`,
+        ...(indent > 0 ? { indent } : {})
+      });
+      continue;
+    }
+
+    // 4. Plain text
+    blocks.push({
+      id: `blk-${baseMs}-${seq++}-${Math.random().toString(36).slice(2, 5)}`,
+      type: "text",
+      text: trimmed,
+      ...(indent > 0 ? { indent } : {})
+    });
+  }
+  return blocks;
+};
