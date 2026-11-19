@@ -895,42 +895,6 @@ function MainApp() {
   const [editingRoutineId, setEditingRoutineId] = useState(null);
   const [isRoutineModalOpen, setIsRoutineModalOpen] = useState(false);
   const [hideEmptyMealSlots, setHideEmptyMealSlots] = useState(true);
-  useEffect(() => {
-    if (
-      !isQuickFabOpen &&
-      !isRoutineModalOpen &&
-      !isActivityModalOpen &&
-      !isEditorUnlockModalOpen &&
-      !isMealCopyModalOpen &&
-      !diaryExportPreviewUrl &&
-      !diaryLightboxUrl &&
-      !isWeatherModalOpen &&
-      !liveActivityPopup &&
-      !activityEditModal &&
-      !zipImportPicker &&
-      !magazineMonth &&
-      !isSettingsOpen
-    ) return;
-    const onEsc = (e) => {
-      if (e.key === "Escape") {
-        setIsQuickFabOpen(false);
-        setIsRoutineModalOpen(false);
-        setIsActivityModalOpen(false);
-        setIsEditorUnlockModalOpen(false);
-        setIsMealCopyModalOpen(false);
-        setDiaryExportPreviewUrl("");
-        setDiaryLightboxUrl("");
-        setIsWeatherModalOpen(false);
-        setLiveActivityPopup(null);
-        setActivityEditModal(null);
-        setZipImportPicker(null);
-        setMagazineMonth(null);
-        setIsSettingsOpen(false);
-      }
-    };
-    window.addEventListener("keydown", onEsc);
-    return () => window.removeEventListener("keydown", onEsc);
-  }, [isQuickFabOpen, isRoutineModalOpen, isActivityModalOpen, isEditorUnlockModalOpen, isMealCopyModalOpen, diaryExportPreviewUrl, diaryLightboxUrl, isWeatherModalOpen, liveActivityPopup, activityEditModal, zipImportPicker, magazineMonth, isSettingsOpen]);
   const [currentDayKey, setCurrentDayKey] = useState(() => getTodayStr());
   useEffect(() => {
     const syncDayKey = () => {
@@ -1674,6 +1638,42 @@ function MainApp() {
 
   // 설정 모달
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  useEffect(() => {
+    if (
+      !isQuickFabOpen &&
+      !isRoutineModalOpen &&
+      !isActivityModalOpen &&
+      !isEditorUnlockModalOpen &&
+      !isMealCopyModalOpen &&
+      !diaryExportPreviewUrl &&
+      !diaryLightboxUrl &&
+      !isWeatherModalOpen &&
+      !liveActivityPopup &&
+      !activityEditModal &&
+      !zipImportPicker &&
+      !magazineMonth &&
+      !isSettingsOpen
+    ) return;
+    const onEsc = (e) => {
+      if (e.key === "Escape") {
+        setIsQuickFabOpen(false);
+        setIsRoutineModalOpen(false);
+        setIsActivityModalOpen(false);
+        setIsEditorUnlockModalOpen(false);
+        setIsMealCopyModalOpen(false);
+        setDiaryExportPreviewUrl("");
+        setDiaryLightboxUrl("");
+        setIsWeatherModalOpen(false);
+        setLiveActivityPopup(null);
+        setActivityEditModal(null);
+        setZipImportPicker(null);
+        setMagazineMonth(null);
+        setIsSettingsOpen(false);
+      }
+    };
+    window.addEventListener("keydown", onEsc);
+    return () => window.removeEventListener("keydown", onEsc);
+  }, [isQuickFabOpen, isRoutineModalOpen, isActivityModalOpen, isEditorUnlockModalOpen, isMealCopyModalOpen, diaryExportPreviewUrl, diaryLightboxUrl, isWeatherModalOpen, liveActivityPopup, activityEditModal, zipImportPicker, magazineMonth, isSettingsOpen]);
   const [toastMsg, setToastMsg] = useState("");
 
   const canViewTab = (tabId) => {

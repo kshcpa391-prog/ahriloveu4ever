@@ -1091,7 +1091,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
     img.src = dataUrl;
   });
 
-export const APP_CODE_VERSION = "v12.00";
+export const APP_CODE_VERSION = "v12.01";
 
 export const formatRoutineTimeLabel = (hhmm) => {
   const m = String(hhmm || "").trim().match(/^(\d{2}):(\d{2})$/);
@@ -1169,6 +1169,16 @@ export const formatTime12Ko = (ms) => {
 };
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v12.01",
+    version: "v12.01",
+    date: "2026-11-19",
+    title: "초기 렌더링 TDZ 오류(Cannot access 'vd' before initialization) 수정",
+    items: [
+      "ESC 키 닫기 useEffect를 모든 모달 상태(isSettingsOpen 등) 선언 이후로 이동해 초기화 전 참조 오류 해결",
+      "전체 useEffect·useMemo 의존성 배열의 TDZ(선언 전 참조) 0건 전수 검증 완료"
+    ]
+  },
   {
     id: "patch-v12.00",
     version: "v12.00",
