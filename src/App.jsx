@@ -692,7 +692,9 @@ function MainApp() {
   const [cookingConfirmModal, setCookingConfirmModal] = useState(null);
 
   const [selectedChildId, setSelectedChildId] = useState("시율");
-  const [babySubTab, setBabySubTab] = useState("activity"); // milestones | vaccines | growth | medical
+  const [babySubTab, setBabySubTab] = useState("activity");
+  const [vaccineStatusFilter, setVaccineStatusFilter] = useState("pending");
+  const [vaccineTypeFilter, setVaccineTypeFilter] = useState("전체"); // milestones | vaccines | growth | medical
   const [babyChecks, setBabyChecks] = useState({});
   const [babyGrowthLogs, setBabyGrowthLogs] = useState([]);
   const [babyMedicalNotes, setBabyMedicalNotes] = useState([]);
@@ -906,7 +908,8 @@ function MainApp() {
       !liveActivityPopup &&
       !activityEditModal &&
       !zipImportPicker &&
-      !magazineMonth
+      !magazineMonth &&
+      !isSettingsOpen
     ) return;
     const onEsc = (e) => {
       if (e.key === "Escape") {
@@ -922,11 +925,12 @@ function MainApp() {
         setActivityEditModal(null);
         setZipImportPicker(null);
         setMagazineMonth(null);
+        setIsSettingsOpen(false);
       }
     };
     window.addEventListener("keydown", onEsc);
     return () => window.removeEventListener("keydown", onEsc);
-  }, [isQuickFabOpen, isRoutineModalOpen, isActivityModalOpen, isEditorUnlockModalOpen, isMealCopyModalOpen, diaryExportPreviewUrl, diaryLightboxUrl, isWeatherModalOpen, liveActivityPopup, activityEditModal, zipImportPicker, magazineMonth]);
+  }, [isQuickFabOpen, isRoutineModalOpen, isActivityModalOpen, isEditorUnlockModalOpen, isMealCopyModalOpen, diaryExportPreviewUrl, diaryLightboxUrl, isWeatherModalOpen, liveActivityPopup, activityEditModal, zipImportPicker, magazineMonth, isSettingsOpen]);
   const [currentDayKey, setCurrentDayKey] = useState(() => getTodayStr());
   useEffect(() => {
     const syncDayKey = () => {
@@ -16065,103 +16069,213 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
               </div>
             )}
 
-            {/* 서브탭 2: 국가예방접종 + 선택접종 + 영유아 건강검진 + 일정 원클릭 등록 */}
-            {babySubTab === "vaccines" && (
-              <div className="space-y-3">
-                <button
-                  onClick={() => handleSyncAllUpcomingBabySchedules(activeChild)}
-                  className="w-full py-2.5 px-3 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white text-[13.5px] font-extrabold flex items-center justify-center gap-1.5 shadow-sm"
-                >
-                  <CalendarDays className="w-4 h-4" />
-                  <span>{activeChild.id} 향후 미완료 접종·검진 일정 달력에 일괄 자동등록</span>
-                </button>
+            {/* 서브탭 2: 국가예방접종 + 선택접종 + 영유아 건강검진 + 완료/미완료 구분 */}
+            {babySubTab === "vaccines" && (() => {
+              const todayKey = getTodayStr();
+              const enriched = BABY_VACCINES_AND_CHECKUPS.map((item) => {
+                const checkKey = `${activeChild.id}_${item.id}`;
+                const isDone = Boolean(babyChecks[checkKey]?.done);
+                const doneDate = babyChecks[checkKey]?.doneDate;
+                const recDate = addMonthsToDateStr(activeChild.birthDate, item.addMonths, item.addDays);
+                const isScheduled = schedules.some((s) => s.id === `baby-${activeChild.id}-${item.id}`);
+                const dDiff = getDaysDiff(todayKey, recDate);
+                return { ...item, isDone, doneDate, recDate, isScheduled, dDiff };
+              });
+              const typeFiltered = enriched.filter((it) => vaccineTypeFilter === "전체" || it.type === vaccineTypeFilter);
+              const doneCnt = typeFiltered.filter((it) => it.isDone).length;
+              const pendingCnt = typeFiltered.length - doneCnt;
+              const pct = typeFiltered.length > 0 ? Math.round((doneCnt / typeFiltered.length) * 100) : 0;
+              const visibleItems = typeFiltered
+                .filter((it) =>
+                  vaccineStatusFilter === "pending"
+                    ? !it.isDone
+                    : vaccineStatusFilter === "done"
+                    ? it.isDone
+                    : true
+                )
+                .sort((a, b) => {
+                  if (a.isDone !== b.isDone) return a.isDone ? 1 : -1;
+                  return String(a.recDate || "").localeCompare(String(b.recDate || ""));
+                });
 
-                <div className="space-y-2">
-                  {BABY_VACCINES_AND_CHECKUPS.map((item) => {
-                    const checkKey = `${activeChild.id}_${item.id}`;
-                    const isDone = Boolean(babyChecks[checkKey]?.done);
-                    const doneDate = babyChecks[checkKey]?.doneDate;
-                    const recDate = addMonthsToDateStr(activeChild.birthDate, item.addMonths, item.addDays);
-                    const isScheduled = schedules.some((s) => s.id === `baby-${activeChild.id}-${item.id}`);
+              return (
+                <div className="space-y-3">
+                  <div className="bg-white p-3 rounded-2xl border border-stone-200 shadow-sm space-y-2.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[13.5px] font-black text-stone-900 whitespace-nowrap">
+                        💉 {activeChild.name} 접종·검진 ({doneCnt}/{typeFiltered.length} 완료 · {pct}%)
+                      </span>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            const doneLines = enriched.filter((x) => x.isDone).map((x) => `✓ ${x.title} (${x.doneDate || "-"})`);
+                            const pendLines = enriched.filter((x) => !x.isDone).slice(0, 6).map((x) => `• ${x.title} (권장 ${x.recDate})`);
+                            const txt = `💉 [${activeChild.name} 접종·검진 현황 (${doneCnt}/${typeFiltered.length})]\n` +
+                              (pendLines.length > 0 ? `\n[예정/미완료]\n${pendLines.join("\n")}\n` : "") +
+                              (doneLines.length > 0 ? `\n[완료]\n${doneLines.join("\n")}` : "");
+                            await copyTextSafe(txt.trim(), `📋 ${activeChild.name} 접종·검진 현황을 복사했습니다!`);
+                          }}
+                          className="px-2 py-1 rounded-xl bg-[#EEF3EE] hover:bg-[#DFE9E0] text-[#35503C] text-[11px] font-extrabold whitespace-nowrap"
+                          title="접종 현황 복사"
+                        >
+                          📋 복사
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleSyncAllUpcomingBabySchedules(activeChild)}
+                          className="px-2.5 py-1 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-extrabold flex items-center gap-1 whitespace-nowrap"
+                        >
+                          <CalendarDays className="w-3.5 h-3.5" />
+                          <span>일정 일괄등록</span>
+                        </button>
+                      </div>
+                    </div>
 
-                    return (
-                      <div
-                        key={item.id}
-                        className={`p-3 rounded-2xl border transition flex items-start justify-between gap-2 ${
-                          isDone
-                            ? "bg-stone-100 border-stone-200 opacity-75"
-                            : "bg-white border-stone-200 shadow-sm"
-                        }`}
-                      >
+                    <div className="h-1.5 rounded-full bg-stone-100 overflow-hidden">
+                      <div className="h-full bg-emerald-500 transition-all duration-300" style={{ width: `${pct}%` }} />
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-1 bg-stone-100 p-1 rounded-xl">
+                      {[
+                        { id: "pending", label: `미완료 (${pendingCnt})` },
+                        { id: "done", label: `완료 (${doneCnt})` },
+                        { id: "all", label: `전체 (${typeFiltered.length})` }
+                      ].map((st) => (
+                        <button
+                          key={st.id}
+                          type="button"
+                          onClick={() => setVaccineStatusFilter(st.id)}
+                          className={`py-1.5 px-1 rounded-lg text-[11.5px] font-extrabold whitespace-nowrap transition ${
+                            vaccineStatusFilter === st.id
+                              ? "bg-white text-stone-900 shadow-sm"
+                              : "text-stone-500 hover:text-stone-800"
+                          }`}
+                        >
+                          {st.label}
+                        </button>
+                      ))}
+                    </div>
+
+                    <div className="flex items-center gap-1 overflow-x-auto pb-0.5">
+                      {["전체", "국가접종", "선택접종", "영유아검진"].map((tp) => (
+                        <button
+                          key={tp}
+                          type="button"
+                          onClick={() => setVaccineTypeFilter(tp)}
+                          className={`px-2.5 py-0.5 rounded-full text-[11px] font-extrabold border whitespace-nowrap shrink-0 ${
+                            vaccineTypeFilter === tp
+                              ? "bg-stone-900 text-white border-stone-900"
+                              : "bg-stone-50 text-stone-600 border-stone-200"
+                          }`}
+                        >
+                          {tp}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {visibleItems.length === 0 ? (
+                    <div className="bg-white rounded-2xl border border-stone-200 p-6 text-center text-[12.5px] font-bold text-stone-400">
+                      {vaccineStatusFilter === "pending"
+                        ? "🎉 선택한 조건의 접종·검진을 모두 완료했습니다!"
+                        : "해당 조건의 완료된 접종·검진 기록이 없습니다."}
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {visibleItems.map((item) => (
                         <div
-                          onClick={() => handleToggleBabyCheck(activeChild.id, item.id)}
-                          className="flex items-start gap-2.5 cursor-pointer flex-1 min-w-0"
+                          key={item.id}
+                          className={`p-3 rounded-2xl border transition flex items-start justify-between gap-2 ${
+                            item.isDone
+                              ? "bg-stone-50 border-stone-200 opacity-80"
+                              : "bg-white border-stone-200 shadow-sm"
+                          }`}
                         >
                           <div
-                            className={`w-5 h-5 mt-0.5 rounded-lg border flex items-center justify-center shrink-0 ${
-                              isDone
-                                ? "bg-emerald-600 border-emerald-600 text-white"
-                                : "border-stone-300 bg-white"
-                            }`}
+                            onClick={() => handleToggleBabyCheck(activeChild.id, item.id)}
+                            className="flex items-start gap-2.5 cursor-pointer flex-1 min-w-0"
                           >
-                            {isDone && <Check className="w-3.5 h-3.5" />}
-                          </div>
-                          <div className="min-w-0">
-                            <div className="flex flex-wrap items-center gap-1 mb-0.5">
-                              <span
-                                className={`px-1.5 py-0.2 rounded text-[10.5px] font-black ${
-                                  item.type === "영유아검진"
-                                    ? "bg-indigo-100 text-indigo-800"
-                                    : item.type === "선택접종"
-                                    ? "bg-amber-100 text-amber-800"
-                                    : "bg-emerald-100 text-emerald-800"
-                                }`}
-                              >
-                                {item.type}
-                              </span>
-                              <span className="text-[11.5px] font-bold text-stone-500">
-                                권장일: {recDate}
-                              </span>
-                              {isDone && (
-                                <input
-                                  type="date"
-                                  value={doneDate || getTodayStr()}
-                                  onClick={(e) => e.stopPropagation()}
-                                  onChange={(e) => handleUpdateBabyCheckDate(activeChild.id, item.id, e.target.value)}
-                                  className="px-1.5 py-0.5 rounded border border-emerald-300 bg-white text-[11.5px] font-extrabold text-emerald-700"
-                                  title="실제 접종/검진일 수정"
-                                />
-                              )}
-                            </div>
                             <div
-                              className={`text-[13.5px] font-extrabold break-keep ${
-                                isDone ? "line-through text-stone-400" : "text-stone-900"
+                              className={`w-5 h-5 mt-0.5 rounded-lg border flex items-center justify-center shrink-0 ${
+                                item.isDone
+                                  ? "bg-emerald-600 border-emerald-600 text-white"
+                                  : "border-stone-300 bg-white"
                               }`}
                             >
-                              {item.title}
+                              {item.isDone && <Check className="w-3.5 h-3.5" />}
                             </div>
-                            <div className="text-[11.5px] text-stone-500 mt-0.5">{item.note}</div>
+                            <div className="min-w-0">
+                              <div className="flex flex-wrap items-center gap-1 mb-0.5">
+                                <span
+                                  className={`px-1.5 py-0.5 rounded text-[10.5px] font-black whitespace-nowrap ${
+                                    item.type === "영유아검진"
+                                      ? "bg-indigo-100 text-indigo-800"
+                                      : item.type === "선택접종"
+                                      ? "bg-amber-100 text-amber-800"
+                                      : "bg-emerald-100 text-emerald-800"
+                                  }`}
+                                >
+                                  {item.type}
+                                </span>
+                                <span className="text-[11.5px] font-bold text-stone-500 whitespace-nowrap">
+                                  권장일 {item.recDate}
+                                </span>
+                                {!item.isDone && Number.isFinite(item.dDiff) && item.dDiff <= 14 && (
+                                  <span
+                                    className={`px-1.5 py-0.5 rounded text-[10px] font-black whitespace-nowrap ${
+                                      item.dDiff < 0
+                                        ? "bg-rose-100 text-rose-800"
+                                        : item.dDiff === 0
+                                        ? "bg-rose-600 text-white"
+                                        : "bg-amber-100 text-amber-900"
+                                    }`}
+                                  >
+                                    {item.dDiff < 0 ? `${Math.abs(item.dDiff)}일 지남` : item.dDiff === 0 ? "오늘" : `D-${item.dDiff}`}
+                                  </span>
+                                )}
+                                {item.isDone && (
+                                  <input
+                                    type="date"
+                                    value={item.doneDate || getTodayStr()}
+                                    onClick={(e) => e.stopPropagation()}
+                                    onChange={(e) => handleUpdateBabyCheckDate(activeChild.id, item.id, e.target.value)}
+                                    className="px-1.5 py-0.5 rounded border border-emerald-300 bg-white text-[11px] font-extrabold text-emerald-700"
+                                    title="실제 접종/검진일 수정"
+                                  />
+                                )}
+                              </div>
+                              <div
+                                className={`text-[13.5px] font-extrabold break-keep ${
+                                  item.isDone ? "line-through text-stone-400" : "text-stone-900"
+                                }`}
+                              >
+                                {item.title}
+                              </div>
+                              <div className="text-[11.5px] text-stone-500 mt-0.5">{item.note}</div>
+                            </div>
                           </div>
-                        </div>
 
-                        {!isDone && (
-                          <button
-                            onClick={() => handleSyncSingleBabySchedule(activeChild, item, recDate)}
-                            className={`px-2 py-1 rounded-xl text-[11.5px] font-extrabold shrink-0 border ${
-                              isScheduled
-                                ? "bg-stone-100 text-stone-500 border-stone-200"
-                                : "bg-pink-50 hover:bg-pink-100 text-pink-700 border-pink-200"
-                            }`}
-                          >
-                            {isScheduled ? "등록됨" : "+ 일정등록"}
-                          </button>
-                        )}
-                      </div>
-                    );
-                  })}
+                          {!item.isDone && (
+                            <button
+                              type="button"
+                              onClick={() => handleSyncSingleBabySchedule(activeChild, item, item.recDate)}
+                              className={`px-2 py-1 rounded-xl text-[11px] font-extrabold whitespace-nowrap shrink-0 border ${
+                                item.isScheduled
+                                  ? "bg-stone-100 text-stone-500 border-stone-200"
+                                  : "bg-pink-50 hover:bg-pink-100 text-pink-700 border-pink-200"
+                              }`}
+                            >
+                              {item.isScheduled ? "등록됨" : "+ 일정등록"}
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
-              </div>
-            )}
+              );
+            })()}
 
             {/* 서브탭 3: 성장 기록 (키·몸무게·머리둘레) */}
             {babySubTab === "growth" && (
@@ -17180,12 +17294,14 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
       {showScrollTop && (
         <button
           type="button"
+          type="button"
           onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
           style={{ bottom: "calc(4.75rem + env(safe-area-inset-bottom))" }}
-          className="fixed left-4 z-30 px-3 py-2 rounded-full bg-white/95 hover:bg-stone-100 border border-stone-300 shadow-lg text-[11.5px] font-black text-stone-700 flex items-center gap-1 transition active:scale-95"
+          className="fixed left-3.5 z-30 w-9 h-9 rounded-full bg-white/80 backdrop-blur-sm hover:bg-white border border-stone-300/80 shadow-md text-[14px] font-black text-stone-700 flex items-center justify-center transition active:scale-95"
           title="맨 위로 이동"
+          aria-label="맨 위로 이동"
         >
-          ⬆️ 위로
+          ↑
         </button>
       )}
 
@@ -19554,42 +19670,52 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
 
       {/* 설정 모달 */}
       {isSettingsOpen && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-sm w-full p-5 space-y-3.5 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between">
-              <h3 className="text-[15.5px] font-black">⚙️ 1일 2회 자동백업 · Gmail/Drive · 설정</h3>
-              <button onClick={() => setIsSettingsOpen(false)}>
+        <div
+          className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+          onClick={() => setIsSettingsOpen(false)}
+        >
+          <div
+            className="bg-white rounded-3xl max-w-sm w-full p-5 space-y-3 max-h-[90vh] overflow-y-auto shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between gap-2">
+              <h3 className="text-[15.5px] font-black text-stone-900 flex items-center gap-1.5 whitespace-nowrap">
+                <span>⚙️ 설정 · 백업 · 권한</span>
+                <span className="px-1.5 py-0.5 rounded-md bg-stone-100 text-stone-600 text-[10.5px] font-extrabold">
+                  {APP_CODE_VERSION}
+                </span>
+              </h3>
+              <button type="button" onClick={() => setIsSettingsOpen(false)} className="p-1 shrink-0">
                 <X className="w-5 h-5 text-stone-400" />
               </button>
             </div>
 
-            <div className="p-3 rounded-2xl bg-emerald-50 border border-emerald-200 text-[13.5px] text-emerald-900 space-y-1">
-              <div>
-                ✅ <b>하루 2회(오전/오후) 클라우드 스냅샷:</b> 정상 가동 중
+            <div className="p-2.5 rounded-2xl bg-emerald-50 border border-emerald-200 text-[12px] text-emerald-900 space-y-0.5">
+              <div className="flex items-center justify-between gap-2">
+                <span>✅ <b>자동 스냅샷</b> 정상 가동</span>
+                <code className="text-[11px] font-bold text-emerald-700">{lastAutoBackupSlot || getTwiceDailySlotKey()}</code>
               </div>
-              <div>
-                🕒 <b>최근 자동백업 슬롯:</b> <code>{lastAutoBackupSlot || getTwiceDailySlotKey()}</code>
-              </div>
-              <div>
-                📦 <b>보관 중인 데이터:</b> 식단 {meals.length}건 · 냉장고 {fridge.length}건 · 일정 {schedules.length}건
+              <div className="text-[11.5px] font-semibold text-emerald-800">
+                📦 식단 {meals.length} · 냉장고 {fridge.length} · 일정 {schedules.length} · 버킷 {bucketList.length}
               </div>
             </div>
 
             <button
+              type="button"
               onClick={() => {
                 setIsSettingsOpen(false);
                 setIsPatchModalOpen(true);
               }}
-              className="w-full py-2.5 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-800 border border-stone-300 text-[13.5px] font-extrabold flex items-center justify-center gap-1.5"
+              className="w-full py-2 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-800 border border-stone-200 text-[12.5px] font-extrabold flex items-center justify-center gap-1.5 whitespace-nowrap"
             >
-              <ClipboardList className="w-4 h-4 text-amber-600" />
-              <span>📝 앱 패치노트 열람 및 새 업데이트 기록하기</span>
+              <ClipboardList className="w-4 h-4 text-amber-600 shrink-0" />
+              <span>📝 패치노트 ({APP_CODE_VERSION})</span>
             </button>
 
-            <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 space-y-2.5">
-              <div className="text-[13.5px] font-black text-amber-900 flex items-center gap-1.5">
-                <CloudUpload className="w-4 h-4 text-amber-700" />
-                <span>Gmail / 구글 드라이브 백업 및 1초 복원</span>
+            <div className="p-3 rounded-2xl bg-amber-50/80 border border-amber-200 space-y-2">
+              <div className="text-[13px] font-black text-amber-900 flex items-center gap-1.5">
+                <CloudUpload className="w-4 h-4 text-amber-700 shrink-0" />
+                <span>백업 및 복원</span>
               </div>
 
               <input
@@ -19597,34 +19723,11 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                 value={backupEmail}
                 onChange={(e) => {
                   setBackupEmail(e.target.value);
-                  localStorage.setItem("kim_family_backup_email", e.target.value);
+                  try { localStorage.setItem("kim_family_backup_email", e.target.value); } catch (err) {}
                 }}
-                placeholder="수신받을 네이버/이메일 주소 입력 (선택)"
-                className="w-full px-3 py-2 rounded-xl border border-amber-300 text-[13.5px] font-bold bg-white"
+                placeholder="수신 이메일 주소 (선택)"
+                className="w-full px-3 py-1.5 rounded-xl border border-amber-300 text-[12.5px] font-bold bg-white"
               />
-
-              <button
-                onClick={() => handleSendBackupToGmailOrDrive(false)}
-                className="w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-[13.5px] font-extrabold flex items-center justify-center gap-1.5 shadow-sm"
-              >
-                <Mail className="w-4 h-4" />
-                <span>전체 백업 보내기 (사진 포함 · 네이버메일/공유)</span>
-              </button>
-
-              <button
-                onClick={() => handleSendBackupToGmailOrDrive(true)}
-                className="w-full py-2 rounded-xl bg-white hover:bg-amber-100/60 border border-amber-300 text-amber-900 text-[12.5px] font-extrabold flex items-center justify-center gap-1.5"
-              >
-                <span>📄 사진 제외 경량 백업 보내기 (1MB 미만 초고속 공유)</span>
-              </button>
-
-              <button
-                onClick={handleDownloadJsonBackup}
-                className="w-full py-2.5 rounded-xl bg-stone-900 hover:bg-stone-800 text-white text-[13.5px] font-extrabold flex items-center justify-center gap-1.5 shadow-sm"
-              >
-                <FileJson className="w-4 h-4 text-amber-400" />
-                <span>전체 DB 원본(JSON) 1초 백업 다운로드</span>
-              </button>
 
               <input
                 ref={jsonRestoreInputRef}
@@ -19633,18 +19736,41 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                 onChange={handleRestoreFromJsonFile}
                 className="hidden"
               />
-              <button
-                onClick={() => jsonRestoreInputRef.current?.click()}
-                disabled={isRestoringJson}
-                className="w-full py-2.5 rounded-xl bg-white hover:bg-amber-100 text-amber-900 border border-amber-300 text-[13.5px] font-extrabold flex items-center justify-center gap-1.5"
-              >
-                <RotateCcw className={`w-4 h-4 ${isRestoringJson ? "animate-spin" : ""}`} />
-                <span>
-                  {isRestoringJson
-                    ? "백업 파일로 DB 복원 중..."
-                    : "백업 파일(.json)로 DB 1초 복원하기"}
-                </span>
-              </button>
+
+              <div className="grid grid-cols-2 gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => handleSendBackupToGmailOrDrive(false)}
+                  className="py-2 px-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-[11.5px] font-extrabold flex items-center justify-center gap-1 whitespace-nowrap shadow-sm"
+                >
+                  <Mail className="w-3.5 h-3.5 shrink-0" />
+                  <span>전체 백업메일</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSendBackupToGmailOrDrive(true)}
+                  className="py-2 px-2 rounded-xl bg-white hover:bg-amber-100/60 border border-amber-300 text-amber-900 text-[11.5px] font-extrabold whitespace-nowrap"
+                >
+                  📄 경량 백업(1MB↓)
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDownloadJsonBackup}
+                  className="py-2 px-2 rounded-xl bg-stone-900 hover:bg-stone-800 text-white text-[11.5px] font-extrabold flex items-center justify-center gap-1 whitespace-nowrap shadow-sm"
+                >
+                  <FileJson className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                  <span>JSON 저장</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => jsonRestoreInputRef.current?.click()}
+                  disabled={isRestoringJson}
+                  className="py-2 px-2 rounded-xl bg-white hover:bg-amber-100 text-amber-900 border border-amber-300 text-[11.5px] font-extrabold flex items-center justify-center gap-1 whitespace-nowrap"
+                >
+                  <RotateCcw className={`w-3.5 h-3.5 shrink-0 ${isRestoringJson ? "animate-spin" : ""}`} />
+                  <span>{isRestoringJson ? "복원 중..." : "JSON 복원"}</span>
+                </button>
+              </div>
             </div>
 
             {!isAdminUnlocked ? (

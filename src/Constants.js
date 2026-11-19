@@ -1091,7 +1091,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
     img.src = dataUrl;
   });
 
-export const APP_CODE_VERSION = "v11.96";
+export const APP_CODE_VERSION = "v12.00";
 
 export const formatRoutineTimeLabel = (hhmm) => {
   const m = String(hhmm || "").trim().match(/^(\d{2}):(\d{2})$/);
@@ -1169,6 +1169,48 @@ export const formatTime12Ko = (ms) => {
 };
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v12.00",
+    version: "v12.00",
+    date: "2026-11-19",
+    title: "설정 모달 슬림화(2×2 백업 그리드) · ESC/배경 닫기 & 버전 표시 추가",
+    items: [
+      "설정 모달 제목 1줄 정리(⚙️ 설정 · 백업 · 권한 + 버전 배지) 및 백업/복원 버튼 4종을 2×2 컴팩트 그리드로 압축",
+      "설정 모달 배경 클릭·ESC 키 닫기 지원 및 backupEmail localStorage 예외 처리 보강",
+      "데이터 현황에 버킷리스트 건수 표시 및 전체 버튼 type='button'·whitespace-nowrap 적용"
+    ]
+  },
+  {
+    id: "patch-v11.99",
+    version: "v11.99",
+    date: "2026-11-19",
+    title: "접종·검진 소아과 제출용 현황 복사 버튼 추가 & 최종 점검",
+    items: [
+      "접종·검진 상단에 [📋 복사] 버튼 추가(완료·예정 접종 내역을 병원·가족 공유용으로 1초 복사)",
+      "시율 케어 영역 미수정, 전체 문법·미종료 문자열 0건·./Firebase·./Constants 대소문자 일치 최종 확인"
+    ]
+  },
+  {
+    id: "patch-v11.98",
+    version: "v11.98",
+    date: "2026-11-19",
+    title: "접종·검진 완료/미완료 구분 필터 및 진행률 인터페이스 최적화",
+    items: [
+      "접종·검진 탭 상단에 [미완료(N) | 완료(M) | 전체] 구분 탭 및 유형(국가접종·선택접종·영유아검진) 필터 추가",
+      "접종 완료율 진행 바 및 미완료 건 권장일 임박/지남(D-Day) 배지 표시",
+      "전체 문법, 미종료 문자열 0건, ./Firebase·./Constants 대소문자 일치 및 배포 정합성 최종 확인"
+    ]
+  },
+  {
+    id: "patch-v11.97",
+    version: "v11.97",
+    date: "2026-11-19",
+    title: "플로팅 [위로] 버튼 슬림화(시각 가림 최소화) & 최종 점검",
+    items: [
+      "좌측 하단 [⬆️ 위로] 플로팅 버튼을 반투명 컴팩트 원형 버튼(↑)으로 슬림화해 하단 카드 배지 가림 현상 해소",
+      "시율 케어 영역 미수정, 전체 문법·미종료 문자열 0건·./Firebase·./Constants 대소문자 일치 최종 확인"
+    ]
+  },
   {
     id: "patch-v11.96",
     version: "v11.96",
