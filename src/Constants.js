@@ -1091,7 +1091,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
     img.src = dataUrl;
   });
 
-export const APP_CODE_VERSION = "v12.03";
+export const APP_CODE_VERSION = "v12.06";
 
 export const formatRoutineTimeLabel = (hhmm) => {
   const m = String(hhmm || "").trim().match(/^(\d{2}):(\d{2})$/);
@@ -1169,6 +1169,39 @@ export const formatTime12Ko = (ms) => {
 };
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v12.06",
+    version: "v12.06",
+    date: "2026-11-19",
+    title: "홈 가족사진 터치 편집(사진 교체·위치 조절·문구 수정) 추가",
+    items: [
+      "홈 상단 가족사진을 누르면 사진 교체·상하 프레이밍 위치(0~100%)·하단 문구를 편집할 수 있는 모달 추가",
+      "Firestore(family_meta_v4/hero_photo) 실시간 동기화로 수혁·아리 기기에 즉시 반영 및 기본 사진 복원 지원",
+      "홈 배너 잔여 '아리나'→'아리' 통일, 버킷리스트 상단 헤더 타이틀 추가 및 전체 TDZ/문법 0건 검증"
+    ]
+  },
+  {
+    id: "patch-v12.05",
+    version: "v12.05",
+    date: "2026-11-19",
+    title: "장보기 엔터 즉시등록 · 자주 사는 품목 원탭 칩 & 입력창 넘침 수정",
+    items: [
+      "장보기 품목명·수량 입력칸에서 Enter 키로 바로 체크리스트에 등록되도록 개선",
+      "자주 사는 필수 품목(계란·우유·두부·대파·양파·바나나) 1탭 자동 채움 칩 추가",
+      "장보기 메모 입력칸 min-w-0 보강으로 모바일 [🚨 급함] 버튼 넘침 방지 및 전체 TDZ/문법 0건 검증"
+    ]
+  },
+  {
+    id: "patch-v12.04",
+    version: "v12.04",
+    date: "2026-11-19",
+    title: "레시피 카드뷰 조리타이머 버튼 연동 & 플로팅 타이머 [+1분] 연장 추가",
+    items: [
+      "레시피북 카드뷰 하단에도 [⏱️ 타이머] 버튼 추가(3단 1줄 그리드: 식단 재현 · 타이머 · 부족 재료)",
+      "조리 타이머 플로팅 바에 [+1분] 즉시 연장 버튼 추가",
+      "시율 케어 영역 미수정, 전체 TDZ·문법·미종료 문자열·인터벌 누수 0건 최종 검증"
+    ]
+  },
   {
     id: "patch-v12.03",
     version: "v12.03",

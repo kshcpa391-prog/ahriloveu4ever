@@ -1638,6 +1638,25 @@ function MainApp() {
 
   // 설정 모달
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [heroPhotoConfig, setHeroPhotoConfig] = useState(() => {
+    try {
+      const raw = localStorage.getItem("kim_family_hero_photo_v1");
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === "object") {
+          return {
+            url: parsed.url || HERO_FAMILY_FALLBACK,
+            posY: Number.isFinite(Number(parsed.posY)) ? Number(parsed.posY) : 35,
+            caption: parsed.caption || "수혁 · 아리 · 시목 · 시율 ♡"
+          };
+        }
+      }
+    } catch (e) {}
+    return { url: HERO_FAMILY_FALLBACK, posY: 35, caption: "수혁 · 아리 · 시목 · 시율 ♡" };
+  });
+  const [isHeroPhotoModalOpen, setIsHeroPhotoModalOpen] = useState(false);
+  const [heroPhotoDraft, setHeroPhotoDraft] = useState(null);
+  const heroPhotoInputRef = useRef(null);
   const [kitchenTimer, setKitchenTimer] = useState({
     open: false,
     mode: "countdown",
@@ -2769,6 +2788,25 @@ function MainApp() {
         (snap) => {
           const loaded = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
           setBucketList(loaded);
+        },
+        () => {}
+      )
+    );
+
+    unsubscribers.push(
+      onSnapshot(
+        getDocRef("family_meta_v4", "hero_photo"),
+        (snap) => {
+          if (snap.exists()) {
+            const d = snap.data() || {};
+            const nextCfg = {
+              url: d.url || HERO_FAMILY_FALLBACK,
+              posY: Number.isFinite(Number(d.posY)) ? Number(d.posY) : 35,
+              caption: d.caption || "수혁 · 아리 · 시목 · 시율 ♡"
+            };
+            setHeroPhotoConfig(nextCfg);
+            try { localStorage.setItem("kim_family_hero_photo_v1", JSON.stringify(nextCfg)); } catch (e) {}
+          }
         },
         () => {}
       )
@@ -8575,7 +8613,8 @@ ${validText}
       !activityEditModal &&
       !zipImportPicker &&
       !magazineMonth &&
-      !isSettingsOpen
+      !isSettingsOpen &&
+      !isHeroPhotoModalOpen
     ) return;
     const onEsc = (e) => {
       if (e.key === "Escape") {
@@ -8592,11 +8631,12 @@ ${validText}
         setZipImportPicker(null);
         setMagazineMonth(null);
         setIsSettingsOpen(false);
+        setIsHeroPhotoModalOpen(false);
       }
     };
     window.addEventListener("keydown", onEsc);
     return () => window.removeEventListener("keydown", onEsc);
-  }, [isQuickFabOpen, isRoutineModalOpen, isActivityModalOpen, isEditorUnlockModalOpen, isMealCopyModalOpen, diaryExportPreviewUrl, diaryLightboxUrl, isWeatherModalOpen, liveActivityPopup, activityEditModal, zipImportPicker, magazineMonth, isSettingsOpen]);
+  }, [isQuickFabOpen, isRoutineModalOpen, isActivityModalOpen, isEditorUnlockModalOpen, isMealCopyModalOpen, diaryExportPreviewUrl, diaryLightboxUrl, isWeatherModalOpen, liveActivityPopup, activityEditModal, zipImportPicker, magazineMonth, isSettingsOpen, isHeroPhotoModalOpen]);
 
   const parseCookTimeMinutes = (cookTimeStr) => {
     const s = String(cookTimeStr || "");
@@ -8838,16 +8878,29 @@ ${validText}
         </div>
 
         {activeTab === "home" && (
-          <div className="relative h-32 sm:h-36 rounded-2xl overflow-hidden mb-2 border border-stone-200 shadow-sm bg-gradient-to-r from-amber-100 via-stone-100 to-rose-100">
+          <div
+            onClick={() => {
+              if (!requireEditorAccess("home")) return;
+              setHeroPhotoDraft({ ...heroPhotoConfig });
+              setIsHeroPhotoModalOpen(true);
+            }}
+            className="relative h-32 sm:h-36 rounded-2xl overflow-hidden mb-2 border border-stone-200 shadow-sm bg-gradient-to-r from-amber-100 via-stone-100 to-rose-100 cursor-pointer group"
+            title="눌러서 가족사진 편집"
+          >
             <img
-              src={HERO_FAMILY_FALLBACK}
+              src={heroPhotoConfig.url || HERO_FAMILY_FALLBACK}
               alt="수혁 아리 시목 시율 가족사진"
-              className="w-full h-full object-cover object-[50%_35%]"
+              style={{ objectPosition: `50% ${heroPhotoConfig.posY ?? 35}%` }}
+              className="w-full h-full object-cover transition group-hover:scale-[1.01]"
             />
             <div className="absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-stone-950/65 to-transparent pointer-events-none" />
+            <div className="absolute top-2 right-2 px-2 py-0.5 rounded-full bg-black/45 backdrop-blur-sm text-white text-[10.5px] font-bold flex items-center gap-1 opacity-90 group-hover:opacity-100">
+              <Camera className="w-3 h-3" />
+              <span>편집</span>
+            </div>
             <div className="absolute bottom-1.5 right-2.5">
               <span className="text-[12.5px] font-black text-white/95 drop-shadow">
-                수혁 · 아리나 · 시목 · 시율 ♡
+                {heroPhotoConfig.caption || "수혁 · 아리 · 시목 · 시율 ♡"}
               </span>
             </div>
           </div>
@@ -8865,6 +8918,7 @@ ${validText}
               monthly: "한눈에 월간·식비 💰",
               notices: "다정한 가족 공지사항 📌",
               recipes: "보글보글 가족 레시피북 📖",
+              bucket: "설레는 가족 버킷리스트 🌟",
               ai: "똑똑한 AI 식단·요리 ✨"
             }[activeTab] || "우리 가족 홈 ♡"}
           </h1>
@@ -13560,6 +13614,7 @@ ${validText}
               className="w-full p-2.5 rounded-xl border border-stone-200 bg-stone-50 text-[13.5px] font-semibold text-stone-800 resize-none focus:outline-none focus:ring-2 focus:ring-stone-400"
             />
             <button
+              type="button"
               onClick={handleQuickParseShopping}
               disabled={isQuickParsingShopping}
               className="w-full py-2 rounded-xl bg-stone-900 hover:bg-stone-800 text-white text-[13.5px] font-extrabold flex items-center justify-center gap-1.5"
@@ -13611,16 +13666,56 @@ ${validText}
                 placeholder="품목명 (우유, 대파 등)"
                 value={shoppingForm.name}
                 onChange={(e) => setShoppingForm({ ...shoppingForm, name: e.target.value })}
-                className="col-span-2 px-3 py-2 rounded-xl border border-stone-200 text-[13.5px] font-bold"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    handleAddShopping();
+                  }
+                }}
+                className="col-span-2 min-w-0 px-3 py-2 rounded-xl border border-stone-200 text-[13.5px] font-bold"
               />
               <input
                 type="text"
                 placeholder="수량 (예: 2팩)"
                 value={shoppingForm.quantity}
                 onChange={(e) => setShoppingForm({ ...shoppingForm, quantity: e.target.value })}
-                className="px-3 py-2 rounded-xl border border-stone-200 text-[13.5px] font-bold"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    handleAddShopping();
+                  }
+                }}
+                className="min-w-0 px-3 py-2 rounded-xl border border-stone-200 text-[13.5px] font-bold"
               />
             </div>
+            {!shoppingForm.name.trim() && (
+              <div className="flex items-center gap-1 overflow-x-auto pb-0.5">
+                {[
+                  { name: "계란", quantity: "1판", category: "유제품/계란" },
+                  { name: "우유", quantity: "1팩", category: "유제품/계란" },
+                  { name: "두부", quantity: "1모", category: "반찬/김치" },
+                  { name: "대파", quantity: "1단", category: "채소/과일" },
+                  { name: "양파", quantity: "1망", category: "채소/과일" },
+                  { name: "바나나", quantity: "1송이", category: "채소/과일" }
+                ].map((qItem) => (
+                  <button
+                    key={qItem.name}
+                    type="button"
+                    onClick={() =>
+                      setShoppingForm((prev) => ({
+                        ...prev,
+                        name: qItem.name,
+                        quantity: qItem.quantity,
+                        category: qItem.category
+                      }))
+                    }
+                    className="px-2 py-0.5 rounded-full bg-stone-50 hover:bg-stone-100 border border-stone-200 text-[11px] font-bold text-stone-600 whitespace-nowrap shrink-0"
+                  >
+                    + {qItem.name}
+                  </button>
+                ))}
+              </div>
+            )}
             {shoppingForm.name.trim() && (() => {
               const q = shoppingForm.name.trim().toLowerCase();
               const hits = knownIngredientList
@@ -13664,13 +13759,14 @@ ${validText}
                 placeholder="메모 (예: 시목이 간식용)"
                 value={shoppingForm.memo}
                 onChange={(e) => setShoppingForm({ ...shoppingForm, memo: e.target.value })}
-                className="flex-1 px-3 py-2 rounded-xl border border-stone-200 text-[13.5px]"
+                className="flex-1 min-w-0 px-3 py-2 rounded-xl border border-stone-200 text-[13px]"
               />
               <button
+                type="button"
                 onClick={() =>
                   setShoppingForm({ ...shoppingForm, urgent: !shoppingForm.urgent })
                 }
-                className={`px-2.5 py-2 rounded-xl text-[13.5px] font-extrabold border shrink-0 ${
+                className={`px-2.5 py-2 rounded-xl text-[12.5px] font-extrabold border whitespace-nowrap shrink-0 ${
                   shoppingForm.urgent
                     ? "bg-red-500 text-white border-red-500"
                     : "bg-stone-50 text-stone-500 border-stone-200"
@@ -13681,6 +13777,7 @@ ${validText}
             </div>
 
             <button
+              type="button"
               onClick={handleAddShopping}
               className="w-full py-2.5 rounded-xl bg-stone-900 text-white text-[13.5px] font-extrabold"
             >
@@ -15499,18 +15596,27 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                       );
                     })()}
 
-                    <div className="grid grid-cols-2 gap-2 pt-1">
+                    <div className="grid grid-cols-3 gap-1.5 pt-1">
                       <button
+                        type="button"
                         onClick={() => handleApplyRecipeToMeal(r)}
-                        className="py-2 rounded-xl bg-stone-900 text-white text-[12.5px] font-extrabold"
+                        className="py-2 px-1 rounded-xl bg-stone-900 text-white text-[11.5px] font-extrabold whitespace-nowrap"
                       >
-                        🍽️ 오늘 식단으로 재현
+                        🍽️ 식단 재현
                       </button>
                       <button
-                        onClick={() => handleAddMissingRecipeIngredientsToShopping(r)}
-                        className="py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-[12.5px] font-extrabold"
+                        type="button"
+                        onClick={() => startRecipeCookTimer(r)}
+                        className="py-2 px-1 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 text-[11.5px] font-extrabold whitespace-nowrap"
                       >
-                        🛒 부족 재료 장보기
+                        ⏱️ {r.cookTime || "10분"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleAddMissingRecipeIngredientsToShopping(r)}
+                        className="py-2 px-1 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-[11.5px] font-extrabold whitespace-nowrap"
+                      >
+                        🛒 부족 재료
                       </button>
                     </div>
                   </div>
@@ -17424,7 +17530,21 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                 {mm}:{ss}
               </div>
               <div className="flex items-center gap-1">
-                {kitchenTimer.mode === "countdown" && [3, 5, 10, 15].map((m) => (
+                {kitchenTimer.mode === "countdown" && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setKitchenTimer((p) => ({
+                        ...p,
+                        remainingSec: p.remainingSec + 60
+                      }))
+                    }
+                    className="px-1.5 py-1 rounded-lg bg-stone-800 hover:bg-stone-700 text-amber-300 text-[10.5px] font-extrabold whitespace-nowrap"
+                  >
+                    +1분
+                  </button>
+                )}
+                {kitchenTimer.mode === "countdown" && [3, 5, 10].map((m) => (
                   <button
                     key={m}
                     type="button"
@@ -19839,6 +19959,140 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
       )}
 
       {/* 설정 모달 */}
+      {isHeroPhotoModalOpen && heroPhotoDraft && (
+        <div
+          className="fixed inset-0 bg-black/55 z-50 flex items-center justify-center p-4"
+          onClick={() => setIsHeroPhotoModalOpen(false)}
+        >
+          <div
+            className="bg-white rounded-3xl max-w-sm w-full p-5 space-y-3.5 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between gap-2">
+              <h3 className="text-[15.5px] font-black text-stone-900">📷 홈 가족사진 편집</h3>
+              <button type="button" onClick={() => setIsHeroPhotoModalOpen(false)} className="p-1">
+                <X className="w-5 h-5 text-stone-400" />
+              </button>
+            </div>
+
+            <div className="relative h-36 rounded-2xl overflow-hidden border border-stone-200 bg-stone-100">
+              <img
+                src={heroPhotoDraft.url || HERO_FAMILY_FALLBACK}
+                alt="미리보기"
+                style={{ objectPosition: `50% ${heroPhotoDraft.posY ?? 35}%` }}
+                className="w-full h-full object-cover"
+              />
+              <div className="absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-stone-950/65 to-transparent pointer-events-none" />
+              <div className="absolute bottom-1.5 right-2.5">
+                <span className="text-[12px] font-black text-white/95 drop-shadow">
+                  {heroPhotoDraft.caption || "수혁 · 아리 · 시목 · 시율 ♡"}
+                </span>
+              </div>
+            </div>
+
+            <input
+              ref={heroPhotoInputRef}
+              type="file"
+              accept="image/*"
+              onChange={async (e) => {
+                const file = e.target.files?.[0];
+                e.target.value = "";
+                if (!file) return;
+                try {
+                  const raw = await fileToBase64(file);
+                  const compressed = await compressDataUrlForFirestore(raw, 1200, 0.8);
+                  setHeroPhotoDraft((p) => ({ ...p, url: compressed || raw }));
+                } catch (err) {
+                  showToast("⚠️ 사진을 불러오지 못했습니다.");
+                }
+              }}
+              className="hidden"
+            />
+
+            <div className="grid grid-cols-2 gap-1.5">
+              <button
+                type="button"
+                onClick={() => heroPhotoInputRef.current?.click()}
+                className="py-2 px-2 rounded-xl bg-stone-900 hover:bg-stone-800 text-white text-[12px] font-extrabold flex items-center justify-center gap-1 whitespace-nowrap"
+              >
+                <Camera className="w-3.5 h-3.5" />
+                <span>새 사진 선택</span>
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  setHeroPhotoDraft({
+                    url: HERO_FAMILY_FALLBACK,
+                    posY: 35,
+                    caption: "수혁 · 아리 · 시목 · 시율 ♡"
+                  })
+                }
+                className="py-2 px-2 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-[12px] font-extrabold whitespace-nowrap"
+              >
+                🔄 기본 사진 복원
+              </button>
+            </div>
+
+            <div className="space-y-1">
+              <div className="flex items-center justify-between text-[11.5px] font-bold text-stone-600">
+                <span>📐 사진 상하 위치 조절</span>
+                <span className="text-stone-900 font-black">{heroPhotoDraft.posY ?? 35}%</span>
+              </div>
+              <input
+                type="range"
+                min="0"
+                max="100"
+                value={heroPhotoDraft.posY ?? 35}
+                onChange={(e) => setHeroPhotoDraft((p) => ({ ...p, posY: Number(e.target.value) }))}
+                className="w-full accent-stone-900"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-[11.5px] font-bold text-stone-600 block">✏️ 우측 하단 문구</label>
+              <input
+                type="text"
+                value={heroPhotoDraft.caption || ""}
+                onChange={(e) => setHeroPhotoDraft((p) => ({ ...p, caption: e.target.value }))}
+                placeholder="수혁 · 아리 · 시목 · 시율 ♡"
+                className="w-full px-3 py-2 rounded-xl border border-stone-200 text-[13px] font-bold bg-stone-50 focus:bg-white"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => setIsHeroPhotoModalOpen(false)}
+                className="py-2.5 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-[13px] font-extrabold"
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  const nextCfg = {
+                    url: heroPhotoDraft.url || HERO_FAMILY_FALLBACK,
+                    posY: Number.isFinite(Number(heroPhotoDraft.posY)) ? Number(heroPhotoDraft.posY) : 35,
+                    caption: String(heroPhotoDraft.caption || "").trim() || "수혁 · 아리 · 시목 · 시율 ♡",
+                    updatedAtMs: Date.now()
+                  };
+                  setHeroPhotoConfig(nextCfg);
+                  try { localStorage.setItem("kim_family_hero_photo_v1", JSON.stringify(nextCfg)); } catch (err) {}
+                  if (user && db) {
+                    await setDoc(getDocRef("family_meta_v4", "hero_photo"), nextCfg, { merge: true }).catch(() => {});
+                  }
+                  setIsHeroPhotoModalOpen(false);
+                  showToast("📷 홈 가족사진이 저장되었습니다!");
+                }}
+                className="py-2.5 rounded-xl bg-[#35503C] hover:bg-[#2a4030] text-white text-[13px] font-extrabold"
+              >
+                💾 저장하기
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {isSettingsOpen && (
         <div
           className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
