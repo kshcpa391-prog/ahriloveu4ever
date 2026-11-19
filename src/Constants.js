@@ -1175,7 +1175,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v12.15";
+export const APP_CODE_VERSION = "v12.16";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1259,6 +1259,17 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v12.16",
+    version: "v12.16",
+    date: "2026-11-19",
+    title: "홈 할 일 상세현황 팝업 연결(체크박스만 완료) · 파일 첨부 동작 복구(이미지 자동압축) & 상세 메모 간략화",
+    items: [
+      "누락되었던 readAttachmentsFromFiles·newRoutineAttachments·scheduleForm.attachments 선언을 복구해 일정·할 일·반복 루틴 파일 첨부가 정상 동작하도록 수정",
+      "이미지 파일 첨부 시 자동 리사이징·압축(960px) 적용으로 고화질 스마트폰 사진도 용량 초과 없이 즉시 첨부 가능",
+      "홈 화면 남은 할 일 항목 클릭 시 상세현황·수정 모달이 열리고 좌측 체크박스 클릭 시에만 완료되도록 확정 반영, 할 일·일정 목록 메모는 1~2줄 간략 표시로 슬림화"
+    ]
+  },
   {
     id: "patch-v12.15",
     version: "v12.15",

@@ -1224,6 +1224,7 @@ function MainApp() {
     if (!requireEditorAccess() || !rt) return;
     setEditingRoutineId(rt.id);
     setNewRoutineTitle(rt.title || "");
+    setNewRoutineAttachments(Array.isArray(rt.attachments) ? rt.attachments : []);
     setNewRoutineTimeSlot(rt.timeSlot || "상시");
     setNewRoutineScheduledTime(rt.scheduledTime || "");
     setNewRoutineCycle(rt.cycle || "daily");
@@ -1242,6 +1243,7 @@ function MainApp() {
     if (!requireEditorAccess()) return;
     setEditingRoutineId(null);
     setNewRoutineTitle("");
+    setNewRoutineAttachments([]);
     setNewRoutineTimeSlot(getCurrentRoutineTimeSlot(routineTimeRanges, liveMinuteTick, routineSlotDefs));
     setNewRoutineScheduledTime("");
     setNewRoutineCycle("daily");
@@ -1258,6 +1260,7 @@ function MainApp() {
     setEditingRoutineId(null);
     setNewRoutineTitle("");
     setNewRoutineScheduledTime("");
+    setNewRoutineAttachments([]);
     setIsRoutineModalOpen(false);
   };
 
@@ -1313,13 +1316,20 @@ function MainApp() {
           ...(r.title === title && r.stepDoneKey ? { stepDoneKey: r.stepDoneKey, stepDoneIndices: r.stepDoneIndices || [] } : {})
         };
       });
-      setFamilyRoutines(nextList);
+      const editedItem = nextList.find((r) => r.id === editingRoutineId);
+      const finalEditedItem = editedItem
+        ? { ...editedItem, ...(newRoutineAttachments.length > 0 ? { attachments: newRoutineAttachments } : {}) }
+        : null;
+      const finalNextList = finalEditedItem
+        ? nextList.map((r) => (r.id === editingRoutineId ? finalEditedItem : r))
+        : nextList;
+      setFamilyRoutines(finalNextList);
       setEditingRoutineId(null);
       setNewRoutineTitle("");
       setNewRoutineScheduledTime("");
+      setNewRoutineAttachments([]);
       setIsRoutineModalOpen(false);
-      const editedItem = nextList.find((r) => r.id === editingRoutineId);
-      syncRoutinesToCloud(nextList, editedItem ? { type: "upsert", item: editedItem } : null);
+      syncRoutinesToCloud(finalNextList, finalEditedItem ? { type: "upsert", item: finalEditedItem } : null);
       showToast(`✏️ '${title}' 루틴이 수정되었습니다!`);
       return;
     }
@@ -1334,12 +1344,14 @@ function MainApp() {
       ...(cycleVal === "monthly_weekday" ? { nthWeek: nthVal, weekDay: wdVal } : {}),
       ...(cycleVal === "weekly" && wdVal !== null ? { weekDay: wdVal } : {}),
       assignee: newRoutineAssignee || "공통",
+      ...(newRoutineAttachments.length > 0 ? { attachments: newRoutineAttachments } : {}),
       lastDoneKey: ""
     };
     const nextList = [nextItem, ...familyRoutines];
     setFamilyRoutines(nextList);
     setNewRoutineTitle("");
     setNewRoutineScheduledTime("");
+    setNewRoutineAttachments([]);
     setIsRoutineModalOpen(false);
     syncRoutinesToCloud(nextList, { type: "upsert", item: nextItem });
     recordActivity("루틴", "추가", title);
@@ -1398,6 +1410,59 @@ function MainApp() {
   };
   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
   const [editingSchedule, setEditingSchedule] = useState(null);
+  const readAttachmentsFromFiles = async (fileList, currentList = [], maxPerFileBytes = 520000) => {
+    const files = Array.from(fileList || []);
+    if (files.length === 0) return { nextList: currentList, addedCount: 0, skippedLarge: 0 };
+    const nextList = Array.isArray(currentList) ? [...currentList] : [];
+    let addedCount = 0;
+    let skippedLarge = 0;
+    for (const file of files) {
+      if (nextList.length >= 5) break;
+      const isImgFile = String(file.type || "").startsWith("image/");
+      if (isImgFile) {
+        try {
+          const { previewUrl, base64, mimeType } = await fileToBase64(file, { maxSide: 960, quality: 0.72 });
+          const dataUrl = previewUrl || (base64 ? `data:${mimeType || "image/jpeg"};base64,${base64}` : "");
+          if (dataUrl && dataUrl.length <= 720000) {
+            nextList.push({
+              id: `att-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+              name: file.name || "이미지",
+              mimeType: mimeType || "image/jpeg",
+              size: Math.round(dataUrl.length * 0.75),
+              dataUrl,
+              uploadedAt: getTodayStr()
+            });
+            addedCount += 1;
+            continue;
+          }
+        } catch (err) {}
+      }
+      if (file.size > maxPerFileBytes) {
+        skippedLarge += 1;
+        continue;
+      }
+      const dataUrl = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result || ""));
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+      if (dataUrl) {
+        nextList.push({
+          id: `att-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          name: file.name || "첨부파일",
+          mimeType: file.type || "application/octet-stream",
+          size: Number(file.size) || 0,
+          dataUrl,
+          uploadedAt: getTodayStr()
+        });
+        addedCount += 1;
+      }
+    }
+    return { nextList, addedCount, skippedLarge };
+  };
+
+
   const [scheduleForm, setScheduleForm] = useState({
     title: "",
     date: getTodayStr(),
@@ -1406,8 +1471,10 @@ function MainApp() {
     isAnnual: false,
     showDday: false,
     hasOriginYear: false,
-    memo: ""
+    memo: "",
+    attachments: []
   });
+  const [newRoutineAttachments, setNewRoutineAttachments] = useState([]);
 
 
   // 식단 모달 상태
@@ -3973,7 +4040,8 @@ function MainApp() {
       showDday: Boolean(scheduleForm.showDday),
       hasOriginYear: Boolean(scheduleForm.hasOriginYear),
       done: editingSchedule ? Boolean(editingSchedule.done) : false,
-      memo: (scheduleForm.memo || "").trim()
+      memo: (scheduleForm.memo || "").trim(),
+      attachments: Array.isArray(scheduleForm.attachments) ? scheduleForm.attachments : []
     };
 
 
@@ -10470,25 +10538,67 @@ ${validText}
                     <div className="space-y-1">
                       {previewTodos.map((todo) => {
                         const isOverdue = Boolean(todo.date && String(todo.date) <= todayKey);
+                        const hasMemo = Boolean(String(todo.memo || "").trim());
+                        const attCount = Array.isArray(todo.attachments) ? todo.attachments.length : 0;
                         return (
-                          <button
+                          <div
                             key={todo.id}
-                            type="button"
-                            onClick={() => handleToggleScheduleDone(todo)}
-                            className={`w-full px-2.5 py-1.5 rounded-xl border flex items-center gap-2 text-left transition active:scale-[0.99] ${
+                            onClick={() => {
+                              if (!requireEditorAccess("schedule")) return;
+                              setEditingSchedule(todo);
+                              setScheduleForm({
+                                title: todo.title || "",
+                                date: todo.date || getTodayStr(),
+                                category: todo.category || "할일(To-Do)",
+                                members: toSafeArray(todo.members).length > 0 ? toSafeArray(todo.members) : ["수혁", "아리나"],
+                                isAnnual: Boolean(todo.isAnnual),
+                                showDday: Boolean(todo.showDday),
+                                hasOriginYear: Boolean(todo.hasOriginYear),
+                                memo: todo.memo || "",
+                                attachments: Array.isArray(todo.attachments) ? todo.attachments : []
+                              });
+                              setIsScheduleModalOpen(true);
+                            }}
+                            role="button"
+                            tabIndex={0}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" || e.key === " ") {
+                                e.preventDefault();
+                                e.currentTarget.click();
+                              }
+                            }}
+                            className={`w-full px-2.5 py-1.5 rounded-xl border flex items-center gap-2 text-left cursor-pointer transition active:scale-[0.99] ${
                               isOverdue
                                 ? "bg-rose-50/60 hover:bg-rose-50 border-rose-200"
                                 : "bg-stone-50/70 hover:bg-stone-100 border-stone-200"
                             }`}
                           >
-                            <span className={`w-3.5 h-3.5 rounded border bg-white shrink-0 ${isOverdue ? "border-rose-400" : "border-stone-400"}`} />
+                            <button
+                              type="button"
+                              aria-label="완료 체크"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleToggleScheduleDone(todo);
+                              }}
+                              className={`w-4 h-4 rounded border bg-white shrink-0 flex items-center justify-center ${
+                                isOverdue ? "border-rose-400" : "border-stone-400"
+                              }`}
+                            />
                             <span className="text-[12.5px] font-extrabold text-stone-800 truncate flex-1">{todo.title}</span>
+                            {hasMemo && (
+                              <span title="메모 있음" className="text-[11px] shrink-0">📝</span>
+                            )}
+                            {attCount > 0 && (
+                              <span title={`첨부파일 ${attCount}개`} className="px-1 py-0.2 rounded bg-sky-100 text-sky-800 text-[10px] font-black shrink-0 whitespace-nowrap">
+                                📎{attCount}
+                              </span>
+                            )}
                             {todo.date && (
                               <span className={`text-[11.5px] font-bold shrink-0 ${isOverdue ? "text-rose-600 font-black" : "text-stone-500"}`}>
                                 {todo.date.slice(5)}
                               </span>
                             )}
-                          </button>
+                          </div>
                         );
                       })}
                     </div>
@@ -12342,7 +12452,8 @@ ${validText}
                                 isAnnual: Boolean(ev.isAnnual),
                                 showDday: Boolean(ev.showDday),
                                 hasOriginYear: Boolean(ev.hasOriginYear),
-                                memo: ev.memo || ""
+                                memo: ev.memo || "",
+                                attachments: Array.isArray(ev.attachments) ? ev.attachments : []
                               });
                               setIsScheduleModalOpen(true);
                             }}
@@ -12367,7 +12478,31 @@ ${validText}
                       >
                         {ev.title}
                       </div>
-                      {ev.memo && <div className="text-[13.5px] text-stone-600">💬 {ev.memo}</div>}
+                      {ev.memo && <div className="text-[12.5px] text-stone-600 line-clamp-2">💬 {ev.memo}</div>}
+                      {Array.isArray(ev.attachments) && ev.attachments.length > 0 && (
+                        <div className="flex flex-wrap gap-1 pt-0.5">
+                          {ev.attachments.map((att) => {
+                            const isImg = String(att.mimeType || "").startsWith("image/") || /^data:image\//.test(String(att.dataUrl || ""));
+                            return (
+                              <a
+                                key={att.id}
+                                href={att.dataUrl}
+                                download={att.name}
+                                onClick={(e) => {
+                                  if (isImg) {
+                                    e.preventDefault();
+                                    setDiaryLightboxUrl(att.dataUrl);
+                                  }
+                                }}
+                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-sky-50 hover:bg-sky-100 border border-sky-200 text-sky-900 text-[11px] font-bold max-w-[180px]"
+                              >
+                                <span>{isImg ? "🖼️" : "📎"}</span>
+                                <span className="truncate">{att.name}</span>
+                              </a>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -13149,6 +13284,27 @@ ${validText}
                               <span className={`px-1.5 py-0.5 rounded text-[10.5px] font-black ${getRoutineAssigneeBadgeCls(rt.assignee)}`}>
                                 {rt.assignee || "공통"}
                               </span>
+                              {Array.isArray(rt.attachments) && rt.attachments.map((att) => {
+                                const isImg = String(att.mimeType || "").startsWith("image/") || /^data:image\//.test(String(att.dataUrl || ""));
+                                return (
+                                  <a
+                                    key={att.id}
+                                    href={att.dataUrl}
+                                    download={att.name}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      if (isImg) {
+                                        e.preventDefault();
+                                        setDiaryLightboxUrl(att.dataUrl);
+                                      }
+                                    }}
+                                    className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-sky-50 hover:bg-sky-100 border border-sky-200 text-sky-800 text-[10px] font-bold max-w-[140px]"
+                                  >
+                                    <span>{isImg ? "🖼️" : "📎"}</span>
+                                    <span className="truncate">{att.name}</span>
+                                  </a>
+                                );
+                              })}
                             </div>
                           </div>
                         </div>
@@ -13418,6 +13574,11 @@ ${validText}
                             📅 {todo.date}({getDayName(todo.date)})
                           </span>
                           <span className="shrink-0">· {todo.category}</span>
+                          {Array.isArray(todo.attachments) && todo.attachments.length > 0 && (
+                            <span className="px-1 py-0.2 rounded bg-sky-100 text-sky-800 text-[10px] font-black shrink-0">
+                              📎{todo.attachments.length}
+                            </span>
+                          )}
                           <span className="inline-flex items-center gap-0.5 shrink-0">
                             ·
                             {toSafeArray(todo.members).map((m) => (
@@ -13425,6 +13586,11 @@ ${validText}
                             ))}
                           </span>
                         </div>
+                        {String(todo.memo || "").trim() && (
+                          <div className="text-[11px] text-stone-500 truncate mt-0.5">
+                            💬 {String(todo.memo).trim()}
+                          </div>
+                        )}
                       </div>
                     </div>
 
@@ -13441,7 +13607,8 @@ ${validText}
                             isAnnual: Boolean(todo.isAnnual),
                             showDday: Boolean(todo.showDday),
                             hasOriginYear: Boolean(todo.hasOriginYear),
-                            memo: todo.memo || ""
+                            memo: todo.memo || "",
+                            attachments: Array.isArray(todo.attachments) ? todo.attachments : []
                           });
                           setIsScheduleModalOpen(true);
                         }}
