@@ -1176,7 +1176,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v12.26";
+export const APP_CODE_VERSION = "v12.27";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1194,7 +1194,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-20 06:15";
+export const APP_BUILD_DATE = "2026-11-20 07:45";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1261,6 +1261,17 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v12.27",
+    version: "v12.27",
+    date: "2026-11-20",
+    title: "미사용 데드코드 0건 달성 · 식단 [오늘로] 1탭 복귀 · 마크다운 표 1탭 복사 · 검색 ESC 초기화",
+    items: [
+      "코드 경량화: MainApp 내 잔여 미사용 함수 2건(recordDeletedLog·handleReuseMealsFromOffset) 제거로 미사용 임포트·선언 모두 0건 달성",
+      "시각적 정리: 식단 탭 상단 중복 '±3일' 라벨을 정리하고 다른 날짜 조회 시 [오늘] 1탭 복귀 버튼 표시, 냉장고 상단 버튼 화살표 아이콘 통일",
+      "편의성·고도화: 가족공유노트 마크다운 표 하단에 [📋 복사] 버튼 추가 및 하단 통합검색창 ESC 키 즉시 초기화 지원"
+    ]
+  },
   {
     id: "patch-v12.26",
     version: "v12.26",

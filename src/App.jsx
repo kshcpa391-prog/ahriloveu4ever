@@ -2265,36 +2265,7 @@ function MainApp() {
   };
 
 
-  const recordDeletedLog = async (type, label, data, actionType = "delete") => {
-    if (!data?.id) return null;
-    const entry = {
-      logId: `dlog-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-      id: data.id,
-      type,
-      actionType,
-      label,
-      data,
-      createdAtMs: Date.now(),
-      deletedAt: new Date().toLocaleString("ko-KR", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })
-    };
-    setDeletedLogs((prev) => {
-      const next = [entry, ...prev.filter((x) => x.logId !== entry.logId)].slice(0, 30);
-      try {
-        localStorage.setItem("kim_deleted_logs_v1", JSON.stringify(next));
-      } catch (e) {}
-      return next;
-    });
-    if (user && db) {
-      beginWrite();
-      try {
-        await setDoc(getDocRef("family_deleted_logs_v8", entry.logId), entry);
-        endWrite(true);
-      } catch (e) {
-        endWrite(false, e.message);
-      }
-    }
-    return entry;
-  };
+  
 
 
   const restoreDeletedLogEntry = async (entry) => {
@@ -8104,62 +8075,7 @@ ${validText}
 
 
 
-  const handleReuseMealsFromOffset = async (offsetDays) => {
-    if (!requireEditorAccess("daily")) return;
-    if (!user || !db) {
-      showToast("⚠️ 서버 연결 후 불러올 수 있습니다.");
-      return;
-    }
-    const baseD = new Date(selectedDate + "T00:00:00");
-    baseD.setDate(baseD.getDate() + offsetDays);
-    const srcDate = formatDate(baseD);
-    const srcMeals = meals.filter(
-      (m) => m.date === srcDate && (selectedMember === "전체" || toSafeArray(m.members).includes(selectedMember))
-    );
-    if (srcMeals.length === 0) {
-      showToast(`${srcDate}에 복사할 식단이 없습니다.`);
-      return;
-    }
-    const existingKeys = new Set(
-      meals.filter((m) => m.date === selectedDate).map((m) => `${m.slot}|${m.menu}`)
-    );
-    const toCopy = srcMeals.filter((m) => !existingKeys.has(`${m.slot}|${m.menu}`));
-    if (toCopy.length === 0) {
-      showToast("선택한 날짜에 이미 동일한 식단이 모두 있습니다.");
-      return;
-    }
-    beginWrite();
-    let ok = false;
-    try {
-      const batch = writeBatch(db);
-      const localUpdates = {};
-      toCopy.forEach((m, idx) => {
-        const nid = `m-${Date.now()}-${idx}-${Math.random().toString(36).slice(2, 5)}`;
-        const p = {
-          ...m,
-          id: nid,
-          date: selectedDate,
-          mealStatus: "planned",
-          updatedAt: new Date().toISOString()
-        };
-        batch.set(getDocRef("family_meals_v3", nid), p);
-        batch.set(getDocRef("family_meals_v4", nid), p);
-        localUpdates[nid] = p;
-      });
-      await batch.commit();
-      setMealsMap((prev) => ({ ...prev, local: { ...(prev.local || {}), ...localUpdates } }));
-      recordActivity("식단", "식단재사용", `${srcDate} → ${selectedDate} (${toCopy.length}끼)`, {
-        beforeText: `${srcDate} 식단 ${toCopy.length}끼`,
-        afterText: `${selectedDate} 계획 식단 ${toCopy.length}끼`
-      });
-      showToast(`↺ ${srcDate} 식단 ${toCopy.length}끼를 ${selectedDate} 계획 식단으로 복사했습니다!`);
-      ok = true;
-    } catch (e) {
-      showToast("⚠️ 식단 불러오기 실패");
-    } finally {
-      endWrite(ok);
-    }
-  };
+  
 
 
   const handleDeleteMeal = async (meal) => {
@@ -11923,9 +11839,15 @@ ${validText}
                   >
                     {hideEmptyMealSlots ? "빈 끼니 숨김중" : "빈 끼니 숨기기"}
                   </button>
-                  <span className="text-[11.5px] font-bold text-stone-500 whitespace-nowrap">
-                    ±3일
-                  </span>
+                  {selectedDate !== getTodayStr() && (
+                    <button
+                      type="button"
+                      onClick={() => setSelectedDate(getTodayStr())}
+                      className="px-2 py-0.5 rounded-full bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-900 text-[11px] font-extrabold whitespace-nowrap"
+                    >
+                      오늘
+                    </button>
+                  )}
                 </div>
               </div>
               <div className="flex items-center justify-between gap-1">
@@ -14417,14 +14339,14 @@ ${validText}
                 <Receipt className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
                 <span>영수증 AI 스캔</span>
               </span>
-              <span className="text-[10.5px] text-emerald-700 shrink-0">&gt;</span>
+              <ChevronRight className="w-3.5 h-3.5 text-emerald-700/70 shrink-0" />
             </button>
             <button
               onClick={() => setIsInventoryExportOpen(true)}
               className="py-2 px-2.5 rounded-2xl bg-stone-100 hover:bg-stone-200/80 border border-stone-200 text-stone-800 text-[11.5px] font-extrabold flex items-center justify-between gap-1 whitespace-nowrap"
             >
               <span className="truncate">📤 식단·재고 내보내기</span>
-              <span className="text-[10.5px] text-stone-500 shrink-0">&gt;</span>
+              <ChevronRight className="w-3.5 h-3.5 text-stone-400 shrink-0" />
             </button>
           </div>
           {expiringItems.length > 0 && (
@@ -17652,12 +17574,33 @@ ${validText}
                                   </tbody>
                                 </table>
                               </div>
-                              {canEditTab("pages") && (
-                                <div className="flex items-center justify-end gap-1.5 px-0.5">
+                              <div className="flex items-center justify-end gap-1.5 px-0.5">
+                                <button
+                                  type="button"
+                                  onClick={async () => {
+                                    const mdLines = [];
+                                    if (headers.length > 0) {
+                                      mdLines.push(`| ${headers.join(" | ")} |`);
+                                      mdLines.push(`| ${headers.map(() => "---").join(" | ")} |`);
+                                    }
+                                    rows.forEach((r) => {
+                                      const cells = Array.isArray(r) ? r : [];
+                                      mdLines.push(`| ${headers.map((_, idx) => cells[idx] ?? "").join(" | ")} |`);
+                                    });
+                                    await copyTextSafe(mdLines.join("\n"), "📋 이 마크다운 표를 복사했습니다!");
+                                  }}
+                                  className="text-[11px] font-bold text-stone-400 hover:text-stone-700"
+                                >
+                                  📋 복사
+                                </button>
+                                {canEditTab("pages") && (
+                                  <>
+                                  <span className="text-stone-300 text-[10px]">·</span>
                                   <button
                                     type="button"
                                     onClick={() => {
                                       setPageBulkEditText(blocksToNotionMarkdown(blocks));
+                                      setPageBulkEditorTab("write");
                                       setIsPageBulkEditMode(true);
                                     }}
                                     className="text-[11px] font-bold text-stone-400 hover:text-stone-700"
@@ -17676,8 +17619,9 @@ ${validText}
                                   >
                                     삭제
                                   </button>
-                                </div>
-                              )}
+                                  </>
+                                )}
+                              </div>
                             </div>
                           );
                         }
@@ -18389,6 +18333,9 @@ ${validText}
                   onChange={(e) => {
                     setPageSearchQuery(e.target.value);
                     if (selectedPageId && e.target.value.trim()) setSelectedPageId(null);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Escape") setPageSearchQuery("");
                   }}
                   placeholder="무엇이든 검색하기..."
                   className="w-full pl-10 pr-9 py-2.5 rounded-full bg-white border border-stone-200/90 shadow-sm text-[13.5px] font-semibold text-stone-800 placeholder:text-stone-400 focus:outline-none focus:ring-2 focus:ring-stone-300"
