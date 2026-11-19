@@ -19603,54 +19603,87 @@ ${validText}
             </div>
 
 
-            <div className="space-y-2 bg-stone-50 p-3 rounded-2xl border border-stone-200">
-              <div className="text-[11.5px] font-extrabold text-stone-500 whitespace-nowrap">
-                기념일/생일 전용 추가 옵션 (필요할 때만 체크)
+            <div className="px-2.5 py-2 rounded-xl bg-stone-50/90 border border-stone-200 space-y-1.5">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[11px] font-extrabold text-stone-500 whitespace-nowrap">
+                  기념일·D-Day 옵션
+                </span>
+                {(scheduleForm.isAnnual || scheduleForm.showDday || scheduleForm.hasOriginYear) && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setScheduleForm({
+                        ...scheduleForm,
+                        isAnnual: false,
+                        showDday: false,
+                        hasOriginYear: false
+                      })
+                    }
+                    className="text-[10.5px] font-bold text-stone-400 hover:text-stone-700 whitespace-nowrap"
+                  >
+                    초기화
+                  </button>
+                )}
               </div>
-              <label className="flex items-center gap-2 text-[13.5px] font-bold text-stone-800 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={scheduleForm.isAnnual}
-                  onChange={(e) =>
-                    setScheduleForm({ ...scheduleForm, isAnnual: e.target.checked })
-                  }
-                />
-                <span>🔄 매년 같은 월·일에 자동으로 반복 표시하기 (생일/기념일)</span>
-              </label>
-
-
-              <label className="flex items-center gap-2 text-[13.5px] font-bold text-stone-800 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={scheduleForm.showDday}
-                  onChange={(e) =>
-                    setScheduleForm({ ...scheduleForm, showDday: e.target.checked })
-                  }
-                />
-                <span>⭐ 하단 D-Day 카운트다운 보드에 고정 표시하기</span>
-              </label>
-
-
-              <label className="flex items-center gap-2 text-[13.5px] font-bold text-stone-800 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={scheduleForm.hasOriginYear}
-                  onChange={(e) =>
-                    setScheduleForm({ ...scheduleForm, hasOriginYear: e.target.checked })
-                  }
-                />
-                <span>📅 시작 연도부터 오늘까지 경과 일수(D+일째)도 함께 계산하기</span>
-              </label>
+              <div className="flex flex-wrap gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setScheduleForm({ ...scheduleForm, isAnnual: !scheduleForm.isAnnual })}
+                  className={`px-2 py-1 rounded-lg text-[11px] font-extrabold border whitespace-nowrap transition ${
+                    scheduleForm.isAnnual
+                      ? "bg-stone-900 text-white border-stone-900"
+                      : "bg-white text-stone-600 border-stone-200"
+                  }`}
+                >
+                  🔄 매년 반복
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setScheduleForm({ ...scheduleForm, showDday: !scheduleForm.showDday })}
+                  className={`px-2 py-1 rounded-lg text-[11px] font-extrabold border whitespace-nowrap transition ${
+                    scheduleForm.showDday
+                      ? "bg-amber-600 text-white border-amber-600"
+                      : "bg-white text-stone-600 border-stone-200"
+                  }`}
+                >
+                  ⭐ D-Day 고정
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setScheduleForm({ ...scheduleForm, hasOriginYear: !scheduleForm.hasOriginYear })}
+                  className={`px-2 py-1 rounded-lg text-[11px] font-extrabold border whitespace-nowrap transition ${
+                    scheduleForm.hasOriginYear
+                      ? "bg-emerald-700 text-white border-emerald-700"
+                      : "bg-white text-stone-600 border-stone-200"
+                  }`}
+                >
+                  📅 D+경과일
+                </button>
+              </div>
             </div>
 
 
-            <textarea
-              rows={2}
-              placeholder="메모 (예: 준비물, 병원 안내, 예약 정보 등)"
-              value={scheduleForm.memo}
-              onChange={(e) => setScheduleForm({ ...scheduleForm, memo: e.target.value })}
-              className="w-full px-3 py-2 rounded-xl border border-stone-200 text-[13.5px]"
-            />
+            <div className="space-y-1">
+              <div className="flex items-center justify-between">
+                <label className="text-[11px] font-extrabold text-stone-500">📝 메모</label>
+                {scheduleForm.memo && (
+                  <button
+                    type="button"
+                    onClick={() => setScheduleForm({ ...scheduleForm, memo: "" })}
+                    className="text-[10.5px] font-bold text-stone-400 hover:text-stone-700"
+                  >
+                    지우기
+                  </button>
+                )}
+              </div>
+              <textarea
+                rows={4}
+                placeholder="메모 (준비물, 병원 안내, 제출 기한 등)"
+                value={scheduleForm.memo}
+                onChange={(e) => setScheduleForm({ ...scheduleForm, memo: e.target.value })}
+                className="w-full px-3 py-2 rounded-xl border border-stone-300 bg-white text-[13px] leading-relaxed focus:outline-none focus:ring-2 focus:ring-stone-400"
+              />
+            </div>
 
 
             <div className="p-2.5 rounded-2xl bg-stone-50 border border-stone-200 space-y-2">

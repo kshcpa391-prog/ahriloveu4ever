@@ -1175,7 +1175,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v12.16";
+export const APP_CODE_VERSION = "v12.17";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1259,6 +1259,17 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v12.17",
+    version: "v12.17",
+    date: "2026-11-19",
+    title: "일정·할 일 모달 옵션 칩 압축 & 메모 입력란 확장(시인성 개선)",
+    items: [
+      "장황하던 체크박스형 '기념일/생일 전용 추가 옵션' 3줄을 컴팩트한 칩 토글(🔄 매년 반복 · ⭐ D-Day 고정 · 📅 D+경과일 + 초기화)로 축소해 모달 높이 절약",
+      "메모 입력란(`📝 메모`)을 `rows={4}`로 넓히고 `지우기` 버튼 및 선명한 테두리를 적용해 메모 본문이 잘 보이지 않던 문제 해소",
+      "전체 문법·중괄호·중복 상태·임포트 경로 정적 무결성 최종 확인"
+    ]
+  },
   {
     id: "patch-v12.16",
     version: "v12.16",
