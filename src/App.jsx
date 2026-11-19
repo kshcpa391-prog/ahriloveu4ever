@@ -21048,9 +21048,15 @@ ${validText}
                 e.target.value = "";
                 if (!file) return;
                 try {
-                  const raw = await fileToBase64(file);
-                  const compressed = await compressDataUrlForFirestore(raw, 1200, 0.8);
-                  setHeroPhotoDraft((p) => ({ ...p, url: compressed || raw }));
+                  const { previewUrl, base64, mimeType } = await fileToBase64(file, { maxSide: 1200, quality: 0.8 });
+                  const rawUrl = previewUrl || (base64 ? `data:${mimeType || "image/jpeg"};base64,${base64}` : "");
+                  if (!rawUrl) {
+                    showToast("⚠️ 이미지를 읽을 수 없습니다.");
+                    return;
+                  }
+                  const compressed = await compressDataUrlForFirestore(rawUrl, 900, 0.72);
+                  setHeroPhotoDraft((p) => ({ ...p, url: compressed || rawUrl }));
+                  showToast("📸 새 사진이 미리보기에 반영되었습니다! [저장하기]를 눌러주세요.");
                 } catch (err) {
                   showToast("⚠️ 사진을 불러오지 못했습니다.");
                 }
@@ -21086,7 +21092,7 @@ ${validText}
 
             <div className="space-y-1">
               <div className="flex items-center justify-between text-[11.5px] font-bold text-stone-600">
-                <span>📐 사진 상하 위치 조절</span>
+                <span>📐 상하 위치</span>
                 <span className="text-stone-900 font-black">{heroPhotoDraft.posY ?? 35}%</span>
               </div>
               <input
@@ -21101,7 +21107,7 @@ ${validText}
 
 
             <div className="space-y-1">
-              <label className="text-[11.5px] font-bold text-stone-600 block">✏️ 우측 하단 문구</label>
+              <label className="text-[11.5px] font-bold text-stone-600 block">✏️ 하단 문구</label>
               <input
                 type="text"
                 value={heroPhotoDraft.caption || ""}
@@ -21132,8 +21138,14 @@ ${validText}
                   setHeroPhotoConfig(nextCfg);
                   try { localStorage.setItem("kim_family_hero_photo_v1", JSON.stringify(nextCfg)); } catch (err) {}
                   if (user && db) {
-                    await setDoc(getDocRef("family_meta_v4", "hero_photo"), nextCfg, { merge: true }).catch(() => {});
+                    try {
+                      await setDoc(getDocRef("family_meta_v4", "hero_photo"), nextCfg, { merge: true });
+                    } catch (err) {
+                      setSyncErrorMsg(err?.message || "홈 가족사진 저장 오류");
+                      showToast("⚠️ 클라우드 저장 실패 — 기기 내에는 반영되었습니다.");
+                    }
                   }
+                  recordActivity("홈", "가족사진수정", nextCfg.caption || "가족사진");
                   setIsHeroPhotoModalOpen(false);
                   showToast("📷 홈 가족사진이 저장되었습니다!");
                 }}

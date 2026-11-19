@@ -1175,7 +1175,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v12.12";
+export const APP_CODE_VERSION = "v12.13";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1259,6 +1259,17 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v12.13",
+    version: "v12.13",
+    date: "2026-11-19",
+    title: "홈 가족사진 변경 안 되던 오류 수정(fileToBase64 반환 객체 매핑) & 저장 피드백 고도화",
+    items: [
+      "홈 가족사진 편집에서 fileToBase64가 반환하는 객체({ previewUrl, base64, mimeType })를 그대로 넘겨 사진이 반영되지 않던 오류 수정",
+      "사진 선택 즉시 미리보기 반영 토스트 안내 및 클라우드 저장 실패 시 오류 알림 배너·최근 수정 활동 기록 연동",
+      "전체 문법·중괄호·중복 상태·임포트 경로 정적 무결성 최종 확인"
+    ]
+  },
   {
     id: "patch-v12.12",
     version: "v12.12",
