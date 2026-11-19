@@ -1091,7 +1091,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
     img.src = dataUrl;
   });
 
-export const APP_CODE_VERSION = "v12.01";
+export const APP_CODE_VERSION = "v12.02";
 
 export const formatRoutineTimeLabel = (hhmm) => {
   const m = String(hhmm || "").trim().match(/^(\d{2}):(\d{2})$/);
@@ -1169,6 +1169,16 @@ export const formatTime12Ko = (ms) => {
 };
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v12.02",
+    version: "v12.02",
+    date: "2026-11-19",
+    title: "ESC useEffect 최하단 이동 & 오류 복구 시 캐시 강제 초기화",
+    items: [
+      "ESC 키 닫기 useEffect를 MainApp의 모든 훅/상태 선언 최하단(return 직전)으로 이동",
+      "화면 자동 복구(ErrorBoundary) [새로고침] 버튼이 구버전 브라우저 캐시를 비운 뒤 재로딩하도록 개선"
+    ]
+  },
   {
     id: "patch-v12.01",
     version: "v12.01",

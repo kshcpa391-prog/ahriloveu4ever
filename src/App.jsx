@@ -186,7 +186,7 @@ class ErrorBoundary extends React.Component {
             <h2 className="text-[15.5px] font-black text-stone-900">화면 자동 복구</h2>
             <p className="text-[13.5px] text-stone-600 break-all">{this.state.errorMsg}</p>
             <button
-              onClick={() => window.location.reload()}
+              onClick={async () => { try { if ("caches" in window) { const ks = await caches.keys(); await Promise.all(ks.map((k) => caches.delete(k))); } } catch (e) {} window.location.reload(); }}
               className="w-full py-2.5 rounded-xl bg-stone-900 text-white text-[13.5px] font-extrabold"
             >
               새로고침
@@ -1638,42 +1638,6 @@ function MainApp() {
 
   // 설정 모달
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  useEffect(() => {
-    if (
-      !isQuickFabOpen &&
-      !isRoutineModalOpen &&
-      !isActivityModalOpen &&
-      !isEditorUnlockModalOpen &&
-      !isMealCopyModalOpen &&
-      !diaryExportPreviewUrl &&
-      !diaryLightboxUrl &&
-      !isWeatherModalOpen &&
-      !liveActivityPopup &&
-      !activityEditModal &&
-      !zipImportPicker &&
-      !magazineMonth &&
-      !isSettingsOpen
-    ) return;
-    const onEsc = (e) => {
-      if (e.key === "Escape") {
-        setIsQuickFabOpen(false);
-        setIsRoutineModalOpen(false);
-        setIsActivityModalOpen(false);
-        setIsEditorUnlockModalOpen(false);
-        setIsMealCopyModalOpen(false);
-        setDiaryExportPreviewUrl("");
-        setDiaryLightboxUrl("");
-        setIsWeatherModalOpen(false);
-        setLiveActivityPopup(null);
-        setActivityEditModal(null);
-        setZipImportPicker(null);
-        setMagazineMonth(null);
-        setIsSettingsOpen(false);
-      }
-    };
-    window.addEventListener("keydown", onEsc);
-    return () => window.removeEventListener("keydown", onEsc);
-  }, [isQuickFabOpen, isRoutineModalOpen, isActivityModalOpen, isEditorUnlockModalOpen, isMealCopyModalOpen, diaryExportPreviewUrl, diaryLightboxUrl, isWeatherModalOpen, liveActivityPopup, activityEditModal, zipImportPicker, magazineMonth, isSettingsOpen]);
   const [toastMsg, setToastMsg] = useState("");
 
   const canViewTab = (tabId) => {
@@ -8589,6 +8553,42 @@ ${validText}
     document.body.removeChild(link);
   };
 
+  useEffect(() => {
+    if (
+      !isQuickFabOpen &&
+      !isRoutineModalOpen &&
+      !isActivityModalOpen &&
+      !isEditorUnlockModalOpen &&
+      !isMealCopyModalOpen &&
+      !diaryExportPreviewUrl &&
+      !diaryLightboxUrl &&
+      !isWeatherModalOpen &&
+      !liveActivityPopup &&
+      !activityEditModal &&
+      !zipImportPicker &&
+      !magazineMonth &&
+      !isSettingsOpen
+    ) return;
+    const onEsc = (e) => {
+      if (e.key === "Escape") {
+        setIsQuickFabOpen(false);
+        setIsRoutineModalOpen(false);
+        setIsActivityModalOpen(false);
+        setIsEditorUnlockModalOpen(false);
+        setIsMealCopyModalOpen(false);
+        setDiaryExportPreviewUrl("");
+        setDiaryLightboxUrl("");
+        setIsWeatherModalOpen(false);
+        setLiveActivityPopup(null);
+        setActivityEditModal(null);
+        setZipImportPicker(null);
+        setMagazineMonth(null);
+        setIsSettingsOpen(false);
+      }
+    };
+    window.addEventListener("keydown", onEsc);
+    return () => window.removeEventListener("keydown", onEsc);
+  }, [isQuickFabOpen, isRoutineModalOpen, isActivityModalOpen, isEditorUnlockModalOpen, isMealCopyModalOpen, diaryExportPreviewUrl, diaryLightboxUrl, isWeatherModalOpen, liveActivityPopup, activityEditModal, zipImportPicker, magazineMonth, isSettingsOpen]);
   return (
     <div className="min-h-screen bg-[#FAF8F3] text-stone-800 pb-24 max-w-md mx-auto shadow-xl border-x border-stone-200 relative font-sans">
       {diaryUploadProgress && (
