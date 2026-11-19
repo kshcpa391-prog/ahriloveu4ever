@@ -1638,6 +1638,14 @@ function MainApp() {
 
   // 설정 모달
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [kitchenTimer, setKitchenTimer] = useState({
+    open: false,
+    mode: "countdown",
+    label: "조리 타이머",
+    running: false,
+    remainingSec: 0,
+    elapsedSec: 0
+  });
   const [toastMsg, setToastMsg] = useState("");
 
   const canViewTab = (tabId) => {
@@ -8589,6 +8597,64 @@ ${validText}
     window.addEventListener("keydown", onEsc);
     return () => window.removeEventListener("keydown", onEsc);
   }, [isQuickFabOpen, isRoutineModalOpen, isActivityModalOpen, isEditorUnlockModalOpen, isMealCopyModalOpen, diaryExportPreviewUrl, diaryLightboxUrl, isWeatherModalOpen, liveActivityPopup, activityEditModal, zipImportPicker, magazineMonth, isSettingsOpen]);
+
+  const parseCookTimeMinutes = (cookTimeStr) => {
+    const s = String(cookTimeStr || "");
+    const hMatch = s.match(/(\d+)\s*시간/);
+    const mMatch = s.match(/(\d+)\s*분/);
+    const hours = hMatch ? Number(hMatch[1]) : 0;
+    const mins = mMatch ? Number(mMatch[1]) : 0;
+    if (hours > 0 || mins > 0) return hours * 60 + mins;
+    const rawNum = s.match(/(\d+)/);
+    return rawNum ? Math.max(1, Number(rawNum[1])) : 10;
+  };
+
+  const startRecipeCookTimer = (recipe) => {
+    const mins = parseCookTimeMinutes(recipe?.cookTime || recipe?.cookMinutes || 10);
+    setKitchenTimer({
+      open: true,
+      mode: "countdown",
+      label: recipe?.title ? `${recipe.title} (${mins}분)` : `조리 타이머 (${mins}분)`,
+      running: true,
+      remainingSec: mins * 60,
+      elapsedSec: 0
+    });
+    showToast(`⏱️ ${recipe?.title || "조리"} ${mins}분 타이머를 시작했습니다!`);
+  };
+
+  useEffect(() => {
+    if (!kitchenTimer.running) return;
+    const tid = setInterval(() => {
+      setKitchenTimer((prev) => {
+        if (!prev.running) return prev;
+        if (prev.mode === "stopwatch") {
+          return { ...prev, elapsedSec: prev.elapsedSec + 1 };
+        }
+        if (prev.remainingSec <= 1) {
+          try {
+            const Ctx = window.AudioContext || window.webkitAudioContext;
+            if (Ctx) {
+              const ctx = new Ctx();
+              const osc = ctx.createOscillator();
+              const gain = ctx.createGain();
+              osc.type = "sine";
+              osc.frequency.value = 880;
+              gain.gain.value = 0.15;
+              osc.connect(gain);
+              gain.connect(ctx.destination);
+              osc.start();
+              setTimeout(() => { try { osc.stop(); ctx.close(); } catch (e) {} }, 600);
+            }
+          } catch (e) {}
+          showToast(`🔔 [${prev.label}] 조리 타이머가 완료되었습니다!`);
+          return { ...prev, running: false, remainingSec: 0 };
+        }
+        return { ...prev, remainingSec: prev.remainingSec - 1 };
+      });
+    }, 1000);
+    return () => clearInterval(tid);
+  }, [kitchenTimer.running]);
+
   return (
     <div className="min-h-screen bg-[#FAF8F3] text-stone-800 pb-24 max-w-md mx-auto shadow-xl border-x border-stone-200 relative font-sans">
       {diaryUploadProgress && (
@@ -15234,6 +15300,14 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                     <div className="flex items-center gap-1 shrink-0">
                       <button
                         type="button"
+                        onClick={() => startRecipeCookTimer(r)}
+                        className="p-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-800 text-[11px] font-extrabold whitespace-nowrap"
+                        title={`${r.cookTime || "10분"} 조리 타이머 시작`}
+                      >
+                        ⏱️
+                      </button>
+                      <button
+                        type="button"
                         onClick={() => copyTextSafe(`🍽️ [${r.category || "레시피"}] ${r.title}\n⏱️ ${r.cookTime || "20분"} · ${r.difficulty || "쉬움"}${r.ingredientsText ? `\n🧂 재료: ${r.ingredientsText}` : ""}${r.memo ? `\n📝 메모: ${r.memo}` : ""}`, "📋 레시피를 복사했습니다!")}
                         className="p-1.5 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-600 text-[11px] font-bold"
                         title="레시피 복사"
@@ -17305,6 +17379,98 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
         </button>
       )}
 
+      {kitchenTimer.open && (() => {
+        const displaySec = kitchenTimer.mode === "stopwatch" ? kitchenTimer.elapsedSec : kitchenTimer.remainingSec;
+        const mm = String(Math.floor(displaySec / 60)).padStart(2, "0");
+        const ss = String(displaySec % 60).padStart(2, "0");
+        return (
+          <div
+            style={{ bottom: "calc(4.75rem + env(safe-area-inset-bottom))" }}
+            className="fixed left-1/2 -translate-x-1/2 z-40 w-[calc(100%-2rem)] max-w-sm bg-stone-900/95 backdrop-blur text-white rounded-2xl px-3 py-2.5 shadow-2xl border border-stone-700 space-y-2"
+          >
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-1.5 min-w-0">
+                <span className={`w-2 h-2 rounded-full shrink-0 ${kitchenTimer.running ? "bg-emerald-400 animate-pulse" : "bg-stone-500"}`} />
+                <span className="text-[12px] font-extrabold truncate">{kitchenTimer.label}</span>
+              </div>
+              <div className="flex items-center gap-1 shrink-0">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setKitchenTimer((p) => ({
+                      ...p,
+                      mode: p.mode === "countdown" ? "stopwatch" : "countdown",
+                      label: p.mode === "countdown" ? "스톱워치" : "조리 타이머",
+                      running: false
+                    }))
+                  }
+                  className="px-2 py-0.5 rounded-lg bg-stone-700 hover:bg-stone-600 text-[10.5px] font-bold whitespace-nowrap"
+                >
+                  {kitchenTimer.mode === "countdown" ? "스톱워치 전환" : "타이머 전환"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setKitchenTimer((p) => ({ ...p, open: false, running: false }))}
+                  className="p-0.5 text-stone-400 hover:text-white"
+                  aria-label="타이머 닫기"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between gap-2">
+              <div className="font-mono text-[22px] font-black tracking-wider tabular-nums text-amber-300">
+                {mm}:{ss}
+              </div>
+              <div className="flex items-center gap-1">
+                {kitchenTimer.mode === "countdown" && [3, 5, 10, 15].map((m) => (
+                  <button
+                    key={m}
+                    type="button"
+                    onClick={() =>
+                      setKitchenTimer((p) => ({
+                        ...p,
+                        mode: "countdown",
+                        label: `조리 타이머 (${m}분)`,
+                        remainingSec: m * 60,
+                        running: true
+                      }))
+                    }
+                    className="px-1.5 py-1 rounded-lg bg-stone-800 hover:bg-stone-700 text-[10.5px] font-bold whitespace-nowrap"
+                  >
+                    {m}분
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => setKitchenTimer((p) => ({ ...p, running: !p.running }))}
+                  className={`px-2.5 py-1 rounded-lg text-[11.5px] font-extrabold whitespace-nowrap ${
+                    kitchenTimer.running ? "bg-amber-500 text-stone-950" : "bg-emerald-500 text-stone-950"
+                  }`}
+                >
+                  {kitchenTimer.running ? "일시정지" : "시작"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setKitchenTimer((p) => ({
+                      ...p,
+                      running: false,
+                      remainingSec: 0,
+                      elapsedSec: 0
+                    }))
+                  }
+                  className="px-2 py-1 rounded-lg bg-stone-700 hover:bg-stone-600 text-[11px] font-bold whitespace-nowrap"
+                >
+                  리셋
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* 스마트 빠른 등록 플로팅 메뉴 & FAB */}
       {isQuickFabOpen && (
         <>
@@ -17516,13 +17682,17 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                 { id: "notices", label: "가족공지", icon: "📌" },
                 { id: "ai", label: "AI추천", icon: "✨" },
                 { id: "recipes", label: "레시피북", icon: "📖" },
-                { id: "bucket", label: "버킷리스트", icon: "🌟" }
+                { id: "bucket", label: "버킷리스트", icon: "🌟" },
+                { id: "kitchen_timer", label: "조리타이머", icon: "⏱️" }
               ].map((m) => (
                 <button
                   key={m.id}
                   onClick={() => {
                     if (m.id === "daily") {
                       openDailyTodayAll();
+                    } else if (m.id === "kitchen_timer") {
+                      setKitchenTimer((p) => ({ ...p, open: true }));
+                      setIsMoreNavOpen(false);
                     } else {
                       setActiveTab(m.id);
                       setIsMoreNavOpen(false);
