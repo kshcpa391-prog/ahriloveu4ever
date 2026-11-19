@@ -1176,7 +1176,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v12.27";
+export const APP_CODE_VERSION = "v12.28";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1194,7 +1194,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-20 07:45";
+export const APP_BUILD_DATE = "2026-11-20 08:25";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1261,6 +1261,17 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v12.28",
+    version: "v12.28",
+    date: "2026-11-20",
+    title: "월간 식단 전면 개편('N끼' 제거·달력 내 메뉴 직접 표시·[한눈에] 리스트/검색·끼니 필터)",
+    items: [
+      "월간 달력 셀과 홈 바로가기 카드에서 불필요한 'N끼' 숫자 배지를 제거하고, 달력 각 날짜 칸에 실제 메뉴명(아침·점심·저녁 색상 구분)이 바로 보이도록 개편",
+      "[📅 달력 / 📋 한눈에] 전환 탭과 [전체·아침·점심·저녁] 끼니 필터를 신설해 '이번 달 저녁 메뉴만 한눈에 보기', 메뉴 검색 및 월간 식단표 1탭 복사 지원",
+      "인별 선택 바를 슬림화해 모바일 첫 화면에 달력이 더 넓게 보이도록 개선하고, 선택한 날짜 카드에 [+ 식단 추가] 바로가기 추가"
+    ]
+  },
   {
     id: "patch-v12.27",
     version: "v12.27",
