@@ -1175,7 +1175,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v12.13";
+export const APP_CODE_VERSION = "v12.15";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1259,6 +1259,28 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v12.15",
+    version: "v12.15",
+    date: "2026-11-19",
+    title: "홈 할 일 클릭 시 상세/수정 이동(체크박스로만 완료) & 일정·루틴·할 일 파일 첨부 추가",
+    items: [
+      "홈 화면 남은 할 일 항목 클릭 시 즉시 완료되지 않고 상세·수정 모달로 이동해 메모·첨부파일을 확인하도록 분리(완료는 좌측 체크버튼 클릭 시만 동작)",
+      "일정·할 일·반복 루틴 등록/수정 모달에 다중 파일 첨부(최대 5개, 이미지 라이트박스 미리보기 및 파일 다운로드/삭제) 추가",
+      "전체 문법·중괄호·중복 상태·임포트 경로 정적 무결성 최종 확인"
+    ]
+  },
+  {
+    id: "patch-v12.14",
+    version: "v12.14",
+    date: "2026-11-19",
+    title: "육아일기 '형제' → '남매' 호칭 정정 · 작성 대상 줄바꿈 교정 & 단일 아이 전환 버튼 추가",
+    items: [
+      "육아일기 작성란의 '형제 함께 쓰기 / 형제 함께 쓰는 중' 표기를 '남매 함께 쓰기 / 남매 함께 쓰는 중'으로 정정",
+      "작성 대상 라벨 줄바꿈 방지(whitespace-nowrap) 및 남매 동시 작성 시 현재 아이만 선택할 수 있는 [시목만/시율만] 빠른 버튼 추가",
+      "전체 문법·중괄호·중복 상태·임포트 경로 정적 무결성 최종 확인"
+    ]
+  },
   {
     id: "patch-v12.13",
     version: "v12.13",

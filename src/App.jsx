@@ -17655,25 +17655,42 @@ ${validText}
                       const isBoth = curIds.length >= 2;
                       return (
                         <div className="flex items-center justify-between gap-2">
-                          <span className="text-[12px] font-extrabold text-[#35503C]">
-                            ✍️ 작성 대상: {isBoth ? "👦👶 시목·시율 함께" : activeChild.name}
+                          <span className="text-[12px] font-extrabold text-[#35503C] whitespace-nowrap">
+                            ✍️ {isBoth ? "남매 함께 (시목·시율)" : `${activeChild.name} 일기`}
                           </span>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setDiaryForm((p) => ({
-                                ...p,
-                                childIds: isBoth ? [activeChild.id] : ["시목", "시율"]
-                              }))
-                            }
-                            className={`px-2.5 py-1 rounded-full text-[11px] font-extrabold border whitespace-nowrap transition ${
-                              isBoth
-                                ? "bg-[#5E7A65] text-white border-[#5E7A65]"
-                                : "bg-stone-50 text-stone-600 border-stone-200 hover:bg-stone-100"
-                            }`}
-                          >
-                            {isBoth ? "✓ 형제 함께 쓰는 중" : "+ 형제 함께 쓰기"}
-                          </button>
+                          <div className="flex items-center gap-1 shrink-0">
+                            {isBoth && (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setDiaryForm((p) => ({
+                                    ...p,
+                                    childIds: [activeChild.id]
+                                  }))
+                                }
+                                title="남매 동시 작성을 끄고 현재 선택된 아이만 작성"
+                                className="px-2 py-1 rounded-full text-[10.5px] font-bold bg-stone-100 hover:bg-stone-200 text-stone-600 whitespace-nowrap transition"
+                              >
+                                {activeChild.name}만
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setDiaryForm((p) => ({
+                                  ...p,
+                                  childIds: isBoth ? [activeChild.id] : ["시목", "시율"]
+                                }))
+                              }
+                              className={`px-2.5 py-1 rounded-full text-[11px] font-extrabold border whitespace-nowrap transition ${
+                                isBoth
+                                  ? "bg-[#5E7A65] text-white border-[#5E7A65]"
+                                  : "bg-stone-50 text-stone-600 border-stone-200 hover:bg-stone-100"
+                              }`}
+                            >
+                              {isBoth ? "✓ 남매 함께 쓰는 중" : "+ 남매 함께 쓰기"}
+                            </button>
+                          </div>
                         </div>
                       );
                     })()}
@@ -19226,6 +19243,79 @@ ${validText}
             </div>
 
 
+            <div className="p-2.5 rounded-2xl bg-stone-50 border border-stone-200 space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[12px] font-extrabold text-stone-700 whitespace-nowrap">
+                  📎 루틴 첨부파일 ({newRoutineAttachments.length}/5)
+                </span>
+                <label className="px-2.5 py-1 rounded-lg bg-white hover:bg-stone-100 border border-stone-200 text-[11.5px] font-extrabold text-stone-700 cursor-pointer whitespace-nowrap shrink-0">
+                  + 파일 추가
+                  <input
+                    type="file"
+                    multiple
+                    className="hidden"
+                    onChange={async (e) => {
+                      const rawFiles = e.target.files;
+                      const res = await readAttachmentsFromFiles(rawFiles, newRoutineAttachments);
+                      e.target.value = "";
+                      if (res.skippedLarge > 0) {
+                        showToast("⚠️ 500KB 초과 파일은 제외되었습니다.");
+                      }
+                      if (res.addedCount > 0) {
+                        setNewRoutineAttachments(res.nextList);
+                        showToast(`📎 루틴에 ${res.addedCount}개 파일이 첨부되었습니다!`);
+                      }
+                    }}
+                  />
+                </label>
+              </div>
+              {newRoutineAttachments.length > 0 && (
+                <div className="space-y-1.5">
+                  {newRoutineAttachments.map((att) => {
+                    const isImg = String(att.mimeType || "").startsWith("image/") || /^data:image\//.test(String(att.dataUrl || ""));
+                    return (
+                      <div key={att.id} className="flex items-center justify-between gap-2 bg-white px-2.5 py-1.5 rounded-xl border border-stone-200 text-[12px]">
+                        <div className="flex items-center gap-2 min-w-0 flex-1">
+                          {isImg && att.dataUrl ? (
+                            <img
+                              src={att.dataUrl}
+                              alt={att.name}
+                              onClick={() => setDiaryLightboxUrl(att.dataUrl)}
+                              className="w-8 h-8 rounded-lg object-cover border border-stone-200 cursor-pointer shrink-0"
+                            />
+                          ) : (
+                            <span className="text-sm shrink-0">📄</span>
+                          )}
+                          <a
+                            href={att.dataUrl}
+                            download={att.name}
+                            onClick={(e) => {
+                              if (isImg) {
+                                e.preventDefault();
+                                setDiaryLightboxUrl(att.dataUrl);
+                              }
+                            }}
+                            className="font-bold text-stone-800 hover:underline truncate"
+                          >
+                            {att.name}
+                          </a>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setNewRoutineAttachments((prev) => prev.filter((x) => x.id !== att.id))}
+                          className="text-stone-400 hover:text-rose-600 font-black px-1 shrink-0"
+                          aria-label="루틴 첨부 삭제"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+
             <div className="flex gap-2 pt-2">
               <button
                 type="button"
@@ -19387,13 +19477,91 @@ ${validText}
             </div>
 
 
-            <input
-              type="text"
-              placeholder="메모 (예: 식당 예약, 준비물, 선물 등)"
+            <textarea
+              rows={2}
+              placeholder="메모 (예: 준비물, 병원 안내, 예약 정보 등)"
               value={scheduleForm.memo}
               onChange={(e) => setScheduleForm({ ...scheduleForm, memo: e.target.value })}
               className="w-full px-3 py-2 rounded-xl border border-stone-200 text-[13.5px]"
             />
+
+
+            <div className="p-2.5 rounded-2xl bg-stone-50 border border-stone-200 space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[12px] font-extrabold text-stone-700 whitespace-nowrap">
+                  📎 파일 첨부 ({(scheduleForm.attachments || []).length}/5)
+                </span>
+                <label className="px-2.5 py-1 rounded-lg bg-white hover:bg-stone-100 border border-stone-200 text-[11.5px] font-extrabold text-stone-700 cursor-pointer whitespace-nowrap shrink-0">
+                  + 파일 추가
+                  <input
+                    type="file"
+                    multiple
+                    className="hidden"
+                    onChange={async (e) => {
+                      const rawFiles = e.target.files;
+                      const res = await readAttachmentsFromFiles(rawFiles, scheduleForm.attachments || []);
+                      e.target.value = "";
+                      if (res.skippedLarge > 0) {
+                        showToast("⚠️ 500KB 초과 파일은 제외되었습니다.");
+                      }
+                      if (res.addedCount > 0) {
+                        setScheduleForm((prev) => ({ ...prev, attachments: res.nextList }));
+                        showToast(`📎 ${res.addedCount}개 파일이 첨부되었습니다!`);
+                      }
+                    }}
+                  />
+                </label>
+              </div>
+              {(scheduleForm.attachments || []).length > 0 && (
+                <div className="space-y-1.5">
+                  {(scheduleForm.attachments || []).map((att) => {
+                    const isImg = String(att.mimeType || "").startsWith("image/") || /^data:image\//.test(String(att.dataUrl || ""));
+                    return (
+                      <div key={att.id} className="flex items-center justify-between gap-2 bg-white px-2.5 py-1.5 rounded-xl border border-stone-200 text-[12px]">
+                        <div className="flex items-center gap-2 min-w-0 flex-1">
+                          {isImg && att.dataUrl ? (
+                            <img
+                              src={att.dataUrl}
+                              alt={att.name}
+                              onClick={() => setDiaryLightboxUrl(att.dataUrl)}
+                              className="w-8 h-8 rounded-lg object-cover border border-stone-200 cursor-pointer shrink-0"
+                            />
+                          ) : (
+                            <span className="text-sm shrink-0">📄</span>
+                          )}
+                          <a
+                            href={att.dataUrl}
+                            download={att.name}
+                            onClick={(e) => {
+                              if (isImg) {
+                                e.preventDefault();
+                                setDiaryLightboxUrl(att.dataUrl);
+                              }
+                            }}
+                            className="font-bold text-stone-800 hover:underline truncate"
+                          >
+                            {att.name}
+                          </a>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setScheduleForm((prev) => ({
+                              ...prev,
+                              attachments: (prev.attachments || []).filter((x) => x.id !== att.id)
+                            }))
+                          }
+                          className="text-stone-400 hover:text-rose-600 font-black px-1 shrink-0"
+                          aria-label="첨부 삭제"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
 
 
             <div className="flex gap-2 pt-2">
