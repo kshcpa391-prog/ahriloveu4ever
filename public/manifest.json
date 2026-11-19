@@ -1,0 +1,25 @@
+{
+  "name": "우리 가족 식탁",
+  "short_name": "우리 가족 식탁",
+  "description": "수혁 · 아리 · 시목 · 시율네 가족 식단 · 냉장고 · 육아 · 일정 실시간 공유 앱",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#FAF8F3",
+  "theme_color": "#FAF8F3",
+  "icons": [
+    {
+      "src": "/og-family.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/og-family.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
