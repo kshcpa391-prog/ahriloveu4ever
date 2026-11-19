@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from "react";
+﻿import React, { useState, useEffect, useMemo, useRef } from "react";
 import {
   Home,
   Utensils,
@@ -144,6 +144,7 @@ import {
   callReliableAiEngine
 } from "./Constants";
 
+
 const MemberAvatar = ({ member, id, size = "sm", className = "" }) => {
   const resolved = member || FAMILY_MEMBERS.find((f) => f.id === id);
   const sizePx = size === "lg" ? 32 : size === "md" ? 24 : 16;
@@ -165,6 +166,7 @@ const MemberAvatar = ({ member, id, size = "sm", className = "" }) => {
   }
   return <span className={className}>{resolved?.emoji || "👤"}</span>;
 };
+
 
 // ==========================================
 // 4. 에러 방어막 컴포넌트
@@ -199,9 +201,11 @@ class ErrorBoundary extends React.Component {
   }
 }
 
+
 // ==========================================
 // 5. 메인 애플리케이션 컴포넌트
 // ==========================================
+
 
 const parseQuickShoppingTextLocal = (rawText) => {
   const cleaned = String(rawText || "")
@@ -212,6 +216,7 @@ const parseQuickShoppingTextLocal = (rawText) => {
     .split(",")
     .map((s) => s.trim())
     .filter((s) => s.length >= 1);
+
 
   const inferCategory = (name) => {
     const n = String(name || "");
@@ -224,6 +229,7 @@ const parseQuickShoppingTextLocal = (rawText) => {
     if (/(양파|대파|마늘|감자|고구마|당근|브로콜리|시금치|애호박|무|배추|상추|깻잎|토마토|사과|바나나|딸기|포도|귤|버섯|콩나물|숙주|고사리|고추)/.test(n)) return "채소/과일";
     return "기타";
   };
+
 
   const results = [];
   for (const chunk of chunks) {
@@ -244,6 +250,7 @@ const parseQuickShoppingTextLocal = (rawText) => {
   return results;
 };
 
+
 const computeFridgeProjectedUsage = (fridgeList, mealsList, baseDateStr, addDaysFn, matchFn, convertFn) => {
   const upcomingDates = new Set(
     Array.from({ length: 7 }, (_, i) => addDaysFn(baseDateStr, 0, i))
@@ -251,11 +258,13 @@ const computeFridgeProjectedUsage = (fridgeList, mealsList, baseDateStr, addDays
   const upcomingMeals = (mealsList || []).filter((m) => upcomingDates.has(m?.date));
   const result = {};
 
+
   for (const item of fridgeList || []) {
     if (!item?.id) continue;
     let plannedQty = 0;
     let unitCompatible = true;
     const matchedMeals = [];
+
 
     for (const meal of upcomingMeals) {
       const ings = Array.isArray(meal?.ingredients) ? meal.ingredients : [];
@@ -264,6 +273,7 @@ const computeFridgeProjectedUsage = (fridgeList, mealsList, baseDateStr, addDays
         if (!ingName) continue;
         const matched = matchFn(ingName, [item]);
         if (!matched) continue;
+
 
         const rawQty = typeof ing === "object" ? Number(ing?.qty ?? ing?.quantity ?? 0) : 0;
         const rawUnit = typeof ing === "object" ? (ing?.unit || item.unit || "개") : (item.unit || "개");
@@ -281,6 +291,7 @@ const computeFridgeProjectedUsage = (fridgeList, mealsList, baseDateStr, addDays
       }
     }
 
+
     const currentQty = Number(item.quantity || 0);
     const roundedPlanned = Math.round(plannedQty * 100) / 100;
     const projectedRemaining = unitCompatible ? Math.round((currentQty - roundedPlanned) * 100) / 100 : currentQty;
@@ -294,6 +305,7 @@ const computeFridgeProjectedUsage = (fridgeList, mealsList, baseDateStr, addDays
   return result;
 };
 
+
 function MainApp() {
   const [user, setUser] = useState(null);
   const [activeTab, setActiveTab] = useState("home");
@@ -304,6 +316,7 @@ function MainApp() {
     setIsQuickFabOpen(false);
     if (activeTab !== "home") setIsHomeEditMode(false);
   }, [activeTab]);
+
 
   const [homeRoutineDayOffset, setHomeRoutineDayOffset] = useState(0);
   const [homeRoutineSlotFilter, setHomeRoutineSlotFilter] = useState(() => {
@@ -363,6 +376,7 @@ function MainApp() {
   const homeDragRef = useRef(null);
   const homeDragOverRef = useRef("");
   const [homeDragOverKey, setHomeDragOverKey] = useState("");
+
 
   const syncHomeSettingsToCloud = async (nextLayout, nextRanges, nextRoutineRanges = null, nextSlotDefs = null) => {
     if (!user || !db || !isEditorUnlocked) return;
@@ -425,6 +439,7 @@ function MainApp() {
     return normalized;
   };
 
+
   const [homeLayoutConfig, setHomeLayoutConfig] = useState(() => {
     try {
       const raw = localStorage.getItem("kim_home_layout_v1");
@@ -435,16 +450,19 @@ function MainApp() {
   const [selectedDate, setSelectedDate] = useState(() => getTodayStr());
   const [selectedMember, setSelectedMember] = useState("전체");
 
+
   // 상단 바 틀고정(Sticky) 해제 상태
   const [isHeaderPinned, setIsHeaderPinned] = useState(() => {
     try { return localStorage.getItem("kim_header_pinned") === "true"; } catch (e) { return false; }
   });
+
 
   // 실시간 서울 중구 날씨 & 미세먼지 상태
   const [weatherInfo, setWeatherInfo] = useState(null);
   const [isWeatherLoading, setIsWeatherLoading] = useState(true);
   const [weatherError, setWeatherError] = useState("");
   const [aiDiagStatus, setAiDiagStatus] = useState("");
+
 
   // 패치노트 기록 및 모달 상태
   const [patchNotes, setPatchNotes] = useState(INITIAL_PATCH_NOTES);
@@ -459,6 +477,7 @@ function MainApp() {
   const [isCookingDeducting, setIsCookingDeducting] = useState(false);
   const [restoringLogIds, setRestoringLogIds] = useState([]);
 
+
   const syncStatus = !isOnline
     ? "offline"
     : syncErrorMsg
@@ -468,6 +487,7 @@ function MainApp() {
     : user && db
     ? "connected"
     : "connecting";
+
 
   const beginWrite = () => {
     setSyncErrorMsg("");
@@ -614,6 +634,7 @@ function MainApp() {
   const [selectedCopyMealIds, setSelectedCopyMealIds] = useState([]);
   const [copyTargetStatus, setCopyTargetStatus] = useState("planned");
 
+
   const [babyDiaryEntries, setBabyDiaryEntries] = useState([]);
   const [diaryForm, setDiaryForm] = useState({
     date: getTodayStr(),
@@ -682,14 +703,17 @@ function MainApp() {
     changesText: ""
   });
 
+
   const [mealsMap, setMealsMap] = useState({});
   const [fridgeMap, setFridgeMap] = useState({});
   const [expenses, setExpenses] = useState([]);
   const [wasteEvents, setWasteEvents] = useState([]);
 
+
   // [신규 v7.0] 육아수첩 상태 (선택한 아이, 서브탭, 접종체크, 성장기록, 진료/열 메모)
   const [aiCallLogs, setAiCallLogs] = useState([]);
   const [cookingConfirmModal, setCookingConfirmModal] = useState(null);
+
 
   const [selectedChildId, setSelectedChildId] = useState("시율");
   const [babySubTab, setBabySubTab] = useState("activity");
@@ -711,6 +735,7 @@ function MainApp() {
   const diaperPressTimerRef = useRef(null);
   const diaperLongPressedRef = useRef(false);
 
+
   useEffect(() => {
     const onScroll = () => {
       setShowScrollTop((window.scrollY || document.documentElement.scrollTop || 0) > 320);
@@ -718,6 +743,7 @@ function MainApp() {
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
+
 
   useEffect(() => {
     const hasActive = babyActivities.some((a) => a.inProgress);
@@ -761,6 +787,7 @@ function MainApp() {
   const dragOverZoneRef = useRef("");
   const justDraggedRef = useRef(false);
 
+
   // [v10.24] 드롭 직후 스크롤 멈춤 방지를 위해 body overflow 토글 제거 & 동기식 리스너 제어
   const touchMoveBlockerRef = useRef(null);
   const enableChipTouchScrollLock = () => {
@@ -779,6 +806,7 @@ function MainApp() {
   };
   useEffect(() => () => disableChipTouchScrollLock(), []);
   const [visualExpiringOnly, setVisualExpiringOnly] = useState(false);
+
 
   // [신규 v10.8] 가족 레시피북 상태
   const [recipes, setRecipes] = useState([]);
@@ -826,6 +854,7 @@ function MainApp() {
     }
   });
 
+
   const [lastAutoBackupSlot, setLastAutoBackupSlot] = useState(() => {
     try { return localStorage.getItem("kim_twice_daily_backup_slot") || ""; } catch (e) { return ""; }
   });
@@ -837,6 +866,7 @@ function MainApp() {
   });
   const [isRestoringJson, setIsRestoringJson] = useState(false);
   const jsonRestoreInputRef = useRef(null);
+
 
   // 월간 캘린더 & 식비 가계부 상태
   const [monthlySubTab, setMonthlySubTab] = useState("calendar");
@@ -853,6 +883,7 @@ function MainApp() {
   const [monthlyBudget, setMonthlyBudget] = useState(() => {
     return Number(localStorage.getItem("kim_family_budget") || 800000);
   });
+
 
   // 일정 탭 상태 + [신규] 전체 To-Do 체크리스트 필터 및 빠른 추가 상태
   const [scheduleMonth, setScheduleMonth] = useState(() => getCurrentYearMonth());
@@ -914,6 +945,7 @@ function MainApp() {
       document.removeEventListener("visibilitychange", onFocusOrVisible);
     };
   }, []);
+
 
   const syncRoutinesToCloud = async (nextList, op = null) => {
     try {
@@ -978,6 +1010,7 @@ function MainApp() {
     }
   };
 
+
   const getRoutineResetKey = (rt, dayStr = currentDayKey) => {
     if (!rt) return dayStr;
     if (rt.cycle === "weekly") return getIsoWeekKey(dayStr);
@@ -985,11 +1018,13 @@ function MainApp() {
     return dayStr;
   };
 
+
   const getMonthlyRoutineDueInfo = (rt, dayStr = currentDayKey) => {
     if (!rt || (rt.cycle !== "monthly" && rt.cycle !== "monthly_weekday")) return null;
     const info = getRoutineNextDateInfo(rt, dayStr);
     return info ? { targetDay: rt.monthDay || 1, diff: info.diff, dateLabel: info.dateLabel } : null;
   };
+
 
   const getIntervalRoutineInfo = (rt, dayStr = currentDayKey) => {
     if (!rt || rt.cycle !== "interval") return null;
@@ -1005,6 +1040,7 @@ function MainApp() {
     return { done, daysLeft: Math.max(0, intervalDays - elapsed), intervalDays };
   };
 
+
   const isRoutineDoneNow = (rt) => {
     if (!rt) return false;
     if (rt.cycle === "interval") {
@@ -1012,6 +1048,7 @@ function MainApp() {
     }
     return rt.lastDoneKey === getRoutineResetKey(rt, currentDayKey);
   };
+
 
   const isRoutineDueTodayOrPast = (rt, dayStr = currentDayKey) => {
     if (!rt) return false;
@@ -1049,6 +1086,7 @@ function MainApp() {
     return true;
   };
 
+
   const isRoutineDueOnExactDay = (rt, dayStr) => {
     if (!rt) return false;
     const dStr = String(dayStr || "").slice(0, 10);
@@ -1084,6 +1122,7 @@ function MainApp() {
     return true;
   };
 
+
   const isRoutineDoneOnDay = (rt, dayStr) => {
     if (!rt) return false;
     const dStr = String(dayStr || "").slice(0, 10);
@@ -1098,6 +1137,7 @@ function MainApp() {
     }
     return rt.lastDoneKey === getRoutineResetKey(rt, dStr);
   };
+
 
   const handleToggleRoutine = (rtId) => {
     if (!requireEditorAccess("schedule")) return;
@@ -1133,6 +1173,7 @@ function MainApp() {
     syncRoutinesToCloud(nextList, updatedItem ? { type: "upsert", item: updatedItem } : null);
   };
 
+
   const getRoutineSubStepDoneSet = (rt) => {
     if (!rt) return new Set();
     const targetKey = rt.cycle === "interval" ? currentDayKey : getRoutineResetKey(rt, currentDayKey);
@@ -1141,6 +1182,7 @@ function MainApp() {
     }
     return new Set();
   };
+
 
   const handleToggleRoutineSubStep = (rtId, stepIdx, totalSteps) => {
     if (!requireEditorAccess("schedule")) return;
@@ -1177,6 +1219,7 @@ function MainApp() {
     syncRoutinesToCloud(nextList, updatedItem ? { type: "upsert", item: updatedItem } : null);
   };
 
+
   const handleStartEditRoutine = (rt) => {
     if (!requireEditorAccess() || !rt) return;
     setEditingRoutineId(rt.id);
@@ -1194,6 +1237,7 @@ function MainApp() {
     setIsRoutineModalOpen(true);
   };
 
+
   const openNewRoutineModal = () => {
     if (!requireEditorAccess()) return;
     setEditingRoutineId(null);
@@ -1209,12 +1253,14 @@ function MainApp() {
     setIsRoutineModalOpen(true);
   };
 
+
   const handleCancelEditRoutine = () => {
     setEditingRoutineId(null);
     setNewRoutineTitle("");
     setNewRoutineScheduledTime("");
     setIsRoutineModalOpen(false);
   };
+
 
   const handleAddRoutine = () => {
     if (!requireEditorAccess("schedule")) return;
@@ -1300,6 +1346,7 @@ function MainApp() {
     showToast(`🔄 '${title}' 루틴이 추가되었습니다!`);
   };
 
+
   const handleDeleteRoutine = (rtId) => {
     if (!requireEditorAccess("schedule")) return;
     const nextList = familyRoutines.filter((r) => r.id !== rtId);
@@ -1309,6 +1356,7 @@ function MainApp() {
     syncRoutinesToCloud(nextList, { type: "delete", id: rtId });
   };
 
+
   const handleClearCompletedTodos = async () => {
     if (!requireEditorAccess()) return;
     const completedTodos = allTodoChecklistItems.filter((s) => s.done && s.category === "할일(To-Do)");
@@ -1316,6 +1364,7 @@ function MainApp() {
       showToast("정리할 완료된 할 일(To-Do)이 없습니다.");
       return;
     }
+    if (!window.confirm(`완료된 할 일 ${completedTodos.length}건을 모두 비울까요?`)) return;
     const delIds = completedTodos.map((s) => s.id);
     const delSet = new Set(delIds);
     setSchedules((prev) => prev.filter((s) => !delSet.has(s.id)));
@@ -1360,6 +1409,7 @@ function MainApp() {
     memo: ""
   });
 
+
   // 식단 모달 상태
   const [isMealModalOpen, setIsMealModalOpen] = useState(false);
   const [mealChipInput, setMealChipInput] = useState("");
@@ -1388,6 +1438,7 @@ function MainApp() {
     }
   });
 
+
   const syncMealFavoritesToCloud = async (nextCombos, nextSingles) => {
     try {
       localStorage.setItem("kim_favorite_meal_combos_v1", JSON.stringify(nextCombos));
@@ -1404,6 +1455,7 @@ function MainApp() {
     }
   };
 
+
   const handleAddFavoriteSingleMenu = (rawName) => {
     const clean = String(rawName || "").trim();
     if (!clean) return;
@@ -1417,11 +1469,13 @@ function MainApp() {
     showToast(`⭐ '${clean}' 단일 메뉴 즐겨찾기에 등록했습니다!`);
   };
 
+
   const handleRemoveFavoriteSingleMenu = (targetName) => {
     const next = favoriteSingleMenus.filter((x) => x !== targetName);
     setFavoriteSingleMenus(next);
     syncMealFavoritesToCloud(favoriteMealCombos, next);
   };
+
 
   const appendMenuChipToForm = (rawItem) => {
     const item = String(rawItem || "").trim();
@@ -1436,6 +1490,7 @@ function MainApp() {
     });
   };
 
+
   const [editingMeal, setEditingMeal] = useState(null);
   const [mealForm, setMealForm] = useState({
     date: getTodayStr(),
@@ -1449,9 +1504,11 @@ function MainApp() {
     mealStatus: "recorded"
   });
 
+
   // 냉장고 모달 상태
   const [isFridgeModalOpen, setIsFridgeModalOpen] = useState(false);
   const [isExpiryManuallyEdited, setIsExpiryManuallyEdited] = useState(false);
+
 
   const getDefaultExpiryForLocation = (loc) => {
     const todayStr = getTodayStr();
@@ -1459,6 +1516,7 @@ function MainApp() {
       ? addMonthsToDateStr(todayStr, 1, 0)
       : addMonthsToDateStr(todayStr, 0, 7);
   };
+
 
   const openAddFridgeModal = () => {
     const defaultLoc = fridgeLocFilter === "전체" ? "냉장실" : fridgeLocFilter;
@@ -1513,6 +1571,7 @@ function MainApp() {
   const [fridgeLocFilter, setFridgeLocFilter] = useState("전체");
   const [fridgeCatFilter, setFridgeCatFilter] = useState("전체");
 
+
   // 장보기 메모 상태
   const [shoppingForm, setShoppingForm] = useState({
     name: "",
@@ -1525,6 +1584,7 @@ function MainApp() {
   const [stockInPrice, setStockInPrice] = useState("");
   const [stockInLocation, setStockInLocation] = useState("냉장실");
 
+
   // 가족 공지사항 상태
   const [isNoticeModalOpen, setIsNoticeModalOpen] = useState(false);
   const [editingNotice, setEditingNotice] = useState(null);
@@ -1535,6 +1595,7 @@ function MainApp() {
     author: "수혁",
     pinned: true
   });
+
 
   // AI 추천 상태
   const [geminiApiKey, setGeminiApiKey] = useState(() => {
@@ -1582,6 +1643,7 @@ function MainApp() {
   const [selfTestResults, setSelfTestResults] = useState(null);
   const [isSavingPlan, setIsSavingPlan] = useState(false);
 
+
   // 전체 재고 텍스트 내보내기 모달 상태
   const [isInventoryExportOpen, setIsInventoryExportOpen] = useState(false);
   const [exportIncludePrice, setExportIncludePrice] = useState(false);
@@ -1596,6 +1658,7 @@ function MainApp() {
   const [quickLogDate, setQuickLogDate] = useState(() => getTodayStr());
   const [quickLogSlot, setQuickLogSlot] = useState("저녁");
 
+
   // AI 플레이팅 코치 (사진 업로드 분석) 상태
   const [platingPreviewUrl, setPlatingPreviewUrl] = useState("");
   const [platingImagePart, setPlatingImagePart] = useState(null);
@@ -1608,6 +1671,7 @@ function MainApp() {
   const platingFileInputRef = useRef(null);
   const currentMilestoneRef = useRef(null);
 
+
   // 식단표 이미지 AI 스캐너 상태
   const [isDaycareModalOpen, setIsDaycareModalOpen] = useState(false);
   const [scanTargetMonth, setScanTargetMonth] = useState(() => getCurrentYearMonth());
@@ -1618,6 +1682,7 @@ function MainApp() {
   const [scannedMenuDays, setScannedMenuDays] = useState([]);
   const [scanErrorMsg, setScanErrorMsg] = useState("");
   const menuFileInputRef = useRef(null);
+
 
   // 마트 영수증 실제 이미지 스캐너 상태
   const [isReceiptModalOpen, setIsReceiptModalOpen] = useState(false);
@@ -1635,6 +1700,7 @@ function MainApp() {
   const [scannedReceiptItems, setScannedReceiptItems] = useState([]);
   const [receiptErrorMsg, setReceiptErrorMsg] = useState("");
   const receiptFileInputRef = useRef(null);
+
 
   // 설정 모달
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -1667,17 +1733,20 @@ function MainApp() {
   });
   const [toastMsg, setToastMsg] = useState("");
 
+
   const canViewTab = (tabId) => {
     if (isAdminUnlocked) return true;
     if (isHelperUnlocked) return tabId === "home" || helperAllowedTabs.includes(tabId);
     return tabId === "home" || guestAllowedTabs.includes(tabId);
   };
 
+
   const canEditTab = (tabId = activeTab) => {
     if (isAdminUnlocked) return true;
     if (isHelperUnlocked) return tabId === "home" ? true : helperEditTabs.includes(tabId);
     return false;
   };
+
 
   const ACTIVITY_CAT_TAB_MAP = {
     "식단": "daily",
@@ -1700,6 +1769,8 @@ function MainApp() {
   }, [recentActivities, isAdminUnlocked, accessRole, helperAllowedTabs, guestAllowedTabs]);
 
 
+
+
   const requireEditorAccess = (targetTab = activeTab) => {
     if (canEditTab(targetTab)) return true;
     if (accessRole === "guest") {
@@ -1712,6 +1783,7 @@ function MainApp() {
     setIsEditorUnlockModalOpen(true);
     return false;
   };
+
 
   const formatActivityTime = (atMs) => {
     if (!atMs) return "";
@@ -1728,6 +1800,7 @@ function MainApp() {
     if (d.toDateString() === yest.toDateString()) return `어제 ${hh}:${mm}`;
     return `${d.getMonth() + 1}/${d.getDate()} ${hh}:${mm}`;
   };
+
 
   const recordActivity = (category, action, detail = "", extra = {}) => {
     if (accessRole === "guest") return;
@@ -1775,6 +1848,7 @@ function MainApp() {
     });
   };
 
+
   const handleNavigateFromActivity = (act) => {
     if (!act) return;
     const targetT = ACTIVITY_CAT_TAB_MAP[act.category];
@@ -1802,6 +1876,7 @@ function MainApp() {
     }
   };
 
+
   const saveAccessConfigToCloud = async (cfg = {}) => {
     const nextAdmin = String(cfg.adminCode ?? adminCode).trim() || EDITOR_INVITE_CODE;
     const nextHelper = String(cfg.helperCode ?? helperCode).trim() || DEFAULT_HELPER_CODE;
@@ -1813,6 +1888,7 @@ function MainApp() {
       : helperAllowedTabs;
     const nextEditRaw = Array.isArray(cfg.helperEditTabs) ? cfg.helperEditTabs : helperEditTabs;
     const nextEdit = nextEditRaw.filter((t) => t !== "home" && nextView.includes(t));
+
 
     setAdminCode(nextAdmin);
     setAdminCodeDraft(nextAdmin);
@@ -1849,6 +1925,7 @@ function MainApp() {
       }
     }
   };
+
 
   const applyLoginCode = (rawCode) => {
     const code = String(rawCode || "").trim();
@@ -1888,6 +1965,7 @@ function MainApp() {
     return false;
   };
 
+
   const logoutToGuest = () => {
     try {
       localStorage.setItem("family_access_role_v1", "guest");
@@ -1899,6 +1977,7 @@ function MainApp() {
     if (!guestAllowedTabs.includes(activeTab)) setActiveTab("home");
     showToast("🔒 로그아웃되어 열람 제한 모드로 전환되었습니다.");
   };
+
 
   const renderStatusState = ({ type = "empty", title, description, actionLabel, onAction }) => {
     const tone =
@@ -1925,6 +2004,7 @@ function MainApp() {
       </div>
     );
   };
+
 
   const renderLockedTabScreen = (tabLabel) => (
     <div className="p-4">
@@ -1960,6 +2040,7 @@ function MainApp() {
     </div>
   );
 
+
   const showToast = (msg, undoAction = null) => {
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
     setToastMsg(msg);
@@ -1969,6 +2050,7 @@ function MainApp() {
       setToastUndo(null);
     }, undoAction ? 5000 : 3500);
   };
+
 
   const copyTextSafe = async (text, successMsg = "📋 복사했습니다!") => {
     const val = String(text ?? "");
@@ -1997,6 +2079,7 @@ function MainApp() {
     showToast("⚠️ 복사에 실패했습니다.");
     return false;
   };
+
 
   const recordDeletedLog = async (type, label, data, actionType = "delete") => {
     if (!data?.id) return null;
@@ -2029,6 +2112,7 @@ function MainApp() {
     return entry;
   };
 
+
   const restoreDeletedLogEntry = async (entry) => {
     if (!requireEditorAccess()) return;
     if (!entry?.data?.id) return;
@@ -2037,6 +2121,7 @@ function MainApp() {
       showToast("⚠️ 서버 연결 후 복구할 수 있습니다.");
       return;
     }
+
 
     const itemId = entry.data.id;
     setRestoringLogIds((prev) => [...prev, entry.logId]);
@@ -2050,6 +2135,7 @@ function MainApp() {
           : entry.type === "fridge"
           ? getDocRef("family_fridge_v4", itemId)
           : getDocRef("family_schedules_v4", itemId);
+
 
       await runTransaction(db, async (tx) => {
         const existingPrimary = await tx.get(primaryRef);
@@ -2075,6 +2161,7 @@ function MainApp() {
         tx.set(trackerRef, { ids: arrayRemove(itemId) }, { merge: true });
         tx.delete(logRef);
       });
+
 
       setDeletedIds((prev) => {
         const next = prev.filter((x) => x !== itemId);
@@ -2107,6 +2194,7 @@ function MainApp() {
     }
   };
 
+
   useEffect(() => {
     const onOnline = () => {
       setIsOnline(true);
@@ -2120,6 +2208,7 @@ function MainApp() {
       window.removeEventListener("offline", onOffline);
     };
   }, []);
+
 
   useEffect(() => {
     if (!user || !db) return;
@@ -2146,6 +2235,7 @@ function MainApp() {
     return () => unsub && unsub();
   }, [user]);
 
+
   useEffect(() => {
     if (!isMoreNavOpen) return;
     const prevOverflow = document.body.style.overflow;
@@ -2165,6 +2255,7 @@ function MainApp() {
     };
   }, [isMoreNavOpen]);
 
+
   // 실시간 서울 중구 날씨(오늘 + 7일 주간예보) + 미세먼지(PM10, PM2.5) 조회 (Open-Meteo + wttr.in 백업)
   const fetchSeoulJungGuWeather = async () => {
     setIsWeatherLoading(true);
@@ -2181,9 +2272,11 @@ function MainApp() {
         )
       ]);
 
+
       if (!weatherRes.ok) throw new Error(`Weather HTTP ${weatherRes.status}`);
       const wData = await weatherRes.json();
       const aData = airRes.ok ? await airRes.json() : null;
+
 
       const curTemp = Math.round(wData?.current?.temperature_2m ?? 12);
       const wCode = wData?.current?.weather_code ?? 0;
@@ -2191,9 +2284,11 @@ function MainApp() {
       const minT = Math.round(wData?.daily?.temperature_2m_min?.[0] ?? curTemp - 4);
       const parsed = parseWeatherCode(wCode, curTemp);
 
+
       const pm10 = Math.round(aData?.current?.pm10 ?? 0);
       const pm25 = Math.round(aData?.current?.pm2_5 ?? 0);
       const dust = getDustGrade(pm10, pm25);
+
 
       const dailyTimes = wData?.daily?.time || [];
       const weeklyForecast = dailyTimes.map((dateStr, idx) => {
@@ -2212,6 +2307,7 @@ function MainApp() {
           rainProb
         };
       });
+
 
       const now = new Date();
       const todayKey = formatDate(now);
@@ -2238,10 +2334,12 @@ function MainApp() {
         });
       });
 
+
       const upcomingHours = todayHourly.filter((h) => h.hour >= curHour);
       const upcomingRainHours = upcomingHours.filter((h) => h.isRainy);
       const maxUpcomingProb = upcomingHours.reduce((mx, h) => Math.max(mx, h.rainProb), 0);
       const todayMaxRainProb = Math.round(wData?.daily?.precipitation_probability_max?.[0] ?? maxUpcomingProb);
+
 
       let rainBarText = `☔ ${maxUpcomingProb}%`;
       let rainAlertText = "오늘 남은 시간 비 소식이 없습니다";
@@ -2257,10 +2355,12 @@ function MainApp() {
         rainAlertText = `☔ 오늘 최대 강수확률 ${todayMaxRainProb}%`;
       }
 
+
       weatherLastFetchedMsRef.current = Date.now();
       const updatedTime = `${String(now.getHours()).padStart(2, "0")}:${String(
         now.getMinutes()
       ).padStart(2, "0")}`;
+
 
       setWeatherInfo({
         location: "서울 중구",
@@ -2321,6 +2421,7 @@ function MainApp() {
     }
   };
 
+
   useEffect(() => {
     if (activeTab === "baby" && babySubTab === "milestones") {
       const timer = setTimeout(() => {
@@ -2330,11 +2431,13 @@ function MainApp() {
     }
   }, [activeTab, babySubTab, selectedChildId]);
 
+
   useEffect(() => {
     fetchSeoulJungGuWeather();
     const interval = setInterval(fetchSeoulJungGuWeather, 15 * 60 * 1000); // 15분마다 자동 업데이트
     return () => clearInterval(interval);
   }, []);
+
 
   const pushAiLog = (provider, task, ok, detail) => {
     const now = new Date();
@@ -2344,12 +2447,14 @@ function MainApp() {
     setAiCallLogs((prev) => [{ id: Date.now() + Math.random(), time: timeStr, provider, task, ok, detail }, ...prev].slice(0, 15));
   };
 
+
   // [v7.1 개선] OpenAI GPT + Google Gemini 통합 자가진단 테스트
   const handleRunAiDiagnostic = async () => {
     setAiDiagStatus("진단 중... GPT 및 Gemini 서버 상태를 확인하고 있습니다.");
     const testGeminiKey = String(tempKeyInput || geminiApiKey || "").trim();
     const testOpenaiKey = String(tempOpenaiKeyInput || openaiApiKey || "").trim();
     const reportLines = [];
+
 
     if (testOpenaiKey) {
       try {
@@ -2380,6 +2485,7 @@ function MainApp() {
     } else {
       reportLines.push("⚪ [OpenAI GPT] API 키 미입력");
     }
+
 
     if (testGeminiKey) {
       try {
@@ -2412,8 +2518,10 @@ function MainApp() {
       reportLines.push("⚪ [Gemini] API 키 미입력");
     }
 
+
     setAiDiagStatus(reportLines.join("\n"));
   };
+
 
   // ==========================================
   // 6. 파이어베이스 실시간 동기화
@@ -2448,10 +2556,13 @@ function MainApp() {
     };
   }, []);
 
+
   useEffect(() => {
     if (!user || !db) return;
 
+
     const unsubscribers = [];
+
 
     unsubscribers.push(
       onSnapshot(
@@ -2576,6 +2687,7 @@ function MainApp() {
       )
     );
 
+
     [getColRef("family_meals_v3"), getColRef("family_meals_v4")].forEach((colRef, idx) => {
       const unsub = onSnapshot(
         colRef,
@@ -2609,6 +2721,7 @@ function MainApp() {
       unsubscribers.push(unsub);
     });
 
+
     [getColRef("family_fridge_v3"), getColRef("family_fridge_v4")].forEach((colRef, idx) => {
       const unsub = onSnapshot(
         colRef,
@@ -2631,6 +2744,7 @@ function MainApp() {
       unsubscribers.push(unsub);
     });
 
+
     unsubscribers.push(
       onSnapshot(
         getColRef("family_expenses_v4"),
@@ -2641,6 +2755,7 @@ function MainApp() {
       )
     );
 
+
     unsubscribers.push(
       onSnapshot(
         getColRef("family_inventory_events_v7"),
@@ -2650,6 +2765,7 @@ function MainApp() {
         (err) => setSyncErrorMsg(err?.message || "폐기 기록 동기화 오류")
       )
     );
+
 
     unsubscribers.push(
       onSnapshot(
@@ -2665,6 +2781,7 @@ function MainApp() {
       )
     );
 
+
     unsubscribers.push(
       onSnapshot(
         getColRef("family_baby_growth_v7"),
@@ -2676,6 +2793,7 @@ function MainApp() {
         (err) => setSyncErrorMsg(err?.message || "성장 기록 동기화 오류")
       )
     );
+
 
     unsubscribers.push(
       onSnapshot(
@@ -2689,6 +2807,7 @@ function MainApp() {
       )
     );
 
+
     unsubscribers.push(
       onSnapshot(
         getColRef("family_baby_notes_v7"),
@@ -2700,6 +2819,7 @@ function MainApp() {
         (err) => setSyncErrorMsg(err?.message || "진료 메모 동기화 오류")
       )
     );
+
 
     unsubscribers.push(
       onSnapshot(
@@ -2713,6 +2833,7 @@ function MainApp() {
       )
     );
 
+
     unsubscribers.push(
       onSnapshot(
         getColRef("family_shopping_v4"),
@@ -2723,6 +2844,7 @@ function MainApp() {
         (err) => setSyncErrorMsg(err?.message || "장보기 동기화 오류")
       )
     );
+
 
     unsubscribers.push(
       onSnapshot(
@@ -2754,6 +2876,7 @@ function MainApp() {
       )
     );
 
+
     if (isAdminUnlocked) {
       unsubscribers.push(
         onSnapshot(
@@ -2771,6 +2894,7 @@ function MainApp() {
       setBabyDiaryEntries([]);
     }
 
+
     unsubscribers.push(
       onSnapshot(
         getColRef("family_notices_v4"),
@@ -2782,6 +2906,7 @@ function MainApp() {
       )
     );
 
+
     unsubscribers.push(
       onSnapshot(
         getColRef("family_bucket_v1"),
@@ -2792,6 +2917,7 @@ function MainApp() {
         () => {}
       )
     );
+
 
     unsubscribers.push(
       onSnapshot(
@@ -2812,6 +2938,7 @@ function MainApp() {
       )
     );
 
+
     unsubscribers.push(
       onSnapshot(
         getColRef("family_schedules_v4"),
@@ -2822,6 +2949,7 @@ function MainApp() {
             members: toSafeArray(d.data().members)
           }));
 
+
           const loadedIds = new Set(loaded.map((s) => s.id));
           let delList = [];
           try {
@@ -2831,9 +2959,11 @@ function MainApp() {
             delList = [];
           }
 
+
           const missingDefaults = INITIAL_SCHEDULES.filter(
             (initItem) => !loadedIds.has(initItem.id) && !delList.includes(initItem.id)
           );
+
 
           if (missingDefaults.length > 0) {
             for (const item of missingDefaults) {
@@ -2842,6 +2972,7 @@ function MainApp() {
               } catch (e) {}
             }
           }
+
 
           const mergedList = [
             ...loaded.filter((s) => !delList.includes(s.id)),
@@ -2852,6 +2983,7 @@ function MainApp() {
         (err) => setSyncErrorMsg(err?.message || "일정 동기화 오류")
       )
     );
+
 
     unsubscribers.push(
       onSnapshot(
@@ -2892,10 +3024,12 @@ function MainApp() {
       )
     );
 
+
     return () => {
       unsubscribers.forEach((u) => u && u());
     };
   }, [user]);
+
 
   const meals = useMemo(() => {
     const merged = {};
@@ -2913,6 +3047,7 @@ function MainApp() {
     return Object.values(merged);
   }, [mealsMap, deletedIds]);
 
+
   const recentSingleMenuChips = useMemo(() => {
     const counts = new Map();
     for (const m of meals) {
@@ -2929,6 +3064,7 @@ function MainApp() {
       .slice(0, 8)
       .map(([name]) => name);
   }, [meals]);
+
 
   const knownMenuSuggestions = useMemo(() => {
     const seen = new Map();
@@ -2949,6 +3085,7 @@ function MainApp() {
     return Array.from(seen.values());
   }, [favoriteSingleMenus, recipes, recentSingleMenuChips, meals]);
 
+
   const fridge = useMemo(() => {
     const merged = {};
     ["local", "restored", "src_0", "src_1"].forEach((key) => {
@@ -2961,6 +3098,7 @@ function MainApp() {
     });
     return Object.values(merged);
   }, [fridgeMap, deletedIds]);
+
 
   const knownIngredientList = useMemo(() => {
     const map = new Map();
@@ -2989,6 +3127,7 @@ function MainApp() {
     });
     return Array.from(map.values());
   }, [fridge, shoppingList, recipes]);
+
 
   // 하루 2번(오전 AM / 오후 PM) + 전체 컬렉션 내용 해시(FNV-1a) 변경 감지 자동 클라우드 스냅샷 백업 엔진
   useEffect(() => {
@@ -3022,6 +3161,7 @@ function MainApp() {
       try { return localStorage.getItem("kim_last_backup_sig_v1") || ""; } catch (e) { return ""; }
     })();
     if (lastAutoBackupSlot === currentSlot && lastSig === dataSig) return;
+
 
     const timer = setTimeout(async () => {
       try {
@@ -3059,6 +3199,7 @@ function MainApp() {
       }
     }, 3500);
 
+
     return () => clearTimeout(timer);
   }, [
     user,
@@ -3078,6 +3219,7 @@ function MainApp() {
     backupEmail
   ]);
 
+
   // 상단 바 틀고정 토글 핸들러
   const handleToggleHeaderPin = () => {
     const next = !isHeaderPinned;
@@ -3090,6 +3232,7 @@ function MainApp() {
     );
   };
 
+
   // 패치노트 직접 추가 및 삭제 핸들러
   const handleAddPatchNote = async () => {
     if (!requireEditorAccess()) return;
@@ -3101,6 +3244,7 @@ function MainApp() {
       .map((s) => s.replace(/^[-•*]\s*/, "").trim())
       .filter(Boolean);
 
+
     const newPatch = {
       id,
       version: ver,
@@ -3109,8 +3253,10 @@ function MainApp() {
       changes: changesArr.length > 0 ? changesArr : [patchForm.title.trim()]
     };
 
+
     setPatchNotes((prev) => [newPatch, ...prev]);
     setPatchForm({ version: "", title: "", changesText: "" });
+
 
     if (user && db) {
       try {
@@ -3119,6 +3265,7 @@ function MainApp() {
     }
     showToast(`패치노트(${ver})가 기록되었습니다!`);
   };
+
 
   const handleDeletePatchNote = async (id) => {
     if (!requireEditorAccess()) return;
@@ -3130,6 +3277,7 @@ function MainApp() {
     }
     showToast("패치노트 항목이 삭제되었습니다.");
   };
+
 
   const markIdDeleted = async (id) => {
     const next = Array.from(new Set([...deletedIds, id]));
@@ -3148,10 +3296,12 @@ function MainApp() {
     }
   };
 
+
   const handleSaveApiKey = async (geminiKeyVal, openaiKeyVal = openaiApiKey, providerVal = aiProvider) => {
     if (!requireEditorAccess()) return;
     const cleanedGemini = String(geminiKeyVal || "").trim();
     const cleanedOpenai = String(openaiKeyVal || "").trim();
+
 
     if (cleanedGemini) {
       setGeminiApiKey(cleanedGemini);
@@ -3162,13 +3312,16 @@ function MainApp() {
     setTempOpenaiKeyInput(cleanedOpenai);
     localStorage.setItem("kim_family_openai_key", cleanedOpenai);
 
+
     setAiProvider(providerVal);
     localStorage.setItem("kim_family_ai_provider", providerVal);
+
 
     setAiErrorMsg("");
     setScanErrorMsg("");
     setReceiptErrorMsg("");
     setPlatingErrorMsg("");
+
 
     if (!user || !db) {
       showToast("⚠️ 이 기기에는 임시 저장되었으나, 서버 미연결로 부부 공유 저장에 실패했습니다.");
@@ -3194,6 +3347,7 @@ function MainApp() {
     }
   };
 
+
   const weekDates = useMemo(() => {
     const base = new Date(selectedDate + "T00:00:00");
     if (Number.isNaN(base.getTime())) return getWeekDatesFromBase(selectedDate);
@@ -3209,6 +3363,7 @@ function MainApp() {
     () => getWeekDatesFromBase(scheduleSelectedDate),
     [scheduleSelectedDate]
   );
+
 
   // ==========================================
   // 7. 전체 DB 원본(JSON) 1초 백업 다운로드 & Gmail/구글 드라이브 전송 & 1초 복원
@@ -3248,6 +3403,7 @@ function MainApp() {
     return JSON.stringify(fullSnapshot, null, 2);
   };
 
+
   const handleDownloadJsonBackup = () => {
     const jsonString = buildFullBackupJsonString();
     const blob = new Blob([jsonString], { type: "application/json;charset=utf-8;" });
@@ -3259,11 +3415,13 @@ function MainApp() {
     link.click();
     document.body.removeChild(link);
 
+
     const curYm = getCurrentYearMonth();
     localStorage.setItem("kim_backup_done_month", curYm);
     setBackupBannerDismissedMonth(curYm);
     showToast("전체 DB 원본(JSON) 백업 파일이 다운로드되었습니다!");
   };
+
 
   const handleSendBackupToGmailOrDrive = async (excludeDiaryPhotos = false) => {
     const isLite = excludeDiaryPhotos === true;
@@ -3276,12 +3434,14 @@ function MainApp() {
     const jsonFile = new File([jsonString], jsonFileName, { type: "application/json" });
     const txtFile = new File([jsonString], txtFileName, { type: "text/plain" });
 
+
     const shareCandidate =
       navigator.canShare && navigator.canShare({ files: [jsonFile] })
         ? jsonFile
         : navigator.canShare && navigator.canShare({ files: [txtFile] })
         ? txtFile
         : null;
+
 
     if (shareCandidate && navigator.share) {
       try {
@@ -3297,6 +3457,7 @@ function MainApp() {
       }
     }
 
+
     // 공유 창 미지원/용량 제한 시 파일 다운로드 + 네이버 메일 작성 창 열기
     const blob = new Blob([jsonString], { type: "application/json;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
@@ -3306,6 +3467,7 @@ function MainApp() {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+
 
     const targetMail = backupEmail.trim() || "";
     const subject = encodeURIComponent(`[가족식탁 자동백업${isLite ? "·경량" : ""}] ${getTodayStr()} 전체 데이터베이스`);
@@ -3317,19 +3479,23 @@ function MainApp() {
     showToast(`📥 ${sizeLabel} 백업 파일 다운로드 완료! (공유창 미지원 → 네이버 메일에서 첨부해 주세요)`);
   };
 
+
   const handleRestoreFromJsonFile = async (e) => {
     if (!requireEditorAccess()) return;
     const file = e.target.files?.[0];
     if (!file) return;
+
 
     try {
       const text = await file.text();
       const parsed = JSON.parse(text);
       const payload = parsed?.data || parsed;
 
+
       if (!payload || typeof payload !== "object") {
         throw new Error("유효한 백업 JSON 파일이 아닙니다.");
       }
+
 
       const existingMealIds = new Set(meals.map((m) => m.id));
       const existingFridgeIds = new Set(fridge.map((f) => f.id));
@@ -3338,6 +3504,7 @@ function MainApp() {
       const fridgeConflicts = toSafeArray(payload.fridge).filter((f) => f?.id && existingFridgeIds.has(f.id)).length;
       const schConflicts = toSafeArray(payload.schedules).filter((s) => s?.id && existingSchIds.has(s.id)).length;
       const totalConflicts = mealConflicts + fridgeConflicts + schConflicts;
+
 
       const confirmRestore = window.confirm(
         `백업 파일을 복원할까요?\n` +
@@ -3351,6 +3518,7 @@ function MainApp() {
         return;
       }
 
+
       setIsRestoringJson(true);
       if (user && db) {
         try {
@@ -3363,6 +3531,7 @@ function MainApp() {
           throw new Error("복원 전 안전 백업 생성에 실패하여 복원을 중단했습니다.");
         }
       }
+
 
       if (Array.isArray(payload.meals)) {
         const mObj = {};
@@ -3428,6 +3597,7 @@ function MainApp() {
         localStorage.setItem("kim_family_deleted_ids", JSON.stringify(payload.deletedIds));
       }
 
+
       if (user && db) {
         const writePromises = [];
         if (isAdminUnlocked && Array.isArray(payload.babyDiaryEntries)) {
@@ -3486,6 +3656,7 @@ function MainApp() {
           );
         }
 
+
         const results = await Promise.allSettled(writePromises);
         const failedCount = results.filter((r) => r.status === "rejected").length;
         if (failedCount > 0) {
@@ -3494,6 +3665,7 @@ function MainApp() {
           return;
         }
       }
+
 
       setIsSettingsOpen(false);
       showToast("백업 파일로부터 전체 데이터베이스가 100% 복원되었습니다!");
@@ -3506,12 +3678,14 @@ function MainApp() {
     }
   };
 
+
   const isFirstDayOfMonthBackupNeeded = useMemo(() => {
     const now = new Date();
     const isDayOne = now.getDate() === 1;
     const curYm = getCurrentYearMonth();
     return isDayOne && backupBannerDismissedMonth !== curYm;
   }, [backupBannerDismissedMonth]);
+
 
   const imminentSchedulesWithin3Days = useMemo(() => {
     return schedules
@@ -3523,6 +3697,7 @@ function MainApp() {
       .filter((s) => s.calc.daysUntil >= 0 && s.calc.daysUntil <= 3)
       .sort((a, b) => a.calc.daysUntil - b.calc.daysUntil);
   }, [schedules]);
+
 
   // ==========================================
   // 8. 가족 일정·기념일·D-Day & To-Do 체크리스트 핸들러
@@ -3544,6 +3719,7 @@ function MainApp() {
     setBabyChecks((p) => ({ ...p, [docId]: updated }));
   };
 
+
   const handleToggleBabyCheck = async (childId, itemId) => {
     if (!requireEditorAccess()) return;
     const docId = `${childId}_${itemId}`;
@@ -3564,6 +3740,7 @@ function MainApp() {
     }
     setBabyChecks((p) => ({ ...p, [docId]: updated }));
   };
+
 
   const handleSyncSingleBabySchedule = async (child, item, targetDate) => {
     if (!requireEditorAccess()) return;
@@ -3599,6 +3776,7 @@ function MainApp() {
     showToast(`${child.name} '${item.title}' 일정이 달력(${targetDate})에 등록되었습니다!`);
   };
 
+
   const handleSyncAllUpcomingBabySchedules = async (child) => {
     if (!requireEditorAccess()) return;
     let added = 0;
@@ -3609,6 +3787,7 @@ function MainApp() {
       if (targetDate < getTodayStr()) continue;
       const schId = `baby-${child.id}-${item.id}`;
       if (schedules.some((s) => s.id === schId)) continue;
+
 
       const payload = {
         id: schId,
@@ -3636,6 +3815,7 @@ function MainApp() {
         : `${child.name} 향후 일정이 이미 모두 등록되어 있습니다.`
     );
   };
+
 
   const handleAddGrowthLog = async () => {
     if (!requireEditorAccess()) return;
@@ -3672,6 +3852,7 @@ function MainApp() {
     }
   };
 
+
   const handleDeleteGrowthLog = async (id) => {
     if (!requireEditorAccess()) return;
     setBabyGrowthLogs((prev) => prev.filter((g) => g.id !== id));
@@ -3683,6 +3864,7 @@ function MainApp() {
       }
     }
   };
+
 
   const handleAddMedicalNote = async () => {
     if (!requireEditorAccess()) return;
@@ -3709,6 +3891,7 @@ function MainApp() {
     showToast(`${selectedChildId} 진료·체온 메모가 저장되었습니다!`);
   };
 
+
   const handleDeleteMedicalNote = async (id) => {
     if (!requireEditorAccess()) return;
     setBabyMedicalNotes((prev) => prev.filter((n) => n.id !== id));
@@ -3721,11 +3904,13 @@ function MainApp() {
     }
   };
 
+
   const handleSaveSchedule = async () => {
     if (!requireEditorAccess("schedule")) return;
     if (!scheduleForm.title.trim()) return;
     const id = editingSchedule ? editingSchedule.id : `sch-${Date.now()}`;
     const safeMembers = toSafeArray(scheduleForm.members);
+
 
     const payload = {
       id,
@@ -3740,6 +3925,7 @@ function MainApp() {
       memo: (scheduleForm.memo || "").trim()
     };
 
+
     setSchedules((prev) => {
       const idx = prev.findIndex((s) => s.id === id);
       if (idx >= 0) {
@@ -3750,8 +3936,10 @@ function MainApp() {
       return [payload, ...prev];
     });
 
+
     setIsScheduleModalOpen(false);
     setEditingSchedule(null);
+
 
     if (user && db) {
       try {
@@ -3766,6 +3954,7 @@ function MainApp() {
     showToast(editingSchedule ? "일정이 수정되었습니다." : "새 가족 일정이 등록되었습니다.");
   };
 
+
   // [신규] 체크리스트에서 1초 만에 할 일(To-Do) 빠른 등록
   const handleQuickAddTodo = async () => {
     if (!requireEditorAccess("schedule")) return;
@@ -3775,6 +3964,7 @@ function MainApp() {
       scheduleMemberFilter === "전체"
         ? ["수혁", "아리나", "시목", "시율"]
         : [scheduleMemberFilter];
+
 
     const payload = {
       id,
@@ -3789,8 +3979,10 @@ function MainApp() {
       memo: ""
     };
 
+
     setSchedules((prev) => [payload, ...prev]);
     setQuickTodoTitle("");
+
 
     if (user && db) {
       try {
@@ -3805,6 +3997,7 @@ function MainApp() {
     recordActivity("할일", "등록", `${quickTodoTitle || ""}`);
     showToast("To-Do 체크리스트에 새 할 일이 추가되었습니다!");
   };
+
 
   const handleToggleScheduleDone = async (item) => {
     if (!requireEditorAccess("schedule")) return;
@@ -3823,6 +4016,7 @@ function MainApp() {
     }
   };
 
+
   const createLogEntryPayload = (type, label, data, actionType = "delete") => ({
     logId: `dlog-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
     id: data.id,
@@ -3833,6 +4027,7 @@ function MainApp() {
     createdAtMs: Date.now(),
     deletedAt: new Date().toLocaleString("ko-KR", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })
   });
+
 
   const handleDeleteSchedule = async (item) => {
     if (!requireEditorAccess("schedule")) return;
@@ -3851,6 +4046,7 @@ function MainApp() {
       batch.delete(getDocRef("family_schedules_v4", item.id));
       await batch.commit();
 
+
       setDeletedIds((prev) => {
         const next = Array.from(new Set([...prev, item.id]));
         try { localStorage.setItem("kim_family_deleted_ids", JSON.stringify(next)); } catch (e) {}
@@ -3868,6 +4064,7 @@ function MainApp() {
     }
   };
 
+
   const getSchedulesForDate = (targetDateStr, memberFilter = "전체", catFilter = "전체") => {
     const targetMmDd = String(targetDateStr).slice(5, 10);
     return schedules.filter((s) => {
@@ -3876,12 +4073,14 @@ function MainApp() {
       const catMatch = catFilter === "전체" || s.category === catFilter;
       if (!memMatch || !catMatch) return false;
 
+
       if (s.isAnnual) {
         return String(s.date).slice(5, 10) === targetMmDd;
       }
       return String(s.date).slice(0, 10) === targetDateStr;
     });
   };
+
 
   // [신규 요청사항 2] 주간(월~일) 일정 중 실제 일정이 있는 날짜와 항목만 추출하는 요약 데이터
   const weeklyActiveScheduleSummary = useMemo(() => {
@@ -3893,6 +4092,7 @@ function MainApp() {
       }))
       .filter((dayGroup) => dayGroup.items.length > 0);
   }, [scheduleWeekDates, schedules, scheduleMemberFilter, scheduleCatFilter]);
+
 
   // 전체 To-Do 체크리스트 전용 데이터 (기본: 할일(To-Do)만 / 토글 시 병원·행사 포함)
   const allTodoChecklistItems = useMemo(() => {
@@ -3920,6 +4120,7 @@ function MainApp() {
       });
   }, [schedules, scheduleMemberFilter, todoStatusFilter, todoIncludeOtherCats]);
 
+
   const todoStats = useMemo(() => {
     const nonAnniv = schedules.filter(
       (s) =>
@@ -3935,6 +4136,7 @@ function MainApp() {
     return { total, doneCount, activeCount };
   }, [schedules, scheduleMemberFilter, todoIncludeOtherCats]);
 
+
   const globalTodoBadgeStats = useMemo(() => {
     const todayStr = currentDayKey;
     const activeTodos = schedules.filter((s) => s.category === "할일(To-Do)" && !s.done);
@@ -3944,6 +4146,7 @@ function MainApp() {
       urgentCount
     };
   }, [schedules, currentDayKey]);
+
 
   const dDayCards = useMemo(() => {
     return schedules
@@ -3964,6 +4167,7 @@ function MainApp() {
       });
   }, [schedules, scheduleMemberFilter]);
 
+
   // ==========================================
   // 9. AI 식단 추천 & 식단표/영수증 이미지 스캔 핸들러
   // ==========================================
@@ -3971,22 +4175,27 @@ function MainApp() {
     if (!requireEditorAccess()) return;
     setAiErrorMsg("");
 
+
     const picked =
       selectedAiIngredients.length > 0
         ? selectedAiIngredients
         : fridge.slice(0, 5).map((f) => f.name);
+
 
     if (picked.length === 0) {
       setAiErrorMsg("활용할 냉장고 재료를 최소 1개 이상 선택하거나 냉장고에 재료를 먼저 등록해 주세요.");
       return;
     }
 
+
     setIsAiLoading(true);
+
 
     try {
       const prompt = `당신은 한국 가정식 및 영유아 영양 전문 셰프입니다.
 선택한 냉장고 재료 [${picked.join(", ")}]를 활용하여 '${aiTargetGroup}' 맞춤 요리 레시피 3가지를 작성해주세요.
 추가 요청사항: ${aiPromptExtra || "재료들의 실제 맛과 영양 궁합을 살린 현실적인 가정식 요리"}
+
 
 반드시 마크다운 코드블록 없이 순수 JSON 배열만 출력하세요:
 [
@@ -4006,6 +4215,7 @@ function MainApp() {
   }
 ]`;
 
+
       let actualProvider = aiProvider.toUpperCase();
       const parsedArray = await callReliableAiEngine({
         apiKey: geminiApiKey,
@@ -4015,6 +4225,7 @@ function MainApp() {
         temperature: 0.65,
         onProviderUsed: (p) => { actualProvider = p; }
       });
+
 
       const mapped = parsedArray.map((r, idx) => ({
         ...r,
@@ -4031,6 +4242,7 @@ function MainApp() {
             : ["수혁", "아리나", "시목", "시율"]
       }));
 
+
       setAiRecipes(mapped);
       pushAiLog(actualProvider, "레시피 추천", true, `${mapped.length}개 생성`);
       showToast("맞춤 레시피 3가지가 생성되었습니다!");
@@ -4042,6 +4254,7 @@ function MainApp() {
       setIsAiLoading(false);
     }
   };
+
 
   const buildValidFridgeContext = () => {
     const valid = fridge
@@ -4058,6 +4271,7 @@ function MainApp() {
         : "등록된 유효 재고 없음";
     return { valid, textList };
   };
+
 
   const buildMealPromptForRequests = (requests, targetMode, adultStyle, validText) => {
     const simokProfile = CHILDREN_INFO.find((c) => c.id === "시목") || CHILDREN_INFO[0];
@@ -4076,14 +4290,17 @@ function MainApp() {
         ? `\n최근 14일 식단(유사 메뉴 반복 피하기): [${recent14Menus.join(", ")}]`
         : "";
 
+
     if (targetMode === "adults") {
       return `당신은 한국 가정식 및 성인 균형 영양 전문 셰프입니다.
 대상: 성인 2인 (수혁·아리나)
 식사 목적: ${adultStyle}
 요청 날짜·끼니(${requests.length}끼): ${reqListStr}${recent14Note}
 
+
 [냉장고·냉동실·실온 전체 유효 재고 (만료·0개 제외, 임박순)]
 ${validText}
+
 
 중요 규칙:
 1. 오직 성인 2인 기준 완성형 한 끼 식단만 제안하세요. 유아식, 아기, 월령, 저염 아이용 설명(babyTip/simokTip 등)은 절대 포함하지 마세요.
@@ -4110,13 +4327,16 @@ ${validText}
 ]`;
     }
 
+
     if (targetMode === "toddler") {
       return `당신은 영유아 영양 및 유아식 전문 셰프입니다.
 대상: 생후 ${simokMonths}개월 유아 1인 (출생일 ${simokProfile.birthDate} 기준)
 요청 날짜·끼니(${requests.length}끼): ${reqListStr}${recent14Note}
 
+
 [냉장고·냉동실·실온 전체 유효 재고 (만료·0개 제외, 임박순)]
 ${validText}
+
 
 중요 규칙:
 1. 생후 ${simokMonths}개월 아기가 안전하게 씹고 삼킬 수 있는 크기·부드러운 식감·저염 조리법으로 구성하고, 알레르기 주의 재료를 고려하세요.
@@ -4144,12 +4364,15 @@ ${validText}
 ]`;
     }
 
+
     return `당신은 한국 가정식 및 가족 통합 식단 전문 셰프입니다.
 대상: 온가족 (성인 2인 + 생후 ${simokMonths}개월 유아 1인, 출생일 ${simokProfile.birthDate} 기준)
 요청 날짜·끼니(${requests.length}끼): ${reqListStr}${recent14Note}
 
+
 [냉장고·냉동실·실온 전체 유효 재고 (만료·0개 제외, 임박순)]
 ${validText}
+
 
 중요 규칙:
 1. 성인 2인이 맛있게 먹는 완성형 한 끼를 기본으로 하되, 생후 ${simokMonths}개월 아기에게 덜어내어 변형하기 좋은 구성(또는 아이에게 부적합한 매운·딱딱한 재료 분리 안내)을 babyTip에 별도로 적으세요.
@@ -4176,6 +4399,7 @@ ${validText}
 ]`;
   };
 
+
   const convertUnitQty = (qty, fromUnit, toUnit) => {
     const q = Number(qty);
     if (!Number.isFinite(q) || q <= 0) return null;
@@ -4188,6 +4412,7 @@ ${validText}
     if (f === "ml" && (t === "l" || t === "ℓ")) return q / 1000;
     return null;
   };
+
 
   const matchFridgeItemExactFirst = (ingName, validFridge) => {
     const lower = String(ingName || "").trim().toLowerCase();
@@ -4202,6 +4427,7 @@ ${validText}
     if (candidates.length === 1) return candidates[0];
     return null;
   };
+
 
   const checkMealCompleteness = (mealName, components, ingredients = []) => {
     const oneBowlKeywords = ["덮밥", "비빔밥", "볶음밥", "파스타", "국수", "칼국수", "우동", "라면", "카레", "리조또", "죽", "솥밥", "전골", "찌개", "정식", "도시락", "김밥", "샌드위치", "토스트"];
@@ -4218,10 +4444,12 @@ ${validText}
     return { ok: false, reason: "구성요소·단백질/채소 재료가 부족한 단일 요리입니다. 재추천을 권장합니다." };
   };
 
+
   const normalizeAiPlanItems = (rawList, requestedPairs, targetMode, validFridge) => {
     const reqSet = new Set(requestedPairs.map((r) => `${r.date}__${r.slot}`));
     const seen = new Set();
     const out = [];
+
 
     for (const item of toSafeArray(rawList)) {
       const dStr = String(item?.date || "").trim();
@@ -4231,12 +4459,14 @@ ${validText}
       if (!reqSet.has(key) || seen.has(key) || !mealName) continue;
       seen.add(key);
 
+
       const components = toSafeArray(item?.components)
         .map((c) => ({
           role: String(c?.role || "main"),
           name: String(c?.name || "").trim()
         }))
         .filter((c) => c.name);
+
 
       const rawIngredients = toSafeArray(item?.ingredients).map((ing) => {
         if (ing && typeof ing === "object") {
@@ -4249,9 +4479,11 @@ ${validText}
         return { name: String(ing || "").trim(), quantity: 1, unit: "개" };
       }).filter((x) => x.name);
 
+
       const matchedEntries = [];
       const unitCheckEntries = [];
       const unmatchedMissing = [];
+
 
       for (const ing of rawIngredients) {
         const matched = matchFridgeItemExactFirst(ing.name, validFridge);
@@ -4276,6 +4508,7 @@ ${validText}
         }
       }
 
+
       const explicitMissing = toSafeArray(item?.missingIngredients).map((mi) => {
         if (mi && typeof mi === "object") {
           return {
@@ -4286,14 +4519,17 @@ ${validText}
         return { name: String(mi || "").trim(), quantity: "1개" };
       }).filter((x) => x.name);
 
+
       const mergedMissingMap = new Map();
       [...explicitMissing, ...unmatchedMissing].forEach((m) => {
         const k = m.name.toLowerCase();
         if (!mergedMissingMap.has(k)) mergedMissingMap.set(k, m);
       });
 
+
       const compNames = components.map((c) => c.name);
       const completeness = checkMealCompleteness(mealName, components, rawIngredients);
+
 
       out.push({
         id: `plan-${Date.now()}-${out.length}-${Math.random().toString(36).slice(2, 5)}`,
@@ -4320,22 +4556,26 @@ ${validText}
     return out;
   };
 
+
   const handleGenerate3DayPlan = async () => {
     if (!requireEditorAccess()) return;
     const requestedPairs = Object.entries(planScheduleMap)
       .sort(([a], [b]) => a.localeCompare(b))
       .flatMap(([date, slots]) => toSafeArray(slots).map((slot) => ({ date, slot })));
 
+
     if (requestedPairs.length === 0) {
       setPlanErrorMsg("추천받을 날짜와 끼니(최소 1끼)를 선택해 주세요.");
       return;
     }
+
 
     setPlanErrorMsg("");
     setIsPlanLoading(true);
     try {
       const { valid: validFridge, textList } = buildValidFridgeContext();
       const prompt = buildMealPromptForRequests(requestedPairs, planTarget, planAdultStyle, textList);
+
 
       let actualProvider = aiProvider.toUpperCase();
       const parsed = await callReliableAiEngine({
@@ -4347,10 +4587,12 @@ ${validText}
         onProviderUsed: (prov) => { actualProvider = prov; }
       });
 
+
       const validated = normalizeAiPlanItems(parsed, requestedPairs, planTarget, validFridge);
       if (validated.length === 0) {
         throw new Error("AI가 요청한 날짜·끼니에 맞는 완성형 식단을 반환하지 못했습니다. 다시 시도해 주세요.");
       }
+
 
       const snapshotMembers =
         planTarget === "toddler"
@@ -4359,9 +4601,11 @@ ${validText}
           ? ["수혁", "아리나"]
           : ["수혁", "아리나", "시목"];
 
+
       setPlanItems(validated);
       const gotSet = new Set(validated.map((v) => `${v.date}__${v.slot}`));
       const missingPairs = requestedPairs.filter((r) => !gotSet.has(`${r.date}__${r.slot}`));
+
 
       setPlanSnapshotMeta({
         operationId: `plan-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
@@ -4384,6 +4628,7 @@ ${validText}
       setIsPlanLoading(false);
     }
   };
+
 
   const handleRegenerateSinglePlanSlot = async (targetItem) => {
     if (!requireEditorAccess()) return;
@@ -4430,6 +4675,7 @@ ${validText}
     }
   };
 
+
   const handleGenerateMissingPlanSlots = async () => {
     if (!requireEditorAccess()) return;
     const missingPairs = toSafeArray(planSnapshotMeta?.missingPairs);
@@ -4471,6 +4717,7 @@ ${validText}
     }
   };
 
+
   const handleApply3DayPlan = async () => {
     if (!requireEditorAccess()) return;
     if (isSavingPlan) return;
@@ -4491,6 +4738,7 @@ ${validText}
     const targetMode = planSnapshotMeta?.target || "adults";
     const opId = planSnapshotMeta?.operationId || `plan-${Date.now()}`;
 
+
     setIsSavingPlan(true);
     beginWrite();
     let ok = false;
@@ -4499,6 +4747,7 @@ ${validText}
       const opRef = getDocRef("family_cooking_operations_v7", opId);
       let alreadyApplied = false;
       const newLocal = {};
+
 
       await runTransaction(db, async (tx) => {
         const existingOp = await tx.get(opRef);
@@ -4530,6 +4779,7 @@ ${validText}
           if (it.tip) noteParts.push(`조리팁: ${it.tip}`);
           if (targetMode !== "adults" && it.babyTip) noteParts.push(`아이 변형: ${it.babyTip}`);
 
+
           const payload = {
             id: mId,
             date: it.date,
@@ -4554,6 +4804,7 @@ ${validText}
           createdAt: new Date().toISOString()
         });
       });
+
 
       ok = true;
       setPlanSnapshotMeta((prev) => (prev ? { ...prev, applied: true } : prev));
@@ -4583,10 +4834,12 @@ ${validText}
     }
   };
 
+
   const computeAggregatedPlanShortage = (selectedPlans) => {
     const validFridge = fridge.filter((f) => Number(f.quantity || 0) > 0 && getDaysDiff(f.expiryDate) >= 0);
     const shopNamesLower = shoppingList.map((s) => String(s.name || "").toLowerCase());
     const demandMap = new Map();
+
 
     for (const it of selectedPlans) {
       for (const ing of toSafeArray(it.ingredients)) {
@@ -4626,11 +4879,13 @@ ${validText}
       }
     }
 
+
     const shortages = [];
     const parseQtyStr = (str) => {
       const m = String(str || "").trim().match(/^([0-9]+(?:\.[0-9]+)?)\s*([a-zA-Z가-힣ℓ]*)$/);
       return m ? { qty: Number(m[1]), unit: m[2] || "개" } : null;
     };
+
 
     for (const [lower, entry] of demandMap.entries()) {
       const existingShop = shoppingList.find((s) => {
@@ -4638,6 +4893,7 @@ ${validText}
         return !s.checked && (sn === lower || sn.includes(lower) || lower.includes(sn));
       });
       const parsedShop = existingShop ? parseQtyStr(existingShop.quantity) : null;
+
 
       if (!entry.matchedItem) {
         if (existingShop && !entry.unit) continue;
@@ -4672,6 +4928,7 @@ ${validText}
     }
     return shortages;
   };
+
 
   const runCoreLogicSelfTests = () => {
     const cases = [
@@ -4805,6 +5062,7 @@ ${validText}
     showToast(`🧪 로직 자가진단: ${passed}/${cases.length} 통과`);
   };
 
+
   const buildRecentWeekMealsLines = () => {
     const baseStr = getTodayStr();
     const dayCount = Number(exportMealDays) || 7;
@@ -4817,10 +5075,12 @@ ${validText}
         ? "가족 전체(인별)"
         : FAMILY_MEMBERS.find((f) => f.id === exportMealMember)?.name || exportMealMember;
 
+
     const out = [
       `📅 최근 ${dayCount}일 일별 식단 (${datesRange[0]} ~ ${datesRange[datesRange.length - 1]} | 대상: ${targetLabel})`,
       ""
     ];
+
 
     let totalMealsCount = 0;
     for (const dStr of datesRange) {
@@ -4831,6 +5091,7 @@ ${validText}
             (exportMealMember === "전체" || toSafeArray(m.members).includes(exportMealMember))
         )
         .sort((a, b) => slotOrder.indexOf(a.slot) - slotOrder.indexOf(b.slot));
+
 
       out.push(`[${dStr} (${getDayName(dStr)})]`);
       if (dayMeals.length === 0) {
@@ -4853,12 +5114,14 @@ ${validText}
     return out;
   };
 
+
   const buildInventoryExportText = () => {
     const todayStr = getTodayStr();
     const filtered = fridge.filter((f) => {
       if (exportIncludeZeroOrExpired) return true;
       return Number(f.quantity || 0) > 0 && getDaysDiff(f.expiryDate) >= 0;
     });
+
 
     const normalizeExportLoc = (rawLoc) => {
       const s = String(rawLoc || "").trim();
@@ -4867,6 +5130,7 @@ ${validText}
       if (!s || s.includes("냉장")) return "냉장실";
       return "기타 보관";
     };
+
 
     const locOrder =
       exportFridgeLoc === "전체"
@@ -4881,6 +5145,7 @@ ${validText}
       })
       .filter((g) => g.loc !== "기타 보관" || g.items.length > 0);
 
+
     const unknownExpiryCount = filtered.filter((f) => !f.expiryDate).length;
     const tempExpiryCount = filtered.filter((f) => f.expiryDate && f.expiryIsTemp).length;
     const syncLabel =
@@ -4891,12 +5156,14 @@ ${validText}
         : "로컬 캐시 기준(오프라인/대기)";
     const scopeLabel = exportIncludeZeroOrExpired ? "전체(0개·만료 포함)" : "유효 재고 기준(0개·만료 제외)";
 
+
     const lines = [
       `우리 가족 식탁 - 전체 재고 현황 (${scopeLabel})`,
       `기준일시: ${todayStr} ${new Date().toTimeString().slice(0, 5)} | 상태: ${syncLabel}`,
       `총 ${filtered.length}개 품목 (${groups.map((g) => `${g.loc} ${g.items.length}`).join(" · ")}) | 미확인 ${unknownExpiryCount} · 임시소비기한 ${tempExpiryCount}`,
       ""
     ];
+
 
     for (const g of groups) {
       lines.push(`[${g.loc}] (${g.items.length}개)`);
@@ -4917,10 +5184,12 @@ ${validText}
       lines.push("");
     }
 
+
     const fridgeLines = [
       ...lines,
       "※ 수량 및 소비기한은 사용자가 확인한 기록을 기준으로 합니다."
     ];
+
 
     const buildAiPromptPrefix = () => {
       if (!exportIncludeAiPrompt) return [];
@@ -4953,6 +5222,7 @@ ${validText}
       return baseLines;
     };
 
+
     const prefix = buildAiPromptPrefix();
     if (exportScope === "meals_only") {
       return [...prefix, ...buildRecentWeekMealsLines()].join("\n");
@@ -4968,6 +5238,7 @@ ${validText}
     }
     return [...prefix, ...fridgeLines].join("\n");
   };
+
 
   const handlePlatingImageSelect = async (e) => {
     const file = e.target.files?.[0];
@@ -4986,6 +5257,7 @@ ${validText}
     }
   };
 
+
   // [신규 v7.2] 버튼 클릭 시에만 저비용 AI 플레이팅 예시 이미지 생성
   const handleGeneratePlatingExampleImage = async () => {
     if (!requireEditorAccess()) return;
@@ -4997,9 +5269,11 @@ ${validText}
       return;
     }
 
+
     setPlatingErrorMsg("");
     setIsPlatingImageLoading(true);
     const visualPrompt = `Overhead food photography of Korean home-cooked dish "${platingResult.dishName}", styled beautifully on ${platingResult.plateAndGarnish || "a clean ceramic plate with fresh garnish"}, natural daylight, appetizing restaurant plating, no text.`;
+
 
     try {
       // 1순위: 가장 저렴한 OpenAI gpt-image-1-mini (low quality, 1024x1024, 25초 타임아웃)
@@ -5047,6 +5321,7 @@ ${validText}
         }
       }
 
+
       // 2순위: Gemini 이미지 모델 (gemini-2.5-flash-image, 25초 타임아웃)
       if (cleanGemini) {
         const gCtrl = new AbortController();
@@ -5091,6 +5366,7 @@ ${validText}
     }
   };
 
+
   const handleAnalyzePlating = async () => {
     if (!requireEditorAccess()) return;
     if (!platingImagePart) {
@@ -5103,6 +5379,7 @@ ${validText}
       const promptText = `당신은 미슐랭 레스토랑 푸드 스타일리스트이자 가정식 플레이팅 코치입니다.
 업로드된 음식 사진을 보고 플레이팅을 분석해 주세요.
 요청 스타일/상황: ${platingStyleHint || "깔끔하고 먹음직스러운 가정식 한 상"}
+
 
 반드시 마크다운 코드블록 없이 아래 형식의 순수 JSON 배열(요소 1개)만 출력하세요:
 [
@@ -5120,6 +5397,7 @@ ${validText}
   }
 ]`;
 
+
       let actualProvider = aiProvider.toUpperCase();
       const parsed = await callReliableAiEngine({
         apiKey: geminiApiKey,
@@ -5131,8 +5409,10 @@ ${validText}
         onProviderUsed: (p) => { actualProvider = p; }
       });
 
+
       const first = Array.isArray(parsed) && parsed.length > 0 ? parsed[0] : null;
       if (!first) throw new Error("플레이팅 분석 결과를 읽지 못했습니다.");
+
 
       setPlatingResult({
         ...first,
@@ -5151,19 +5431,24 @@ ${validText}
     }
   };
 
+
   const handleMenuImageUpload = async (e) => {
     if (!requireEditorAccess()) return;
     const file = e.target.files?.[0];
     if (!file) return;
 
+
     setScanErrorMsg("");
     setIsMenuScanning(true);
+
 
     try {
       const { base64, mimeType, previewUrl } = await fileToBase64(file, { maxSide: 2200, quality: 0.92 });
       setScanPreviewUrl(previewUrl);
 
+
       const weekMappingHint = `월(MON)=${weekDates[0]}, 화(TUE)=${weekDates[1]}, 수(WED)=${weekDates[2]}, 목(THU)=${weekDates[3]}, 금(FRI)=${weekDates[4]}, 토(SAT)=${weekDates[5]}, 일(SUN)=${weekDates[6]}`;
+
 
       const promptText = `식단표 이미지(칠판/화이트보드 손글씨 또는 인쇄물)의 날짜(또는 요일)와 메뉴를 읽어 순수 JSON 배열로만 출력하세요.
 - 기준 연월: "${scanTargetMonth}"
@@ -5174,8 +5459,10 @@ ${validText}
 - 오후간식 -> "aSnack"
 - '저:' 또는 저녁 -> "dinner"
 
+
 반드시 아래 순수 JSON 배열만 출력하세요:
 [{"date":"2026-11-11","breakfast":"","mSnack":"","lunch":"","aSnack":"","dinner":"","note":""}]`;
+
 
       const parsedArray = await callReliableAiEngine({
         apiKey: geminiApiKey,
@@ -5185,6 +5472,7 @@ ${validText}
         imagePart: { base64, mimeType },
         temperature: 0.1
       });
+
 
       setScannedMenuDays(
         parsedArray.map((item, idx) => ({
@@ -5207,19 +5495,23 @@ ${validText}
     }
   };
 
+
   const handleSaveScannedMenuDays = async () => {
     if (!requireEditorAccess()) return;
     if (scannedMenuDays.length === 0) return;
+
 
     const targetMembers =
       scanTargetMember === "전체"
         ? ["수혁", "아리나", "시목", "시율"]
         : [scanTargetMember];
 
+
     const newMealsObj = {};
     scannedMenuDays.forEach((d) => {
       if (!d.date) return;
       const baseNote = d.note || scanSchoolName;
+
 
       if (d.breakfast && d.breakfast.trim()) {
         const id = `sc-${d.date}-${scanTargetMember}-bf`;
@@ -5293,22 +5585,27 @@ ${validText}
       }
     });
 
+
     const entries = Object.values(newMealsObj);
     if (entries.length === 0) return;
+
 
     setMealsMap((prev) => ({
       ...prev,
       local: { ...(prev.local || {}), ...newMealsObj }
     }));
 
+
     if (scannedMenuDays[0]?.date) {
       setSelectedDate(scannedMenuDays[0].date);
       setCurrentMonth(scannedMenuDays[0].date.slice(0, 7));
     }
 
+
     setIsDaycareModalOpen(false);
     setScannedMenuDays([]);
     setScanPreviewUrl("");
+
 
     if (user && db) {
       for (const m of entries) {
@@ -5319,9 +5616,11 @@ ${validText}
       }
     }
 
+
     recordActivity("식단", "AI스캔 등록", `${entries.length}끼 일괄 등록`);
     showToast(`총 ${entries.length}끼 식단이 달력에 일괄 입력되었습니다!`);
   };
+
 
   const runReceiptOcrWithImagePart = async (imagePart) => {
     setReceiptErrorMsg("");
@@ -5331,6 +5630,7 @@ ${validText}
     try {
       const promptText = `당신은 한국 마트 영수증 정밀 OCR 전문가입니다.
 이미지에 인쇄된 글자만 100% 그대로 판독하세요. 이미지에 없는 품목(예: 감자, 브로콜리, 사과, 미나리 등)이나 임의 가격(1490 등)을 절대 추측해 지어내지 마세요.
+
 
 작업 순서 (반드시 준수):
 1단계(rawLines): 영수증 본문의 상품 줄(예: "01*건고사리35G 6,990 1 6,990", "에누리(쿠폰) -4,000")과 하단 합계 줄("결제대상금액 20,580" 또는 "카드결제 20,580")을 이미지에 보이는 글자 그대로 한 줄씩 받아 적으세요.
@@ -5342,6 +5642,7 @@ ${validText}
 - 영수증 하단의 실제 총 결제금액(예: 결제대상금액 20,580)을 receiptTotal에 적으세요.
 - location은 ["냉장실", "냉동실", "실온·팬트리"] 중 하나, category는 ["채소/과일", "육류/수산", "유제품/계란", "유아식/이유식 재료", "반찬/김치", "밀키트", "양념/소스", "기타"] 중 하나입니다.
 
+
 마크다운 코드블록 없이 아래 순수 JSON 객체만 출력하세요:
 {
   "rawLines": ["01*건고사리35G 6,990 1 6,990", "결제대상금액 20,580"],
@@ -5351,6 +5652,7 @@ ${validText}
     {"lineNo":"01","rawName":"건고사리35G","name":"건고사리","location":"실온·팬트리","category":"채소/과일","quantity":35,"unit":"g","price":6990}
   ]
 }`;
+
 
       const parsedObj = await callReliableAiEngine({
         apiKey: geminiApiKey,
@@ -5363,14 +5665,17 @@ ${validText}
         onProviderUsed: (eng) => setReceiptEngineUsed(eng)
       });
 
+
       const rawLinesArr = Array.isArray(parsedObj?.rawLines) ? parsedObj.rawLines.map((s) => String(s)) : [];
       setReceiptRawLines(rawLinesArr);
+
 
       const itemsSource = Array.isArray(parsedObj?.items)
         ? parsedObj.items
         : Array.isArray(parsedObj)
         ? parsedObj
         : [];
+
 
       const seenLineNos = new Set();
       let detectedTotal = parsedObj?.receiptTotal && Number(parsedObj.receiptTotal) > 0
@@ -5379,6 +5684,7 @@ ${validText}
       let detectedExcluded = parsedObj?.excludedTotal !== undefined && Number(parsedObj.excludedTotal) >= 0
         ? String(Number(parsedObj.excludedTotal))
         : "0";
+
 
       const normalized = toSafeArray(itemsSource)
         .filter((it) => {
@@ -5409,6 +5715,7 @@ ${validText}
         })
         .filter((it) => it.name && !it.name.includes("봉투"));
 
+
       setReceiptTotalAmount(detectedTotal);
       setReceiptExcludedAmount(detectedExcluded);
       setScannedReceiptItems(normalized);
@@ -5420,6 +5727,7 @@ ${validText}
       setIsReceiptScanning(false);
     }
   };
+
 
   const handleReceiptImageUpload = async (e) => {
     if (!requireEditorAccess()) return;
@@ -5440,6 +5748,7 @@ ${validText}
     }
   };
 
+
   // ==========================================
   // 10. 냉장고·식단·장보기·공지사항 핸들러
   // ==========================================
@@ -5456,12 +5765,14 @@ ${validText}
     if (inFlightOpsRef.current.has(lockKey)) return;
     inFlightOpsRef.current.add(lockKey);
 
+
     const id = editingFridge ? editingFridge.id : `f-${Date.now()}`;
     const priceNum = Number(fridgeForm.price) || 0;
     const baseUpdatedAt = typeof overrideUpdatedAt === "string" ? overrideUpdatedAt : editingFridge?.updatedAt;
     const cleanExp = fridgeForm.expiryDate ? String(fridgeForm.expiryDate).slice(0, 10) : "";
     const cleanPurchase = fridgeForm.purchaseDate || selectedDate;
     const cleanName = fridgeForm.name.trim();
+
 
     const payload = {
       id,
@@ -5479,6 +5790,7 @@ ${validText}
       shelfZone: fridgeForm.shelfZone || "",
       updatedAt: new Date().toISOString()
     };
+
 
     if (!user || !db) {
       inFlightOpsRef.current.delete(lockKey);
@@ -5526,6 +5838,7 @@ ${validText}
         await batch.commit();
       }
 
+
       setFridgeMap((prev) => ({
         ...prev,
         local: { ...(prev.local || {}), [id]: payload }
@@ -5552,6 +5865,7 @@ ${validText}
       endWrite(ok, errMsg);
     }
   };
+
 
   const handleAdjustQuantity = async (item, delta) => {
     if (!requireEditorAccess("fridge")) return;
@@ -5625,6 +5939,7 @@ ${validText}
     }
   };
 
+
   const handleHalfEatFridgeItem = async (item) => {
     if (!requireEditorAccess("fridge")) return;
     const cur = Number(item?.quantity || 0);
@@ -5636,6 +5951,7 @@ ${validText}
     const step = Math.max(0.1, rawStep);
     await handleAdjustQuantity(item, -step);
   };
+
 
   const handleMoveFridgeShelfZone = async (item, newZone) => {
     if (!requireEditorAccess()) return;
@@ -5679,6 +5995,7 @@ ${validText}
     recordActivity("냉장고", "이동", `${item.name} → ${newZone}`);
     showToast(`📦 '${item.name}' → [${newZone}] 이동 완료`);
   };
+
 
   // [신규 v6.2] 냉장고 식재료 폐기(소비기한 경과 등) -> 손실 금액 별도 기록
   const handleBulkMoveFridgeShelfZone = async (ids, targetZone) => {
@@ -5736,6 +6053,7 @@ ${validText}
     showToast(`📦 ${targetItems.length}개 재료를 '${targetZone}'(으)로 일괄 이동했습니다!`);
   };
 
+
   const handleWasteFridgeItem = async (item) => {
     if (!requireEditorAccess()) return;
     const lossAmount = Number(item.price) || 0;
@@ -5750,6 +6068,7 @@ ${validText}
       reason: "폐기 처리",
       createdAt: new Date().toISOString()
     };
+
 
     setWasteEvents((prev) => [wasteRecord, ...prev]);
     await markIdDeleted(item.id);
@@ -5768,6 +6087,7 @@ ${validText}
         : `'${item.name}' 폐기 처리 완료`
     );
   };
+
 
   // [신규 v6.2] AI 레시피 부족 재료 일괄 장보기 담기
   const handleAddMissingIngredientsToShopping = async (usedIngs) => {
@@ -5797,6 +6117,7 @@ ${validText}
       showToast("부족한 재료가 이미 냉장고 또는 장보기 목록에 있습니다!");
       return;
     }
+
 
     beginWrite();
     let ok = false;
@@ -5830,6 +6151,7 @@ ${validText}
     }
   };
 
+
   // [v7.1 개선] 요리 완료 전 차감 수량 확인 팝업 열기 & 확정 차감
   const handleCompleteRecipeCooking = (recipe) => {
     if (!requireEditorAccess()) return;
@@ -5861,6 +6183,7 @@ ${validText}
       }))
     });
   };
+
 
   const handleConfirmCookingDeduction = async () => {
     if (!requireEditorAccess()) return;
@@ -5953,6 +6276,7 @@ ${validText}
     }
   };
 
+
   const handleConsumeFridgeItem = async (item, addToShopping = false) => {
     if (!requireEditorAccess("fridge")) return;
     if (user && db && Number(item.price) > 0) {
@@ -5971,6 +6295,7 @@ ${validText}
       }
     }
 
+
     await markIdDeleted(item.id);
     if (user && db) {
       try {
@@ -5980,6 +6305,7 @@ ${validText}
         setSyncErrorMsg(e?.message || "소진 재고 삭제 동기화 오류");
       }
     }
+
 
     if (getDaysDiff(item.expiryDate) <= 3 && Number(item.price) > 0) {
       const resId = `res-${Date.now()}`;
@@ -5997,6 +6323,7 @@ ${validText}
         } catch (e) {}
       }
     }
+
 
     if (addToShopping) {
       const alreadyInShop = shoppingList.some(
@@ -6031,6 +6358,7 @@ ${validText}
     }
   };
 
+
   const handleMistakeDeleteFridgeItem = async (item) => {
     if (!requireEditorAccess()) return;
     if (!user || !db) {
@@ -6049,6 +6377,7 @@ ${validText}
       batch.delete(getDocRef("family_fridge_v4", item.id));
       await batch.commit();
 
+
       setDeletedIds((prev) => {
         const next = Array.from(new Set([...prev, item.id]));
         try { localStorage.setItem("kim_family_deleted_ids", JSON.stringify(next)); } catch (e) {}
@@ -6064,6 +6393,7 @@ ${validText}
       endWrite(ok, errMsg);
     }
   };
+
 
   const handleSaveMeal = async () => {
     if (!requireEditorAccess("daily")) return;
@@ -6096,6 +6426,7 @@ ${validText}
       mealStatus: mealForm.mealStatus || (mealForm.date > getTodayStr() ? "planned" : "recorded"),
       updatedAt: new Date().toISOString()
     };
+
 
     if (!user || !db) {
       showToast("⚠️ 서버 미연결 상태입니다. 연결 후 다시 저장해 주세요.");
@@ -6130,6 +6461,7 @@ ${validText}
         await batch.commit();
       }
 
+
       setMealsMap((prev) => ({
         ...prev,
         local: { ...(prev.local || {}), [id]: payload }
@@ -6149,6 +6481,7 @@ ${validText}
       endWrite(ok, errMsg);
     }
   };
+
 
   const handleCopyMealToDate = async (srcMeal, targetDate) => {
     if (!requireEditorAccess("daily") || !srcMeal) return;
@@ -6183,6 +6516,7 @@ ${validText}
       endWrite(ok);
     }
   };
+
 
   const handleMoveMealByDays = async (srcMeal, deltaDays) => {
     if (!requireEditorAccess("daily") || !srcMeal) return;
@@ -6220,6 +6554,7 @@ ${validText}
     }
   };
 
+
   const handleMarkPlannedMealRecorded = async (e, meal) => {
     e.stopPropagation();
     if (!requireEditorAccess("daily")) return;
@@ -6238,6 +6573,7 @@ ${validText}
       showToast("⚠️ 상태 변경 실패");
     }
   };
+
 
   const handleCopyTodayBriefing = async () => {
     const today = getTodayStr();
@@ -6282,12 +6618,14 @@ ${validText}
     await copyTextSafe(textOut, "📋 오늘 가족 브리핑이 복사되었습니다! (카톡에 바로 붙여넣기)");
   };
 
+
   const openBabyTab = () => {
     setBabySubTab(isAdminUnlocked ? "diary" : "milestones");
     setActiveTab("baby");
     setIsMoreNavOpen(false);
     window.scrollTo({ top: 0, behavior: "instant" });
   };
+
 
   const openDailyTodayAll = () => {
     const today = getTodayStr();
@@ -6301,6 +6639,7 @@ ${validText}
     }, 180);
   };
 
+
   const handleOpenMealCopyModal = () => {
     if (!requireEditorAccess("daily")) return;
     const d = new Date(selectedDate + "T00:00:00");
@@ -6313,6 +6652,7 @@ ${validText}
     setCopyTargetStatus(selectedDate > getTodayStr() ? "planned" : "recorded");
     setIsMealCopyModalOpen(true);
   };
+
 
   const handleExecuteSelectedMealCopy = async () => {
     if (!requireEditorAccess("daily")) return;
@@ -6364,17 +6704,20 @@ ${validText}
     }
   };
 
+
   const getDiaryEntryChildIds = (entry) => {
     if (Array.isArray(entry?.childIds) && entry.childIds.length > 0) return entry.childIds;
     if (entry?.childId === "시목·시율") return ["시목", "시율"];
     return [entry?.childId || "시율"];
   };
 
+
   const getDiaryEntryPhotos = (entry) => {
     if (Array.isArray(entry?.photoUrls) && entry.photoUrls.length > 0) return entry.photoUrls.filter(Boolean);
     if (entry?.photoUrl) return [entry.photoUrl];
     return [];
   };
+
 
   const handleDiaryPhotoSelect = async (e) => {
     const files = Array.from(e.target.files || []);
@@ -6412,6 +6755,7 @@ ${validText}
     }
   };
 
+
   const compressDiaryPhotoToBudget = async (file, maxChars = 650000) => {
     const presets = [
       { maxSide: 800, quality: 0.7 },
@@ -6429,6 +6773,7 @@ ${validText}
     }
     return bestUrl;
   };
+
 
   const handleSaveBabyDiary = async () => {
     if (!isAdminUnlocked) {
@@ -6545,6 +6890,7 @@ ${validText}
     }
   };
 
+
   const parseZipEntriesInBrowser = async (arrayBuffer) => {
     const bytes = new Uint8Array(arrayBuffer);
     const dv = new DataView(arrayBuffer);
@@ -6561,6 +6907,7 @@ ${validText}
     const decoder = new TextDecoder("utf-8");
     const filesMap = {};
 
+
     for (let idx = 0; idx < totalEntries; idx++) {
       if (dv.getUint32(cdOffset, true) !== 0x02014b50) break;
       const compMethod = dv.getUint16(cdOffset + 10, true);
@@ -6572,12 +6919,14 @@ ${validText}
       const fileName = decoder.decode(bytes.slice(cdOffset + 46, cdOffset + 46 + nameLen));
       cdOffset += 46 + nameLen + extraLen + commentLen;
 
+
       if (fileName.endsWith("/")) continue;
       if (dv.getUint32(localHeaderOffset, true) !== 0x04034b50) continue;
       const lhNameLen = dv.getUint16(localHeaderOffset + 26, true);
       const lhExtraLen = dv.getUint16(localHeaderOffset + 28, true);
       const dataStart = localHeaderOffset + 30 + lhNameLen + lhExtraLen;
       const compData = bytes.slice(dataStart, dataStart + compSize);
+
 
       let rawBytes = null;
       if (compMethod === 0) {
@@ -6597,6 +6946,7 @@ ${validText}
     return filesMap;
   };
 
+
   const handleImportBabyTimeZip = async (e) => {
     const selectedFiles = Array.from(e.target.files || []);
     if (e.target) e.target.value = "";
@@ -6609,6 +6959,7 @@ ${validText}
       showToast("⚠️ 서버 연결 후 가져올 수 있습니다.");
       return;
     }
+
 
     setDiaryUploadProgress({ stepText: `📦 일기 ZIP ${selectedFiles.length}개 분석 중...`, pct: 8 });
     beginWrite();
@@ -6626,9 +6977,11 @@ ${validText}
           .map((d) => `${d.date}|${String(d.content || "").trim()}`)
       );
 
+
       let importedDiaryCount = 0;
       let importedGrowthCount = 0;
       let skippedDupCount = 0;
+
 
       for (let fIdx = 0; fIdx < selectedFiles.length; fIdx++) {
         const file = selectedFiles[fIdx];
@@ -6638,8 +6991,10 @@ ${validText}
         const ascKey = txtKeys.find((k) => k.includes("_asc")) || txtKeys[0];
         if (!ascKey) continue;
 
+
         const rawText = new TextDecoder("utf-8").decode(filesMap[ascKey]);
         const blocks = rawText.split(/={5,}/).map((b) => b.trim()).filter(Boolean);
+
 
       for (let bIdx = 0; bIdx < blocks.length; bIdx++) {
         const block = blocks[bIdx];
@@ -6647,9 +7002,11 @@ ${validText}
         if (!dateMatch) continue;
         const entryDate = dateMatch[1];
 
+
         const weightMatch = block.match(/weight:\s*([0-9.]+)/i);
         const heightMatch = block.match(/height:\s*([0-9.]+)/i);
         const headMatch = block.match(/head:\s*([0-9.]+)/i);
+
 
         let contentText = "";
         const contentIdx = block.search(/content:\s*/i);
@@ -6658,6 +7015,7 @@ ${validText}
           after = after.split(/\n(?:images:|weight:|height:|head:)/i)[0].trim();
           contentText = after;
         }
+
 
         const imageNames = [];
         const imgLineMatch = block.match(/images:\s*([^\n\r]+)/i);
@@ -6668,10 +7026,12 @@ ${validText}
           });
         }
 
+
         setDiaryUploadProgress({
           stepText: `☁️ 파일 ${fIdx + 1}/${selectedFiles.length} 반영 중... (${bIdx + 1}/${blocks.length})`,
           pct: Math.min(92, Math.round((((fIdx + (bIdx + 1) / Math.max(1, blocks.length)) / selectedFiles.length)) * 82) + 10)
         });
+
 
         if (weightMatch || heightMatch || headMatch) {
           const wVal = weightMatch ? Number(weightMatch[1]) : null;
@@ -6694,6 +7054,7 @@ ${validText}
             importedGrowthCount += 1;
           }
         }
+
 
         if (contentText || imageNames.length > 0) {
           const dKey = `${entryDate}|${contentText}`;
@@ -6734,6 +7095,7 @@ ${validText}
       }
       }
 
+
       if (importedDiaryCount > 0 || importedGrowthCount > 0) {
         recordActivity("육아", "일기가져오기", `${targetChild} · 일기 ${importedDiaryCount}편 · 성장 ${importedGrowthCount}건`, {
           targetSubTab: "diary",
@@ -6754,6 +7116,7 @@ ${validText}
     }
   };
 
+
   const computeActivitySummaryForChild = (childId) => {
     const list = babyActivities
       .filter((a) => a.childId === childId)
@@ -6768,6 +7131,7 @@ ${validText}
     const lastSleep = list.find((a) => a.type === "수면") || null;
     return { list, lastFeed, prevFeed, feedIntervalMs, lastDiaper, lastSleep };
   };
+
 
   const handleQuickRecordDiaper = async (subType = "소변", childOverride = null) => {
     if (!requireEditorAccess()) return;
@@ -6799,6 +7163,7 @@ ${validText}
     showToast(`${subType === "대변" ? "💩" : "🧷"} ${targetChild} ${subType}이 즉시 기록되었습니다!`);
   };
 
+
   const handleQuickTapBabyActivity = async (typeId, childOverride = null, subTypeOverride = null) => {
     if (!requireEditorAccess()) return;
     if (!user || !db) {
@@ -6808,6 +7173,7 @@ ${validText}
     const targetChild = childOverride || selectedChildId || "시율";
     const meta = BABY_ACTIVITY_TYPES.find((t) => t.id === typeId);
     if (!meta) return;
+
 
     const activeItem = babyActivities.find((a) => a.childId === targetChild && a.type === typeId && a.inProgress);
     if (activeItem) {
@@ -6822,8 +7188,10 @@ ${validText}
       return;
     }
 
+
     const nowMs = Date.now();
     const todayStr = formatDate(new Date(nowMs));
+
 
     if (typeId === "기저귀") {
       setActivityEditModal({
@@ -6844,6 +7212,7 @@ ${validText}
       return;
     }
 
+
     if (typeId === "투약" || typeId === "기타") {
       setActivityEditModal({
         isNew: true,
@@ -6862,6 +7231,7 @@ ${validText}
       });
       return;
     }
+
 
     if (typeId === "목욕") {
       const id = `act-${targetChild}-${nowMs}`;
@@ -6882,6 +7252,7 @@ ${validText}
       showToast(`🛁 ${targetChild} 목욕이 즉시 기록되었습니다!`);
       return;
     }
+
 
     const hr = new Date(nowMs).getHours();
     const defaultSub =
@@ -6916,6 +7287,7 @@ ${validText}
     showToast(`${meta.emoji} ${targetChild} ${typeId} 시작 기록! 종료 시 한 번 더 눌러주세요.`);
   };
 
+
   const handleSwitchBreastSide = async (act, nextSide) => {
     if (!requireEditorAccess() || !act || !user || !db) return;
     const nowMs = Date.now();
@@ -6942,6 +7314,7 @@ ${validText}
     await setDoc(getDocRef("family_baby_activities_v1", act.id), updated);
     showToast(`🤱 모유 방향 전환: ${nextSide === "left" ? "왼쪽" : "오른쪽"}`);
   };
+
 
   const handleStopBabyActivityTimer = async (act) => {
     if (!requireEditorAccess() || !act || !user || !db) return;
@@ -6985,6 +7358,7 @@ ${validText}
     }
   };
 
+
   const handleSaveActivityModal = async () => {
     if (!requireEditorAccess() || !activityEditModal || !user || !db) return;
     const m = activityEditModal;
@@ -7012,12 +7386,14 @@ ${validText}
     showToast(`✅ ${payload.type} 기록이 저장되었습니다!`);
   };
 
+
   const handleDeleteBabyActivity = async (id) => {
     if (!requireEditorAccess() || !id || !user || !db) return;
     await deleteDoc(getDocRef("family_baby_activities_v1", id));
     setActivityEditModal(null);
     showToast("기록이 삭제되었습니다.");
   };
+
 
   const parseBabyTimeDateTime = (dtStr) => {
     const m = String(dtStr || "").trim().match(/^(\d{4}-\d{2}-\d{2})\s+(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
@@ -7030,6 +7406,7 @@ ${validText}
     const d = new Date(`${m[1]}T${String(h).padStart(2, "0")}:${String(min).padStart(2, "0")}:00`);
     return { date: m[1], ms: d.getTime() };
   };
+
 
   const handleImportBabyTimeActivityZip = async (e) => {
     const selectedFiles = Array.from(e.target.files || []);
@@ -7051,6 +7428,7 @@ ${validText}
       let skippedCount = 0;
       const toWrite = [];
 
+
       for (let fIdx = 0; fIdx < selectedFiles.length; fIdx++) {
         const file = selectedFiles[fIdx];
         const ab = await file.arrayBuffer();
@@ -7059,6 +7437,7 @@ ${validText}
         const ascHtmlKey = htmlKeys.find((k) => k.includes("_asc")) || htmlKeys[0];
         const txtKeys = Object.keys(filesMap).filter((k) => k.endsWith(".txt") && !k.toUpperCase().includes("NOTICE"));
         const ascTxtKey = txtKeys.find((k) => k.includes("_asc")) || txtKeys[0];
+
 
       let rawSegments = [];
       if (ascHtmlKey) {
@@ -7086,15 +7465,18 @@ ${validText}
         continue;
       }
 
+
       for (let idx = 0; idx < rawSegments.length; idx++) {
         const { text, imgs } = rawSegments[idx];
         const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
         if (lines.length === 0) continue;
 
+
         const dtParts = lines[0].split("~").map((x) => x.trim());
         const startParsed = parseBabyTimeDateTime(dtParts[0]);
         if (!startParsed) continue;
         const endParsed = dtParts[1] ? parseBabyTimeDateTime(dtParts[1]) : null;
+
 
         const kindLine = lines.find((l) => l.startsWith("기록 종류:")) || "";
         const rawKind = kindLine.replace("기록 종류:", "").trim();
@@ -7120,11 +7502,13 @@ ${validText}
         else if (rawKind.startsWith("터미타임")) type = "터미타임";
         else if (rawKind.startsWith("투약")) type = "투약";
 
+
         if (existingKeys.has(`${startParsed.ms}|${type}`)) {
           skippedCount += 1;
           continue;
         }
         existingKeys.add(`${startParsed.ms}|${type}`);
+
 
         const durM = text.match(/소요시간:\s*(\d+)/);
         const leftM = text.match(/모유 왼쪽 시간:\s*(\d+)/);
@@ -7134,8 +7518,10 @@ ${validText}
         const memoM = text.match(/메모:\s*([^\n]+)/);
         const etcM = text.match(/기타 항목:\s*([^\n]+)/);
 
+
         if (diaperM) subType = diaperM[1].trim();
         const memoText = [etcM?.[1]?.trim(), memoM?.[1]?.trim()].filter(Boolean).join(" · ");
+
 
         let photoUrl = "";
         if (imgs.length > 0) {
@@ -7149,6 +7535,7 @@ ${validText}
             photoUrl = await compressDiaryPhotoToBudget(imgFile, 180000);
           }
         }
+
 
         const actId = `act-bt-${startParsed.ms}-${fIdx}-${idx}`;
         toWrite.push({
@@ -7173,6 +7560,7 @@ ${validText}
       }
       }
 
+
       setDiaryUploadProgress({ stepText: `☁️ 클라우드 일괄 저장 중... (${toWrite.length}건)`, pct: 90 });
       for (let i = 0; i < toWrite.length; i += 400) {
         const batch = writeBatch(db);
@@ -7182,6 +7570,7 @@ ${validText}
         await batch.commit();
       }
       importedCount = toWrite.length;
+
 
       if (importedCount > 0) {
         recordActivity("육아", "생활기록가져오기", `${targetChild} · ${importedCount}건 업로드`, {
@@ -7202,6 +7591,7 @@ ${validText}
       endWrite(ok);
     }
   };
+
 
   const handleDeleteBabyDiary = async (entryOrId) => {
     const id = typeof entryOrId === "string" ? entryOrId : entryOrId?.id;
@@ -7224,9 +7614,11 @@ ${validText}
     }
   };
 
+
   const handleInsertTodayBabySummaryToDiary = () => {
     const targetDate = diaryForm.date || getTodayStr();
     const targetIds = Array.isArray(diaryForm.childIds) && diaryForm.childIds.length > 0 ? diaryForm.childIds : [selectedChildId];
+
 
     const childMeals = meals.filter(
       (m) => m.date === targetDate && targetIds.some((cid) => toSafeArray(m.members).includes(cid))
@@ -7247,6 +7639,7 @@ ${validText}
     const dayTodos = (schedules || []).filter(
       (t) => (t.category === "할일" || t.isTodo) && (t.date === targetDate || t.dueDate === targetDate)
     );
+
 
     const candidates = [];
     if (childMeals.length > 0) {
@@ -7312,6 +7705,7 @@ ${validText}
       });
     }
 
+
     setDiaryImportModal({
       date: targetDate,
       childId: targetIds[0] || selectedChildId,
@@ -7322,6 +7716,7 @@ ${validText}
       quickHead: ""
     });
   };
+
 
   const handleExportDiaryCardImage = async (entry) => {
     if (!entry) return;
@@ -7335,9 +7730,11 @@ ${validText}
         ? `📖 ${childMetas.map((c) => `${c.name}(${formatBabyAgeLabel(c.birthDate, entryDateStr)})`).join(" · ")}`
         : `📖 ${childMetas[0]?.name || "아기"} (${childMetas[0]?.birthDate || ""}생) · ${formatBabyAgeLabel(childMetas[0]?.birthDate, entryDateStr)}`;
 
+
     const W = 1080;
     const padX = 76;
     const maxBoxW = W - padX * 2 - 48;
+
 
     const loadImg = async (src) => {
       if (!src) return null;
@@ -7361,6 +7758,7 @@ ${validText}
     };
     const rawUrls = getDiaryEntryPhotos(entry);
     const loadedImgs = (await Promise.all(rawUrls.map((u) => loadImg(u)))).filter(Boolean);
+
 
     const tmpCanvas = document.createElement("canvas");
     const tCtx = tmpCanvas.getContext("2d");
@@ -7392,10 +7790,12 @@ ${validText}
     const totalPhotoH = photoDims.reduce((acc, d) => acc + d.h + 32, 0);
     const H = Math.max(900, 320 + (photoDims.length > 0 ? totalPhotoH + 28 : 0) + (entry.title ? 74 : 0) + bodyLines.length * 52 + 150);
 
+
     const canvas = document.createElement("canvas");
     canvas.width = W;
     canvas.height = H;
     const ctx = canvas.getContext("2d");
+
 
     ctx.fillStyle = "#FAF8F3";
     ctx.fillRect(0, 0, W, H);
@@ -7408,13 +7808,16 @@ ${validText}
     ctx.fillStyle = "#F3EEE4";
     ctx.fillRect(52, 52, W - 104, 156);
 
+
     ctx.fillStyle = "#35503C";
     ctx.font = childMetas.length >= 2 ? "bold 23px sans-serif" : "bold 26px sans-serif";
     ctx.fillText(headerTitle, padX, 110);
 
+
     ctx.fillStyle = "#292524";
     ctx.font = "bold 40px sans-serif";
     ctx.fillText(`${entryDateStr} (${weekday})`, padX, 170);
+
 
     if (entry.mood) {
       ctx.font = "bold 30px sans-serif";
@@ -7423,7 +7826,9 @@ ${validText}
       ctx.fillText(entry.mood, W - padX - moodW, 168);
     }
 
+
     let curY = 264;
+
 
     // Diary Title & Body FIRST
     if (entry.title) {
@@ -7432,6 +7837,7 @@ ${validText}
       ctx.fillText(entry.title, padX + 24, curY);
       curY += 66;
     }
+
 
     ctx.fillStyle = "#44403C";
     ctx.font = "500 32px sans-serif";
@@ -7445,6 +7851,7 @@ ${validText}
       ctx.stroke();
       curY += 52;
     });
+
 
     // Photos BELOW text
     if (photoDims.length > 0) curY += 20;
@@ -7473,10 +7880,12 @@ ${validText}
       curY += pd.h + 32;
     }
 
+
     // Footer
     ctx.fillStyle = "#78716C";
     ctx.font = "bold 24px sans-serif";
     ctx.fillText(`작성: ${entry.author || "엄마·아빠"}  |  수혁 · 아리 · 시목 · 시율 ♡`, padX + 24, H - 86);
+
 
     const pngUrl = canvas.toDataURL("image/png");
     const fname = `육아일기_${childMetas.map((c) => c.name).join("_") || "아기"}_${entry.date}.png`;
@@ -7484,6 +7893,8 @@ ${validText}
     setDiaryExportPreviewUrl(pngUrl);
     showToast("🖼️ 미리보기에서 공유 또는 다운로드를 선택해 주세요!");
   };
+
+
 
 
   const handleReuseMealsFromOffset = async (offsetDays) => {
@@ -7543,6 +7954,7 @@ ${validText}
     }
   };
 
+
   const handleDeleteMeal = async (meal) => {
     if (!requireEditorAccess("daily")) return;
     if (!user || !db) {
@@ -7561,6 +7973,7 @@ ${validText}
       batch.delete(getDocRef("family_meals_v4", meal.id));
       await batch.commit();
 
+
       setDeletedIds((prev) => {
         const next = Array.from(new Set([...prev, meal.id]));
         try { localStorage.setItem("kim_family_deleted_ids", JSON.stringify(next)); } catch (e) {}
@@ -7578,6 +7991,7 @@ ${validText}
     }
   };
 
+
   const fridgeProjectedMap = useMemo(
     () =>
       computeFridgeProjectedUsage(
@@ -7590,6 +8004,7 @@ ${validText}
       ),
     [fridge, meals]
   );
+
 
   const handleQuickParseShopping = async () => {
     if (!requireEditorAccess()) return;
@@ -7629,6 +8044,7 @@ ${validText}
         return;
       }
 
+
       const existingNames = new Set(
         shoppingList.map((s) => String(s.name || "").trim().toLowerCase()).filter(Boolean)
       );
@@ -7644,11 +8060,13 @@ ${validText}
         }
       });
 
+
       if (uniqueItems.length === 0) {
         setQuickShoppingText("");
         showToast("이미 장보기 목록에 모두 등록되어 있습니다.");
         return;
       }
+
 
       const newPayloads = uniqueItems.map((it, idx) => ({
         id: `sh-${Date.now()}-${idx}`,
@@ -7659,6 +8077,7 @@ ${validText}
         checked: false,
         memo: "카톡·음성 1초 파싱"
       }));
+
 
       setShoppingList((prev) => [...newPayloads, ...prev]);
       if (user && db) {
@@ -7681,6 +8100,7 @@ ${validText}
     }
   };
 
+
   const appendRecipeIngredientChip = (rawChip) => {
     const clean = String(rawChip || "").trim();
     if (!clean) return;
@@ -7693,6 +8113,7 @@ ${validText}
     }
     setRecipeForm((prev) => ({ ...prev, ingredientsText: existing.join(" + ") }));
   };
+
 
   const handleQuickAddSingleIngredientToShopping = async (rawToken, recipeTitle = "") => {
     if (!requireEditorAccess()) return;
@@ -7728,12 +8149,14 @@ ${validText}
     showToast(`🛒 '${itemName} (${itemQty})' 장보기에 추가됨!`);
   };
 
+
   const openCropModalWithUrl = (srcUrl) => {
     if (!srcUrl) return;
     setCropAspect("free");
     setCropRect({ x: 0.08, y: 0.08, w: 0.84, h: 0.84 });
     setCropModal({ srcUrl });
   };
+
 
   const handleRecipePhotoSelect = async (e) => {
     const file = e.target.files?.[0];
@@ -7753,6 +8176,7 @@ ${validText}
     }
   };
 
+
   const handleApplyCrop = async () => {
     if (!cropModal?.srcUrl || !cropImgRef.current) return;
     const img = cropImgRef.current;
@@ -7760,10 +8184,12 @@ ${validText}
     const natH = img.naturalHeight || img.height;
     if (!natW || !natH) return;
 
+
     const sx = Math.max(0, Math.round(cropRect.x * natW));
     const sy = Math.max(0, Math.round(cropRect.y * natH));
     const sw = Math.max(20, Math.round(cropRect.w * natW));
     const sh = Math.max(20, Math.round(cropRect.h * natH));
+
 
     const maxSide = 720;
     let dw = sw;
@@ -7776,6 +8202,7 @@ ${validText}
       dh = maxSide;
     }
 
+
     const canvas = document.createElement("canvas");
     canvas.width = dw;
     canvas.height = dh;
@@ -7787,6 +8214,7 @@ ${validText}
     setCropModal(null);
     showToast("✂️ 선택한 영역으로 사진이 잘렸습니다!");
   };
+
 
   const handleCropPointerDown = (mode, e) => {
     e.preventDefault();
@@ -7803,6 +8231,7 @@ ${validText}
       init: { ...cropRect }
     };
 
+
     const onMove = (ev) => {
       const drag = cropDragRef.current;
       if (!drag) return;
@@ -7812,6 +8241,7 @@ ${validText}
       const dy = (curPt.clientY - drag.startY) / drag.boxH;
       const minSize = 0.12;
       let { x, y, w, h } = drag.init;
+
 
       if (drag.mode === "move") {
         x = Math.max(0, Math.min(1 - w, x + dx));
@@ -7844,6 +8274,7 @@ ${validText}
       setCropRect({ x, y, w, h });
     };
 
+
     const onUp = () => {
       cropDragRef.current = null;
       window.removeEventListener("mousemove", onMove);
@@ -7852,11 +8283,13 @@ ${validText}
       window.removeEventListener("touchend", onUp);
     };
 
+
     window.addEventListener("mousemove", onMove, { passive: false });
     window.addEventListener("mouseup", onUp);
     window.addEventListener("touchmove", onMove, { passive: false });
     window.addEventListener("touchend", onUp);
   };
+
 
   const openNewRecipeModal = (prefill = null) => {
     if (!requireEditorAccess()) return;
@@ -7875,6 +8308,7 @@ ${validText}
     });
     setIsRecipeModalOpen(true);
   };
+
 
   const handleSaveRecipe = async () => {
     if (!requireEditorAccess("recipes")) return;
@@ -7903,6 +8337,7 @@ ${validText}
         return { name: parsed.name, qty: parsed.qty, unit: parsed.unit };
       });
 
+
     const payload = {
       id,
       title: recipeForm.title.trim(),
@@ -7920,12 +8355,14 @@ ${validText}
       updatedAt: nowIso
     };
 
+
     setRecipes((prev) => {
       const exists = prev.some((r) => r.id === id);
       return exists ? prev.map((r) => (r.id === id ? payload : r)) : [payload, ...prev];
     });
     setIsRecipeModalOpen(false);
     setEditingRecipe(null);
+
 
     if (user && db) {
       beginWrite();
@@ -7946,6 +8383,7 @@ ${validText}
     showToast("📖 가족 레시피북에 저장되었습니다!");
   };
 
+
   const handleDeleteRecipe = async (recipeId) => {
     if (!requireEditorAccess()) return;
     if (!window.confirm("이 레시피를 가족 레시피북에서 삭제할까요?")) return;
@@ -7960,6 +8398,7 @@ ${validText}
     recordActivity("레시피", "삭제", "레시피 삭제");
     showToast("레시피가 삭제되었습니다.");
   };
+
 
   const handleSendPlatingToRecipeBook = async () => {
     if (!requireEditorAccess()) return;
@@ -7982,6 +8421,7 @@ ${validText}
     });
   };
 
+
   const handleApplyRecipeToMeal = (recipe) => {
     if (!requireEditorAccess()) return;
     setEditingMeal(null);
@@ -7997,6 +8437,7 @@ ${validText}
     });
     setIsMealModalOpen(true);
   };
+
 
   const handleAddMissingRecipeIngredientsToShopping = async (recipe) => {
     if (!requireEditorAccess()) return;
@@ -8062,6 +8503,7 @@ ${validText}
     showToast(`🛒 냉장고에 없는 재료 ${newPayloads.length}건을 장보기에 추가했습니다!`);
   };
 
+
   const handleAddShopping = async () => {
     if (!requireEditorAccess("shopping")) return;
     if (!shoppingForm.name.trim()) return;
@@ -8087,6 +8529,7 @@ ${validText}
     recordActivity("장보기", "등록", `${shoppingForm.name || ""}`);
     showToast("장보기 메모에 추가되었습니다.");
   };
+
 
   const handleQuickAddFridgeItemToShopping = async (fItem) => {
     if (!requireEditorAccess("shopping") || !fItem?.name) return;
@@ -8117,6 +8560,7 @@ ${validText}
     showToast(`🛒 '${payload.name}' 장보기에 담았습니다!`);
   };
 
+
   const handleToggleShopping = async (item) => {
     if (!requireEditorAccess()) return;
     const updated = { ...item, checked: !item.checked };
@@ -8130,6 +8574,7 @@ ${validText}
     }
   };
 
+
   const handleDeleteShopping = async (id) => {
     if (!requireEditorAccess()) return;
     setShoppingList((prev) => prev.filter((s) => s.id !== id));
@@ -8141,6 +8586,7 @@ ${validText}
       }
     }
   };
+
 
   const handleClearCheckedShopping = async () => {
     if (!requireEditorAccess()) return;
@@ -8162,6 +8608,7 @@ ${validText}
       }
     }
   };
+
 
   const handleMoveCheckedShoppingToFridge = async () => {
     if (!requireEditorAccess()) return;
@@ -8215,6 +8662,7 @@ ${validText}
     }
   };
 
+
   const handleConfirmStockIn = async () => {
     if (!requireEditorAccess()) return;
     if (!stockInItem) return;
@@ -8222,6 +8670,7 @@ ${validText}
     const priceNum = Number(stockInPrice) || 0;
     const expDateObj = new Date();
     expDateObj.setDate(expDateObj.getDate() + 10);
+
 
     const rawQtyStr = String(stockInItem.quantity || "1개").trim();
     const qtyMatch = rawQtyStr.match(/^(\d+(?:\.\d+)?)\s*(.*)$/);
@@ -8231,6 +8680,7 @@ ${validText}
     const itemCat = stockInItem.category || "채소/과일";
     const autoZone = resolveItemShelfZone({ location: itemLoc, category: itemCat });
     const defaultExp = getDefaultExpiryForLocation(itemLoc);
+
 
     const newFridgeItem = {
       id: fId,
@@ -8245,11 +8695,13 @@ ${validText}
       purchaseDate: selectedDate
     };
 
+
     setFridgeMap((prev) => ({
       ...prev,
       local: { ...(prev.local || {}), [fId]: newFridgeItem }
     }));
     setShoppingList((prev) => prev.filter((s) => s.id !== stockInItem.id));
+
 
     const stockLockKey = `stockin-${stockInItem.id}`;
     if (inFlightOpsRef.current.has(stockLockKey)) return;
@@ -8299,6 +8751,7 @@ ${validText}
     showToast("구매 완료! 냉장고 입고 및 식비 가계부에 반영되었습니다.");
   };
 
+
   const handleSaveNotice = async () => {
     if (!requireEditorAccess("notices")) return;
     if (!noticeForm.title.trim()) return;
@@ -8335,6 +8788,7 @@ ${validText}
     showToast("가족 공지사항이 등록되었습니다.");
   };
 
+
   const handleToggleNoticeDone = async (notice) => {
     if (!requireEditorAccess()) return;
     const updated = { ...notice, done: !notice.done };
@@ -8348,6 +8802,7 @@ ${validText}
     }
   };
 
+
   const handleDeleteNotice = async (id) => {
     if (!requireEditorAccess()) return;
     setNotices((prev) => prev.filter((n) => n.id !== id));
@@ -8360,6 +8815,7 @@ ${validText}
     }
     showToast("공지사항이 삭제되었습니다.");
   };
+
 
   const handleAddBucketItem = async (e) => {
     e?.preventDefault?.();
@@ -8391,6 +8847,7 @@ ${validText}
     showToast("🌟 가족 버킷리스트에 추가했습니다!");
   };
 
+
   const handleToggleBucketDone = async (item) => {
     if (!requireEditorAccess()) return;
     const nextDone = !item.done;
@@ -8407,6 +8864,7 @@ ${validText}
     showToast(nextDone ? `🎉 '${item.title}' 버킷리스트 달성!` : "미완료 상태로 되돌렸습니다.");
   };
 
+
   const handleDeleteBucketItem = async (id) => {
     if (!requireEditorAccess()) return;
     setBucketList((prev) => prev.filter((b) => b.id !== id));
@@ -8415,6 +8873,7 @@ ${validText}
     }
     showToast("버킷리스트 항목을 삭제했습니다.");
   };
+
 
   const handleConfirmQuickLog = async () => {
     if (!requireEditorAccess()) return;
@@ -8451,6 +8910,7 @@ ${validText}
     showToast(`${quickLogDate} ${quickLogSlot} 식단표에 등록되었습니다!`);
   };
 
+
   // ==========================================
   // 11. 파생 통계 계산
   // ==========================================
@@ -8458,6 +8918,7 @@ ${validText}
     const monthPrefix = currentMonth;
     const ledgerItems = expenses.filter((e) => String(e.date || "").startsWith(monthPrefix));
     const ledgerIds = new Set(ledgerItems.map((e) => e.id));
+
 
     const unrecordedFridgeAsLedger = fridge
       .filter(
@@ -8474,12 +8935,14 @@ ${validText}
         date: f.purchaseDate || `${monthPrefix}-10`
       }));
 
+
     const combinedLedger = [...ledgerItems, ...unrecordedFridgeAsLedger].sort((a, b) =>
       String(b.date || "").localeCompare(String(a.date || ""))
     );
     const diningItems = meals.filter(
       (m) => String(m.date || "").startsWith(monthPrefix) && Number(m.cost) > 0
     );
+
 
     const groceryTotal = combinedLedger.reduce((acc, cur) => acc + (Number(cur.amount) || 0), 0);
     const diningTotal = diningItems.reduce((acc, cur) => acc + (Number(cur.cost) || 0), 0);
@@ -8492,6 +8955,7 @@ ${validText}
       (w) => String(w.date || "").startsWith(monthPrefix) && w.type === "rescued"
     );
     const rescuedTotal = monthRescuedItems.reduce((acc, cur) => acc + (Number(cur.savedAmount) || 0), 0);
+
 
     const [cy, cm] = monthPrefix.split("-").map((n) => Number(n) || 0);
     const prevDate = new Date(cy || 2026, (cm || 1) - 2, 1);
@@ -8514,6 +8978,7 @@ ${validText}
     const prevMonthTotal = prevGrocery + prevDining;
     const prevDiff = prevMonthTotal > 0 ? total - prevMonthTotal : null;
 
+
     const catMap = new Map();
     combinedLedger.forEach((item) => {
       const cat = item.category || "기타";
@@ -8528,6 +8993,7 @@ ${validText}
       .sort((a, b) => b.amount - a.amount)
       .slice(0, 4);
     const wasteRate = groceryTotal > 0 ? Math.round((wasteTotal / groceryTotal) * 1000) / 10 : 0;
+
 
     return {
       groceryTotal,
@@ -8547,6 +9013,7 @@ ${validText}
     };
   }, [expenses, fridge, meals, wasteEvents, currentMonth]);
 
+
   const expiringItems = useMemo(() => {
     return fridge
       .map((item) => ({ ...item, diff: getDaysDiff(item.expiryDate) }))
@@ -8554,9 +9021,11 @@ ${validText}
       .sort((a, b) => a.diff - b.diff);
   }, [fridge]);
 
+
   const pinnedNotices = useMemo(() => {
     return notices.filter((n) => n.pinned && !n.done);
   }, [notices]);
+
 
   const handleRestoreAllDeleted = async () => {
     if (!requireEditorAccess()) return;
@@ -8569,6 +9038,7 @@ ${validText}
     }
     showToast("숨겨졌던 모든 기존 데이터가 다시 복원되었습니다!");
   };
+
 
   const handleExportCsv = () => {
     const headers = ["구분,날짜,분류,내역/품목,대상/보관장소,금액(원),메모"];
@@ -8598,6 +9068,7 @@ ${validText}
     link.click();
     document.body.removeChild(link);
   };
+
 
   useEffect(() => {
     if (
@@ -8638,6 +9109,7 @@ ${validText}
     return () => window.removeEventListener("keydown", onEsc);
   }, [isQuickFabOpen, isRoutineModalOpen, isActivityModalOpen, isEditorUnlockModalOpen, isMealCopyModalOpen, diaryExportPreviewUrl, diaryLightboxUrl, isWeatherModalOpen, liveActivityPopup, activityEditModal, zipImportPicker, magazineMonth, isSettingsOpen, isHeroPhotoModalOpen]);
 
+
   const parseCookTimeMinutes = (cookTimeStr) => {
     const s = String(cookTimeStr || "");
     const hMatch = s.match(/(\d+)\s*시간/);
@@ -8648,6 +9120,7 @@ ${validText}
     const rawNum = s.match(/(\d+)/);
     return rawNum ? Math.max(1, Number(rawNum[1])) : 10;
   };
+
 
   const startRecipeCookTimer = (recipe) => {
     const mins = parseCookTimeMinutes(recipe?.cookTime || recipe?.cookMinutes || 10);
@@ -8661,6 +9134,7 @@ ${validText}
     });
     showToast(`⏱️ ${recipe?.title || "조리"} ${mins}분 타이머를 시작했습니다!`);
   };
+
 
   useEffect(() => {
     if (!kitchenTimer.running) return;
@@ -8695,6 +9169,7 @@ ${validText}
     return () => clearInterval(tid);
   }, [kitchenTimer.running]);
 
+
   return (
     <div className="min-h-screen bg-[#FAF8F3] text-stone-800 pb-24 max-w-md mx-auto shadow-xl border-x border-stone-200 relative font-sans">
       {diaryUploadProgress && (
@@ -8711,6 +9186,7 @@ ${validText}
           </div>
         </div>
       )}
+
 
       {toastMsg && (
         <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 max-w-[92vw] bg-stone-900 text-white px-4 py-2.5 rounded-full text-[13.5px] font-bold shadow-lg flex items-center gap-2">
@@ -8731,6 +9207,7 @@ ${validText}
           )}
         </div>
       )}
+
 
       {/* ==========================================
           상단 헤더 (패치노트 + 상단바 접기/펼치기 + 틀고정 해제/고정 토글 모두 유지!)
@@ -8765,6 +9242,7 @@ ${validText}
             </div>
           </div>
         )}
+
 
         <div className="mb-2 flex items-center justify-between gap-1">
           <div className="flex items-center gap-1 min-w-0 flex-1 overflow-x-auto">
@@ -8877,6 +9355,7 @@ ${validText}
           </div>
         </div>
 
+
         {activeTab === "home" && (
           <div
             onClick={() => {
@@ -8906,6 +9385,7 @@ ${validText}
           </div>
         )}
 
+
         <div className="flex items-center justify-between gap-1">
           <h1 className="text-[15.5px] font-black tracking-tight text-stone-900 whitespace-nowrap">
             {{
@@ -8922,6 +9402,7 @@ ${validText}
               ai: "똑똑한 AI 식단·요리 ✨"
             }[activeTab] || "우리 가족 홈 ♡"}
           </h1>
+
 
           {activeTab !== "home" && (
             <div className="flex items-center gap-1 shrink-0">
@@ -8949,6 +9430,7 @@ ${validText}
             </div>
           )}
         </div>
+
 
         {activeTab === "home" && (() => {
           const activeModeForHdr =
@@ -9008,6 +9490,7 @@ ${validText}
               </div>
             </div>
             )}
+
 
             {accessRole !== "guest" && pinnedNotices.length > 0 && canViewTab("notices") && (
               <div
@@ -9205,6 +9688,7 @@ ${validText}
         })()}
       </header>
 
+
       {syncErrorMsg && (
         <div className="mx-3 mt-2 px-3 py-2 rounded-2xl bg-rose-50 border border-rose-300 text-rose-900 flex items-start justify-between gap-2 shadow-sm">
           <div className="text-[12.5px] font-bold leading-snug break-all">
@@ -9221,6 +9705,7 @@ ${validText}
         </div>
       )}
 
+
       {isInitialLoading && (
         <div className="mx-3 mt-2">
           {renderStatusState({
@@ -9230,6 +9715,7 @@ ${validText}
           })}
         </div>
       )}
+
 
       {activeTab !== "home" && canViewTab(activeTab) && !canEditTab(activeTab) && (
         <div className="mx-3 mt-2 px-3 py-1.5 rounded-xl bg-amber-50 border border-amber-200 flex items-center justify-between gap-2">
@@ -9245,6 +9731,7 @@ ${validText}
           </button>
         </div>
       )}
+
 
       {/* ==========================================
           탭 0: 🏠 홈 (대시보드 & 바로가기 허브)
@@ -9271,6 +9758,7 @@ ${validText}
                 rangeLabel: `${String(homeTimeRanges.nightStart).padStart(2, "0")}:00 ~ 익일 ${String(homeTimeRanges.morningStart).padStart(2, "0")}:00`
               };
 
+
         const curModeLayout = homeLayoutConfig?.[activeHomeTimeMode] || DEFAULT_HOME_LAYOUT[activeHomeTimeMode];
         const blockOrder = Array.isArray(curModeLayout.blocks) ? curModeLayout.blocks : DEFAULT_HOME_LAYOUT[activeHomeTimeMode].blocks;
         const hiddenBlocks = Array.isArray(curModeLayout.hiddenBlocks) ? curModeLayout.hiddenBlocks : [];
@@ -9278,6 +9766,7 @@ ${validText}
         const hiddenMenus = Array.isArray(curModeLayout.hiddenMenus) ? curModeLayout.hiddenMenus : [];
         const blockSizes = curModeLayout.blockSizes || {};
         const menuSizes = curModeLayout.menuSizes || {};
+
 
         const reorderById = (arr, fromId, toId) => {
           if (!fromId || !toId || fromId === toId) return arr;
@@ -9289,6 +9778,7 @@ ${validText}
           copy.splice(toIdx, 0, moved);
           return copy;
         };
+
 
         const saveHomeLayout = (updater) => {
           setHomeLayoutConfig((prev) => {
@@ -9303,6 +9793,7 @@ ${validText}
           });
         };
 
+
         const moveArrayItem = (arr, idx, dir) => {
           const target = idx + dir;
           if (target < 0 || target >= arr.length) return arr;
@@ -9311,10 +9802,12 @@ ${validText}
           return copy;
         };
 
+
         const BLOCK_LABELS = {
           action_feed: "⚡ 오늘의 행동 피드 (일정·루틴·할일)",
           menu_grid: "🧭 핵심 메뉴 바로가기"
         };
+
 
         const todayKey = getTodayStr();
         const todayMealsList = meals.filter((m) => m.date === todayKey);
@@ -9344,6 +9837,7 @@ ${validText}
         const activeRoutines = homeRoutineDayOffset === 0
           ? dueRoutines.filter((r) => !isRoutineDoneNow(r))
           : dueRoutines;
+
 
         const MENU_DEFS = {
           daily: {
@@ -9455,6 +9949,7 @@ ${validText}
           }
         };
 
+
         const slotFilteredRoutines =
           homeRoutineSlotFilter === "전체"
             ? activeRoutines
@@ -9478,6 +9973,7 @@ ${validText}
             return ta.localeCompare(tb);
           });
 
+
         const actionFeedSize = blockSizes.action_feed || "normal";
         const previewLimit = actionFeedSize === "compact" ? 2 : actionFeedSize === "large" ? 5 : 3;
         const blockPadClass = (bId) => {
@@ -9488,6 +9984,7 @@ ${validText}
           .filter((s) => s.category === "할일(To-Do)" && !s.done)
           .sort((a, b) => String(a.date || "9999-99-99").localeCompare(String(b.date || "9999-99-99")))
           .slice(0, previewLimit);
+
 
         const renderHomeBlock = (blockId) => {
           if (hiddenBlocks.includes(blockId)) return null;
@@ -9575,6 +10072,7 @@ ${validText}
                   )}
                 </div>
 
+
                 {/* 2) 지금 시간대 + 상시 루틴 */}
                 <div className={`${padCls} space-y-1.5`}>
                   {(() => {
@@ -9661,6 +10159,7 @@ ${validText}
                     </div>
                   </div>
 
+
                   <div className="flex items-center gap-1 overflow-x-auto">
                     {[
                       { id: "전체", label: "전체" },
@@ -9686,11 +10185,12 @@ ${validText}
                     ))}
                   </div>
 
+
                   <div className="flex items-center gap-1 overflow-x-auto pb-0.5">
                     {[
                       { id: "auto", label: `자동(${curSlot})` },
-                      ...activeRoutineTimeSlots.map((s) => ({ id: s, label: s })),
-                      { id: "전체", label: `전체(${activeRoutines.length})` }
+                      { id: "전체", label: `전체(${activeRoutines.length})` },
+                      ...activeRoutineTimeSlots.map((s) => ({ id: s, label: s }))
                     ].map((opt) => (
                       <button
                         key={opt.id}
@@ -9709,6 +10209,7 @@ ${validText}
                       </button>
                     ))}
                   </div>
+
 
                   {activeRoutines.length === 0 ? (
                     <div className="text-[12.5px] font-bold text-emerald-700 bg-stone-50 rounded-xl px-2.5 py-1.5">
@@ -9852,6 +10353,7 @@ ${validText}
                   )}
                 </div>
 
+
                 {/* 3) 남은 할 일 */}
                 <div className={`${padCls} space-y-1.5`}>
                   <div className="flex items-center justify-between gap-1">
@@ -9927,6 +10429,7 @@ ${validText}
             );
           }
 
+
           if (blockId === "menu_grid") {
             const visibleMenuIds = menuOrder.filter((id) => {
               if (!MENU_DEFS[id] || hiddenMenus.includes(id)) return false;
@@ -9966,6 +10469,7 @@ ${validText}
           return null;
         };
 
+
         return (
           <div className={`p-3 space-y-2.5 rounded-b-3xl ${modeMeta.bgClass}`}>
             {/* 시간대 적응형 모드 전환 & 홈 화면 편집 바 */}
@@ -10003,8 +10507,10 @@ ${validText}
                 </button>
               )}
 
+
               </div>
             </div>
+
 
             {isHomeEditMode && (
               <div
@@ -10040,6 +10546,7 @@ ${validText}
                     </div>
                   </div>
                   <div className="overflow-y-auto flex-1 space-y-2.5 pr-0.5">
+
 
                 <div className="bg-stone-50 border border-stone-200 rounded-xl p-2.5 space-y-1.5">
                   <div className="flex items-center justify-between">
@@ -10102,6 +10609,7 @@ ${validText}
                     </div>
                   )}
                 </div>
+
 
                 <div className="space-y-1">
                   <div className="text-[11.5px] font-extrabold text-stone-500 whitespace-nowrap">1) 주요 영역 순서(⋮⋮ 드래그 / ▲▼) · 크기 · 표시</div>
@@ -10260,6 +10768,7 @@ ${validText}
                   </div>
                 </div>
 
+
                 <div className="space-y-1">
                   <div className="text-[11.5px] font-extrabold text-stone-500 whitespace-nowrap">2) 바로가기 카드 순서(⋮⋮ 드래그 / ▲▼) · 크기 · 표시</div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-1">
@@ -10402,6 +10911,7 @@ ${validText}
               </div>
             )}
 
+
             {/* 시간대별 전용 히어로 브리핑 카드 */}
             {activeHomeTimeMode === "morning" && (() => {
               const morningMeals = todayMealsList.filter((m) => m.slot === "아침" || m.slot === "점심" || m.slot === "오전간식");
@@ -10433,6 +10943,7 @@ ${validText}
                 </div>
               );
             })()}
+
 
             {activeHomeTimeMode === "afternoon" && (() => {
               const dinnerMeal = todayMealsList.find((m) => m.slot === "저녁");
@@ -10471,6 +10982,9 @@ ${validText}
 
 
 
+
+
+
             {accessRole === "guest" && (
               <div className="bg-white border border-amber-200 rounded-2xl p-3.5 shadow-sm flex items-center justify-between gap-3">
                 <div className="flex items-start gap-2.5 min-w-0">
@@ -10494,10 +11008,12 @@ ${validText}
               </div>
             )}
 
+
             {blockOrder.map((blockId) => renderHomeBlock(blockId))}
           </div>
         );
       })()}
+
 
       {/* ==========================================
           탭 1: 🍽️ 통합 식단 (주간 ±3일 한눈에 보기 + 즉시 추가·수정·삭제 + 인별 오늘 이동)
@@ -10582,6 +11098,7 @@ ${validText}
               </div>
             </div>
 
+
             <div className="grid grid-cols-2 gap-1.5">
               <button
                 type="button"
@@ -10605,6 +11122,7 @@ ${validText}
                 <span className="whitespace-nowrap">📤 식단·재고 내보내기</span>
               </button>
             </div>
+
 
             <div className="pt-1 flex items-center gap-1.5">
               <div className="relative flex-1 min-w-0">
@@ -10635,7 +11153,10 @@ ${validText}
             </div>
 
 
+
+
           </div>
+
 
           {/* 상단 고정(Sticky) 1줄 인원 빠른 전환 바 */}
           <div className={`sticky z-20 bg-white/95 backdrop-blur border border-stone-200 rounded-2xl px-2 py-1.5 shadow-sm ${isHeaderPinned ? "top-[82px]" : "top-1"}`}>
@@ -10683,6 +11204,7 @@ ${validText}
               })}
             </div>
           </div>
+
 
           <div className="bg-white rounded-2xl border border-stone-200 overflow-hidden shadow-sm">
             <div className="divide-y divide-stone-200">
@@ -10887,6 +11409,7 @@ ${validText}
         </div>
       )}
 
+
       {/* ==========================================
           탭 3: 월간 식단·식비 가계부
       ========================================== */}
@@ -10943,6 +11466,7 @@ ${validText}
             </button>
           </div>
 
+
           <div className="grid grid-cols-2 gap-1.5 bg-stone-200 p-1 rounded-2xl">
             <button
               type="button"
@@ -10968,6 +11492,7 @@ ${validText}
             </button>
           </div>
 
+
           {monthlySubTab === "calendar" ? (
             <div className="space-y-3">
               <div className="grid grid-cols-4 gap-1.5">
@@ -10986,6 +11511,7 @@ ${validText}
                   </button>
                 ))}
               </div>
+
 
               <div className="bg-white p-3 rounded-2xl border border-stone-200 shadow-sm">
                 <div className="grid grid-cols-7 gap-1 text-center text-[11.5px] font-extrabold text-stone-400 mb-1.5">
@@ -11033,6 +11559,7 @@ ${validText}
                 </div>
               </div>
 
+
               <div className="bg-white p-3.5 rounded-2xl border border-stone-200 shadow-sm space-y-2">
                 <div className="text-[13.5px] font-black text-stone-900">
                   📌 {selectedDate} ({getDayName(selectedDate)}) {monthlyMember}님의 식단
@@ -11074,6 +11601,7 @@ ${validText}
                   {monthlyExpenseSummary.total.toLocaleString()}원
                 </div>
 
+
                 <div className="grid grid-cols-2 gap-2 pt-3 mt-2 border-t border-stone-700 text-[13.5px]">
                   <div>
                     <div className="text-stone-400">🛒 장보기/식재료 구입</div>
@@ -11088,6 +11616,7 @@ ${validText}
                     </div>
                   </div>
                 </div>
+
 
                 <div className="mt-2.5 space-y-1.5">
                   <div className="w-full h-2 rounded-full bg-stone-700 overflow-hidden">
@@ -11115,6 +11644,7 @@ ${validText}
                   </div>
                 </div>
 
+
                 {monthlyExpenseSummary.categoryTop?.length > 0 && (
                   <div className="mt-2.5 pt-2 border-t border-stone-700 space-y-1.5">
                     <div className="text-[11.5px] font-bold text-stone-400">📊 카테고리별 식비 비중 (상위 4개)</div>
@@ -11132,6 +11662,7 @@ ${validText}
                   </div>
                 )}
 
+
                 {monthlyExpenseSummary.rescuedCount > 0 && (
                   <div className="mt-2.5 pt-2 border-t border-stone-700 flex items-center justify-between text-[12.5px]">
                     <span className="text-emerald-300 font-bold">
@@ -11142,6 +11673,7 @@ ${validText}
                     </span>
                   </div>
                 )}
+
 
                 {monthlyExpenseSummary.wasteCount > 0 && (
                   <div className="mt-2.5 pt-2 border-t border-stone-700 flex items-center justify-between text-[12.5px]">
@@ -11154,6 +11686,7 @@ ${validText}
                   </div>
                 )}
 
+
                 {(() => {
                   const todayStr = getTodayStr();
                   const isCurMonth = currentMonth === todayStr.slice(0, 7);
@@ -11165,6 +11698,7 @@ ${validText}
                   const remainBudget = monthlyBudget > 0 ? monthlyBudget - monthlyExpenseSummary.total : 0;
                   const dailyAllow = isCurMonth && remainDays > 0 && monthlyBudget > 0 ? Math.round(remainBudget / remainDays) : null;
 
+
                   const trendMonths = Array.from({ length: 6 }, (_, idx) => shiftYearMonth(currentMonth, idx - 5)).map((ym) => {
                     const gSum = expenses
                       .filter((e) => String(e.date || "").startsWith(ym))
@@ -11175,6 +11709,7 @@ ${validText}
                     return { ym, total: gSum + dSum };
                   });
                   const maxTrend = Math.max(1, ...trendMonths.map((t) => t.total));
+
 
                   return (
                     <div className="mt-2.5 pt-2.5 border-t border-stone-700 space-y-2.5">
@@ -11237,6 +11772,7 @@ ${validText}
                   );
                 })()}
               </div>
+
 
               {(() => {
                 const eq = expenseSearchQuery.trim().toLowerCase();
@@ -11355,6 +11891,7 @@ ${validText}
         </div>
       ))}
 
+
       {/* ==========================================
           탭 4: 일정 (1. 월간 달력 -> 2. 선택일 상세일정 -> 3. [신규] 주간 일정 요약 -> 4. [신규] 전체 To-Do 체크리스트 -> 5. 최하단 D-Day 보드)
       ========================================== */}
@@ -11393,6 +11930,7 @@ ${validText}
               <Plus className="w-3.5 h-3.5" /> 일정 추가
             </button>
           </div>
+
 
           <div className="grid grid-cols-3 gap-1.5 bg-stone-100 p-1 rounded-2xl">
             <button
@@ -11445,6 +11983,7 @@ ${validText}
             </button>
           </div>
 
+
           <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 sm:grid sm:grid-cols-5 sm:gap-1">
             <button
               onClick={() => {
@@ -11478,6 +12017,7 @@ ${validText}
               </button>
             ))}
           </div>
+
 
           {scheduleSubTab === "calendar" && (
             <>
@@ -11529,6 +12069,7 @@ ${validText}
               </button>
             </div>
 
+
             <div className="flex gap-1 overflow-x-auto pb-1">
               {["전체", ...SCHEDULE_CATEGORIES].map((cat) => (
                 <button
@@ -11545,11 +12086,13 @@ ${validText}
               ))}
             </div>
 
+
             <div className="grid grid-cols-7 gap-1 text-center text-[11.5px] font-extrabold text-stone-400">
               {["일", "월", "화", "수", "목", "금", "토"].map((d) => (
                 <div key={d}>{d}</div>
               ))}
             </div>
+
 
             <div className="grid grid-cols-7 gap-1">
               {Array.from(
@@ -11568,6 +12111,7 @@ ${validText}
                 );
                 const isSel = scheduleSelectedDate === dateStr;
                 const isToday = getTodayStr() === dateStr;
+
 
                 return (
                   <button
@@ -11620,6 +12164,7 @@ ${validText}
             </div>
           </div>
 
+
           {/* [2순위 배치] 선택한 날짜의 상세 일정 관리 */}
           <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-sm space-y-2.5">
             <div className="flex items-center justify-between">
@@ -11646,6 +12191,7 @@ ${validText}
                 + 이 날짜에 추가
               </button>
             </div>
+
 
             {getSchedulesForDate(scheduleSelectedDate, scheduleMemberFilter, scheduleCatFilter)
               .length === 0 ? (
@@ -11702,6 +12248,7 @@ ${validText}
                           })}
                         </div>
 
+
                         <div className="flex items-center gap-1 shrink-0">
                           {ev.category !== "기념일/생일" && (
                             <button
@@ -11743,6 +12290,7 @@ ${validText}
                         </div>
                       </div>
 
+
                       <div
                         className={`text-[15.5px] font-black break-keep ${
                           ev.done ? "line-through text-stone-400" : "text-stone-900"
@@ -11757,6 +12305,7 @@ ${validText}
               </div>
             )}
           </div>
+
 
           {/* ==========================================
               [신규 요청사항 2 완벽 반영] 주간 일정이 있는 항목만 요약하는 화면
@@ -11807,6 +12356,7 @@ ${validText}
               </div>
             </div>
 
+
             {weeklyActiveScheduleSummary.length === 0 ? (
               <div className="text-[13.5px] text-stone-400 py-4 text-center bg-stone-50 rounded-xl border border-dashed border-stone-200">
                 이 주간({scheduleWeekDates[0].slice(5)} ~ {scheduleWeekDates[6].slice(5)})에는 등록된 일정이 없습니다.
@@ -11841,6 +12391,7 @@ ${validText}
                         </span>
                       </div>
 
+
                       <div className="space-y-1">
                         {dayGroup.items.map((ev) => {
                           const dInfo = calculateScheduleDday(ev);
@@ -11874,6 +12425,7 @@ ${validText}
                                 </span>
                               </div>
 
+
                               <div className="flex items-center gap-1 shrink-0">
                                 {toSafeArray(ev.members).map((mId) => {
                                   const info = FAMILY_MEMBERS.find((f) => f.id === mId);
@@ -11898,8 +12450,10 @@ ${validText}
             )}
           </div>
 
+
             </>
           )}
+
 
           {/* 🔄 자정/주간 자동 리셋 데일리·위클리 육아/집안일 루틴 */}
           {scheduleSubTab === "routine" && (
@@ -11954,6 +12508,7 @@ ${validText}
               </div>
             </div>
 
+
             {isRoutineRangeEditOpen && (() => {
               const sortedSlots = [...routineSlotDefs].sort((a, b) => toTimeMinutes(a.startTime) - toTimeMinutes(b.startTime));
               const wdList = sortedSlots.filter((s) => s.weekday);
@@ -11972,6 +12527,7 @@ ${validText}
               };
               const hasDupWd = new Set(wdList.map((s) => toTimeMinutes(s.startTime))).size < wdList.length;
               const hasDupWe = new Set(weList.map((s) => toTimeMinutes(s.startTime))).size < weList.length;
+
 
               return (
                 <div className="bg-indigo-50/70 border border-indigo-200 rounded-xl p-2.5 space-y-2.5">
@@ -11992,6 +12548,7 @@ ${validText}
                     </button>
                   </div>
 
+
                   <div className="text-[11.5px] text-indigo-900 space-y-0.5 bg-white/80 border border-indigo-100 rounded-lg px-2 py-1.5">
                     <div>
                       <span className="font-black">평일:</span>{" "}
@@ -12010,6 +12567,7 @@ ${validText}
                       </span>
                     </div>
                   </div>
+
 
                   <div className="space-y-1.5">
                     {sortedSlots.map((slot) => (
@@ -12128,6 +12686,7 @@ ${validText}
                     ))}
                   </div>
 
+
                   <div className="flex flex-wrap items-center gap-1.5 pt-1 border-t border-indigo-200">
                     <input
                       type="text"
@@ -12225,6 +12784,7 @@ ${validText}
                     </button>
                   </div>
 
+
                   {(hasDupWd || hasDupWe) && (
                     <div className="text-[11.5px] font-extrabold text-rose-600">
                       ⚠️ 같은 요일 그룹 내 시작 시각이 중복된 시간대가 있습니다.
@@ -12233,6 +12793,7 @@ ${validText}
                 </div>
               );
             })()}
+
 
             <div className="flex gap-1 overflow-x-auto">
               {[
@@ -12257,6 +12818,7 @@ ${validText}
                 </button>
               ))}
             </div>
+
 
             <div className="flex gap-1 overflow-x-auto pb-0.5">
               {["전체", ...activeRoutineTimeSlots].map((ts) => (
@@ -12291,6 +12853,7 @@ ${validText}
                 );
               })()}
             </div>
+
 
             {(() => {
               const timedRoutines = familyRoutines
@@ -12332,6 +12895,7 @@ ${validText}
                 </div>
               );
             })()}
+
 
             {familyRoutines.length === 0 ? (
               <div className="text-center py-3 text-[13.5px] text-stone-400">
@@ -12544,7 +13108,9 @@ ${validText}
             )}
           </div>
 
+
           )}
+
 
           {/* ==========================================
               [신규 요청사항 1 완벽 반영] To-Do List 전체를 체크리스트처럼 표시하는 화면
@@ -12560,6 +13126,7 @@ ${validText}
                   </h3>
                 </div>
               </div>
+
 
               <div className="flex items-center justify-between gap-2 flex-wrap">
                 <div className="flex gap-1 bg-stone-100 p-0.5 rounded-lg shrink-0">
@@ -12593,6 +13160,7 @@ ${validText}
               </div>
             </div>
 
+
             <div className="flex items-center justify-between gap-2">
               <span className="text-[11.5px] font-semibold text-stone-500 whitespace-nowrap truncate">
                 {todoIncludeOtherCats ? "표시: 할일 + 병원·행사" : "표시: 할일만"}
@@ -12608,6 +13176,7 @@ ${validText}
                 {todoIncludeOtherCats ? "🏥 병원·행사 ON" : "🏥 병원·행사 포함"}
               </button>
             </div>
+
 
             {/* 진행률 바 */}
             {todoStats.total > 0 && (() => {
@@ -12627,6 +13196,7 @@ ${validText}
                 </div>
               );
             })()}
+
 
             {todoStats.total > 0 && (
               <div className="relative">
@@ -12648,6 +13218,7 @@ ${validText}
                 )}
               </div>
             )}
+
 
             {/* 체크리스트 인라인 빠른 할 일 추가 바 */}
             <div className="bg-stone-50 p-2 rounded-xl border border-stone-200 space-y-1.5">
@@ -12708,6 +13279,7 @@ ${validText}
               </div>
             </div>
 
+
             {/* 전체 체크리스트 목록 */}
             {(() => {
               const tq = todoSearchQuery.trim().toLowerCase();
@@ -12750,6 +13322,7 @@ ${validText}
                         {todo.done && <Check className="w-3.5 h-3.5" />}
                       </div>
 
+
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-1.5 flex-wrap">
                           <span
@@ -12786,6 +13359,7 @@ ${validText}
                       </div>
                     </div>
 
+
                     <div className="flex items-center gap-1 shrink-0">
                       <button
                         onClick={() => {
@@ -12820,7 +13394,9 @@ ${validText}
             })()}
           </div>
 
+
           )}
+
 
           {/* [5순위 최하단 배치] 우리 가족 D-Day & 기념일 카운트다운 보드 */}
           {scheduleSubTab === "calendar" && (
@@ -12831,6 +13407,7 @@ ${validText}
                 <span>우리 가족 D-Day & 기념일 카운트다운 (오늘: {getTodayStr()})</span>
               </div>
             </div>
+
 
             <div className="space-y-2">
               {dDayCards.map((item) => (
@@ -12865,6 +13442,7 @@ ${validText}
                     </div>
                   </div>
 
+
                   <span
                     className={`px-2.5 py-1 rounded-xl text-[13.5px] font-black shrink-0 ${
                       item.calc.daysUntil <= 3 && item.calc.daysUntil >= 0
@@ -12881,6 +13459,7 @@ ${validText}
           )}
         </div>
       ))}
+
 
       {/* ==========================================
           탭 5: 스마트 냉장고
@@ -12927,6 +13506,7 @@ ${validText}
             </div>
           )}
 
+
           {fridge.length > 0 && (
             <div className="grid grid-cols-3 gap-1.5">
               {[
@@ -12962,6 +13542,7 @@ ${validText}
               })}
             </div>
           )}
+
 
           <div className="flex items-center justify-between gap-2">
             {fridgeViewMode === "visual" ? (
@@ -13001,6 +13582,7 @@ ${validText}
             </button>
           </div>
 
+
           <div className="flex items-center justify-between gap-2 bg-stone-100 p-1 rounded-xl">
             <button
               onClick={() => { setFridgeViewMode("list"); setBulkMoveMode(false); setSelectedBulkFridgeIds([]); }}
@@ -13020,6 +13602,7 @@ ${validText}
             </button>
           </div>
 
+
           <div className="flex gap-1.5 overflow-x-auto pb-1">
             {["전체", ...FRIDGE_CATEGORIES].map((cat) => (
               <button
@@ -13035,6 +13618,7 @@ ${validText}
               </button>
             ))}
           </div>
+
 
           <div className="flex items-center gap-1.5">
             <div className="relative flex-1">
@@ -13081,6 +13665,7 @@ ${validText}
             )}
           </div>
 
+
           {fridge.length === 0 ? (
             <div className="bg-white p-6 rounded-2xl border border-stone-200 text-center space-y-2">
               <div className="text-[13.5px] font-bold text-stone-500">
@@ -13111,6 +13696,7 @@ ${validText}
               if (!itemsByZone[z]) itemsByZone[z] = [];
               itemsByZone[z].push(it);
             });
+
 
             const renderShelfBox = (zoneName, labelOverride = null, toneClass = "bg-white border-sky-200") => {
               const zItems = itemsByZone[zoneName] || [];
@@ -13287,6 +13873,7 @@ ${validText}
               );
             };
 
+
             return (
               <div className="space-y-3">
                 <div className="text-[12.5px] font-bold text-stone-500 bg-stone-100 px-2.5 py-1.5 rounded-xl space-y-1.5">
@@ -13355,12 +13942,14 @@ ${validText}
                   )}
                 </div>
 
+
                 {/* 1. 4도어 상냉장 · 하냉동 */}
                 {(fridgeLocFilter === "전체" || fridgeLocFilter === "냉장실" || fridgeLocFilter === "메인 냉동실" || fridgeLocFilter === "냉동실") && (
                   <div className="rounded-2xl border-2 border-sky-200 bg-sky-50/40 p-2.5 space-y-2">
                     <div className="text-[13.5px] font-black text-sky-950 flex items-center justify-between px-0.5">
                       <span>🧊 4도어 메인 냉장고</span>
                     </div>
+
 
                     {(fridgeLocFilter === "전체" || fridgeLocFilter === "냉장실") && (
                       <div className="space-y-1.5">
@@ -13371,6 +13960,7 @@ ${validText}
                         {renderShelfBox("채소칸", "🥬 채소칸 (통합)", "bg-emerald-50/70 border-emerald-200")}
                       </div>
                     )}
+
 
                     {(fridgeLocFilter === "전체" || fridgeLocFilter === "메인 냉동실" || fridgeLocFilter === "냉동실") && (
                       <div className="space-y-1.5 pt-1 border-t border-sky-200/80">
@@ -13386,6 +13976,7 @@ ${validText}
                   </div>
                 )}
 
+
                 {/* 2. 별도 4칸짜리 전용 냉동고 */}
                 {(fridgeLocFilter === "전체" || fridgeLocFilter === "별도 냉동고" || fridgeLocFilter === "냉동실") && (
                   <div className="rounded-2xl border-2 border-indigo-200 bg-indigo-50/40 p-2.5 space-y-1.5">
@@ -13400,6 +13991,7 @@ ${validText}
                     </div>
                   </div>
                 )}
+
 
                 {/* 3. 팬트리 (1칸) */}
                 {(fridgeLocFilter === "전체" || fridgeLocFilter === "실온·팬트리") && (
@@ -13505,6 +14097,7 @@ ${validText}
                           </div>
                         </div>
 
+
                         <div className="flex items-center gap-1 bg-stone-100 px-1.5 py-0.5 rounded-xl shrink-0">
                           <button
                             type="button"
@@ -13526,6 +14119,7 @@ ${validText}
                           </button>
                         </div>
                       </div>
+
 
                       <div className="flex items-center justify-between pt-1.5 border-t border-stone-100 gap-1">
                         <div className="flex items-center gap-1 flex-nowrap min-w-0 overflow-x-auto">
@@ -13556,6 +14150,7 @@ ${validText}
                             🗑️폐기
                           </button>
                         </div>
+
 
                         <div className="flex items-center gap-0.5 shrink-0">
                           <button
@@ -13596,6 +14191,7 @@ ${validText}
         </div>
       ))}
 
+
       {/* ==========================================
           탭 6: 장보기 메모
       ========================================== */}
@@ -13623,41 +14219,15 @@ ${validText}
             </button>
           </div>
 
+
           <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-sm space-y-3">
             <div className="flex items-center justify-between gap-2">
               <h2 className="text-[15.5px] font-black text-stone-900 flex items-center gap-1.5">
                 <ShoppingCart className="w-4 h-4 text-emerald-600" />
-                <span>장보기 목록</span>
+                <span>장보기 품목 등록</span>
               </h2>
-              {shoppingList.filter((s) => !s.checked).length > 0 && (
-                <button
-                  type="button"
-                  onClick={async () => {
-                    const items = shoppingList.filter((s) => !s.checked);
-                    const msg = `🛒 장보기 목록 (${items.length}건)\n` + items.map((s) => `- ${s.name}${s.quantity ? ` (${s.quantity})` : ""}`).join("\n");
-                    await copyTextSafe(msg, "📋 장보기 목록이 복사되었습니다!");
-                  }}
-                  className="px-2.5 py-1 rounded-lg bg-[#EEF3EE] text-[#35503C] border border-[#C9D8CC] text-[11.5px] font-extrabold shrink-0"
-                >
-                  📋 카톡 복사
-                </button>
-              )}
             </div>
-            {shoppingList.length > 0 && (() => {
-              const doneCnt = shoppingList.filter((s) => s.checked).length;
-              const pct = Math.round((doneCnt / shoppingList.length) * 100);
-              return (
-                <div className="space-y-1">
-                  <div className="flex justify-between text-[11.5px] font-extrabold text-stone-500">
-                    <span>장보기 진행률 {doneCnt}/{shoppingList.length}건</span>
-                    <span className="text-[#35503C]">{pct}%</span>
-                  </div>
-                  <div className="w-full h-1.5 rounded-full bg-stone-100 overflow-hidden">
-                    <div className="h-full bg-[#5E7A65] transition-all" style={{ width: `${pct}%` }} />
-                  </div>
-                </div>
-              );
-            })()}
+
 
             <div className="grid grid-cols-3 gap-2">
               <input
@@ -13742,6 +14312,7 @@ ${validText}
               ) : null;
             })()}
 
+
             <div className="flex items-center gap-2">
               <select
                 value={shoppingForm.category}
@@ -13776,6 +14347,7 @@ ${validText}
               </button>
             </div>
 
+
             <button
               type="button"
               onClick={handleAddShopping}
@@ -13784,6 +14356,7 @@ ${validText}
               + 장보기 체크리스트에 등록
             </button>
           </div>
+
 
           {shoppingList.length > 0 && (() => {
             const totalCnt = shoppingList.length;
@@ -13823,6 +14396,7 @@ ${validText}
             );
           })()}
 
+
           {shoppingList.some((s) => s.checked) && (
             <div className="flex items-center justify-between gap-1.5 bg-stone-100 px-3 py-2 rounded-xl flex-wrap">
               <span className="text-[12.5px] font-bold text-stone-600 whitespace-nowrap">
@@ -13845,6 +14419,7 @@ ${validText}
               </div>
             </div>
           )}
+
 
           {(() => {
             const existingNames = new Set(
@@ -13882,6 +14457,7 @@ ${validText}
               </div>
             );
           })()}
+
 
           {shoppingList.length > 0 && (
             <div className="flex items-center gap-1.5">
@@ -13925,6 +14501,7 @@ ${validText}
               </div>
             </div>
           )}
+
 
           <div className="space-y-2">
             {[...shoppingList]
@@ -13988,6 +14565,7 @@ ${validText}
                   </div>
                 </div>
 
+
                 <div className="flex items-center gap-1.5 shrink-0">
                   <button
                     onClick={() => {
@@ -14010,6 +14588,7 @@ ${validText}
           </div>
         </div>
       ))}
+
 
       {/* ==========================================
           탭 7: 가족 공지사항
@@ -14041,6 +14620,7 @@ ${validText}
             </button>
           </div>
 
+
           {notices.length > 0 && (
             <div className="flex items-center justify-between gap-2 bg-white border border-stone-200 rounded-2xl px-3 py-2">
               <span className="text-[12.5px] font-bold text-stone-600">
@@ -14059,6 +14639,7 @@ ${validText}
               </button>
             </div>
           )}
+
 
           <div className="space-y-2.5">
             {[...notices]
@@ -14094,20 +14675,12 @@ ${validText}
                     </span>
                   </div>
 
+
                   <div className="flex items-center gap-1 shrink-0">
                     <button
                       type="button"
-                      onClick={() => copyTextSafe(`📌 [${n.category}] ${n.title}
-${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
-                      className="p-1.5 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-600 text-[11px] font-bold"
-                      title="공지 복사"
-                    >
-                      📋
-                    </button>
-                    <button
-                      type="button"
                       onClick={async () => {
-                        const txt = `[${n.category}] ${n.title}\n${n.content || ""}`.trim();
+                        const txt = `📌 [${n.category}] ${n.title}\n${n.content || ""}`.trim();
                         await copyTextSafe(txt, "📋 공지 내용이 복사되었습니다!");
                       }}
                       className="px-2 py-0.5 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 text-[11.5px] font-extrabold whitespace-nowrap"
@@ -14149,6 +14722,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                   </div>
                 </div>
 
+
                 <div
                   className={`text-[15.5px] font-black break-keep ${
                     n.done ? "line-through text-stone-500" : "text-stone-900"
@@ -14164,6 +14738,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
           </div>
         </div>
       ))}
+
 
       {/* ==========================================
           탭 8: AI 추천
@@ -14193,6 +14768,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
             </button>
           </div>
 
+
           {aiSubMode === "plan3d" && (
             <div className="space-y-3.5">
               <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-sm space-y-3.5">
@@ -14205,6 +14781,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                     날짜·끼니와 대상(성인·유아·온가족)을 골라 AI 식단을 추천받으세요.
                   </p>
                 </div>
+
 
                 {/* 대상 & 성인 식사 목적 선택 */}
                 <div className="space-y-2">
@@ -14247,6 +14824,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                   )}
                 </div>
 
+
                 {/* 날짜 추가 & 날짜별 끼니 개별 선택 */}
                 <div className="space-y-2">
                   <div className="flex items-center justify-between gap-2">
@@ -14275,6 +14853,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                       + 날짜 추가
                     </button>
                   </div>
+
 
                   <div className="space-y-1.5">
                     {Object.keys(planScheduleMap)
@@ -14348,6 +14927,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                   </div>
                 </div>
 
+
                 {planErrorMsg && (
                   <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-[13.5px] font-bold text-rose-800 space-y-2">
                     <div>⚠️ {planErrorMsg}</div>
@@ -14362,6 +14942,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                     )}
                   </div>
                 )}
+
 
                 <button
                   onClick={handleGenerate3DayPlan}
@@ -14379,9 +14960,11 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                 </button>
               </div>
 
+
               {planItems.length > 0 && (() => {
                 const allMissing = computeAggregatedPlanShortage(planItems.filter((x) => x.selected));
                 const groupedDates = Array.from(new Set(planItems.map((it) => it.date))).sort();
+
 
                 return (
                   <div className="space-y-3">
@@ -14409,6 +14992,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                       </div>
                     )}
 
+
                     <div className="bg-white p-3.5 rounded-2xl border border-stone-200 shadow-sm space-y-3">
                       <div className="flex items-center justify-between">
                         <span className="text-[13.5px] font-black text-stone-900">
@@ -14424,6 +15008,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                           {planItems.every((x) => x.selected) ? "전체 해제" : "전체 선택"}
                         </button>
                       </div>
+
 
                       {groupedDates.map((gDate) => (
                         <div key={gDate} className="space-y-2">
@@ -14475,6 +15060,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                                     </div>
                                   </div>
 
+
                                   <input
                                     type="text"
                                     value={it.mealName}
@@ -14496,6 +15082,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                                     </div>
                                   )}
 
+
                                   {toSafeArray(it.components).length > 0 && (
                                     <div className="flex flex-wrap gap-1">
                                       {toSafeArray(it.components).map((c, cIdx) => (
@@ -14508,6 +15095,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                                       ))}
                                     </div>
                                   )}
+
 
                                   {toSafeArray(it.usedIngredientsDisplay).length > 0 && (
                                     <div className="text-[12.5px] font-semibold text-emerald-700">
@@ -14549,6 +15137,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                             })}
                         </div>
                       ))}
+
 
                       {planSnapshotMeta && (
                         <div className="text-[12.5px] font-bold text-stone-500 bg-stone-50 px-2.5 py-2 rounded-xl border border-stone-200 space-y-1.5">
@@ -14602,6 +15191,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
             </div>
           )}
 
+
           {aiSubMode === "recipe" && (
           <>
           <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-sm space-y-3.5">
@@ -14619,6 +15209,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                 ⚡ Gemini 직통 활성
               </span>
             </div>
+
 
             <div>
               <div className="flex items-center justify-between mb-1.5">
@@ -14670,6 +15261,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
               </div>
             </div>
 
+
             <div>
               <div className="text-[13.5px] font-extrabold text-stone-700 mb-1.5">
                 Step 2. 누구를 위한 식단인가요?
@@ -14696,6 +15288,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
               </div>
             </div>
 
+
             <input
               type="text"
               placeholder="추가 요청 (예: 매콤한 국물 요리, 에어프라이어 활용, 15분 컷 등)"
@@ -14704,11 +15297,13 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
               className="w-full px-3 py-2 rounded-xl border border-stone-200 text-[13.5px]"
             />
 
+
             {aiErrorMsg && (
               <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-[13.5px] text-red-700 font-bold">
                 ⚠️ {aiErrorMsg}
               </div>
             )}
+
 
             <button
               onClick={handleRunAiRecommend}
@@ -14728,6 +15323,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
               )}
             </button>
           </div>
+
 
           {aiRecipes.length === 0 ? (
             <div className="bg-white p-6 rounded-2xl border border-dashed border-stone-300 text-center space-y-1">
@@ -14774,6 +15370,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                     </div>
                   )}
 
+
                   <div className="grid grid-cols-2 gap-1.5">
                     <button
                       onClick={() => handleAddMissingIngredientsToShopping(rec.usedIngredients)}
@@ -14788,6 +15385,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                       🍳 요리완료 (재고 -1)
                     </button>
                   </div>
+
 
                   <button
                     onClick={() => {
@@ -14823,6 +15421,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
               </span>
             </div>
 
+
             <input
               ref={platingFileInputRef}
               type="file"
@@ -14830,6 +15429,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
               onChange={handlePlatingImageSelect}
               className="hidden"
             />
+
 
             <div className="grid grid-cols-2 gap-2">
               <button
@@ -14848,6 +15448,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
               />
             </div>
 
+
             {platingPreviewUrl && (
               <div className="rounded-2xl overflow-hidden border border-stone-200 bg-stone-100">
                 <img
@@ -14858,11 +15459,13 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
               </div>
             )}
 
+
             {platingErrorMsg && (
               <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-[13.5px] text-red-700 font-bold">
                 ⚠️ {platingErrorMsg}
               </div>
             )}
+
 
             <button
               onClick={handleAnalyzePlating}
@@ -14886,6 +15489,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
               )}
             </button>
 
+
             {platingResult && (
               <div className="p-3.5 rounded-2xl bg-rose-50/60 border border-rose-200 space-y-2.5">
                 <div className="flex items-center justify-between gap-2">
@@ -14902,15 +15506,18 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                   </div>
                 </div>
 
+
                 <div className="text-[13.5px] font-bold text-stone-800 leading-snug">
                   {platingResult.summary}
                 </div>
+
 
                 {platingResult.plateAndGarnish && (
                   <div className="p-2.5 rounded-xl bg-white border border-rose-100 text-[12.5px] font-semibold text-stone-700">
                     🥣 <b>추천 그릇·가니쉬:</b> {platingResult.plateAndGarnish}
                   </div>
                 )}
+
 
                 <div className="space-y-1 bg-white p-2.5 rounded-xl border border-rose-100 text-[13.5px] text-stone-700">
                   {toSafeArray(platingResult.tips).map((tip, idx) => (
@@ -14920,12 +15527,14 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                   ))}
                 </div>
 
+
                 <button
                   onClick={handleSendPlatingToRecipeBook}
                   className="w-full py-2 px-3 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-[13.5px] font-extrabold flex items-center justify-center gap-1.5 shadow-sm"
                 >
                   <span>📖 이 플레이팅 결과로 가족 레시피북에 저장</span>
                 </button>
+
 
                 <button
                   onClick={handleGeneratePlatingExampleImage}
@@ -14941,6 +15550,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                     <span>🎨 완성 예시 이미지 그려보기 (선택·저비용)</span>
                   )}
                 </button>
+
 
                 {platingExampleImageUrl && (
                   <div className="space-y-1 pt-1">
@@ -14962,6 +15572,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
         </div>
       ))}
 
+
       {/* ==========================================
           탭 8-2: 📖 가족 레시피북
       ========================================== */}
@@ -14982,6 +15593,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
             if (Boolean(a.done) !== Boolean(b.done)) return a.done ? 1 : -1;
             return (Number(b.updatedAtMs) || 0) - (Number(a.updatedAtMs) || 0);
           });
+
 
         return (
           <div className="space-y-3">
@@ -15017,11 +15629,13 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                 </div>
               </div>
 
+
               {bucketList.length > 0 && (
                 <div className="h-1.5 rounded-full bg-stone-100 overflow-hidden">
                   <div className="h-full bg-[#5E7A65] transition-all" style={{ width: `${pct}%` }} />
                 </div>
               )}
+
 
               {weatherInfo && (
                 <div className="flex items-center justify-between gap-2 px-3 py-2 rounded-xl bg-[#FAF8F3] border border-stone-200 text-[11.5px]">
@@ -15041,6 +15655,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                   </button>
                 </div>
               )}
+
 
               <form onSubmit={handleAddBucketItem} className="space-y-2 pt-1">
                 <div className="flex gap-1.5">
@@ -15087,6 +15702,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                 </div>
               </form>
 
+
               <div className="flex items-center gap-1 overflow-x-auto pb-0.5">
                 {["전체", "나들이/여행", "키즈카페/체험", "맛집", "우리집 목표"].map((cat) => (
                   <button
@@ -15104,6 +15720,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                 ))}
               </div>
             </div>
+
 
             {filtered.length === 0 ? (
               renderStatusState({
@@ -15191,6 +15808,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
         );
       })()}
 
+
       {activeTab === "recipes" && (() => {
         const filteredRecipes = recipes
           .filter((r) => {
@@ -15206,17 +15824,18 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
           })
           .sort((a, b) => {
             if (recipeSort === "rating") {
-              return (
-                Number(b.suhyukRating || 0) +
-                Number(b.arinaRating || 0) -
-                (Number(a.suhyukRating || 0) + Number(a.arinaRating || 0))
-              );
+              const sumRating = (r) =>
+                r?.ratings && typeof r.ratings === "object"
+                  ? Object.values(r.ratings).reduce((acc, v) => acc + (Number(v) || 0), 0)
+                  : Number(r?.suhyukRating || 0) + Number(r?.arinaRating || 0);
+              return sumRating(b) - sumRating(a);
             }
             if (recipeSort === "time") {
-              return Number(a.cookMinutes || 999) - Number(b.cookMinutes || 999);
+              return parseCookTimeMinutes(a.cookTime || a.cookMinutes || 999) - parseCookTimeMinutes(b.cookTime || b.cookMinutes || 999);
             }
             return 0;
           });
+
 
         return (
         <div className="p-4 space-y-3.5">
@@ -15236,6 +15855,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
               </button>
             </div>
 
+
             {!isEditorUnlocked && (
               <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 flex items-center justify-between gap-2 text-[12.5px]">
                 <span className="font-bold text-amber-900">🔒 열람 잠금 중입니다.</span>
@@ -15247,6 +15867,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                 </button>
               </div>
             )}
+
 
             <div className="space-y-2">
               <div className="relative">
@@ -15305,6 +15926,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
               </div>
             </div>
 
+
             <div className="flex gap-1.5 overflow-x-auto pb-0.5">
               {["전체", ...RECIPE_CATEGORIES].map((cat) => (
                 <button
@@ -15320,6 +15942,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                 </button>
               ))}
             </div>
+
 
             <div className="flex items-center gap-1 bg-stone-100 p-1 rounded-xl">
               <button
@@ -15340,6 +15963,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
               </button>
             </div>
           </div>
+
 
           {filteredRecipes.length === 0 ? (
             <div className="bg-white p-6 rounded-2xl border border-stone-200 text-center space-y-2">
@@ -15514,6 +16138,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                           </div>
                         </div>
 
+
                         <div className="flex items-center gap-1.5 flex-wrap">
                           <span className="px-2 py-0.5 rounded-md bg-stone-100 text-stone-700 text-[11.5px] font-bold">
                             ⏱️ {r.cookTime || "20분"}
@@ -15529,6 +16154,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                         </div>
                       </div>
                     </div>
+
 
                     {r.ingredientsText && (
                       <div className="bg-stone-50 p-2 rounded-xl space-y-1">
@@ -15563,6 +16189,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                       </div>
                     )}
 
+
                     <div className="flex flex-wrap gap-1.5 text-[11.5px] font-bold">
                       {["수혁", "아리나", "시목", "시율"].map((mName) => {
                         const score = Number(r.ratings?.[mName] || 0);
@@ -15574,6 +16201,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                       })}
                     </div>
 
+
                     {r.stepsText && (
                       <div className="text-[12.5px] text-stone-700 bg-amber-50/50 border border-amber-100 p-2 rounded-xl whitespace-pre-line">
                         <span className="font-black text-amber-900 block mb-0.5">👩‍🍳 조리 순서</span>
@@ -15581,6 +16209,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                       </div>
                     )}
                     {r.memo && <div className="text-[12.5px] text-stone-600 whitespace-pre-line">{r.memo}</div>}
+
 
                     {toSafeArray(r.ingredients).length > 0 && (() => {
                       const missingCnt = toSafeArray(r.ingredients).filter((ing) => {
@@ -15595,6 +16224,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                         </div>
                       );
                     })()}
+
 
                     <div className="grid grid-cols-3 gap-1.5 pt-1">
                       <button
@@ -15628,6 +16258,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
         );
       })()}
 
+
       {/* ==========================================
           탭 9: 👶 육아수첩 (월령별 발달 · 예방접종/영유아검진 · 성장 기록 · 진료/열 체크)
       ========================================== */}
@@ -15637,6 +16268,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
         const ageStats = getChildAgeStats(activeChild.birthDate);
         const childGrowth = babyGrowthLogs.filter((g) => g.childId === activeChild.id);
         const childNotes = babyMedicalNotes.filter((n) => n.childId === activeChild.id);
+
 
         return (
           <div className="p-4 space-y-4">
@@ -15679,6 +16311,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
               })}
             </div>
 
+
             {/* 육아수첩 서브 탭 (가로 스크롤 없이 한눈에 보기, 일기 오른쪽에 성장기록 배치) */}
             <div className="grid grid-cols-3 gap-1 bg-stone-200 p-1 rounded-2xl">
               {[
@@ -15708,6 +16341,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
               ))}
             </div>
 
+
             {/* 서브탭 0: 🍼 수유·기저귀·수면·생활 원탭 트래커 */}
             {babySubTab === "activity" && (() => {
               const sum = computeActivitySummaryForChild(activeChild.id);
@@ -15722,6 +16356,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                 return true;
               });
 
+
               const groupedByDate = [];
               filteredActs.forEach((act) => {
                 const dKey = act.date || formatDate(new Date(act.startMs || nowMs));
@@ -15733,6 +16368,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                 grp.items.push(act);
               });
 
+
               return (
                 <div className="space-y-3">
                   <input
@@ -15743,6 +16379,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                     onChange={handleImportBabyTimeActivityZip}
                     className="hidden"
                   />
+
 
                   <div ref={activityTopRef} className="bg-white rounded-2xl border border-stone-200/80 shadow-sm overflow-hidden scroll-mt-4">
                     <div className="px-3.5 pt-2.5 pb-1 flex items-center justify-between gap-2">
@@ -15783,6 +16420,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                         </button>
                       </div>
                     </div>
+
 
                     <div className="flex items-center gap-3 overflow-x-auto px-3.5 py-2">
                       {BABY_ACTIVITY_TYPES.flatMap((t) =>
@@ -15858,6 +16496,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                       })}
                     </div>
 
+
                     {activeTimers.map((act) => {
                       const secElapsed = Math.max(0, Math.floor((nowMs - (Number(act.startMs) || nowMs)) / 1000));
                       const mm = String(Math.floor(secElapsed / 60)).padStart(2, "0");
@@ -15905,6 +16544,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                       );
                     })}
 
+
                     <div className="grid grid-cols-3 divide-x divide-stone-100 py-2.5 border-t border-stone-100 text-center">
                       <div className="px-1">
                         <div className="text-[11px] font-medium text-stone-500">마지막 기저귀</div>
@@ -15947,6 +16587,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                       </div>
                     </div>
 
+
                     {(() => {
                       const todayKey = getTodayStr();
                       const todayActs = sum.list.filter((a) => a.date === todayKey);
@@ -15966,6 +16607,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                       );
                     })()}
                   </div>
+
 
                   {sum.list.length > 0 && (
                     <div className="space-y-1.5">
@@ -16031,6 +16673,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                     </div>
                   )}
 
+
                   {groupedByDate.length === 0 ? (
                     <div className="space-y-2">
                       {renderStatusState({
@@ -16065,6 +16708,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                         const totalFeedMl = formulaMl + pumpedFeedMl;
                         const peeCnt = grp.items.filter((x) => x.type === "기저귀" && String(x.subType).includes("소변")).length;
                         const pooCnt = grp.items.filter((x) => x.type === "기저귀" && String(x.subType).includes("대변")).length;
+
 
                         return (
                           <div key={grp.date} className="bg-white rounded-2xl border border-stone-200/80 shadow-sm overflow-hidden">
@@ -16111,8 +16755,10 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                                 }
                                 if (act.subType && act.type !== "기저귀" && act.type !== "수면") detailParts.push(act.subType);
 
+
                                 const startParts = formatTime12Ko(act.startMs).split(" ");
                                 const endTimeOnly = act.endMs ? formatTime12Ko(act.endMs).split(" ")[0] : "";
+
 
                                 return (
                                   <div
@@ -16191,6 +16837,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
               );
             })()}
 
+
             {/* 서브탭 1: 월령별 발달과정 */}
             {babySubTab === "milestones" && (
               <div className="space-y-2.5">
@@ -16249,6 +16896,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
               </div>
             )}
 
+
             {/* 서브탭 2: 국가예방접종 + 선택접종 + 영유아 건강검진 + 완료/미완료 구분 */}
             {babySubTab === "vaccines" && (() => {
               const todayKey = getTodayStr();
@@ -16277,6 +16925,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                   if (a.isDone !== b.isDone) return a.isDone ? 1 : -1;
                   return String(a.recDate || "").localeCompare(String(b.recDate || ""));
                 });
+
 
               return (
                 <div className="space-y-3">
@@ -16312,9 +16961,11 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                       </div>
                     </div>
 
+
                     <div className="h-1.5 rounded-full bg-stone-100 overflow-hidden">
                       <div className="h-full bg-emerald-500 transition-all duration-300" style={{ width: `${pct}%` }} />
                     </div>
+
 
                     <div className="grid grid-cols-3 gap-1 bg-stone-100 p-1 rounded-xl">
                       {[
@@ -16337,6 +16988,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                       ))}
                     </div>
 
+
                     <div className="flex items-center gap-1 overflow-x-auto pb-0.5">
                       {["전체", "국가접종", "선택접종", "영유아검진"].map((tp) => (
                         <button
@@ -16354,6 +17006,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                       ))}
                     </div>
                   </div>
+
 
                   {visibleItems.length === 0 ? (
                     <div className="bg-white rounded-2xl border border-stone-200 p-6 text-center text-[12.5px] font-bold text-stone-400">
@@ -16436,6 +17089,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                             </div>
                           </div>
 
+
                           {!item.isDone && (
                             <button
                               type="button"
@@ -16456,6 +17110,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                 </div>
               );
             })()}
+
 
             {/* 서브탭 3: 성장 기록 (키·몸무게·머리둘레) */}
             {babySubTab === "growth" && (
@@ -16511,6 +17166,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                     + 성장 기록 저장하기
                   </button>
                 </div>
+
 
                 {childGrowth.length > 0 && (() => {
                   const latest = childGrowth[0];
@@ -16578,6 +17234,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                   );
                 })()}
 
+
                 {childGrowth.length >= 2 && (() => {
                   const sorted = [...childGrowth].reverse().slice(-8);
                   const weights = sorted.map((g) => Number(g.weight || 0)).filter((v) => v > 0);
@@ -16597,6 +17254,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                   const getX = (i) => (sorted.length === 1 ? padL + plotW / 2 : padL + (i / (sorted.length - 1)) * plotW);
                   const getY = (val, minV, maxV) => padT + plotH - ((val - minV) / Math.max(0.1, maxV - minV)) * plotH;
 
+
                   const heightCoords = sorted
                     .map((item, i) => {
                       const val = Number(item.height || 0);
@@ -16610,9 +17268,11 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                     })
                     .filter(Boolean);
 
+
                   const yRatios = [0, 0.5, 1];
                   const showTickIdx = (i) =>
                     sorted.length <= 4 || i === 0 || i === sorted.length - 1 || i === Math.floor((sorted.length - 1) / 2);
+
 
                   return (
                     <div className="bg-white p-3.5 rounded-2xl border border-stone-200 shadow-sm space-y-2">
@@ -16627,6 +17287,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                         {/* Y축 단위 라벨 */}
                         <text x={padL - 4} y={11} textAnchor="end" fontSize="8.5" fontWeight="800" fill="#059669">키(cm)</text>
                         <text x={W - padR + 4} y={11} textAnchor="start" fontSize="8.5" fontWeight="800" fill="#4f46e5">체중(kg)</text>
+
 
                         {/* 가로 눈금선 & 좌/우 Y축 눈금 */}
                         {yRatios.map((r) => {
@@ -16644,10 +17305,12 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                           );
                         })}
 
+
                         {/* 좌·우 Y축 및 하단 X축 실선 */}
                         <line x1={padL} y1={padT} x2={padL} y2={padT + plotH} stroke="#d6d3d1" strokeWidth="1.2" />
                         <line x1={W - padR} y1={padT} x2={W - padR} y2={padT + plotH} stroke="#d6d3d1" strokeWidth="1.2" />
                         <line x1={padL} y1={padT + plotH} x2={W - padR} y2={padT + plotH} stroke="#a8a29e" strokeWidth="1.2" />
+
 
                         {/* X축 눈금 & 날짜(MM/DD) */}
                         {sorted.map((item, i) => {
@@ -16666,6 +17329,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                         })}
                         <text x={W / 2} y={H - 3} textAnchor="middle" fontSize="8" fontWeight="700" fill="#a8a29e">측정일 (월/일)</text>
 
+
                         {/* 키 추이 선 & 포인트 */}
                         {heightCoords.length >= 2 && (
                           <polyline
@@ -16680,6 +17344,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                         {heightCoords.map((p, idx) => (
                           <circle key={`hc-${idx}`} cx={p.x} cy={p.y} r="3" fill="#059669" stroke="#ffffff" strokeWidth="1.2" />
                         ))}
+
 
                         {/* 몸무게 추이 선 & 포인트 */}
                         {weightCoords.length >= 2 && (
@@ -16699,6 +17364,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                     </div>
                   );
                 })()}
+
 
                 {childGrowth.length === 0 ? (
                   <div className="text-[13.5px] text-stone-400 py-6 text-center bg-white rounded-2xl border border-dashed border-stone-200">
@@ -16771,6 +17437,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
               </div>
             )}
 
+
             {/* 서브탭 4: 소아과 진료 · 열 체크 메모 */}
             {babySubTab === "medical" && (
               <div className="space-y-3">
@@ -16815,6 +17482,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                     + 진료·열 체크 저장하기
                   </button>
                 </div>
+
 
                 {childNotes.length === 0 ? (
                   <div className="text-[13.5px] text-stone-400 py-6 text-center bg-white rounded-2xl border border-dashed border-stone-200">
@@ -16863,6 +17531,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
               </div>
             )}
 
+
             {babySubTab === "diary" && (
               !isAdminUnlocked ? (
                 renderLockedTabScreen("📖 육아일기 (관리자 전용)")
@@ -16910,6 +17579,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                       )}
                     </div>
 
+
                     {(() => {
                       const curIds = Array.isArray(diaryForm.childIds) && diaryForm.childIds.length > 0 ? diaryForm.childIds : [activeChild.id];
                       const isBoth = curIds.length >= 2;
@@ -16937,6 +17607,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                         </div>
                       );
                     })()}
+
 
                     <div className="grid grid-cols-2 gap-2">
                       <div className="space-y-1">
@@ -16977,6 +17648,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                       </select>
                     </div>
 
+
                     <input
                       type="text"
                       placeholder="오늘의 한 줄 (예: 첫 뒤집기!)"
@@ -17000,6 +17672,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                         {(diaryForm.content || "").length}자
                       </span>
                     </div>
+
 
                     <div className="space-y-2">
                       <input
@@ -17092,6 +17765,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                       )}
                     </div>
 
+
                     {Array.isArray(diaryForm.photos) && diaryForm.photos.length > 0 && (
                       <div className="space-y-1.5">
                         <div className="text-[11.5px] font-extrabold text-[#35503C] bg-[#EEF3EE] px-2.5 py-1 rounded-lg flex items-center justify-between">
@@ -17157,6 +17831,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                       </div>
                     )}
                   </div>
+
 
                   {babyDiaryEntries.length > 0 && (
                     <div className="space-y-1.5">
@@ -17281,6 +17956,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                       })()}
                     </div>
                   )}
+
 
                   {(() => {
                     const q = diarySearchQuery.trim().toLowerCase();
@@ -17471,6 +18147,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
         );
       })()}
 
+
       {showScrollTop && (
         <button
           type="button"
@@ -17484,6 +18161,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
           ↑
         </button>
       )}
+
 
       {kitchenTimer.open && (() => {
         const displaySec = kitchenTimer.mode === "stopwatch" ? kitchenTimer.elapsedSec : kitchenTimer.remainingSec;
@@ -17524,6 +18202,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                 </button>
               </div>
             </div>
+
 
             <div className="flex items-center justify-between gap-2">
               <div className="font-mono text-[22px] font-black tracking-wider tabular-nums text-amber-300">
@@ -17590,6 +18269,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
           </div>
         );
       })()}
+
 
       {/* 스마트 빠른 등록 플로팅 메뉴 & FAB */}
       {isQuickFabOpen && (
@@ -17748,6 +18428,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
         </>
       )}
 
+
       {isEditorUnlocked && (
         <button
           type="button"
@@ -17762,6 +18443,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
           <Plus className="w-6 h-6" />
         </button>
       )}
+
 
       {/* 하단 더보기 메뉴 시트 (접근성·Safe Area 적용) */}
       {isMoreNavOpen && (
@@ -17833,6 +18515,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
         </div>
       )}
 
+
       {/* 하단 네비게이션 (6개 핵심 메뉴) */}
       <nav style={{ paddingBottom: "calc(0.375rem + env(safe-area-inset-bottom))" }} className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md bg-white/95 backdrop-blur border-t border-stone-200 px-1.5 pt-1.5 grid grid-cols-6 gap-0.5 z-30">
         {[
@@ -17900,6 +18583,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
         </button>
       </nav>
 
+
       {/* ==========================================
           모달: 패치노트 (업데이트 히스토리 열람 및 새 기록 작성)
       ========================================== */}
@@ -17920,6 +18604,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                 <X className="w-5 h-5 text-stone-400" />
               </button>
             </div>
+
 
             <div className="bg-indigo-50 p-3 rounded-2xl border border-indigo-200 space-y-2">
               <div className="flex items-center justify-between gap-2">
@@ -17947,6 +18632,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                 접속 도메인: <span className="font-bold">{typeof window !== "undefined" ? window.location.hostname : ""}</span>
               </div>
             </div>
+
 
             <div className="bg-stone-50 p-3.5 rounded-2xl border border-stone-200 space-y-2">
               <div className="text-[13.5px] font-extrabold text-stone-800">
@@ -17982,6 +18668,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                 + 패치노트 저장하기
               </button>
             </div>
+
 
             <div className="space-y-3">
               {patchNotes.map((pn) => (
@@ -18021,6 +18708,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
         </div>
       )}
 
+
       {/* ==========================================
           모달: 가족 일정 추가·수정
       ========================================== */}
@@ -18035,6 +18723,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                 <X className="w-5 h-5 text-stone-400" />
               </button>
             </div>
+
 
             <div>
               <label className="text-[11.5px] font-extrabold text-stone-500 block mb-1">
@@ -18071,6 +18760,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
               )}
             </div>
 
+
             <div>
               <label className="text-[11.5px] font-extrabold text-stone-500 block mb-1">대상</label>
               <div className="flex flex-wrap gap-1.5">
@@ -18098,6 +18788,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
               </div>
             </div>
 
+
             <div>
               <label className="text-[11.5px] font-extrabold text-stone-500 block mb-1">시간대</label>
               <div className="flex flex-wrap gap-1.5">
@@ -18117,6 +18808,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                 ))}
               </div>
             </div>
+
 
             <div>
               <div className="flex items-center justify-between mb-1">
@@ -18164,6 +18856,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
               </div>
             </div>
 
+
             <div className="space-y-1.5">
               <label className="text-[11.5px] font-extrabold text-stone-500 block">반복 주기</label>
               <div className="flex flex-wrap gap-1.5">
@@ -18188,6 +18881,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                   </button>
                 ))}
               </div>
+
 
               {newRoutineCycle === "interval" && (
                 <select
@@ -18238,6 +18932,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
               )}
             </div>
 
+
             <div className="flex gap-2 pt-2">
               <button
                 type="button"
@@ -18258,6 +18953,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
         </div>
       )}
 
+
       {isScheduleModalOpen && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-sm w-full p-5 space-y-3.5 max-h-[90vh] overflow-y-auto">
@@ -18270,6 +18966,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
               </button>
             </div>
 
+
             <input
               type="text"
               placeholder="일정 제목 (예: 시목 어린이집상담 2시반, 병원 예약)"
@@ -18277,6 +18974,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
               onChange={(e) => setScheduleForm({ ...scheduleForm, title: e.target.value })}
               className="w-full px-3 py-2.5 rounded-xl border border-stone-200 text-[13.5px] font-bold"
             />
+
 
             <div className="grid grid-cols-2 gap-2">
               <div>
@@ -18309,6 +19007,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                 </select>
               </div>
             </div>
+
 
             <div>
               <div className="flex items-center justify-between mb-1">
@@ -18353,6 +19052,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
               </div>
             </div>
 
+
             <div className="space-y-2 bg-stone-50 p-3 rounded-2xl border border-stone-200">
               <div className="text-[11.5px] font-extrabold text-stone-500 whitespace-nowrap">
                 기념일/생일 전용 추가 옵션 (필요할 때만 체크)
@@ -18368,6 +19068,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                 <span>🔄 매년 같은 월·일에 자동으로 반복 표시하기 (생일/기념일)</span>
               </label>
 
+
               <label className="flex items-center gap-2 text-[13.5px] font-bold text-stone-800 cursor-pointer">
                 <input
                   type="checkbox"
@@ -18378,6 +19079,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                 />
                 <span>⭐ 하단 D-Day 카운트다운 보드에 고정 표시하기</span>
               </label>
+
 
               <label className="flex items-center gap-2 text-[13.5px] font-bold text-stone-800 cursor-pointer">
                 <input
@@ -18391,6 +19093,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
               </label>
             </div>
 
+
             <input
               type="text"
               placeholder="메모 (예: 식당 예약, 준비물, 선물 등)"
@@ -18398,6 +19101,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
               onChange={(e) => setScheduleForm({ ...scheduleForm, memo: e.target.value })}
               className="w-full px-3 py-2 rounded-xl border border-stone-200 text-[13.5px]"
             />
+
 
             <div className="flex gap-2 pt-2">
               <button
@@ -18417,6 +19121,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
         </div>
       )}
 
+
       {/* 모달 6: 식단표 이미지 AI 자동 스캔 모달 */}
       {isDaycareModalOpen && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
@@ -18434,6 +19139,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                 <X className="w-5 h-5 text-stone-400" />
               </button>
             </div>
+
 
             <div className="grid grid-cols-3 gap-2 bg-stone-50 p-3 rounded-2xl border border-stone-200">
               <div>
@@ -18478,6 +19184,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
               </div>
             </div>
 
+
             <div>
               <input
                 ref={menuFileInputRef}
@@ -18505,6 +19212,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
               </button>
             </div>
 
+
             {scanPreviewUrl && (
               <div className="relative rounded-2xl overflow-hidden border border-stone-200 max-h-36 bg-stone-100">
                 <img
@@ -18515,11 +19223,13 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
               </div>
             )}
 
+
             {scanErrorMsg && (
               <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-[12.5px] text-red-700 font-bold">
                 ⚠️ {scanErrorMsg}
               </div>
             )}
+
 
             <div className="space-y-2">
               <div className="flex items-center justify-between">
@@ -18548,6 +19258,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                   + 날짜 행 직접 추가
                 </button>
               </div>
+
 
               {scannedMenuDays.length > 0 && (
                 <div className="space-y-2.5 max-h-64 overflow-y-auto pr-1">
@@ -18581,6 +19292,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
                       </div>
+
 
                       <input
                         type="text"
@@ -18643,6 +19355,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
               )}
             </div>
 
+
             {scannedMenuDays.length > 0 && (
               <button
                 onClick={handleSaveScannedMenuDays}
@@ -18655,6 +19368,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
         </div>
       )}
 
+
       {/* 모달 7: 마트 영수증 실제 이미지 스캔 모달 */}
       {isReceiptModalOpen && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
@@ -18665,6 +19379,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                 <X className="w-5 h-5 text-stone-400" />
               </button>
             </div>
+
 
             <input
               ref={receiptFileInputRef}
@@ -18691,11 +19406,13 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
               )}
             </button>
 
+
             {receiptErrorMsg && (
               <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-[13.5px] text-red-700 font-bold">
                 ⚠️ {receiptErrorMsg}
               </div>
             )}
+
 
             {receiptPreviewUrl && (
               <img
@@ -18704,6 +19421,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                 className="w-full h-28 object-cover rounded-xl border border-stone-200"
               />
             )}
+
 
             {scannedReceiptItems.length > 0 && (
               <div className="space-y-2">
@@ -18923,6 +19641,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                       if (!okDiff) return;
                     }
 
+
                     const opId = receiptOperationId || `rcpt-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
                     setReceiptSaveError("");
                     setIsSavingReceipt(true);
@@ -18933,6 +19652,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                       const opRef = getDocRef("family_cooking_operations_v7", opId);
                       let alreadyImported = false;
                       const createdLocal = {};
+
 
                       await runTransaction(db, async (tx) => {
                         const existingOp = await tx.get(opRef);
@@ -18971,6 +19691,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                           createdAt: nowIso
                         });
                       });
+
 
                       ok = true;
                       if (alreadyImported) {
@@ -19011,6 +19732,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
         </div>
       )}
 
+
       {/* 기존 모달들 (식단, 냉장고, 장보기입고, 공지, AI퀵로그) */}
       {isMealModalOpen && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
@@ -19036,6 +19758,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                 </button>
               </div>
             </div>
+
 
             <div className="space-y-2">
               <div className="flex items-center gap-1.5">
@@ -19088,6 +19811,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
               </div>
             </div>
 
+
             <div className="flex items-center justify-between gap-1.5">
               <div className="flex gap-1 bg-stone-100 p-1 rounded-xl flex-1">
                 {[
@@ -19137,6 +19861,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                 </div>
               )}
             </div>
+
 
             <div>
               <div className="flex items-center justify-between mb-1">
@@ -19194,6 +19919,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
               </div>
             </div>
 
+
             <div className="space-y-2 bg-stone-50 p-3 rounded-2xl border border-stone-200">
               <div className="flex items-center justify-between">
                 <span className="text-[12.5px] font-extrabold text-stone-700">메뉴 구성 (자동 + 연결)</span>
@@ -19216,6 +19942,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                   </button>
                 )}
               </div>
+
 
               {/* 칩으로 하나씩 추가 */}
               <div className="flex items-center gap-1.5">
@@ -19294,6 +20021,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                 ) : null;
               })()}
 
+
               {/* 현재 조합된 칩 목록 */}
               {String(mealForm.menu || "").trim() && (
                 <div className="flex flex-wrap gap-1">
@@ -19336,6 +20064,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                 </div>
               )}
 
+
               {/* 최종 한 줄 메뉴명 직접 수정도 가능 */}
               <input
                 type="text"
@@ -19344,6 +20073,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                 onChange={(e) => setMealForm({ ...mealForm, menu: e.target.value })}
                 className="w-full px-3 py-2 rounded-xl border border-stone-200 text-[13.5px] font-bold bg-white"
               />
+
 
               {/* 최근 자주 먹은 개별 메뉴 원터치 칩 */}
               {recentSingleMenuChips.length > 0 && (
@@ -19363,6 +20093,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                   </div>
                 </div>
               )}
+
 
               {/* 즐겨찾는 단일 메뉴 (터치로 + 추가) */}
               {favoriteSingleMenus.length > 0 && (
@@ -19394,6 +20125,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                 </div>
               )}
 
+
               {/* 레시피북에서 바로 추가 */}
               {recipes.length > 0 && (
                 <div className="space-y-1 pt-0.5">
@@ -19412,6 +20144,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                   </div>
                 </div>
               )}
+
 
               {/* 즐겨찾기 조합 */}
               {favoriteMealCombos.length > 0 && (
@@ -19448,6 +20181,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
               )}
             </div>
 
+
             <div className="grid grid-cols-2 gap-2">
               <select
                 value={mealForm.sourceType}
@@ -19468,6 +20202,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
               />
             </div>
 
+
             <input
               type="text"
               placeholder="메모"
@@ -19475,6 +20210,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
               onChange={(e) => setMealForm({ ...mealForm, note: e.target.value })}
               className="w-full px-3 py-2 rounded-xl border border-stone-200 text-[13.5px]"
             />
+
 
             <div className="flex gap-2 pt-2">
               <button
@@ -19494,6 +20230,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
         </div>
       )}
 
+
       {isFridgeModalOpen && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-sm w-full p-5 space-y-3">
@@ -19505,6 +20242,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                 <X className="w-5 h-5 text-stone-400" />
               </button>
             </div>
+
 
             <input
               type="text"
@@ -19548,6 +20286,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
               ) : null;
             })()}
 
+
             <div className="grid grid-cols-2 gap-2">
               <select
                 value={fridgeForm.location}
@@ -19583,6 +20322,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
               </select>
             </div>
 
+
             <div>
               <label className="text-[11.5px] font-bold text-stone-500 block mb-1">세부 보관 칸 (시각적 냉장고 위치)</label>
               <select
@@ -19596,6 +20336,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                 ))}
               </select>
             </div>
+
 
             <div className="grid grid-cols-2 gap-2">
               <input
@@ -19616,6 +20357,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                 className="px-3 py-2 rounded-xl border border-stone-200 text-[13.5px] font-bold"
               />
             </div>
+
 
             <div className="grid grid-cols-2 gap-2">
               <div>
@@ -19641,6 +20383,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                 />
               </div>
             </div>
+
 
             {fridgeConflictData && (
               <div className="bg-amber-50 border border-amber-300 rounded-2xl p-3 space-y-2">
@@ -19692,6 +20435,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
               </div>
             )}
 
+
             <div className="flex gap-2 pt-2">
               <button
                 onClick={() => { setFridgeConflictData(null); setIsFridgeModalOpen(false); }}
@@ -19709,6 +20453,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
           </div>
         </div>
       )}
+
 
       {stockInItem && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
@@ -19761,6 +20506,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
         </div>
       )}
 
+
       {isNoticeModalOpen && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-sm w-full p-5 space-y-3">
@@ -19773,6 +20519,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
               </button>
             </div>
 
+
             <input
               type="text"
               placeholder="제목"
@@ -19780,6 +20527,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
               onChange={(e) => setNoticeForm({ ...noticeForm, title: e.target.value })}
               className="w-full px-3 py-2.5 rounded-xl border border-stone-200 text-[13.5px] font-bold"
             />
+
 
             <div className="grid grid-cols-2 gap-2">
               <select
@@ -19802,6 +20550,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
               </select>
             </div>
 
+
             <textarea
               rows={3}
               placeholder="상세 내용"
@@ -19809,6 +20558,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
               onChange={(e) => setNoticeForm({ ...noticeForm, content: e.target.value })}
               className="w-full px-3 py-2 rounded-xl border border-stone-200 text-[13.5px]"
             />
+
 
             <label className="flex items-center gap-2 text-[13.5px] font-bold text-stone-700 cursor-pointer">
               <input
@@ -19818,6 +20568,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
               />
               <span>📌 앱 상단 배너에 중요 공지로 고정하기</span>
             </label>
+
 
             <div className="flex gap-2 pt-2">
               <button
@@ -19836,6 +20587,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
           </div>
         </div>
       )}
+
 
       {quickLogRecipe && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
@@ -19880,6 +20632,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
           </div>
         </div>
       )}
+
 
       {/* 요리 완료 재고 차감 확인 모달 */}
       {cookingConfirmModal && (
@@ -19958,6 +20711,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
         </div>
       )}
 
+
       {/* 설정 모달 */}
       {isHeroPhotoModalOpen && heroPhotoDraft && (
         <div
@@ -19975,6 +20729,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
               </button>
             </div>
 
+
             <div className="relative h-36 rounded-2xl overflow-hidden border border-stone-200 bg-stone-100">
               <img
                 src={heroPhotoDraft.url || HERO_FAMILY_FALLBACK}
@@ -19989,6 +20744,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                 </span>
               </div>
             </div>
+
 
             <input
               ref={heroPhotoInputRef}
@@ -20008,6 +20764,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
               }}
               className="hidden"
             />
+
 
             <div className="grid grid-cols-2 gap-1.5">
               <button
@@ -20033,6 +20790,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
               </button>
             </div>
 
+
             <div className="space-y-1">
               <div className="flex items-center justify-between text-[11.5px] font-bold text-stone-600">
                 <span>📐 사진 상하 위치 조절</span>
@@ -20048,6 +20806,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
               />
             </div>
 
+
             <div className="space-y-1">
               <label className="text-[11.5px] font-bold text-stone-600 block">✏️ 우측 하단 문구</label>
               <input
@@ -20058,6 +20817,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                 className="w-full px-3 py-2 rounded-xl border border-stone-200 text-[13px] font-bold bg-stone-50 focus:bg-white"
               />
             </div>
+
 
             <div className="grid grid-cols-2 gap-2 pt-1">
               <button
@@ -20093,6 +20853,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
         </div>
       )}
 
+
       {isSettingsOpen && (
         <div
           className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
@@ -20114,6 +20875,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
               </button>
             </div>
 
+
             <div className="p-2.5 rounded-2xl bg-emerald-50 border border-emerald-200 text-[12px] text-emerald-900 space-y-0.5">
               <div className="flex items-center justify-between gap-2">
                 <span>✅ <b>자동 스냅샷</b> 정상 가동</span>
@@ -20123,6 +20885,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                 📦 식단 {meals.length} · 냉장고 {fridge.length} · 일정 {schedules.length} · 버킷 {bucketList.length}
               </div>
             </div>
+
 
             <button
               type="button"
@@ -20136,11 +20899,13 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
               <span>📝 패치노트 ({APP_CODE_VERSION})</span>
             </button>
 
+
             <div className="p-3 rounded-2xl bg-amber-50/80 border border-amber-200 space-y-2">
               <div className="text-[13px] font-black text-amber-900 flex items-center gap-1.5">
                 <CloudUpload className="w-4 h-4 text-amber-700 shrink-0" />
                 <span>백업 및 복원</span>
               </div>
+
 
               <input
                 type="email"
@@ -20153,6 +20918,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                 className="w-full px-3 py-1.5 rounded-xl border border-amber-300 text-[12.5px] font-bold bg-white"
               />
 
+
               <input
                 ref={jsonRestoreInputRef}
                 type="file"
@@ -20160,6 +20926,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                 onChange={handleRestoreFromJsonFile}
                 className="hidden"
               />
+
 
               <div className="grid grid-cols-2 gap-1.5">
                 <button
@@ -20196,6 +20963,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                 </button>
               </div>
             </div>
+
 
             {!isAdminUnlocked ? (
               <div className="bg-amber-50 p-3.5 rounded-2xl border border-amber-200 space-y-2">
@@ -20241,6 +21009,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                   </button>
                 </div>
 
+
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   <div className="bg-white p-2 rounded-xl border border-emerald-200 space-y-1">
                     <div className="flex items-center justify-between text-[11.5px] font-extrabold text-emerald-900">
@@ -20277,6 +21046,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                     </div>
                   </div>
 
+
                   <div className="bg-white p-2 rounded-xl border border-sky-200 space-y-1">
                     <div className="flex items-center justify-between text-[11.5px] font-extrabold text-sky-900">
                       <span>🌿 육아지원군 비밀번호</span>
@@ -20312,6 +21082,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                     </div>
                   </div>
                 </div>
+
 
                 <div className="bg-white rounded-xl border border-sky-200 overflow-hidden">
                   <div className="grid grid-cols-[1fr_54px_54px_54px] items-center bg-sky-100/70 px-2.5 py-1.5 text-[11.5px] font-black text-sky-950 text-center">
@@ -20387,6 +21158,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                   </div>
                 </div>
 
+
                 <div className="grid grid-cols-2 gap-1.5">
                   <button
                     type="button"
@@ -20415,6 +21187,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                 🤖 듀얼 AI 엔진 설정 (GPT + Gemini)
               </div>
 
+
               <div className="grid grid-cols-3 gap-1">
                 {[
                   { id: "auto", label: "자동(GPT우선)" },
@@ -20436,6 +21209,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                 ))}
               </div>
 
+
               <div>
                 <div className="flex items-center justify-between mb-1">
                   <label className="text-[11.5px] font-bold text-stone-600">
@@ -20453,6 +21227,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                   className="w-full px-3 py-2 rounded-xl border border-stone-300 text-[13.5px] font-bold bg-white"
                 />
               </div>
+
 
               <div>
                 <div className="flex items-center justify-between mb-1">
@@ -20472,11 +21247,13 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                 />
               </div>
 
+
               {aiDiagStatus && (
                 <div className="p-2.5 rounded-xl bg-white border-2 border-amber-300 text-[12.5px] font-bold text-stone-800 whitespace-pre-line shadow-sm">
                   {aiDiagStatus}
                 </div>
               )}
+
 
               <div className="grid grid-cols-2 gap-1.5">
                 <button
@@ -20498,6 +21275,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
             </div>
             </>
             )}
+
 
             {aiCallLogs.length > 0 && (
               <div className="p-3 rounded-2xl bg-stone-50 border border-stone-200 space-y-1.5">
@@ -20530,6 +21308,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
               </div>
             )}
 
+
             <div className="p-3 rounded-2xl bg-stone-50 border border-stone-200 space-y-2">
               <div className="flex items-center justify-between gap-2">
                 <span className="text-[13.5px] font-black text-stone-800">
@@ -20555,6 +21334,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                 </div>
               )}
             </div>
+
 
             {isAdminUnlocked && (
               <div className="p-3 rounded-2xl bg-stone-50 border border-stone-200 space-y-2">
@@ -20610,6 +21390,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
               </div>
             )}
 
+
             <button
               onClick={handleRestoreAllDeleted}
               className="w-full py-2.5 rounded-xl bg-stone-200 hover:bg-stone-300 text-stone-800 text-[13.5px] font-extrabold flex items-center justify-center gap-1.5"
@@ -20617,6 +21398,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
               <Database className="w-4 h-4" />
               <span>숨겨지거나 삭제된 기존 데이터 전체 다시 불러오기</span>
             </button>
+
 
             <button
               onClick={handleExportCsv}
@@ -20628,6 +21410,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
           </div>
         </div>
       )}
+
 
       {liveActivityPopup && (
         <div className="fixed top-3 left-1/2 -translate-x-1/2 z-50 w-[92%] max-w-sm bg-white border-2 border-[#5E7A65] rounded-2xl shadow-2xl p-3 space-y-2">
@@ -20690,6 +21473,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
         </div>
       )}
 
+
       {isMealCopyModalOpen && (() => {
         const srcMeals = meals.filter((m) => m.date === copyFromDate);
         const shiftDay = (baseStr, delta) => {
@@ -20716,6 +21500,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                   <X className="w-5 h-5 text-stone-400" />
                 </button>
               </div>
+
 
               <div className="p-3 rounded-2xl bg-[#FAF8F3] border border-stone-200 space-y-2">
                 <div className="flex items-center justify-between gap-2">
@@ -20761,6 +21546,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                   )}
                 </div>
 
+
                 <div className="max-h-40 overflow-y-auto space-y-1">
                   {srcMeals.length === 0 ? (
                     <div className="py-4 text-center text-[12.5px] font-bold text-stone-400">
@@ -20802,6 +21588,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                   )}
                 </div>
               </div>
+
 
               <div className="p-3 rounded-2xl bg-[#F3EEE4]/60 border border-stone-200 space-y-2">
                 <div className="flex items-center justify-between gap-2">
@@ -20853,6 +21640,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                 </div>
               </div>
 
+
               <button
                 type="button"
                 onClick={handleExecuteSelectedMealCopy}
@@ -20864,6 +21652,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
           </div>
         );
       })()}
+
 
       {isWeatherModalOpen && weatherInfo && (
         <div
@@ -20907,6 +21696,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
               </div>
             </div>
 
+
             <div
               className={`p-3 rounded-2xl border text-[13.5px] font-extrabold ${
                 weatherInfo.hasUpcomingRain
@@ -20916,6 +21706,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
             >
               {weatherInfo.rainAlertText}
             </div>
+
 
             {Array.isArray(weatherInfo.todayHourly) && weatherInfo.todayHourly.length > 0 && (
               <div className="space-y-1.5">
@@ -20943,10 +21734,12 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
               </div>
             )}
 
+
             <div className="p-2.5 rounded-2xl bg-[#FAF8F3] border border-stone-200 flex items-center justify-between text-[13.5px] font-bold text-stone-700">
               <span>😷 미세먼지 {weatherInfo.pm10} ({weatherInfo.dust?.label || "-"})</span>
               <span>초미세 {weatherInfo.pm25}</span>
             </div>
+
 
             {Array.isArray(weatherInfo.weekly) && weatherInfo.weekly.length > 0 && (
               <div className="space-y-1">
@@ -20968,6 +21761,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
               </div>
             )}
 
+
             <a
               href="https://weather.naver.com/today/09140104"
               target="_blank"
@@ -20979,6 +21773,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
           </div>
         </div>
       )}
+
 
       {diaryLightboxUrl && (
         <div
@@ -21001,6 +21796,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
           />
         </div>
       )}
+
 
       {zipImportPicker && (
         <div
@@ -21052,6 +21848,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
         </div>
       )}
 
+
       {activityEditModal && (() => {
         const actMeta = BABY_ACTIVITY_TYPES.find((t) => t.id === activityEditModal.type) || BABY_ACTIVITY_TYPES[BABY_ACTIVITY_TYPES.length - 1];
         const isFeed = ["모유", "분유", "유축수유"].includes(activityEditModal.type);
@@ -21086,6 +21883,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
           }));
           showToast(`⏱️ 현재 시각(${formatTime12Ko(nowMs)}) 기준 ${calcMin}분으로 반영되었습니다!`);
         };
+
 
         return (
         <div
@@ -21126,6 +21924,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                 </button>
               </div>
             </div>
+
 
             <div className="p-4 space-y-3.5 overflow-y-auto flex-1">
               {activityEditModal.isNew && (
@@ -21194,6 +21993,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                   </button>
                 </div>
 
+
                 <div className="grid grid-cols-6 gap-1">
                   {[
                     { label: "-1H", min: -60 },
@@ -21214,6 +22014,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                   ))}
                 </div>
               </div>
+
 
               {/* 수유/소요 시간 + [지금 다 먹었어요!] + -5분/-1분/+1분/+5분 */}
               {(actMeta.timed || Number(activityEditModal.durationMin) > 0) && (
@@ -21266,6 +22067,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                   </div>
                 </div>
               )}
+
 
               {/* 모유 먹인 위치 */}
               {activityEditModal.type === "모유" && (
@@ -21340,6 +22142,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                 </div>
               )}
 
+
               {/* 기저귀 / 수면 선택 */}
               {activityEditModal.type === "기저귀" && (
                 <div className="grid grid-cols-3 gap-1.5">
@@ -21360,6 +22163,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                 </div>
               )}
 
+
               {activityEditModal.type === "수면" && (
                 <div className="grid grid-cols-2 gap-1.5">
                   {["낮잠", "밤잠"].map((sub) => (
@@ -21378,6 +22182,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                   ))}
                 </div>
               )}
+
 
               {/* 용량 (ml / g) */}
               {actMeta.hasMl && (
@@ -21406,6 +22211,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                   </div>
                 </div>
               )}
+
 
               {/* 메모 + 사진 + 빠른 태그 칩 */}
               <div className="space-y-2">
@@ -21466,6 +22272,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                 </div>
               </div>
 
+
               <button
                 type="button"
                 onClick={handleSaveActivityModal}
@@ -21478,6 +22285,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
         </div>
         );
       })()}
+
 
       {diaryImportModal && (
         <div
@@ -21576,6 +22384,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                 </button>
                 ))
               )}
+
 
               <div className="p-3 rounded-2xl bg-[#FAF8F3] border border-[#C9D8CC] space-y-2">
                 <div className="flex items-center justify-between">
@@ -21692,6 +22501,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
         </div>
       )}
 
+
       {diaryExportPreviewUrl && (
         <div
           className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4"
@@ -21748,11 +22558,13 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
         </div>
       )}
 
+
       {magazineMonth && (() => {
         const ym = String(magazineMonth).slice(0, 7);
         const yearNum = Number(ym.slice(0, 4)) || new Date().getFullYear();
         const monthNum = Number(ym.slice(5, 7)) || (new Date().getMonth() + 1);
         const ymEndDate = `${ym}-31`;
+
 
         const monthDiaries = [...babyDiaryEntries]
           .filter((d) => String(d.date || "").startsWith(ym))
@@ -21771,6 +22583,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
           }))
         ).sort((a, b) => String(a.date).localeCompare(String(b.date)));
 
+
         const growthSnapshots = CHILDREN_INFO.map((c) => {
           const logs = [...babyGrowthLogs]
             .filter((g) => g.childId === c.id && String(g.date || "") <= ymEndDate)
@@ -21783,6 +22596,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
           const wEval = latest?.weightKg ? evaluateGrowthMetric(c.id, ageM, "weight", Number(latest.weightKg)) : null;
           return { child: c, ageM, latest, hEval, wEval };
         });
+
 
         const buildMagazineHtml = () => {
           const escHtml = (s) => String(s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -21803,10 +22617,12 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
           return `<!doctype html><html lang="ko"><head><meta charset="utf-8"/><title>김씨네 성장 매거진 ${yearNum}년 ${monthNum}월호</title><style>body{font-family:-apple-system,BlinkMacSystemFont,'Apple SD Gothic Neo',sans-serif;max-width:760px;margin:0 auto;padding:28px 20px;color:#1c1917;background:#faf8f3;line-height:1.6}header{text-align:center;border-bottom:2px solid #35503c;padding-bottom:16px;margin-bottom:20px}.kicker{font-size:11px;letter-spacing:2px;color:#5e7a65;font-weight:800}h1{margin:6px 0;font-size:26px}.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:16px 0}.stat{background:#fff;border:1px solid #e7e5e4;border-radius:12px;padding:10px;text-align:center}.stat b{display:block;font-size:18px;color:#35503c}h2{font-size:16px;border-left:4px solid #5e7a65;padding-left:8px;margin:22px 0 10px}.card,.entry{background:#fff;border:1px solid #e7e5e4;border-radius:12px;padding:14px;margin-bottom:10px}.meta{font-size:12px;color:#78716c;font-weight:700;margin-bottom:4px}.photos{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px;margin-top:10px}.photos img{width:100%;height:160px;object-fit:cover;border-radius:8px}@media print{body{background:#fff;padding:0}.entry,.card{break-inside:avoid}}</style></head><body><header><div class="kicker">KIM FAMILY TIME CAPSULE</div><h1>시목·시율 성장 매거진 ${yearNum}년 ${monthNum}월호</h1></header><div class="stats"><div class="stat"><b>${monthDiaries.length}편</b><span>육아일기</span></div><div class="stat"><b>${monthPhotoCount}장</b><span>추억 사진</span></div><div class="stat"><b>${monthMilestones.length}건</b><span>첫 발달</span></div><div class="stat"><b>${monthActivities.length}회</b><span>수유·케어</span></div></div><h2>🌱 성장 스냅샷</h2>${growthHtml}<h2>✨ 이달의 첫 발달</h2><ul>${msHtml}</ul><h2>📖 이달의 육아일기</h2>${diaryHtml}</body></html>`;
         };
 
+
         const shiftMagazineMonth = (delta) => {
           const dt = new Date(yearNum, monthNum - 1 + delta, 1);
           setMagazineMonth(`${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}`);
         };
+
 
         return (
           <div className="fixed inset-0 bg-black/55 z-50 flex items-center justify-center p-3" onClick={() => setMagazineMonth(null)}>
@@ -21832,6 +22648,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                 </div>
               </div>
 
+
               <div className="flex-1 overflow-y-auto p-4 space-y-3.5">
                 <div className="grid grid-cols-4 gap-1.5 text-center">
                   {[
@@ -21846,6 +22663,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                     </div>
                   ))}
                 </div>
+
 
                 <div className="bg-white rounded-2xl p-3 border border-stone-200 space-y-2">
                   <div className="text-[12.5px] font-black text-stone-900">📏 {monthNum}월 성장 스냅샷</div>
@@ -21866,6 +22684,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                   </div>
                 </div>
 
+
                 {monthActivities.length > 0 && (() => {
                   const mFeedMl = monthActivities.filter((a) => a.type === "분유" || a.type === "유축수유").reduce((s, a) => s + (Number(a.amountMl) || 0), 0);
                   const mBreastMin = monthActivities.filter((a) => a.type === "모유").reduce((s, a) => s + (Number(a.durationMin) || 0), 0);
@@ -21881,6 +22700,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                   );
                 })()}
 
+
                 {monthMilestones.length > 0 && (
                   <div className="bg-white rounded-2xl p-3 border border-stone-200 space-y-1.5">
                     <div className="text-[12.5px] font-black text-stone-900">🌱 이달의 첫 발달 ({monthMilestones.length}건)</div>
@@ -21895,6 +22715,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                     ))}
                   </div>
                 )}
+
 
                 <div className="space-y-2">
                   <div className="text-[12.5px] font-black text-stone-900 px-0.5">📖 이달의 육아일기 ({monthDiaries.length}편)</div>
@@ -21926,6 +22747,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                   )}
                 </div>
               </div>
+
 
               <div className="p-3 bg-white border-t border-stone-200 grid grid-cols-3 gap-1.5 shrink-0">
                 <button
@@ -22042,6 +22864,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
               </div>
             </div>
 
+
             <div className="flex items-center gap-1 overflow-x-auto py-0.5 shrink-0">
               {["전체", "식단", "냉장고", "일정", "할일", "루틴", "육아", "장보기", "공지", "레시피"].map((cat) => (
                 <button
@@ -22058,6 +22881,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                 </button>
               ))}
             </div>
+
 
             {(() => {
               const actors = Array.from(new Set(visibleRecentActivities.map((a) => (a.actor === "아리나" ? "아리" : a.actor)).filter(Boolean)));
@@ -22082,6 +22906,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                 </div>
               );
             })()}
+
 
             <div className="flex-1 overflow-y-auto space-y-1.5 pr-0.5">
               {visibleRecentActivities.filter(
@@ -22183,6 +23008,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
         </div>
       )}
 
+
       {isEditorUnlockModalOpen && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-sm w-full p-5 space-y-4 shadow-xl">
@@ -22198,6 +23024,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                 <X className="w-5 h-5 text-stone-400" />
               </button>
             </div>
+
 
             {isEditorUnlocked ? (
               <div className="space-y-3">
@@ -22250,6 +23077,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                   </div>
                 </div>
 
+
                 {isAdminUnlocked ? (
                   <>
                     <p className="text-[13.5px] text-stone-600 leading-relaxed">
@@ -22270,6 +23098,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                     허용된 메뉴({helperAllowedTabs.filter((x) => x !== "home").length}개)의 열람 및 편집이 가능합니다.
                   </p>
                 )}
+
 
                 <button
                   onClick={logoutToGuest}
@@ -22324,6 +23153,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                 </button>
               </div>
 
+
               <div className="space-y-2 bg-stone-50 p-3 rounded-2xl border border-stone-200 text-[13.5px]">
                 <div className="grid grid-cols-3 gap-2">
                   <div className={exportScope === "fridge_only" ? "col-span-3" : "col-span-2"}>
@@ -22357,6 +23187,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                     </div>
                   )}
                 </div>
+
 
                 <div className="grid grid-cols-2 gap-2">
                   {exportScope !== "fridge_only" && (
@@ -22400,6 +23231,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                 </div>
               </div>
 
+
               {exportIncludeAiPrompt && (
                 <div className="bg-amber-50/70 p-2.5 rounded-2xl border border-amber-200 flex items-center justify-between gap-2 text-[13.5px]">
                   <label className="font-extrabold text-amber-950 shrink-0">🎯 AI 요청 목표</label>
@@ -22414,6 +23246,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                   </select>
                 </div>
               )}
+
 
               <div className="flex items-center gap-3 flex-wrap text-[13.5px] font-bold text-stone-700">
                 <label className="inline-flex items-center gap-1.5 cursor-pointer">
@@ -22445,12 +23278,14 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                 </label>
               </div>
 
+
               <textarea
                 readOnly
                 value={exportText}
                 rows={12}
                 className="w-full p-3 rounded-2xl bg-stone-50 border border-stone-200 text-[12.5px] font-mono text-stone-800 leading-relaxed resize-none"
               />
+
 
               <div className="grid grid-cols-3 gap-1.5">
                 <button
@@ -22540,6 +23375,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
               </div>
             </div>
 
+
             <div className="grid grid-cols-3 gap-2">
               <input
                 type="text"
@@ -22558,6 +23394,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                 ))}
               </select>
             </div>
+
 
             <div className="space-y-1.5">
               <input
@@ -22587,6 +23424,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                 <img src={recipeForm.photoDataUrl} alt="미리보기" className="w-full h-36 object-cover rounded-xl border border-stone-200" />
               )}
             </div>
+
 
             <div className="space-y-2 bg-stone-50 p-3 rounded-2xl border border-stone-200">
               <div className="flex items-center justify-between">
@@ -22705,6 +23543,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
               />
             </div>
 
+
             <div className="grid grid-cols-2 gap-2">
               <input
                 type="text"
@@ -22723,6 +23562,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                 <option value="어려움">난이도: 어려움</option>
               </select>
             </div>
+
 
             <div className="p-2.5 rounded-xl bg-amber-50/70 border border-amber-200 space-y-1.5">
               <div className="text-[12.5px] font-black text-amber-900">가족별 선호도</div>
@@ -22752,6 +23592,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
               </div>
             </div>
 
+
             <textarea
               rows={2}
               value={recipeForm.stepsText || ""}
@@ -22766,6 +23607,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
               placeholder="조리 팁, 간 맞추기 노하우 등"
               className="w-full px-3 py-2 rounded-xl border border-stone-200 text-[13.5px] resize-none"
             />
+
 
             <button
               onClick={handleSaveRecipe}
@@ -22791,6 +23633,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                 <X className="w-4 h-4" />
               </button>
             </div>
+
 
             <div className="flex items-center gap-1.5 flex-wrap">
               {[
@@ -22831,6 +23674,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                 전체 선택
               </button>
             </div>
+
 
             <div className="flex justify-center bg-stone-900 rounded-2xl p-2 overflow-hidden">
               <div ref={cropBoxRef} className="relative inline-block select-none touch-none max-h-[52vh]">
@@ -22877,6 +23721,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
               </div>
             </div>
 
+
             <div className="grid grid-cols-2 gap-2">
               <button
                 onClick={async () => {
@@ -22898,6 +23743,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
           </div>
         </div>
       )}
+
 
       {zoomedRecipePhoto && (
         <div
@@ -22953,6 +23799,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
               </button>
             </div>
 
+
             <div className="flex items-center justify-between bg-stone-50 p-3 rounded-2xl border border-stone-200">
               <span className="text-[13.5px] font-extrabold text-stone-700">현재 수량</span>
               <div className="flex items-center gap-2">
@@ -22984,6 +23831,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
               </div>
             </div>
 
+
             <div className="space-y-1">
               <label className="text-[12.5px] font-black text-stone-700 block">📦 보관 칸 이동</label>
               <select
@@ -22996,6 +23844,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
                 ))}
               </select>
             </div>
+
 
             <div className="grid grid-cols-2 gap-1.5 pt-1">
               <button
@@ -23043,6 +23892,7 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
         </div>
       )}
 
+
       {draggingChip && (
         <div
           style={{ left: draggingChip.x, top: draggingChip.y }}
@@ -23054,9 +23904,11 @@ ${n.content || ""}`.trim(), "📋 공지 내용을 복사했습니다!")}
         </div>
       )}
 
+
     </div>
   );
 }
+
 
 export default function App() {
   return (
