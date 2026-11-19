@@ -17190,7 +17190,7 @@ ${validText}
                                 title={c.label}
                               />
                             ))}
-                            <span className="text-[10.5px] text-stone-400 ml-auto">'->' 앞부분 자동 강조</span>
+                            <span className="text-[10.5px] text-stone-400 ml-auto">'-&gt;' 앞부분 자동 강조</span>
                           </div>
                         )}
 
