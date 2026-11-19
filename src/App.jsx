@@ -1723,14 +1723,65 @@ function MainApp() {
   const [isHeroPhotoModalOpen, setIsHeroPhotoModalOpen] = useState(false);
   const [heroPhotoDraft, setHeroPhotoDraft] = useState(null);
   const heroPhotoInputRef = useRef(null);
-  const [kitchenTimer, setKitchenTimer] = useState({
-    open: false,
-    mode: "countdown",
-    label: "조리 타이머",
-    running: false,
-    remainingSec: 0,
-    elapsedSec: 0
+  const [kitchenTimer, setKitchenTimer] = useState(() => {
+    try {
+      const raw = localStorage.getItem("kim_kitchen_timer_v1");
+      if (raw) {
+        const p = JSON.parse(raw);
+        if (p && typeof p === "object") {
+          const now = Date.now();
+          if (p.running && p.mode === "stopwatch" && Number(p.startedAtMs) > 0) {
+            return {
+              ...p,
+              elapsedSec: Math.max(0, Math.floor((now - Number(p.startedAtMs)) / 1000)),
+              cookStartTimeStr: p.cookStartTimeStr || "",
+              cookEndTimeStr: p.cookEndTimeStr || ""
+            };
+          }
+          if (p.running && p.mode === "countdown" && Number(p.targetEndMs) > 0) {
+            const rem = Math.max(0, Math.ceil((Number(p.targetEndMs) - now) / 1000));
+            return {
+              ...p,
+              remainingSec: rem,
+              running: rem > 0,
+              targetEndMs: rem > 0 ? Number(p.targetEndMs) : null,
+              cookStartTimeStr: p.cookStartTimeStr || "",
+              cookEndTimeStr: p.cookEndTimeStr || ""
+            };
+          }
+          return {
+            open: Boolean(p.open),
+            mode: p.mode === "stopwatch" ? "stopwatch" : "countdown",
+            label: p.label || "조리 타이머",
+            running: false,
+            remainingSec: Number(p.remainingSec) || 0,
+            elapsedSec: Number(p.elapsedSec) || 0,
+            startedAtMs: null,
+            targetEndMs: null,
+            cookStartTimeStr: p.cookStartTimeStr || "",
+            cookEndTimeStr: p.cookEndTimeStr || ""
+          };
+        }
+      }
+    } catch (e) {}
+    return {
+      open: false,
+      mode: "countdown",
+      label: "조리 타이머",
+      running: false,
+      remainingSec: 0,
+      elapsedSec: 0,
+      startedAtMs: null,
+      targetEndMs: null,
+      cookStartTimeStr: "",
+      cookEndTimeStr: ""
+    };
   });
+  useEffect(() => {
+    try {
+      localStorage.setItem("kim_kitchen_timer_v1", JSON.stringify(kitchenTimer));
+    } catch (e) {}
+  }, [kitchenTimer]);
   const [toastMsg, setToastMsg] = useState("");
 
 
@@ -9124,13 +9175,16 @@ ${validText}
 
   const startRecipeCookTimer = (recipe) => {
     const mins = parseCookTimeMinutes(recipe?.cookTime || recipe?.cookMinutes || 10);
+    const now = Date.now();
     setKitchenTimer({
       open: true,
       mode: "countdown",
       label: recipe?.title ? `${recipe.title} (${mins}분)` : `조리 타이머 (${mins}분)`,
       running: true,
       remainingSec: mins * 60,
-      elapsedSec: 0
+      elapsedSec: 0,
+      startedAtMs: null,
+      targetEndMs: now + mins * 60 * 1000
     });
     showToast(`⏱️ ${recipe?.title || "조리"} ${mins}분 타이머를 시작했습니다!`);
   };
@@ -9138,13 +9192,19 @@ ${validText}
 
   useEffect(() => {
     if (!kitchenTimer.running) return;
-    const tid = setInterval(() => {
+    const tick = () => {
+      const now = Date.now();
       setKitchenTimer((prev) => {
         if (!prev.running) return prev;
         if (prev.mode === "stopwatch") {
-          return { ...prev, elapsedSec: prev.elapsedSec + 1 };
+          const baseStart = Number(prev.startedAtMs) || (now - (Number(prev.elapsedSec) || 0) * 1000);
+          const nextElapsed = Math.max(0, Math.floor((now - baseStart) / 1000));
+          if (nextElapsed === prev.elapsedSec && prev.startedAtMs) return prev;
+          return { ...prev, startedAtMs: baseStart, elapsedSec: nextElapsed };
         }
-        if (prev.remainingSec <= 1) {
+        const targetEnd = Number(prev.targetEndMs) || (now + (Number(prev.remainingSec) || 0) * 1000);
+        const rem = Math.max(0, Math.ceil((targetEnd - now) / 1000));
+        if (rem <= 0) {
           try {
             const Ctx = window.AudioContext || window.webkitAudioContext;
             if (Ctx) {
@@ -9161,12 +9221,21 @@ ${validText}
             }
           } catch (e) {}
           showToast(`🔔 [${prev.label}] 조리 타이머가 완료되었습니다!`);
-          return { ...prev, running: false, remainingSec: 0 };
+          return { ...prev, running: false, remainingSec: 0, targetEndMs: null };
         }
-        return { ...prev, remainingSec: prev.remainingSec - 1 };
+        if (rem === prev.remainingSec && prev.targetEndMs) return prev;
+        return { ...prev, targetEndMs: targetEnd, remainingSec: rem };
       });
-    }, 1000);
-    return () => clearInterval(tid);
+    };
+    tick();
+    const tid = setInterval(tick, 500);
+    window.addEventListener("visibilitychange", tick);
+    window.addEventListener("focus", tick);
+    return () => {
+      clearInterval(tid);
+      window.removeEventListener("visibilitychange", tick);
+      window.removeEventListener("focus", tick);
+    };
   }, [kitchenTimer.running]);
 
 
@@ -15599,12 +15668,9 @@ ${validText}
           <div className="space-y-3">
             <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-sm space-y-2.5">
               <div className="flex items-center justify-between gap-2">
-                <div>
-                  <h2 className="text-[16px] font-black text-stone-900">🌟 가족 버킷리스트</h2>
-                  <p className="text-[11.5px] font-semibold text-stone-500">
-                    가보고 싶은 곳·해보고 싶은 일을 모아두고 날씨 맞춰 떠나보세요.
-                  </p>
-                </div>
+                <span className="text-[13.5px] font-black text-stone-800">
+                  버킷리스트 진행 현황 ({doneCount}/{bucketList.length})
+                </span>
                 <div className="flex items-center gap-1 shrink-0">
                   {doneCount > 0 && (
                     <button
@@ -18151,7 +18217,6 @@ ${validText}
       {showScrollTop && (
         <button
           type="button"
-          type="button"
           onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
           style={{ bottom: "calc(4.75rem + env(safe-area-inset-bottom))" }}
           className="fixed left-3.5 z-30 w-9 h-9 rounded-full bg-white/80 backdrop-blur-sm hover:bg-white border border-stone-300/80 shadow-md text-[14px] font-black text-stone-700 flex items-center justify-center transition active:scale-95"
@@ -18163,10 +18228,46 @@ ${validText}
       )}
 
 
-      {kitchenTimer.open && (() => {
+      {(() => {
         const displaySec = kitchenTimer.mode === "stopwatch" ? kitchenTimer.elapsedSec : kitchenTimer.remainingSec;
-        const mm = String(Math.floor(displaySec / 60)).padStart(2, "0");
+        const hh = Math.floor(displaySec / 3600);
+        const mm = String(Math.floor((displaySec % 3600) / 60)).padStart(2, "0");
         const ss = String(displaySec % 60).padStart(2, "0");
+        const timeText = hh > 0 ? `${hh}:${mm}:${ss}` : `${mm}:${ss}`;
+
+
+        const toNowHHMM = () => {
+          const d = new Date();
+          return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+        };
+        const computeHHMMDiffSec = (startStr, endStr) => {
+          if (!startStr || !endStr || !startStr.includes(":") || !endStr.includes(":")) return null;
+          const [sh, sm] = startStr.split(":").map(Number);
+          const [eh, em] = endStr.split(":").map(Number);
+          if (![sh, sm, eh, em].every(Number.isFinite)) return null;
+          let diffMin = eh * 60 + em - (sh * 60 + sm);
+          if (diffMin < 0) diffMin += 1440;
+          return diffMin * 60;
+        };
+
+
+        if (!kitchenTimer.open && (kitchenTimer.running || displaySec > 0 || kitchenTimer.cookStartTimeStr)) {
+          return (
+            <button
+              type="button"
+              onClick={() => setKitchenTimer((p) => ({ ...p, open: true }))}
+              style={{ bottom: "calc(4.85rem + env(safe-area-inset-bottom))" }}
+              className="fixed left-4 z-40 px-3 py-1.5 rounded-full bg-stone-900/95 text-amber-300 border border-stone-700 shadow-lg flex items-center gap-1.5 text-[12px] font-mono font-black"
+              title="누르면 타이머·스톱워치 펼치기"
+            >
+              <span className={`w-2 h-2 rounded-full ${kitchenTimer.running ? "bg-emerald-400 animate-pulse" : "bg-stone-400"}`} />
+              <span>{kitchenTimer.mode === "stopwatch" ? "⏱️" : "⏲️"} {timeText}</span>
+            </button>
+          );
+        }
+        if (!kitchenTimer.open) return null;
+
+
         return (
           <div
             style={{ bottom: "calc(4.75rem + env(safe-area-inset-bottom))" }}
@@ -18184,8 +18285,10 @@ ${validText}
                     setKitchenTimer((p) => ({
                       ...p,
                       mode: p.mode === "countdown" ? "stopwatch" : "countdown",
-                      label: p.mode === "countdown" ? "스톱워치" : "조리 타이머",
-                      running: false
+                      label: p.mode === "countdown" ? "요리 스톱워치" : "조리 타이머",
+                      running: false,
+                      startedAtMs: null,
+                      targetEndMs: null
                     }))
                   }
                   className="px-2 py-0.5 rounded-lg bg-stone-700 hover:bg-stone-600 text-[10.5px] font-bold whitespace-nowrap"
@@ -18194,9 +18297,30 @@ ${validText}
                 </button>
                 <button
                   type="button"
-                  onClick={() => setKitchenTimer((p) => ({ ...p, open: false, running: false }))}
+                  onClick={() => setKitchenTimer((p) => ({ ...p, open: false }))}
+                  className="px-1.5 py-0.5 rounded-lg bg-stone-800 hover:bg-stone-700 text-stone-300 text-[10.5px] font-bold whitespace-nowrap"
+                  title="계속 실행한 채 미니 배지로 접기"
+                >
+                  접기
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setKitchenTimer((p) => ({
+                      ...p,
+                      open: false,
+                      running: false,
+                      remainingSec: 0,
+                      elapsedSec: 0,
+                      startedAtMs: null,
+                      targetEndMs: null,
+                      cookStartTimeStr: "",
+                      cookEndTimeStr: ""
+                    }))
+                  }
                   className="p-0.5 text-stone-400 hover:text-white"
-                  aria-label="타이머 닫기"
+                  aria-label="타이머 종료 및 닫기"
+                  title="완전 종료"
                 >
                   <X className="w-4 h-4" />
                 </button>
@@ -18206,7 +18330,7 @@ ${validText}
 
             <div className="flex items-center justify-between gap-2">
               <div className="font-mono text-[22px] font-black tracking-wider tabular-nums text-amber-300">
-                {mm}:{ss}
+                {timeText}
               </div>
               <div className="flex items-center gap-1">
                 {kitchenTimer.mode === "countdown" && (
@@ -18215,7 +18339,8 @@ ${validText}
                     onClick={() =>
                       setKitchenTimer((p) => ({
                         ...p,
-                        remainingSec: p.remainingSec + 60
+                        remainingSec: p.remainingSec + 60,
+                        targetEndMs: p.running ? (Number(p.targetEndMs) || Date.now()) + 60000 : p.targetEndMs
                       }))
                     }
                     className="px-1.5 py-1 rounded-lg bg-stone-800 hover:bg-stone-700 text-amber-300 text-[10.5px] font-extrabold whitespace-nowrap"
@@ -18233,7 +18358,9 @@ ${validText}
                         mode: "countdown",
                         label: `조리 타이머 (${m}분)`,
                         remainingSec: m * 60,
-                        running: true
+                        running: true,
+                        startedAtMs: null,
+                        targetEndMs: Date.now() + m * 60 * 1000
                       }))
                     }
                     className="px-1.5 py-1 rounded-lg bg-stone-800 hover:bg-stone-700 text-[10.5px] font-bold whitespace-nowrap"
@@ -18243,7 +18370,40 @@ ${validText}
                 ))}
                 <button
                   type="button"
-                  onClick={() => setKitchenTimer((p) => ({ ...p, running: !p.running }))}
+                  onClick={() =>
+                    setKitchenTimer((p) => {
+                      const now = Date.now();
+                      if (p.running) {
+                        const nowStr = toNowHHMM();
+                        return {
+                          ...p,
+                          running: false,
+                          startedAtMs: null,
+                          targetEndMs: null,
+                          ...(p.mode === "stopwatch" && p.cookStartTimeStr ? { cookEndTimeStr: nowStr } : {})
+                        };
+                      }
+                      if (p.mode === "stopwatch") {
+                        const startStr = p.cookStartTimeStr || toNowHHMM();
+                        return {
+                          ...p,
+                          running: true,
+                          startedAtMs: now - (Number(p.elapsedSec) || 0) * 1000,
+                          targetEndMs: null,
+                          cookStartTimeStr: startStr,
+                          cookEndTimeStr: ""
+                        };
+                      }
+                      const rem = Number(p.remainingSec) > 0 ? Number(p.remainingSec) : 180;
+                      return {
+                        ...p,
+                        running: true,
+                        remainingSec: rem,
+                        startedAtMs: null,
+                        targetEndMs: now + rem * 1000
+                      };
+                    })
+                  }
                   className={`px-2.5 py-1 rounded-lg text-[11.5px] font-extrabold whitespace-nowrap ${
                     kitchenTimer.running ? "bg-amber-500 text-stone-950" : "bg-emerald-500 text-stone-950"
                   }`}
@@ -18257,7 +18417,11 @@ ${validText}
                       ...p,
                       running: false,
                       remainingSec: 0,
-                      elapsedSec: 0
+                      elapsedSec: 0,
+                      startedAtMs: null,
+                      targetEndMs: null,
+                      cookStartTimeStr: "",
+                      cookEndTimeStr: ""
                     }))
                   }
                   className="px-2 py-1 rounded-lg bg-stone-700 hover:bg-stone-600 text-[11px] font-bold whitespace-nowrap"
@@ -18266,6 +18430,94 @@ ${validText}
                 </button>
               </div>
             </div>
+
+
+            {kitchenTimer.mode === "stopwatch" && (
+              <div className="pt-1.5 border-t border-stone-800 space-y-1.5">
+                <div className="grid grid-cols-2 gap-1.5">
+                  <div className="bg-stone-800/90 rounded-xl px-2 py-1 flex items-center justify-between gap-1">
+                    <span className="text-[10.5px] font-bold text-stone-400 whitespace-nowrap">시작</span>
+                    <input
+                      type="time"
+                      value={kitchenTimer.cookStartTimeStr || ""}
+                      onChange={(e) => {
+                        const nextStart = e.target.value;
+                        setKitchenTimer((p) => {
+                          const diffSec = computeHHMMDiffSec(nextStart, p.cookEndTimeStr);
+                          return {
+                            ...p,
+                            cookStartTimeStr: nextStart,
+                            ...(diffSec !== null ? { elapsedSec: diffSec, running: false, startedAtMs: null } : {})
+                          };
+                        });
+                      }}
+                      className="bg-transparent text-white font-mono text-[11px] font-extrabold focus:outline-none w-20 text-right"
+                    />
+                  </div>
+                  <div className="bg-stone-800/90 rounded-xl px-2 py-1 flex items-center justify-between gap-1">
+                    <span className="text-[10.5px] font-bold text-stone-400 whitespace-nowrap">완료</span>
+                    <input
+                      type="time"
+                      value={kitchenTimer.cookEndTimeStr || ""}
+                      onChange={(e) => {
+                        const nextEnd = e.target.value;
+                        setKitchenTimer((p) => {
+                          const baseStart = p.cookStartTimeStr || toNowHHMM();
+                          const diffSec = computeHHMMDiffSec(baseStart, nextEnd);
+                          return {
+                            ...p,
+                            cookStartTimeStr: baseStart,
+                            cookEndTimeStr: nextEnd,
+                            ...(diffSec !== null ? { elapsedSec: diffSec, running: false, startedAtMs: null } : {})
+                          };
+                        });
+                      }}
+                      className="bg-transparent text-amber-300 font-mono text-[11px] font-extrabold focus:outline-none w-20 text-right"
+                    />
+                  </div>
+                </div>
+                <div className="flex items-center justify-between gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const nowStr = toNowHHMM();
+                      setKitchenTimer((p) => {
+                        const baseStart = p.cookStartTimeStr || nowStr;
+                        const diffSec = computeHHMMDiffSec(baseStart, nowStr) ?? 0;
+                        return {
+                          ...p,
+                          running: false,
+                          startedAtMs: null,
+                          cookStartTimeStr: baseStart,
+                          cookEndTimeStr: nowStr,
+                          elapsedSec: diffSec
+                        };
+                      });
+                      showToast("🏁 완료 시각 기준으로 총 조리 시간이 자동 계산되었습니다!");
+                    }}
+                    className="flex-1 py-1 px-2 rounded-lg bg-emerald-600/90 hover:bg-emerald-500 text-white text-[11px] font-extrabold whitespace-nowrap"
+                  >
+                    🏁 지금 완료 찍기 (자동 계산)
+                  </button>
+                  {displaySec > 0 && (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        const mins = Math.max(1, Math.round(displaySec / 60));
+                        const rangeTxt =
+                          kitchenTimer.cookStartTimeStr && kitchenTimer.cookEndTimeStr
+                            ? ` (${kitchenTimer.cookStartTimeStr}~${kitchenTimer.cookEndTimeStr})`
+                            : "";
+                        await copyTextSafe(`⏱️ 조리 소요시간: ${mins}분${rangeTxt}`, `📋 조리시간(${mins}분)이 복사되었습니다!`);
+                      }}
+                      className="px-2 py-1 rounded-lg bg-stone-700 hover:bg-stone-600 text-[11px] font-extrabold whitespace-nowrap"
+                    >
+                      📋 {Math.max(1, Math.round(displaySec / 60))}분 복사
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         );
       })()}
@@ -18395,7 +18647,29 @@ ${validText}
                       setTimeout(() => document.getElementById("baby-growth-height-input")?.focus(), 200);
                     }
                   },
-                  { tab: "recipes", label: "🍳 레시피 등록", onClick: () => openNewRecipeModal() }
+                  { tab: "recipes", label: "🍳 레시피 등록", onClick: () => openNewRecipeModal() },
+                  {
+                    tab: "home",
+                    label: "⏲️ 조리 타이머",
+                    onClick: () =>
+                      setKitchenTimer((p) => ({
+                        ...p,
+                        open: true,
+                        mode: "countdown",
+                        label: p.label && p.mode === "countdown" ? p.label : "조리 타이머"
+                      }))
+                  },
+                  {
+                    tab: "home",
+                    label: "⏱️ 요리 스톱워치",
+                    onClick: () =>
+                      setKitchenTimer((p) => ({
+                        ...p,
+                        open: true,
+                        mode: "stopwatch",
+                        label: "요리 스톱워치"
+                      }))
+                  }
                 ]
               }
             ]

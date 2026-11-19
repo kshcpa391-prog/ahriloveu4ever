@@ -1175,7 +1175,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v12.07";
+export const APP_CODE_VERSION = "v12.09";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1259,6 +1259,29 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v12.09",
+    version: "v12.09",
+    date: "2026-11-19",
+    title: "요리 스톱워치 시작·완료 시각 자동 경과시간 계산 & 빠른도구(+) 타이머·스톱워치 추가",
+    items: [
+      "요리 스톱워치에서 [시작] 누른 뒤 나중에 [🏁 지금 완료 찍기] 또는 완료 시각(HH:MM)을 직접 입력하면 총 조리 경과시간이 자동 계산되도록 고도화",
+      "계산된 조리 소요시간(분) 및 시작~완료 시각 범위를 원탭 복사([📋 N분 복사])해 레시피북 조리시간에 바로 활용 가능",
+      "우측 하단 빠른 도구(+) 메뉴에 [⏲️ 조리 타이머]·[⏱️ 요리 스톱워치] 바로가기 추가 및 맨 위로 버튼 중복 type 속성 정리"
+    ]
+  },
+  {
+    id: "patch-v12.08",
+    version: "v12.08",
+    date: "2026-11-19",
+    title: "스톱워치·타이머 백그라운드/페이지 이동 영속 유지 · 미니 배지 접기 & 버킷리스트 헤더 슬림화",
+    items: [
+      "스톱워치·타이머가 다른 탭 이동, 브라우저 백그라운드 전환, 새로고침 후에도 실제 시각(startedAtMs/targetEndMs + localStorage) 기준으로 끊김 없이 계속 기록되도록 고도화",
+      "타이머 상단에 [접기] 버튼 추가 — 화면을 가리지 않는 좌측 하단 미니 알약 배지(⏱️ 00:00)로 축소해 계속 실행 및 원탭 복원 지원",
+      "1시간 이상 경과 시 HH:MM:SS 포맷 자동 전환 및 타이머 [시작] 시 0초일 때 기본 3분 자동 세팅 편의성 개선",
+      "버킷리스트 카드 상단의 중복 제목·설명 문구 슬림화 및 전체 빌드·문법 무결성 검증"
+    ]
+  },
   {
     id: "patch-v12.07",
     version: "v12.07",
