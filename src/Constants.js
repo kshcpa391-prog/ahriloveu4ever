@@ -1175,7 +1175,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v12.09";
+export const APP_CODE_VERSION = "v12.12";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1259,6 +1259,39 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v12.12",
+    version: "v12.12",
+    date: "2026-11-19",
+    title: "레시피 등록 모달 줄바꿈 교정 & 스톱워치 조리시간 즉시 반영 버튼 추가",
+    items: [
+      "레시피 등록·수정 모달의 재료 헤더·부족 재료 버튼 및 가족별 선호도(수혁·아리·시목·시율) 세로 줄바꿈 현상 수정",
+      "조리시간 입력란 옆에 스톱워치 경과시간(1분 이상)을 한 번에 불러오는 [N분↓] 원탭 버튼 추가",
+      "전체 문법·중괄호·중복 상태·임포트 경로 정적 무결성 최종 확인"
+    ]
+  },
+  {
+    id: "patch-v12.11",
+    version: "v12.11",
+    date: "2026-11-19",
+    title: "장보기 부족·임박 [+ 모두 담기] · 수량 기준 정밀화 & 장보기·접종 중복 문구 슬림화",
+    items: [
+      "냉장고 부족·임박 재구매 추천 바에 [+ 모두 담기] 원탭 일괄 추가 버튼 추가 및 quantity/qty 기준 정밀화",
+      "장보기 체크 완료 바·접종·검진 헤더의 중복 카운트 문구 슬림화 및 비우기 버튼 type='button' 보강",
+      "전체 문법·중괄호·중복 상태·임포트 경로 정적 무결성 최종 검증 완료"
+    ]
+  },
+  {
+    id: "patch-v12.10",
+    version: "v12.10",
+    date: "2026-11-19",
+    title: "스톱워치→레시피북 원탭 조리시간 기록 연동 & 버킷리스트·AI 탭 문구 슬림화",
+    items: [
+      "요리 스톱워치에서 계산된 조리시간을 레시피북 등록 모달의 조리시간 필드로 즉시 채워 넣는 [📖 레시피 기록] 원탭 버튼 추가",
+      "버킷리스트 상단의 중복 달성률 표기 통합·완료정리 안전 확인창 추가 및 AI 식단표 상단 중복 안내 문구 슬림화",
+      "전체 문법·중괄호·중복 상태·모듈 경로 정적 무결성 최종 검증 완료"
+    ]
+  },
   {
     id: "patch-v12.09",
     version: "v12.09",

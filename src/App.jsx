@@ -14467,21 +14467,22 @@ ${validText}
 
 
           {shoppingList.some((s) => s.checked) && (
-            <div className="flex items-center justify-between gap-1.5 bg-stone-100 px-3 py-2 rounded-xl flex-wrap">
-              <span className="text-[12.5px] font-bold text-stone-600 whitespace-nowrap">
-                체크 완료 {shoppingList.filter((s) => s.checked).length}건
+            <div className="flex items-center justify-between gap-1.5 bg-stone-100 px-3 py-1.5 rounded-xl flex-wrap">
+              <span className="text-[12px] font-extrabold text-stone-700 whitespace-nowrap">
+                담음 {shoppingList.filter((s) => s.checked).length}건
               </span>
               <div className="flex items-center gap-1.5">
                 <button
                   type="button"
                   onClick={handleMoveCheckedShoppingToFridge}
-                  className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[12.5px] font-extrabold whitespace-nowrap"
+                  className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[12px] font-extrabold whitespace-nowrap"
                 >
-                  ❄️ 냉장고에 바로 넣기
+                  ❄️ 냉장고 입고
                 </button>
                 <button
+                  type="button"
                   onClick={handleClearCheckedShopping}
-                  className="px-2.5 py-1 rounded-lg bg-white border border-stone-200 text-[12.5px] font-extrabold text-rose-600 hover:bg-rose-50 whitespace-nowrap"
+                  className="px-2.5 py-1 rounded-lg bg-white border border-stone-200 text-[12px] font-extrabold text-rose-600 hover:bg-rose-50 whitespace-nowrap"
                 >
                   🧹 비우기
                 </button>
@@ -14495,21 +14496,33 @@ ${validText}
               shoppingList.filter((s) => !s.checked).map((s) => String(s.name || "").trim().toLowerCase())
             );
             const restockCandidates = fridge
-              .map((f) => ({ ...f, diff: getDaysDiff(f.expiryDate) }))
+              .map((f) => ({ ...f, curQty: Number(f.quantity ?? f.qty ?? 0), diff: getDaysDiff(f.expiryDate) }))
               .filter(
                 (f) =>
-                  (Number(f.qty) <= 1 || f.diff <= 2) &&
+                  (f.curQty <= 1 || f.diff <= 2) &&
                   !existingNames.has(String(f.name || "").trim().toLowerCase())
               )
               .slice(0, 8);
             if (restockCandidates.length === 0) return null;
             return (
-              <div className="bg-sky-50/70 border border-sky-200/80 rounded-2xl p-3 space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <span className="text-[12.5px] font-black text-sky-900">
-                    ❄️ 냉장고 부족 · 임박 재료 1탭 담기
+              <div className="bg-sky-50/70 border border-sky-200/80 rounded-2xl p-2.5 space-y-1.5">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[12px] font-black text-sky-900">
+                    ❄️ 부족·임박 재구매 ({restockCandidates.length})
                   </span>
-                  <span className="text-[10.5px] font-bold text-sky-700">잔량 ≤1 · 임박</span>
+                  {restockCandidates.length >= 2 && (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        for (const fc of restockCandidates) {
+                          await handleQuickAddFridgeItemToShopping(fc);
+                        }
+                      }}
+                      className="px-2 py-0.5 rounded-lg bg-sky-700 hover:bg-sky-800 text-white text-[10.5px] font-extrabold whitespace-nowrap"
+                    >
+                      + 모두 담기
+                    </button>
+                  )}
                 </div>
                 <div className="flex flex-wrap gap-1.5">
                   {restockCandidates.map((fc) => (
@@ -14841,15 +14854,10 @@ ${validText}
           {aiSubMode === "plan3d" && (
             <div className="space-y-3.5">
               <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-sm space-y-3.5">
-                <div>
-                  <h2 className="text-[15.5px] font-black text-stone-900 flex items-center gap-1.5">
-                    <CalendarDays className="w-4 h-4 text-amber-600" />
-                    <span>AI 날짜·대상별 맞춤 식단표</span>
-                  </h2>
-                  <p className="text-[12.5px] text-stone-500 mt-0.5">
-                    날짜·끼니와 대상(성인·유아·온가족)을 골라 AI 식단을 추천받으세요.
-                  </p>
-                </div>
+                <h2 className="text-[15px] font-black text-stone-900 flex items-center gap-1.5">
+                  <CalendarDays className="w-4 h-4 text-amber-600" />
+                  <span>AI 날짜·대상별 맞춤 식단표</span>
+                </h2>
 
 
                 {/* 대상 & 성인 식사 목적 선택 */}
@@ -15669,30 +15677,26 @@ ${validText}
             <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-sm space-y-2.5">
               <div className="flex items-center justify-between gap-2">
                 <span className="text-[13.5px] font-black text-stone-800">
-                  버킷리스트 진행 현황 ({doneCount}/{bucketList.length})
+                  달성 현황 · <span className="text-[#35503C]">{doneCount}/{bucketList.length} ({pct}%)</span>
                 </span>
-                <div className="flex items-center gap-1 shrink-0">
-                  {doneCount > 0 && (
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        if (!requireEditorAccess()) return;
-                        const doneIds = bucketList.filter((b) => b.done).map((b) => b.id);
-                        setBucketList((prev) => prev.filter((b) => !b.done));
-                        if (user && db) {
-                          await Promise.all(doneIds.map((bid) => deleteDoc(getDocRef("family_bucket_v1", bid)).catch(() => {})));
-                        }
-                        showToast(`🧹 완료된 버킷리스트 ${doneIds.length}건을 정리했습니다.`);
-                      }}
-                      className="px-2 py-1 rounded-full bg-stone-100 hover:bg-rose-50 text-stone-600 hover:text-rose-700 text-[11px] font-extrabold whitespace-nowrap"
-                    >
-                      🧹 완료정리
-                    </button>
-                  )}
-                  <span className="px-2.5 py-1 rounded-full bg-[#EEF3EE] text-[#35503C] text-[11.5px] font-black whitespace-nowrap">
-                    달성 {doneCount}/{bucketList.length} ({pct}%)
-                  </span>
-                </div>
+                {doneCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (!requireEditorAccess()) return;
+                      if (!window.confirm(`완료된 버킷리스트 ${doneCount}건을 정리할까요?`)) return;
+                      const doneIds = bucketList.filter((b) => b.done).map((b) => b.id);
+                      setBucketList((prev) => prev.filter((b) => !b.done));
+                      if (user && db) {
+                        await Promise.all(doneIds.map((bid) => deleteDoc(getDocRef("family_bucket_v1", bid)).catch(() => {})));
+                      }
+                      showToast(`🧹 완료된 버킷리스트 ${doneIds.length}건을 정리했습니다.`);
+                    }}
+                    className="px-2.5 py-1 rounded-full bg-stone-100 hover:bg-rose-50 text-stone-600 hover:text-rose-700 text-[11px] font-extrabold whitespace-nowrap shrink-0"
+                  >
+                    🧹 완료정리
+                  </button>
+                )}
               </div>
 
 
@@ -16998,7 +17002,7 @@ ${validText}
                   <div className="bg-white p-3 rounded-2xl border border-stone-200 shadow-sm space-y-2.5">
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-[13.5px] font-black text-stone-900 whitespace-nowrap">
-                        💉 {activeChild.name} 접종·검진 ({doneCnt}/{typeFiltered.length} 완료 · {pct}%)
+                        💉 {activeChild.name} 접종·검진 ({pct}%)
                       </span>
                       <div className="flex items-center gap-1 shrink-0">
                         <button
@@ -18500,20 +18504,35 @@ ${validText}
                     🏁 지금 완료 찍기 (자동 계산)
                   </button>
                   {displaySec > 0 && (
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        const mins = Math.max(1, Math.round(displaySec / 60));
-                        const rangeTxt =
-                          kitchenTimer.cookStartTimeStr && kitchenTimer.cookEndTimeStr
-                            ? ` (${kitchenTimer.cookStartTimeStr}~${kitchenTimer.cookEndTimeStr})`
-                            : "";
-                        await copyTextSafe(`⏱️ 조리 소요시간: ${mins}분${rangeTxt}`, `📋 조리시간(${mins}분)이 복사되었습니다!`);
-                      }}
-                      className="px-2 py-1 rounded-lg bg-stone-700 hover:bg-stone-600 text-[11px] font-extrabold whitespace-nowrap"
-                    >
-                      📋 {Math.max(1, Math.round(displaySec / 60))}분 복사
-                    </button>
+                    <>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          const mins = Math.max(1, Math.round(displaySec / 60));
+                          const rangeTxt =
+                            kitchenTimer.cookStartTimeStr && kitchenTimer.cookEndTimeStr
+                              ? ` (${kitchenTimer.cookStartTimeStr}~${kitchenTimer.cookEndTimeStr})`
+                              : "";
+                          await copyTextSafe(`⏱️ 조리 소요시간: ${mins}분${rangeTxt}`, `📋 조리시간(${mins}분)이 복사되었습니다!`);
+                        }}
+                        className="px-2 py-1 rounded-lg bg-stone-700 hover:bg-stone-600 text-[11px] font-extrabold whitespace-nowrap"
+                      >
+                        📋 {Math.max(1, Math.round(displaySec / 60))}분 복사
+                      </button>
+                      {canEditTab("recipes") && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const mins = Math.max(1, Math.round(displaySec / 60));
+                            openNewRecipeModal({ cookTime: `${mins}분` });
+                            showToast(`📖 레시피북 조리시간에 '${mins}분'이 자동 입력되었습니다!`);
+                          }}
+                          className="px-2 py-1 rounded-lg bg-amber-500/90 hover:bg-amber-400 text-stone-950 text-[11px] font-black whitespace-nowrap"
+                        >
+                          📖 레시피 기록
+                        </button>
+                      )}
+                    </>
                   )}
                 </div>
               </div>
@@ -23701,8 +23720,8 @@ ${validText}
 
 
             <div className="space-y-2 bg-stone-50 p-3 rounded-2xl border border-stone-200">
-              <div className="flex items-center justify-between">
-                <span className="text-[12.5px] font-black text-stone-700">🥕 재료 하나씩 입력 (+ 자동 연결)</span>
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[12px] font-black text-stone-700 whitespace-nowrap">🥕 재료 입력 (+ 자동 연결)</span>
                 {String(recipeForm.ingredientsText || "").trim() && (
                   <button
                     type="button"
@@ -23710,9 +23729,9 @@ ${validText}
                       title: recipeForm.title || "새 레시피",
                       ingredients: String(recipeForm.ingredientsText || "").split(/[+,\n]+/).map((s) => s.trim()).filter(Boolean)
                     })}
-                    className="text-[11.5px] font-extrabold text-emerald-700 hover:text-emerald-800"
+                    className="text-[11px] font-extrabold text-emerald-700 hover:text-emerald-800 whitespace-nowrap shrink-0"
                   >
-                    🛒 부족 재료 일괄 장보기
+                    🛒 부족 재료 담기
                   </button>
                 )}
               </div>
@@ -23819,13 +23838,29 @@ ${validText}
 
 
             <div className="grid grid-cols-2 gap-2">
-              <input
-                type="text"
-                value={recipeForm.cookTime}
-                onChange={(e) => setRecipeForm({ ...recipeForm, cookTime: e.target.value })}
-                placeholder="조리시간 (예: 25분)"
-                className="px-3 py-2 rounded-xl border border-stone-200 text-[13.5px] font-bold"
-              />
+              <div className="flex items-center gap-1 min-w-0">
+                <input
+                  type="text"
+                  value={recipeForm.cookTime}
+                  onChange={(e) => setRecipeForm({ ...recipeForm, cookTime: e.target.value })}
+                  placeholder="조리시간 (예: 25분)"
+                  className="flex-1 min-w-0 px-2.5 py-2 rounded-xl border border-stone-200 text-[13px] font-bold"
+                />
+                {(Number(kitchenTimer?.elapsedSec) || 0) >= 60 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const mins = Math.max(1, Math.round((Number(kitchenTimer.elapsedSec) || 0) / 60));
+                      setRecipeForm((prev) => ({ ...prev, cookTime: `${mins}분` }));
+                      showToast(`⏱️ 스톱워치 기록(${mins}분)을 반영했습니다!`);
+                    }}
+                    title="스톱워치 경과시간 불러오기"
+                    className="px-2 py-2 rounded-xl bg-amber-100 hover:bg-amber-200 text-amber-900 text-[11px] font-black whitespace-nowrap shrink-0"
+                  >
+                    {Math.max(1, Math.round((Number(kitchenTimer.elapsedSec) || 0) / 60))}분↓
+                  </button>
+                )}
+              </div>
               <select
                 value={recipeForm.difficulty}
                 onChange={(e) => setRecipeForm({ ...recipeForm, difficulty: e.target.value })}
@@ -23840,26 +23875,31 @@ ${validText}
 
             <div className="p-2.5 rounded-xl bg-amber-50/70 border border-amber-200 space-y-1.5">
               <div className="text-[12.5px] font-black text-amber-900">가족별 선호도</div>
-              <div className="grid grid-cols-2 gap-2">
-                {["수혁", "아리나", "시목", "시율"].map((mName) => (
-                  <div key={mName} className="flex items-center justify-between bg-white px-2 py-1 rounded-lg border border-amber-100 text-[12.5px]">
-                    <span className="font-bold text-stone-700">{mName}</span>
+              <div className="grid grid-cols-2 gap-1.5">
+                {[
+                  { key: "수혁", label: "수혁" },
+                  { key: "아리나", label: "아리" },
+                  { key: "시목", label: "시목" },
+                  { key: "시율", label: "시율" }
+                ].map((mObj) => (
+                  <div key={mObj.key} className="flex items-center justify-between gap-1 bg-white px-2 py-1 rounded-lg border border-amber-100 text-[12px]">
+                    <span className="font-bold text-stone-700 whitespace-nowrap shrink-0">{mObj.label}</span>
                     <select
-                      value={recipeForm.ratings?.[mName] ?? 0}
+                      value={recipeForm.ratings?.[mObj.key] ?? 0}
                       onChange={(e) =>
                         setRecipeForm({
                           ...recipeForm,
-                          ratings: { ...(recipeForm.ratings || {}), [mName]: Number(e.target.value) }
+                          ratings: { ...(recipeForm.ratings || {}), [mObj.key]: Number(e.target.value) }
                         })
                       }
-                      className="font-bold text-amber-700 bg-transparent focus:outline-none"
+                      className="font-bold text-amber-700 bg-transparent focus:outline-none text-[11px] min-w-0"
                     >
                       <option value={0}>미평가</option>
-                      <option value={5}>⭐⭐⭐⭐⭐</option>
-                      <option value={4}>⭐⭐⭐⭐</option>
-                      <option value={3}>⭐⭐⭐</option>
-                      <option value={2}>⭐⭐</option>
-                      <option value={1}>⭐</option>
+                      <option value={5}>★★★★★</option>
+                      <option value={4}>★★★★☆</option>
+                      <option value={3}>★★★☆☆</option>
+                      <option value={2}>★★☆☆☆</option>
+                      <option value={1}>★☆☆☆☆</option>
                     </select>
                   </div>
                 ))}
