@@ -1176,7 +1176,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v12.24";
+export const APP_CODE_VERSION = "v12.26";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1194,7 +1194,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-20 06:00";
+export const APP_BUILD_DATE = "2026-11-20 06:15";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1261,6 +1261,28 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v12.26",
+    version: "v12.26",
+    date: "2026-11-20",
+    title: "가족공유노트 원탭 서식 툴바·실시간 미리보기 에디터 개편 및 플로팅(+) 겹침 완전 해결",
+    items: [
+      "전체 편집 모드에 [제목·체크·목록·B·I·표·→] 1탭 서식 툴바와 [✍️ 작성 / 👀 미리보기] 실시간 전환 탭을 추가해 기호를 직접 치지 않고도 직관적으로 편집 가능",
+      "불필요한 안내 문구 2줄을 제거하고 가독성 높은 기본 글꼴 적용 및 Ctrl/Cmd+S 단축키 저장 지원",
+      "편집 중 우측 하단 플로팅(+) 버튼이 [저장] 버튼을 가리던 겹침 현상 해결 및 편집 상단 바 슬림화로 제목 말줄임 방지"
+    ]
+  },
+  {
+    id: "patch-v12.25",
+    version: "v12.25",
+    date: "2026-11-20",
+    title: "빠른실행(+) 버튼 크기 3열 균일 통일 · 가족공지 빠른작성 추가 · 최근노트 커버색·진행률 표시",
+    items: [
+      "빠른실행(+) 팝업의 모든 그룹을 동일한 3열·균일 높이(h-[46px]) 타일로 통일해 들쭉날쭉한 크기 편차 완전 해소",
+      "빠른실행(+)에 [📌 가족공지] 바로 작성 버튼 추가(식단·살림 6 / 일정·육아·공지 6 / 노트·버킷·내보내기 3 균형 배치)",
+      "가족공유노트 최근 항목 카드 상단에 페이지 파스텔 커버 색상과 체크리스트 진행률 배지(완료/전체) 연동 표시"
+    ]
+  },
   {
     id: "patch-v12.24",
     version: "v12.24",
@@ -4713,7 +4735,8 @@ export const blocksToNotionMarkdown = (blocks = []) => {
     } else if (b.type === "todo") {
       lines.push(`${pad}- [${b.checked ? "x" : " "}] ${b.text || ""}`);
     } else {
-      lines.push(`${pad}${b.text || ""}`);
+      const rawTxt = String(b.text || "");
+      lines.push(`${pad}${rawTxt.startsWith("• ") ? `- ${rawTxt.slice(2)}` : rawTxt}`);
     }
   });
   return lines.join("\n").trim();

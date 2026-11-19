@@ -936,6 +936,8 @@ function MainApp() {
   const [pagePasteMode, setPagePasteMode] = useState("append");
   const [isPageBulkEditMode, setIsPageBulkEditMode] = useState(false);
   const [pageBulkEditText, setPageBulkEditText] = useState("");
+  const [pageBulkEditorTab, setPageBulkEditorTab] = useState("write");
+  const pageBulkTextareaRef = useRef(null);
   const [hideCompletedPageTodos, setHideCompletedPageTodos] = useState(false);
   const [tableFilterState, setTableFilterState] = useState({});
   const [tableSearchOpenId, setTableSearchOpenId] = useState(null);
@@ -9450,9 +9452,64 @@ ${validText}
       updatedAtMs: Date.now()
     });
     setIsPageBulkEditMode(false);
+    setPageBulkEditorTab("write");
     recordActivity("노트", "일괄편집", page.title);
     showToast("✨ 변경 사항을 저장했습니다!");
   };
+
+  const applyBulkFormatAction = (kind) => {
+    const el = pageBulkTextareaRef.current;
+    const val = pageBulkEditText || "";
+    const start = el ? el.selectionStart : val.length;
+    const end = el ? el.selectionEnd : val.length;
+    const selected = val.slice(start, end);
+    let nextVal = val;
+    let nextCursorStart = start;
+    let nextCursorEnd = end;
+
+    if (kind === "bold" || kind === "italic") {
+      const wrap = kind === "bold" ? "**" : "*";
+      const inner = selected || (kind === "bold" ? "강조" : "기울임");
+      nextVal = val.slice(0, start) + wrap + inner + wrap + val.slice(end);
+      nextCursorStart = start + wrap.length;
+      nextCursorEnd = nextCursorStart + inner.length;
+    } else if (kind === "table") {
+      const tpl = "\n| 구분 | 항목 | 비고 |\n| --- | --- | --- |\n| 1 |  |  |\n";
+      nextVal = val.slice(0, start) + tpl + val.slice(end);
+      nextCursorStart = start + tpl.length;
+      nextCursorEnd = nextCursorStart;
+    } else {
+      // Line-prefix actions: heading, todo, bullet, indent
+      const lineStart = val.lastIndexOf("\n", Math.max(0, start - 1)) + 1;
+      const prefixMap = {
+        heading: "### ",
+        todo: "- [ ] ",
+        bullet: "- ",
+        indent: "    "
+      };
+      const prefix = prefixMap[kind] || "";
+      const lineRest = val.slice(lineStart);
+      if (kind !== "indent" && lineRest.startsWith(prefix)) {
+        nextVal = val.slice(0, lineStart) + lineRest.slice(prefix.length);
+        nextCursorStart = Math.max(lineStart, start - prefix.length);
+        nextCursorEnd = Math.max(lineStart, end - prefix.length);
+      } else {
+        nextVal = val.slice(0, lineStart) + prefix + lineRest;
+        nextCursorStart = start + prefix.length;
+        nextCursorEnd = end + prefix.length;
+      }
+    }
+
+    setPageBulkEditText(nextVal);
+    setPageBulkEditorTab("write");
+    setTimeout(() => {
+      if (pageBulkTextareaRef.current) {
+        pageBulkTextareaRef.current.focus();
+        pageBulkTextareaRef.current.setSelectionRange(nextCursorStart, nextCursorEnd);
+      }
+    }, 0);
+  };
+
 
   const handleIndentPageBlock = async (page, blockId, delta) => {
     if (!requireEditorAccess("pages") || !page) return;
@@ -17028,24 +17085,35 @@ ${validText}
                         </button>
                         {pagesRecentOpen && (
                           <div className="flex gap-2.5 overflow-x-auto pb-1">
-                            {recentPages.map((pg) => (
-                              <button
-                                key={`recent-${pg.id}`}
-                                type="button"
-                                onClick={() => openFamilyPage(pg.id)}
-                                className="w-[136px] shrink-0 rounded-2xl border border-stone-200/90 bg-white hover:border-stone-300 shadow-sm overflow-hidden text-left transition active:scale-[0.98]"
-                              >
-                                <div className="h-11 bg-stone-100/90" />
-                                <div className="px-3 pb-3 -mt-4 space-y-1.5">
-                                  <div className="w-8 h-8 rounded-xl bg-white/95 border border-stone-100 shadow-sm flex items-center justify-center text-[18px]">
-                                    {pg.icon || "📄"}
+                            {recentPages.map((pg) => {
+                              const cov = PAGE_COVER_COLORS.find((c) => c.id === pg.coverColor);
+                              const pgTodos = (Array.isArray(pg.blocks) ? pg.blocks : []).filter((b) => b.type === "todo");
+                              const pgDone = pgTodos.filter((b) => b.checked).length;
+                              return (
+                                <button
+                                  key={`recent-${pg.id}`}
+                                  type="button"
+                                  onClick={() => openFamilyPage(pg.id)}
+                                  className="w-[136px] shrink-0 rounded-2xl border border-stone-200/90 bg-white hover:border-stone-300 shadow-sm overflow-hidden text-left transition active:scale-[0.98]"
+                                >
+                                  <div className={`h-11 relative ${cov?.bg || "bg-stone-100/90"}`}>
+                                    {pgTodos.length > 0 && (
+                                      <span className="absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded-full bg-white/90 text-[10px] font-extrabold text-[#2383E2] shadow-2xs">
+                                        {pgDone}/{pgTodos.length}
+                                      </span>
+                                    )}
                                   </div>
-                                  <div className="text-[13px] font-extrabold text-stone-900 truncate">
-                                    {pg.title}
+                                  <div className="px-3 pb-3 -mt-4 space-y-1.5">
+                                    <div className="w-8 h-8 rounded-xl bg-white/95 border border-stone-100 shadow-sm flex items-center justify-center text-[18px]">
+                                      {pg.icon || "📄"}
+                                    </div>
+                                    <div className="text-[13px] font-extrabold text-stone-900 truncate">
+                                      {pg.title}
+                                    </div>
                                   </div>
-                                </div>
-                              </button>
-                            ))}
+                                </button>
+                              );
+                            })}
                           </div>
                         )}
                       </div>
@@ -17130,83 +17198,100 @@ ${validText}
                       <span className="truncate">{parentPage ? `${parentPage.icon || "📄"} ${parentPage.title}` : "가족공유노트"}</span>
                     </button>
                     <div className="flex items-center gap-1 shrink-0">
-                      {canEditTab("pages") && (
+                      {isPageBulkEditMode ? (
                         <>
                           <button
                             type="button"
                             onClick={() => {
-                              if (!isPageBulkEditMode) {
-                                setPageBulkEditText(blocksToNotionMarkdown(blocks));
-                                setIsPageBulkEditMode(true);
-                                setEditingBlockId(null);
-                              } else {
-                                setIsPageBulkEditMode(false);
-                              }
+                              setIsPageBulkEditMode(false);
+                              setPageBulkEditorTab("write");
                             }}
-                            className={`px-2 py-1 rounded-lg border text-[11px] font-extrabold whitespace-nowrap transition ${
-                              isPageBulkEditMode
-                                ? "bg-stone-900 text-white border-stone-900"
-                                : "bg-stone-50 hover:bg-stone-100 border-stone-200 text-stone-700"
-                            }`}
-                            title="전체 텍스트로 편하게 수정·복사·붙여넣기"
+                            className="px-2.5 py-1 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-600 text-[11.5px] font-extrabold whitespace-nowrap"
                           >
-                            {isPageBulkEditMode ? "✓ 편집종료" : "✏️ 편집"}
+                            취소
                           </button>
                           <button
                             type="button"
-                            onClick={() => {
-                              setPagePasteText("");
-                              setPagePasteColor("amber");
-                              setPagePasteMode("append");
-                              setIsPagePasteModalOpen(true);
-                            }}
-                            className="px-2 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-900 text-[11px] font-extrabold whitespace-nowrap"
-                            title="노션 마크다운 통째로 붙여넣기"
+                            onClick={() => handleSaveBulkEdit(currentPage)}
+                            className="px-3 py-1 rounded-lg bg-stone-900 hover:bg-stone-800 text-white text-[11.5px] font-extrabold whitespace-nowrap"
                           >
-                            📥 붙여넣기
+                            💾 저장
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          {canEditTab("pages") && (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setPageBulkEditText(blocksToNotionMarkdown(blocks));
+                                  setPageBulkEditorTab("write");
+                                  setIsPageBulkEditMode(true);
+                                  setEditingBlockId(null);
+                                }}
+                                className="px-2 py-1 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-800 text-[11px] font-extrabold whitespace-nowrap"
+                                title="서식 툴바로 편하게 편집"
+                              >
+                                ✏️ 편집
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setPagePasteText("");
+                                  setPagePasteColor("amber");
+                                  setPagePasteMode("append");
+                                  setIsPagePasteModalOpen(true);
+                                }}
+                                className="px-2 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-900 text-[11px] font-extrabold whitespace-nowrap"
+                                title="노션 마크다운 통째로 붙여넣기"
+                              >
+                                📥 붙여넣기
+                              </button>
+                            </>
+                          )}
+                          {todoBlocks.length > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => handleResetPageTodos(currentPage)}
+                              className="px-2 py-1 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 text-[11px] font-extrabold whitespace-nowrap"
+                              title="체크리스트 전체 해제/완료"
+                            >
+                              🔄 {doneTodoCount > 0 ? "초기화" : "전체체크"}
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              const mdBody = blocksToNotionMarkdown(blocks);
+                              const tableTexts = blocks
+                                .filter((b) => b.type === "table")
+                                .map((t) => {
+                                  const cols = Array.isArray(t.columns) ? t.columns : [{ id: "desc", name: "비고" }];
+                                  const hdr = `| Priority | Task name | ${cols.map((c) => c.name).join(" | ")} |`;
+                                  const rows = (t.rows || []).map(
+                                    (r) => `| ${r.priority || "-"} | ${r.taskName || ""} | ${cols.map((c) => (r.values?.[c.id] || "")).join(" | ")} |`
+                                  );
+                                  return [hdr, ...rows].join("\n");
+                                });
+                              const full = [`${currentPage.icon || "📄"} ${currentPage.title}`, mdBody, ...tableTexts].filter(Boolean).join("\n\n");
+                              await copyTextSafe(full, "📋 노션 마크다운 형식으로 복사했습니다!");
+                            }}
+                            className="p-1.5 rounded-lg hover:bg-stone-100 text-stone-500 hover:text-stone-800"
+                            title="마크다운 복사"
+                          >
+                            <Copy className="w-4 h-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setPageMenuTargetId(currentPage.id)}
+                            className="p-1.5 rounded-lg hover:bg-stone-100 text-stone-500 hover:text-stone-800"
+                            title="페이지 옵션"
+                          >
+                            <MoreHorizontal className="w-4 h-4" />
                           </button>
                         </>
                       )}
-                      {todoBlocks.length > 0 && !isPageBulkEditMode && (
-                        <button
-                          type="button"
-                          onClick={() => handleResetPageTodos(currentPage)}
-                          className="px-2 py-1 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 text-[11px] font-extrabold whitespace-nowrap"
-                          title="체크리스트 전체 해제/완료"
-                        >
-                          🔄 {doneTodoCount > 0 ? "초기화" : "전체체크"}
-                        </button>
-                      )}
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          const mdBody = blocksToNotionMarkdown(blocks);
-                          const tableTexts = blocks
-                            .filter((b) => b.type === "table")
-                            .map((t) => {
-                              const cols = Array.isArray(t.columns) ? t.columns : [{ id: "desc", name: "비고" }];
-                              const hdr = `| Priority | Task name | ${cols.map((c) => c.name).join(" | ")} |`;
-                              const rows = (t.rows || []).map(
-                                (r) => `| ${r.priority || "-"} | ${r.taskName || ""} | ${cols.map((c) => (r.values?.[c.id] || "")).join(" | ")} |`
-                              );
-                              return [hdr, ...rows].join("\n");
-                            });
-                          const full = [`${currentPage.icon || "📄"} ${currentPage.title}`, mdBody, ...tableTexts].filter(Boolean).join("\n\n");
-                          await copyTextSafe(full, "📋 노션 마크다운 형식으로 복사했습니다!");
-                        }}
-                        className="p-1.5 rounded-lg hover:bg-stone-100 text-stone-500 hover:text-stone-800"
-                        title="마크다운 복사"
-                      >
-                        <Copy className="w-4 h-4" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setPageMenuTargetId(currentPage.id)}
-                        className="p-1.5 rounded-lg hover:bg-stone-100 text-stone-500 hover:text-stone-800"
-                        title="페이지 옵션"
-                      >
-                        <MoreHorizontal className="w-4 h-4" />
-                      </button>
                     </div>
                   </div>
 
@@ -17359,37 +17444,147 @@ ${validText}
                       </div>
                     )}
 
-                    {/* 원탭 전체 편집 모드 (여러 줄 복사·붙여넣기·수정에 최적화) */}
+                    {/* 직관적 1탭 서식 툴바 + 실시간 미리보기 에디터 */}
                     {isPageBulkEditMode && canEditTab("pages") && (
-                      <div className="space-y-2 p-3 rounded-2xl bg-stone-50 border border-stone-200">
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="text-[12px] font-extrabold text-stone-700">
-                            ✏️ 전체 텍스트 편집 (여러 줄 복사·붙여넣기 가능)
-                          </span>
-                          <span className="text-[10.5px] font-bold text-stone-400">
-                            ### 제목 · - [ ] 체크 · 4칸 들여쓰기
-                          </span>
+                      <div className="rounded-2xl border border-stone-200 bg-white overflow-hidden shadow-xs">
+                        {/* 상단: 작성/미리보기 탭 + 1탭 서식 버튼 */}
+                        <div className="px-2.5 py-2 bg-stone-50 border-b border-stone-200/80 space-y-2">
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="inline-flex items-center bg-stone-200/70 p-0.5 rounded-xl">
+                              {[
+                                { id: "write", label: "✍️ 작성" },
+                                { id: "preview", label: "👀 미리보기" }
+                              ].map((t) => (
+                                <button
+                                  key={t.id}
+                                  type="button"
+                                  onClick={() => setPageBulkEditorTab(t.id)}
+                                  className={`px-2.5 py-1 rounded-lg text-[11.5px] font-extrabold transition ${
+                                    pageBulkEditorTab === t.id ? "bg-white text-stone-900 shadow-2xs" : "text-stone-500"
+                                  }`}
+                                >
+                                  {t.label}
+                                </button>
+                              ))}
+                            </div>
+                            <span className="text-[11px] font-bold text-stone-400">
+                              복사·붙여넣기 자유롭게 가능
+                            </span>
+                          </div>
+
+                          {pageBulkEditorTab === "write" && (
+                            <div className="flex items-center gap-1 overflow-x-auto pb-0.5">
+                              {[
+                                { id: "heading", label: "제목", title: "강조 섹션 제목" },
+                                { id: "todo", label: "☑️ 체크", title: "체크리스트 추가" },
+                                { id: "bullet", label: "• 목록", title: "글머리 기호" },
+                                { id: "bold", label: "B", title: "굵게 (드래그 후 클릭)", extraCls: "font-black" },
+                                { id: "italic", label: "I", title: "기울임", extraCls: "italic font-serif" },
+                                { id: "indent", label: "→", title: "하위 들여쓰기" },
+                                { id: "table", label: "📊 표", title: "마크다운 표 삽입" }
+                              ].map((btn) => (
+                                <button
+                                  key={btn.id}
+                                  type="button"
+                                  onClick={() => applyBulkFormatAction(btn.id)}
+                                  title={btn.title}
+                                  className={`px-2.5 py-1 rounded-lg bg-white hover:bg-stone-100 border border-stone-200 text-stone-700 text-[11.5px] font-extrabold whitespace-nowrap shrink-0 transition active:scale-95 ${btn.extraCls || ""}`}
+                                >
+                                  {btn.label}
+                                </button>
+                              ))}
+                            </div>
+                          )}
                         </div>
-                        <textarea
-                          rows={12}
-                          autoFocus
-                          value={pageBulkEditText}
-                          onChange={(e) => setPageBulkEditText(e.target.value)}
-                          placeholder={"### 세면용품 파우치 -> 캐리어\n- [ ] 칫솔\n- [x] 치약\n    - [ ] 휴대용 칫솔캡"}
-                          className="w-full p-3 rounded-xl border border-stone-200 bg-white text-[13px] font-mono leading-relaxed focus:outline-none focus:border-stone-400"
-                        />
-                        <div className="flex items-center justify-end gap-2">
+
+                        {pageBulkEditorTab === "write" ? (
+                          <textarea
+                            ref={pageBulkTextareaRef}
+                            rows={13}
+                            autoFocus
+                            value={pageBulkEditText}
+                            onChange={(e) => setPageBulkEditText(e.target.value)}
+                            onKeyDown={(e) => {
+                              if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s") {
+                                e.preventDefault();
+                                handleSaveBulkEdit(currentPage);
+                              }
+                            }}
+                            placeholder={"편하게 자유롭게 적거나 붙여넣어 보세요.\n위 버튼으로 제목·체크박스·굵게·표를 바로 넣을 수 있어요."}
+                            className="w-full p-3.5 bg-white text-[14px] font-sans text-stone-800 leading-relaxed focus:outline-none resize-y min-h-[260px]"
+                          />
+                        ) : (
+                          <div className="p-3.5 space-y-2 min-h-[260px] bg-white">
+                            {(() => {
+                              const prevList = parseNotionMarkdownToBlocks(pageBulkEditText, pageQuickAddColor || "amber");
+                              if (prevList.length === 0) {
+                                return <div className="py-10 text-center text-[12.5px] font-semibold text-stone-400">작성된 내용이 없습니다.</div>;
+                              }
+                              return prevList.map((pb) => {
+                                if (pb.type === "heading") return <div key={pb.id} className="pt-2 first:pt-0">{renderHeadingContent(pb)}</div>;
+                                if (pb.type === "todo") {
+                                  const ind = Math.min(3, Number(pb.indent) || 0) * 20;
+                                  return (
+                                    <div key={pb.id} style={ind ? { paddingLeft: `${ind}px` } : undefined} className="flex items-start gap-2 text-[14px]">
+                                      <span className={`w-4 h-4 mt-0.5 rounded-[4px] border flex items-center justify-center text-[10px] shrink-0 ${pb.checked ? "bg-[#2383E2] border-[#2383E2] text-white" : "border-stone-400"}`}>
+                                        {pb.checked ? "✓" : ""}
+                                      </span>
+                                      <span className={pb.checked ? "line-through text-stone-400" : "text-stone-800"}>{renderInlineMarkdownText(pb.text)}</span>
+                                    </div>
+                                  );
+                                }
+                                if (pb.type === "md_table") {
+                                  const hs = Array.isArray(pb.headers) ? pb.headers : [];
+                                  const rs = Array.isArray(pb.rows) ? pb.rows : [];
+                                  return (
+                                    <div key={pb.id} className="overflow-x-auto rounded-lg border border-stone-200 my-1">
+                                      <table className="w-full border-collapse text-left text-[12.5px]">
+                                        <thead>
+                                          <tr className="bg-[#F7F6F3] border-b border-stone-200">
+                                            {hs.map((h, hi) => (
+                                              <th key={hi} className="py-1.5 px-2.5 font-bold border-r last:border-r-0 border-stone-200 whitespace-nowrap">{renderInlineMarkdownText(h)}</th>
+                                            ))}
+                                          </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-stone-200">
+                                          {rs.map((r, ri) => (
+                                            <tr key={ri}>
+                                              {hs.map((_, ci) => (
+                                                <td key={ci} className="py-1.5 px-2.5 border-r last:border-r-0 border-stone-200">{renderInlineMarkdownText(r[ci] ?? "")}</td>
+                                              ))}
+                                            </tr>
+                                          ))}
+                                        </tbody>
+                                      </table>
+                                    </div>
+                                  );
+                                }
+                                const tInd = Math.min(3, Number(pb.indent) || 0) * 20;
+                                return (
+                                  <div key={pb.id} style={tInd ? { paddingLeft: `${tInd}px` } : undefined} className="text-[14px] text-stone-700 leading-relaxed whitespace-pre-wrap">
+                                    {renderInlineMarkdownText(pb.text)}
+                                  </div>
+                                );
+                              });
+                            })()}
+                          </div>
+                        )}
+
+                        <div className="px-3 py-2.5 bg-stone-50 border-t border-stone-200/80 flex items-center justify-end gap-2">
                           <button
                             type="button"
-                            onClick={() => setIsPageBulkEditMode(false)}
-                            className="px-3 py-1.5 rounded-xl bg-white border border-stone-200 text-stone-600 text-[12px] font-extrabold"
+                            onClick={() => {
+                              setIsPageBulkEditMode(false);
+                              setPageBulkEditorTab("write");
+                            }}
+                            className="px-3.5 py-1.5 rounded-xl bg-white border border-stone-200 text-stone-600 text-[12.5px] font-extrabold"
                           >
                             취소
                           </button>
                           <button
                             type="button"
                             onClick={() => handleSaveBulkEdit(currentPage)}
-                            className="px-4 py-1.5 rounded-xl bg-stone-900 hover:bg-stone-800 text-white text-[12px] font-extrabold"
+                            className="px-4 py-1.5 rounded-xl bg-stone-900 hover:bg-stone-800 text-white text-[12.5px] font-extrabold"
                           >
                             💾 변경사항 저장
                           </button>
@@ -18066,7 +18261,7 @@ ${validText}
                     </div>
 
                     {/* 블록 빠른 추가 입력 바 */}
-                    {canEditTab("pages") && (
+                    {canEditTab("pages") && !isPageBulkEditMode && (
                       <div className="pt-3 border-t border-stone-100 space-y-2">
                         <div className="flex items-center justify-between gap-1 flex-wrap">
                           <div className="flex items-center gap-1">
@@ -20904,12 +21099,11 @@ ${validText}
           />
           <div
             style={{ bottom: "calc(8.15rem + env(safe-area-inset-bottom))" }}
-            className="fixed right-3 z-40 w-[340px] max-w-[94vw] bg-white/95 backdrop-blur border border-stone-200 rounded-3xl shadow-2xl p-3 space-y-2"
+            className="fixed right-3 z-40 w-[336px] max-w-[94vw] bg-white/95 backdrop-blur border border-stone-200 rounded-3xl shadow-2xl p-3 space-y-2"
           >
             {[
               {
                 group: "🍽️ 식단 · 살림",
-                cols: "grid-cols-3",
                 items: [
                   {
                     tab: "daily",
@@ -20947,19 +21141,20 @@ ${validText}
                   { tab: "fridge", icon: "🧾", label: "영수증", onClick: () => setIsReceiptModalOpen(true) },
                   { tab: "recipes", icon: "🍳", label: "레시피", onClick: () => openNewRecipeModal() },
                   {
-                    tab: "daily",
-                    icon: "📤",
-                    label: "내보내기",
-                    onClick: () => {
-                      setExportScope("all");
-                      setIsInventoryExportOpen(true);
-                    }
+                    tab: "home",
+                    icon: "⏱️",
+                    label: "조리타이머",
+                    onClick: () =>
+                      setKitchenTimer((p) => ({
+                        ...p,
+                        open: true,
+                        label: p.label || "조리 타이머"
+                      }))
                   }
                 ]
               },
               {
-                group: "🗓️ 일정 · 육아",
-                cols: "grid-cols-5",
+                group: "🗓️ 일정 · 육아 · 공지",
                 items: [
                   {
                     tab: "schedule",
@@ -21022,12 +21217,27 @@ ${validText}
                       setBabySubTab("growth");
                       setTimeout(() => document.getElementById("baby-growth-height-input")?.focus(), 200);
                     }
+                  },
+                  {
+                    tab: "notices",
+                    icon: "📌",
+                    label: "가족공지",
+                    onClick: () => {
+                      setEditingNotice(null);
+                      setNoticeForm({
+                        title: "",
+                        content: "",
+                        category: "육아/아이들",
+                        author: actorName || "수혁",
+                        pinned: true
+                      });
+                      setIsNoticeModalOpen(true);
+                    }
                   }
                 ]
               },
               {
-                group: "🗂️ 노트 · 버킷 · 도구",
-                cols: "grid-cols-3",
+                group: "🗂️ 노트 · 버킷 · 내보내기",
                 items: [
                   {
                     tab: "pages",
@@ -21048,15 +21258,13 @@ ${validText}
                     }
                   },
                   {
-                    tab: "home",
-                    icon: "⏱️",
-                    label: "조리타이머",
-                    onClick: () =>
-                      setKitchenTimer((p) => ({
-                        ...p,
-                        open: true,
-                        label: p.label || "조리 타이머"
-                      }))
+                    tab: "daily",
+                    icon: "📤",
+                    label: "식단내보내기",
+                    onClick: () => {
+                      setExportScope("all");
+                      setIsInventoryExportOpen(true);
+                    }
                   }
                 ]
               }
@@ -21069,7 +21277,7 @@ ${validText}
               .map((g) => (
                 <div key={g.group} className="space-y-1">
                   <div className="text-[11px] font-extrabold text-stone-400 px-0.5">{g.group}</div>
-                  <div className={`grid ${g.cols} gap-1.5`}>
+                  <div className="grid grid-cols-3 gap-1.5">
                     {g.items.map((act) => (
                       <button
                         key={act.label}
@@ -21078,7 +21286,7 @@ ${validText}
                           setIsQuickFabOpen(false);
                           act.onClick();
                         }}
-                        className="py-1.5 px-1 rounded-xl bg-[#FAF8F3] hover:bg-[#EEF3EE] border border-stone-200/90 text-stone-900 flex flex-col items-center justify-center gap-0.5 transition active:scale-95"
+                        className="h-[46px] px-1.5 rounded-xl bg-[#FAF8F3] hover:bg-[#EEF3EE] border border-stone-200/90 text-stone-900 flex flex-col items-center justify-center gap-0.5 transition active:scale-95"
                       >
                         <span className="text-[15px] leading-none">{act.icon}</span>
                         <span className="text-[11px] font-extrabold whitespace-nowrap">{act.label}</span>
@@ -21092,7 +21300,7 @@ ${validText}
       )}
 
 
-      {showScrollTopBtn && !isQuickFabOpen && (
+      {showScrollTopBtn && !isQuickFabOpen && !isPageBulkEditMode && !isPagePasteModalOpen && !activeTableTaskModal && (
         <button
           type="button"
           onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
@@ -21105,7 +21313,7 @@ ${validText}
         </button>
       )}
 
-      {isEditorUnlocked && (
+      {isEditorUnlocked && !isPageBulkEditMode && !isPagePasteModalOpen && !activeTableTaskModal && (
         <button
           type="button"
           onClick={() => setIsQuickFabOpen((v) => !v)}
