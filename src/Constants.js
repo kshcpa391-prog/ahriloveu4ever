@@ -1176,7 +1176,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v12.41";
+export const APP_CODE_VERSION = "v12.42";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1194,7 +1194,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-20 18:00";
+export const APP_BUILD_DATE = "2026-11-20 18:30";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1261,6 +1261,18 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v12.42",
+    version: "v12.42",
+    date: "2026-11-20",
+    title: "알림 토스트 탭 즉시 닫기 · 백업/CSV Blob 메모리 누수 해소 · 이미지 지연 로딩 최적화 · 새 창 보안 보강",
+    items: [
+      "상단 알림 토스트를 한 번 탭하면 즉시 닫히도록 개선하여 헤더 버튼 가림 시간과 시각적 피로도 축소",
+      "JSON 전체 백업·메일 백업·CSV 내보내기 3곳의 URL.createObjectURL 호출 후 누락된 URL.revokeObjectURL 해제를 추가해 모바일 메모리 누수 방지",
+      "레시피·육아일기·첨부 이미지 등 콘텐츠 이미지에 loading='lazy' 및 decoding='async'를 일괄 적용해 스크롤·초기 로딩 성능 고도화",
+      "네이버 메일 백업 새 창 열기에 noopener,noreferrer 보안 옵션을 추가하고 백업 완료 월 localStorage 저장 예외 방어 보강"
+    ]
+  },
   {
     id: "patch-v12.41",
     version: "v12.41",

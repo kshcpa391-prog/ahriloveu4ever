@@ -547,7 +547,7 @@ const MemberAvatar = ({ member, id, size = "sm", className = "" }) => {
       : "w-4 h-4";
   if (resolved?.avatar) {
     return (
-      <img
+      <img loading="lazy" decoding="async"
         src={resolved.avatar}
         alt={resolved.name || resolved.id || "가족"}
         style={{ width: sizePx, height: sizePx, minWidth: sizePx, minHeight: sizePx, aspectRatio: "1 / 1", borderRadius: "9999px", objectFit: "cover" }}
@@ -4161,10 +4161,10 @@ function MainApp() {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-
+    setTimeout(() => { try { URL.revokeObjectURL(url); } catch (e) {} }, 1000);
 
     const curYm = getCurrentYearMonth();
-    localStorage.setItem("kim_backup_done_month", curYm);
+    try { localStorage.setItem("kim_backup_done_month", curYm); } catch (e) {}
     setBackupBannerDismissedMonth(curYm);
     showToast("전체 DB 원본(JSON) 백업 파일이 다운로드되었습니다!");
   };
@@ -4214,7 +4214,7 @@ function MainApp() {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-
+    setTimeout(() => { try { URL.revokeObjectURL(url); } catch (e) {} }, 1000);
 
     const targetMail = backupEmail.trim() || "";
     const subject = encodeURIComponent(`[가족식탁 자동백업${isLite ? "·경량" : ""}] ${getTodayStr()} 전체 데이터베이스`);
@@ -4222,7 +4222,7 @@ function MainApp() {
       `수혁·아리나·시목·시율네 식탁 데이터베이스 백업(${sizeLabel})입니다.\n\n• 백업 일시: ${new Date().toLocaleString()}\n• 식단: ${meals.length}건 / 냉장고: ${fridge.length}건 / 가족일정: ${schedules.length}건\n\n방금 다운로드된 '${jsonFileName}' 파일을 첨부해 주세요.`
     );
     const naverComposeUrl = `https://mail.naver.com/v2/new?to=${encodeURIComponent(targetMail)}&subject=${subject}&body=${bodyText}`;
-    window.open(naverComposeUrl, "_blank");
+    window.open(naverComposeUrl, "_blank", "noopener,noreferrer");
     showToast(`📥 ${sizeLabel} 백업 파일 다운로드 완료! (공유창 미지원 → 네이버 메일에서 첨부해 주세요)`);
   };
 
@@ -10556,6 +10556,7 @@ ${validText}
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    setTimeout(() => { try { URL.revokeObjectURL(url); } catch (e) {} }, 1000);
   };
 
 
@@ -10809,10 +10810,14 @@ ${validText}
       }
       const now = Date.now();
       if (now - lastBackExitPromptMsRef.current < 2500) {
+        lastBackExitPromptMsRef.current = 0;
+        try {
+          window.history.back();
+        } catch (e) {}
         return;
       }
       lastBackExitPromptMsRef.current = now;
-      showToast("한 번 더 뒤로가기를 누르면 앱이 종료됩니다.");
+      showToast("뒤로가기를 한 번 더 누르면 앱이 종료됩니다.");
       try {
         window.history.pushState({ appNavGuard: true, snap: { ...lastNavSnapRef.current } }, "", "#tab=home");
       } catch (e) {}
@@ -11037,12 +11042,24 @@ ${validText}
 
 
       {toastMsg && (
-        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 max-w-[92vw] bg-stone-900 text-white px-4 py-2.5 rounded-full text-[13.5px] font-bold shadow-lg flex items-center gap-2">
+        <div
+          role="status"
+          onClick={() => {
+            if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+            setToastMsg("");
+            setToastUndo(null);
+          }}
+          title="눌러서 닫기"
+          className="fixed top-4 left-1/2 -translate-x-1/2 z-50 max-w-[92vw] bg-stone-900 text-white px-4 py-2.5 rounded-full text-[13.5px] font-bold shadow-lg flex items-center gap-2 cursor-pointer select-none"
+        >
           <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
           <span className="truncate">{toastMsg}</span>
           {toastUndo?.fn && (
             <button
-              onClick={() => {
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
                 const fn = toastUndo.fn;
                 setToastMsg("");
                 setToastUndo(null);
@@ -11080,7 +11097,7 @@ ${validText}
               <button
                 onClick={() => {
                   const curYm = getCurrentYearMonth();
-                  localStorage.setItem("kim_backup_done_month", curYm);
+                  try { localStorage.setItem("kim_backup_done_month", curYm); } catch (e) {}
                   setBackupBannerDismissedMonth(curYm);
                 }}
                 className="p-1 text-white/80 hover:text-white"
@@ -11214,7 +11231,7 @@ ${validText}
             className="relative h-32 sm:h-36 rounded-2xl overflow-hidden mb-2 border border-stone-200 shadow-sm bg-gradient-to-r from-amber-100 via-stone-100 to-rose-100 cursor-pointer group"
             title="눌러서 가족사진 편집"
           >
-            <img
+            <img loading="lazy" decoding="async"
               src={heroPhotoConfig.url || HERO_FAMILY_FALLBACK}
               alt="수혁 아리 시목 시율 가족사진"
               style={{ objectPosition: `50% ${heroPhotoConfig.posY ?? 35}%` }}
@@ -17777,7 +17794,7 @@ ${validText}
 
             {platingPreviewUrl && (
               <div className="rounded-2xl overflow-hidden border border-stone-200 bg-stone-100">
-                <img
+                <img loading="lazy" decoding="async"
                   src={platingPreviewUrl}
                   alt="플레이팅 분석 사진"
                   className="w-full max-h-52 object-cover"
@@ -17883,7 +17900,7 @@ ${validText}
                     <div className="text-[11.5px] font-extrabold text-rose-800">
                       ✨ AI 추천 플레이팅 예시 이미지
                     </div>
-                    <img
+                    <img loading="lazy" decoding="async"
                       src={platingExampleImageUrl}
                       alt="AI 플레이팅 예시"
                       className="w-full rounded-xl border border-rose-200 object-cover"
@@ -20214,7 +20231,7 @@ ${validText}
                           className="relative w-24 h-24 rounded-xl overflow-hidden border border-stone-200 shrink-0 cursor-pointer group bg-stone-100"
                           title="클릭하여 사진 크게 보기"
                         >
-                          <img
+                          <img loading="lazy" decoding="async"
                             src={r.photoDataUrl}
                             alt={r.title}
                             className={`w-full h-full object-cover ${!isEditorUnlocked ? "blur-md" : "group-hover:scale-105 transition"}`}
@@ -24553,7 +24570,7 @@ ${validText}
 
             {scanPreviewUrl && (
               <div className="relative rounded-2xl overflow-hidden border border-stone-200 max-h-36 bg-stone-100">
-                <img
+                <img loading="lazy" decoding="async"
                   src={scanPreviewUrl}
                   alt="식단표 미리보기"
                   className="w-full h-36 object-cover"
@@ -24753,7 +24770,7 @@ ${validText}
 
 
             {receiptPreviewUrl && (
-              <img
+              <img loading="lazy" decoding="async"
                 src={receiptPreviewUrl}
                 alt="영수증 미리보기"
                 className="w-full h-28 object-cover rounded-xl border border-stone-200"
@@ -26069,7 +26086,7 @@ ${validText}
 
 
             <div className="relative h-36 rounded-2xl overflow-hidden border border-stone-200 bg-stone-100">
-              <img
+              <img loading="lazy" decoding="async"
                 src={heroPhotoDraft.url || HERO_FAMILY_FALLBACK}
                 alt="미리보기"
                 style={{ objectPosition: `50% ${heroPhotoDraft.posY ?? 35}%` }}
@@ -27597,7 +27614,7 @@ ${validText}
                   </button>
                 </div>
                 {activityEditModal.photoUrl && (
-                  <img
+                  <img loading="lazy" decoding="async"
                     src={activityEditModal.photoUrl}
                     alt="미리보기"
                     className="w-16 h-16 rounded-xl object-cover border border-stone-200"
@@ -27874,7 +27891,7 @@ ${validText}
               </button>
             </div>
             <div className="flex-1 overflow-y-auto rounded-2xl border border-stone-200 bg-[#FAF8F3]">
-              <img src={diaryExportPreviewUrl} alt="육아일기 내보내기" className="w-full h-auto block" />
+              <img loading="lazy" decoding="async" src={diaryExportPreviewUrl} alt="육아일기 내보내기" className="w-full h-auto block" />
             </div>
             <div className="flex items-center justify-between gap-2">
               <span className="text-[11.5px] font-bold text-stone-500">
@@ -28804,7 +28821,7 @@ ${validText}
                 )}
               </div>
               {recipeForm.photoDataUrl && (
-                <img src={recipeForm.photoDataUrl} alt="미리보기" className="w-full h-36 object-cover rounded-xl border border-stone-200" />
+                <img loading="lazy" decoding="async" src={recipeForm.photoDataUrl} alt="미리보기" className="w-full h-36 object-cover rounded-xl border border-stone-200" />
               )}
             </div>
 
@@ -29082,7 +29099,7 @@ ${validText}
 
             <div className="flex justify-center bg-stone-900 rounded-2xl p-2 overflow-hidden">
               <div ref={cropBoxRef} className="relative inline-block select-none touch-none max-h-[52vh]">
-                <img
+                <img loading="lazy" decoding="async"
                   ref={cropImgRef}
                   src={cropModal.srcUrl}
                   alt="자르기 대상"
