@@ -2072,6 +2072,10 @@ function MainApp() {
     lng: null
   });
   const [bucketViewMode, setBucketViewMode] = useState("map");
+  const [bucketCatFilter, setBucketCatFilter] = useState("전체");
+  const [bucketWeatherOnly, setBucketWeatherOnly] = useState(false);
+  const [bucketMemberFilter, setBucketMemberFilter] = useState("전체");
+  const [bucketStatusFilter, setBucketStatusFilter] = useState("all");
   const [selectedBucketMapItem, setSelectedBucketMapItem] = useState(null);
   const [isGeocodingBucket, setIsGeocodingBucket] = useState(false);
   const [isBucketModalOpen, setIsBucketModalOpen] = useState(false);
@@ -15766,7 +15770,7 @@ ${validText}
             const unifiedSearchMatches = uq
               ? [
                   ...(effectiveScope !== "private"
-                    ? familySchedules
+                    ? schedules
                         .filter(
                           (it) =>
                             String(it.title || "").toLowerCase().includes(uq) ||
@@ -27637,8 +27641,14 @@ ${validText}
 
 
       {isFridgeModalOpen && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-sm w-full p-5 space-y-3">
+        <div
+          className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+          onClick={() => { setFridgeConflictData(null); setIsFridgeModalOpen(false); }}
+        >
+          <div
+            className="bg-white rounded-3xl max-w-sm w-full p-5 space-y-3"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="flex items-center justify-between">
               <h3 className="text-[15.5px] font-black">
                 {editingFridge ? "냉장고 재료 수정" : "냉장고 재료 추가"}

@@ -1177,7 +1177,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v12.51";
+export const APP_CODE_VERSION = "v12.52";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1195,7 +1195,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-20 23:40";
+export const APP_BUILD_DATE = "2026-11-20 23:55";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1262,6 +1262,18 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v12.52",
+    version: "v12.52",
+    date: "2026-11-20",
+    title: "버킷리스트·통합검색 ReferenceError 완전 수정 및 전체 스코프 무결성 검증",
+    category: "안정화 · 오류 수정",
+    changes: [
+      "버킷리스트 화면 진입 시 발생하던 bucketCatFilter 등 4개 필터 상태 미선언(ReferenceError) 즉시 복구",
+      "통합 달력 검색에서 가족 일정 검색 시 발생하던 familySchedules 참조 오류를 schedules로 수정",
+      "냉장고 재료 등록·수정 모달에 배경 터치 닫기 적용 및 전체 3만여 줄 AST 스코프 전수 검증(미선언 변수 0건) 완료"
+    ]
+  },
   {
     id: "patch-v12.51",
     version: "v12.51",
