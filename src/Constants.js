@@ -1177,7 +1177,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v12.47";
+export const APP_CODE_VERSION = "v12.49";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1195,7 +1195,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-20 22:30";
+export const APP_BUILD_DATE = "2026-11-20 23:05";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1262,6 +1262,34 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v12.49",
+    version: "v12.49",
+    date: "2026-11-20",
+    title: "15년 조르테 기록 연·월 즉시 점프 · 팝업 스와이프 · 검색 직행 및 안정성 고도화",
+    category: "편의성 · 안정화",
+    changes: [
+      "달력 상단 'YYYY년 M월 ▾' 터치 시 연·월 즉시 선택 피커를 열어 과거 기록(2013~2027)으로 2탭 이동 지원",
+      "조르테 일자 팝업 창 안에서도 좌우 스와이프로 이전 날·다음 날을 바로 넘길 수 있도록 제스처 확장",
+      "통합 달력 검색 결과를 누르면 해당 월 이동과 동시에 상세 팝업으로 직행해 메모·다이어리를 즉시 열람",
+      "개인일정 저장·완료·삭제·초기화 모든 동작에 로컬 캐시 동기화를 일관 적용해 재실행 시 즉시 표시",
+      "달력 하단 구버전 안내 문구 및 빈 패널 여백을 슬림화해 시각적 피로도 최소화"
+    ]
+  },
+  {
+    id: "patch-v12.48",
+    version: "v12.48",
+    date: "2026-11-20",
+    title: "통합 달력 조르테 UX 고도화 (좌우 스와이프·일자 팝업 상세·가독성·상단 추가)",
+    category: "UX 고도화",
+    changes: [
+      "CSV로 불러온 모든 일정을 로그인 본인 개인일정(🔒)으로 확실히 반영하고 UTF-8/EUC-KR 자동 인식 및 로컬 캐시 보강",
+      "달력 영역 좌우 스와이프 제스처로 전월·다음월 자연스럽게 이동 지원",
+      "달력 일자 터치 시 조르테 스타일 팝업(일자 일정 목록 ↔ 상세 보기 · 삭제/완료/복사/편집 · << 이전날 / 새로운 일정 / 다음날 >>) 구현",
+      "모바일 달력을 화면 좌우 풀폭으로 확장하고 셀 패딩·글자 크기(2줄 표시·가족 2px 컬러바)를 최적화해 일정 가독성 대폭 개선",
+      "중복 상단 제목·플로팅 '+' 버튼을 정리하고 달력 상단 바에 '+ 추가' 버튼을 바로 배치해 시각적 피로도 최소화"
+    ]
+  },
   {
     id: "patch-v12.47",
     version: "v12.47",

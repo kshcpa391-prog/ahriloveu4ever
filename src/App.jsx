@@ -310,7 +310,7 @@ const PRIVATE_CAL_COLORS = [
   { id: "purple", label: "보라", textCls: "text-purple-700", bgCls: "bg-purple-100/80", dotCls: "bg-purple-600" }
 ];
 
-const getLunarFiveDayLabel = (dateObj) => {
+const getLunarDateLabel = (dateObj) => {
   try {
     if (!dateObj || Number.isNaN(dateObj.getTime())) return "";
     const parts = new Intl.DateTimeFormat("en-US-u-ca-chinese", {
@@ -322,13 +322,17 @@ const getLunarFiveDayLabel = (dateObj) => {
     const lMonth = parseInt(mPart.replace(/[^\d]/g, ""), 10);
     const lDay = parseInt(dPart.replace(/[^\d]/g, ""), 10);
     if (!Number.isFinite(lMonth) || !Number.isFinite(lDay)) return "";
-    if (lDay === 1 || lDay % 5 === 0) {
-      return `${lMonth}.${lDay}`;
-    }
-    return "";
+    return `${lMonth}.${lDay}`;
   } catch (e) {
     return "";
   }
+};
+
+const getLunarFiveDayLabel = (dateObj) => {
+  const lbl = getLunarDateLabel(dateObj);
+  if (!lbl) return "";
+  const lDay = parseInt(lbl.split(".")[1], 10);
+  return lDay === 1 || lDay % 5 === 0 ? lbl : "";
 };
 
 const BucketMapView = ({ items, selectedId, onSelectItem, onPickCoords }) => {
@@ -1513,10 +1517,23 @@ function MainApp() {
   const [bucketSearchQuery, setBucketSearchQuery] = useState("");
   const [bucketSearchResults, setBucketSearchResults] = useState([]);
   const [bucketSearchError, setBucketSearchError] = useState("");
-  const [privateSchedules, setPrivateSchedules] = useState([]);
+  const [privateSchedules, setPrivateSchedules] = useState(() => {
+    try {
+      const raw = localStorage.getItem("kim_private_schedules_cache_v1");
+      const parsed = raw ? JSON.parse(raw) : [];
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (e) {
+      return [];
+    }
+  });
   const [scheduleCalScope, setScheduleCalScope] = useState("all"); // "all" | "family" | "private"
   const [privateCalSearchOpen, setPrivateCalSearchOpen] = useState(false);
   const [privateCalSearchQuery, setPrivateCalSearchQuery] = useState("");
+  const [calDayPopupDate, setCalDayPopupDate] = useState(null);
+  const [calDayPopupItem, setCalDayPopupItem] = useState(null);
+  const calTouchStartRef = useRef(null);
+  const calSwipedRef = useRef(false);
+  const popupTouchStartRef = useRef(null);
   const currentAdminOwner = actorName === "아리나" ? "아리나" : "수혁";
   const [isPrivateCalModalOpen, setIsPrivateCalModalOpen] = useState(false);
   const [editingPrivateCalId, setEditingPrivateCalId] = useState(null);
@@ -3810,6 +3827,9 @@ function MainApp() {
             }
           });
           setPrivateSchedules(loaded);
+          try {
+            localStorage.setItem("kim_private_schedules_cache_v1", JSON.stringify(loaded));
+          } catch (e) {}
         },
         () => {}
       )
@@ -10049,6 +10069,7 @@ ${validText}
       ? privateSchedules.map((x) => (x.id === id ? statePayload : x))
       : [statePayload, ...privateSchedules];
     setPrivateSchedules(nextAll);
+    try { localStorage.setItem("kim_private_schedules_cache_v1", JSON.stringify(nextAll)); } catch (e) {}
     setScheduleSelectedDate(dateVal);
     setScheduleMonth(dateVal.slice(0, 7));
     setIsPrivateCalModalOpen(false);
@@ -10071,6 +10092,7 @@ ${validText}
     const updated = { ...item, done: !item.done, updatedAtMs: Date.now() };
     const nextAll = privateSchedules.map((x) => (x.id === item.id ? updated : x));
     setPrivateSchedules(nextAll);
+    try { localStorage.setItem("kim_private_schedules_cache_v1", JSON.stringify(nextAll)); } catch (e) {}
     if (user && db) {
       if (item._bucketDocId) {
         await syncPrivateBucketInCloud(item._bucketDocId, nextAll);
@@ -10085,6 +10107,7 @@ ${validText}
     const target = privateSchedules.find((x) => x.id === id);
     const nextAll = privateSchedules.filter((x) => x.id !== id);
     setPrivateSchedules(nextAll);
+    try { localStorage.setItem("kim_private_schedules_cache_v1", JSON.stringify(nextAll)); } catch (e) {}
     if (user && db) {
       if (target?._bucketDocId) {
         await syncPrivateBucketInCloud(target._bucketDocId, nextAll);
@@ -10227,7 +10250,19 @@ ${validText}
     const reader = new FileReader();
     reader.onload = () => {
       try {
-        const text = String(reader.result || "");
+        const buf = reader.result;
+        let text = "";
+        if (buf instanceof ArrayBuffer) {
+          text = new TextDecoder("utf-8").decode(buf);
+          if (text.includes("\uFFFD")) {
+            try {
+              const eucText = new TextDecoder("euc-kr").decode(buf);
+              if (eucText && !eucText.includes("\uFFFD")) text = eucText;
+            } catch (e2) {}
+          }
+        } else {
+          text = String(buf || "");
+        }
         const parsed = parseJorteCsvToPrivateItems(text, currentAdminOwner);
         if (parsed.length === 0) {
           showToast("인식된 일정이 없습니다. 조르테 CSV(dtstart, title 포함) 파일인지 확인해 주세요.");
@@ -10248,7 +10283,7 @@ ${validText}
             dupCount += 1;
           } else {
             seenInFile.add(key);
-            freshItems.push(it);
+            freshItems.push({ ...it, owner: currentAdminOwner, isPrivate: true });
           }
         });
         const sortedDates = parsed.map((x) => x.date).sort();
@@ -10267,7 +10302,7 @@ ${validText}
         setPrivateCalCsvPreview(null);
       }
     };
-    reader.readAsText(file, "UTF-8");
+    reader.readAsArrayBuffer(file);
     if (e?.target) e.target.value = "";
   };
 
@@ -10279,16 +10314,19 @@ ${validText}
     }
     setPrivateCalCsvBusy(true);
     try {
-      const targetOwner = privateCalCsvPreview.owner === "아리나" ? "아리나" : "수혁";
+      const targetOwner = currentAdminOwner;
       const touchedBucketIds = new Set();
       const newHydrated = privateCalCsvPreview.items.map((it) => {
         const yr = /^\d{4}/.test(it.date) ? it.date.slice(0, 4) : "misc";
         const bId = `bucket_${targetOwner}_${yr}`;
         touchedBucketIds.add(bId);
-        return { ...it, owner: targetOwner, _bucketDocId: bId };
+        return { ...it, owner: targetOwner, isPrivate: true, _bucketDocId: bId };
       });
       const nextAll = [...privateSchedules, ...newHydrated];
       setPrivateSchedules(nextAll);
+      try {
+        localStorage.setItem("kim_private_schedules_cache_v1", JSON.stringify(nextAll));
+      } catch (e) {}
 
       if (user && db) {
         const bucketList = Array.from(touchedBucketIds);
@@ -10312,7 +10350,26 @@ ${validText}
         }
       }
 
-      showToast(`☁️ ${targetOwner} 클라우드에 ${newHydrated.length.toLocaleString()}건 저장 완료!`);
+      if (scheduleCalScope === "family") {
+        setScheduleCalScope("private");
+      }
+      const hasInCurMonth = newHydrated.some((x) => String(x.date || "").startsWith(scheduleMonth));
+      if (!hasInCurMonth && newHydrated.length > 0) {
+        const todayYm = getTodayStr().slice(0, 7);
+        const hasTodayMonth = newHydrated.some((x) => String(x.date || "").startsWith(todayYm));
+        if (hasTodayMonth) {
+          setScheduleMonth(todayYm);
+          setScheduleSelectedDate(getTodayStr());
+        } else {
+          const latestDate = newHydrated.map((x) => x.date).sort().pop();
+          if (latestDate) {
+            setScheduleMonth(latestDate.slice(0, 7));
+            setScheduleSelectedDate(latestDate);
+          }
+        }
+      }
+
+      showToast(`☁️ ${targetOwner} 개인일정에 ${newHydrated.length.toLocaleString()}건 클라우드 저장 완료!`);
       setPrivateCalCsvPreview(null);
       setIsPrivateCalCsvModalOpen(false);
     } catch (err) {
@@ -10392,7 +10449,9 @@ ${validText}
       ownerItems.forEach((it) => {
         docIdsToDelete.add(it._bucketDocId || it.id);
       });
-      setPrivateSchedules((prev) => prev.filter((x) => (x.owner || "수혁") !== currentAdminOwner));
+      const remainAfterClear = privateSchedules.filter((x) => (x.owner || "수혁") !== currentAdminOwner);
+      setPrivateSchedules(remainAfterClear);
+      try { localStorage.setItem("kim_private_schedules_cache_v1", JSON.stringify(remainAfterClear)); } catch (e) {}
       if (user && db) {
         const ids = Array.from(docIdsToDelete);
         for (let i = 0; i < ids.length; i += 400) {
@@ -11268,6 +11327,7 @@ ${validText}
       !isBucketModalOpen &&
       !isPrivateCalModalOpen &&
       !isPrivateCalCsvModalOpen &&
+      !calDayPopupDate &&
       !isScheduleModalOpen &&
       !isMealModalOpen &&
       !isFridgeModalOpen &&
@@ -11307,6 +11367,8 @@ ${validText}
         setIsBucketModalOpen(false);
         setIsPrivateCalModalOpen(false);
         setIsPrivateCalCsvModalOpen(false);
+        setCalDayPopupDate(null);
+        setCalDayPopupItem(null);
         setIsScheduleModalOpen(false);
         setIsMealModalOpen(false);
         setIsFridgeModalOpen(false);
@@ -11323,7 +11385,7 @@ ${validText}
     };
     window.addEventListener("keydown", onEsc);
     return () => window.removeEventListener("keydown", onEsc);
-  }, [isQuickFabOpen, isRoutineModalOpen, isActivityModalOpen, isEditorUnlockModalOpen, isMealCopyModalOpen, diaryExportPreviewUrl, diaryLightboxUrl, isWeatherModalOpen, liveActivityPopup, activityEditModal, zipImportPicker, magazineMonth, isSettingsOpen, isHeroPhotoModalOpen, isPageModalOpen, pageMenuTargetId, isPagePasteModalOpen, activeTableTaskModal, isDreamLinksModalOpen, isPatchModalOpen, isBucketModalOpen, isPrivateCalModalOpen, isPrivateCalCsvModalOpen, isScheduleModalOpen, isMealModalOpen, isFridgeModalOpen, isNoticeModalOpen, isRecipeModalOpen, isDaycareModalOpen, isReceiptModalOpen, isInventoryExportOpen, stockInItem, quickLogRecipe, cookingConfirmModal, quickFridgeItem]);
+  }, [isQuickFabOpen, isRoutineModalOpen, isActivityModalOpen, isEditorUnlockModalOpen, isMealCopyModalOpen, diaryExportPreviewUrl, diaryLightboxUrl, isWeatherModalOpen, liveActivityPopup, activityEditModal, zipImportPicker, magazineMonth, isSettingsOpen, isHeroPhotoModalOpen, isPageModalOpen, pageMenuTargetId, isPagePasteModalOpen, activeTableTaskModal, isDreamLinksModalOpen, isPatchModalOpen, isBucketModalOpen, isPrivateCalModalOpen, isPrivateCalCsvModalOpen, calDayPopupDate, isScheduleModalOpen, isMealModalOpen, isFridgeModalOpen, isNoticeModalOpen, isRecipeModalOpen, isDaycareModalOpen, isReceiptModalOpen, isInventoryExportOpen, stockInItem, quickLogRecipe, cookingConfirmModal, quickFridgeItem]);
 
   // ==========================================
   // 모바일·브라우저 뒤로가기 이전 화면 이동 (Chrome User-Gesture History API + URL 해시)
@@ -11362,6 +11424,7 @@ ${validText}
     isBucketModalOpen ||
     isPrivateCalModalOpen ||
     isPrivateCalCsvModalOpen ||
+    Boolean(calDayPopupDate) ||
     isScheduleModalOpen ||
     isMealModalOpen ||
     isFridgeModalOpen ||
@@ -11402,6 +11465,8 @@ ${validText}
       setIsBucketModalOpen(false);
       setIsPrivateCalModalOpen(false);
       setIsPrivateCalCsvModalOpen(false);
+      setCalDayPopupDate(null);
+      setCalDayPopupItem(null);
       setIsScheduleModalOpen(false);
       setIsMealModalOpen(false);
       setIsFridgeModalOpen(false);
@@ -11604,6 +11669,7 @@ ${validText}
       isBucketModalOpen ||
       isPrivateCalModalOpen ||
       isPrivateCalCsvModalOpen ||
+      Boolean(calDayPopupDate) ||
       isPatchModalOpen ||
       isSettingsOpen ||
       isScheduleModalOpen ||
@@ -11625,6 +11691,7 @@ ${validText}
     isBucketModalOpen,
     isPrivateCalModalOpen,
     isPrivateCalCsvModalOpen,
+    calDayPopupDate,
     isPatchModalOpen,
     isSettingsOpen,
     isScheduleModalOpen,
@@ -14873,40 +14940,7 @@ ${validText}
           탭 4: 일정 (1. 월간 달력 -> 2. 선택일 상세일정 -> 3. [신규] 주간 일정 요약 -> 4. [신규] 전체 To-Do 체크리스트 -> 5. 최하단 D-Day 보드)
       ========================================== */}
       {activeTab === "schedule" && (!canViewTab("schedule") ? renderLockedTabScreen("🗓️ 일정·루틴") : (
-        <div className="p-4 space-y-4">
-          <div className="flex items-center justify-between gap-2">
-            <div className="min-w-0">
-              <h2 className="text-[15.5px] font-black text-stone-900 flex items-center gap-1.5">
-                <CalendarDays className="w-4 h-4 text-pink-600 shrink-0" />
-                <span className="truncate">우리 가족 월간 일정표</span>
-              </h2>
-              <p className="text-[12.5px] text-stone-500">
-                달력 · 주간 요약 · To-Do · D-Day
-              </p>
-            </div>
-            <button
-              onClick={() => {
-                setEditingSchedule(null);
-                setScheduleForm({
-                  title: "",
-                  date: scheduleSelectedDate,
-                  category: "할일(To-Do)",
-                  members:
-                    scheduleMemberFilter === "전체"
-                      ? ["수혁", "아리나", "시목", "시율"]
-                      : [scheduleMemberFilter],
-                  isAnnual: false,
-                  showDday: false,
-                  hasOriginYear: false,
-                  memo: ""
-                });
-                setIsScheduleModalOpen(true);
-              }}
-              className="px-3 py-2 rounded-xl bg-stone-900 text-white text-[13.5px] font-extrabold flex items-center gap-1 shrink-0 shadow-sm"
-            >
-              <Plus className="w-3.5 h-3.5" /> 일정 추가
-            </button>
-          </div>
+        <div className="px-3 pt-2.5 pb-4 space-y-2.5">
 
 
           <div className="grid grid-cols-3 gap-1 bg-stone-100 p-1 rounded-2xl">
@@ -14961,13 +14995,14 @@ ${validText}
           </div>
 
 
+          {!(scheduleSubTab === "calendar" && isAdminUnlocked && scheduleCalScope === "private") && (
           <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 sm:grid sm:grid-cols-5 sm:gap-1">
             <button
               onClick={() => {
                 setScheduleMemberFilter("전체");
                 setRoutineTargetFilter("전체");
               }}
-              className={`px-2.5 py-2 rounded-xl text-[12.5px] font-extrabold border transition flex items-center justify-center gap-1 whitespace-nowrap shrink-0 ${
+              className={`px-2.5 py-1.5 rounded-xl text-[12px] font-extrabold border transition flex items-center justify-center gap-1 whitespace-nowrap shrink-0 ${
                 scheduleMemberFilter === "전체"
                   ? "bg-stone-900 text-white border-stone-900"
                   : "bg-white text-stone-600 border-stone-200"
@@ -14983,7 +15018,7 @@ ${validText}
                   setScheduleMemberFilter(m.id);
                   setRoutineTargetFilter(m.id);
                 }}
-                className={`px-2.5 py-2 rounded-xl text-[12.5px] font-extrabold border transition flex items-center justify-center gap-1 whitespace-nowrap shrink-0 ${
+                className={`px-2.5 py-1.5 rounded-xl text-[12px] font-extrabold border transition flex items-center justify-center gap-1 whitespace-nowrap shrink-0 ${
                   scheduleMemberFilter === m.id
                     ? "bg-stone-900 text-white border-stone-900"
                     : "bg-white text-stone-600 border-stone-200"
@@ -14994,6 +15029,7 @@ ${validText}
               </button>
             ))}
           </div>
+          )}
 
 
           {scheduleSubTab === "calendar" && (
@@ -15073,10 +15109,10 @@ ${validText}
 
             return (
               <div className="space-y-3">
-                <div className="bg-white rounded-2xl border border-stone-200 shadow-sm overflow-hidden">
-                  {/* 상단 통합 컨트롤 바 */}
-                  <div className="px-3 py-2.5 border-b border-stone-200 space-y-2">
-                    <div className="flex items-center justify-between gap-1.5">
+                <div className="-mx-3 sm:mx-0 bg-white sm:rounded-2xl border-y sm:border border-stone-200 shadow-sm overflow-hidden">
+                  {/* 상단 통합 컨트롤 바 (월 이동 · 검색 · CSV · + 추가) */}
+                  <div className="px-2.5 py-2 border-b border-stone-200 space-y-2">
+                    <div className="flex items-center justify-between gap-1">
                       <div className="flex items-center gap-0.5 min-w-0">
                         <button
                           type="button"
@@ -15090,21 +15126,28 @@ ${validText}
                         >
                           <ChevronLeft className="w-4 h-4" />
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const t = getTodayStr();
-                            setScheduleMonth(t.slice(0, 7));
-                            setScheduleSelectedDate(t);
-                          }}
-                          className="text-left leading-none whitespace-nowrap px-1"
-                          title="오늘로 이동"
+                        <label
+                          className="relative inline-flex items-baseline leading-none whitespace-nowrap px-1 py-0.5 rounded-lg hover:bg-stone-100 cursor-pointer"
+                          title="연·월 바로 이동"
                         >
-                          <span className="text-[15.5px] font-black text-stone-800">{uYear}</span>
-                          <span className="text-[11px] font-bold text-stone-500 mr-1">년</span>
+                          <span className="text-[15px] font-black text-stone-800">{uYear}</span>
+                          <span className="text-[10.5px] font-bold text-stone-500 mr-0.5">년</span>
                           <span className="text-[19px] font-black text-stone-900">{uMonth}</span>
-                          <span className="text-[11px] font-bold text-stone-500">월</span>
-                        </button>
+                          <span className="text-[10.5px] font-bold text-stone-500">월</span>
+                          <span className="text-[9.5px] font-bold text-stone-400 ml-0.5">▾</span>
+                          <input
+                            type="month"
+                            value={scheduleMonth}
+                            onChange={(e) => {
+                              if (e.target.value) {
+                                setScheduleMonth(e.target.value);
+                                setScheduleSelectedDate(`${e.target.value}-01`);
+                              }
+                            }}
+                            aria-label="연·월 선택"
+                            className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                          />
+                        </label>
                         <button
                           type="button"
                           onClick={() => {
@@ -15117,6 +15160,18 @@ ${validText}
                         >
                           <ChevronRight className="w-4 h-4" />
                         </button>
+                        {scheduleMonth !== todayStr.slice(0, 7) && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setScheduleMonth(todayStr.slice(0, 7));
+                              setScheduleSelectedDate(todayStr);
+                            }}
+                            className="ml-0.5 px-1.5 py-0.5 rounded-md bg-rose-50 text-rose-600 text-[10px] font-extrabold whitespace-nowrap"
+                          >
+                            오늘
+                          </button>
+                        )}
                       </div>
 
                       <div className="flex items-center gap-1 shrink-0">
@@ -15148,6 +15203,34 @@ ${validText}
                             <span>CSV</span>
                           </button>
                         )}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (isAdminUnlocked && effectiveScope !== "family") {
+                              openPrivateCalModal(scheduleSelectedDate, null);
+                            } else {
+                              setEditingSchedule(null);
+                              setScheduleForm({
+                                title: "",
+                                date: scheduleSelectedDate,
+                                category: "할일(To-Do)",
+                                members:
+                                  scheduleMemberFilter === "전체"
+                                    ? ["수혁", "아리나", "시목", "시율"]
+                                    : [scheduleMemberFilter],
+                                isAnnual: false,
+                                showDday: false,
+                                hasOriginYear: false,
+                                memo: ""
+                              });
+                              setIsScheduleModalOpen(true);
+                            }
+                          }}
+                          className="px-2.5 py-1.5 rounded-xl bg-stone-900 hover:bg-stone-800 text-white text-[11.5px] font-extrabold whitespace-nowrap flex items-center gap-0.5 shadow-2xs"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          <span>추가</span>
+                        </button>
                       </div>
                     </div>
 
@@ -15243,6 +15326,8 @@ ${validText}
                                     setScheduleMonth(String(it.date || "").slice(0, 7));
                                     setPrivateCalSearchOpen(false);
                                     setPrivateCalSearchQuery("");
+                                    setCalDayPopupDate(it.date);
+                                    setCalDayPopupItem(it);
                                   }}
                                   className="w-full text-left px-2.5 py-1.5 hover:bg-white flex items-center justify-between gap-2 text-[12px]"
                                 >
@@ -15259,126 +15344,142 @@ ${validText}
                     )}
                   </div>
 
-                  {/* 조르테 스타일 요일 헤더 + 6주 풀그리드 */}
-                  <div className="grid grid-cols-7 text-center text-[11.5px] font-black text-white">
-                    {["일", "월", "화", "수", "목", "금", "토"].map((dayLbl, idx) => (
-                      <div
-                        key={dayLbl}
-                        className="py-1"
-                        style={{
-                          backgroundColor: idx === 0 ? "#966B6B" : idx === 6 ? "#5C7899" : "#7A7A7A"
-                        }}
-                      >
-                        {dayLbl}
-                      </div>
-                    ))}
-                  </div>
-                  <div className="grid grid-cols-7 border-t border-stone-200/80">
-                    {cells.map((cell) => {
-                      const isToday = cell.dateStr === todayStr;
-                      const isSelected = cell.dateStr === scheduleSelectedDate;
-                      const cellBg = !cell.inCurrentMonth
-                        ? "bg-stone-100/75"
-                        : cell.dow === 0
-                        ? "bg-rose-50/45"
-                        : cell.dow === 6
-                        ? "bg-sky-50/45"
-                        : "bg-white";
-                      const numColor = !cell.inCurrentMonth
-                        ? "text-stone-400"
-                        : cell.dow === 0
-                        ? "text-rose-600"
-                        : cell.dow === 6
-                        ? "text-sky-600"
-                        : "text-stone-800";
+                  {/* 조르테 스타일 요일 헤더 + 6주 풀그리드 (좌우 스와이프 월 이동 지원) */}
+                  <div
+                    onTouchStart={(e) => {
+                      const t = e.touches?.[0];
+                      if (!t) return;
+                      calTouchStartRef.current = { x: t.clientX, y: t.clientY };
+                      calSwipedRef.current = false;
+                    }}
+                    onTouchEnd={(e) => {
+                      const st = calTouchStartRef.current;
+                      const t = e.changedTouches?.[0];
+                      calTouchStartRef.current = null;
+                      if (!st || !t) return;
+                      const dx = t.clientX - st.x;
+                      const dy = t.clientY - st.y;
+                      if (Math.abs(dx) >= 48 && Math.abs(dx) > Math.abs(dy) * 1.25) {
+                        calSwipedRef.current = true;
+                        const delta = dx < 0 ? 1 : -1;
+                        const nextM = shiftYearMonth(scheduleMonth, delta);
+                        setScheduleMonth(nextM);
+                        setScheduleSelectedDate(`${nextM}-01`);
+                        setTimeout(() => {
+                          calSwipedRef.current = false;
+                        }, 120);
+                      }
+                    }}
+                  >
+                    <div className="grid grid-cols-7 text-center text-[11.5px] font-black text-white">
+                      {["일", "월", "화", "수", "목", "금", "토"].map((dayLbl, idx) => (
+                        <div
+                          key={dayLbl}
+                          className="py-1"
+                          style={{
+                            backgroundColor: idx === 0 ? "#966B6B" : idx === 6 ? "#5C7899" : "#7A7A7A"
+                          }}
+                        >
+                          {dayLbl}
+                        </div>
+                      ))}
+                    </div>
+                    <div className="grid grid-cols-7 border-t border-stone-200/80 select-none">
+                      {cells.map((cell) => {
+                        const isToday = cell.dateStr === todayStr;
+                        const isSelected = cell.dateStr === scheduleSelectedDate;
+                        const cellBg = !cell.inCurrentMonth
+                          ? "bg-stone-100/75"
+                          : cell.dow === 0
+                          ? "bg-rose-50/45"
+                          : cell.dow === 6
+                          ? "bg-sky-50/45"
+                          : "bg-white";
+                        const numColor = !cell.inCurrentMonth
+                          ? "text-stone-400"
+                          : cell.dow === 0
+                          ? "text-rose-600"
+                          : cell.dow === 6
+                          ? "text-sky-600"
+                          : "text-stone-800";
+                        const compactMode = cell.combined.length >= 3;
 
-                      return (
-                        <button
-                          key={cell.dateStr}
-                          type="button"
-                          onClick={() => {
-                            if (scheduleSelectedDate === cell.dateStr) {
-                              if (isAdminUnlocked && effectiveScope !== "family") {
-                                openPrivateCalModal(cell.dateStr, null);
-                              } else {
-                                setEditingSchedule(null);
-                                setScheduleForm({
-                                  title: "",
-                                  date: cell.dateStr,
-                                  category: "할일(To-Do)",
-                                  members: scheduleMemberFilter === "전체" ? ["수혁", "아리나", "시목", "시율"] : [scheduleMemberFilter],
-                                  isAnnual: false,
-                                  showDday: false,
-                                  hasOriginYear: false,
-                                  memo: ""
-                                });
-                                setIsScheduleModalOpen(true);
-                              }
-                            } else {
+                        return (
+                          <button
+                            key={cell.dateStr}
+                            type="button"
+                            onClick={() => {
+                              if (calSwipedRef.current) return;
                               setScheduleSelectedDate(cell.dateStr);
                               if (!cell.inCurrentMonth) {
                                 setScheduleMonth(cell.dateStr.slice(0, 7));
                               }
-                            }
-                          }}
-                          className={`min-h-[78px] p-1 border-r border-b border-stone-200/70 last:border-r-0 text-left flex flex-col items-stretch justify-start transition ${cellBg} ${
-                            isSelected ? "ring-2 ring-inset ring-stone-800 z-10" : ""
-                          }`}
-                        >
-                          <div className="flex items-start justify-between gap-0.5 mb-0.5">
-                            <span
-                              className={`text-[12px] font-black leading-tight ${numColor} ${
-                                isToday ? "bg-rose-300/75 text-stone-900 px-1 rounded-[3px] w-full" : ""
-                              }`}
-                            >
-                              {cell.dayNum}
-                            </span>
-                            {cell.lunarLbl && !isToday && (
-                              <span className="text-[8.5px] font-bold text-stone-400 leading-none pt-0.5 shrink-0">
-                                {cell.lunarLbl}
+                              setCalDayPopupItem(null);
+                              setCalDayPopupDate(cell.dateStr);
+                            }}
+                            className={`min-h-[88px] px-[2px] py-[2px] border-r border-b border-stone-200/75 last:border-r-0 text-left flex flex-col items-stretch justify-start transition ${cellBg} ${
+                              isSelected ? "ring-1 ring-inset ring-stone-700 z-10" : ""
+                            }`}
+                          >
+                            <div className="flex items-start justify-between gap-0.5 mb-0.5 px-[1px]">
+                              <span
+                                className={`text-[12.5px] font-black leading-tight ${numColor} ${
+                                  isToday ? "bg-rose-300/80 text-stone-900 px-1 rounded-[3px] w-full" : ""
+                                }`}
+                              >
+                                {cell.dayNum}
                               </span>
-                            )}
-                          </div>
-                          <div className="space-y-0.5 w-full overflow-hidden">
-                            {cell.combined.slice(0, 4).map((ev) => {
-                              if (ev._isFamily) {
-                                const famCls =
-                                  ev.category === "기념일/생일"
-                                    ? "bg-pink-100/90 text-pink-800"
-                                    : ev.done
-                                    ? "bg-stone-200/70 text-stone-400 line-through"
-                                    : "bg-indigo-50 text-indigo-800";
+                              {cell.lunarLbl && !isToday && (
+                                <span className="text-[8.5px] font-bold text-stone-400 leading-none pt-0.5 shrink-0">
+                                  {cell.lunarLbl}
+                                </span>
+                              )}
+                            </div>
+                            <div className="space-y-[2px] w-full overflow-hidden">
+                              {cell.combined.slice(0, 4).map((ev) => {
+                                if (ev._isFamily) {
+                                  const famCls =
+                                    ev.category === "기념일/생일"
+                                      ? "border-l-2 border-pink-500 bg-pink-50/90 text-pink-900"
+                                      : ev.done
+                                      ? "border-l-2 border-stone-300 bg-stone-100 text-stone-400 line-through"
+                                      : "border-l-2 border-indigo-500 bg-indigo-50/85 text-indigo-900";
+                                  return (
+                                    <div
+                                      key={`f-${ev.id}`}
+                                      className={`text-[10.5px] leading-[1.18] tracking-tight font-bold pl-[2px] pr-[1px] rounded-r-[2px] ${
+                                        compactMode ? "truncate" : "line-clamp-2 break-all"
+                                      } ${famCls}`}
+                                    >
+                                      {ev.title}
+                                    </div>
+                                  );
+                                }
+                                const cMeta = PRIVATE_CAL_COLORS.find((c) => c.id === ev.color) || PRIVATE_CAL_COLORS[0];
+                                const dispText = `${ev.time ? `${ev.time} ` : ""}${ev.title}`;
                                 return (
                                   <div
-                                    key={`f-${ev.id}`}
-                                    className={`text-[9.5px] leading-[1.2] font-extrabold truncate px-0.5 rounded-[2px] ${famCls}`}
+                                    key={`p-${ev.id}`}
+                                    className={`text-[10.5px] leading-[1.18] tracking-tight font-bold px-[1px] rounded-[2px] ${
+                                      compactMode ? "truncate" : "line-clamp-2 break-all"
+                                    } ${cMeta.textCls} ${
+                                      ev.highlight && cMeta.bgCls ? cMeta.bgCls : ""
+                                    } ${ev.done ? "line-through opacity-45" : ""}`}
                                   >
-                                    {effectiveScope === "all" ? `🏠${ev.title}` : ev.title}
+                                    {dispText}
                                   </div>
                                 );
-                              }
-                              const cMeta = PRIVATE_CAL_COLORS.find((c) => c.id === ev.color) || PRIVATE_CAL_COLORS[0];
-                              const dispText = `${ev.time ? `${ev.time} ` : ""}${ev.title}`;
-                              return (
-                                <div
-                                  key={`p-${ev.id}`}
-                                  className={`text-[9.5px] leading-[1.2] font-bold truncate px-0.5 rounded-[2px] ${cMeta.textCls} ${
-                                    ev.highlight && cMeta.bgCls ? cMeta.bgCls : ""
-                                  } ${ev.done ? "line-through opacity-45" : ""}`}
-                                >
-                                  {dispText}
+                              })}
+                              {cell.combined.length > 4 && (
+                                <div className="text-[9px] font-extrabold text-stone-400 px-[1px] leading-none">
+                                  +{cell.combined.length - 4}
                                 </div>
-                              );
-                            })}
-                            {cell.combined.length > 4 && (
-                              <div className="text-[9px] font-extrabold text-stone-400 px-0.5">
-                                +{cell.combined.length - 4}
-                              </div>
-                            )}
-                          </div>
-                        </button>
-                      );
-                    })}
+                              )}
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
 
@@ -15422,8 +15523,8 @@ ${validText}
                   </div>
 
                   {selectedFamilyEvents.length === 0 && selectedPrivateEvents.length === 0 ? (
-                    <div className="text-[12.5px] text-stone-400 py-4 text-center bg-stone-50 rounded-xl border border-dashed border-stone-200">
-                      등록된 일정이 없습니다. 날짜를 한 번 더 누르거나 위 버튼으로 추가해 보세요.
+                    <div className="text-[12px] text-stone-400 py-2.5 text-center bg-stone-50/80 rounded-xl border border-dashed border-stone-200">
+                      등록된 일정 없음 · 날짜를 누르면 상세 팝업이 열립니다
                     </div>
                   ) : (
                     <div className="space-y-2.5">
@@ -24097,10 +24198,35 @@ ${validText}
             </div>
 
             <form onSubmit={handleSavePrivateSchedule} className="space-y-3">
-              {/* 본인 전용 잠금 배지 (관리자 간 비공개 분리) */}
-              <div className="flex items-center justify-between px-3 py-2 rounded-xl bg-stone-100 text-[12px] font-extrabold text-stone-700">
-                <span>🔒 {currentAdminOwner} 전용 일정 · 다이어리</span>
-                <span className="text-[10.5px] font-bold text-stone-400">나만 보기</span>
+              {/* 본인 전용 잠금 배지 + 신규 추가 시 1탭 가족 일정 전환 */}
+              <div className="flex items-center justify-between gap-2 px-3 py-2 rounded-xl bg-stone-100 text-[12px] font-extrabold text-stone-700">
+                <span>🔒 {currentAdminOwner} 개인 일정 · 다이어리</span>
+                {!editingPrivateCalId && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const d = privateCalForm.date || scheduleSelectedDate || getTodayStr();
+                      const t = privateCalForm.title || "";
+                      const m = privateCalForm.memo || "";
+                      setIsPrivateCalModalOpen(false);
+                      setEditingSchedule(null);
+                      setScheduleForm({
+                        title: t,
+                        date: d,
+                        category: "할일(To-Do)",
+                        members: ["수혁", "아리나"],
+                        isAnnual: Boolean(privateCalForm.isAnnual),
+                        showDday: false,
+                        hasOriginYear: false,
+                        memo: m
+                      });
+                      setIsScheduleModalOpen(true);
+                    }}
+                    className="px-2 py-0.5 rounded-lg bg-white border border-stone-200 text-indigo-700 text-[10.5px] font-black whitespace-nowrap"
+                  >
+                    🏠 가족 일정으로
+                  </button>
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-2">
@@ -24264,7 +24390,7 @@ ${validText}
                   <span>조르테 CSV 불러오기 → 클라우드 저장</span>
                 </div>
                 <p className="text-[11px] text-stone-500 leading-relaxed">
-                  조르테 앱에서 내보낸 CSV 파일을 선택하면 중복 일정을 자동 제외한 뒤 연도별로 묶어 클라우드에 빠르게 저장합니다.
+                  조르테 CSV로 불러온 모든 일정은 로그인한 본인의 개인일정(🔒)으로만 클라우드에 저장되며 중복은 자동 제외됩니다.
                 </p>
                 <label className="block w-full text-center py-2.5 px-3 rounded-xl border border-dashed border-stone-300 bg-white hover:bg-stone-50 text-[12.5px] font-extrabold text-stone-700 cursor-pointer transition">
                   <span>📂 CSV 파일 선택 (.csv)</span>
@@ -24341,6 +24467,323 @@ ${validText}
                 >
                   🗑️ {currentAdminOwner} 클라우드 일정 전체 비우기
                 </button>
+              )}
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* ==========================================
+          모달: 조르테 스타일 일자 일정 팝업 (목록 ↔ 상세 보기)
+      ========================================== */}
+      {calDayPopupDate && (() => {
+        const [py, pm, pd] = calDayPopupDate.split("-").map(Number);
+        const popDateObj = new Date(py, (pm || 1) - 1, pd || 1);
+        const popLunar = getLunarDateLabel(popDateObj);
+        const popHeaderText = `${py}년 ${pm}월 ${pd}일 (${getDayName(calDayPopupDate)})${popLunar ? ` ${popLunar}` : ""}`;
+        const effScope = isAdminUnlocked ? scheduleCalScope : "family";
+
+        const popFamEvents =
+          effScope === "private"
+            ? []
+            : getSchedulesForDate(calDayPopupDate, scheduleMemberFilter, scheduleCatFilter).map((ev) => ({
+                ...ev,
+                _isFamily: true
+              }));
+        const popPrivEvents =
+          !isAdminUnlocked || effScope === "family"
+            ? []
+            : privateSchedules
+                .filter((it) => {
+                  if ((it.owner || "수혁") !== currentAdminOwner) return false;
+                  if (it.date === calDayPopupDate) return true;
+                  if (it.endDate && it.date && it.date <= calDayPopupDate && calDayPopupDate <= it.endDate) return true;
+                  if (it.isAnnual && String(it.date || "").slice(5, 10) === calDayPopupDate.slice(5, 10)) return true;
+                  return false;
+                })
+                .sort((a, b) => String(a.time || "99:99").localeCompare(String(b.time || "99:99")))
+                .map((ev) => ({ ...ev, _isFamily: false }));
+
+        const popAllEvents = [...popFamEvents, ...popPrivEvents];
+        const activeDetail = calDayPopupItem
+          ? popAllEvents.find((x) => x.id === calDayPopupItem.id && x._isFamily === calDayPopupItem._isFamily) || calDayPopupItem
+          : null;
+
+        const shiftPopupDay = (delta) => {
+          const nextD = new Date(py, (pm || 1) - 1, (pd || 1) + delta);
+          const nextStr = formatDate(nextD);
+          setCalDayPopupItem(null);
+          setCalDayPopupDate(nextStr);
+          setScheduleSelectedDate(nextStr);
+          setScheduleMonth(nextStr.slice(0, 7));
+        };
+
+        return (
+          <div
+            className="fixed inset-0 bg-black/55 z-50 flex items-center justify-center p-3"
+            onClick={() => {
+              setCalDayPopupDate(null);
+              setCalDayPopupItem(null);
+            }}
+          >
+            <div
+              className="bg-white rounded-xl max-w-sm w-full h-[76vh] max-h-[600px] flex flex-col overflow-hidden shadow-2xl border border-stone-600/30"
+              onClick={(e) => e.stopPropagation()}
+              onTouchStart={(e) => {
+                const t = e.touches?.[0];
+                if (!t) return;
+                popupTouchStartRef.current = { x: t.clientX, y: t.clientY };
+              }}
+              onTouchEnd={(e) => {
+                const st = popupTouchStartRef.current;
+                const t = e.changedTouches?.[0];
+                popupTouchStartRef.current = null;
+                if (!st || !t) return;
+                const dx = t.clientX - st.x;
+                const dy = t.clientY - st.y;
+                if (Math.abs(dx) >= 56 && Math.abs(dx) > Math.abs(dy) * 1.35) {
+                  shiftPopupDay(dx < 0 ? 1 : -1);
+                }
+              }}
+            >
+              {/* 조르테 스타일 다크 헤더 */}
+              <div className="bg-[#595959] text-white px-3.5 py-2.5 flex items-center justify-between gap-2 shrink-0">
+                <div className="text-[14.5px] font-bold tracking-tight truncate">
+                  {popHeaderText}
+                </div>
+                {activeDetail ? (
+                  <button
+                    type="button"
+                    onClick={() => setCalDayPopupItem(null)}
+                    className="px-2 py-0.5 rounded bg-white/15 hover:bg-white/25 text-white text-[11.5px] font-bold flex items-center gap-0.5 shrink-0"
+                    title="일자 목록으로"
+                  >
+                    <span>목록</span>
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCalDayPopupDate(null);
+                      setCalDayPopupItem(null);
+                    }}
+                    className="p-1 rounded hover:bg-white/15 text-white shrink-0"
+                    title="닫기"
+                    aria-label="닫기"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+
+              {/* 본문 영역: 상세 보기 OR 일자 목록 */}
+              {activeDetail ? (
+                <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-white">
+                  <div className="pb-2.5 border-b border-stone-300">
+                    <div className={`text-[17px] font-black text-stone-900 break-keep leading-snug ${activeDetail.done ? "line-through opacity-50" : ""}`}>
+                      {activeDetail.title}
+                    </div>
+                  </div>
+                  <div className="space-y-2.5 text-[13.5px] text-stone-800">
+                    <div className="font-bold text-stone-700">
+                      {activeDetail._isFamily
+                        ? `🏠 우리 가족 일정 · ${activeDetail.category || "일정"}`
+                        : `🔒 ${currentAdminOwner} 개인일정 · 다이어리`}
+                    </div>
+                    <div>
+                      <div className="text-[11.5px] font-extrabold text-stone-400">언제</div>
+                      <div className="font-bold text-stone-800 mt-0.5">
+                        {activeDetail.date}
+                        {activeDetail.endDate && activeDetail.endDate > activeDetail.date ? ` ~ ${activeDetail.endDate}` : ""}
+                        {activeDetail.time ? ` · ${activeDetail.time}` : ""}
+                        {activeDetail.isAnnual ? " (매년 반복)" : ""}
+                      </div>
+                    </div>
+                    {activeDetail._isFamily && toSafeArray(activeDetail.members).length > 0 && (
+                      <div>
+                        <div className="text-[11.5px] font-extrabold text-stone-400">대상</div>
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {toSafeArray(activeDetail.members).map((mId) => {
+                            const info = FAMILY_MEMBERS.find((f) => f.id === mId);
+                            return info ? (
+                              <span key={mId} className={`px-2 py-0.5 rounded text-[11.5px] font-bold border ${info.color}`}>
+                                {info.name}
+                              </span>
+                            ) : null;
+                          })}
+                        </div>
+                      </div>
+                    )}
+                    <div>
+                      <div className="text-[11.5px] font-extrabold text-stone-400">메모</div>
+                      <div className="text-[13px] text-stone-700 mt-0.5 whitespace-pre-line break-keep leading-relaxed">
+                        {activeDetail.memo || "등록된 메모가 없습니다."}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex-1 overflow-y-auto divide-y divide-stone-200 bg-white">
+                  {popAllEvents.length === 0 ? (
+                    <div className="h-full flex flex-col items-center justify-center p-6 text-center text-[13px] font-bold text-stone-400">
+                      등록된 일정이 없습니다.
+                      <span className="text-[11.5px] font-medium mt-1">아래 [새로운 일정] 버튼으로 추가해 보세요.</span>
+                    </div>
+                  ) : (
+                    popAllEvents.map((ev) => {
+                      const cMeta = !ev._isFamily
+                        ? (PRIVATE_CAL_COLORS.find((c) => c.id === ev.color) || PRIVATE_CAL_COLORS[0])
+                        : null;
+                      return (
+                        <button
+                          key={`${ev._isFamily ? "f" : "p"}-${ev.id}`}
+                          type="button"
+                          onClick={() => setCalDayPopupItem(ev)}
+                          className="w-full text-left px-4 py-3 hover:bg-stone-50 transition flex items-center justify-between gap-2"
+                        >
+                          <div className="min-w-0 flex-1">
+                            <div
+                              className={`text-[14.5px] font-bold break-keep leading-snug ${
+                                ev._isFamily ? "text-indigo-900" : cMeta.textCls
+                              } ${ev.done ? "line-through opacity-45" : ""}`}
+                            >
+                              {ev._isFamily ? "🏠 " : ""}
+                              {ev.time ? <span className="mr-1 opacity-75">{ev.time}</span> : null}
+                              {ev.title}
+                            </div>
+                            {ev.memo && (
+                              <div className="text-[11.5px] text-stone-400 truncate mt-0.5">{ev.memo}</div>
+                            )}
+                          </div>
+                          <ChevronRight className="w-4 h-4 text-stone-300 shrink-0" />
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+              )}
+
+              {/* 조르테 스타일 하단 액션 바 */}
+              {activeDetail ? (
+                <div className="bg-[#595959] px-2.5 py-2 grid grid-cols-4 gap-1.5 shrink-0">
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (activeDetail._isFamily) {
+                        await handleDeleteSchedule(activeDetail);
+                      } else {
+                        await handleDeletePrivateSchedule(activeDetail.id);
+                      }
+                      setCalDayPopupItem(null);
+                    }}
+                    className="py-2 rounded-md bg-[#707070] hover:bg-rose-600 text-white text-[12.5px] font-bold transition"
+                  >
+                    삭제
+                  </button>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (activeDetail._isFamily) {
+                        await handleToggleScheduleDone(activeDetail);
+                      } else {
+                        await handleTogglePrivateScheduleDone(activeDetail);
+                      }
+                      setCalDayPopupItem((prev) => (prev ? { ...prev, done: !prev.done } : null));
+                    }}
+                    className={`py-2 rounded-md text-[12.5px] font-bold transition ${
+                      activeDetail.done
+                        ? "bg-emerald-600 text-white"
+                        : "bg-[#707070] hover:bg-[#828282] text-white"
+                    }`}
+                  >
+                    {activeDetail.done ? "완료됨" : "완료"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const copyBody = `[${activeDetail.date}${activeDetail.time ? ` ${activeDetail.time}` : ""}] ${activeDetail.title}${activeDetail.memo ? `\n${activeDetail.memo}` : ""}`;
+                      copyTextSafe(copyBody, "📋 일정 내용을 복사했습니다.");
+                    }}
+                    className="py-2 rounded-md bg-[#707070] hover:bg-[#828282] text-white text-[12.5px] font-bold transition"
+                  >
+                    복사
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const target = activeDetail;
+                      setCalDayPopupDate(null);
+                      setCalDayPopupItem(null);
+                      if (target._isFamily) {
+                        setEditingSchedule(target);
+                        setScheduleForm({
+                          title: target.title,
+                          date: target.date,
+                          category: target.category,
+                          members: toSafeArray(target.members),
+                          isAnnual: Boolean(target.isAnnual),
+                          showDday: Boolean(target.showDday),
+                          hasOriginYear: Boolean(target.hasOriginYear),
+                          memo: target.memo || "",
+                          attachments: Array.isArray(target.attachments) ? target.attachments : []
+                        });
+                        setIsScheduleModalOpen(true);
+                      } else {
+                        openPrivateCalModal(target.date, target);
+                      }
+                    }}
+                    className="py-2 rounded-md bg-stone-200 hover:bg-white text-stone-900 text-[12.5px] font-black transition"
+                  >
+                    편집
+                  </button>
+                </div>
+              ) : (
+                <div className="bg-[#595959] px-2.5 py-2 flex items-center justify-between gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => shiftPopupDay(-1)}
+                    className="px-3.5 py-2 rounded-md hover:bg-white/15 text-white text-[13px] font-black"
+                    aria-label="이전 날"
+                  >
+                    &lt;&lt;
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const targetDate = calDayPopupDate;
+                      setCalDayPopupDate(null);
+                      setCalDayPopupItem(null);
+                      if (isAdminUnlocked && effScope !== "family") {
+                        openPrivateCalModal(targetDate, null);
+                      } else {
+                        setEditingSchedule(null);
+                        setScheduleForm({
+                          title: "",
+                          date: targetDate,
+                          category: "할일(To-Do)",
+                          members: ["수혁", "아리나"],
+                          isAnnual: false,
+                          showDday: false,
+                          hasOriginYear: false,
+                          memo: ""
+                        });
+                        setIsScheduleModalOpen(true);
+                      }
+                    }}
+                    className="flex-1 py-2 rounded-md bg-[#727272] hover:bg-[#828282] text-white text-[13px] font-bold transition"
+                  >
+                    새로운 일정
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => shiftPopupDay(1)}
+                    className="px-3.5 py-2 rounded-md hover:bg-white/15 text-white text-[13px] font-black"
+                    aria-label="다음 날"
+                  >
+                    &gt;&gt;
+                  </button>
+                </div>
               )}
             </div>
           </div>
