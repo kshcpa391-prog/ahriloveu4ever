@@ -1177,7 +1177,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v12.50";
+export const APP_CODE_VERSION = "v12.51";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1195,7 +1195,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-20 23:25";
+export const APP_BUILD_DATE = "2026-11-20 23:40";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1262,6 +1262,18 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v12.51",
+    version: "v12.51",
+    date: "2026-11-20",
+    title: "버킷리스트 화면 복구 · 공지 입력 렉 제거 · 빠른등록 내 일정 바로가기",
+    category: "버그 수정 · 성능",
+    changes: [
+      "통합 달력 개편 과정에서 누락되었던 버킷리스트(지도·목록·갈 곳 복사·장소 추가) 화면을 정상 복구",
+      "가족 공지 작성/수정 모달을 React.memo 독립 컴포넌트(NoticeFormModal)로 분리해 키보드 입력 딜레이 제거 및 배경 터치 닫기·작성자 자동매칭·수정 버튼 문구 개선",
+      "하단 빠른 등록(+) 메뉴에 관리자 전용 '🔒 내 일정' 1탭 바로가기 추가"
+    ]
+  },
   {
     id: "patch-v12.50",
     version: "v12.50",

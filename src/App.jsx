@@ -774,6 +774,122 @@ const ScheduleFormModal = React.memo(({
   );
 });
 
+
+// 입력 렉 완전 제거용 독립 메모이즈드 가족공지 모달
+const NoticeFormModal = React.memo(({
+  initialForm,
+  isEditing,
+  onClose,
+  onSubmitForm
+}) => {
+  const [draft, setDraft] = useState(() => ({
+    ...initialForm,
+    author:
+      initialForm?.author === "수혁"
+        ? "김수혁"
+        : initialForm?.author === "아리나" || initialForm?.author === "아리"
+        ? "최아리나"
+        : initialForm?.author || "김수혁"
+  }));
+
+  useEffect(() => {
+    setDraft({
+      ...initialForm,
+      author:
+        initialForm?.author === "수혁"
+          ? "김수혁"
+          : initialForm?.author === "아리나" || initialForm?.author === "아리"
+          ? "최아리나"
+          : initialForm?.author || "김수혁"
+    });
+  }, [initialForm]);
+
+  return (
+    <div
+      className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white rounded-3xl max-w-sm w-full p-5 space-y-3 shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between">
+          <h3 className="text-[15.5px] font-black">
+            {isEditing ? "가족 공지 수정" : "새 가족 공지사항 작성"}
+          </h3>
+          <button type="button" onClick={onClose} aria-label="닫기">
+            <X className="w-5 h-5 text-stone-400" />
+          </button>
+        </div>
+
+        <input
+          type="text"
+          autoFocus
+          placeholder="제목"
+          value={draft.title || ""}
+          onChange={(e) => setDraft((p) => ({ ...p, title: e.target.value }))}
+          className="w-full px-3 py-2.5 rounded-xl border border-stone-200 text-[13.5px] font-bold"
+        />
+
+        <div className="grid grid-cols-2 gap-2">
+          <select
+            value={draft.category || "육아/아이들"}
+            onChange={(e) => setDraft((p) => ({ ...p, category: e.target.value }))}
+            className="px-3 py-2 rounded-xl border border-stone-200 text-[13.5px] font-bold"
+          >
+            <option value="육아/아이들">👶 육아/아이들</option>
+            <option value="일정/행사">📅 일정/행사</option>
+            <option value="집안일">🧹 집안일</option>
+            <option value="일반">💬 일반 공지</option>
+          </select>
+          <select
+            value={draft.author || "김수혁"}
+            onChange={(e) => setDraft((p) => ({ ...p, author: e.target.value }))}
+            className="px-3 py-2 rounded-xl border border-stone-200 text-[13.5px] font-bold"
+          >
+            <option value="김수혁">👨🏻 수혁</option>
+            <option value="최아리나">👩🏻 아리</option>
+          </select>
+        </div>
+
+        <textarea
+          rows={3}
+          placeholder="상세 내용"
+          value={draft.content || ""}
+          onChange={(e) => setDraft((p) => ({ ...p, content: e.target.value }))}
+          className="w-full px-3 py-2 rounded-xl border border-stone-200 text-[13.5px]"
+        />
+
+        <label className="flex items-center gap-2 text-[13.5px] font-bold text-stone-700 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={Boolean(draft.pinned)}
+            onChange={(e) => setDraft((p) => ({ ...p, pinned: e.target.checked }))}
+          />
+          <span>📌 앱 상단 배너에 중요 공지로 고정하기</span>
+        </label>
+
+        <div className="flex gap-2 pt-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex-1 py-2.5 rounded-xl bg-stone-100 text-stone-600 text-[13.5px] font-extrabold"
+          >
+            취소
+          </button>
+          <button
+            type="button"
+            onClick={() => onSubmitForm(draft)}
+            className="flex-1 py-2.5 rounded-xl bg-stone-900 text-white text-[13.5px] font-extrabold"
+          >
+            {isEditing ? "수정 저장" : "등록하기"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+});
+
 const getLunarFiveDayLabel = (dateObj) => {
   const lbl = getLunarDateLabel(dateObj);
   if (!lbl) return "";
@@ -10185,17 +10301,18 @@ ${validText}
   };
 
 
-  const handleSaveNotice = async () => {
+  const handleSaveNotice = async (overrideForm = null) => {
     if (!requireEditorAccess("notices")) return;
-    if (!noticeForm.title.trim()) return;
+    const src = overrideForm || noticeForm;
+    if (!String(src.title || "").trim()) return;
     const id = editingNotice ? editingNotice.id : `nt-${Date.now()}`;
     const payload = {
       id,
-      title: noticeForm.title.trim(),
-      content: (noticeForm.content || "").trim(),
-      category: noticeForm.category,
-      author: noticeForm.author,
-      pinned: Boolean(noticeForm.pinned),
+      title: String(src.title || "").trim(),
+      content: String(src.content || "").trim(),
+      category: src.category || "육아/아이들",
+      author: src.author || "김수혁",
+      pinned: Boolean(src.pinned),
       done: editingNotice ? Boolean(editingNotice.done) : false,
       createdAt: selectedDate
     };
@@ -10217,7 +10334,7 @@ ${validText}
         setSyncErrorMsg(e?.message || "공지 추가 동기화 오류");
       }
     }
-    recordActivity("공지", "등록", `${noticeForm.title || ""}`);
+    recordActivity("공지", editingNotice ? "수정" : "등록", `${payload.title || ""}`);
     showToast("가족 공지사항이 등록되었습니다.");
   };
 
@@ -19634,6 +19751,444 @@ ${validText}
       {/* ==========================================
           탭 8-3: 🗂️ 노션 스타일 가족 공유 노트 (계층형 페이지 · 최근 항목 · 체크리스트)
       ========================================== */}
+      {activeTab === "bucket" && (() => {
+        const isBadWeather = Boolean(
+          weatherInfo &&
+          (String(weatherInfo.rainAlertText || "").includes("비") ||
+            String(weatherInfo.rainAlertText || "").includes("눈") ||
+            Number(weatherInfo.pm10 || 0) > 80)
+        );
+        const weatherRecType = isBadWeather ? "실내" : "맑음";
+        const doneCount = bucketList.filter((b) => b.done).length;
+        const plannedCount = bucketList.length - doneCount;
+        const getItemMembers = (it) =>
+          Array.isArray(it?.members) && it.members.length > 0 ? it.members : ["수혁", "아리나", "시목", "시율"];
+
+        const filtered = [...bucketList]
+          .filter((b) => bucketCatFilter === "전체" || (b.category || "나들이/여행") === bucketCatFilter)
+          .filter((b) => bucketMemberFilter === "전체" || getItemMembers(b).includes(bucketMemberFilter))
+          .filter((b) => bucketStatusFilter === "all" || (bucketStatusFilter === "done" ? b.done : !b.done))
+          .filter((b) => !bucketWeatherOnly || b.weather === weatherRecType || b.weather === "무관")
+          .sort((a, b) => {
+            if (Boolean(a.done) !== Boolean(b.done)) return a.done ? 1 : -1;
+            return (Number(b.updatedAtMs) || 0) - (Number(a.updatedAtMs) || 0);
+          });
+
+        const hasActiveFilter =
+          bucketMemberFilter !== "전체" ||
+          bucketCatFilter !== "전체" ||
+          bucketStatusFilter !== "all" ||
+          bucketWeatherOnly;
+        const pinnedCount = filtered.filter((b) => Number.isFinite(Number(b.lat)) && Number.isFinite(Number(b.lng)) && Number(b.lat) !== 0).length;
+        const unpinnedItems = filtered.filter((b) => !Number.isFinite(Number(b.lat)) || !Number.isFinite(Number(b.lng)) || Number(b.lat) === 0);
+
+        return (
+          <div className="space-y-3">
+            {/* 단순화된 상단 컨트롤 바 (핵심 2줄) */}
+            <div className="bg-white p-3 rounded-2xl border border-stone-200 shadow-sm space-y-2.5">
+              {/* 1줄: 지도/목록 전환 + 현황 + 장소 추가 */}
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 min-w-0">
+                  <div className="inline-flex items-center bg-stone-200/80 p-0.5 rounded-xl shrink-0">
+                    {[
+                      { id: "map", label: "🗺️ 지도" },
+                      { id: "list", label: "📋 목록" }
+                    ].map((vm) => (
+                      <button
+                        key={vm.id}
+                        type="button"
+                        onClick={() => setBucketViewMode(vm.id)}
+                        className={`px-2.5 py-1 rounded-lg text-[11.5px] font-extrabold whitespace-nowrap transition ${
+                          bucketViewMode === vm.id ? "bg-white text-stone-900 shadow-2xs" : "text-stone-500"
+                        }`}
+                      >
+                        {vm.label}
+                      </button>
+                    ))}
+                  </div>
+                  <span className="text-[12px] font-extrabold text-stone-500 whitespace-nowrap truncate">
+                    갈 곳 <b className="text-amber-600">{plannedCount}</b> · 다녀옴 <b className="text-[#35503C]">{doneCount}</b>
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => openBucketAddModal(null)}
+                  className="px-3 py-1.5 rounded-xl bg-stone-900 hover:bg-stone-800 text-white text-[12px] font-extrabold whitespace-nowrap shrink-0 flex items-center gap-1 shadow-xs"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>장소 추가</span>
+                </button>
+              </div>
+
+              {/* 2줄: 상태 + 가족/분류 슬림 필터 */}
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <div className="inline-flex items-center bg-stone-100 p-0.5 rounded-xl shrink-0">
+                  {[
+                    { id: "all", label: "전체" },
+                    { id: "planned", label: "갈 곳" },
+                    { id: "done", label: "다녀옴" }
+                  ].map((st) => (
+                    <button
+                      key={st.id}
+                      type="button"
+                      onClick={() => setBucketStatusFilter(st.id)}
+                      className={`px-2 py-1 rounded-lg text-[11px] font-extrabold whitespace-nowrap transition ${
+                        bucketStatusFilter === st.id ? "bg-[#5E7A65] text-white" : "text-stone-600"
+                      }`}
+                    >
+                      {st.label}
+                    </button>
+                  ))}
+                </div>
+                <select
+                  value={bucketMemberFilter}
+                  onChange={(e) => setBucketMemberFilter(e.target.value)}
+                  aria-label="가족 필터"
+                  className="px-2 py-1 rounded-xl border border-stone-200 bg-stone-50 text-[11.5px] font-bold text-stone-700"
+                >
+                  <option value="전체">👨‍👩‍👧‍👦 가족 전체</option>
+                  {FAMILY_MEMBERS.map((m) => (
+                    <option key={m.id} value={m.id}>{m.name}</option>
+                  ))}
+                </select>
+                <select
+                  value={bucketCatFilter}
+                  onChange={(e) => setBucketCatFilter(e.target.value)}
+                  aria-label="분류 필터"
+                  className="px-2 py-1 rounded-xl border border-stone-200 bg-stone-50 text-[11.5px] font-bold text-stone-700"
+                >
+                  {["전체", "나들이/여행", "키즈카페/체험", "맛집", "우리집 목표"].map((cat) => (
+                    <option key={cat} value={cat}>{cat === "전체" ? "🏷️ 분류 전체" : cat}</option>
+                  ))}
+                </select>
+                {weatherInfo && (
+                  <button
+                    type="button"
+                    onClick={() => setBucketWeatherOnly((v) => !v)}
+                    className={`px-2 py-1 rounded-xl text-[11px] font-extrabold border whitespace-nowrap ${
+                      bucketWeatherOnly
+                        ? "bg-stone-900 text-white border-stone-900"
+                        : "bg-[#FAF8F3] text-stone-600 border-stone-200"
+                    }`}
+                  >
+                    {isBadWeather ? "☔ 실내" : "☀️ 야외"}
+                  </button>
+                )}
+                {hasActiveFilter && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setBucketStatusFilter("all");
+                      setBucketMemberFilter("전체");
+                      setBucketCatFilter("전체");
+                      setBucketWeatherOnly(false);
+                    }}
+                    className="px-2 py-1 rounded-xl text-[11px] font-extrabold text-stone-500 hover:text-stone-800 whitespace-nowrap"
+                  >
+                    초기화
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* 🗺️ 지도 뷰 */}
+            {bucketViewMode === "map" && (
+              <div className="space-y-2.5">
+                <div className="flex items-center justify-between px-1 text-[11px] font-bold text-stone-500">
+                  <div className="flex items-center gap-2.5">
+                    <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-amber-600" /> 갈 곳</span>
+                    <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-[#35503C]" /> 다녀옴</span>
+                  </div>
+                  <span>지도 핀 {pinnedCount}/{filtered.length}곳</span>
+                </div>
+
+                <BucketMapView
+                  items={filtered}
+                  selectedId={selectedBucketMapItem?.id || null}
+                  onSelectItem={(it) => setSelectedBucketMapItem(it)}
+                />
+
+                {/* 지도에서 선택한 핀 상세 카드 */}
+                {selectedBucketMapItem && (() => {
+                  const sel = bucketList.find((x) => x.id === selectedBucketMapItem.id);
+                  if (!sel) return null;
+                  const mNames = getItemMembers(sel)
+                    .map((id) => FAMILY_MEMBERS.find((f) => f.id === id)?.name || id)
+                    .join(" · ");
+                  return (
+                    <div className="bg-white rounded-2xl border-2 border-[#5E7A65] p-3.5 shadow-sm space-y-2.5">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className={`px-1.5 py-0.5 rounded text-[10px] font-black ${sel.done ? "bg-[#EEF3EE] text-[#35503C]" : "bg-amber-100 text-amber-800"}`}>
+                              {sel.done ? "✅ 다녀옴" : "📍 갈 곳"}
+                            </span>
+                            <span className="text-[14.5px] font-black text-stone-900">{sel.title}</span>
+                          </div>
+                          <div className="text-[11.5px] font-bold text-stone-500 mt-1">
+                            👨‍👩‍👧‍👦 {mNames} · {sel.category || "나들이/여행"}{sel.doneDate ? ` · ${sel.doneDate}` : ""}
+                          </div>
+                          {sel.address && (
+                            <div className="text-[11px] text-stone-400 mt-0.5 truncate">{sel.address}</div>
+                          )}
+                          {sel.memo && (
+                            <div className="text-[12px] font-semibold text-stone-700 mt-1">{sel.memo}</div>
+                          )}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedBucketMapItem(null)}
+                          className="p-1 text-stone-400 hover:text-stone-700"
+                          aria-label="닫기"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                      <div className="flex items-center justify-between gap-1.5 flex-wrap pt-1 border-t border-stone-100">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <a
+                            href={getNaverMapUrl(sel)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="px-2.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-extrabold whitespace-nowrap"
+                          >
+                            네이버지도
+                          </a>
+                          <a
+                            href={getGoogleMapUrl(sel)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="px-2.5 py-1.5 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-[11px] font-extrabold whitespace-nowrap"
+                          >
+                            구글맵
+                          </a>
+                          <button
+                            type="button"
+                            onClick={() => handleToggleBucketDone(sel)}
+                            className="px-2.5 py-1.5 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-800 text-[11px] font-extrabold whitespace-nowrap"
+                          >
+                            {sel.done ? "↩️ 갈 곳으로" : "✅ 다녀옴"}
+                          </button>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => openBucketAddModal(sel)}
+                            className="px-2 py-1.5 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-[11px] font-extrabold whitespace-nowrap"
+                          >
+                            ✏️ 수정
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingSchedule(null);
+                              setScheduleForm({
+                                title: sel.title,
+                                date: getTodayStr(),
+                                category: "가족행사",
+                                members: getItemMembers(sel),
+                                isAnnual: false,
+                                showDday: true,
+                                hasOriginYear: false,
+                                memo: sel.memo || ""
+                              });
+                              setIsScheduleModalOpen(true);
+                            }}
+                            className="px-2 py-1.5 rounded-xl bg-[#EEF3EE] text-[#35503C] text-[11px] font-extrabold whitespace-nowrap"
+                          >
+                            📅 일정
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteBucketItem(sel.id)}
+                            className="p-1.5 rounded-xl hover:bg-rose-50 text-stone-400 hover:text-rose-600"
+                            title="삭제"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* 위치 미등록 항목 -> 누르면 검색·확인 모달 오픈 */}
+                {unpinnedItems.length > 0 && (
+                  <div className="bg-white rounded-2xl border border-stone-200 p-3 space-y-1.5">
+                    <div className="text-[11.5px] font-extrabold text-stone-500">
+                      📌 위치 미지정 ({unpinnedItems.length}건) · 눌러서 검색 후 지도 핀 지정
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {unpinnedItems.map((it) => (
+                        <button
+                          key={it.id}
+                          type="button"
+                          onClick={() => openBucketAddModal(it, true)}
+                          className="px-2.5 py-1 rounded-xl bg-stone-50 hover:bg-[#EEF3EE] border border-stone-200 text-[11.5px] font-extrabold text-stone-700 whitespace-nowrap"
+                        >
+                          🔍 {it.title}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* 📋 목록 뷰 */}
+            {bucketViewMode === "list" && (
+              filtered.length === 0 ? (
+                renderStatusState({
+                  type: "empty",
+                  title: "표시할 버킷리스트가 없어요",
+                  description: "오른쪽 위 [+ 장소 추가]를 눌러 위치를 검색하고 확인한 뒤 추가해 보세요."
+                })
+              ) : (
+                <div className="space-y-2">
+                  {filtered.map((item) => {
+                    const mNames = getItemMembers(item)
+                      .map((id) => FAMILY_MEMBERS.find((f) => f.id === id)?.name || id)
+                      .join("·");
+                    const hasCoords = Number.isFinite(Number(item.lat)) && Number.isFinite(Number(item.lng)) && Number(item.lat) !== 0;
+                    return (
+                      <div
+                        key={item.id}
+                        className={`p-3 rounded-2xl border flex items-start justify-between gap-2.5 transition ${
+                          item.done ? "bg-stone-50 border-stone-200" : "bg-white border-stone-200 shadow-sm"
+                        }`}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => handleToggleBucketDone(item)}
+                          className={`w-5 h-5 mt-0.5 rounded-lg border flex items-center justify-center shrink-0 ${
+                            item.done ? "bg-[#5E7A65] border-[#5E7A65] text-white" : "bg-white border-stone-300"
+                          }`}
+                          title={item.done ? "갈 곳으로 되돌리기" : "다녀옴 체크"}
+                        >
+                          {item.done && <Check className="w-3.5 h-3.5" />}
+                        </button>
+                        <div className="flex-1 min-w-0 space-y-1">
+                          <div className={`text-[13.5px] font-black break-keep ${item.done ? "text-stone-500 line-through" : "text-stone-900"}`}>
+                            {item.title}
+                          </div>
+                          <div className="flex items-center gap-1 flex-wrap text-[10.5px] font-bold">
+                            <span className="px-1.5 py-0.5 rounded bg-[#EEF3EE] text-[#35503C] whitespace-nowrap">{mNames}</span>
+                            <span className="px-1.5 py-0.5 rounded bg-stone-100 text-stone-600 whitespace-nowrap">{item.category || "나들이/여행"}</span>
+                            {item.doneDate && <span className="text-emerald-700 whitespace-nowrap">{item.doneDate}</span>}
+                            {item.memo && <span className="text-stone-500 truncate">{item.memo}</span>}
+                          </div>
+                          <div className="flex items-center gap-1.5 pt-0.5 flex-wrap">
+                            <a
+                              href={getNaverMapUrl(item)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="px-2 py-0.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-800 text-[10.5px] font-extrabold whitespace-nowrap"
+                            >
+                              네이버
+                            </a>
+                            <a
+                              href={getGoogleMapUrl(item)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="px-2 py-0.5 rounded-lg bg-sky-50 hover:bg-sky-100 border border-sky-200 text-sky-800 text-[10.5px] font-extrabold whitespace-nowrap"
+                            >
+                              구글맵
+                            </a>
+                            {hasCoords ? (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setSelectedBucketMapItem(item);
+                                  setBucketViewMode("map");
+                                }}
+                                className="px-2 py-0.5 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 text-[10.5px] font-extrabold whitespace-nowrap"
+                              >
+                                🗺️ 지도보기
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => openBucketAddModal(item, true)}
+                                className="px-2 py-0.5 rounded-lg bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-800 text-[10.5px] font-extrabold whitespace-nowrap"
+                              >
+                                🔍 위치 지정
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-0.5 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => openBucketAddModal(item)}
+                            className="p-1.5 rounded-lg hover:bg-stone-100 text-stone-400 hover:text-stone-700"
+                            title="수정"
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingSchedule(null);
+                              setScheduleForm({
+                                title: item.title,
+                                date: getTodayStr(),
+                                category: "가족행사",
+                                members: getItemMembers(item),
+                                isAnnual: false,
+                                showDday: true,
+                                hasOriginYear: false,
+                                memo: item.memo || ""
+                              });
+                              setIsScheduleModalOpen(true);
+                            }}
+                            className="p-1.5 rounded-lg hover:bg-[#EEF3EE] text-[#35503C]"
+                            title="일정으로 잡기"
+                          >
+                            <CalendarDays className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteBucketItem(item.id)}
+                            className="p-1.5 rounded-lg hover:bg-rose-50 text-stone-400 hover:text-rose-600"
+                            title="삭제"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {doneCount > 0 && (
+                    <div className="pt-1 flex justify-end">
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          if (!requireEditorAccess()) return;
+                          if (!window.confirm(`다녀온 버킷리스트 ${doneCount}건을 정리할까요?`)) return;
+                          const doneIds = bucketList.filter((b) => b.done).map((b) => b.id);
+                          setBucketList((prev) => prev.filter((b) => !b.done));
+                          if (selectedBucketMapItem && doneIds.includes(selectedBucketMapItem.id)) {
+                            setSelectedBucketMapItem(null);
+                          }
+                          if (user && db) {
+                            await Promise.all(doneIds.map((bid) => deleteDoc(getDocRef("family_bucket_v1", bid)).catch(() => {})));
+                          }
+                          showToast(`🧹 다녀온 항목 ${doneIds.length}건을 정리했습니다.`);
+                        }}
+                        className="px-2.5 py-1 rounded-xl text-[11px] font-bold text-stone-400 hover:text-rose-600 hover:bg-rose-50"
+                      >
+                        🧹 다녀옴 일괄 정리 ({doneCount}건)
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )
+            )}
+          </div>
+        );
+      })()}
+
+
       {activeTab === "pages" && (!canViewTab("pages") ? renderLockedTabScreen("🗂️ 공유노트") : (() => {
         const currentPage = selectedPageId ? familyPages.find((p) => p.id === selectedPageId) || null : null;
         const sq = pageSearchQuery.trim().toLowerCase();
@@ -24111,6 +24666,16 @@ ${validText}
                       setIsScheduleModalOpen(true);
                     }
                   },
+                  ...(isAdminUnlocked
+                    ? [
+                        {
+                          tab: "schedule",
+                          icon: "🔒",
+                          label: "내 일정",
+                          onClick: () => openPrivateCalModal(getTodayStr(), null)
+                        }
+                      ]
+                    : []),
                   {
                     tab: "schedule",
                     icon: "✅",
@@ -27348,84 +27913,12 @@ ${validText}
 
 
       {isNoticeModalOpen && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-sm w-full p-5 space-y-3">
-            <div className="flex items-center justify-between">
-              <h3 className="text-[15.5px] font-black">
-                {editingNotice ? "가족 공지 수정" : "새 가족 공지사항 작성"}
-              </h3>
-              <button onClick={() => setIsNoticeModalOpen(false)}>
-                <X className="w-5 h-5 text-stone-400" />
-              </button>
-            </div>
-
-
-            <input
-              type="text"
-              placeholder="제목"
-              value={noticeForm.title}
-              onChange={(e) => setNoticeForm({ ...noticeForm, title: e.target.value })}
-              className="w-full px-3 py-2.5 rounded-xl border border-stone-200 text-[13.5px] font-bold"
-            />
-
-
-            <div className="grid grid-cols-2 gap-2">
-              <select
-                value={noticeForm.category}
-                onChange={(e) => setNoticeForm({ ...noticeForm, category: e.target.value })}
-                className="px-3 py-2 rounded-xl border border-stone-200 text-[13.5px] font-bold"
-              >
-                <option value="육아/아이들">👶 육아/아이들</option>
-                <option value="일정/행사">📅 일정/행사</option>
-                <option value="집안일">🧹 집안일</option>
-                <option value="일반">💬 일반 공지</option>
-              </select>
-              <select
-                value={noticeForm.author}
-                onChange={(e) => setNoticeForm({ ...noticeForm, author: e.target.value })}
-                className="px-3 py-2 rounded-xl border border-stone-200 text-[13.5px] font-bold"
-              >
-                <option value="김수혁">👨🏻 수혁</option>
-                <option value="최아리나">👩🏻 아리</option>
-              </select>
-            </div>
-
-
-            <textarea
-              rows={3}
-              placeholder="상세 내용"
-              value={noticeForm.content}
-              onChange={(e) => setNoticeForm({ ...noticeForm, content: e.target.value })}
-              className="w-full px-3 py-2 rounded-xl border border-stone-200 text-[13.5px]"
-            />
-
-
-            <label className="flex items-center gap-2 text-[13.5px] font-bold text-stone-700 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={noticeForm.pinned}
-                onChange={(e) => setNoticeForm({ ...noticeForm, pinned: e.target.checked })}
-              />
-              <span>📌 앱 상단 배너에 중요 공지로 고정하기</span>
-            </label>
-
-
-            <div className="flex gap-2 pt-2">
-              <button
-                onClick={() => setIsNoticeModalOpen(false)}
-                className="flex-1 py-2.5 rounded-xl bg-stone-100 text-stone-600 text-[13.5px] font-extrabold"
-              >
-                취소
-              </button>
-              <button
-                onClick={handleSaveNotice}
-                className="flex-1 py-2.5 rounded-xl bg-stone-900 text-white text-[13.5px] font-extrabold"
-              >
-                등록하기
-              </button>
-            </div>
-          </div>
-        </div>
+        <NoticeFormModal
+          initialForm={noticeForm}
+          isEditing={Boolean(editingNotice)}
+          onClose={() => setIsNoticeModalOpen(false)}
+          onSubmitForm={(draft) => handleSaveNotice(draft)}
+        />
       )}
 
 
