@@ -1177,7 +1177,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v12.53";
+export const APP_CODE_VERSION = "v12.54";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1195,7 +1195,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-20 23:59";
+export const APP_BUILD_DATE = "2026-11-21 03:00";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1262,6 +1262,19 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v12.54",
+    version: "v12.54",
+    date: "2026-11-21",
+    title: "주간 식단 스와이프·원클릭 복사 · 루틴 입력 렉 제거 · PIN 자동완성 방해 차단",
+    category: "편의성 · 성능",
+    changes: [
+      "식단 탭 상단 카드에 좌우 스와이프 이전주/다음주 이동 제스처와 '📋 복사'(주간 식단표 카톡 공유용) 버튼 추가",
+      "반복 루틴 추가·수정 모달의 루틴 입력란을 React.memo 독립 컴포넌트(RoutineTitleField)로 분리해 키보드 입력 딜레이 제거",
+      "관리자·계정전환 PIN 입력창에 autoComplete='off'를 적용해 모바일 비밀번호 관리자 팝업이 화면을 가리는 현상 방지",
+      "식단 상단 버튼 문구 슬림화 및 리스너(24:24)·타이머(4:4)·AST 스코프 미선언 변수 0건 전수 검증 완료"
+    ]
+  },
   {
     id: "patch-v12.53",
     version: "v12.53",

@@ -890,6 +890,64 @@ const NoticeFormModal = React.memo(({
   );
 });
 
+
+// 반복 루틴 입력 렉 제거용 독립 메모이즈드 입력 필드 (쉼표 단계 실시간 미리보기 포함)
+const RoutineTitleField = React.memo(({ initialValue, onSyncValue, onSubmitEnter }) => {
+  const [val, setVal] = useState(initialValue || "");
+
+  useEffect(() => {
+    setVal(initialValue || "");
+  }, [initialValue]);
+
+  const steps = String(val || "")
+    .split(/[,\n]/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  return (
+    <div>
+      <label className="text-[11.5px] font-extrabold text-stone-500 block mb-1">
+        루틴 내용 (쉼표 , 로 여러 단계 구분 가능)
+      </label>
+      <input
+        type="text"
+        autoFocus
+        value={val}
+        onChange={(e) => {
+          const next = e.target.value;
+          setVal(next);
+          if (onSyncValue) onSyncValue(next, false);
+        }}
+        onBlur={() => onSyncValue && onSyncValue(val, true)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            if (onSyncValue) onSyncValue(val, true);
+            if (onSubmitEnter) onSubmitEnter(val);
+          }
+        }}
+        placeholder="예: 약먹기, 양치, 코뽑기, 잠옷"
+        className="w-full px-3 py-2.5 rounded-xl border border-stone-200 text-[13.5px] font-bold focus:outline-none focus:ring-2 focus:ring-stone-400"
+      />
+      {steps.length >= 2 && (
+        <div className="mt-1.5 flex flex-col gap-1 bg-stone-50 border border-stone-200 rounded-xl p-2">
+          {steps.map((st, idx) => (
+            <div
+              key={idx}
+              className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-white border border-stone-200 text-[11.5px] font-extrabold text-stone-800"
+            >
+              <span className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full border border-stone-400 text-[8px] font-black shrink-0">
+                {idx + 1}
+              </span>
+              <span className="min-w-0 flex-1 break-keep">{st}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+});
+
 const getLunarFiveDayLabel = (dateObj) => {
   const lbl = getLunarDateLabel(dateObj);
   if (!lbl) return "";
@@ -2100,6 +2158,8 @@ function MainApp() {
   const calTouchStartRef = useRef(null);
   const calSwipedRef = useRef(false);
   const popupTouchStartRef = useRef(null);
+  const dailyTouchStartRef = useRef(null);
+  const routineTitleLiveRef = useRef("");
   const currentAdminOwner = actorName === "아리나" ? "아리나" : "수혁";
   const [isPrivateCalModalOpen, setIsPrivateCalModalOpen] = useState(false);
   const [editingPrivateCalId, setEditingPrivateCalId] = useState(null);
@@ -2540,6 +2600,7 @@ function MainApp() {
   const openNewRoutineModal = () => {
     if (!requireEditorAccess()) return;
     setEditingRoutineId(null);
+    routineTitleLiveRef.current = "";
     setNewRoutineTitle("");
     setNewRoutineAttachments([]);
     setNewRoutineTimeSlot(getCurrentRoutineTimeSlot(routineTimeRanges, liveMinuteTick, routineSlotDefs));
@@ -2556,6 +2617,7 @@ function MainApp() {
 
   const handleCancelEditRoutine = () => {
     setEditingRoutineId(null);
+    routineTitleLiveRef.current = "";
     setNewRoutineTitle("");
     setNewRoutineScheduledTime("");
     setNewRoutineAttachments([]);
@@ -2563,9 +2625,9 @@ function MainApp() {
   };
 
 
-  const handleAddRoutine = () => {
+  const handleAddRoutine = (overrideTitle = null) => {
     if (!requireEditorAccess("schedule")) return;
-    const title = newRoutineTitle.trim();
+    const title = String(overrideTitle ?? routineTitleLiveRef.current ?? newRoutineTitle ?? "").trim();
     if (!title) return;
     const cycleVal = ["daily", "interval", "weekly", "monthly", "monthly_weekday"].includes(newRoutineCycle)
       ? newRoutineCycle
@@ -2623,7 +2685,8 @@ function MainApp() {
         : nextList;
       setFamilyRoutines(finalNextList);
       setEditingRoutineId(null);
-      setNewRoutineTitle("");
+      routineTitleLiveRef.current = "";
+    setNewRoutineTitle("");
       setNewRoutineScheduledTime("");
       setNewRoutineAttachments([]);
       setIsRoutineModalOpen(false);
@@ -2647,6 +2710,7 @@ function MainApp() {
     };
     const nextList = [nextItem, ...familyRoutines];
     setFamilyRoutines(nextList);
+    routineTitleLiveRef.current = "";
     setNewRoutineTitle("");
     setNewRoutineScheduledTime("");
     setNewRoutineAttachments([]);
@@ -14446,23 +14510,68 @@ ${validText}
       ========================================== */}
       {activeTab === "daily" && (
         <div className="p-4 space-y-3.5">
-          <div className="bg-white p-3.5 rounded-2xl border border-stone-200 shadow-sm space-y-2.5">
+          <div
+            className="bg-white p-3.5 rounded-2xl border border-stone-200 shadow-sm space-y-2.5"
+            onTouchStart={(e) => {
+              const t = e.touches?.[0];
+              if (!t) return;
+              dailyTouchStartRef.current = { x: t.clientX, y: t.clientY };
+            }}
+            onTouchEnd={(e) => {
+              const st = dailyTouchStartRef.current;
+              const t = e.changedTouches?.[0];
+              dailyTouchStartRef.current = null;
+              if (!st || !t) return;
+              const dx = t.clientX - st.x;
+              const dy = t.clientY - st.y;
+              if (Math.abs(dx) >= 56 && Math.abs(dx) > Math.abs(dy) * 1.35) {
+                const d = new Date(selectedDate + "T00:00:00");
+                d.setDate(d.getDate() + (dx < 0 ? 7 : -7));
+                const nextStr = formatDate(d);
+                setSelectedDate(nextStr);
+                setCurrentMonth(nextStr.slice(0, 7));
+              }
+            }}
+          >
             <div className="space-y-2">
-              <div className="flex items-center justify-between gap-2">
-                <h2 className="text-[15.5px] font-black text-stone-900 truncate">
+              <div className="flex items-center justify-between gap-1.5">
+                <h2 className="text-[15px] font-black text-stone-900 truncate">
                   🍽️ 식단 ({weekDates[0].slice(5)} ~ {weekDates[6].slice(5)})
                 </h2>
-                <div className="flex items-center gap-1.5 shrink-0">
+                <div className="flex items-center gap-1 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const weekSet = new Set(weekDates);
+                      const weekMeals = meals.filter((m) => weekSet.has(m.date));
+                      if (weekMeals.length === 0) {
+                        showToast("이번 주에 기록된 식단이 없습니다.");
+                        return;
+                      }
+                      const lines = [`🍽️ 주간 식단 (${weekDates[0].slice(5)} ~ ${weekDates[6].slice(5)})`];
+                      weekDates.forEach((wd) => {
+                        const dayMs = weekMeals.filter((m) => m.date === wd);
+                        if (dayMs.length === 0) return;
+                        const summary = dayMs.map((m) => `${m.slot}:${m.menu}`).join(" / ");
+                        lines.push(`• ${wd.slice(5)}(${getDayName(wd)}) ${summary}`);
+                      });
+                      copyTextSafe(lines.join("\n"), `📋 주간 식단 ${weekMeals.length}건을 복사했습니다!`);
+                    }}
+                    className="px-2 py-0.5 rounded-full bg-[#EEF3EE] text-[#35503C] border border-[#C9D8CC] text-[11px] font-extrabold whitespace-nowrap"
+                    title="이번 주 식단표 복사"
+                  >
+                    📋 복사
+                  </button>
                   <button
                     type="button"
                     onClick={() => setHideEmptyMealSlots((v) => !v)}
-                    className={`px-2 py-0.5 rounded-full text-[11.5px] font-extrabold border whitespace-nowrap ${
+                    className={`px-2 py-0.5 rounded-full text-[11px] font-extrabold border whitespace-nowrap ${
                       hideEmptyMealSlots
                         ? "bg-stone-900 text-white border-stone-900"
                         : "bg-stone-50 text-stone-600 border-stone-200"
                     }`}
                   >
-                    {hideEmptyMealSlots ? "빈 끼니 숨김중" : "빈 끼니 숨기기"}
+                    {hideEmptyMealSlots ? "숨김중" : "빈칸 숨김"}
                   </button>
                   {selectedDate !== getTodayStr() && (
                     <button
@@ -26232,40 +26341,14 @@ ${validText}
             </div>
 
 
-            <div>
-              <label className="text-[11.5px] font-extrabold text-stone-500 block mb-1">
-                루틴 내용 (쉼표 , 로 여러 단계 구분 가능)
-              </label>
-              <input
-                type="text"
-                autoFocus
-                value={newRoutineTitle}
-                onChange={(e) => setNewRoutineTitle(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    handleAddRoutine();
-                  }
-                }}
-                placeholder="예: 약먹기, 양치, 코뽑기, 잠옷"
-                className="w-full px-3 py-2.5 rounded-xl border border-stone-200 text-[13.5px] font-bold focus:outline-none focus:ring-2 focus:ring-stone-400"
-              />
-              {parseRoutineSteps(newRoutineTitle).length >= 2 && (
-                <div className="mt-1.5 flex flex-col gap-1 bg-stone-50 border border-stone-200 rounded-xl p-2">
-                  {parseRoutineSteps(newRoutineTitle).map((st, idx) => (
-                    <div
-                      key={idx}
-                      className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-white border border-stone-200 text-[11.5px] font-extrabold text-stone-800"
-                    >
-                      <span className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full border border-stone-400 text-[8px] font-black shrink-0">
-                        {idx + 1}
-                      </span>
-                      <span className="min-w-0 flex-1 break-keep">{st}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+            <RoutineTitleField
+              initialValue={newRoutineTitle}
+              onSyncValue={(v, commitState) => {
+                routineTitleLiveRef.current = v;
+                if (commitState) setNewRoutineTitle(v);
+              }}
+              onSubmitEnter={(v) => handleAddRoutine(v)}
+            />
 
 
             <div>
@@ -30505,6 +30588,7 @@ ${validText}
                               <input
                                 type="password"
                                 inputMode="numeric"
+                                autoComplete="off"
                                 value={switchAdminPinInput}
                                 onChange={(e) => setSwitchAdminPinInput(e.target.value)}
                                 onKeyDown={(e) => {
@@ -30627,6 +30711,7 @@ ${validText}
                 <input
                   type="password"
                   inputMode="numeric"
+                  autoComplete="off"
                   placeholder="수혁 · 아리나 또는 육아지원군 비밀번호 입력"
                   value={editorCodeInput}
                   onChange={(e) => setEditorCodeInput(e.target.value)}
