@@ -152,7 +152,9 @@ import {
   PAGE_TEXT_COLORS,
   PAGE_TEXT_BG_COLORS,
   parseNotionMarkdownToBlocks,
-  blocksToNotionMarkdown
+  blocksToNotionMarkdown,
+  INITIAL_BABY_DREAM_LINKS,
+  BABY_DREAM_ICON_PRESETS
 } from "./Constants";
 
 
@@ -1166,6 +1168,19 @@ function MainApp() {
   const [pagePasteMode, setPagePasteMode] = useState("append");
   const [isPageVisualEditMode, setIsPageVisualEditMode] = useState(false);
   const [isPageMultiSelectMode, setIsPageMultiSelectMode] = useState(false);
+  const [babyDreamLinks, setBabyDreamLinks] = useState(() => {
+    try {
+      const saved = localStorage.getItem("kim_baby_dream_links_v1");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) {}
+    return INITIAL_BABY_DREAM_LINKS;
+  });
+  const [isDreamLinksModalOpen, setIsDreamLinksModalOpen] = useState(false);
+  const [editingDreamLinkId, setEditingDreamLinkId] = useState(null);
+  const [dreamLinkDraft, setDreamLinkDraft] = useState({ label: "", icon: "🎵", url: "" });
   const [selectedPageBlockIds, setSelectedPageBlockIds] = useState([]);
   const [keyboardInsetPx, setKeyboardInsetPx] = useState(0);
   const [hideCompletedPageTodos, setHideCompletedPageTodos] = useState(false);
@@ -3333,6 +3348,23 @@ function MainApp() {
             };
             setHeroPhotoConfig(nextCfg);
             try { localStorage.setItem("kim_family_hero_photo_v1", JSON.stringify(nextCfg)); } catch (e) {}
+          }
+        },
+        () => {}
+      )
+    );
+
+
+    unsubscribers.push(
+      onSnapshot(
+        getDocRef("family_meta_v4", "baby_dream_links"),
+        (snap) => {
+          if (snap.exists()) {
+            const d = snap.data() || {};
+            if (Array.isArray(d.items) && d.items.length > 0) {
+              setBabyDreamLinks(d.items);
+              try { localStorage.setItem("kim_baby_dream_links_v1", JSON.stringify(d.items)); } catch (e) {}
+            }
           }
         },
         () => {}
@@ -9732,6 +9764,35 @@ ${validText}
     setSelectedPageBlockIds((prev) => prev.filter((id) => !idSet.has(id)));
     await savePageToCloud({ ...page, blocks: nextBlocks, updatedAtMs: Date.now() });
   };
+  const normalizeDreamUrl = (raw) => {
+    const s = String(raw || "").trim();
+    if (!s) return "";
+    if (/^https?:\/\//i.test(s)) return s;
+    return `https://${s}`;
+  };
+
+  const saveBabyDreamLinksToCloud = async (nextList, toastMsg = "") => {
+    if (!requireEditorAccess("baby")) return;
+    setBabyDreamLinks(nextList);
+    try { localStorage.setItem("kim_baby_dream_links_v1", JSON.stringify(nextList)); } catch (e) {}
+    if (user && db) {
+      beginWrite();
+      let ok = false;
+      try {
+        await setDoc(getDocRef("family_meta_v4", "baby_dream_links"), {
+          items: nextList,
+          updatedAtMs: Date.now()
+        });
+        ok = true;
+      } catch (e) {
+        setSyncErrorMsg(e?.message || "아기꿈나라 링크 저장 오류");
+      } finally {
+        endWrite(ok);
+      }
+    }
+    if (toastMsg) showToast(toastMsg);
+  };
+
 
 
   const handleIndentPageBlock = async (page, blockId, delta) => {
@@ -21715,7 +21776,7 @@ ${validText}
           />
           <div
             style={{ bottom: "calc(8.15rem + env(safe-area-inset-bottom))" }}
-            className="fixed right-3 z-40 w-[336px] max-w-[94vw] bg-white/95 backdrop-blur border border-stone-200 rounded-3xl shadow-2xl p-3 space-y-2"
+            className="fixed right-3 z-40 w-[336px] max-w-[94vw] max-h-[75vh] overflow-y-auto bg-white/95 backdrop-blur border border-stone-200 rounded-3xl shadow-2xl p-3 space-y-2"
           >
             {[
               {
@@ -21911,6 +21972,41 @@ ${validText}
                   </div>
                 </div>
               ))}
+            {/* 🌙 아기꿈나라 유튜브 바로 실행 */}
+            <div className="space-y-1 pt-1 border-t border-stone-100">
+              <div className="flex items-center justify-between px-0.5">
+                <span className="text-[11px] font-extrabold text-indigo-500">🌙 아기꿈나라</span>
+                {canEditTab("baby") && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsQuickFabOpen(false);
+                      setEditingDreamLinkId(null);
+                      setDreamLinkDraft({ label: "", icon: "🎵", url: "" });
+                      setIsDreamLinksModalOpen(true);
+                    }}
+                    className="text-[10.5px] font-extrabold text-stone-400 hover:text-stone-700 whitespace-nowrap"
+                  >
+                    ⚙️ 링크관리
+                  </button>
+                )}
+              </div>
+              <div className="grid grid-cols-4 gap-1.5">
+                {babyDreamLinks.map((dl) => (
+                  <a
+                    key={dl.id}
+                    href={normalizeDreamUrl(dl.url)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={() => setIsQuickFabOpen(false)}
+                    className="h-[46px] px-1 rounded-xl bg-indigo-50/75 hover:bg-indigo-100/80 border border-indigo-200/80 text-indigo-950 flex flex-col items-center justify-center gap-0.5 transition active:scale-95"
+                  >
+                    <span className="text-[15px] leading-none">{dl.icon || "🎵"}</span>
+                    <span className="text-[10.5px] font-extrabold whitespace-nowrap truncate max-w-full">{dl.label}</span>
+                  </a>
+                ))}
+              </div>
+            </div>
           </div>
         </>
       )}
@@ -21942,6 +22038,257 @@ ${validText}
         >
           <Plus className="w-6 h-6" />
         </button>
+      )}
+
+
+      {/* 모달: 🌙 아기꿈나라 유튜브 링크 관리 */}
+      {isDreamLinksModalOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+          onClick={() => setIsDreamLinksModalOpen(false)}
+        >
+          <div
+            className="bg-white rounded-3xl max-w-md w-full max-h-[85vh] flex flex-col overflow-hidden shadow-2xl border border-stone-200"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="px-4 py-3.5 bg-indigo-950 text-white flex items-center justify-between gap-2 shrink-0">
+              <div className="min-w-0">
+                <div className="text-[15.5px] font-black">🌙 아기꿈나라 링크 관리</div>
+                <div className="text-[11px] text-indigo-200 font-semibold">유튜브 앱 바로 실행 · 부부 기기 실시간 동기화</div>
+              </div>
+              <div className="flex items-center gap-1.5 shrink-0">
+                {canEditTab("baby") && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!window.confirm("아기꿈나라 링크를 기본 4종(아소리·종이소리·자장가·쉬소리)으로 복원할까요?")) return;
+                      saveBabyDreamLinksToCloud(INITIAL_BABY_DREAM_LINKS, "🌙 기본 링크 4종으로 복원했습니다!");
+                      setEditingDreamLinkId(null);
+                    }}
+                    className="px-2 py-1 rounded-lg bg-white/15 hover:bg-white/25 text-[11px] font-extrabold whitespace-nowrap"
+                  >
+                    ↺ 기본복원
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setIsDreamLinksModalOpen(false)}
+                  className="p-1 hover:opacity-80"
+                  aria-label="닫기"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-3.5 space-y-2.5 bg-[#FAF8F3]">
+              {babyDreamLinks.map((dl, idx) => {
+                const isEd = editingDreamLinkId === dl.id;
+                return (
+                  <div key={dl.id} className="bg-white rounded-2xl border border-stone-200 p-3 space-y-2 shadow-2xs">
+                    {isEd ? (
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-1 flex-wrap">
+                          {BABY_DREAM_ICON_PRESETS.map((ic) => (
+                            <button
+                              key={ic}
+                              type="button"
+                              onClick={() => setDreamLinkDraft((p) => ({ ...p, icon: ic }))}
+                              className={`w-7 h-7 rounded-lg text-[15px] flex items-center justify-center border transition ${
+                                dreamLinkDraft.icon === ic ? "bg-indigo-100 border-indigo-400 scale-105" : "bg-stone-50 border-stone-200"
+                              }`}
+                            >
+                              {ic}
+                            </button>
+                          ))}
+                        </div>
+                        <input
+                          type="text"
+                          value={dreamLinkDraft.label}
+                          onChange={(e) => setDreamLinkDraft((p) => ({ ...p, label: e.target.value }))}
+                          placeholder="이름 (예: 아소리)"
+                          className="w-full px-3 py-1.5 rounded-xl border border-stone-200 text-[13px] font-bold"
+                        />
+                        <input
+                          type="url"
+                          value={dreamLinkDraft.url}
+                          onChange={(e) => setDreamLinkDraft((p) => ({ ...p, url: e.target.value }))}
+                          placeholder="유튜브 링크 (https://youtu.be/...)"
+                          className="w-full px-3 py-1.5 rounded-xl border border-stone-200 text-[12px] font-medium"
+                        />
+                        <div className="flex items-center justify-end gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => setEditingDreamLinkId(null)}
+                            className="px-3 py-1 rounded-lg bg-stone-100 text-stone-600 text-[11.5px] font-extrabold"
+                          >
+                            취소
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const cleanLabel = String(dreamLinkDraft.label || "").trim();
+                              const cleanUrl = normalizeDreamUrl(dreamLinkDraft.url);
+                              if (!cleanLabel || !cleanUrl) {
+                                showToast("이름과 유튜브 링크를 모두 입력해 주세요.");
+                                return;
+                              }
+                              const nextList = babyDreamLinks.map((x) =>
+                                x.id === dl.id ? { ...x, label: cleanLabel, icon: dreamLinkDraft.icon || "🎵", url: cleanUrl } : x
+                              );
+                              saveBabyDreamLinksToCloud(nextList, `🌙 '${cleanLabel}' 링크를 수정했습니다!`);
+                              setEditingDreamLinkId(null);
+                            }}
+                            className="px-3 py-1 rounded-lg bg-indigo-900 text-white text-[11.5px] font-extrabold"
+                          >
+                            저장
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2 min-w-0 flex-1">
+                          <span className="w-9 h-9 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-[18px] shrink-0">
+                            {dl.icon || "🎵"}
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <div className="text-[13.5px] font-black text-stone-900 truncate">{dl.label}</div>
+                            <div className="text-[11px] font-medium text-stone-400 truncate">{dl.url}</div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <a
+                            href={normalizeDreamUrl(dl.url)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="px-2.5 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-[11px] font-extrabold whitespace-nowrap"
+                          >
+                            ▶ 재생
+                          </a>
+                          {canEditTab("baby") && (
+                            <>
+                              <button
+                                type="button"
+                                disabled={idx === 0}
+                                onClick={() => {
+                                  if (idx <= 0) return;
+                                  const next = [...babyDreamLinks];
+                                  [next[idx - 1], next[idx]] = [next[idx], next[idx - 1]];
+                                  saveBabyDreamLinksToCloud(next);
+                                }}
+                                className="p-1 rounded-lg bg-stone-100 text-stone-600 text-[10px] font-bold disabled:opacity-30"
+                                title="위로"
+                              >
+                                ▲
+                              </button>
+                              <button
+                                type="button"
+                                disabled={idx === babyDreamLinks.length - 1}
+                                onClick={() => {
+                                  if (idx >= babyDreamLinks.length - 1) return;
+                                  const next = [...babyDreamLinks];
+                                  [next[idx], next[idx + 1]] = [next[idx + 1], next[idx]];
+                                  saveBabyDreamLinksToCloud(next);
+                                }}
+                                className="p-1 rounded-lg bg-stone-100 text-stone-600 text-[10px] font-bold disabled:opacity-30"
+                                title="아래로"
+                              >
+                                ▼
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEditingDreamLinkId(dl.id);
+                                  setDreamLinkDraft({ label: dl.label || "", icon: dl.icon || "🎵", url: dl.url || "" });
+                                }}
+                                className="p-1.5 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700"
+                                title="수정"
+                              >
+                                <Edit2 className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (babyDreamLinks.length <= 1) {
+                                    showToast("최소 1개 이상의 링크를 남겨두어 주세요.");
+                                    return;
+                                  }
+                                  const next = babyDreamLinks.filter((x) => x.id !== dl.id);
+                                  saveBabyDreamLinksToCloud(next, `🗑️ '${dl.label}' 링크를 삭제했습니다.`);
+                                }}
+                                className="p-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600"
+                                title="삭제"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+
+              {/* 새 아기꿈나라 링크 추가 폼 */}
+              {canEditTab("baby") && !editingDreamLinkId && (
+                <div className="bg-white rounded-2xl border border-dashed border-indigo-200 p-3 space-y-2">
+                  <div className="text-[12px] font-black text-indigo-900">+ 새 소리 링크 추가</div>
+                  <div className="flex items-center gap-1 flex-wrap">
+                    {BABY_DREAM_ICON_PRESETS.map((ic) => (
+                      <button
+                        key={ic}
+                        type="button"
+                        onClick={() => setDreamLinkDraft((p) => ({ ...p, icon: ic }))}
+                        className={`w-7 h-7 rounded-lg text-[15px] flex items-center justify-center border transition ${
+                          dreamLinkDraft.icon === ic ? "bg-indigo-100 border-indigo-400 scale-105" : "bg-stone-50 border-stone-200"
+                        }`}
+                      >
+                        {ic}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="grid grid-cols-3 gap-1.5">
+                    <input
+                      type="text"
+                      value={dreamLinkDraft.label}
+                      onChange={(e) => setDreamLinkDraft((p) => ({ ...p, label: e.target.value }))}
+                      placeholder="이름 (예: 빗소리)"
+                      className="col-span-1 px-2.5 py-1.5 rounded-xl border border-stone-200 text-[12.5px] font-bold"
+                    />
+                    <input
+                      type="url"
+                      value={dreamLinkDraft.url}
+                      onChange={(e) => setDreamLinkDraft((p) => ({ ...p, url: e.target.value }))}
+                      placeholder="유튜브 링크 붙여넣기..."
+                      className="col-span-2 px-2.5 py-1.5 rounded-xl border border-stone-200 text-[12px] font-medium"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const cleanLabel = String(dreamLinkDraft.label || "").trim();
+                      const cleanUrl = normalizeDreamUrl(dreamLinkDraft.url);
+                      if (!cleanLabel || !cleanUrl) {
+                        showToast("이름과 유튜브 링크를 모두 입력해 주세요.");
+                        return;
+                      }
+                      const nextList = [
+                        ...babyDreamLinks,
+                        { id: `dream-${Date.now()}`, label: cleanLabel, icon: dreamLinkDraft.icon || "🎵", url: cleanUrl }
+                      ];
+                      saveBabyDreamLinksToCloud(nextList, `🌙 '${cleanLabel}' 링크를 추가했습니다!`);
+                      setDreamLinkDraft({ label: "", icon: "🎵", url: "" });
+                    }}
+                    className="w-full py-2 rounded-xl bg-indigo-950 hover:bg-indigo-900 text-white text-[12.5px] font-extrabold"
+                  >
+                    + 아기꿈나라에 추가
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
       )}
 
 
@@ -21993,7 +22340,8 @@ ${validText}
                     { id: "pages", label: "공유노트", icon: "🗂️" },
                     { id: "notices", label: "가족공지", icon: "📌" },
                     { id: "bucket", label: "버킷리스트", icon: "🌟" },
-                    { id: "kitchen_timer", label: "조리타이머", icon: "⏱️" }
+                    { id: "kitchen_timer", label: "조리타이머", icon: "⏱️" },
+                    { id: "baby_dream", label: "아기꿈나라", icon: "🌙" }
                   ]
                 }
               ].map((grp) => (
@@ -22006,6 +22354,11 @@ ${validText}
                         onClick={() => {
                           if (m.id === "kitchen_timer") {
                             setKitchenTimer((p) => ({ ...p, open: true }));
+                            setIsMoreNavOpen(false);
+                          } else if (m.id === "baby_dream") {
+                            setEditingDreamLinkId(null);
+                            setDreamLinkDraft({ label: "", icon: "🎵", url: "" });
+                            setIsDreamLinksModalOpen(true);
                             setIsMoreNavOpen(false);
                           } else {
                             if (m.id === "pages") setSelectedPageId(null);
@@ -22020,7 +22373,7 @@ ${validText}
                             : "bg-stone-50 text-stone-800 border-stone-200 hover:bg-amber-50"
                         }`}
                       >
-                        <span className="text-[17px]">{m.id === "kitchen_timer" || canViewTab(m.id) ? m.icon : "🔒"}</span>
+                        <span className="text-[17px]">{m.id === "kitchen_timer" || m.id === "baby_dream" || canViewTab(m.id) ? m.icon : "🔒"}</span>
                         <span className="truncate w-full text-center">{m.label}</span>
                       </button>
                     ))}

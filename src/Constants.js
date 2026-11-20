@@ -1176,7 +1176,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v12.34";
+export const APP_CODE_VERSION = "v12.35";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1194,7 +1194,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-20 10:55";
+export const APP_BUILD_DATE = "2026-11-20 13:30";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1261,6 +1261,17 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v12.35",
+    version: "v12.35",
+    date: "2026-11-20",
+    title: "빠른실행 [🌙 아기꿈나라] 유튜브 4종 원탭 실행 & 링크 관리 전용 메뉴 추가",
+    items: [
+      "우측 하단 빠른실행(+) 팝업에 [🌙 아기꿈나라] 분류(🗣️ 아소리 · 📄 종이소리 · 🎵 자장가 · 🤫 쉬소리) 추가 — 네이티브 링크 실행으로 유튜브 앱 바로 연결",
+      "더보기 메뉴 및 빠른실행 [⚙️ 관리]에서 접근 가능한 [🌙 아기꿈나라 링크 관리] 전용 메뉴 신설 (링크·이름·아이콘 수정, 새 소리 추가, 순서 변경, 삭제, 기본값 복원 및 부부 기기 Firestore 실시간 동기화)",
+      "빠른실행 팝업 모바일 최대 높이 스크롤 가드(max-h-[75vh]) 보강 및 전체 구문·배포 무결성 최종 확인"
+    ]
+  },
   {
     id: "patch-v12.34",
     version: "v12.34",
@@ -4859,3 +4870,12 @@ export const PAGE_TEXT_BG_COLORS = [
   { id: "sky", label: "파랑", cls: "bg-sky-100/85 px-1.5 py-0.5 rounded-md", dot: "bg-sky-200" },
   { id: "rose", label: "분홍", cls: "bg-rose-100/85 px-1.5 py-0.5 rounded-md", dot: "bg-rose-200" }
 ];
+
+export const INITIAL_BABY_DREAM_LINKS = [
+  { id: "dream-1", label: "아소리", icon: "🗣️", url: "https://youtu.be/hdT6CodrB8w?si=T81I1wKCV8L7_iOV" },
+  { id: "dream-2", label: "종이소리", icon: "📄", url: "https://youtu.be/itxHiMlWeBU?si=FWrEhrz74zYNGypW" },
+  { id: "dream-3", label: "자장가", icon: "🎵", url: "https://youtu.be/OzhsoSo-4dU?feature=shared" },
+  { id: "dream-4", label: "쉬소리", icon: "🤫", url: "https://youtu.be/-X_rCJFIx38?feature=shared" }
+];
+
+export const BABY_DREAM_ICON_PRESETS = ["🗣️", "📄", "🎵", "🤫", "🌊", "🌧️", "🚗", "🌙", "🧸", "💤"];
