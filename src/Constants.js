@@ -1,4 +1,4 @@
-﻿import { EMBEDDED_GEMINI_KEY } from "./Firebase";
+import { EMBEDDED_GEMINI_KEY } from "./Firebase";
 
 
 // ==========================================
@@ -1176,7 +1176,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v12.37";
+export const APP_CODE_VERSION = "v12.38";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1194,7 +1194,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-20 14:00";
+export const APP_BUILD_DATE = "2026-11-20 16:30";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1261,6 +1261,19 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v12.38",
+    version: "v12.38",
+    date: "2026-11-20",
+    title: "버킷리스트 위치 검색·지도 확인 후 추가 개편 & 버튼 대폭 단순화 + 전체 코드 오류 수정",
+    items: [
+      "버킷리스트 상단의 과도한 버튼들을 [🗺️ 지도 | 📋 목록] + [+ 장소 추가] + 1줄 슬림 필터(상태 + 가족/분류 선택)로 대폭 단순화",
+      "버킷리스트 [장소 추가/수정] 전용 모달 신설: 장소명 검색(최대 5개 후보 주소 표시) → 모달 내 미니 지도에서 핀 위치 직접 확인·미세조정 → 추가하는 직관적 흐름 적용",
+      "기존 버킷리스트 항목 수정 기능 추가 및 삭제 시 선택된 지도 상세 카드 자동 정리",
+      "치명적 오류 수정: 공유노트 마크다운 표 [표 수정] 버튼 ReferenceError 복구, 예방접종 D-Day(getDaysDiff) 계산 오류 수정, 서버 연결 배지(syncStatus) 재연결 오동작 수정, 최신 패치노트 본문 미표시(items/changes) 오류 수정",
+      "시각적 피로도·중복 제거: 겹쳐 보이던 맨 위로(↑) 버튼 및 이중 스크롤 리스너 통합, 미사용 코드 정리, ESC 키 닫기 지원 모달 확대"
+    ]
+  },
   {
     id: "patch-v12.37",
     version: "v12.37",

@@ -306,6 +306,10 @@ const BucketMapView = ({ items, selectedId, onSelectItem, onPickCoords }) => {
   const mapInstRef = useRef(null);
   const tileLayerRef = useRef(null);
   const markersLayerRef = useRef(null);
+  const onSelectItemRef = useRef(onSelectItem);
+  const onPickCoordsRef = useRef(onPickCoords);
+  onSelectItemRef.current = onSelectItem;
+  onPickCoordsRef.current = onPickCoords;
   const [mapReady, setMapReady] = useState(false);
   const [mapErr, setMapErr] = useState("");
   const [mapTileMode, setMapTileMode] = useState("osm"); // osm | satellite
@@ -323,8 +327,8 @@ const BucketMapView = ({ items, selectedId, onSelectItem, onPickCoords }) => {
           }).addTo(map);
           markersLayerRef.current = L.layerGroup().addTo(map);
           map.on("click", (ev) => {
-            if (onPickCoords && ev?.latlng) {
-              onPickCoords(Number(ev.latlng.lat.toFixed(6)), Number(ev.latlng.lng.toFixed(6)));
+            if (onPickCoordsRef.current && ev?.latlng) {
+              onPickCoordsRef.current(Number(ev.latlng.lat.toFixed(6)), Number(ev.latlng.lng.toFixed(6)));
             }
           });
           mapInstRef.current = map;
@@ -386,7 +390,7 @@ const BucketMapView = ({ items, selectedId, onSelectItem, onPickCoords }) => {
       const markerIcon = L.divIcon({ className: "", html: iconHtml, iconSize: [0, 0] });
       const marker = L.marker([lat, lng], { icon: markerIcon }).addTo(layer);
       marker.bindTooltip(`${it.title} (${mNames})`, { direction: "top", offset: [0, -10] });
-      marker.on("click", () => onSelectItem && onSelectItem(it));
+      marker.on("click", () => onSelectItemRef.current && onSelectItemRef.current(it));
     });
     if (bounds.length === 1) {
       mapInstRef.current.setView(bounds[0], 13);
@@ -438,6 +442,94 @@ const BucketMapView = ({ items, selectedId, onSelectItem, onPickCoords }) => {
       {!mapReady && (
         <div className="absolute inset-0 bg-stone-50/90 flex items-center justify-center text-[12.5px] font-bold text-stone-500">
           🗺️ 가족 지도 불러오는 중...
+        </div>
+      )}
+    </div>
+  );
+};
+
+const BucketLocationPreviewMap = ({ lat, lng, label, onPickCoords }) => {
+  const mapElRef = useRef(null);
+  const mapInstRef = useRef(null);
+  const markerRef = useRef(null);
+  const onPickRef = useRef(onPickCoords);
+  onPickRef.current = onPickCoords;
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    ensureLeafletLoaded()
+      .then((L) => {
+        if (cancelled || !mapElRef.current) return;
+        if (!mapInstRef.current) {
+          const initLat = Number.isFinite(Number(lat)) && Number(lat) !== 0 ? Number(lat) : 37.5665;
+          const initLng = Number.isFinite(Number(lng)) && Number(lng) !== 0 ? Number(lng) : 126.978;
+          const map = L.map(mapElRef.current, { zoomControl: true }).setView(
+            [initLat, initLng],
+            Number.isFinite(Number(lat)) && Number(lat) !== 0 ? 15 : 11
+          );
+          L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+            attribution: "&copy; OpenStreetMap",
+            maxZoom: 19
+          }).addTo(map);
+          map.on("click", (ev) => {
+            if (onPickRef.current && ev?.latlng) {
+              onPickRef.current(Number(ev.latlng.lat.toFixed(6)), Number(ev.latlng.lng.toFixed(6)));
+            }
+          });
+          mapInstRef.current = map;
+        }
+        setReady(true);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (mapInstRef.current) {
+        try { mapInstRef.current.remove(); } catch (e) {}
+        mapInstRef.current = null;
+        markerRef.current = null;
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!ready || !mapInstRef.current || !window.L) return;
+    const L = window.L;
+    const map = mapInstRef.current;
+    const hasCoords = Number.isFinite(Number(lat)) && Number(lat) !== 0 && Number.isFinite(Number(lng)) && Number(lng) !== 0;
+    if (markerRef.current) {
+      try { map.removeLayer(markerRef.current); } catch (e) {}
+      markerRef.current = null;
+    }
+    if (hasCoords) {
+      const nLat = Number(lat);
+      const nLng = Number(lng);
+      const safeLabel = String(label || "선택한 위치").replace(/</g, "&lt;").replace(/>/g, "&gt;").slice(0, 14);
+      const iconHtml = `<div style="display:flex;align-items:center;gap:3px;background:#D97706;color:#fff;padding:4px 9px;border-radius:999px;font-size:11.5px;font-weight:800;white-space:nowrap;border:2px solid #fff;box-shadow:0 3px 10px rgba(0,0,0,0.32);transform:translate(-50%,-100%);">📍 ${safeLabel}</div>`;
+      markerRef.current = L.marker([nLat, nLng], {
+        icon: L.divIcon({ className: "", html: iconHtml, iconSize: [0, 0] })
+      }).addTo(map);
+      map.setView([nLat, nLng], Math.max(map.getZoom(), 15));
+    }
+    setTimeout(() => {
+      try { map.invalidateSize(); } catch (e) {}
+    }, 100);
+  }, [ready, lat, lng, label]);
+
+  return (
+    <div className="relative rounded-2xl overflow-hidden border border-stone-200 bg-stone-100">
+      <div ref={mapElRef} className="w-full h-[190px] z-0" />
+      <div className="absolute bottom-2 left-2 z-[400] px-2 py-0.5 rounded-lg bg-white/90 text-[10.5px] font-bold text-stone-600 shadow-xs pointer-events-none">
+        지도를 눌러 핀 위치를 직접 미세조정할 수 있어요
+      </div>
+      {!ready && (
+        <div className="absolute inset-0 bg-stone-50/90 flex items-center justify-center text-[12px] font-bold text-stone-500">
+          🗺️ 미리보기 지도 로딩 중...
         </div>
       )}
     </div>
@@ -1324,8 +1416,6 @@ function MainApp() {
   const [bucketList, setBucketList] = useState([]);
   const [bucketCatFilter, setBucketCatFilter] = useState("전체");
   const [bucketWeatherOnly, setBucketWeatherOnly] = useState(false);
-  const [bucketHideDone, setBucketHideDone] = useState(false);
-  const [showScrollTopBtn, setShowScrollTopBtn] = useState(false);
   const [bucketForm, setBucketForm] = useState({
     title: "",
     category: "나들이/여행",
@@ -1334,6 +1424,7 @@ function MainApp() {
     members: ["수혁", "아리나", "시목", "시율"],
     done: false,
     placeName: "",
+    address: "",
     mapUrl: "",
     lat: null,
     lng: null
@@ -1343,7 +1434,11 @@ function MainApp() {
   const [bucketStatusFilter, setBucketStatusFilter] = useState("all");
   const [selectedBucketMapItem, setSelectedBucketMapItem] = useState(null);
   const [isGeocodingBucket, setIsGeocodingBucket] = useState(false);
-  const [isBucketAddExpanded, setIsBucketAddExpanded] = useState(false);
+  const [isBucketModalOpen, setIsBucketModalOpen] = useState(false);
+  const [editingBucketId, setEditingBucketId] = useState(null);
+  const [bucketSearchQuery, setBucketSearchQuery] = useState("");
+  const [bucketSearchResults, setBucketSearchResults] = useState([]);
+  const [bucketSearchError, setBucketSearchError] = useState("");
   const [familyPages, setFamilyPages] = useState([]);
   const [selectedPageId, setSelectedPageId] = useState(null);
   const [pagesRecentOpen, setPagesRecentOpen] = useState(true);
@@ -9420,76 +9515,132 @@ ${validText}
   };
 
 
-  const geocodePlaceQuery = async (queryText) => {
+  const searchPlaceCandidates = async (queryText) => {
     const q = String(queryText || "").trim();
-    if (!q) return null;
-    try {
-      const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&accept-language=ko&q=${encodeURIComponent(q)}`;
+    if (!q) return [];
+    const fetchList = async (countryParam) => {
+      const url = `https://nominatim.openstreetmap.org/search?format=json&limit=5&addressdetails=1&accept-language=ko${countryParam}&q=${encodeURIComponent(q)}`;
       const res = await fetch(url, { headers: { Accept: "application/json" } });
-      if (!res.ok) return null;
+      if (!res.ok) return [];
       const arr = await res.json();
-      if (Array.isArray(arr) && arr[0]) {
-        return {
-          lat: Number(arr[0].lat),
-          lng: Number(arr[0].lon),
-          displayName: String(arr[0].display_name || q)
-        };
-      }
-    } catch (e) {}
-    return null;
+      if (!Array.isArray(arr)) return [];
+      return arr
+        .filter((it) => Number.isFinite(Number(it.lat)) && Number.isFinite(Number(it.lon)))
+        .map((it) => {
+          const full = String(it.display_name || q);
+          const shortName = String(it.name || full.split(",")[0] || q).trim();
+          return {
+            lat: Number(it.lat),
+            lng: Number(it.lon),
+            shortName,
+            displayName: full
+          };
+        });
+    };
+    try {
+      const krList = await fetchList("&countrycodes=kr");
+      if (krList.length > 0) return krList;
+      return await fetchList("");
+    } catch (e) {
+      return [];
+    }
   };
 
-  const handleLocateBucketForm = async () => {
-    const urlCoords = parseCoordsFromMapUrl(bucketForm.mapUrl);
-    if (urlCoords) {
-      setBucketForm((p) => ({ ...p, lat: urlCoords.lat, lng: urlCoords.lng }));
-      showToast("📍 지도 링크에서 좌표를 자동 추출했습니다!");
+  const handleSearchBucketPlaces = async (customQuery) => {
+    const raw = String(customQuery ?? bucketSearchQuery ?? "").trim();
+    if (!raw) {
+      setBucketSearchError("검색할 장소명이나 지도 링크를 입력해 주세요.");
+      setBucketSearchResults([]);
       return;
     }
-    const q = String(bucketForm.placeName || bucketForm.title || bucketForm.memo || "").trim();
-    if (!q) {
-      showToast("장소명이나 지도 링크를 먼저 입력해 주세요.");
+    const urlCoords = parseCoordsFromMapUrl(raw);
+    if (urlCoords) {
+      setBucketForm((p) => ({
+        ...p,
+        mapUrl: raw,
+        lat: urlCoords.lat,
+        lng: urlCoords.lng,
+        address: `지도 링크 좌표 (${urlCoords.lat.toFixed(4)}, ${urlCoords.lng.toFixed(4)})`
+      }));
+      setBucketSearchResults([]);
+      setBucketSearchError("");
+      showToast("📍 지도 링크에서 좌표를 확인했습니다! 아래 지도를 확인 후 저장해 주세요.");
       return;
     }
     setIsGeocodingBucket(true);
+    setBucketSearchError("");
     try {
-      const found = await geocodePlaceQuery(q);
-      if (found) {
-        setBucketForm((p) => ({ ...p, lat: found.lat, lng: found.lng, placeName: p.placeName || q }));
-        showToast(`📍 '${q}' 위치를 지도에서 찾았습니다!`);
-      } else {
-        showToast("좌표를 찾지 못했습니다. 지도를 직접 누르거나 구글맵 링크를 붙여넣어 보세요.");
+      const list = await searchPlaceCandidates(raw);
+      setBucketSearchResults(list);
+      if (list.length === 0) {
+        setBucketSearchError("검색 결과가 없습니다. 시·구 등 지역명을 함께 입력하거나 아래 지도를 직접 눌러 위치를 지정해 주세요.");
+      } else if (list.length === 1) {
+        const first = list[0];
+        setBucketForm((p) => ({
+          ...p,
+          title: p.title || first.shortName,
+          placeName: first.shortName,
+          address: first.displayName,
+          lat: first.lat,
+          lng: first.lng
+        }));
       }
     } finally {
       setIsGeocodingBucket(false);
     }
   };
 
-  const handleAutoLocateExistingBucket = async (item) => {
+  const openBucketAddModal = (editItem = null, autoSearch = false) => {
     if (!requireEditorAccess()) return;
-    const q = String(item.placeName || item.title || item.memo || "").trim();
-    if (!q) return;
-    showToast(`🔍 '${q}' 위치 검색 중...`);
-    const found = await geocodePlaceQuery(q);
-    if (!found) {
-      showToast("자동 검색 결과가 없습니다. 지도를 눌러 위치를 지정하거나 지역명을 함께 적어보세요.");
-      return;
+    setBucketSearchResults([]);
+    setBucketSearchError("");
+    if (editItem) {
+      setEditingBucketId(editItem.id);
+      const q = String(editItem.placeName || editItem.title || "").trim();
+      setBucketSearchQuery(q);
+      setBucketForm({
+        title: editItem.title || "",
+        category: editItem.category || "나들이/여행",
+        weather: editItem.weather || "무관",
+        memo: editItem.memo || "",
+        members: Array.isArray(editItem.members) && editItem.members.length > 0 ? editItem.members : ["수혁", "아리나", "시목", "시율"],
+        done: Boolean(editItem.done),
+        placeName: editItem.placeName || editItem.title || "",
+        address: editItem.address || "",
+        mapUrl: editItem.mapUrl || "",
+        lat: Number.isFinite(Number(editItem.lat)) && Number(editItem.lat) !== 0 ? Number(editItem.lat) : null,
+        lng: Number.isFinite(Number(editItem.lng)) && Number(editItem.lng) !== 0 ? Number(editItem.lng) : null
+      });
+      setIsBucketModalOpen(true);
+      if (autoSearch && q) {
+        setTimeout(() => handleSearchBucketPlaces(q), 80);
+      }
+    } else {
+      setEditingBucketId(null);
+      setBucketSearchQuery("");
+      setBucketForm({
+        title: "",
+        category: "나들이/여행",
+        weather: "무관",
+        memo: "",
+        members: ["수혁", "아리나", "시목", "시율"],
+        done: false,
+        placeName: "",
+        address: "",
+        mapUrl: "",
+        lat: null,
+        lng: null
+      });
+      setIsBucketModalOpen(true);
     }
-    const updated = { ...item, lat: found.lat, lng: found.lng, placeName: item.placeName || q, updatedAtMs: Date.now() };
-    setBucketList((prev) => prev.map((x) => (x.id === item.id ? updated : x)));
-    setSelectedBucketMapItem(updated);
-    if (user && db) {
-      await setDoc(getDocRef("family_bucket_v1", item.id), updated).catch(() => {});
-    }
-    showToast(`📍 '${item.title}' 핀을 지도에 표시했습니다!`);
   };
 
-  const handleAddBucketItem = async (e) => {
+  const handleSaveBucketItem = async (e) => {
     e?.preventDefault?.();
     if (!requireEditorAccess()) return;
-    const title = String(bucketForm.title || "").trim();
+    const title = String(bucketForm.title || bucketSearchQuery || "").trim();
     if (!title) {
-      showToast("버킷리스트 장소나 내용을 입력해 주세요.");
+      showToast("장소 이름을 입력해 주세요.");
       return;
     }
     let lat = bucketForm.lat;
@@ -9499,20 +9650,14 @@ ${validText}
       lat = parsedFromUrl.lat;
       lng = parsedFromUrl.lng;
     }
-    if ((!lat || !lng) && bucketForm.category !== "우리집 목표") {
-      const q = String(bucketForm.placeName || title).trim();
-      const autoFound = await geocodePlaceQuery(q);
-      if (autoFound) {
-        lat = autoFound.lat;
-        lng = autoFound.lng;
-      }
-    }
-    const id = `bkt-${Date.now()}`;
     const members =
       Array.isArray(bucketForm.members) && bucketForm.members.length > 0
         ? bucketForm.members
         : ["수혁", "아리나", "시목", "시율"];
+    const existing = editingBucketId ? bucketList.find((b) => b.id === editingBucketId) : null;
+    const id = existing ? existing.id : `bkt-${Date.now()}`;
     const payload = {
+      ...(existing || {}),
       id,
       title,
       category: bucketForm.category || "나들이/여행",
@@ -9520,36 +9665,36 @@ ${validText}
       memo: String(bucketForm.memo || "").trim(),
       members,
       placeName: String(bucketForm.placeName || title).trim(),
+      address: String(bucketForm.address || "").trim(),
       mapUrl: String(bucketForm.mapUrl || "").trim(),
-      lat: Number.isFinite(Number(lat)) ? Number(lat) : null,
-      lng: Number.isFinite(Number(lng)) ? Number(lng) : null,
+      lat: Number.isFinite(Number(lat)) && Number(lat) !== 0 ? Number(lat) : null,
+      lng: Number.isFinite(Number(lng)) && Number(lng) !== 0 ? Number(lng) : null,
       done: Boolean(bucketForm.done),
-      doneDate: bucketForm.done ? getTodayStr() : "",
-      author: actorName || "수혁",
-      createdAt: getTodayStr(),
+      doneDate: bucketForm.done ? (existing?.doneDate || getTodayStr()) : "",
+      author: existing?.author || actorName || "수혁",
+      createdAt: existing?.createdAt || getTodayStr(),
       updatedAtMs: Date.now()
     };
-    setBucketList((prev) => [payload, ...prev]);
-    setBucketForm({
-      title: "",
-      category: bucketForm.category || "나들이/여행",
-      weather: "무관",
-      memo: "",
-      members: ["수혁", "아리나", "시목", "시율"],
-      done: false,
-      placeName: "",
-      mapUrl: "",
-      lat: null,
-      lng: null
-    });
-    if (payload.lat && payload.lng) setSelectedBucketMapItem(payload);
-    if (user && db) {
-      await setDoc(getDocRef("family_bucket_v1", id), payload).catch(() => {});
+    if (existing) {
+      setBucketList((prev) => prev.map((b) => (b.id === id ? payload : b)));
+    } else {
+      setBucketList((prev) => [payload, ...prev]);
     }
-    recordActivity("버킷", "추가", title);
-    showToast(payload.lat ? "🗺️ 지도 핀과 함께 버킷리스트에 추가했습니다!" : "🌟 가족 버킷리스트에 추가했습니다!");
+    if (payload.lat && payload.lng) setSelectedBucketMapItem(payload);
+    setIsBucketModalOpen(false);
+    setEditingBucketId(null);
+    if (user && db) {
+      await setDoc(getDocRef("family_bucket_v1", id), payload, { merge: true }).catch(() => {});
+    }
+    recordActivity("버킷", existing ? "수정" : "추가", title);
+    showToast(
+      existing
+        ? `✏️ '${title}' 버킷리스트를 수정했습니다.`
+        : payload.lat
+        ? "🗺️ 확인한 위치와 함께 버킷리스트에 추가했습니다!"
+        : "🌟 가족 버킷리스트에 추가했습니다!"
+    );
   };
-
 
   const handleToggleBucketDone = async (item) => {
     if (!requireEditorAccess()) return;
@@ -9561,16 +9706,21 @@ ${validText}
       updatedAtMs: Date.now()
     };
     setBucketList((prev) => prev.map((b) => (b.id === item.id ? updated : b)));
+    if (selectedBucketMapItem?.id === item.id) {
+      setSelectedBucketMapItem(updated);
+    }
     if (user && db) {
       await setDoc(getDocRef("family_bucket_v1", item.id), updated, { merge: true }).catch(() => {});
     }
     showToast(nextDone ? `🎉 '${item.title}' 버킷리스트 달성!` : "미완료 상태로 되돌렸습니다.");
   };
 
-
   const handleDeleteBucketItem = async (id) => {
     if (!requireEditorAccess()) return;
     setBucketList((prev) => prev.filter((b) => b.id !== id));
+    if (selectedBucketMapItem?.id === id) {
+      setSelectedBucketMapItem(null);
+    }
     if (user && db) {
       await deleteDoc(getDocRef("family_bucket_v1", id)).catch(() => {});
     }
@@ -9856,17 +10006,7 @@ ${validText}
     await savePageToCloud(updated);
   };
 
-  const handleUpdatePageBlockStyle = async (page, blockId, stylePatch) => {
-    if (!requireEditorAccess("pages") || !page) return;
-    const updated = {
-      ...page,
-      blocks: (Array.isArray(page.blocks) ? page.blocks : []).map((b) =>
-        b.id === blockId ? { ...b, ...stylePatch } : b
-      ),
-      updatedAtMs: Date.now()
-    };
-    await savePageToCloud(updated);
-  };
+
 
 
 
@@ -10109,15 +10249,7 @@ ${validText}
 
 
 
-  const handleIndentPageBlock = async (page, blockId, delta) => {
-    if (!requireEditorAccess("pages") || !page) return;
-    const nextBlocks = (Array.isArray(page.blocks) ? page.blocks : []).map((b) => {
-      if (b.id !== blockId) return b;
-      const nextIndent = Math.max(0, Math.min(3, (Number(b.indent) || 0) + delta));
-      return { ...b, indent: nextIndent };
-    });
-    await savePageToCloud({ ...page, blocks: nextBlocks, updatedAtMs: Date.now() });
-  };
+
 
   const handleAddTableBlock = async (page) => {
     if (!requireEditorAccess("pages") || !page) return;
@@ -10444,7 +10576,10 @@ ${validText}
       !isPageModalOpen &&
       !pageMenuTargetId &&
       !isPagePasteModalOpen &&
-      !activeTableTaskModal
+      !activeTableTaskModal &&
+      !isDreamLinksModalOpen &&
+      !isPatchModalOpen &&
+      !isBucketModalOpen
     ) return;
     const onEsc = (e) => {
       if (e.key === "Escape") {
@@ -10467,20 +10602,14 @@ ${validText}
         setIsPagePasteModalOpen(false);
         setActiveTableTaskModal(null);
         setTaskModalDraft(null);
+        setIsDreamLinksModalOpen(false);
+        setIsPatchModalOpen(false);
+        setIsBucketModalOpen(false);
       }
     };
     window.addEventListener("keydown", onEsc);
     return () => window.removeEventListener("keydown", onEsc);
-  }, [isQuickFabOpen, isRoutineModalOpen, isActivityModalOpen, isEditorUnlockModalOpen, isMealCopyModalOpen, diaryExportPreviewUrl, diaryLightboxUrl, isWeatherModalOpen, liveActivityPopup, activityEditModal, zipImportPicker, magazineMonth, isSettingsOpen, isHeroPhotoModalOpen, isPageModalOpen, pageMenuTargetId, isPagePasteModalOpen, activeTableTaskModal]);
-
-  useEffect(() => {
-    const onScroll = () => {
-      const y = window.scrollY || document.documentElement.scrollTop || 0;
-      setShowScrollTopBtn(y > 360);
-    };
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
-  }, []);
+  }, [isQuickFabOpen, isRoutineModalOpen, isActivityModalOpen, isEditorUnlockModalOpen, isMealCopyModalOpen, diaryExportPreviewUrl, diaryLightboxUrl, isWeatherModalOpen, liveActivityPopup, activityEditModal, zipImportPicker, magazineMonth, isSettingsOpen, isHeroPhotoModalOpen, isPageModalOpen, pageMenuTargetId, isPagePasteModalOpen, activeTableTaskModal, isDreamLinksModalOpen, isPatchModalOpen, isBucketModalOpen]);
 
 
 
@@ -10641,7 +10770,7 @@ ${validText}
             <button
               type="button"
               onClick={async () => {
-                if (syncStatus === "synced" || !auth) return;
+                if (syncStatus === "connected" || !auth) return;
                 showToast("🔄 서버 재연결을 시도합니다...");
                 try {
                   await signInAnonymously(auth);
@@ -10649,7 +10778,7 @@ ${validText}
                   setSyncErrorMsg("서버 재연결 실패: 네트워크를 확인해 주세요.");
                 }
               }}
-              title={syncStatus === "synced" ? "서버 연결 정상" : "눌러서 서버 재연결 시도"}
+              title={syncStatus === "connected" ? "서버 연결 정상" : "눌러서 서버 재연결 시도"}
               className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-bold border whitespace-nowrap shrink-0 ${
                 syncStatus === "offline" || syncStatus === "error"
                   ? "bg-rose-50 text-rose-700 border-rose-200 cursor-pointer"
@@ -17451,7 +17580,6 @@ ${validText}
         const weatherRecType = isBadWeather ? "실내" : "맑음";
         const doneCount = bucketList.filter((b) => b.done).length;
         const plannedCount = bucketList.length - doneCount;
-        const pct = bucketList.length > 0 ? Math.round((doneCount / bucketList.length) * 100) : 0;
         const getItemMembers = (it) =>
           Array.isArray(it?.members) && it.members.length > 0 ? it.members : ["수혁", "아리나", "시목", "시율"];
 
@@ -17460,27 +17588,27 @@ ${validText}
           .filter((b) => bucketMemberFilter === "전체" || getItemMembers(b).includes(bucketMemberFilter))
           .filter((b) => bucketStatusFilter === "all" || (bucketStatusFilter === "done" ? b.done : !b.done))
           .filter((b) => !bucketWeatherOnly || b.weather === weatherRecType || b.weather === "무관")
-          .filter((b) => !bucketHideDone || !b.done)
           .sort((a, b) => {
             if (Boolean(a.done) !== Boolean(b.done)) return a.done ? 1 : -1;
             return (Number(b.updatedAtMs) || 0) - (Number(a.updatedAtMs) || 0);
           });
 
+        const hasActiveFilter =
+          bucketMemberFilter !== "전체" ||
+          bucketCatFilter !== "전체" ||
+          bucketStatusFilter !== "all" ||
+          bucketWeatherOnly;
         const pinnedCount = filtered.filter((b) => Number.isFinite(Number(b.lat)) && Number.isFinite(Number(b.lng)) && Number(b.lat) !== 0).length;
         const unpinnedItems = filtered.filter((b) => !Number.isFinite(Number(b.lat)) || !Number.isFinite(Number(b.lng)) || Number(b.lat) === 0);
 
         return (
           <div className="space-y-3">
-            <div className="bg-white p-3.5 rounded-2xl border border-stone-200 shadow-sm space-y-2.5">
-              {/* 상단: 현황 + 지도/목록 전환 + 완료정리 */}
+            {/* 단순화된 상단 컨트롤 바 (핵심 2줄) */}
+            <div className="bg-white p-3 rounded-2xl border border-stone-200 shadow-sm space-y-2.5">
+              {/* 1줄: 지도/목록 전환 + 현황 + 장소 추가 */}
               <div className="flex items-center justify-between gap-2">
-                <div className="min-w-0">
-                  <span className="text-[13px] font-black text-stone-800 whitespace-nowrap">
-                    다녀옴 <span className="text-[#35503C]">{doneCount}</span> · 갈 곳 <span className="text-amber-600">{plannedCount}</span> ({pct}%)
-                  </span>
-                </div>
-                <div className="flex items-center gap-1.5 shrink-0">
-                  <div className="inline-flex items-center bg-stone-200/80 p-0.5 rounded-xl">
+                <div className="flex items-center gap-2 min-w-0">
+                  <div className="inline-flex items-center bg-stone-200/80 p-0.5 rounded-xl shrink-0">
                     {[
                       { id: "map", label: "🗺️ 지도" },
                       { id: "list", label: "📋 목록" }
@@ -17489,7 +17617,7 @@ ${validText}
                         key={vm.id}
                         type="button"
                         onClick={() => setBucketViewMode(vm.id)}
-                        className={`px-2 py-1 rounded-lg text-[11px] font-extrabold whitespace-nowrap transition ${
+                        className={`px-2.5 py-1 rounded-lg text-[11.5px] font-extrabold whitespace-nowrap transition ${
                           bucketViewMode === vm.id ? "bg-white text-stone-900 shadow-2xs" : "text-stone-500"
                         }`}
                       >
@@ -17497,233 +17625,88 @@ ${validText}
                       </button>
                     ))}
                   </div>
-                  {doneCount > 0 && (
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        if (!requireEditorAccess()) return;
-                        if (!window.confirm(`완료된 버킷리스트 ${doneCount}건을 정리할까요?`)) return;
-                        const doneIds = bucketList.filter((b) => b.done).map((b) => b.id);
-                        setBucketList((prev) => prev.filter((b) => !b.done));
-                        if (user && db) {
-                          await Promise.all(doneIds.map((bid) => deleteDoc(getDocRef("family_bucket_v1", bid)).catch(() => {})));
-                        }
-                        showToast(`🧹 완료된 버킷리스트 ${doneIds.length}건을 정리했습니다.`);
-                      }}
-                      className="px-2 py-1 rounded-lg bg-stone-100 hover:bg-rose-50 text-stone-500 hover:text-rose-700 text-[10.5px] font-extrabold whitespace-nowrap"
-                    >
-                      🧹 정리
-                    </button>
-                  )}
+                  <span className="text-[12px] font-extrabold text-stone-500 whitespace-nowrap truncate">
+                    갈 곳 <b className="text-amber-600">{plannedCount}</b> · 다녀옴 <b className="text-[#35503C]">{doneCount}</b>
+                  </span>
                 </div>
+                <button
+                  type="button"
+                  onClick={() => openBucketAddModal(null)}
+                  className="px-3 py-1.5 rounded-xl bg-stone-900 hover:bg-stone-800 text-white text-[12px] font-extrabold whitespace-nowrap shrink-0 flex items-center gap-1 shadow-xs"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>장소 추가</span>
+                </button>
               </div>
 
-              {/* 가족 구성원 1줄 필터 (누가 어디를 갔고/갈지 한눈에) */}
-              <div className="grid grid-cols-5 gap-1">
-                {[{ id: "전체", name: "전체" }, ...FAMILY_MEMBERS].map((m) => (
-                  <button
-                    key={m.id}
-                    type="button"
-                    onClick={() => setBucketMemberFilter(m.id)}
-                    className={`py-1 px-1 rounded-xl border flex items-center justify-center gap-1 text-[11.5px] font-extrabold whitespace-nowrap transition ${
-                      bucketMemberFilter === m.id
-                        ? "bg-stone-900 text-white border-stone-900"
-                        : "bg-stone-50 text-stone-700 border-stone-200 hover:bg-white"
-                    }`}
-                  >
-                    {m.id !== "전체" && <MemberAvatar member={m} size="sm" />}
-                    <span>{m.name}</span>
-                  </button>
-                ))}
-              </div>
-
-              {/* 상태 필터 (전체 / 갈 곳 / 다녀옴) + 날씨 추천 */}
-              <div className="flex items-center justify-between gap-1.5 flex-wrap">
-                <div className="flex items-center gap-1">
+              {/* 2줄: 상태 + 가족/분류 슬림 필터 */}
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <div className="inline-flex items-center bg-stone-100 p-0.5 rounded-xl shrink-0">
                   {[
-                    { id: "all", label: `전체(${bucketList.length})` },
-                    { id: "planned", label: `📍 갈 곳(${plannedCount})` },
-                    { id: "done", label: `✅ 다녀옴(${doneCount})` }
+                    { id: "all", label: "전체" },
+                    { id: "planned", label: "갈 곳" },
+                    { id: "done", label: "다녀옴" }
                   ].map((st) => (
                     <button
                       key={st.id}
                       type="button"
-                      onClick={() => {
-                        setBucketStatusFilter(st.id);
-                        if (st.id === "done") setBucketHideDone(false);
-                      }}
-                      className={`px-2 py-1 rounded-full text-[11px] font-extrabold border whitespace-nowrap transition ${
-                        bucketStatusFilter === st.id
-                          ? "bg-[#5E7A65] text-white border-[#5E7A65]"
-                          : "bg-white text-stone-600 border-stone-200"
+                      onClick={() => setBucketStatusFilter(st.id)}
+                      className={`px-2 py-1 rounded-lg text-[11px] font-extrabold whitespace-nowrap transition ${
+                        bucketStatusFilter === st.id ? "bg-[#5E7A65] text-white" : "text-stone-600"
                       }`}
                     >
                       {st.label}
                     </button>
                   ))}
                 </div>
+                <select
+                  value={bucketMemberFilter}
+                  onChange={(e) => setBucketMemberFilter(e.target.value)}
+                  aria-label="가족 필터"
+                  className="px-2 py-1 rounded-xl border border-stone-200 bg-stone-50 text-[11.5px] font-bold text-stone-700"
+                >
+                  <option value="전체">👨‍👩‍👧‍👦 가족 전체</option>
+                  {FAMILY_MEMBERS.map((m) => (
+                    <option key={m.id} value={m.id}>{m.name}</option>
+                  ))}
+                </select>
+                <select
+                  value={bucketCatFilter}
+                  onChange={(e) => setBucketCatFilter(e.target.value)}
+                  aria-label="분류 필터"
+                  className="px-2 py-1 rounded-xl border border-stone-200 bg-stone-50 text-[11.5px] font-bold text-stone-700"
+                >
+                  {["전체", "나들이/여행", "키즈카페/체험", "맛집", "우리집 목표"].map((cat) => (
+                    <option key={cat} value={cat}>{cat === "전체" ? "🏷️ 분류 전체" : cat}</option>
+                  ))}
+                </select>
                 {weatherInfo && (
                   <button
                     type="button"
                     onClick={() => setBucketWeatherOnly((v) => !v)}
-                    className={`px-2 py-1 rounded-full text-[10.5px] font-extrabold border whitespace-nowrap ${
+                    className={`px-2 py-1 rounded-xl text-[11px] font-extrabold border whitespace-nowrap ${
                       bucketWeatherOnly
                         ? "bg-stone-900 text-white border-stone-900"
-                        : "bg-[#FAF8F3] text-stone-700 border-stone-200"
+                        : "bg-[#FAF8F3] text-stone-600 border-stone-200"
                     }`}
                   >
-                    {bucketWeatherOnly ? "날씨 맞춤 ON" : `${isBadWeather ? "☔ 실내" : "☀️ 야외"} 추천`}
+                    {isBadWeather ? "☔ 실내" : "☀️ 야외"}
                   </button>
                 )}
-              </div>
-
-              {/* 장소 추가 폼 (기본 슬림 1줄 + 상세 펼치기) */}
-              <form onSubmit={handleAddBucketItem} className="space-y-2 pt-1 border-t border-stone-100">
-                <div className="flex gap-1.5">
-                  <input
-                    id="bucket-title-input"
-                    type="text"
-                    value={bucketForm.title}
-                    onFocus={() => setIsBucketAddExpanded(true)}
-                    onChange={(e) => setBucketForm((p) => ({ ...p, title: e.target.value }))}
-                    placeholder="장소명 입력 (예: 에버랜드, 양평 딸기체험)"
-                    className="flex-1 min-w-0 px-3 py-2 rounded-xl border border-stone-200 text-[13px] font-bold bg-stone-50 focus:bg-white"
-                  />
+                {hasActiveFilter && (
                   <button
                     type="button"
-                    onClick={() => setIsBucketAddExpanded((v) => !v)}
-                    className="px-2.5 py-2 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-[11.5px] font-extrabold whitespace-nowrap shrink-0"
+                    onClick={() => {
+                      setBucketStatusFilter("all");
+                      setBucketMemberFilter("전체");
+                      setBucketCatFilter("전체");
+                      setBucketWeatherOnly(false);
+                    }}
+                    className="px-2 py-1 rounded-xl text-[11px] font-extrabold text-stone-500 hover:text-stone-800 whitespace-nowrap"
                   >
-                    {isBucketAddExpanded ? "접기" : "상세"}
+                    초기화
                   </button>
-                  <button
-                    type="submit"
-                    className="px-3 py-2 rounded-xl bg-stone-900 text-white text-[12.5px] font-extrabold whitespace-nowrap shrink-0"
-                  >
-                    + 추가
-                  </button>
-                </div>
-
-                {isBucketAddExpanded && (
-                  <div className="space-y-2 p-2.5 rounded-xl bg-[#FAF8F3] border border-stone-200/80">
-                    {/* 누가 갔는지/갈 건지 + 상태 선택 */}
-                    <div className="flex items-center justify-between gap-1.5 flex-wrap">
-                      <div className="flex items-center gap-1 flex-wrap">
-                        {FAMILY_MEMBERS.map((m) => {
-                          const on = (bucketForm.members || []).includes(m.id);
-                          return (
-                            <button
-                              key={m.id}
-                              type="button"
-                              onClick={() =>
-                                setBucketForm((p) => {
-                                  const cur = Array.isArray(p.members) ? p.members : [];
-                                  const next = cur.includes(m.id) ? cur.filter((x) => x !== m.id) : [...cur, m.id];
-                                  return { ...p, members: next.length > 0 ? next : [m.id] };
-                                })
-                              }
-                              className={`px-2 py-0.5 rounded-full text-[11px] font-extrabold border whitespace-nowrap transition ${
-                                on ? "bg-stone-900 text-white border-stone-900" : "bg-white text-stone-500 border-stone-200"
-                              }`}
-                            >
-                              {m.name}
-                            </button>
-                          );
-                        })}
-                      </div>
-                      <div className="inline-flex bg-stone-200/70 p-0.5 rounded-lg shrink-0">
-                        {[
-                          { val: false, label: "📍 갈 곳" },
-                          { val: true, label: "✅ 다녀옴" }
-                        ].map((opt) => (
-                          <button
-                            key={String(opt.val)}
-                            type="button"
-                            onClick={() => setBucketForm((p) => ({ ...p, done: opt.val }))}
-                            className={`px-2 py-0.5 rounded-md text-[10.5px] font-extrabold whitespace-nowrap ${
-                              bucketForm.done === opt.val ? "bg-white text-stone-900 shadow-2xs" : "text-stone-500"
-                            }`}
-                          >
-                            {opt.label}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* 네이버지도/구글맵 링크 붙여넣기 + 자동 위치찾기 */}
-                    <div className="flex items-center gap-1.5">
-                      <input
-                        type="text"
-                        value={bucketForm.mapUrl}
-                        onChange={(e) => {
-                          const v = e.target.value;
-                          const c = parseCoordsFromMapUrl(v);
-                          setBucketForm((p) => ({
-                            ...p,
-                            mapUrl: v,
-                            ...(c ? { lat: c.lat, lng: c.lng } : {})
-                          }));
-                        }}
-                        placeholder="네이버지도·구글맵 링크 붙여넣기 (선택)"
-                        className="flex-1 min-w-0 px-2.5 py-1.5 rounded-xl border border-stone-200 text-[11.5px] font-medium bg-white"
-                      />
-                      <button
-                        type="button"
-                        disabled={isGeocodingBucket}
-                        onClick={handleLocateBucketForm}
-                        className="px-2.5 py-1.5 rounded-xl bg-[#EEF3EE] hover:bg-[#DFE9E0] border border-[#C9D8CC] text-[#35503C] text-[11px] font-extrabold whitespace-nowrap shrink-0"
-                      >
-                        {isGeocodingBucket ? "찾는중..." : bucketForm.lat ? "📍 좌표완료" : "🔍 위치찾기"}
-                      </button>
-                    </div>
-
-                    <div className="grid grid-cols-3 gap-1.5">
-                      <select
-                        value={bucketForm.category}
-                        onChange={(e) => setBucketForm((p) => ({ ...p, category: e.target.value }))}
-                        className="px-2 py-1.5 rounded-xl border border-stone-200 text-[11.5px] font-bold bg-white"
-                      >
-                        {["나들이/여행", "키즈카페/체험", "맛집", "우리집 목표"].map((c) => (
-                          <option key={c} value={c}>{c}</option>
-                        ))}
-                      </select>
-                      <select
-                        value={bucketForm.weather}
-                        onChange={(e) => setBucketForm((p) => ({ ...p, weather: e.target.value }))}
-                        className="px-2 py-1.5 rounded-xl border border-stone-200 text-[11.5px] font-bold bg-white"
-                      >
-                        <option value="무관">🌤️ 날씨 무관</option>
-                        <option value="맑음">☀️ 맑은 날</option>
-                        <option value="실내">🏠 실내</option>
-                      </select>
-                      <input
-                        type="text"
-                        value={bucketForm.memo}
-                        onChange={(e) => setBucketForm((p) => ({ ...p, memo: e.target.value }))}
-                        placeholder="메모/후기"
-                        className="px-2.5 py-1.5 rounded-xl border border-stone-200 text-[11.5px] font-bold bg-white"
-                      />
-                    </div>
-                  </div>
                 )}
-              </form>
-
-              {/* 카테고리 필터 */}
-              <div className="flex items-center gap-1 overflow-x-auto pb-0.5">
-                {["전체", "나들이/여행", "키즈카페/체험", "맛집", "우리집 목표"].map((cat) => (
-                  <button
-                    key={cat}
-                    type="button"
-                    onClick={() => setBucketCatFilter(cat)}
-                    className={`px-2.5 py-1 rounded-full text-[11px] font-extrabold border whitespace-nowrap shrink-0 ${
-                      bucketCatFilter === cat
-                        ? "bg-stone-900 text-white border-stone-900"
-                        : "bg-stone-50 text-stone-600 border-stone-200"
-                    }`}
-                  >
-                    {cat}
-                  </button>
-                ))}
               </div>
             </div>
 
@@ -17731,96 +17714,138 @@ ${validText}
             {bucketViewMode === "map" && (
               <div className="space-y-2.5">
                 <div className="flex items-center justify-between px-1 text-[11px] font-bold text-stone-500">
-                  <div className="flex items-center gap-2">
-                    <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-[#35503C]" /> 다녀옴</span>
+                  <div className="flex items-center gap-2.5">
                     <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-amber-600" /> 갈 곳</span>
+                    <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-[#35503C]" /> 다녀옴</span>
                   </div>
-                  <span>지도 표시 {pinnedCount}/{filtered.length}곳</span>
+                  <span>지도 핀 {pinnedCount}/{filtered.length}곳</span>
                 </div>
 
                 <BucketMapView
                   items={filtered}
                   selectedId={selectedBucketMapItem?.id || null}
                   onSelectItem={(it) => setSelectedBucketMapItem(it)}
-                  onPickCoords={(lat, lng) => {
-                    if (!isBucketAddExpanded) return;
-                    setBucketForm((p) => ({ ...p, lat, lng }));
-                    showToast(`📍 지도에서 위치(${lat.toFixed(4)}, ${lng.toFixed(4)})를 선택했습니다!`);
-                  }}
                 />
 
                 {/* 지도에서 선택한 핀 상세 카드 */}
                 {selectedBucketMapItem && (() => {
-                  const sel = bucketList.find((x) => x.id === selectedBucketMapItem.id) || selectedBucketMapItem;
+                  const sel = bucketList.find((x) => x.id === selectedBucketMapItem.id);
+                  if (!sel) return null;
                   const mNames = getItemMembers(sel)
                     .map((id) => FAMILY_MEMBERS.find((f) => f.id === id)?.name || id)
                     .join(" · ");
                   return (
-                    <div className="bg-white rounded-2xl border-2 border-[#5E7A65] p-3 shadow-sm space-y-2">
+                    <div className="bg-white rounded-2xl border-2 border-[#5E7A65] p-3.5 shadow-sm space-y-2.5">
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-1.5 flex-wrap">
                             <span className={`px-1.5 py-0.5 rounded text-[10px] font-black ${sel.done ? "bg-[#EEF3EE] text-[#35503C]" : "bg-amber-100 text-amber-800"}`}>
                               {sel.done ? "✅ 다녀옴" : "📍 갈 곳"}
                             </span>
-                            <span className="text-[14px] font-black text-stone-900">{sel.title}</span>
+                            <span className="text-[14.5px] font-black text-stone-900">{sel.title}</span>
                           </div>
-                          <div className="text-[11.5px] font-bold text-stone-500 mt-0.5">
-                            👨‍👩‍👧‍👦 {mNames} {sel.doneDate ? `· ${sel.doneDate}` : ""} {sel.memo ? `· ${sel.memo}` : ""}
+                          <div className="text-[11.5px] font-bold text-stone-500 mt-1">
+                            👨‍👩‍👧‍👦 {mNames} · {sel.category || "나들이/여행"}{sel.doneDate ? ` · ${sel.doneDate}` : ""}
                           </div>
+                          {sel.address && (
+                            <div className="text-[11px] text-stone-400 mt-0.5 truncate">{sel.address}</div>
+                          )}
+                          {sel.memo && (
+                            <div className="text-[12px] font-semibold text-stone-700 mt-1">{sel.memo}</div>
+                          )}
                         </div>
                         <button
                           type="button"
                           onClick={() => setSelectedBucketMapItem(null)}
                           className="p-1 text-stone-400 hover:text-stone-700"
+                          aria-label="닫기"
                         >
                           <X className="w-4 h-4" />
                         </button>
                       </div>
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <a
-                          href={getNaverMapUrl(sel)}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="px-2.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-extrabold whitespace-nowrap"
-                        >
-                          🟢 네이버지도
-                        </a>
-                        <a
-                          href={getGoogleMapUrl(sel)}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="px-2.5 py-1.5 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-[11px] font-extrabold whitespace-nowrap"
-                        >
-                          🔵 구글맵
-                        </a>
-                        <button
-                          type="button"
-                          onClick={() => handleToggleBucketDone(sel)}
-                          className="px-2.5 py-1.5 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-800 text-[11px] font-extrabold whitespace-nowrap"
-                        >
-                          {sel.done ? "↩️ 갈 곳으로" : "✅ 다녀옴 체크"}
-                        </button>
+                      <div className="flex items-center justify-between gap-1.5 flex-wrap pt-1 border-t border-stone-100">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <a
+                            href={getNaverMapUrl(sel)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="px-2.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-extrabold whitespace-nowrap"
+                          >
+                            네이버지도
+                          </a>
+                          <a
+                            href={getGoogleMapUrl(sel)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="px-2.5 py-1.5 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-[11px] font-extrabold whitespace-nowrap"
+                          >
+                            구글맵
+                          </a>
+                          <button
+                            type="button"
+                            onClick={() => handleToggleBucketDone(sel)}
+                            className="px-2.5 py-1.5 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-800 text-[11px] font-extrabold whitespace-nowrap"
+                          >
+                            {sel.done ? "↩️ 갈 곳으로" : "✅ 다녀옴"}
+                          </button>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => openBucketAddModal(sel)}
+                            className="px-2 py-1.5 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-[11px] font-extrabold whitespace-nowrap"
+                          >
+                            ✏️ 수정
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingSchedule(null);
+                              setScheduleForm({
+                                title: sel.title,
+                                date: getTodayStr(),
+                                category: "가족행사",
+                                members: getItemMembers(sel),
+                                isAnnual: false,
+                                showDday: true,
+                                hasOriginYear: false,
+                                memo: sel.memo || ""
+                              });
+                              setIsScheduleModalOpen(true);
+                            }}
+                            className="px-2 py-1.5 rounded-xl bg-[#EEF3EE] text-[#35503C] text-[11px] font-extrabold whitespace-nowrap"
+                          >
+                            📅 일정
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteBucketItem(sel.id)}
+                            className="p-1.5 rounded-xl hover:bg-rose-50 text-stone-400 hover:text-rose-600"
+                            title="삭제"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </div>
                     </div>
                   );
                 })()}
 
-                {/* 아직 좌표가 없는 기존 버킷 항목 -> 1탭 자동 핀 추가 */}
+                {/* 위치 미등록 항목 -> 누르면 검색·확인 모달 오픈 */}
                 {unpinnedItems.length > 0 && (
                   <div className="bg-white rounded-2xl border border-stone-200 p-3 space-y-1.5">
                     <div className="text-[11.5px] font-extrabold text-stone-500">
-                      📌 위치 미등록 항목 ({unpinnedItems.length}건) · 누르면 자동 검색해 지도에 핀 표시
+                      📌 위치 미지정 ({unpinnedItems.length}건) · 눌러서 검색 후 지도 핀 지정
                     </div>
                     <div className="flex flex-wrap gap-1.5">
                       {unpinnedItems.map((it) => (
                         <button
                           key={it.id}
                           type="button"
-                          onClick={() => handleAutoLocateExistingBucket(it)}
+                          onClick={() => openBucketAddModal(it, true)}
                           className="px-2.5 py-1 rounded-xl bg-stone-50 hover:bg-[#EEF3EE] border border-stone-200 text-[11.5px] font-extrabold text-stone-700 whitespace-nowrap"
                         >
-                          📍 {it.title}
+                          🔍 {it.title}
                         </button>
                       ))}
                     </div>
@@ -17834,8 +17859,8 @@ ${validText}
               filtered.length === 0 ? (
                 renderStatusState({
                   type: "empty",
-                  title: "조건에 맞는 버킷리스트가 없어요",
-                  description: "위 입력창에 가족이 다녀온 곳이나 가고 싶은 곳을 추가해 보세요."
+                  title: "표시할 버킷리스트가 없어요",
+                  description: "오른쪽 위 [+ 장소 추가]를 눌러 위치를 검색하고 확인한 뒤 추가해 보세요."
                 })
               ) : (
                 <div className="space-y-2">
@@ -17847,7 +17872,7 @@ ${validText}
                     return (
                       <div
                         key={item.id}
-                        className={`p-3 rounded-2xl border flex items-start justify-between gap-2 transition ${
+                        className={`p-3 rounded-2xl border flex items-start justify-between gap-2.5 transition ${
                           item.done ? "bg-stone-50 border-stone-200" : "bg-white border-stone-200 shadow-sm"
                         }`}
                       >
@@ -17857,35 +17882,36 @@ ${validText}
                           className={`w-5 h-5 mt-0.5 rounded-lg border flex items-center justify-center shrink-0 ${
                             item.done ? "bg-[#5E7A65] border-[#5E7A65] text-white" : "bg-white border-stone-300"
                           }`}
+                          title={item.done ? "갈 곳으로 되돌리기" : "다녀옴 체크"}
                         >
                           {item.done && <Check className="w-3.5 h-3.5" />}
                         </button>
                         <div className="flex-1 min-w-0 space-y-1">
-                          <div className={`text-[13.5px] font-black break-keep ${item.done ? "text-stone-500" : "text-stone-900"}`}>
-                            {item.done ? "✅ " : "📍 "}{item.title}
+                          <div className={`text-[13.5px] font-black break-keep ${item.done ? "text-stone-500 line-through" : "text-stone-900"}`}>
+                            {item.title}
                           </div>
                           <div className="flex items-center gap-1 flex-wrap text-[10.5px] font-bold">
                             <span className="px-1.5 py-0.5 rounded bg-[#EEF3EE] text-[#35503C] whitespace-nowrap">{mNames}</span>
-                            <span className="px-1.5 py-0.5 rounded bg-stone-100 text-stone-700 whitespace-nowrap">{item.category || "나들이/여행"}</span>
-                            {item.memo && <span className="text-stone-500 truncate">{item.memo}</span>}
+                            <span className="px-1.5 py-0.5 rounded bg-stone-100 text-stone-600 whitespace-nowrap">{item.category || "나들이/여행"}</span>
                             {item.doneDate && <span className="text-emerald-700 whitespace-nowrap">{item.doneDate}</span>}
+                            {item.memo && <span className="text-stone-500 truncate">{item.memo}</span>}
                           </div>
-                          <div className="flex items-center gap-1 pt-0.5 flex-wrap">
+                          <div className="flex items-center gap-1.5 pt-0.5 flex-wrap">
                             <a
                               href={getNaverMapUrl(item)}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="px-2 py-0.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-800 text-[10px] font-extrabold whitespace-nowrap"
+                              className="px-2 py-0.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-800 text-[10.5px] font-extrabold whitespace-nowrap"
                             >
-                              🟢 네이버
+                              네이버
                             </a>
                             <a
                               href={getGoogleMapUrl(item)}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="px-2 py-0.5 rounded-lg bg-sky-50 hover:bg-sky-100 border border-sky-200 text-sky-800 text-[10px] font-extrabold whitespace-nowrap"
+                              className="px-2 py-0.5 rounded-lg bg-sky-50 hover:bg-sky-100 border border-sky-200 text-sky-800 text-[10.5px] font-extrabold whitespace-nowrap"
                             >
-                              🔵 구글맵
+                              구글맵
                             </a>
                             {hasCoords ? (
                               <button
@@ -17894,22 +17920,30 @@ ${validText}
                                   setSelectedBucketMapItem(item);
                                   setBucketViewMode("map");
                                 }}
-                                className="px-2 py-0.5 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 text-[10px] font-extrabold whitespace-nowrap"
+                                className="px-2 py-0.5 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 text-[10.5px] font-extrabold whitespace-nowrap"
                               >
                                 🗺️ 지도보기
                               </button>
                             ) : (
                               <button
                                 type="button"
-                                onClick={() => handleAutoLocateExistingBucket(item)}
-                                className="px-2 py-0.5 rounded-lg bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-800 text-[10px] font-extrabold whitespace-nowrap"
+                                onClick={() => openBucketAddModal(item, true)}
+                                className="px-2 py-0.5 rounded-lg bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-800 text-[10.5px] font-extrabold whitespace-nowrap"
                               >
-                                📍 위치찾기
+                                🔍 위치 지정
                               </button>
                             )}
                           </div>
                         </div>
-                        <div className="flex items-center gap-1 shrink-0">
+                        <div className="flex items-center gap-0.5 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => openBucketAddModal(item)}
+                            className="p-1.5 rounded-lg hover:bg-stone-100 text-stone-400 hover:text-stone-700"
+                            title="수정"
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </button>
                           <button
                             type="button"
                             onClick={() => {
@@ -17926,10 +17960,10 @@ ${validText}
                               });
                               setIsScheduleModalOpen(true);
                             }}
-                            className="px-2 py-1 rounded-lg bg-[#EEF3EE] text-[#35503C] text-[10.5px] font-extrabold whitespace-nowrap"
+                            className="p-1.5 rounded-lg hover:bg-[#EEF3EE] text-[#35503C]"
                             title="일정으로 잡기"
                           >
-                            📅 일정
+                            <CalendarDays className="w-3.5 h-3.5" />
                           </button>
                           <button
                             type="button"
@@ -17943,6 +17977,29 @@ ${validText}
                       </div>
                     );
                   })}
+                  {doneCount > 0 && (
+                    <div className="pt-1 flex justify-end">
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          if (!requireEditorAccess()) return;
+                          if (!window.confirm(`다녀온 버킷리스트 ${doneCount}건을 정리할까요?`)) return;
+                          const doneIds = bucketList.filter((b) => b.done).map((b) => b.id);
+                          setBucketList((prev) => prev.filter((b) => !b.done));
+                          if (selectedBucketMapItem && doneIds.includes(selectedBucketMapItem.id)) {
+                            setSelectedBucketMapItem(null);
+                          }
+                          if (user && db) {
+                            await Promise.all(doneIds.map((bid) => deleteDoc(getDocRef("family_bucket_v1", bid)).catch(() => {})));
+                          }
+                          showToast(`🧹 다녀온 항목 ${doneIds.length}건을 정리했습니다.`);
+                        }}
+                        className="px-2.5 py-1 rounded-xl text-[11px] font-bold text-stone-400 hover:text-rose-600 hover:bg-rose-50"
+                      >
+                        🧹 다녀옴 일괄 정리 ({doneCount}건)
+                      </button>
+                    </div>
+                  )}
                 </div>
               )
             )}
@@ -18956,9 +19013,10 @@ ${validText}
                                   <button
                                     type="button"
                                     onClick={() => {
-                                      setPageBulkEditText(blocksToNotionMarkdown(blocks));
-                                      setPageBulkEditorTab("write");
-                                      setIsPageBulkEditMode(true);
+                                      setPagePasteText(blocksToNotionMarkdown(blocks));
+                                      setPagePasteColor("amber");
+                                      setPagePasteMode("replace");
+                                      setIsPagePasteModalOpen(true);
                                     }}
                                     className="text-[11px] font-bold text-stone-400 hover:text-stone-700"
                                   >
@@ -20606,14 +20664,13 @@ ${validText}
 
             {/* 서브탭 2: 국가예방접종 + 선택접종 + 영유아 건강검진 + 완료/미완료 구분 */}
             {babySubTab === "vaccines" && (() => {
-              const todayKey = getTodayStr();
               const enriched = BABY_VACCINES_AND_CHECKUPS.map((item) => {
                 const checkKey = `${activeChild.id}_${item.id}`;
                 const isDone = Boolean(babyChecks[checkKey]?.done);
                 const doneDate = babyChecks[checkKey]?.doneDate;
                 const recDate = addMonthsToDateStr(activeChild.birthDate, item.addMonths, item.addDays);
                 const isScheduled = schedules.some((s) => s.id === `baby-${activeChild.id}-${item.id}`);
-                const dDiff = getDaysDiff(todayKey, recDate);
+                const dDiff = getDaysDiff(recDate);
                 return { ...item, isDone, doneDate, recDate, isScheduled, dDiff };
               });
               const typeFiltered = enriched.filter((it) => vaccineTypeFilter === "전체" || it.type === vaccineTypeFilter);
@@ -22022,18 +22079,7 @@ ${validText}
       })()}
 
 
-      {showScrollTop && (
-        <button
-          type="button"
-          onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
-          style={{ bottom: "calc(4.75rem + env(safe-area-inset-bottom))" }}
-          className="fixed left-3.5 z-30 w-9 h-9 rounded-full bg-white/80 backdrop-blur-sm hover:bg-white border border-stone-300/80 shadow-md text-[14px] font-black text-stone-700 flex items-center justify-center transition active:scale-95"
-          title="맨 위로 이동"
-          aria-label="맨 위로 이동"
-        >
-          ↑
-        </button>
-      )}
+
 
 
       {(() => {
@@ -22592,7 +22638,7 @@ ${validText}
       )}
 
 
-      {showScrollTopBtn && !isQuickFabOpen && !isPageVisualEditMode && !isPagePasteModalOpen && !activeTableTaskModal && (
+      {showScrollTop && !isQuickFabOpen && !isPageVisualEditMode && !isPagePasteModalOpen && !activeTableTaskModal && !isBucketModalOpen && (
         <button
           type="button"
           onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
@@ -23037,6 +23083,249 @@ ${validText}
       {/* ==========================================
           모달: 패치노트 (업데이트 히스토리 열람 및 새 기록 작성)
       ========================================== */}
+      {/* ==========================================
+          모달: 버킷리스트 위치 검색·확인 후 추가/수정
+      ========================================== */}
+      {isBucketModalOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+          onClick={() => setIsBucketModalOpen(false)}
+        >
+          <div
+            className="bg-white rounded-3xl max-w-md w-full p-5 space-y-3.5 max-h-[90vh] overflow-y-auto shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between">
+              <h3 className="text-[15.5px] font-black text-stone-900">
+                {editingBucketId ? "✏️ 버킷리스트 장소 수정" : "📍 위치 검색 후 버킷리스트 추가"}
+              </h3>
+              <button
+                type="button"
+                onClick={() => setIsBucketModalOpen(false)}
+                className="p-1 text-stone-400 hover:text-stone-700"
+                aria-label="닫기"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Step 1: 위치 검색 */}
+            <div className="space-y-1.5">
+              <label className="text-[11.5px] font-extrabold text-stone-600 block">
+                1. 장소 검색 (또는 네이버·구글 지도 링크 붙여넣기)
+              </label>
+              <div className="flex gap-1.5">
+                <input
+                  type="text"
+                  autoFocus
+                  value={bucketSearchQuery}
+                  onChange={(e) => setBucketSearchQuery(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      handleSearchBucketPlaces(bucketSearchQuery);
+                    }
+                  }}
+                  placeholder="예: 에버랜드, 양평 두물머리, 제주 아쿠아플라넷"
+                  className="flex-1 min-w-0 px-3 py-2 rounded-xl border border-stone-200 bg-stone-50 focus:bg-white text-[13px] font-bold"
+                />
+                <button
+                  type="button"
+                  disabled={isGeocodingBucket}
+                  onClick={() => handleSearchBucketPlaces(bucketSearchQuery)}
+                  className="px-3.5 py-2 rounded-xl bg-stone-900 hover:bg-stone-800 disabled:opacity-50 text-white text-[12px] font-extrabold whitespace-nowrap shrink-0"
+                >
+                  {isGeocodingBucket ? "검색중..." : "🔍 검색"}
+                </button>
+              </div>
+              {bucketSearchError && (
+                <div className="text-[11.5px] font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-2.5 py-1.5">
+                  {bucketSearchError}
+                </div>
+              )}
+              {bucketSearchResults.length > 0 && (
+                <div className="border border-stone-200 rounded-2xl divide-y divide-stone-100 max-h-[160px] overflow-y-auto bg-white">
+                  {bucketSearchResults.map((res, idx) => {
+                    const isPicked =
+                      Number(bucketForm.lat) === Number(res.lat) &&
+                      Number(bucketForm.lng) === Number(res.lng);
+                    return (
+                      <button
+                        key={`${res.lat}-${res.lng}-${idx}`}
+                        type="button"
+                        onClick={() => {
+                          setBucketForm((p) => ({
+                            ...p,
+                            title: p.title || res.shortName,
+                            placeName: res.shortName,
+                            address: res.displayName,
+                            lat: res.lat,
+                            lng: res.lng
+                          }));
+                        }}
+                        className={`w-full text-left px-3 py-2 transition flex items-start justify-between gap-2 ${
+                          isPicked ? "bg-[#EEF3EE]" : "hover:bg-stone-50"
+                        }`}
+                      >
+                        <div className="min-w-0">
+                          <div className="text-[12.5px] font-black text-stone-900 truncate">
+                            📍 {res.shortName}
+                          </div>
+                          <div className="text-[11px] text-stone-500 line-clamp-1">
+                            {res.displayName}
+                          </div>
+                        </div>
+                        {isPicked && (
+                          <span className="text-[10.5px] font-black text-[#35503C] shrink-0">선택됨</span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Step 2: 지도 미리보기 및 위치 확인 */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="text-[11.5px] font-extrabold text-stone-600">2. 지도에서 위치 확인</span>
+                {bucketForm.lat && bucketForm.lng ? (
+                  <span className="text-[11px] font-black text-[#35503C]">✅ 위치 확인됨</span>
+                ) : (
+                  <span className="text-[11px] font-bold text-stone-400">검색하거나 지도를 눌러 지정</span>
+                )}
+              </div>
+              <BucketLocationPreviewMap
+                lat={bucketForm.lat}
+                lng={bucketForm.lng}
+                label={bucketForm.title || bucketForm.placeName || bucketSearchQuery}
+                onPickCoords={(lat, lng) => {
+                  setBucketForm((p) => ({
+                    ...p,
+                    lat,
+                    lng,
+                    address: `지도 직접 지정 (${lat.toFixed(4)}, ${lng.toFixed(4)})`
+                  }));
+                }}
+              />
+              {bucketForm.address && (
+                <div className="text-[11px] text-stone-500 bg-stone-50 px-2.5 py-1.5 rounded-xl border border-stone-200/80 truncate">
+                  📌 {bucketForm.address}
+                </div>
+              )}
+            </div>
+
+            {/* Step 3: 표시 이름 & 간단 옵션 */}
+            <form onSubmit={handleSaveBucketItem} className="space-y-2.5 pt-1 border-t border-stone-100">
+              <div className="space-y-1">
+                <label className="text-[11.5px] font-extrabold text-stone-600 block">
+                  3. 버킷리스트 이름 & 정보
+                </label>
+                <input
+                  type="text"
+                  value={bucketForm.title}
+                  onChange={(e) => setBucketForm((p) => ({ ...p, title: e.target.value }))}
+                  placeholder="리스트에 표시할 이름 (예: 용인 에버랜드)"
+                  className="w-full px-3 py-2 rounded-xl border border-stone-200 bg-stone-50 focus:bg-white text-[13px] font-bold"
+                />
+              </div>
+
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <div className="flex items-center gap-1 flex-wrap">
+                  {FAMILY_MEMBERS.map((m) => {
+                    const on = (bucketForm.members || []).includes(m.id);
+                    return (
+                      <button
+                        key={m.id}
+                        type="button"
+                        onClick={() =>
+                          setBucketForm((p) => {
+                            const cur = Array.isArray(p.members) ? p.members : [];
+                            const next = cur.includes(m.id) ? cur.filter((x) => x !== m.id) : [...cur, m.id];
+                            return { ...p, members: next.length > 0 ? next : [m.id] };
+                          })
+                        }
+                        className={`px-2 py-1 rounded-full text-[11px] font-extrabold border whitespace-nowrap transition ${
+                          on ? "bg-stone-900 text-white border-stone-900" : "bg-white text-stone-500 border-stone-200"
+                        }`}
+                      >
+                        {m.name}
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="inline-flex bg-stone-200/70 p-0.5 rounded-lg shrink-0">
+                  {[
+                    { val: false, label: "📍 갈 곳" },
+                    { val: true, label: "✅ 다녀옴" }
+                  ].map((opt) => (
+                    <button
+                      key={String(opt.val)}
+                      type="button"
+                      onClick={() => setBucketForm((p) => ({ ...p, done: opt.val }))}
+                      className={`px-2 py-1 rounded-md text-[11px] font-extrabold whitespace-nowrap ${
+                        bucketForm.done === opt.val ? "bg-white text-stone-900 shadow-2xs" : "text-stone-500"
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-1.5">
+                <select
+                  value={bucketForm.category}
+                  onChange={(e) => setBucketForm((p) => ({ ...p, category: e.target.value }))}
+                  className="px-2.5 py-2 rounded-xl border border-stone-200 text-[12px] font-bold bg-white"
+                >
+                  {["나들이/여행", "키즈카페/체험", "맛집", "우리집 목표"].map((c) => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
+                <select
+                  value={bucketForm.weather}
+                  onChange={(e) => setBucketForm((p) => ({ ...p, weather: e.target.value }))}
+                  className="px-2.5 py-2 rounded-xl border border-stone-200 text-[12px] font-bold bg-white"
+                >
+                  <option value="무관">🌤️ 날씨 무관</option>
+                  <option value="맑음">☀️ 맑은 날</option>
+                  <option value="실내">🏠 실내</option>
+                </select>
+              </div>
+
+              <input
+                type="text"
+                value={bucketForm.memo}
+                onChange={(e) => setBucketForm((p) => ({ ...p, memo: e.target.value }))}
+                placeholder="한 줄 메모나 후기 (선택)"
+                className="w-full px-3 py-2 rounded-xl border border-stone-200 text-[12.5px] font-semibold bg-white"
+              />
+
+              <div className="flex items-center gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setIsBucketModalOpen(false)}
+                  className="flex-1 py-2.5 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-[13px] font-extrabold"
+                >
+                  취소
+                </button>
+                <button
+                  type="submit"
+                  className="flex-[2] py-2.5 rounded-xl bg-stone-900 hover:bg-stone-800 text-white text-[13px] font-extrabold"
+                >
+                  {editingBucketId
+                    ? "수정 저장"
+                    : bucketForm.lat
+                    ? "이 위치로 추가"
+                    : "위치 없이 추가"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {isPatchModalOpen && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-md w-full p-5 space-y-4 max-h-[90vh] overflow-y-auto">
@@ -23046,9 +23335,7 @@ ${validText}
                   <ClipboardList className="w-4 h-4 text-amber-600" />
                   <span>우리 가족 식탁 앱 패치노트 (업데이트 기록)</span>
                 </h3>
-                <p className="text-[12.5px] text-stone-500">
-                  그동안의 기능 보완 내역을 확인하고 새 패치 기록을 남길 수 있습니다.
-                </p>
+
               </div>
               <button onClick={() => setIsPatchModalOpen(false)}>
                 <X className="w-5 h-5 text-stone-400" />
@@ -23145,7 +23432,7 @@ ${validText}
                     </div>
                   </div>
                   <ul className="space-y-1 text-[13.5px] text-stone-600 pl-1">
-                    {toSafeArray(pn.changes).map((line, i) => (
+                    {toSafeArray(Array.isArray(pn.changes) && pn.changes.length > 0 ? pn.changes : pn.items).map((line, i) => (
                       <li key={i} className="leading-snug break-keep">
                         • {line}
                       </li>
