@@ -10821,6 +10821,104 @@ ${validText}
     showToast("🏠 개인 일정을 가족 공유 일정으로 이동했습니다!");
   };
 
+  const shiftIsoDateByDays = (isoStr, deltaDays) => {
+    const m = String(isoStr || "").match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (!m) return getTodayStr();
+    const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]) + deltaDays);
+    return formatDate(d);
+  };
+
+  const handlePostponeEventByOneDay = async (ev) => {
+    if (!ev || !ev.id) return;
+    const nextDate = shiftIsoDateByDays(ev.date || getTodayStr(), 1);
+    const nextEndDate = ev.endDate && ev.endDate > ev.date ? shiftIsoDateByDays(ev.endDate, 1) : "";
+
+    if (ev._isFamily) {
+      if (!requireEditorAccess("schedule")) return;
+      const { _isFamily, ...cleanEv } = ev;
+      const updated = { ...cleanEv, date: nextDate };
+      setSchedules((prev) => prev.map((s) => (s.id === ev.id ? updated : s)));
+      if (user && db) {
+        await setDoc(getDocRef("family_schedules_v4", ev.id), updated, { merge: true }).catch(() => {});
+      }
+      setCalDayPopupDate(nextDate);
+      setCalDayPopupItem({ ...updated, _isFamily: true });
+      setScheduleSelectedDate(nextDate);
+      setScheduleMonth(nextDate.slice(0, 7));
+      recordActivity("일정", "수정", `${updated.title} (+1일 이동)`);
+      showToast(`⏭️ '${updated.title}'을 ${nextDate}로 미뤘습니다.`);
+      return;
+    }
+
+    if (!isAdminUnlocked) return;
+    const prevBucketId = ev._bucketDocId || null;
+    const ownerVal = ev.owner === "아리나" ? "아리나" : currentAdminOwner;
+    const nextYear = /^\d{4}/.test(nextDate) ? nextDate.slice(0, 4) : "misc";
+    const nextBucketId = prevBucketId ? `bucket_${ownerVal}_${nextYear}` : null;
+    const { _isFamily, ...cleanPriv } = ev;
+    const updatedPriv = {
+      ...stripPrivateMeta(cleanPriv),
+      date: nextDate,
+      endDate: nextEndDate,
+      updatedAtMs: Date.now()
+    };
+    const stateUpdated = nextBucketId ? { ...updatedPriv, _bucketDocId: nextBucketId } : updatedPriv;
+    const nextAll = privateSchedules.map((x) => (x.id === ev.id ? stateUpdated : x));
+    setPrivateSchedules(nextAll);
+    try {
+      localStorage.setItem("kim_private_schedules_cache_v1", JSON.stringify(nextAll));
+    } catch (e) {}
+    if (user && db) {
+      if (prevBucketId) {
+        await syncPrivateBucketInCloud(prevBucketId, nextAll);
+        if (nextBucketId && nextBucketId !== prevBucketId) {
+          await syncPrivateBucketInCloud(nextBucketId, nextAll);
+        }
+      } else {
+        await setDoc(getDocRef("admin_private_schedules_v1", ev.id), updatedPriv, { merge: true }).catch(() => {});
+      }
+    }
+    setCalDayPopupDate(nextDate);
+    setCalDayPopupItem({ ...stateUpdated, _isFamily: false });
+    setScheduleSelectedDate(nextDate);
+    setScheduleMonth(nextDate.slice(0, 7));
+    showToast(`⏭️ '${updatedPriv.title}'을 ${nextDate}로 미뤘습니다.`);
+  };
+
+  const handleCopyFamilyEventToPrivate = async (famEv) => {
+    if (!isAdminUnlocked || !famEv) return;
+    const dateVal = String(famEv.date || getTodayStr()).slice(0, 10);
+    const id = `priv-copy-${Date.now()}`;
+    const payload = {
+      id,
+      owner: currentAdminOwner,
+      isPrivate: true,
+      title: String(famEv.title || "").trim(),
+      date: dateVal,
+      endDate: "",
+      time: "",
+      color: "default",
+      highlight: false,
+      isAnnual: Boolean(famEv.isAnnual),
+      memo: String(famEv.memo || "").trim(),
+      done: Boolean(famEv.done),
+      updatedAtMs: Date.now()
+    };
+    const nextAll = [payload, ...privateSchedules];
+    setPrivateSchedules(nextAll);
+    try {
+      localStorage.setItem("kim_private_schedules_cache_v1", JSON.stringify(nextAll));
+    } catch (e) {}
+    if (user && db) {
+      await setDoc(getDocRef("admin_private_schedules_v1", id), payload, { merge: true }).catch(() => {});
+    }
+    if (scheduleCalScope === "family") {
+      setScheduleCalScope("all");
+    }
+    setCalDayPopupItem({ ...payload, _isFamily: false });
+    showToast(`🔒 ${currentAdminOwner} 개인 일정·다이어리로 복사했습니다!`);
+  };
+
   const handleTogglePrivateScheduleDone = async (item) => {
     if (!isAdminUnlocked) return;
     const updated = { ...item, done: !item.done, updatedAtMs: Date.now() };
@@ -16144,6 +16242,39 @@ ${validText}
                     )}
                   </div>
 
+                  {/* 🕰️ N년 전 오늘 (과거 개인 기록이 있을 때만 1줄 표시) */}
+                  {isAdminUnlocked && effectiveScope !== "family" && (() => {
+                    const todayMmdd = todayStr.slice(5, 10);
+                    const curYr = Number(todayStr.slice(0, 4));
+                    const pastMemories = myPrivateItems
+                      .filter((it) => !it.isAnnual && String(it.date || "").slice(5, 10) === todayMmdd && Number(String(it.date || "").slice(0, 4)) < curYr)
+                      .sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")));
+                    if (pastMemories.length === 0) return null;
+                    const topMem = pastMemories[0];
+                    const yrDiff = curYr - Number(String(topMem.date || "").slice(0, 4));
+                    return (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setScheduleMonth(topMem.date.slice(0, 7));
+                          setScheduleSelectedDate(topMem.date);
+                          setCalDayPopupDate(topMem.date);
+                          setCalDayPopupItem({ ...topMem, _isFamily: false });
+                        }}
+                        className="w-full px-3 py-1.5 bg-amber-50/85 hover:bg-amber-100/70 border-b border-amber-200/70 flex items-center justify-between gap-2 text-left transition"
+                      >
+                        <span className="text-[11px] font-extrabold text-amber-950 truncate">
+                          🕰️ {yrDiff}년 전 오늘 ({String(topMem.date).slice(0, 4)}): {topMem.title}
+                        </span>
+                        {pastMemories.length > 1 && (
+                          <span className="text-[10px] font-black text-amber-700 shrink-0">
+                            +{pastMemories.length - 1}건
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })()}
+
                   {/* 조르테 스타일 요일 헤더 + 6주 풀그리드 (좌우 스와이프 월 이동 지원) */}
                   <div
                     onTouchStart={(e) => {
@@ -16202,8 +16333,6 @@ ${validText}
                           : cell.dow === 6
                           ? "text-sky-600"
                           : "text-stone-800";
-                        const compactMode = cell.combined.length >= 2;
-
                         return (
                           <button
                             key={cell.dateStr}
@@ -16217,39 +16346,37 @@ ${validText}
                               setCalDayPopupItem(null);
                               setCalDayPopupDate(cell.dateStr);
                             }}
-                            className={`min-h-[86px] px-[1.5px] py-[2px] border-r border-b border-stone-200/75 last:border-r-0 text-left flex flex-col items-stretch justify-start transition ${cellBg} ${
+                            className={`min-h-[90px] px-[1.5px] py-[2px] border-r border-b border-stone-200/75 last:border-r-0 text-left flex flex-col items-stretch justify-start transition overflow-hidden ${cellBg} ${
                               isSelected ? "ring-1 ring-inset ring-stone-700 z-10" : ""
                             }`}
                           >
                             <div className="flex items-start justify-between gap-0.5 mb-[2px] px-[1px]">
                               <span
-                                className={`text-[11.5px] font-black leading-none ${numColor} ${
-                                  isToday ? "bg-rose-300/80 text-stone-900 px-1 py-[1px] rounded-[3px] w-full" : ""
+                                className={`text-[13px] font-bold leading-none ${numColor} ${
+                                  isToday ? "bg-rose-300/80 text-stone-900 px-1 py-[1px] rounded-[2px] w-full" : ""
                                 }`}
                               >
                                 {cell.dayNum}
                               </span>
                               {cell.lunarLbl && !isToday && (
-                                <span className="text-[8px] font-bold text-stone-400 leading-none shrink-0">
+                                <span className="text-[7.5px] font-semibold text-stone-400 leading-none pt-[1px] shrink-0">
                                   {cell.lunarLbl}
                                 </span>
                               )}
                             </div>
-                            <div className="space-y-[1.5px] w-full overflow-hidden">
-                              {cell.combined.slice(0, 5).map((ev) => {
+                            <div className="space-y-[1px] w-full overflow-hidden">
+                              {cell.combined.slice(0, 6).map((ev) => {
                                 if (ev._isFamily) {
                                   const famCls =
                                     ev.category === "기념일/생일"
-                                      ? "border-l-2 border-pink-500 bg-pink-50/90 text-pink-900"
+                                      ? "border-l-[1.5px] border-pink-500 bg-pink-50/90 text-pink-900"
                                       : ev.done
-                                      ? "border-l-2 border-stone-300 bg-stone-100 text-stone-400 line-through"
-                                      : "border-l-2 border-indigo-500 bg-indigo-50/85 text-indigo-900";
+                                      ? "border-l-[1.5px] border-stone-300 bg-stone-100 text-stone-400 line-through"
+                                      : "border-l-[1.5px] border-indigo-500 bg-indigo-50/85 text-indigo-900";
                                   return (
                                     <div
                                       key={`f-${ev.id}`}
-                                      className={`text-[9px] leading-[1.15] tracking-[-0.025em] font-bold pl-[2px] pr-[1px] rounded-r-[2px] ${
-                                        compactMode ? "truncate" : "line-clamp-2 break-all"
-                                      } ${famCls}`}
+                                      className={`text-[8px] leading-[1.22] tracking-[-0.04em] font-semibold pl-[2px] whitespace-nowrap overflow-hidden rounded-r-[2px] ${famCls}`}
                                     >
                                       {ev.title}
                                     </div>
@@ -16260,19 +16387,17 @@ ${validText}
                                 return (
                                   <div
                                     key={`p-${ev.id}`}
-                                    className={`text-[9px] leading-[1.15] tracking-[-0.025em] font-bold px-[1px] rounded-[2px] ${
-                                      compactMode ? "truncate" : "line-clamp-2 break-all"
-                                    } ${cMeta.textCls} ${
-                                      ev.highlight && cMeta.bgCls ? cMeta.bgCls : ""
+                                    className={`text-[8px] leading-[1.22] tracking-[-0.04em] font-semibold whitespace-nowrap overflow-hidden rounded-[2px] ${cMeta.textCls} ${
+                                      ev.highlight && cMeta.bgCls ? `${cMeta.bgCls} px-[1px]` : ""
                                     } ${ev.done ? "line-through opacity-45" : ""}`}
                                   >
                                     {dispText}
                                   </div>
                                 );
                               })}
-                              {cell.combined.length > 5 && (
-                                <div className="text-[8.5px] font-extrabold text-stone-400 px-[1px] leading-none">
-                                  +{cell.combined.length - 5}
+                              {cell.combined.length > 6 && (
+                                <div className="text-[7.5px] font-bold text-stone-400 leading-none">
+                                  +{cell.combined.length - 6}
                                 </div>
                               )}
                             </div>
@@ -22062,6 +22187,8 @@ ${validText}
                     <div className="flex items-center gap-2.5 min-w-0 flex-1">
                       {validPhoto ? (
                         <img
+                          loading="lazy"
+                          decoding="async"
                           src={r.photoDataUrl}
                           alt={r.title}
                           onClick={() => {
@@ -22877,6 +23004,8 @@ ${validText}
                                     <div className="flex items-center gap-1.5 shrink-0">
                                       {act.photoUrl && (
                                         <img
+                                          loading="lazy"
+                                          decoding="async"
                                           src={act.photoUrl}
                                           alt="활동 사진"
                                           onClick={(ev) => {
@@ -24364,6 +24493,8 @@ ${validText}
                                     className="rounded-xl overflow-hidden border border-stone-200 bg-white cursor-pointer hover:opacity-95 transition"
                                   >
                                     <img
+                                      loading="lazy"
+                                      decoding="async"
                                       src={pUrl}
                                       alt={`${entry.title || "육아일기 사진"} ${pIdx + 1}`}
                                       className={`w-full object-cover ${getDiaryEntryPhotos(entry).length >= 2 ? "h-40" : "max-h-72"}`}
@@ -25694,7 +25825,7 @@ ${validText}
 
               {/* 본문 영역: 상세 보기 OR 일자 목록 */}
               {activeDetail ? (
-                <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-white">
+                <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3 bg-white">
                   <div className="pb-2.5 border-b border-stone-300">
                     <div className={`text-[17px] font-black text-stone-900 break-keep leading-snug ${activeDetail.done ? "line-through opacity-50" : ""}`}>
                       {activeDetail.title}
@@ -25732,10 +25863,58 @@ ${validText}
                     )}
                     <div>
                       <div className="text-[11.5px] font-extrabold text-stone-400">메모</div>
-                      <div className="text-[13px] text-stone-700 mt-0.5 whitespace-pre-line break-keep leading-relaxed">
+                      <div className={`mt-0.5 whitespace-pre-line break-keep leading-relaxed ${activeDetail.memo ? "text-[13px] text-stone-700" : "text-[12px] text-stone-400"}`}>
                         {activeDetail.memo || "등록된 메모가 없습니다."}
                       </div>
                     </div>
+                    {activeDetail._isFamily && Array.isArray(activeDetail.attachments) && activeDetail.attachments.length > 0 && (
+                      <div>
+                        <div className="text-[11.5px] font-extrabold text-stone-400 mb-1">첨부파일</div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {activeDetail.attachments.map((att) => {
+                            const isImg = String(att.mimeType || "").startsWith("image/") || /^data:image\//.test(String(att.dataUrl || ""));
+                            return (
+                              <a
+                                key={att.id}
+                                href={att.dataUrl}
+                                download={att.name}
+                                onClick={(e) => {
+                                  if (isImg) {
+                                    e.preventDefault();
+                                    setDiaryLightboxUrl(att.dataUrl);
+                                  }
+                                }}
+                                className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-sky-50 hover:bg-sky-100 border border-sky-200 text-sky-900 text-[11.5px] font-bold max-w-[200px]"
+                              >
+                                <span>{isImg ? "🖼️" : "📎"}</span>
+                                <span className="truncate">{att.name}</span>
+                              </a>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  {/* 조르테 스타일 하단 우측 빠른 액션 (+1일 미루기 · 가족→개인 복사) */}
+                  <div className="pt-3 mt-auto flex flex-wrap items-center justify-end gap-1.5">
+                    {!activeDetail.isAnnual && (
+                      <button
+                        type="button"
+                        onClick={() => handlePostponeEventByOneDay(activeDetail)}
+                        className="px-2.5 py-1.5 rounded-lg border border-stone-300 bg-stone-50 hover:bg-stone-100 text-stone-800 text-[11.5px] font-extrabold transition"
+                      >
+                        ⏭️ 내일로 미루기 (+1일)
+                      </button>
+                    )}
+                    {isAdminUnlocked && activeDetail._isFamily && (
+                      <button
+                        type="button"
+                        onClick={() => handleCopyFamilyEventToPrivate(activeDetail)}
+                        className="px-2.5 py-1.5 rounded-lg border border-stone-300 bg-white hover:bg-stone-100 text-stone-800 text-[11.5px] font-extrabold transition"
+                      >
+                        🔒 내 다이어리로 복사
+                      </button>
+                    )}
                   </div>
                 </div>
               ) : (
@@ -25939,6 +26118,7 @@ ${validText}
               <div className="flex gap-1.5">
                 <input
                   type="text"
+                  enterKeyHint="search"
                   autoFocus
                   value={bucketSearchQuery}
                   onChange={(e) => setBucketSearchQuery(e.target.value)}
@@ -25946,6 +26126,10 @@ ${validText}
                     if (e.key === "Enter") {
                       e.preventDefault();
                       handleSearchBucketPlaces(bucketSearchQuery);
+                    } else if (e.key === "Escape") {
+                      setBucketSearchQuery("");
+                      setBucketSearchResults([]);
+                      setBucketSearchError("");
                     }
                   }}
                   placeholder="예: 에버랜드, 양평 두물머리, 제주 아쿠아플라넷"
@@ -26558,6 +26742,8 @@ ${validText}
                         <div className="flex items-center gap-2 min-w-0 flex-1">
                           {isImg && att.dataUrl ? (
                             <img
+                              loading="lazy"
+                              decoding="async"
                               src={att.dataUrl}
                               alt={att.name}
                               onClick={() => setDiaryLightboxUrl(att.dataUrl)}
@@ -31920,6 +32106,8 @@ ${validText}
                       <div key={att.id} className="p-2 rounded-xl border border-stone-200 bg-stone-50/70 flex items-center gap-2.5">
                         {att.isImage ? (
                           <img
+                            loading="lazy"
+                            decoding="async"
                             src={att.url}
                             alt={att.name}
                             onClick={() => setDiaryLightboxUrl(att.url)}

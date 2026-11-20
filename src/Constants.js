@@ -1177,7 +1177,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v12.54";
+export const APP_CODE_VERSION = "v12.57";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1195,7 +1195,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-21 03:00";
+export const APP_BUILD_DATE = "2026-11-21 03:28";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1262,6 +1262,40 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v12.57",
+    version: "v12.57",
+    date: "2026-11-21",
+    title: "조르테 원본 비율 맞춤 달력 일정 글씨 크기(8px)·말줄임표 제거 최적화",
+    category: "UI 개선",
+    changes: [
+      "달력 날짜 숫자(13px) 대비 일정 글씨를 조르테 원본 비율(8px · 좁은 자간)로 축소하고 말줄임표(...) 대신 깔끔한 셀 끝 클리핑을 적용해 한 칸에 5~6글자·하루 최대 6건까지 한눈에 표시"
+    ]
+  },
+  {
+    id: "patch-v12.56",
+    version: "v12.56",
+    date: "2026-11-21",
+    title: "과거 기록 'N년 전 오늘' 1줄 회고 · 리스트 이미지 지연로딩 · 버킷 검색 개선",
+    category: "편의성 · 성능",
+    changes: [
+      "관리자 본인 개인일정(조르테 15년 기록 포함) 중 오늘과 같은 날짜의 과거 기록이 있을 때만 달력 상단에 1줄 회고 배너('🕰️ N년 전 오늘')를 노출하고 터치 시 상세 팝업으로 직행",
+      "레시피·육아일기·첨부파일 썸네일 이미지 5건에 loading='lazy' decoding='async'를 추가해 스크롤 성능 개선",
+      "버킷리스트 장소 검색 입력창에 모바일 검색 키보드(enterKeyHint='search') 및 ESC 즉시 초기화 지원 추가"
+    ]
+  },
+  {
+    id: "patch-v12.55",
+    version: "v12.55",
+    date: "2026-11-21",
+    title: "조르테 상세 팝업 '내일로 미루기(+1일)' · '가족→개인 다이어리 복사' 및 첨부 바로보기",
+    category: "편의성 · 고도화",
+    changes: [
+      "조르테 일자 상세 팝업에 '⏭️ 내일로 미루기(+1일)' 버튼 추가 (가족·개인 일정 및 다일정·연도 경계 버킷 자동 동기화)",
+      "가족 일정을 1탭으로 로그인 본인의 개인 일정·다이어리로 복사('🔒 내 다이어리로 복사')해 별도 메모 관리 지원",
+      "조르테 상세 팝업에서 가족 일정에 첨부된 사진(확대 보기)·문서 파일을 닫지 않고 바로 열람할 수 있도록 고도화"
+    ]
+  },
   {
     id: "patch-v12.54",
     version: "v12.54",
