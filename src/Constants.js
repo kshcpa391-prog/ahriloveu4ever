@@ -1176,7 +1176,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v12.40";
+export const APP_CODE_VERSION = "v12.41";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1194,7 +1194,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-20 17:30";
+export const APP_BUILD_DATE = "2026-11-20 18:00";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1261,6 +1261,17 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v12.41",
+    version: "v12.41",
+    date: "2026-11-20",
+    title: "안드로이드·크롬 뒤로가기 즉시 종료 근본 해결 (사용자 제스처 기반 실제 History 스택 + URL 해시 동기화) · 현재 탭 재클릭 상단 이동",
+    items: [
+      "안드로이드 Chrome/PWA의 History Manipulation Intervention(비제스처 pushState 스킵 정책)으로 뒤로가기 시 앱이 바로 꺼지던 문제를 근본 해결: 최초 터치 제스처 가드 등록 + 탭·서브탭·공유노트·모달 전환마다 고유 URL 해시(#tab=...)와 함께 실제 history.pushState 적재",
+      "하단 내비게이션에서 이미 보고 있는 탭을 한 번 더 누르면 맨 위로 부드럽게 스크롤되도록 모바일 표준 UX 추가",
+      "현재 열람 중인 탭 이름에 맞춰 브라우저/PWA 탭 제목(document.title) 자동 동기화"
+    ]
+  },
   {
     id: "patch-v12.40",
     version: "v12.40",

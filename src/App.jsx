@@ -10638,7 +10638,7 @@ ${validText}
   }, [isQuickFabOpen, isRoutineModalOpen, isActivityModalOpen, isEditorUnlockModalOpen, isMealCopyModalOpen, diaryExportPreviewUrl, diaryLightboxUrl, isWeatherModalOpen, liveActivityPopup, activityEditModal, zipImportPicker, magazineMonth, isSettingsOpen, isHeroPhotoModalOpen, isPageModalOpen, pageMenuTargetId, isPagePasteModalOpen, activeTableTaskModal, isDreamLinksModalOpen, isPatchModalOpen, isBucketModalOpen, isScheduleModalOpen, isMealModalOpen, isFridgeModalOpen, isNoticeModalOpen, isRecipeModalOpen, isDaycareModalOpen, isReceiptModalOpen, isInventoryExportOpen, stockInItem, quickLogRecipe, cookingConfirmModal, quickFridgeItem]);
 
   // ==========================================
-  // 모바일·브라우저 뒤로가기 이전 화면 이동 (History API + popstate)
+  // 모바일·브라우저 뒤로가기 이전 화면 이동 (Chrome User-Gesture History API + URL 해시)
   // ==========================================
   const navHistoryRef = useRef([]);
   const lastNavSnapRef = useRef({
@@ -10648,47 +10648,65 @@ ${validText}
     bucketViewMode: "map"
   });
   const isPoppingHistoryRef = useRef(false);
+  const historyArmedRef = useRef(false);
   const lastBackExitPromptMsRef = useRef(0);
+  const prevAnyModalOpenRef = useRef(false);
   const backCloseHandlerRef = useRef(null);
 
+  const buildNavHash = (snap, modalFlag = false) => {
+    const parts = [`tab=${encodeURIComponent(snap.activeTab || "home")}`];
+    if (snap.activeTab === "baby" && snap.babySubTab) {
+      parts.push(`sub=${encodeURIComponent(snap.babySubTab)}`);
+    }
+    if (snap.activeTab === "pages" && snap.selectedPageId) {
+      parts.push(`page=${encodeURIComponent(snap.selectedPageId)}`);
+    }
+    if (snap.activeTab === "bucket" && snap.bucketViewMode) {
+      parts.push(`view=${encodeURIComponent(snap.bucketViewMode)}`);
+    }
+    if (modalFlag) parts.push("m=1");
+    return `#${parts.join("&")}`;
+  };
+
+  const anyOverlayModalOpen = Boolean(
+    isMoreNavOpen ||
+    isQuickFabOpen ||
+    isBucketModalOpen ||
+    isScheduleModalOpen ||
+    isMealModalOpen ||
+    isFridgeModalOpen ||
+    isNoticeModalOpen ||
+    isRecipeModalOpen ||
+    isDaycareModalOpen ||
+    isReceiptModalOpen ||
+    isInventoryExportOpen ||
+    isPatchModalOpen ||
+    isSettingsOpen ||
+    isRoutineModalOpen ||
+    isActivityModalOpen ||
+    isEditorUnlockModalOpen ||
+    isMealCopyModalOpen ||
+    isWeatherModalOpen ||
+    isDreamLinksModalOpen ||
+    isHeroPhotoModalOpen ||
+    isPageModalOpen ||
+    pageMenuTargetId ||
+    isPagePasteModalOpen ||
+    activeTableTaskModal ||
+    stockInItem ||
+    quickLogRecipe ||
+    cookingConfirmModal ||
+    quickFridgeItem ||
+    liveActivityPopup ||
+    activityEditModal ||
+    zipImportPicker ||
+    magazineMonth ||
+    diaryExportPreviewUrl ||
+    diaryLightboxUrl
+  );
+
   backCloseHandlerRef.current = () => {
-    const anyModalOpen = Boolean(
-      isMoreNavOpen ||
-      isQuickFabOpen ||
-      isBucketModalOpen ||
-      isScheduleModalOpen ||
-      isMealModalOpen ||
-      isFridgeModalOpen ||
-      isNoticeModalOpen ||
-      isRecipeModalOpen ||
-      isDaycareModalOpen ||
-      isReceiptModalOpen ||
-      isInventoryExportOpen ||
-      isPatchModalOpen ||
-      isSettingsOpen ||
-      isRoutineModalOpen ||
-      isActivityModalOpen ||
-      isEditorUnlockModalOpen ||
-      isMealCopyModalOpen ||
-      isWeatherModalOpen ||
-      isDreamLinksModalOpen ||
-      isHeroPhotoModalOpen ||
-      isPageModalOpen ||
-      pageMenuTargetId ||
-      isPagePasteModalOpen ||
-      activeTableTaskModal ||
-      stockInItem ||
-      quickLogRecipe ||
-      cookingConfirmModal ||
-      quickFridgeItem ||
-      liveActivityPopup ||
-      activityEditModal ||
-      zipImportPicker ||
-      magazineMonth ||
-      diaryExportPreviewUrl ||
-      diaryLightboxUrl
-    );
-    if (anyModalOpen) {
+    if (anyOverlayModalOpen) {
       setIsMoreNavOpen(false);
       setIsQuickFabOpen(false);
       setIsBucketModalOpen(false);
@@ -10756,43 +10774,83 @@ ${validText}
     return "at_root";
   };
 
-  // 최초 진입 시 History Sentinel 등록 + popstate 리스너 연결
+  // 최초 사용자 터치/클릭 제스처 시점에 유저-액티베이티드 History 가드 등록 (Chrome History Intervention 우회)
   useEffect(() => {
     if (typeof window === "undefined" || !window.history?.pushState) return;
-    try {
-      if (!window.history.state?.appNavSentinel) {
-        window.history.replaceState({ appNavSentinel: true }, "");
-        window.history.pushState({ appNavGuard: true }, "");
-      }
-    } catch (e) {}
+    const armHistoryOnGesture = () => {
+      if (historyArmedRef.current) return;
+      historyArmedRef.current = true;
+      try {
+        const curHash = buildNavHash(lastNavSnapRef.current, false);
+        window.history.replaceState({ appNavRoot: true }, "", window.location.pathname + window.location.search);
+        window.history.pushState({ appNavGuard: true, snap: { ...lastNavSnapRef.current } }, "", curHash);
+      } catch (e) {}
+    };
+
+    window.addEventListener("pointerdown", armHistoryOnGesture, { once: true, capture: true, passive: true });
+    window.addEventListener("touchstart", armHistoryOnGesture, { once: true, capture: true, passive: true });
+    window.addEventListener("click", armHistoryOnGesture, { once: true, capture: true, passive: true });
+    window.addEventListener("keydown", armHistoryOnGesture, { once: true, capture: true });
 
     const onPopState = () => {
       const result = backCloseHandlerRef.current ? backCloseHandlerRef.current() : "at_root";
       if (result !== "at_root") {
-        try {
-          window.history.pushState({ appNavGuard: true }, "");
-        } catch (e) {}
+        // 남아있는 스택이 비어 루트 경계에 닿았을 때만 다음 뒤로가기 보호용 해시 보강
+        if (window.history.state?.appNavRoot) {
+          try {
+            window.history.pushState(
+              { appNavGuard: true, snap: { ...lastNavSnapRef.current } },
+              "",
+              buildNavHash(lastNavSnapRef.current, false)
+            );
+          } catch (e) {}
+        }
         return;
       }
       const now = Date.now();
       if (now - lastBackExitPromptMsRef.current < 2500) {
-        // 2.5초 이내 재입력 시 정상 종료 허용
         return;
       }
       lastBackExitPromptMsRef.current = now;
       showToast("한 번 더 뒤로가기를 누르면 앱이 종료됩니다.");
       try {
-        window.history.pushState({ appNavGuard: true }, "");
+        window.history.pushState({ appNavGuard: true, snap: { ...lastNavSnapRef.current } }, "", "#tab=home");
       } catch (e) {}
     };
 
     window.addEventListener("popstate", onPopState);
-    return () => window.removeEventListener("popstate", onPopState);
+    return () => {
+      window.removeEventListener("pointerdown", armHistoryOnGesture, { capture: true });
+      window.removeEventListener("touchstart", armHistoryOnGesture, { capture: true });
+      window.removeEventListener("click", armHistoryOnGesture, { capture: true });
+      window.removeEventListener("keydown", armHistoryOnGesture, { capture: true });
+      window.removeEventListener("popstate", onPopState);
+    };
   }, []);
 
-  // 화면(탭 · 육아 서브탭 · 공유노트 · 버킷뷰) 이동 시 이전 화면 스택에 기록 + 탭 변경 시 상단 스크롤
+  // 화면(탭 · 육아 서브탭 · 공유노트 · 버킷뷰) 이동 시 실제 브라우저 History 엔트리(URL 해시 포함) 적재 + 타이틀 동기화
   useEffect(() => {
+    const TAB_TITLES = {
+      home: "홈",
+      daily: "식단",
+      monthly: "월간·식비",
+      schedule: "일정·루틴",
+      fridge: "냉장고",
+      shopping: "장보기",
+      notices: "가족공지",
+      ai: "AI추천",
+      bucket: "버킷리스트",
+      pages: "공유노트",
+      recipes: "레시피",
+      baby: "육아"
+    };
+    if (typeof document !== "undefined") {
+      const label = TAB_TITLES[activeTab];
+      document.title = label && activeTab !== "home" ? `혁리나목율♡ · ${label}` : "혁리나목율♡";
+    }
+
     const prev = lastNavSnapRef.current;
+    const nextSnap = { activeTab, babySubTab, selectedPageId, bucketViewMode };
     const changed =
       prev.activeTab !== activeTab ||
       (activeTab === "baby" && prev.babySubTab !== babySubTab) ||
@@ -10803,13 +10861,20 @@ ${validText}
 
     if (isPoppingHistoryRef.current) {
       isPoppingHistoryRef.current = false;
-      lastNavSnapRef.current = { activeTab, babySubTab, selectedPageId, bucketViewMode };
+      lastNavSnapRef.current = nextSnap;
       return;
     }
 
     const tabChanged = prev.activeTab !== activeTab;
     navHistoryRef.current = [...navHistoryRef.current.slice(-29), { ...prev }];
-    lastNavSnapRef.current = { activeTab, babySubTab, selectedPageId, bucketViewMode };
+    lastNavSnapRef.current = nextSnap;
+
+    if (typeof window !== "undefined" && window.history?.pushState) {
+      try {
+        historyArmedRef.current = true;
+        window.history.pushState({ appNav: true, snap: nextSnap }, "", buildNavHash(nextSnap, false));
+      } catch (e) {}
+    }
 
     if (tabChanged && typeof window !== "undefined") {
       try {
@@ -10819,6 +10884,22 @@ ${validText}
       }
     }
   }, [activeTab, babySubTab, selectedPageId, bucketViewMode]);
+
+  // 모달/팝업이 열릴 때도 실제 History 엔트리 적재 (뒤로가기 누르면 모달만 깔끔하게 닫힘)
+  useEffect(() => {
+    const wasOpen = prevAnyModalOpenRef.current;
+    prevAnyModalOpenRef.current = anyOverlayModalOpen;
+    if (!wasOpen && anyOverlayModalOpen && typeof window !== "undefined" && window.history?.pushState) {
+      try {
+        historyArmedRef.current = true;
+        window.history.pushState(
+          { appNavModal: true, snap: { ...lastNavSnapRef.current } },
+          "",
+          buildNavHash(lastNavSnapRef.current, true)
+        );
+      } catch (e) {}
+    }
+  }, [anyOverlayModalOpen]);
 
   // 주요 모달 오픈 시 배경 화면 스크롤 잠금 (모바일 스크롤 밀림 방지)
   useEffect(() => {
@@ -23308,6 +23389,11 @@ ${validText}
             <button
               key={item.id}
               onClick={() => {
+                if (activeTab === item.id) {
+                  setIsMoreNavOpen(false);
+                  window.scrollTo({ top: 0, behavior: "smooth" });
+                  return;
+                }
                 if (item.id === "daily") {
                   openDailyTodayAll();
                 } else if (item.id === "baby") {
@@ -23315,7 +23401,6 @@ ${validText}
                 } else {
                   setActiveTab(item.id);
                   setIsMoreNavOpen(false);
-                  window.scrollTo({ top: 0, behavior: "instant" });
                 }
               }}
               className={`flex flex-col items-center justify-center py-1.5 rounded-xl transition ${
