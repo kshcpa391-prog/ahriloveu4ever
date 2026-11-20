@@ -1176,7 +1176,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v12.33";
+export const APP_CODE_VERSION = "v12.34";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1194,7 +1194,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-20 10:45";
+export const APP_BUILD_DATE = "2026-11-20 10:55";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1261,6 +1261,18 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v12.34",
+    version: "v12.34",
+    date: "2026-11-20",
+    title: "공유노트 키보드 상단 밀착 도킹 툴바(visualViewport 연동) · 다른 항목 즉시 커서 전환 · 다중 블록 일괄 서식",
+    items: [
+      "모바일 키보드가 올라올 때 상단 고정 툴바가 화면 위로 밀려 안 보이던 문제를 근본 해결 — 툴바를 화면 하단(키보드 바로 위, visualViewport 실시간 추적)에 z-50으로 밀착 도킹해 어떤 위치에서 편집해도 100% 항상 노출",
+      "항목 편집 중 다른 항목(섹션·체크·메모)을 누르면 기존 수정 내용을 자동 저장하고 즉시 커서를 이동해 끊김 없이 연속 편집 가능",
+      "툴바에 [☑️ 다중선택] 모드 추가 — 여러 항목을 한 번에 블록 선택해 글자 크기·굵기·글자색·형광펜·들여쓰기·유형 변경·삭제를 1탭으로 일괄 적용",
+      "하단 여백 자동 보강으로 마지막 항목도 키보드·툴바에 가려지지 않도록 개선 및 전체 구문·배포 무결성 최종 확인"
+    ]
+  },
   {
     id: "patch-v12.33",
     version: "v12.33",
