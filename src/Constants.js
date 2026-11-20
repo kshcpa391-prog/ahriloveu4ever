@@ -234,6 +234,7 @@ export const DEFAULT_HOME_MENU_ORDER = [
   "recipes",
   "notices",
   "pages",
+  "bucket",
   "ai"
 ];
 
@@ -253,7 +254,7 @@ export const DEFAULT_HOME_LAYOUT = {
     hiddenMenus: [],
     blockSizes: {},
     menuSizes: {},
-    menuOrder: ["daily", "fridge", "shopping", "ai", "routine_tab", "monthly_cal", "monthly_exp", "baby", "recipes", "notices", "pages"]
+    menuOrder: ["daily", "fridge", "shopping", "ai", "routine_tab", "monthly_cal", "monthly_exp", "baby", "recipes", "notices", "pages", "bucket"]
   },
   night: {
     blocks: ["action_feed", "menu_grid"],
@@ -261,7 +262,7 @@ export const DEFAULT_HOME_LAYOUT = {
     hiddenMenus: [],
     blockSizes: {},
     menuSizes: {},
-    menuOrder: ["daily", "monthly_exp", "routine_tab", "fridge", "shopping", "monthly_cal", "baby", "recipes", "notices", "pages", "ai"]
+    menuOrder: ["daily", "monthly_exp", "routine_tab", "fridge", "shopping", "monthly_cal", "baby", "recipes", "notices", "pages", "bucket", "ai"]
   }
 };
 
@@ -1176,7 +1177,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v12.42";
+export const APP_CODE_VERSION = "v12.43";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1194,7 +1195,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-20 18:30";
+export const APP_BUILD_DATE = "2026-11-20 20:45";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1261,6 +1262,17 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v12.43",
+    version: "v12.43",
+    date: "2026-11-20",
+    title: "홈 화면 버킷리스트 메뉴 카드 추가 (갈 곳·다녀옴 실시간 현황 + 홈 편집 모드 연동) · 월간 메뉴 권한 매핑 수정",
+    items: [
+      "홈 화면 [🗂️ 가족 기록 · 소통] 영역에 [🌟 버킷리스트] 바로가기 카드를 추가하고 갈 곳·다녀옴 실시간 개수를 한눈에 표시",
+      "홈 편집 모드(✏️ 편집)에서 버킷리스트 카드의 순서 이동·크기 조절(반폭/전폭/크게)·숨김 설정 모두 지원",
+      "홈 메뉴 그리드에서 월간 식단(monthly_cal)·월간 식비(monthly_exp)가 육아지원군 권한 체크 시 monthly 탭 권한과 정확히 일치하도록 매핑 오류 수정"
+    ]
+  },
   {
     id: "patch-v12.42",
     version: "v12.42",

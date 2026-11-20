@@ -11828,6 +11828,25 @@ ${validText}
               setActiveTab("pages");
             }
           },
+          bucket: {
+            title: "🌟 버킷리스트",
+            actionLabel: "열기 >",
+            actionColor: "text-stone-500",
+            borderHover: "hover:border-stone-400",
+            sub: (() => {
+              const bDone = bucketList.filter((b) => b.done).length;
+              const bPlan = bucketList.length - bDone;
+              return bucketList.length > 0 ? (
+                <span>
+                  갈 곳 <span className="text-amber-600 font-black">{bPlan}</span> · 다녀옴{" "}
+                  <span className="text-[#35503C] font-black">{bDone}</span>
+                </span>
+              ) : (
+                <span className="text-stone-400">가고 싶은 곳 추가하기</span>
+              );
+            })(),
+            onClick: () => setActiveTab("bucket")
+          },
           ai: {
             title: "✨ AI추천",
             actionLabel: "열기 >",
@@ -12364,14 +12383,19 @@ ${validText}
           if (blockId === "menu_grid") {
             const visibleMenuIds = menuOrder.filter((id) => {
               if (!MENU_DEFS[id] || hiddenMenus.includes(id)) return false;
-              const targetTab = id === "routine_tab" ? "schedule" : id;
+              const targetTab =
+                id === "routine_tab"
+                  ? "schedule"
+                  : id === "monthly_cal" || id === "monthly_exp"
+                  ? "monthly"
+                  : id;
               return canViewTab(targetTab);
             });
             const gridPad = blockSizes.menu_grid === "compact" ? "gap-1.5" : blockSizes.menu_grid === "large" ? "gap-2.5" : "gap-2";
             const HOME_MENU_GROUPS = [
               { id: "meal", label: "🍽️ 식단 · 살림", ids: ["daily", "fridge", "shopping", "monthly_cal", "monthly_exp", "recipes", "ai"] },
               { id: "family", label: "👶 육아 · 일정", ids: ["baby", "routine_tab"] },
-              { id: "notes", label: "🗂️ 가족 기록 · 소통", ids: ["pages", "notices"] }
+              { id: "notes", label: "🗂️ 가족 기록 · 소통", ids: ["pages", "notices", "bucket"] }
             ];
             const assigned = new Set(HOME_MENU_GROUPS.flatMap((g) => g.ids));
             const extraIds = visibleMenuIds.filter((id) => !assigned.has(id));
