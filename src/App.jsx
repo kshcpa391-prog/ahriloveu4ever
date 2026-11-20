@@ -304,9 +304,11 @@ const ensureLeafletLoaded = () => {
 const BucketMapView = ({ items, selectedId, onSelectItem, onPickCoords }) => {
   const mapElRef = useRef(null);
   const mapInstRef = useRef(null);
+  const tileLayerRef = useRef(null);
   const markersLayerRef = useRef(null);
   const [mapReady, setMapReady] = useState(false);
   const [mapErr, setMapErr] = useState("");
+  const [mapTileMode, setMapTileMode] = useState("osm"); // osm | satellite
 
   useEffect(() => {
     let cancelled = false;
@@ -315,8 +317,8 @@ const BucketMapView = ({ items, selectedId, onSelectItem, onPickCoords }) => {
         if (cancelled || !mapElRef.current) return;
         if (!mapInstRef.current) {
           const map = L.map(mapElRef.current, { zoomControl: true }).setView([37.5665, 126.978], 11);
-          L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
-            attribution: "&copy; OpenStreetMap &copy; CARTO",
+          tileLayerRef.current = L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+            attribution: "&copy; OpenStreetMap",
             maxZoom: 19
           }).addTo(map);
           markersLayerRef.current = L.layerGroup().addTo(map);
@@ -338,10 +340,25 @@ const BucketMapView = ({ items, selectedId, onSelectItem, onPickCoords }) => {
   }, []);
 
   useEffect(() => {
+    if (!mapReady || !mapInstRef.current || !window.L) return;
+    const L = window.L;
+    if (tileLayerRef.current) {
+      try { mapInstRef.current.removeLayer(tileLayerRef.current); } catch (e) {}
+    }
+    const url =
+      mapTileMode === "satellite"
+        ? "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+        : "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
+    const attr = mapTileMode === "satellite" ? "&copy; Esri" : "&copy; OpenStreetMap";
+    tileLayerRef.current = L.tileLayer(url, { attribution: attr, maxZoom: 19 }).addTo(mapInstRef.current);
+  }, [mapReady, mapTileMode]);
+
+  useEffect(() => {
     return () => {
       if (mapInstRef.current) {
         try { mapInstRef.current.remove(); } catch (e) {}
         mapInstRef.current = null;
+        tileLayerRef.current = null;
         markersLayerRef.current = null;
       }
     };
@@ -391,6 +408,33 @@ const BucketMapView = ({ items, selectedId, onSelectItem, onPickCoords }) => {
   return (
     <div className="relative rounded-2xl overflow-hidden border border-stone-200 shadow-sm bg-stone-100">
       <div ref={mapElRef} className="w-full h-[310px] z-0" />
+      {mapReady && (
+        <div className="absolute top-2.5 right-2.5 z-[400] flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() => setMapTileMode((m) => (m === "osm" ? "satellite" : "osm"))}
+            className="px-2 py-1 rounded-lg bg-white/95 hover:bg-white border border-stone-300 shadow-sm text-[11px] font-extrabold text-stone-800 whitespace-nowrap"
+          >
+            {mapTileMode === "osm" ? "🛰️ 위성" : "🗺️ 기본"}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              if (!navigator.geolocation || !mapInstRef.current) return;
+              navigator.geolocation.getCurrentPosition(
+                (pos) => {
+                  mapInstRef.current?.setView([pos.coords.latitude, pos.coords.longitude], 14);
+                },
+                () => {}
+              );
+            }}
+            className="px-2 py-1 rounded-lg bg-white/95 hover:bg-white border border-stone-300 shadow-sm text-[11px] font-extrabold text-stone-800 whitespace-nowrap"
+            title="내 현재 위치로 이동"
+          >
+            📍 내 위치
+          </button>
+        </div>
+      )}
       {!mapReady && (
         <div className="absolute inset-0 bg-stone-50/90 flex items-center justify-center text-[12.5px] font-bold text-stone-500">
           🗺️ 가족 지도 불러오는 중...
@@ -22561,7 +22605,7 @@ ${validText}
         </button>
       )}
 
-      {isEditorUnlocked && !isPageVisualEditMode && !isPagePasteModalOpen && !activeTableTaskModal && !editingBlockId && (
+      {isEditorUnlocked && !isPageVisualEditMode && !isPagePasteModalOpen && !activeTableTaskModal && !editingBlockId && !(activeTab === "bucket" && bucketViewMode === "map") && (
         <button
           type="button"
           onClick={() => setIsQuickFabOpen((v) => !v)}

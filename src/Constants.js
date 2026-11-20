@@ -1176,7 +1176,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v12.36";
+export const APP_CODE_VERSION = "v12.37";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1194,7 +1194,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-20 13:50";
+export const APP_BUILD_DATE = "2026-11-20 14:00";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1261,6 +1261,17 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v12.37",
+    version: "v12.37",
+    date: "2026-11-20",
+    title: "버킷리스트 지도 'API KEY REQUIRED' 오류 해결 (무료 OSM 한국어 지도 + 위성지도 전환 · 내 위치 이동)",
+    items: [
+      "Carto 타일 서버의 API 키 요구 정책(API KEY REQUIRED)으로 지도가 하얗게 뜨던 오류를 API 키가 필요 없는 공식 OpenStreetMap 한국어 지도 타일(tile.openstreetmap.org)로 교체해 해결",
+      "지도 우측 상단에 [🗺️ 기본 / 🛰️ 위성] 지도 전환 버튼(Esri World Imagery 무료 위성) 및 [📍 내 위치] 원탭 이동 버튼 추가",
+      "버킷리스트 지도 화면에서 우측 하단 플로팅(+) 버튼이 지도 모서리를 가리지 않도록 자동 숨김 처리"
+    ]
+  },
   {
     id: "patch-v12.36",
     version: "v12.36",
