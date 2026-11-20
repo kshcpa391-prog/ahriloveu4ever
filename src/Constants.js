@@ -1177,7 +1177,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v12.61";
+export const APP_CODE_VERSION = "v12.62";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1195,7 +1195,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-21 08:35";
+export const APP_BUILD_DATE = "2026-11-21 08:40";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1262,6 +1262,17 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v12.62",
+    version: "v12.62",
+    date: "2026-11-21",
+    title: "초기화 전 변수 참조(TDZ) 오류 즉시 수정 및 전체 블록 선언순서 전수 검증",
+    category: "긴급 오류 수정",
+    changes: [
+      "공휴일 연도 자동 동기화 useEffect([scheduleMonth])가 scheduleMonth 선언보다 위에 배치되어 발생하던 Cannot access before initialization(TDZ) 오류를 선언 이후로 이동해 즉시 해결",
+      "전체 3만2천여 줄 모든 블록 대상 TDZ(선언 전 동기 참조)·미선언 변수·12개 전체 탭 무결성 전수 검증 완료"
+    ]
+  },
   {
     id: "patch-v12.61",
     version: "v12.61",

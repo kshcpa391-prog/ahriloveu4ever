@@ -1564,12 +1564,6 @@ function MainApp() {
     fetchKoreanHolidaysForYears([y - 1, y, y + 1]);
   }, []);
 
-  useEffect(() => {
-    const yr = Number(String(scheduleMonth || "").slice(0, 4));
-    if (yr >= 2015 && yr <= 2035) {
-      fetchKoreanHolidaysForYears([yr]);
-    }
-  }, [scheduleMonth]);
 
   const isHolidayOrWeekend = (dayStr) => {
     const dStr = String(dayStr || "").slice(0, 10);
@@ -2433,6 +2427,12 @@ function MainApp() {
 
   // 일정 탭 상태 + [신규] 전체 To-Do 체크리스트 필터 및 빠른 추가 상태
   const [scheduleMonth, setScheduleMonth] = useState(() => getCurrentYearMonth());
+  useEffect(() => {
+    const yr = Number(String(scheduleMonth || "").slice(0, 4));
+    if (yr >= 2015 && yr <= 2035) {
+      fetchKoreanHolidaysForYears([yr]);
+    }
+  }, [scheduleMonth]);
   const [scheduleSelectedDate, setScheduleSelectedDate] = useState(() => getTodayStr());
   const [scheduleMemberFilter, setScheduleMemberFilter] = useState("전체");
   const [scheduleCatFilter, setScheduleCatFilter] = useState("전체");
