@@ -858,6 +858,8 @@ function MainApp() {
   // 패치노트 기록 및 모달 상태
   const [patchNotes, setPatchNotes] = useState(INITIAL_PATCH_NOTES);
   const [isPatchModalOpen, setIsPatchModalOpen] = useState(false);
+  const [patchSearchQuery, setPatchSearchQuery] = useState("");
+  const [patchShowAll, setPatchShowAll] = useState(false);
   const [isMoreNavOpen, setIsMoreNavOpen] = useState(false);
   const [isOnline, setIsOnline] = useState(() =>
     typeof navigator !== "undefined" ? navigator.onLine : true
@@ -1501,7 +1503,7 @@ function MainApp() {
   const [activeTableTaskModal, setActiveTableTaskModal] = useState(null);
   const [taskModalDraft, setTaskModalDraft] = useState(null);
   const [monthlyBudget, setMonthlyBudget] = useState(() => {
-    return Number(localStorage.getItem("kim_family_budget") || 800000);
+    try { return Number(localStorage.getItem("kim_family_budget") || 800000); } catch (e) { return 800000; }
   });
 
 
@@ -2292,13 +2294,13 @@ function MainApp() {
     try { const saved = localStorage.getItem("kim_family_gemini_key"); return saved && (saved.startsWith("AIzaSy") || saved.startsWith("AQ.")) ? saved : EMBEDDED_GEMINI_KEY; } catch (e) { return EMBEDDED_GEMINI_KEY; }
   });
   const [openaiApiKey, setOpenaiApiKey] = useState(() => {
-    return localStorage.getItem("kim_family_openai_key") || "";
+    try { return localStorage.getItem("kim_family_openai_key") || ""; } catch (e) { return ""; }
   });
   const [tempOpenaiKeyInput, setTempOpenaiKeyInput] = useState(() => {
-    return localStorage.getItem("kim_family_openai_key") || "";
+    try { return localStorage.getItem("kim_family_openai_key") || ""; } catch (e) { return ""; }
   });
   const [aiProvider, setAiProvider] = useState(() => {
-    return localStorage.getItem("kim_family_ai_provider") || "auto";
+    try { return localStorage.getItem("kim_family_ai_provider") || "auto"; } catch (e) { return "auto"; }
   });
   const [selectedAiIngredients, setSelectedAiIngredients] = useState([]);
   const [aiTargetGroup, setAiTargetGroup] = useState("온가족 한끼");
@@ -3968,7 +3970,7 @@ function MainApp() {
   const handleToggleHeaderPin = () => {
     const next = !isHeaderPinned;
     setIsHeaderPinned(next);
-    localStorage.setItem("kim_header_pinned", String(next));
+    try { localStorage.setItem("kim_header_pinned", String(next)); } catch (e) {}
     showToast(
       next
         ? "상단 바 틀고정이 설정되었습니다 (스크롤 시 따라옴)"
@@ -10579,7 +10581,19 @@ ${validText}
       !activeTableTaskModal &&
       !isDreamLinksModalOpen &&
       !isPatchModalOpen &&
-      !isBucketModalOpen
+      !isBucketModalOpen &&
+      !isScheduleModalOpen &&
+      !isMealModalOpen &&
+      !isFridgeModalOpen &&
+      !isNoticeModalOpen &&
+      !isRecipeModalOpen &&
+      !isDaycareModalOpen &&
+      !isReceiptModalOpen &&
+      !isInventoryExportOpen &&
+      !stockInItem &&
+      !quickLogRecipe &&
+      !cookingConfirmModal &&
+      !quickFridgeItem
     ) return;
     const onEsc = (e) => {
       if (e.key === "Escape") {
@@ -10605,11 +10619,243 @@ ${validText}
         setIsDreamLinksModalOpen(false);
         setIsPatchModalOpen(false);
         setIsBucketModalOpen(false);
+        setIsScheduleModalOpen(false);
+        setIsMealModalOpen(false);
+        setIsFridgeModalOpen(false);
+        setIsNoticeModalOpen(false);
+        setIsRecipeModalOpen(false);
+        setIsDaycareModalOpen(false);
+        setIsReceiptModalOpen(false);
+        setIsInventoryExportOpen(false);
+        setStockInItem(null);
+        setQuickLogRecipe(null);
+        setCookingConfirmModal(null);
+        setQuickFridgeItem(null);
       }
     };
     window.addEventListener("keydown", onEsc);
     return () => window.removeEventListener("keydown", onEsc);
-  }, [isQuickFabOpen, isRoutineModalOpen, isActivityModalOpen, isEditorUnlockModalOpen, isMealCopyModalOpen, diaryExportPreviewUrl, diaryLightboxUrl, isWeatherModalOpen, liveActivityPopup, activityEditModal, zipImportPicker, magazineMonth, isSettingsOpen, isHeroPhotoModalOpen, isPageModalOpen, pageMenuTargetId, isPagePasteModalOpen, activeTableTaskModal, isDreamLinksModalOpen, isPatchModalOpen, isBucketModalOpen]);
+  }, [isQuickFabOpen, isRoutineModalOpen, isActivityModalOpen, isEditorUnlockModalOpen, isMealCopyModalOpen, diaryExportPreviewUrl, diaryLightboxUrl, isWeatherModalOpen, liveActivityPopup, activityEditModal, zipImportPicker, magazineMonth, isSettingsOpen, isHeroPhotoModalOpen, isPageModalOpen, pageMenuTargetId, isPagePasteModalOpen, activeTableTaskModal, isDreamLinksModalOpen, isPatchModalOpen, isBucketModalOpen, isScheduleModalOpen, isMealModalOpen, isFridgeModalOpen, isNoticeModalOpen, isRecipeModalOpen, isDaycareModalOpen, isReceiptModalOpen, isInventoryExportOpen, stockInItem, quickLogRecipe, cookingConfirmModal, quickFridgeItem]);
+
+  // ==========================================
+  // 모바일·브라우저 뒤로가기 이전 화면 이동 (History API + popstate)
+  // ==========================================
+  const navHistoryRef = useRef([]);
+  const lastNavSnapRef = useRef({
+    activeTab: "home",
+    babySubTab: "activity",
+    selectedPageId: null,
+    bucketViewMode: "map"
+  });
+  const isPoppingHistoryRef = useRef(false);
+  const lastBackExitPromptMsRef = useRef(0);
+  const backCloseHandlerRef = useRef(null);
+
+  backCloseHandlerRef.current = () => {
+    const anyModalOpen = Boolean(
+      isMoreNavOpen ||
+      isQuickFabOpen ||
+      isBucketModalOpen ||
+      isScheduleModalOpen ||
+      isMealModalOpen ||
+      isFridgeModalOpen ||
+      isNoticeModalOpen ||
+      isRecipeModalOpen ||
+      isDaycareModalOpen ||
+      isReceiptModalOpen ||
+      isInventoryExportOpen ||
+      isPatchModalOpen ||
+      isSettingsOpen ||
+      isRoutineModalOpen ||
+      isActivityModalOpen ||
+      isEditorUnlockModalOpen ||
+      isMealCopyModalOpen ||
+      isWeatherModalOpen ||
+      isDreamLinksModalOpen ||
+      isHeroPhotoModalOpen ||
+      isPageModalOpen ||
+      pageMenuTargetId ||
+      isPagePasteModalOpen ||
+      activeTableTaskModal ||
+      stockInItem ||
+      quickLogRecipe ||
+      cookingConfirmModal ||
+      quickFridgeItem ||
+      liveActivityPopup ||
+      activityEditModal ||
+      zipImportPicker ||
+      magazineMonth ||
+      diaryExportPreviewUrl ||
+      diaryLightboxUrl
+    );
+    if (anyModalOpen) {
+      setIsMoreNavOpen(false);
+      setIsQuickFabOpen(false);
+      setIsBucketModalOpen(false);
+      setIsScheduleModalOpen(false);
+      setIsMealModalOpen(false);
+      setIsFridgeModalOpen(false);
+      setIsNoticeModalOpen(false);
+      setIsRecipeModalOpen(false);
+      setIsDaycareModalOpen(false);
+      setIsReceiptModalOpen(false);
+      setIsInventoryExportOpen(false);
+      setIsPatchModalOpen(false);
+      setIsSettingsOpen(false);
+      setIsRoutineModalOpen(false);
+      setIsActivityModalOpen(false);
+      setIsEditorUnlockModalOpen(false);
+      setIsMealCopyModalOpen(false);
+      setIsWeatherModalOpen(false);
+      setIsDreamLinksModalOpen(false);
+      setIsHeroPhotoModalOpen(false);
+      setIsPageModalOpen(false);
+      setPageMenuTargetId(null);
+      setIsPagePasteModalOpen(false);
+      setActiveTableTaskModal(null);
+      setTaskModalDraft(null);
+      setStockInItem(null);
+      setQuickLogRecipe(null);
+      setCookingConfirmModal(null);
+      setQuickFridgeItem(null);
+      setLiveActivityPopup(null);
+      setActivityEditModal(null);
+      setZipImportPicker(null);
+      setMagazineMonth(null);
+      setDiaryExportPreviewUrl("");
+      setDiaryLightboxUrl("");
+      return "modal_closed";
+    }
+    if (navHistoryRef.current.length > 0) {
+      const prev = navHistoryRef.current.pop();
+      isPoppingHistoryRef.current = true;
+      setActiveTab(prev.activeTab || "home");
+      if (prev.babySubTab) setBabySubTab(prev.babySubTab);
+      setSelectedPageId(prev.selectedPageId || null);
+      if (prev.bucketViewMode) setBucketViewMode(prev.bucketViewMode);
+      lastNavSnapRef.current = {
+        activeTab: prev.activeTab || "home",
+        babySubTab: prev.babySubTab || "activity",
+        selectedPageId: prev.selectedPageId || null,
+        bucketViewMode: prev.bucketViewMode || "map"
+      };
+      return "nav_back";
+    }
+    if (selectedPageId) {
+      isPoppingHistoryRef.current = true;
+      setSelectedPageId(null);
+      lastNavSnapRef.current = { ...lastNavSnapRef.current, selectedPageId: null };
+      return "page_back";
+    }
+    if (activeTab !== "home") {
+      isPoppingHistoryRef.current = true;
+      setActiveTab("home");
+      lastNavSnapRef.current = { ...lastNavSnapRef.current, activeTab: "home", selectedPageId: null };
+      return "home_back";
+    }
+    return "at_root";
+  };
+
+  // 최초 진입 시 History Sentinel 등록 + popstate 리스너 연결
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.history?.pushState) return;
+    try {
+      if (!window.history.state?.appNavSentinel) {
+        window.history.replaceState({ appNavSentinel: true }, "");
+        window.history.pushState({ appNavGuard: true }, "");
+      }
+    } catch (e) {}
+
+    const onPopState = () => {
+      const result = backCloseHandlerRef.current ? backCloseHandlerRef.current() : "at_root";
+      if (result !== "at_root") {
+        try {
+          window.history.pushState({ appNavGuard: true }, "");
+        } catch (e) {}
+        return;
+      }
+      const now = Date.now();
+      if (now - lastBackExitPromptMsRef.current < 2500) {
+        // 2.5초 이내 재입력 시 정상 종료 허용
+        return;
+      }
+      lastBackExitPromptMsRef.current = now;
+      showToast("한 번 더 뒤로가기를 누르면 앱이 종료됩니다.");
+      try {
+        window.history.pushState({ appNavGuard: true }, "");
+      } catch (e) {}
+    };
+
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, []);
+
+  // 화면(탭 · 육아 서브탭 · 공유노트 · 버킷뷰) 이동 시 이전 화면 스택에 기록 + 탭 변경 시 상단 스크롤
+  useEffect(() => {
+    const prev = lastNavSnapRef.current;
+    const changed =
+      prev.activeTab !== activeTab ||
+      (activeTab === "baby" && prev.babySubTab !== babySubTab) ||
+      (activeTab === "pages" && prev.selectedPageId !== selectedPageId) ||
+      (activeTab === "bucket" && prev.bucketViewMode !== bucketViewMode);
+
+    if (!changed) return;
+
+    if (isPoppingHistoryRef.current) {
+      isPoppingHistoryRef.current = false;
+      lastNavSnapRef.current = { activeTab, babySubTab, selectedPageId, bucketViewMode };
+      return;
+    }
+
+    const tabChanged = prev.activeTab !== activeTab;
+    navHistoryRef.current = [...navHistoryRef.current.slice(-29), { ...prev }];
+    lastNavSnapRef.current = { activeTab, babySubTab, selectedPageId, bucketViewMode };
+
+    if (tabChanged && typeof window !== "undefined") {
+      try {
+        window.scrollTo({ top: 0, behavior: "instant" });
+      } catch (e) {
+        window.scrollTo(0, 0);
+      }
+    }
+  }, [activeTab, babySubTab, selectedPageId, bucketViewMode]);
+
+  // 주요 모달 오픈 시 배경 화면 스크롤 잠금 (모바일 스크롤 밀림 방지)
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const shouldLock = Boolean(
+      isBucketModalOpen ||
+      isPatchModalOpen ||
+      isSettingsOpen ||
+      isScheduleModalOpen ||
+      isMealModalOpen ||
+      isFridgeModalOpen ||
+      isNoticeModalOpen ||
+      isRecipeModalOpen ||
+      isReceiptModalOpen ||
+      isDaycareModalOpen ||
+      isInventoryExportOpen
+    );
+    if (!shouldLock) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [
+    isBucketModalOpen,
+    isPatchModalOpen,
+    isSettingsOpen,
+    isScheduleModalOpen,
+    isMealModalOpen,
+    isFridgeModalOpen,
+    isNoticeModalOpen,
+    isRecipeModalOpen,
+    isReceiptModalOpen,
+    isDaycareModalOpen,
+    isInventoryExportOpen
+  ]);
+
 
 
 
@@ -10681,11 +10927,11 @@ ${validText}
     };
     tick();
     const tid = setInterval(tick, 500);
-    window.addEventListener("visibilitychange", tick);
+    document.addEventListener("visibilitychange", tick);
     window.addEventListener("focus", tick);
     return () => {
       clearInterval(tid);
-      window.removeEventListener("visibilitychange", tick);
+      document.removeEventListener("visibilitychange", tick);
       window.removeEventListener("focus", tick);
     };
   }, [kitchenTimer.running]);
@@ -12750,6 +12996,7 @@ ${validText}
                   type="text"
                   value={mealSearchQuery}
                   onChange={(e) => setMealSearchQuery(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Escape") setMealSearchQuery(""); }}
                   placeholder="🔍 식단·재료 검색..."
                   className="w-full px-2.5 py-1.5 pr-7 rounded-xl border border-stone-200 bg-stone-50 text-[12.5px] font-semibold text-stone-800"
                 />
@@ -13732,6 +13979,7 @@ ${validText}
                             type="text"
                             value={expenseSearchQuery}
                             onChange={(e) => setExpenseSearchQuery(e.target.value)}
+                            onKeyDown={(e) => { if (e.key === "Escape") setExpenseSearchQuery(""); }}
                             placeholder="🔍 지출 품목·카테고리 검색..."
                             className="w-full px-3 py-1.5 pr-7 rounded-xl border border-stone-200 bg-stone-50 text-[12.5px] font-semibold text-stone-800"
                           />
@@ -15162,6 +15410,7 @@ ${validText}
                   type="text"
                   value={todoSearchQuery}
                   onChange={(e) => setTodoSearchQuery(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Escape") setTodoSearchQuery(""); }}
                   placeholder="🔍 할 일 제목·메모 검색..."
                   className="w-full px-3 py-1.5 pr-7 rounded-xl border border-stone-200 bg-stone-50 text-[12.5px] font-semibold text-stone-800"
                 />
@@ -15595,6 +15844,7 @@ ${validText}
                 type="text"
                 value={fridgeSearch}
                 onChange={(e) => setFridgeSearch(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Escape") setFridgeSearch(""); }}
                 placeholder="🔍 재료 검색 (양파, 우유 등)"
                 className="w-full px-3 py-2 pr-8 rounded-xl border border-stone-200 bg-white text-[13.5px] font-semibold text-stone-800 placeholder:text-stone-400"
               />
@@ -16459,6 +16709,7 @@ ${validText}
                   type="text"
                   value={shoppingSearchQuery}
                   onChange={(e) => setShoppingSearchQuery(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Escape") setShoppingSearchQuery(""); }}
                   placeholder="🔍 장보기 품목·메모 검색..."
                   className="w-full px-3 py-1.5 pr-7 rounded-xl border border-stone-200 bg-white text-[12.5px] font-semibold text-stone-800"
                 />
@@ -17977,8 +18228,28 @@ ${validText}
                       </div>
                     );
                   })}
-                  {doneCount > 0 && (
-                    <div className="pt-1 flex justify-end">
+                  <div className="pt-1 flex items-center justify-between gap-2">
+                    {plannedCount > 0 ? (
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          const targets = filtered.filter((b) => !b.done);
+                          if (targets.length === 0) {
+                            showToast("복사할 '갈 곳' 항목이 없습니다.");
+                            return;
+                          }
+                          const lines = [
+                            `🌟 우리 가족 갈 곳 리스트 (${targets.length}곳)`,
+                            ...targets.map((b, idx) => `${idx + 1}. ${b.title}${b.memo ? ` - ${b.memo}` : ""}`)
+                          ];
+                          await copyTextSafe(lines.join("\n"), `📋 갈 곳 ${targets.length}곳을 복사했습니다!`);
+                        }}
+                        className="px-2.5 py-1 rounded-xl text-[11px] font-bold text-[#35503C] bg-[#EEF3EE] hover:bg-[#DFE9E0]"
+                      >
+                        📋 갈 곳 목록 복사
+                      </button>
+                    ) : <span />}
+                    {doneCount > 0 && (
                       <button
                         type="button"
                         onClick={async () => {
@@ -17998,8 +18269,8 @@ ${validText}
                       >
                         🧹 다녀옴 일괄 정리 ({doneCount}건)
                       </button>
-                    </div>
-                  )}
+                    )}
+                  </div>
                 </div>
               )
             )}
@@ -19159,6 +19430,14 @@ ${validText}
                                         [blk.id]: { ...fState, q: e.target.value }
                                       }))
                                     }
+                                    onKeyDown={(e) => {
+                                      if (e.key === "Escape") {
+                                        setTableFilterState((prev) => ({
+                                          ...prev,
+                                          [blk.id]: { ...fState, q: "" }
+                                        }));
+                                      }
+                                    }}
                                     placeholder="Task name, 비고, 메모 검색..."
                                     className="flex-1 bg-transparent text-[12px] font-semibold text-stone-800 focus:outline-none"
                                   />
@@ -19640,6 +19919,7 @@ ${validText}
                   type="text"
                   value={recipeSearch}
                   onChange={(e) => setRecipeSearch(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Escape") setRecipeSearch(""); }}
                   placeholder="🔍 요리명·재료 검색 (예: 소고기, 무국)"
                   className="w-full px-3 py-2 pr-8 rounded-xl border border-stone-200 bg-white text-[13.5px] font-bold"
                 />
@@ -21759,6 +22039,7 @@ ${validText}
                           type="text"
                           value={diarySearchQuery}
                           onChange={(e) => setDiarySearchQuery(e.target.value)}
+                          onKeyDown={(e) => { if (e.key === "Escape") setDiarySearchQuery(""); }}
                           placeholder="🔍 육아일기 검색 (날짜, 제목, 내용...)"
                           className="w-full px-3 py-2 pr-8 rounded-xl border border-stone-200 bg-white text-[13.5px] font-semibold text-stone-800"
                         />
@@ -22557,7 +22838,7 @@ ${validText}
                     label: "버킷리스트",
                     onClick: () => {
                       setActiveTab("bucket");
-                      setTimeout(() => document.getElementById("bucket-title-input")?.focus(), 200);
+                      openBucketAddModal(null);
                     }
                   },
                   {
@@ -23327,8 +23608,8 @@ ${validText}
       )}
 
       {isPatchModalOpen && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-md w-full p-5 space-y-4 max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setIsPatchModalOpen(false)}>
+          <div className="bg-white rounded-3xl max-w-md w-full p-5 space-y-4 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="text-[15.5px] font-black text-stone-900 flex items-center gap-1.5">
@@ -23407,8 +23688,42 @@ ${validText}
             </div>
 
 
-            <div className="space-y-3">
-              {patchNotes.map((pn) => (
+            <div className="space-y-2.5">
+              <div className="relative">
+                <input
+                  type="text"
+                  value={patchSearchQuery}
+                  onChange={(e) => setPatchSearchQuery(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Escape") setPatchSearchQuery(""); }}
+                  placeholder="🔍 패치노트 버전·키워드 검색..."
+                  className="w-full px-3 py-1.5 pr-8 rounded-xl border border-stone-200 bg-stone-50 text-[12px] font-bold text-stone-800"
+                />
+                {patchSearchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setPatchSearchQuery("")}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-700"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+              {(() => {
+                const pq = patchSearchQuery.trim().toLowerCase();
+                const matchedNotes = pq
+                  ? patchNotes.filter((pn) => {
+                      const bullets = toSafeArray(Array.isArray(pn.changes) && pn.changes.length > 0 ? pn.changes : pn.items);
+                      return (
+                        String(pn.version || "").toLowerCase().includes(pq) ||
+                        String(pn.title || "").toLowerCase().includes(pq) ||
+                        bullets.some((b) => String(b).toLowerCase().includes(pq))
+                      );
+                    })
+                  : patchNotes;
+                const visibleNotes = patchShowAll || pq ? matchedNotes : matchedNotes.slice(0, 20);
+                return (
+                  <>
+                    {visibleNotes.map((pn) => (
                 <div
                   key={pn.id}
                   className="p-3.5 rounded-2xl bg-white border border-stone-200 shadow-sm space-y-2"
@@ -23440,6 +23755,23 @@ ${validText}
                   </ul>
                 </div>
               ))}
+                    {!pq && matchedNotes.length > 20 && (
+                      <button
+                        type="button"
+                        onClick={() => setPatchShowAll((v) => !v)}
+                        className="w-full py-2 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-[12px] font-extrabold"
+                      >
+                        {patchShowAll ? "최근 20건만 보기" : `이전 기록 전체 보기 (총 ${matchedNotes.length}건)`}
+                      </button>
+                    )}
+                    {visibleNotes.length === 0 && (
+                      <div className="py-4 text-center text-[12.5px] font-bold text-stone-400">
+                        일치하는 패치노트가 없습니다.
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
             </div>
           </div>
         </div>
@@ -25377,8 +25709,8 @@ ${validText}
 
 
       {stockInItem && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-sm w-full p-5 space-y-3">
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setStockInItem(null)}>
+          <div className="bg-white rounded-3xl max-w-sm w-full p-5 space-y-3" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-[15.5px] font-black">🛒 구매 완료 및 냉장고 입고</h3>
             <p className="text-[13.5px] text-stone-600">
               <b>{stockInItem.name}</b> 품목을 냉장고에 입고합니다. 결제 금액을 입력하면 식비 가계부에도 영구 기록됩니다.
@@ -25511,8 +25843,8 @@ ${validText}
 
 
       {quickLogRecipe && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-sm w-full p-5 space-y-3">
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setQuickLogRecipe(null)}>
+          <div className="bg-white rounded-3xl max-w-sm w-full p-5 space-y-3" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-[15.5px] font-black">식단표에 바로 등록하기</h3>
             <div className="text-[13.5px] font-bold text-stone-700">{quickLogRecipe.title}</div>
             <input
@@ -25557,8 +25889,8 @@ ${validText}
 
       {/* 요리 완료 재고 차감 확인 모달 */}
       {cookingConfirmModal && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-sm w-full p-5 space-y-3.5">
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setCookingConfirmModal(null)}>
+          <div className="bg-white rounded-3xl max-w-sm w-full p-5 space-y-3.5" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between">
               <h3 className="text-[15.5px] font-black">🍳 요리 완료 · 재고 차감 확인</h3>
               <button onClick={() => setCookingConfirmModal(null)}>
@@ -27976,8 +28308,8 @@ ${validText}
 
 
       {isEditorUnlockModalOpen && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-sm w-full p-5 space-y-4 shadow-xl">
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setIsEditorUnlockModalOpen(false)}>
+          <div className="bg-white rounded-3xl max-w-sm w-full p-5 space-y-4 shadow-xl" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between">
               <h3 className="text-[15.5px] font-black text-stone-900">
                 {isAdminUnlocked
@@ -28105,8 +28437,8 @@ ${validText}
       {isInventoryExportOpen && (() => {
         const exportText = buildInventoryExportText();
         return (
-          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-            <div className="bg-white rounded-3xl max-w-md w-full p-5 space-y-3.5 max-h-[90vh] flex flex-col">
+          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setIsInventoryExportOpen(false)}>
+            <div className="bg-white rounded-3xl max-w-md w-full p-5 space-y-3.5 max-h-[90vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
               <div className="flex items-center justify-between">
                 <h3 className="text-[15.5px] font-black text-stone-900">
                   📤 식단 · 전체 재고 통합 내보내기

@@ -1176,7 +1176,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v12.38";
+export const APP_CODE_VERSION = "v12.40";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1194,7 +1194,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-20 16:30";
+export const APP_BUILD_DATE = "2026-11-20 17:30";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1261,6 +1261,31 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v12.40",
+    version: "v12.40",
+    date: "2026-11-20",
+    title: "뒤로가기 이전 화면 이동 지원(모달 닫기·탭/노트 히스토리·두 번 눌러 종료) · 탭 전환 자동 상단 스크롤 · 모달 배경 스크롤 잠금",
+    items: [
+      "모바일·브라우저 뒤로가기 버튼 누름 시 앱이 바로 꺼지지 않고 ① 열려 있는 모달/팝업 닫기 → ② 직전에 열람했던 탭·육아 서브탭·공유노트 화면으로 복귀 → ③ 홈 이동 → ④ 홈에서 2.5초 내 두 번 눌러 종료되도록 History API(popstate) 연동",
+      "탭 전환 시 이전 탭의 하단 스크롤 위치가 남지 않도록 자동 최상단 이동 적용",
+      "주요 모달 오픈 시 뒤쪽 배경 화면이 함께 밀리는 현상을 방지하는 배경 스크롤 잠금 통합 적용",
+      "사파리 시크릿 모드·저장공간 제한 환경에서의 localStorage 초기화 및 설정 저장 예외 방어 보강"
+    ]
+  },
+  {
+    id: "patch-v12.39",
+    version: "v12.39",
+    date: "2026-11-20",
+    title: "조리 타이머 백그라운드 복귀 버그 수정 · 모달 ESC/배경닫기 확대 · 패치노트 경량화 · 검색창 ESC 초기화 통일",
+    items: [
+      "조리 타이머의 visibilitychange 이벤트 리스너 대상을 window에서 document로 수정하여 모바일 앱 전환 복귀 시 남은 시간이 즉시 동기화되도록 개선",
+      "우측 하단 빠른 실행(+) → [🌟 버킷리스트] 클릭 시 새 위치 검색·확인 모달이 바로 열리도록 연결 보완",
+      "일정·식단·냉장고·공지·레시피·어린이집·영수증·내보내기 등 12개 핵심 모달을 전역 ESC 키 닫기에 통합하고, 주요 팝업 6종의 배경 클릭 닫기 지원 추가",
+      "식단·지출·할일·냉장고·장보기·공유노트 표·레시피·육아일기 등 앱 전역 8개 검색창에 ESC 키 즉시 초기화 기능 통일 적용",
+      "패치노트 모달에 검색 필터와 최근 20건 기본 표시(전체 보기 토글)를 적용해 스크롤 피로도를 줄이고, 버킷리스트 목록에 갈 곳 일괄 복사 기능 추가"
+    ]
+  },
   {
     id: "patch-v12.38",
     version: "v12.38",
