@@ -909,26 +909,41 @@ const RoutineTitleField = React.memo(({ initialValue, onSyncValue, onSubmitEnter
       <label className="text-[11.5px] font-extrabold text-stone-500 block mb-1">
         루틴 내용 (쉼표 , 로 여러 단계 구분 가능)
       </label>
-      <input
-        type="text"
-        autoFocus
-        value={val}
-        onChange={(e) => {
-          const next = e.target.value;
-          setVal(next);
-          if (onSyncValue) onSyncValue(next, false);
-        }}
-        onBlur={() => onSyncValue && onSyncValue(val, true)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") {
-            e.preventDefault();
-            if (onSyncValue) onSyncValue(val, true);
-            if (onSubmitEnter) onSubmitEnter(val);
-          }
-        }}
-        placeholder="예: 약먹기, 양치, 코뽑기, 잠옷"
-        className="w-full px-3 py-2.5 rounded-xl border border-stone-200 text-[13.5px] font-bold focus:outline-none focus:ring-2 focus:ring-stone-400"
-      />
+      <div className="relative">
+        <input
+          type="text"
+          autoFocus
+          value={val}
+          onChange={(e) => {
+            const next = e.target.value;
+            setVal(next);
+            if (onSyncValue) onSyncValue(next, false);
+          }}
+          onBlur={() => onSyncValue && onSyncValue(val, true)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              if (onSyncValue) onSyncValue(val, true);
+              if (onSubmitEnter) onSubmitEnter(val);
+            }
+          }}
+          placeholder="예: 약먹기, 양치, 코뽑기, 잠옷"
+          className="w-full px-3 py-2.5 pr-8 rounded-xl border border-stone-200 text-[13.5px] font-bold focus:outline-none focus:ring-2 focus:ring-stone-400"
+        />
+        {val && (
+          <button
+            type="button"
+            onClick={() => {
+              setVal("");
+              if (onSyncValue) onSyncValue("", true);
+            }}
+            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-700"
+            aria-label="입력 지우기"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        )}
+      </div>
       {steps.length >= 2 && (
         <div className="mt-1.5 flex flex-col gap-1 bg-stone-50 border border-stone-200 rounded-xl p-2">
           {steps.map((st, idx) => (
@@ -2582,6 +2597,7 @@ function MainApp() {
   const handleStartEditRoutine = (rt) => {
     if (!requireEditorAccess() || !rt) return;
     setEditingRoutineId(rt.id);
+    routineTitleLiveRef.current = rt.title || "";
     setNewRoutineTitle(rt.title || "");
     setNewRoutineAttachments(Array.isArray(rt.attachments) ? rt.attachments : []);
     setNewRoutineTimeSlot(rt.timeSlot || "상시");
@@ -2628,7 +2644,8 @@ function MainApp() {
 
   const handleAddRoutine = (overrideTitle = null) => {
     if (!requireEditorAccess("schedule")) return;
-    const title = String(overrideTitle ?? routineTitleLiveRef.current ?? newRoutineTitle ?? "").trim();
+    const safeOverride = typeof overrideTitle === "string" ? overrideTitle : null;
+    const title = String(safeOverride !== null ? safeOverride : (routineTitleLiveRef.current || newRoutineTitle || "")).trim();
     if (!title) return;
     const cycleVal = ["daily", "interval", "weekly", "monthly", "monthly_weekday"].includes(newRoutineCycle)
       ? newRoutineCycle
@@ -5575,7 +5592,7 @@ function MainApp() {
 
   const handleSaveSchedule = async (overrideForm = null) => {
     if (!requireEditorAccess("schedule")) return;
-    const srcForm = overrideForm || scheduleForm;
+    const srcForm = overrideForm && typeof overrideForm === "object" && !overrideForm.nativeEvent && !overrideForm.preventDefault ? overrideForm : scheduleForm;
     if (!String(srcForm.title || "").trim()) return;
     const id = editingSchedule ? editingSchedule.id : `sch-${Date.now()}`;
     const safeMembers = toSafeArray(srcForm.members);
@@ -10372,7 +10389,7 @@ ${validText}
 
   const handleSaveNotice = async (overrideForm = null) => {
     if (!requireEditorAccess("notices")) return;
-    const src = overrideForm || noticeForm;
+    const src = overrideForm && typeof overrideForm === "object" && !overrideForm.nativeEvent && !overrideForm.preventDefault ? overrideForm : noticeForm;
     if (!String(src.title || "").trim()) return;
     const id = editingNotice ? editingNotice.id : `nt-${Date.now()}`;
     const payload = {
@@ -26814,7 +26831,7 @@ ${validText}
               </button>
               <button
                 type="button"
-                onClick={handleAddRoutine}
+                onClick={() => handleAddRoutine()}
                 className="flex-1 py-2.5 rounded-xl bg-stone-900 text-white text-[13.5px] font-extrabold"
               >
                 {editingRoutineId ? "수정 저장" : "저장하기"}

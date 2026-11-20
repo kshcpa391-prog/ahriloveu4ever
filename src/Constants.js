@@ -1177,7 +1177,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v12.58";
+export const APP_CODE_VERSION = "v12.59";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1195,7 +1195,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-21 03:35";
+export const APP_BUILD_DATE = "2026-11-21 07:48";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1262,6 +1262,18 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v12.59",
+    version: "v12.59",
+    date: "2026-11-21",
+    title: "반복 루틴 수정 시 [object Object] 저장 오류 수정 및 이벤트 핸들러 안전화",
+    category: "버그 수정 · 안정화",
+    changes: [
+      "반복 루틴 수정/저장 버튼 클릭 시 마우스 이벤트 객체가 제목 인자로 전달되어 [object Object]로 저장되던 오류 즉시 수정",
+      "루틴 편집 시작 시 내부 입력 참조(routineTitleLiveRef) 동기화 및 일정·공지·루틴 모든 저장 핸들러에 이벤트 객체 오인 방지 가드 적용",
+      "루틴 제목 입력란에 1탭 지우기(✕) 버튼 추가로 빠른 수정 편의성 개선"
+    ]
+  },
   {
     id: "patch-v12.58",
     version: "v12.58",
