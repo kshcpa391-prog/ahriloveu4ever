@@ -145,10 +145,10 @@ export const ROUTINE_ORDERED_SLOTS = ["아침", "점심", "하원후", "오후",
 export const isWeekendNow = () => [0, 6].includes(new Date().getDay());
 
 
-export const getCurrentRoutineTimeSlot = (ranges = DEFAULT_ROUTINE_TIME_RANGES, minuteOverride = null, slotDefs = null) => {
+export const getCurrentRoutineTimeSlot = (ranges = DEFAULT_ROUTINE_TIME_RANGES, minuteOverride = null, slotDefs = null, forceDayOff = null) => {
   const now = new Date();
   const curMin = typeof minuteOverride === "number" ? minuteOverride : now.getHours() * 60 + now.getMinutes();
-  const isWknd = [0, 6].includes(now.getDay());
+  const isWknd = typeof forceDayOff === "boolean" ? forceDayOff : [0, 6].includes(now.getDay());
   if (Array.isArray(slotDefs) && slotDefs.length > 0) {
     const active = slotDefs
       .filter((s) => (isWknd ? s.weekend : s.weekday))
@@ -1177,7 +1177,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v12.62";
+export const APP_CODE_VERSION = "v12.63";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1195,7 +1195,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-21 08:40";
+export const APP_BUILD_DATE = "2026-11-21 08:48";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1262,6 +1262,17 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v12.63",
+    version: "v12.63",
+    date: "2026-11-21",
+    title: "평일 공휴일 현재 시간대 자동 전환 · 공휴일 수동 즉시 갱신 및 최종 전수 검증",
+    category: "고도화 · 편의성",
+    changes: [
+      "getCurrentRoutineTimeSlot에 한국 공휴일 판정을 연동해 평일 공휴일(어린이날·대체공휴일 등)에도 홈 화면 지금(시간대)과 루틴 탭 헤더가 자동으로 주말·공휴일 시간대로 전환되도록 고도화",
+      "설정 화면에 🇰🇷 공휴일 지금 갱신 버튼을 추가해 임시공휴일 발표 시 7일 주기를 기다리지 않고 즉시 동기화 가능"
+    ]
+  },
   {
     id: "patch-v12.62",
     version: "v12.62",

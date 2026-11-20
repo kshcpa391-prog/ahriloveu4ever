@@ -82,7 +82,6 @@ import {
   DEFAULT_ROUTINE_TIME_RANGES,
   DEFAULT_ROUTINE_SLOT_DEFS,
   normalizeRoutineSlotDefs,
-  isWeekendNow,
   getCurrentRoutineTimeSlot,
   matchesRoutineTarget,
   getRoutineAssigneeBadgeCls,
@@ -1474,12 +1473,12 @@ function MainApp() {
   })());
   const krHolidayFetchingRef = useRef(new Set());
 
-  const fetchKoreanHolidaysForYears = async (years) => {
+  const fetchKoreanHolidaysForYears = async (years, force = false) => {
     const now = Date.now();
     const TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7일 주기 자동 갱신
     const toFetch = Array.from(new Set(years.map((y) => Number(y)).filter((y) => y >= 2015 && y <= 2035))).filter((y) => {
       const lastMs = Number(krHolidayMetaRef.current[String(y)] || 0);
-      return !krHolidayFetchingRef.current.has(y) && now - lastMs > TTL_MS;
+      return !krHolidayFetchingRef.current.has(y) && (force || now - lastMs > TTL_MS);
     });
     if (toFetch.length === 0) return;
 
@@ -2796,7 +2795,7 @@ function MainApp() {
     routineTitleLiveRef.current = "";
     setNewRoutineTitle("");
     setNewRoutineAttachments([]);
-    setNewRoutineTimeSlot(getCurrentRoutineTimeSlot(routineTimeRanges, liveMinuteTick, routineSlotDefs));
+    setNewRoutineTimeSlot(getCurrentRoutineTimeSlot(routineTimeRanges, liveMinuteTick, routineSlotDefs, isHolidayOrWeekend(currentDayKey)));
     setNewRoutineScheduledTime("");
     setNewRoutineCycle("daily");
     setNewRoutineIntervalDays(2);
@@ -13542,8 +13541,8 @@ ${validText}
         const mealPreviewText = targetMealObj
           ? `${targetMealObj.slot}: ${String(targetMealObj.menu || "").replace(/\[.*?\]\s*/, "")}`
           : `${targetMealSlot} 미기록 · 눌러서 등록`;
-        const curSlot = getCurrentRoutineTimeSlot(routineTimeRanges, liveMinuteTick, routineSlotDefs);
-        const wkndNow = isWeekendNow();
+        const wkndNow = isHolidayOrWeekend(currentDayKey);
+        const curSlot = getCurrentRoutineTimeSlot(routineTimeRanges, liveMinuteTick, routineSlotDefs, wkndNow);
         const homeRoutineDayStr = (() => {
           const dt = new Date(String(currentDayKey).slice(0, 10) + "T00:00:00");
           if (Number.isNaN(dt.getTime())) return currentDayKey;
@@ -17122,7 +17121,7 @@ ${validText}
                   </span>
                 </h3>
                 <p className="text-[11px] text-stone-500 font-semibold mt-0.5 whitespace-nowrap truncate">
-                  {isWeekendNow() ? "주말" : "평일"} · <span className="text-stone-900 font-extrabold">{getCurrentRoutineTimeSlot(routineTimeRanges, liveMinuteTick, routineSlotDefs)}</span> · 자동 리셋
+                  {isHolidayOrWeekend(currentDayKey) ? (krHolidays[currentDayKey] ? `공휴일(${krHolidays[currentDayKey]})` : "주말") : "평일"} · <span className="text-stone-900 font-extrabold">{getCurrentRoutineTimeSlot(routineTimeRanges, liveMinuteTick, routineSlotDefs, isHolidayOrWeekend(currentDayKey))}</span> · 자동 리셋
                 </p>
                 {(() => {
                   const dueList = familyRoutines.filter((r) => isRoutineDueTodayOrPast(r, currentDayKey));
@@ -29242,6 +29241,23 @@ ${validText}
                     className="py-1.5 rounded-xl bg-white hover:bg-sky-100 text-sky-800 border border-sky-200 text-[11px] font-extrabold"
                   >
                     🔗 지원군 링크
+                  </button>
+                </div>
+                <div className="flex items-center justify-between gap-2 pt-1 border-t border-sky-200/70">
+                  <span className="text-[11px] font-extrabold text-sky-900">
+                    🇰🇷 한국 공휴일 자동 연동 ({Object.keys(krHolidays || {}).length}건 캐시)
+                  </span>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const y = new Date().getFullYear();
+                      showToast("🇰🇷 한국 공휴일 정보를 최신화하는 중...");
+                      await fetchKoreanHolidaysForYears([y - 1, y, y + 1], true);
+                      showToast("🇰🇷 한국 공휴일 최신 동기화 완료!");
+                    }}
+                    className="px-2 py-1 rounded-lg bg-white hover:bg-sky-100 border border-sky-200 text-sky-800 text-[11px] font-extrabold whitespace-nowrap shrink-0"
+                  >
+                    🔄 지금 갱신
                   </button>
                 </div>
               </div>
