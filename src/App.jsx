@@ -1146,9 +1146,7 @@ function MainApp() {
   const [isPageModalOpen, setIsPageModalOpen] = useState(false);
   const [editingPageMeta, setEditingPageMeta] = useState(null);
   const [pageMetaForm, setPageMetaForm] = useState({ title: "", icon: "📄", parentId: null });
-  const [pageQuickAddType, setPageQuickAddType] = useState("todo");
   const [pageQuickAddText, setPageQuickAddText] = useState("");
-  const [pageQuickAddColor, setPageQuickAddColor] = useState("amber");
   const [editingBlockId, setEditingBlockId] = useState(null);
   const [editingBlockText, setEditingBlockText] = useState("");
   const [isEditingPageTitle, setIsEditingPageTitle] = useState(false);
@@ -1158,10 +1156,7 @@ function MainApp() {
   const [pagePasteText, setPagePasteText] = useState("");
   const [pagePasteColor, setPagePasteColor] = useState("amber");
   const [pagePasteMode, setPagePasteMode] = useState("append");
-  const [isPageBulkEditMode, setIsPageBulkEditMode] = useState(false);
-  const [pageBulkEditText, setPageBulkEditText] = useState("");
-  const [pageBulkEditorTab, setPageBulkEditorTab] = useState("write");
-  const pageBulkTextareaRef = useRef(null);
+  const [isPageVisualEditMode, setIsPageVisualEditMode] = useState(false);
   const [hideCompletedPageTodos, setHideCompletedPageTodos] = useState(false);
   const [tableFilterState, setTableFilterState] = useState({});
   const [tableSearchOpenId, setTableSearchOpenId] = useState(null);
@@ -9224,12 +9219,19 @@ ${validText}
     showToast("버킷리스트 항목을 삭제했습니다.");
   };
 
+  useEffect(() => {
+    if (activeTab !== "pages") {
+      setIsPageVisualEditMode(false);
+      setEditingBlockId(null);
+    }
+  }, [activeTab]);
+
   const openFamilyPage = (pageId) => {
     setSelectedPageId(pageId);
     setEditingBlockId(null);
     setIsEditingPageTitle(false);
     setIsPageEmojiPickerOpen(false);
-    setIsPageBulkEditMode(false);
+    setIsPageVisualEditMode(false);
     setAddingColBlockId(null);
     setPageSearchQuery("");
     if (!pageId) return;
@@ -9413,10 +9415,9 @@ ${validText}
     const nowMs = Date.now();
     const newBlock = {
       id: `blk-${nowMs}-${Math.random().toString(36).slice(2, 5)}`,
-      type: pageQuickAddType,
+      type: "todo",
       text: clean,
-      ...(pageQuickAddType === "todo" ? { checked: false } : {}),
-      ...(pageQuickAddType === "heading" ? { color: pageQuickAddColor || "amber" } : {})
+      checked: false
     };
     const updated = {
       ...page,
@@ -9598,73 +9599,50 @@ ${validText}
     showToast(`✨ ${summaryParts} 자동 반영되었습니다!`);
   };
 
-  const handleSaveBulkEdit = async (page) => {
+  const handleInsertPageBlockAt = async (page, blockType = "todo", afterBlockId = null) => {
     if (!requireEditorAccess("pages") || !page) return;
-    const parsed = parseNotionMarkdownToBlocks(pageBulkEditText, pageQuickAddColor || "amber");
-    const existingTables = (Array.isArray(page.blocks) ? page.blocks : []).filter((b) => b.type === "table");
-    const nextBlocks = [...parsed, ...existingTables];
-    await savePageToCloud({
-      ...page,
-      blocks: nextBlocks,
-      updatedAtMs: Date.now()
-    });
-    setIsPageBulkEditMode(false);
-    setPageBulkEditorTab("write");
-    recordActivity("노트", "일괄편집", page.title);
-    showToast("✨ 변경 사항을 저장했습니다!");
+    const nowMs = Date.now();
+    let curBlocks = Array.isArray(page.blocks) ? [...page.blocks] : [];
+    // Flush currently edited block text if any
+    if (editingBlockId) {
+      const cleanCur = String(editingBlockText || "").trim();
+      curBlocks = curBlocks.map((b) => (b.id === editingBlockId ? { ...b, text: cleanCur || b.text } : b));
+    }
+    const afterBlk = afterBlockId ? curBlocks.find((b) => b.id === afterBlockId) : null;
+    const newId = `blk-${nowMs}-${Math.random().toString(36).slice(2, 5)}`;
+    const newBlock = {
+      id: newId,
+      type: blockType,
+      text: "",
+      ...(blockType === "todo" ? { checked: false } : {}),
+      ...(blockType === "heading" ? { color: "amber" } : {}),
+      ...(blockType !== "heading" && afterBlk && afterBlk.type !== "heading" && Number(afterBlk.indent) > 0
+        ? { indent: Number(afterBlk.indent) }
+        : {})
+    };
+    const targetIdx = afterBlockId ? curBlocks.findIndex((b) => b.id === afterBlockId) : -1;
+    if (targetIdx >= 0) {
+      curBlocks.splice(targetIdx + 1, 0, newBlock);
+    } else {
+      curBlocks.push(newBlock);
+    }
+    setIsPageVisualEditMode(true);
+    setEditingBlockId(newId);
+    setEditingBlockText("");
+    await savePageToCloud({ ...page, blocks: curBlocks, updatedAtMs: nowMs });
   };
 
-  const applyBulkFormatAction = (kind) => {
-    const el = pageBulkTextareaRef.current;
-    const val = pageBulkEditText || "";
-    const start = el ? el.selectionStart : val.length;
-    const end = el ? el.selectionEnd : val.length;
-    const selected = val.slice(start, end);
-    let nextVal = val;
-    let nextCursorStart = start;
-    let nextCursorEnd = end;
-
-    if (kind === "bold" || kind === "italic") {
-      const wrap = kind === "bold" ? "**" : "*";
-      const inner = selected || (kind === "bold" ? "강조" : "기울임");
-      nextVal = val.slice(0, start) + wrap + inner + wrap + val.slice(end);
-      nextCursorStart = start + wrap.length;
-      nextCursorEnd = nextCursorStart + inner.length;
-    } else if (kind === "table") {
-      const tpl = "\n| 구분 | 항목 | 비고 |\n| --- | --- | --- |\n| 1 |  |  |\n";
-      nextVal = val.slice(0, start) + tpl + val.slice(end);
-      nextCursorStart = start + tpl.length;
-      nextCursorEnd = nextCursorStart;
-    } else {
-      // Line-prefix actions: heading, todo, bullet, indent
-      const lineStart = val.lastIndexOf("\n", Math.max(0, start - 1)) + 1;
-      const prefixMap = {
-        heading: "### ",
-        todo: "- [ ] ",
-        bullet: "- ",
-        indent: "    "
-      };
-      const prefix = prefixMap[kind] || "";
-      const lineRest = val.slice(lineStart);
-      if (kind !== "indent" && lineRest.startsWith(prefix)) {
-        nextVal = val.slice(0, lineStart) + lineRest.slice(prefix.length);
-        nextCursorStart = Math.max(lineStart, start - prefix.length);
-        nextCursorEnd = Math.max(lineStart, end - prefix.length);
-      } else {
-        nextVal = val.slice(0, lineStart) + prefix + lineRest;
-        nextCursorStart = start + prefix.length;
-        nextCursorEnd = end + prefix.length;
-      }
+  const handleFinishPageVisualEdit = async (page) => {
+    if (editingBlockId && page) {
+      const clean = String(editingBlockText || "").trim();
+      const curBlocks = Array.isArray(page.blocks) ? page.blocks : [];
+      const nextBlocks = clean
+        ? curBlocks.map((b) => (b.id === editingBlockId ? { ...b, text: clean } : b))
+        : curBlocks.filter((b) => b.id !== editingBlockId);
+      await savePageToCloud({ ...page, blocks: nextBlocks, updatedAtMs: Date.now() });
     }
-
-    setPageBulkEditText(nextVal);
-    setPageBulkEditorTab("write");
-    setTimeout(() => {
-      if (pageBulkTextareaRef.current) {
-        pageBulkTextareaRef.current.focus();
-        pageBulkTextareaRef.current.setSelectionRange(nextCursorStart, nextCursorEnd);
-      }
-    }, 0);
+    setEditingBlockId(null);
+    setIsPageVisualEditMode(false);
   };
 
 
@@ -17655,40 +17633,23 @@ ${validText}
                       <span className="truncate">{parentPage ? `${parentPage.icon || "📄"} ${parentPage.title}` : "공유노트"}</span>
                     </button>
                     <div className="flex items-center gap-1 shrink-0">
-                      {isPageBulkEditMode ? (
-                        <>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setIsPageBulkEditMode(false);
-                              setPageBulkEditorTab("write");
-                            }}
-                            className="px-2.5 py-1 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-600 text-[11.5px] font-extrabold whitespace-nowrap"
-                          >
-                            취소
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleSaveBulkEdit(currentPage)}
-                            className="px-3 py-1 rounded-lg bg-stone-900 hover:bg-stone-800 text-white text-[11.5px] font-extrabold whitespace-nowrap"
-                          >
-                            💾 저장
-                          </button>
-                        </>
+                      {isPageVisualEditMode || editingBlockId ? (
+                        <button
+                          type="button"
+                          onClick={() => handleFinishPageVisualEdit(currentPage)}
+                          className="px-3 py-1 rounded-lg bg-stone-900 hover:bg-stone-800 text-white text-[11.5px] font-extrabold whitespace-nowrap"
+                        >
+                          ✓ 편집 완료
+                        </button>
                       ) : (
                         <>
                           {canEditTab("pages") && (
                             <>
                               <button
                                 type="button"
-                                onClick={() => {
-                                  setPageBulkEditText(blocksToNotionMarkdown(blocks));
-                                  setPageBulkEditorTab("write");
-                                  setIsPageBulkEditMode(true);
-                                  setEditingBlockId(null);
-                                }}
+                                onClick={() => setIsPageVisualEditMode(true)}
                                 className="px-2 py-1 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-800 text-[11px] font-extrabold whitespace-nowrap"
-                                title="서식 툴바로 편하게 편집"
+                                title="상단 고정 툴바로 추가·서식·편집"
                               >
                                 ✏️ 편집
                               </button>
@@ -17901,323 +17862,222 @@ ${validText}
                       </div>
                     )}
 
-                    {/* 직관적 1탭 서식 툴바 + 실시간 미리보기 에디터 */}
-                    {isPageBulkEditMode && canEditTab("pages") && (
-                      <div className="rounded-2xl border border-stone-200 bg-white overflow-hidden shadow-xs">
-                        {/* 상단: 작성/미리보기 탭 + 1탭 서식 버튼 */}
-                        <div className="px-2.5 py-2 bg-stone-50 border-b border-stone-200/80 space-y-2">
-                          <div className="flex items-center justify-between gap-2">
-                            <div className="inline-flex items-center bg-stone-200/70 p-0.5 rounded-xl shrink-0">
-                              {[
-                                { id: "write", label: "✍️ 작성" },
-                                { id: "preview", label: "👀 미리보기" }
-                              ].map((t) => (
-                                <button
-                                  key={t.id}
-                                  type="button"
-                                  onClick={() => setPageBulkEditorTab(t.id)}
-                                  className={`px-2.5 py-1 rounded-lg text-[11px] font-extrabold whitespace-nowrap shrink-0 transition ${
-                                    pageBulkEditorTab === t.id ? "bg-white text-stone-900 shadow-2xs" : "text-stone-500"
-                                  }`}
-                                >
-                                  {t.label}
-                                </button>
-                              ))}
-                            </div>
-                            <span className="text-[10.5px] font-bold text-stone-400 whitespace-nowrap shrink-0">
-                              {pageBulkEditText.split("\n").filter((l) => l.trim()).length}줄
-                            </span>
-                          </div>
-
-                          {pageBulkEditorTab === "write" && (
-                            <div className="flex items-center gap-1 overflow-x-auto pb-0.5">
-                              {[
-                                { id: "heading", label: "제목", title: "강조 섹션 제목" },
-                                { id: "todo", label: "☑️ 체크", title: "체크리스트 추가" },
-                                { id: "bullet", label: "• 목록", title: "글머리 기호" },
-                                { id: "bold", label: "B", title: "굵게 (드래그 후 클릭)", extraCls: "font-black" },
-                                { id: "italic", label: "I", title: "기울임", extraCls: "italic font-serif" },
-                                { id: "indent", label: "→", title: "하위 들여쓰기" },
-                                { id: "table", label: "📊 표", title: "마크다운 표 삽입" }
-                              ].map((btn) => (
-                                <button
-                                  key={btn.id}
-                                  type="button"
-                                  onClick={() => applyBulkFormatAction(btn.id)}
-                                  title={btn.title}
-                                  className={`px-2.5 py-1 rounded-lg bg-white hover:bg-stone-100 border border-stone-200 text-stone-700 text-[11.5px] font-extrabold whitespace-nowrap shrink-0 transition active:scale-95 ${btn.extraCls || ""}`}
-                                >
-                                  {btn.label}
-                                </button>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-
-                        {pageBulkEditorTab === "write" ? (
-                          <textarea
-                            ref={pageBulkTextareaRef}
-                            rows={13}
-                            autoFocus
-                            value={pageBulkEditText}
-                            onChange={(e) => setPageBulkEditText(e.target.value)}
-                            onKeyDown={(e) => {
-                              if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s") {
-                                e.preventDefault();
-                                handleSaveBulkEdit(currentPage);
-                              }
-                            }}
-                            placeholder={"편하게 자유롭게 적거나 붙여넣어 보세요.\n위 버튼으로 제목·체크박스·굵게·표를 바로 넣을 수 있어요."}
-                            className="w-full p-3.5 bg-white text-[14px] font-sans text-stone-800 leading-relaxed focus:outline-none resize-y min-h-[260px]"
-                          />
-                        ) : (
-                          <div className="p-3.5 space-y-2 min-h-[260px] bg-white">
-                            {(() => {
-                              const prevList = parseNotionMarkdownToBlocks(pageBulkEditText, pageQuickAddColor || "amber");
-                              if (prevList.length === 0) {
-                                return <div className="py-10 text-center text-[12.5px] font-semibold text-stone-400">작성된 내용이 없습니다.</div>;
-                              }
-                              return prevList.map((pb) => {
-                                if (pb.type === "heading") return <div key={pb.id} className="pt-2 first:pt-0">{renderHeadingContent(pb)}</div>;
-                                if (pb.type === "todo") {
-                                  const ind = Math.min(3, Number(pb.indent) || 0) * 20;
-                                  return (
-                                    <div key={pb.id} style={ind ? { paddingLeft: `${ind}px` } : undefined} className="flex items-start gap-2 text-[14px]">
-                                      <span className={`w-4 h-4 mt-0.5 rounded-[4px] border flex items-center justify-center text-[10px] shrink-0 ${pb.checked ? "bg-[#2383E2] border-[#2383E2] text-white" : "border-stone-400"}`}>
-                                        {pb.checked ? "✓" : ""}
-                                      </span>
-                                      <span className={pb.checked ? "line-through text-stone-400" : "text-stone-800"}>{renderInlineMarkdownText(pb.text)}</span>
-                                    </div>
-                                  );
-                                }
-                                if (pb.type === "md_table") {
-                                  const hs = Array.isArray(pb.headers) ? pb.headers : [];
-                                  const rs = Array.isArray(pb.rows) ? pb.rows : [];
-                                  return (
-                                    <div key={pb.id} className="overflow-x-auto rounded-lg border border-stone-200 my-1">
-                                      <table className="w-full border-collapse text-left text-[12.5px]">
-                                        <thead>
-                                          <tr className="bg-[#F7F6F3] border-b border-stone-200">
-                                            {hs.map((h, hi) => (
-                                              <th key={hi} className="py-1.5 px-2.5 font-bold border-r last:border-r-0 border-stone-200 whitespace-nowrap">{renderInlineMarkdownText(h)}</th>
-                                            ))}
-                                          </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-stone-200">
-                                          {rs.map((r, ri) => (
-                                            <tr key={ri}>
-                                              {hs.map((_, ci) => (
-                                                <td key={ci} className="py-1.5 px-2.5 border-r last:border-r-0 border-stone-200">{renderInlineMarkdownText(r[ci] ?? "")}</td>
-                                              ))}
-                                            </tr>
-                                          ))}
-                                        </tbody>
-                                      </table>
-                                    </div>
-                                  );
-                                }
-                                const tInd = Math.min(3, Number(pb.indent) || 0) * 20;
-                                return (
-                                  <div key={pb.id} style={tInd ? { paddingLeft: `${tInd}px` } : undefined} className="text-[14px] text-stone-700 leading-relaxed whitespace-pre-wrap">
-                                    {renderInlineMarkdownText(pb.text)}
-                                  </div>
-                                );
-                              });
-                            })()}
-                          </div>
-                        )}
-
-                        <div className="px-3 py-2.5 bg-stone-50 border-t border-stone-200/80 flex items-center justify-end gap-2">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setIsPageBulkEditMode(false);
-                              setPageBulkEditorTab("write");
-                            }}
-                            className="px-3.5 py-1.5 rounded-xl bg-white border border-stone-200 text-stone-600 text-[12.5px] font-extrabold"
-                          >
-                            취소
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleSaveBulkEdit(currentPage)}
-                            className="px-4 py-1.5 rounded-xl bg-stone-900 hover:bg-stone-800 text-white text-[12.5px] font-extrabold"
-                          >
-                            💾 변경사항 저장
-                          </button>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* 상단 고정 서식·편집 툴바 (항목 선택 시 상단에 고정 표시) */}
-                    {!isPageBulkEditMode && canEditTab("pages") && editingBlockId && (() => {
-                      const activeBlkIdx = blocks.findIndex((b) => b.id === editingBlockId);
+                    {/* 화면 상단 완전 틀고정(Fixed) 통합 편집 툴바: 항목 추가 + 서식 + 이동 + 삭제 */}
+                    {canEditTab("pages") && (isPageVisualEditMode || editingBlockId) && (() => {
+                      const activeBlkIdx = editingBlockId ? blocks.findIndex((b) => b.id === editingBlockId) : -1;
                       const activeBlk = activeBlkIdx >= 0 ? blocks[activeBlkIdx] : null;
-                      if (!activeBlk) return null;
                       return (
-                        <div
-                          onMouseDown={(e) => e.preventDefault()}
-                          className={`sticky ${isHeaderPinned ? "top-[58px]" : "top-2"} z-20 p-2 rounded-2xl bg-white/95 backdrop-blur-md border border-stone-300 shadow-md space-y-1.5`}
-                        >
-                          <div className="flex items-center justify-between gap-1.5 flex-wrap">
-                            <div className="flex items-center gap-1 flex-wrap">
-                              <div className="flex items-center gap-0.5 bg-stone-100 rounded-lg p-0.5">
-                                {PAGE_TEXT_SIZES.map((sz) => (
-                                  <button
-                                    key={sz.id}
-                                    type="button"
-                                    onClick={() => handleUpdatePageBlockStyle(currentPage, activeBlk.id, { fontSize: sz.id })}
-                                    className={`px-1.5 py-0.5 rounded text-[10.5px] font-extrabold whitespace-nowrap transition ${
-                                      (activeBlk.fontSize || "base") === sz.id ? "bg-stone-900 text-white" : "text-stone-600 hover:bg-white"
-                                    }`}
-                                  >
-                                    {sz.label}
-                                  </button>
-                                ))}
+                        <>
+                          <div
+                            onMouseDown={(e) => e.preventDefault()}
+                            style={{ top: isHeaderPinned ? "58px" : "8px" }}
+                            className="fixed left-1/2 -translate-x-1/2 w-[calc(100%-1rem)] max-w-lg z-40 p-2 rounded-2xl bg-white/95 backdrop-blur-md border border-stone-300 shadow-lg space-y-1.5"
+                          >
+                            {/* 1행: 체크·섹션·메모·표·페이지 즉시 추가 + 완료 (절대 줄바꿈 없음) */}
+                            <div className="flex items-center justify-between gap-1.5">
+                              <div className="flex items-center gap-1 overflow-x-auto min-w-0">
+                                <button
+                                  type="button"
+                                  onClick={() => handleInsertPageBlockAt(currentPage, "todo", activeBlk?.id || null)}
+                                  className="px-2 py-1 rounded-lg bg-stone-900 hover:bg-stone-800 text-white text-[11px] font-extrabold whitespace-nowrap shrink-0"
+                                >
+                                  + 체크
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleInsertPageBlockAt(currentPage, "heading", activeBlk?.id || null)}
+                                  className="px-2 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-900 text-[11px] font-extrabold whitespace-nowrap shrink-0"
+                                >
+                                  + 섹션
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleInsertPageBlockAt(currentPage, "text", activeBlk?.id || null)}
+                                  className="px-2 py-1 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 text-[11px] font-extrabold whitespace-nowrap shrink-0"
+                                >
+                                  + 메모
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleAddTableBlock(currentPage)}
+                                  className="px-2 py-1 rounded-lg bg-sky-50 hover:bg-sky-100 border border-sky-200 text-sky-800 text-[11px] font-extrabold whitespace-nowrap shrink-0"
+                                >
+                                  + 표
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => openCreatePageModal(currentPage.id)}
+                                  className="px-2 py-1 rounded-lg bg-[#EEF3EE] hover:bg-[#DFE9E0] border border-[#C9D8CC] text-[#35503C] text-[11px] font-extrabold whitespace-nowrap shrink-0"
+                                >
+                                  + 페이지
+                                </button>
                               </div>
                               <button
                                 type="button"
-                                onClick={() => handleUpdatePageBlockStyle(currentPage, activeBlk.id, { bold: !activeBlk.bold })}
-                                className={`px-2 py-0.5 rounded-lg border text-[11px] font-black transition ${
-                                  activeBlk.bold ? "bg-stone-900 text-white border-stone-900" : "bg-white text-stone-700 border-stone-200"
-                                }`}
-                                title="굵게"
+                                onClick={() => handleFinishPageVisualEdit(currentPage)}
+                                className="px-2.5 py-1 rounded-lg bg-[#5E7A65] hover:bg-[#4E6855] text-white text-[11px] font-extrabold whitespace-nowrap shrink-0"
                               >
-                                B
+                                완료
                               </button>
-                              <select
-                                value={activeBlk.type}
-                                onMouseDown={(e) => e.stopPropagation()}
-                                onChange={(e) => {
-                                  const nt = e.target.value;
-                                  handleUpdatePageBlockStyle(currentPage, activeBlk.id, {
-                                    type: nt,
-                                    ...(nt === "todo" ? { checked: Boolean(activeBlk.checked) } : {}),
-                                    ...(nt === "heading" ? { color: activeBlk.color || "amber" } : {})
-                                  });
-                                }}
-                                className="px-1.5 py-0.5 rounded-lg bg-white border border-stone-200 text-[10.5px] font-extrabold text-stone-700"
-                                title="블록 유형 변경"
-                              >
-                                <option value="todo">☑️ 체크</option>
-                                <option value="heading">🏷️ 섹션</option>
-                                <option value="text">📝 메모</option>
-                              </select>
                             </div>
-                            <button
-                              type="button"
-                              onClick={() => handleUpdatePageBlockText(currentPage, activeBlk.id, editingBlockText)}
-                              className="px-2.5 py-1 rounded-lg bg-stone-900 text-white text-[11px] font-extrabold whitespace-nowrap shrink-0"
-                            >
-                              완료
-                            </button>
-                          </div>
 
-                          <div className="flex items-center justify-between gap-1.5 flex-wrap pt-1 border-t border-stone-100">
-                            <div className="flex items-center gap-1 flex-wrap">
-                              {PAGE_TEXT_COLORS.map((c) => (
-                                <button
-                                  key={c.id}
-                                  type="button"
-                                  onClick={() => handleUpdatePageBlockStyle(currentPage, activeBlk.id, { textColor: c.id })}
-                                  className={`w-4 h-4 rounded-full ${c.dot} ${
-                                    (activeBlk.textColor || "default") === c.id ? "ring-2 ring-stone-900 ring-offset-1" : "opacity-70 hover:opacity-100"
-                                  }`}
-                                  title={`글자색: ${c.label}`}
-                                />
-                              ))}
-                              {activeBlk.type === "heading" ? (
-                                <div className="flex items-center gap-1 pl-1.5 ml-0.5 border-l border-stone-200">
-                                  {PAGE_HEADING_COLORS.map((c) => (
+                            {/* 2행: 선택한 항목 서식 · 유형 · 이동 · 삭제 (미선택 시 안내) */}
+                            {activeBlk ? (
+                              <>
+                                <div className="flex items-center justify-between gap-1.5 pt-1 border-t border-stone-100 overflow-x-auto">
+                                  <div className="flex items-center gap-1 shrink-0">
+                                    <div className="flex items-center gap-0.5 bg-stone-100 rounded-lg p-0.5">
+                                      {PAGE_TEXT_SIZES.map((sz) => (
+                                        <button
+                                          key={sz.id}
+                                          type="button"
+                                          onClick={() => handleUpdatePageBlockStyle(currentPage, activeBlk.id, { fontSize: sz.id })}
+                                          className={`px-1.5 py-0.5 rounded text-[10.5px] font-extrabold whitespace-nowrap transition ${
+                                            (activeBlk.fontSize || "base") === sz.id ? "bg-stone-900 text-white" : "text-stone-600 hover:bg-white"
+                                          }`}
+                                        >
+                                          {sz.label}
+                                        </button>
+                                      ))}
+                                    </div>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleUpdatePageBlockStyle(currentPage, activeBlk.id, { bold: !activeBlk.bold })}
+                                      className={`px-2 py-0.5 rounded-lg border text-[11px] font-black transition ${
+                                        activeBlk.bold ? "bg-stone-900 text-white border-stone-900" : "bg-white text-stone-700 border-stone-200"
+                                      }`}
+                                      title="굵게"
+                                    >
+                                      B
+                                    </button>
+                                    <select
+                                      value={activeBlk.type}
+                                      onMouseDown={(e) => e.stopPropagation()}
+                                      onChange={(e) => {
+                                        const nt = e.target.value;
+                                        handleUpdatePageBlockStyle(currentPage, activeBlk.id, {
+                                          type: nt,
+                                          ...(nt === "todo" ? { checked: Boolean(activeBlk.checked) } : {}),
+                                          ...(nt === "heading" ? { color: activeBlk.color || "amber" } : {})
+                                        });
+                                      }}
+                                      className="px-1.5 py-0.5 rounded-lg bg-white border border-stone-200 text-[10.5px] font-extrabold text-stone-700"
+                                      title="블록 유형"
+                                    >
+                                      <option value="todo">☑️ 체크</option>
+                                      <option value="heading">🏷️ 섹션</option>
+                                      <option value="text">📝 메모</option>
+                                    </select>
+                                  </div>
+
+                                  <div className="flex items-center gap-1 shrink-0">
+                                    {activeBlk.type !== "heading" && (
+                                      <>
+                                        <button
+                                          type="button"
+                                          disabled={(Number(activeBlk.indent) || 0) <= 0}
+                                          onClick={() => handleIndentPageBlock(currentPage, activeBlk.id, -1)}
+                                          className="px-1.5 py-0.5 rounded bg-stone-50 border border-stone-200 text-[10.5px] font-bold disabled:opacity-30"
+                                          title="내어쓰기"
+                                        >
+                                          ←
+                                        </button>
+                                        <button
+                                          type="button"
+                                          disabled={(Number(activeBlk.indent) || 0) >= 3}
+                                          onClick={() => handleIndentPageBlock(currentPage, activeBlk.id, 1)}
+                                          className="px-1.5 py-0.5 rounded bg-stone-50 border border-stone-200 text-[10.5px] font-bold disabled:opacity-30"
+                                          title="들여쓰기"
+                                        >
+                                          →
+                                        </button>
+                                      </>
+                                    )}
+                                    <button
+                                      type="button"
+                                      disabled={activeBlkIdx === 0}
+                                      onClick={() => handleMovePageBlock(currentPage, activeBlkIdx, -1)}
+                                      className="px-1.5 py-0.5 rounded bg-stone-50 border border-stone-200 text-[10.5px] font-bold disabled:opacity-30"
+                                      title="위로"
+                                    >
+                                      ▲
+                                    </button>
+                                    <button
+                                      type="button"
+                                      disabled={activeBlkIdx === blocks.length - 1}
+                                      onClick={() => handleMovePageBlock(currentPage, activeBlkIdx, 1)}
+                                      className="px-1.5 py-0.5 rounded bg-stone-50 border border-stone-200 text-[10.5px] font-bold disabled:opacity-30"
+                                      title="아래로"
+                                    >
+                                      ▼
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDeletePageBlock(currentPage, activeBlk.id)}
+                                      className="px-1.5 py-0.5 rounded bg-rose-50 border border-rose-200 text-rose-600 text-[10.5px] font-extrabold whitespace-nowrap"
+                                    >
+                                      삭제
+                                    </button>
+                                  </div>
+                                </div>
+
+                                <div className="flex items-center gap-1.5 overflow-x-auto pt-0.5">
+                                  <span className="text-[10px] font-bold text-stone-400 whitespace-nowrap shrink-0">글자</span>
+                                  {PAGE_TEXT_COLORS.map((c) => (
                                     <button
                                       key={c.id}
                                       type="button"
-                                      onClick={() => handleUpdatePageBlockStyle(currentPage, activeBlk.id, { color: c.id })}
-                                      className={`w-4 h-4 rounded-full ${c.dot} ${activeBlk.color === c.id ? "ring-2 ring-stone-900 ring-offset-1" : "opacity-70"}`}
-                                      title={`섹션색: ${c.label}`}
+                                      onClick={() => handleUpdatePageBlockStyle(currentPage, activeBlk.id, { textColor: c.id })}
+                                      className={`w-4 h-4 rounded-full shrink-0 ${c.dot} ${
+                                        (activeBlk.textColor || "default") === c.id ? "ring-2 ring-stone-900 ring-offset-1" : "opacity-70 hover:opacity-100"
+                                      }`}
+                                      title={`글자색: ${c.label}`}
                                     />
                                   ))}
-                                </div>
-                              ) : (
-                                <div className="flex items-center gap-1 pl-1.5 ml-0.5 border-l border-stone-200">
-                                  {PAGE_TEXT_BG_COLORS.map((bg) => (
+                                  <span className="text-[10px] font-bold text-stone-400 whitespace-nowrap shrink-0 pl-1.5 ml-0.5 border-l border-stone-200">
+                                    {activeBlk.type === "heading" ? "섹션" : "배경"}
+                                  </span>
+                                  {(activeBlk.type === "heading" ? PAGE_HEADING_COLORS : PAGE_TEXT_BG_COLORS).map((bg) => (
                                     <button
                                       key={bg.id}
                                       type="button"
-                                      onClick={() => handleUpdatePageBlockStyle(currentPage, activeBlk.id, { bgColor: bg.id })}
-                                      className={`w-4 h-4 rounded ${bg.dot} ${
-                                        (activeBlk.bgColor || "none") === bg.id ? "ring-2 ring-stone-900 ring-offset-1" : "opacity-75 hover:opacity-100"
+                                      onClick={() =>
+                                        handleUpdatePageBlockStyle(
+                                          currentPage,
+                                          activeBlk.id,
+                                          activeBlk.type === "heading" ? { color: bg.id } : { bgColor: bg.id }
+                                        )
+                                      }
+                                      className={`w-4 h-4 rounded shrink-0 ${bg.dot} ${
+                                        (activeBlk.type === "heading" ? activeBlk.color === bg.id : (activeBlk.bgColor || "none") === bg.id)
+                                          ? "ring-2 ring-stone-900 ring-offset-1"
+                                          : "opacity-75 hover:opacity-100"
                                       }`}
-                                      title={`형광펜: ${bg.label}`}
+                                      title={bg.label}
                                     />
                                   ))}
                                 </div>
-                              )}
-                            </div>
-
-                            <div className="flex items-center gap-1 shrink-0">
-                              {activeBlk.type !== "heading" && (
-                                <>
-                                  <button
-                                    type="button"
-                                    disabled={(Number(activeBlk.indent) || 0) <= 0}
-                                    onClick={() => handleIndentPageBlock(currentPage, activeBlk.id, -1)}
-                                    className="px-1.5 py-0.5 rounded bg-stone-50 border border-stone-200 text-[10.5px] font-bold disabled:opacity-30"
-                                    title="내어쓰기"
-                                  >
-                                    ←
-                                  </button>
-                                  <button
-                                    type="button"
-                                    disabled={(Number(activeBlk.indent) || 0) >= 3}
-                                    onClick={() => handleIndentPageBlock(currentPage, activeBlk.id, 1)}
-                                    className="px-1.5 py-0.5 rounded bg-stone-50 border border-stone-200 text-[10.5px] font-bold disabled:opacity-30"
-                                    title="들여쓰기"
-                                  >
-                                    →
-                                  </button>
-                                </>
-                              )}
-                              <button
-                                type="button"
-                                disabled={activeBlkIdx === 0}
-                                onClick={() => handleMovePageBlock(currentPage, activeBlkIdx, -1)}
-                                className="px-1.5 py-0.5 rounded bg-stone-50 border border-stone-200 text-[10.5px] font-bold disabled:opacity-30"
-                                title="위로 이동"
-                              >
-                                ▲
-                              </button>
-                              <button
-                                type="button"
-                                disabled={activeBlkIdx === blocks.length - 1}
-                                onClick={() => handleMovePageBlock(currentPage, activeBlkIdx, 1)}
-                                className="px-1.5 py-0.5 rounded bg-stone-50 border border-stone-200 text-[10.5px] font-bold disabled:opacity-30"
-                                title="아래로 이동"
-                              >
-                                ▼
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleDeletePageBlock(currentPage, activeBlk.id)}
-                                className="px-1.5 py-0.5 rounded bg-rose-50 border border-rose-200 text-rose-600 text-[10.5px] font-extrabold whitespace-nowrap"
-                              >
-                                삭제
-                              </button>
-                            </div>
+                              </>
+                            ) : (
+                              <div className="pt-1 border-t border-stone-100 text-[11px] font-bold text-stone-400 text-center">
+                                수정할 항목을 누르거나 위 [+ 체크 · + 섹션 · + 메모]로 바로 추가하세요
+                              </div>
+                            )}
                           </div>
-                        </div>
+                          {/* 고정 툴바 높이만큼 상단 여백 확보 */}
+                          <div className={activeBlk ? "h-[106px]" : "h-[68px]"} />
+                        </>
                       );
                     })()}
 
                     {/* 노션 스타일 블록 리스트 */}
                     <div className="space-y-2">
-                      {!isPageBulkEditMode && blocks.length === 0 && childPages.length === 0 && (
+                      {blocks.length === 0 && childPages.length === 0 && (
                         <div className="py-6 text-center text-[12.5px] font-semibold text-stone-400 bg-stone-50/70 rounded-2xl border border-dashed border-stone-200">
                           아래에서 체크리스트·섹션·메모·표를 추가하거나 여러 줄을 바로 붙여넣어 보세요.
                         </div>
                       )}
                       {blocks.map((blk, bIdx) => {
-                        if (isPageBulkEditMode && blk.type !== "table") return null;
                         if (hideCompletedPageTodos && blk.type === "todo" && blk.checked) return null;
 
                         if (blk.type === "md_table") {
@@ -18678,9 +18538,21 @@ ${validText}
                                 autoFocus
                                 value={editingBlockText}
                                 onChange={(e) => setEditingBlockText(e.target.value)}
+                                placeholder={blk.type === "heading" ? "섹션 제목 입력..." : blk.type === "todo" ? "체크리스트 항목 입력..." : "메모 입력..."}
                                 onKeyDown={(e) => {
-                                  if (e.key === "Enter") handleUpdatePageBlockText(currentPage, blk.id, editingBlockText);
-                                  if (e.key === "Escape") setEditingBlockId(null);
+                                  if (e.key === "Enter") {
+                                    e.preventDefault();
+                                    if (String(editingBlockText || "").trim()) {
+                                      handleInsertPageBlockAt(currentPage, blk.type === "heading" ? "todo" : blk.type, blk.id);
+                                    } else {
+                                      handleFinishPageVisualEdit(currentPage);
+                                    }
+                                  }
+                                  if (e.key === "Backspace" && !editingBlockText) {
+                                    e.preventDefault();
+                                    handleDeletePageBlock(currentPage, blk.id);
+                                  }
+                                  if (e.key === "Escape") handleFinishPageVisualEdit(currentPage);
                                 }}
                                 className={`flex-1 min-w-0 px-2.5 py-1 rounded-xl border-2 border-amber-400 bg-white shadow-2xs focus:outline-none ${sizeMeta ? sizeMeta.cls : "text-[14px]"} ${blk.bold ? "font-black" : "font-semibold"} ${txtColorMeta.cls} ${bgColorMeta.cls}`}
                               />
@@ -18766,118 +18638,53 @@ ${validText}
                       })}
                     </div>
 
-                    {/* 블록 빠른 추가 입력 바 */}
-                    {canEditTab("pages") && !isPageBulkEditMode && (
-                      <div className="pt-3 border-t border-stone-100 space-y-2">
-                        <div className="flex items-center justify-between gap-1 flex-wrap">
-                          <div className="flex items-center gap-1">
-                            {[
-                              { id: "todo", label: "☑️ 체크" },
-                              { id: "heading", label: "🏷️ 섹션" },
-                              { id: "text", label: "📝 메모" }
-                            ].map((bt) => (
-                              <button
-                                key={bt.id}
-                                type="button"
-                                onClick={() => setPageQuickAddType(bt.id)}
-                                className={`px-2.5 py-1 rounded-full text-[11.5px] font-extrabold border whitespace-nowrap transition ${
-                                  pageQuickAddType === bt.id
-                                    ? "bg-stone-900 text-white border-stone-900"
-                                    : "bg-stone-50 text-stone-600 border-stone-200"
-                                }`}
-                              >
-                                {bt.label}
-                              </button>
-                            ))}
-                            <button
-                              type="button"
-                              onClick={() => handleAddTableBlock(currentPage)}
-                              className="px-2.5 py-1 rounded-full text-[11.5px] font-extrabold border bg-sky-50 hover:bg-sky-100 text-sky-800 border-sky-200 whitespace-nowrap transition"
-                              title="Priority · Task name · 비고 표 추가"
-                            >
-                              + 📊 표
-                            </button>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => openCreatePageModal(currentPage.id)}
-                            className="px-2 py-1 rounded-full bg-[#EEF3EE] text-[#35503C] border border-[#C9D8CC] text-[11px] font-extrabold whitespace-nowrap"
-                          >
-                            + 하위 페이지
-                          </button>
-                        </div>
-
-                        {pageQuickAddType === "heading" && (
-                          <div className="flex items-center gap-1.5 px-0.5">
-                            <span className="text-[11px] font-bold text-stone-400">강조색:</span>
-                            {PAGE_HEADING_COLORS.map((c) => (
-                              <button
-                                key={c.id}
-                                type="button"
-                                onClick={() => setPageQuickAddColor(c.id)}
-                                className={`w-5 h-5 rounded-full ${c.dot} ${
-                                  pageQuickAddColor === c.id ? "ring-2 ring-stone-900 ring-offset-1" : "opacity-65"
-                                }`}
-                                title={c.label}
-                              />
-                            ))}
-                            <span className="text-[10.5px] text-stone-400 ml-auto">'-&gt;' 앞부분 자동 강조</span>
-                          </div>
-                        )}
-
-                        <div className="flex items-center gap-1.5">
-                          <input
-                            type="text"
-                            value={pageQuickAddText}
-                            onChange={(e) => setPageQuickAddText(e.target.value)}
-                            onPaste={(e) => {
-                              const pasted = e.clipboardData?.getData("text") || "";
-                              if (!pasted.includes("\n")) return;
-                              e.preventDefault();
-                              if (/^\s*#{1,6}\s+/m.test(pasted) || /^\s*(?:[-*+]\s*)?\[[ xX✓✔]\]/m.test(pasted) || (/\|.*\|/m.test(pasted) && /^\s*\|?\s*:?-{2,}:?\s*\|/m.test(pasted))) {
-                                handleApplyMarkdownPaste(currentPage, pasted, "append", pageQuickAddColor || "amber");
-                                return;
-                              }
-                              const plainLines = pasted.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
-                              if (plainLines.length === 0) return;
-                              const now = Date.now();
-                              const added = plainLines.map((ln, idx) => ({
-                                id: `blk-${now}-${idx}-${Math.random().toString(36).slice(2, 5)}`,
-                                type: pageQuickAddType,
-                                text: ln,
-                                ...(pageQuickAddType === "todo" ? { checked: false } : {}),
-                                ...(pageQuickAddType === "heading" ? { color: pageQuickAddColor || "amber" } : {})
-                              }));
-                              savePageToCloud({
-                                ...currentPage,
-                                blocks: [...blocks, ...added],
-                                updatedAtMs: now
-                              });
-                              showToast(`✨ ${added.length}줄을 바로 추가했습니다!`);
-                            }}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") {
-                                e.preventDefault();
-                                handleAddPageBlock(currentPage);
-                              }
-                            }}
-                            placeholder={
-                              pageQuickAddType === "heading"
-                                ? "예: 세면용품 파우치 -> 캐리어"
-                                : pageQuickAddType === "todo"
-                                ? "체크리스트 항목 입력 후 Enter..."
-                                : "메모 또는 가이드 내용 입력..."
+                    {/* 하단 슬림 1줄 빠른 추가 바 */}
+                    {canEditTab("pages") && (
+                      <div className="pt-2.5 border-t border-stone-100 flex items-center gap-1.5">
+                        <input
+                          type="text"
+                          value={pageQuickAddText}
+                          onChange={(e) => setPageQuickAddText(e.target.value)}
+                          onPaste={(e) => {
+                            const pasted = e.clipboardData?.getData("text") || "";
+                            if (!pasted.includes("\n")) return;
+                            e.preventDefault();
+                            if (/^\s*#{1,6}\s+/m.test(pasted) || /^\s*(?:[-*+]\s*)?\[[ xX✓✔]\]/m.test(pasted) || (/\|.*\|/m.test(pasted) && /^\s*\|?\s*:?-{2,}:?\s*\|/m.test(pasted))) {
+                              handleApplyMarkdownPaste(currentPage, pasted, "append", "amber");
+                              return;
                             }
-                            className="flex-1 min-w-0 px-3 py-2 rounded-xl border border-stone-200 bg-stone-50 focus:bg-white text-[13.5px] font-semibold"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => handleAddPageBlock(currentPage)}
-                            className="px-3.5 py-2 rounded-xl bg-stone-900 hover:bg-stone-800 text-white text-[13px] font-extrabold whitespace-nowrap shrink-0"
-                          >
-                            + 추가
-                          </button>
-                        </div>
+                            const plainLines = pasted.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+                            if (plainLines.length === 0) return;
+                            const now = Date.now();
+                            const added = plainLines.map((ln, idx) => ({
+                              id: `blk-${now}-${idx}-${Math.random().toString(36).slice(2, 5)}`,
+                              type: "todo",
+                              text: ln,
+                              checked: false
+                            }));
+                            savePageToCloud({
+                              ...currentPage,
+                              blocks: [...blocks, ...added],
+                              updatedAtMs: now
+                            });
+                            showToast(`✨ ${added.length}줄을 바로 추가했습니다!`);
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              handleAddPageBlock(currentPage);
+                            }
+                          }}
+                          placeholder="체크리스트 빠른 추가 후 Enter..."
+                          className="flex-1 min-w-0 px-3 py-2 rounded-xl border border-stone-200 bg-stone-50 focus:bg-white text-[13px] font-semibold"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => handleAddPageBlock(currentPage)}
+                          className="px-3 py-2 rounded-xl bg-stone-900 hover:bg-stone-800 text-white text-[12.5px] font-extrabold whitespace-nowrap shrink-0"
+                        >
+                          + 추가
+                        </button>
                       </div>
                     )}
                   </div>
@@ -21959,7 +21766,7 @@ ${validText}
       )}
 
 
-      {showScrollTopBtn && !isQuickFabOpen && !isPageBulkEditMode && !isPagePasteModalOpen && !activeTableTaskModal && (
+      {showScrollTopBtn && !isQuickFabOpen && !isPageVisualEditMode && !isPagePasteModalOpen && !activeTableTaskModal && (
         <button
           type="button"
           onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
@@ -21972,7 +21779,7 @@ ${validText}
         </button>
       )}
 
-      {isEditorUnlocked && !isPageBulkEditMode && !isPagePasteModalOpen && !activeTableTaskModal && !editingBlockId && (
+      {isEditorUnlocked && !isPageVisualEditMode && !isPagePasteModalOpen && !activeTableTaskModal && !editingBlockId && (
         <button
           type="button"
           onClick={() => setIsQuickFabOpen((v) => !v)}

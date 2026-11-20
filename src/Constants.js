@@ -1176,7 +1176,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v12.31";
+export const APP_CODE_VERSION = "v12.32";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1194,7 +1194,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-20 10:25";
+export const APP_BUILD_DATE = "2026-11-20 10:40";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1261,6 +1261,18 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v12.32",
+    version: "v12.32",
+    date: "2026-11-20",
+    title: "공유노트 통합 틀고정(Fixed) 편집 툴바 전면 개편 (시각적 편집 · 서식 · 체크리스트 즉시 추가 통합)",
+    items: [
+      "서식 툴바가 스크롤 시 풀리던 sticky 한계(부모 overflow-hidden)를 해결해 화면 상단에 완전 고정(fixed)되는 통합 편집 툴바로 개편",
+      "비직관적이던 txt 마크다운 일괄편집을 제거하고, [✏️ 편집]을 누르면 실제 체크리스트·섹션 화면 그대로 보면서 상단 고정 툴바에서 [+ 체크 · + 섹션 · + 메모 · + 표 · + 페이지] 즉시 추가와 서식·이동·삭제를 한 번에 처리",
+      "항목 선택 상태에서 [+ 체크/섹션/메모] 또는 Enter 키를 누르면 바로 아래 줄에 새 항목이 즉시 생성·포커스되어 위아래로 스크롤할 필요 없이 연속 입력 가능",
+      "하단 중복 5종 추가 버튼 및 미사용 텍스트 편집 상태·함수 제거로 시각적 피로도 최소화 및 코드 경량화"
+    ]
+  },
   {
     id: "patch-v12.31",
     version: "v12.31",
