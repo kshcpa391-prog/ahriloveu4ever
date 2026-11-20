@@ -2159,6 +2159,7 @@ function MainApp() {
   const calSwipedRef = useRef(false);
   const popupTouchStartRef = useRef(null);
   const dailyTouchStartRef = useRef(null);
+  const monthlyTouchStartRef = useRef(null);
   const routineTitleLiveRef = useRef("");
   const currentAdminOwner = actorName === "아리나" ? "아리나" : "수혁";
   const [isPrivateCalModalOpen, setIsPrivateCalModalOpen] = useState(false);
@@ -15056,9 +15057,30 @@ ${validText}
       ========================================== */}
       {activeTab === "monthly" && (!canViewTab("monthly") ? renderLockedTabScreen("💰 월간·식비") : (
         <div className="p-4 space-y-4">
-          <div className="flex items-center justify-between gap-2 bg-white px-3 py-2 rounded-2xl border border-stone-200 shadow-sm">
+          <div
+            className="flex items-center justify-between gap-2 bg-white px-3 py-2 rounded-2xl border border-stone-200 shadow-sm"
+            onTouchStart={(e) => {
+              const t = e.touches?.[0];
+              if (!t) return;
+              monthlyTouchStartRef.current = { x: t.clientX, y: t.clientY };
+            }}
+            onTouchEnd={(e) => {
+              const st = monthlyTouchStartRef.current;
+              const t = e.changedTouches?.[0];
+              monthlyTouchStartRef.current = null;
+              if (!st || !t) return;
+              const dx = t.clientX - st.x;
+              const dy = t.clientY - st.y;
+              if (Math.abs(dx) >= 48 && Math.abs(dx) > Math.abs(dy) * 1.25) {
+                const nextM = shiftYearMonth(currentMonth, dx < 0 ? 1 : -1);
+                setCurrentMonth(nextM);
+                setSelectedDate(`${nextM}-01`);
+              }
+            }}
+          >
             <button
               type="button"
+              aria-label="이전 달"
               onClick={() => {
                 const prevM = shiftYearMonth(currentMonth, -1);
                 setCurrentMonth(prevM);
@@ -28730,6 +28752,11 @@ ${validText}
                   </div>
 
 
+                  {suhyeokCode === arinaCode && (
+                    <div className="sm:col-span-2 px-2.5 py-1.5 rounded-xl bg-amber-50 border border-amber-200 text-[11px] font-bold text-amber-900">
+                      💡 수혁·아리나 비밀번호를 서로 다르게 설정하면 로그인 시 자동으로 본인 계정과 개인일정에 바로 접속됩니다.
+                    </div>
+                  )}
                   <div className="bg-white p-2 rounded-xl border border-sky-200 space-y-1 sm:col-span-2">
                     <div className="flex items-center justify-between text-[11.5px] font-extrabold text-sky-900">
                       <span>🌿 육아지원군 비밀번호</span>

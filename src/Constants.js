@@ -1177,7 +1177,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v12.57";
+export const APP_CODE_VERSION = "v12.58";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1195,7 +1195,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-21 03:28";
+export const APP_BUILD_DATE = "2026-11-21 03:35";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1262,6 +1262,18 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v12.58",
+    version: "v12.58",
+    date: "2026-11-21",
+    title: "월간·식비 스와이프 월 이동 통일 · 개별 비밀번호 자동접속 안내 및 최종 전수 검증",
+    category: "편의성 · 안정화",
+    changes: [
+      "월간·식비(가계부) 탭 상단 월 이동 바에도 좌우 스와이프 이전달/다음달 이동을 적용해 달력·식단·가계부 제스처 UX 일관화",
+      "설정 화면에서 수혁·아리나 비밀번호가 아직 같을 때만 개별 분리 시 자동 계정 접속을 안내하는 1줄 팁 표시",
+      "프로덕션 console.log 0건 · AST 스코프 미선언 변수(ReferenceError) 0건 · 12개 전체 탭 무결성 최종 확인 완료"
+    ]
+  },
   {
     id: "patch-v12.57",
     version: "v12.57",
