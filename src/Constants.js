@@ -1177,7 +1177,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v12.52";
+export const APP_CODE_VERSION = "v12.53";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1195,7 +1195,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-20 23:55";
+export const APP_BUILD_DATE = "2026-11-20 23:59";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1262,6 +1262,18 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v12.53",
+    version: "v12.53",
+    date: "2026-11-20",
+    title: "전 모달 배경 터치 닫기 통일 · 모바일 검색 키보드 최적화 및 전수 검증",
+    category: "편의성 · 안정화",
+    changes: [
+      "마지막으로 남아 있던 반복 루틴·식단 기록 모달에도 배경 터치 닫기를 적용해 앱 전체 모든 모달의 닫기 UX 통일",
+      "식단·지출·통합달력·할일·냉장고·장보기·공유노트·레시피 모든 검색 입력창에 모바일 검색 키보드(enterKeyHint='search') 적용",
+      "전체 3만여 줄 코드 대상 Babel AST 스코프 미선언 변수(ReferenceError) 0건 · 12개 전체 탭 렌더링 무결성 재검증 완료"
+    ]
+  },
   {
     id: "patch-v12.52",
     version: "v12.52",

@@ -14563,6 +14563,7 @@ ${validText}
                   value={mealSearchQuery}
                   onChange={(e) => setMealSearchQuery(e.target.value)}
                   onKeyDown={(e) => { if (e.key === "Escape") setMealSearchQuery(""); }}
+                  enterKeyHint="search"
                   placeholder="🔍 식단·재료 검색..."
                   className="w-full px-2.5 py-1.5 pr-7 rounded-xl border border-stone-200 bg-stone-50 text-[12.5px] font-semibold text-stone-800"
                 />
@@ -15035,6 +15036,7 @@ ${validText}
                       onKeyDown={(e) => {
                         if (e.key === "Escape") setMonthlySearchQuery("");
                       }}
+                      enterKeyHint="search"
                       placeholder="메뉴 검색..."
                       className="w-full px-2.5 py-1 rounded-full bg-white border border-stone-200 text-[11.5px] font-bold text-stone-800 placeholder:text-stone-400 focus:outline-none focus:border-stone-400"
                     />
@@ -15546,6 +15548,7 @@ ${validText}
                             value={expenseSearchQuery}
                             onChange={(e) => setExpenseSearchQuery(e.target.value)}
                             onKeyDown={(e) => { if (e.key === "Escape") setExpenseSearchQuery(""); }}
+                            enterKeyHint="search"
                             placeholder="🔍 지출 품목·카테고리 검색..."
                             className="w-full px-3 py-1.5 pr-7 rounded-xl border border-stone-200 bg-stone-50 text-[12.5px] font-semibold text-stone-800"
                           />
@@ -15986,6 +15989,7 @@ ${validText}
                             value={privateCalSearchQuery}
                             onChange={(e) => setPrivateCalSearchQuery(e.target.value)}
                             onKeyDown={(e) => { if (e.key === "Escape") setPrivateCalSearchQuery(""); }}
+                            enterKeyHint="search"
                             placeholder={isAdminUnlocked ? `🔍 가족 · ${currentAdminOwner} 개인 일정 검색...` : "🔍 가족 일정 검색..."}
                             className="w-full px-3 py-1.5 pr-8 rounded-xl border border-stone-200 bg-stone-50 text-[12px] font-bold"
                           />
@@ -17339,6 +17343,7 @@ ${validText}
                   value={todoSearchQuery}
                   onChange={(e) => setTodoSearchQuery(e.target.value)}
                   onKeyDown={(e) => { if (e.key === "Escape") setTodoSearchQuery(""); }}
+                  enterKeyHint="search"
                   placeholder="🔍 할 일 제목·메모 검색..."
                   className="w-full px-3 py-1.5 pr-7 rounded-xl border border-stone-200 bg-stone-50 text-[12.5px] font-semibold text-stone-800"
                 />
@@ -17773,6 +17778,7 @@ ${validText}
                 value={fridgeSearch}
                 onChange={(e) => setFridgeSearch(e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Escape") setFridgeSearch(""); }}
+                enterKeyHint="search"
                 placeholder="🔍 재료 검색 (양파, 우유 등)"
                 className="w-full px-3 py-2 pr-8 rounded-xl border border-stone-200 bg-white text-[13.5px] font-semibold text-stone-800 placeholder:text-stone-400"
               />
@@ -18638,6 +18644,7 @@ ${validText}
                   value={shoppingSearchQuery}
                   onChange={(e) => setShoppingSearchQuery(e.target.value)}
                   onKeyDown={(e) => { if (e.key === "Escape") setShoppingSearchQuery(""); }}
+                  enterKeyHint="search"
                   placeholder="🔍 장보기 품목·메모 검색..."
                   className="w-full px-3 py-1.5 pr-7 rounded-xl border border-stone-200 bg-white text-[12.5px] font-semibold text-stone-800"
                 />
@@ -20435,6 +20442,7 @@ ${validText}
                     onKeyDown={(e) => {
                       if (e.key === "Escape") setPageSearchQuery("");
                     }}
+                    enterKeyHint="search"
                     placeholder="페이지 · 체크리스트 · 표 검색..."
                     className="w-full pl-10 pr-9 py-2.5 rounded-full bg-white border border-stone-200/90 shadow-sm text-[13.5px] font-semibold text-stone-800 placeholder:text-stone-400 focus:outline-none focus:ring-2 focus:ring-stone-300"
                   />
@@ -21349,6 +21357,7 @@ ${validText}
                                         }));
                                       }
                                     }}
+                                    enterKeyHint="search"
                                     placeholder="Task name, 비고, 메모 검색..."
                                     className="flex-1 bg-transparent text-[12px] font-semibold text-stone-800 focus:outline-none"
                                   />
@@ -21831,6 +21840,7 @@ ${validText}
                   value={recipeSearch}
                   onChange={(e) => setRecipeSearch(e.target.value)}
                   onKeyDown={(e) => { if (e.key === "Escape") setRecipeSearch(""); }}
+                  enterKeyHint="search"
                   placeholder="🔍 요리명·재료 검색 (예: 소고기, 무국)"
                   className="w-full px-3 py-2 pr-8 rounded-xl border border-stone-200 bg-white text-[13.5px] font-bold"
                 />
@@ -26204,8 +26214,14 @@ ${validText}
           모달: 가족 일정 추가·수정
       ========================================== */}
       {isRoutineModalOpen && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-sm w-full p-5 space-y-3 max-h-[88vh] overflow-y-auto">
+        <div
+          className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+          onClick={handleCancelEditRoutine}
+        >
+          <div
+            className="bg-white rounded-3xl max-w-sm w-full p-5 space-y-3 max-h-[88vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="flex items-center justify-between">
               <h3 className="text-[15.5px] font-black text-stone-900">
                 {editingRoutineId ? "🔄 반복 루틴 수정" : "🔄 새 반복 루틴 추가"}
@@ -27144,8 +27160,13 @@ ${validText}
 
       {/* 기존 모달들 (식단, 냉장고, 장보기입고, 공지, AI퀵로그) */}
       {isMealModalOpen && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-sm w-full p-5 pt-0 space-y-3.5 max-h-[90vh] overflow-y-auto">
+        <div
+          className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+          onClick={() => setIsMealModalOpen(false)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-3xl max-w-sm w-full p-5 pt-0 space-y-3.5 max-h-[90vh] overflow-y-auto">
             <div className="sticky top-0 bg-white z-10 pt-4 pb-2.5 border-b border-stone-100 flex items-center justify-between gap-2">
               <h3 className="text-[15.5px] font-black">
                 {editingMeal ? "식단 수정하기" : "새 식단 기록하기"}
