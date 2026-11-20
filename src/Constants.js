@@ -1176,7 +1176,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v12.30";
+export const APP_CODE_VERSION = "v12.31";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1194,7 +1194,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-20 10:10";
+export const APP_BUILD_DATE = "2026-11-20 10:25";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1261,6 +1261,17 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v12.31",
+    version: "v12.31",
+    date: "2026-11-20",
+    title: "육아일기 선택 영역 부분 서식 · 공유노트 상단 고정 서식 툴바 · 월간식단 4인(시율 포함) 한눈에 배치",
+    items: [
+      "육아일기 서식 고도화: 글자를 드래그(블록 선택)한 상태에서 크기·굵기·글자색·형광펜을 누르면 선택한 부분만 서식이 적용되고, 선택 없이 누르면 전체 기본 서식으로 자동 적용(실시간 '선택 영역 적용/전체 기본 서식' 안내 배지 및 안전한 HTML 살균 적용)",
+      "공유노트 상단 고정 툴바 전환: 항목 클릭 시 제자리에 큰 편집 팝업이 펼쳐지던 방식을 없애고, 항목은 깔끔한 1줄 인라인 입력으로 유지하면서 상단에 고정 서식·이동 툴바가 뜨도록 개편",
+      "월간식단 4인 버튼(수혁·아리·시목·시율)을 4열 균등 그리드로 재배치해 가로 스크롤 없이 시율이 버튼까지 한눈에 보이도록 개선 및 육아일기 날짜 입력창 잘림 해소"
+    ]
+  },
   {
     id: "patch-v12.30",
     version: "v12.30",

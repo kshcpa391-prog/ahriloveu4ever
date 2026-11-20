@@ -194,6 +194,56 @@ const isDiaryTextStyleCustom = (ts) => {
   );
 };
 
+const DIARY_SIZE_PX = { sm: "12.5px", base: "14.5px", lg: "17px", xl: "20px" };
+
+const plainTextToDiaryHtml = (txt) =>
+  String(txt || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/\n/g, "<br>");
+
+const sanitizeDiaryHtml = (rawHtml) => {
+  const str = String(rawHtml || "");
+  if (!str) return "";
+  if (typeof DOMParser === "undefined") return plainTextToDiaryHtml(str.replace(/<[^>]+>/g, ""));
+  try {
+    const doc = new DOMParser().parseFromString(`<div>${str}</div>`, "text/html");
+    const root = doc.body.firstChild;
+    const ALLOWED_TAGS = new Set(["SPAN", "BR", "DIV", "P", "B", "STRONG", "I", "EM"]);
+    const walk = (node) => {
+      if (node.nodeType === 3) {
+        return node.textContent
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;");
+      }
+      if (node.nodeType !== 1) return "";
+      const tag = node.tagName.toUpperCase();
+      if (tag === "BR") return "<br>";
+      const inner = Array.from(node.childNodes).map(walk).join("");
+      if (!ALLOWED_TAGS.has(tag)) return inner;
+      if (tag === "SPAN") {
+        const st = node.style;
+        const safeParts = [];
+        if (st.fontSize && /^\d+(\.\d+)?px$/.test(st.fontSize)) safeParts.push(`font-size:${st.fontSize}`);
+        if (st.color) safeParts.push(`color:${st.color}`);
+        if (st.backgroundColor) safeParts.push(`background-color:${st.backgroundColor}`);
+        if (st.fontWeight) safeParts.push(`font-weight:${st.fontWeight}`);
+        if (st.padding) safeParts.push(`padding:${st.padding}`);
+        if (st.borderRadius) safeParts.push(`border-radius:${st.borderRadius}`);
+        return safeParts.length > 0 ? `<span style="${safeParts.join(";")}">${inner}</span>` : inner;
+      }
+      if (tag === "B" || tag === "STRONG") return `<strong>${inner}</strong>`;
+      if (tag === "I" || tag === "EM") return `<em>${inner}</em>`;
+      return `<div>${inner}</div>`;
+    };
+    return Array.from(root.childNodes).map(walk).join("");
+  } catch (e) {
+    return plainTextToDiaryHtml(str.replace(/<[^>]+>/g, ""));
+  }
+};
+
 const MemberAvatar = ({ member, id, size = "sm", className = "" }) => {
   const resolved = member || FAMILY_MEMBERS.find((f) => f.id === id);
   const sizePx = size === "lg" ? 32 : size === "md" ? 24 : 16;
@@ -690,12 +740,17 @@ function MainApp() {
     mood: "😊 행복",
     title: "",
     content: "",
+    contentHtml: "",
     photoUrl: "",
     photos: [],
     childIds: ["시율"],
     textStyle: { ...DEFAULT_DIARY_TEXT_STYLE }
   });
   const [isDiaryFormatOpen, setIsDiaryFormatOpen] = useState(false);
+  const diaryEditorRef = useRef(null);
+  const diarySavedRangeRef = useRef(null);
+  const [hasDiarySelection, setHasDiarySelection] = useState(false);
+  const [diaryEditorSyncTick, setDiaryEditorSyncTick] = useState(0);
   useEffect(() => {
     try {
       let meta = document.querySelector('meta[name="theme-color"]');
@@ -707,6 +762,121 @@ function MainApp() {
       meta.setAttribute("content", "#5E7A65");
     } catch (e) {}
   }, []);
+
+  useEffect(() => {
+    const el = diaryEditorRef.current;
+    if (!el) return;
+    const targetHtml = diaryForm.contentHtml || plainTextToDiaryHtml(diaryForm.content || "");
+    if (el.innerHTML !== targetHtml) {
+      el.innerHTML = targetHtml;
+    }
+  }, [diaryEditorSyncTick]);
+
+  useEffect(() => {
+    const handleSelChange = () => {
+      const el = diaryEditorRef.current;
+      if (!el) return;
+      const sel = window.getSelection?.();
+      if (!sel || sel.rangeCount === 0) return;
+      const range = sel.getRangeAt(0);
+      if (el.contains(range.commonAncestorContainer)) {
+        if (!range.collapsed) {
+          diarySavedRangeRef.current = range.cloneRange();
+          setHasDiarySelection(true);
+        } else {
+          diarySavedRangeRef.current = null;
+          setHasDiarySelection(false);
+        }
+      }
+    };
+    document.addEventListener("selectionchange", handleSelChange);
+    return () => document.removeEventListener("selectionchange", handleSelChange);
+  }, []);
+
+  const applyDiaryFormat = (patch) => {
+    const el = diaryEditorRef.current;
+    const sel = window.getSelection?.();
+    let activeRange = null;
+    if (el && sel && sel.rangeCount > 0) {
+      const r = sel.getRangeAt(0);
+      if (!r.collapsed && el.contains(r.commonAncestorContainer)) {
+        activeRange = r;
+      }
+    }
+    if (!activeRange && el && diarySavedRangeRef.current) {
+      const sr = diarySavedRangeRef.current;
+      if (!sr.collapsed && el.contains(sr.commonAncestorContainer)) {
+        activeRange = sr.cloneRange();
+        try {
+          sel?.removeAllRanges();
+          sel?.addRange(activeRange);
+        } catch (e) {}
+      }
+    }
+
+    // 1) 블록(드래그 선택)한 텍스트가 있을 때: 선택한 영역만 서식 적용
+    if (activeRange && el) {
+      if (patch.reset) {
+        const plain = activeRange.toString();
+        activeRange.deleteContents();
+        const txtNode = document.createTextNode(plain);
+        activeRange.insertNode(txtNode);
+        const nr = document.createRange();
+        nr.selectNodeContents(txtNode);
+        sel?.removeAllRanges();
+        sel?.addRange(nr);
+        diarySavedRangeRef.current = nr.cloneRange();
+      } else {
+        const frag = activeRange.extractContents();
+        const span = document.createElement("span");
+        if (patch.size && DIARY_SIZE_PX[patch.size]) span.style.fontSize = DIARY_SIZE_PX[patch.size];
+        if (patch.color) span.style.color = DIARY_STYLE_HEX_COLOR[patch.color] || DIARY_STYLE_HEX_COLOR.default;
+        if (patch.bg !== undefined) {
+          const bgHex = DIARY_STYLE_HEX_BG[patch.bg] || "";
+          span.style.backgroundColor = bgHex || "transparent";
+          if (bgHex) {
+            span.style.padding = "0 3px";
+            span.style.borderRadius = "4px";
+          }
+        }
+        if (patch.toggleBold) {
+          const parentEl =
+            activeRange.commonAncestorContainer.nodeType === 1
+              ? activeRange.commonAncestorContainer
+              : activeRange.commonAncestorContainer.parentElement;
+          const curW = parentEl ? window.getComputedStyle(parentEl).fontWeight : "400";
+          const isAlreadyBold = curW === "bold" || Number(curW) >= 600;
+          span.style.fontWeight = isAlreadyBold ? "400" : "700";
+        }
+        span.appendChild(frag);
+        activeRange.insertNode(span);
+        const nr = document.createRange();
+        nr.selectNodeContents(span);
+        sel?.removeAllRanges();
+        sel?.addRange(nr);
+        diarySavedRangeRef.current = nr.cloneRange();
+      }
+      const cleanHtml = sanitizeDiaryHtml(el.innerHTML);
+      const plainTxt = (el.innerText || "").replace(/\r\n/g, "\n");
+      setDiaryForm((p) => ({ ...p, content: plainTxt, contentHtml: cleanHtml }));
+      return;
+    }
+
+    // 2) 블록 선택이 없을 때: 기본(전체) 서식으로 적용
+    if (patch.reset) {
+      setDiaryForm((p) => ({ ...p, textStyle: { ...DEFAULT_DIARY_TEXT_STYLE } }));
+      return;
+    }
+    setDiaryForm((p) => {
+      const cur = p.textStyle || DEFAULT_DIARY_TEXT_STYLE;
+      const next = { ...cur };
+      if (patch.size) next.size = patch.size;
+      if (patch.color) next.color = patch.color;
+      if (patch.bg !== undefined) next.bg = patch.bg;
+      if (patch.toggleBold) next.bold = !cur.bold;
+      return { ...p, textStyle: next };
+    });
+  };
   const [editingDiaryEntry, setEditingDiaryEntry] = useState(null);
   const [diaryExportPreviewUrl, setDiaryExportPreviewUrl] = useState("");
   const [diaryExportFilename, setDiaryExportFilename] = useState("육아일기.png");
@@ -7075,6 +7245,7 @@ ${validText}
         mood: diaryForm.mood || "😊 행복",
         title: (diaryForm.title || "").trim(),
         content: (diaryForm.content || "").trim(),
+        contentHtml: sanitizeDiaryHtml(diaryForm.contentHtml || ""),
         textStyle: diaryForm.textStyle || { ...DEFAULT_DIARY_TEXT_STYLE },
         photoUrl: finalUrls[0] && String(finalUrls[0]).startsWith("http") ? finalUrls[0] : "",
         photoUrls: finalUrls,
@@ -7097,11 +7268,15 @@ ${validText}
         mood: "😊 행복",
         title: "",
         content: "",
+        contentHtml: "",
         photoUrl: "",
         photos: [],
         childIds: [selectedChildId],
         textStyle: { ...DEFAULT_DIARY_TEXT_STYLE }
       });
+      diarySavedRangeRef.current = null;
+      setHasDiarySelection(false);
+      setDiaryEditorSyncTick((t) => t + 1);
       recordActivity("육아", editingDiaryEntry ? "일기수정" : "일기등록", `${primaryChildLabel} · ${payload.date}`, {
         targetSubTab: "diary",
         targetId: id,
@@ -12411,22 +12586,40 @@ ${validText}
 
             return (
               <div className="space-y-2.5">
-                {/* 슬림 가족 구성원 선택 + 한눈에/달력 전환 */}
+                {/* 가족 4인 한눈에 선택 (스크롤 없이 4열 균등 배치) */}
+                <div className="grid grid-cols-4 gap-1">
+                  {FAMILY_MEMBERS.map((m) => (
+                    <button
+                      key={m.id}
+                      type="button"
+                      onClick={() => setMonthlyMember(m.id)}
+                      className={`py-1.5 px-1 rounded-xl border flex items-center justify-center gap-1 text-[12px] font-extrabold whitespace-nowrap transition ${
+                        monthlyMember === m.id
+                          ? "bg-stone-900 text-white border-stone-900 shadow-xs"
+                          : "bg-white text-stone-700 border-stone-200 hover:bg-stone-50"
+                      }`}
+                    >
+                      <MemberAvatar member={m} size="sm" />
+                      <span>{m.name}</span>
+                    </button>
+                  ))}
+                </div>
+
+                {/* 한눈에/달력 전환 + 끼니 필터 */}
                 <div className="flex items-center justify-between gap-1.5">
-                  <div className="flex items-center gap-1 overflow-x-auto pb-0.5">
-                    {FAMILY_MEMBERS.map((m) => (
+                  <div className="flex items-center gap-1 shrink-0">
+                    {["전체", "아침", "점심", "저녁"].map((sl) => (
                       <button
-                        key={m.id}
+                        key={sl}
                         type="button"
-                        onClick={() => setMonthlyMember(m.id)}
-                        className={`px-2.5 py-1.5 rounded-full border flex items-center gap-1.5 text-[12px] font-extrabold whitespace-nowrap shrink-0 transition ${
-                          monthlyMember === m.id
-                            ? "bg-stone-900 text-white border-stone-900 shadow-xs"
-                            : "bg-white text-stone-700 border-stone-200"
+                        onClick={() => setMonthlySlotFilter(sl)}
+                        className={`px-2 py-1 rounded-full text-[11px] font-extrabold border whitespace-nowrap transition ${
+                          monthlySlotFilter === sl
+                            ? "bg-stone-900 text-white border-stone-900"
+                            : "bg-white text-stone-600 border-stone-200"
                         }`}
                       >
-                        <MemberAvatar member={m} size="sm" />
-                        <span>{m.name}</span>
+                        {sl}
                       </button>
                     ))}
                   </div>
@@ -12449,24 +12642,8 @@ ${validText}
                   </div>
                 </div>
 
-                {/* 끼니 필터 + 메뉴 빠른 검색 */}
+                {/* 메뉴 빠른 검색 */}
                 <div className="flex items-center gap-1.5">
-                  <div className="flex items-center gap-1 shrink-0">
-                    {["전체", "아침", "점심", "저녁"].map((sl) => (
-                      <button
-                        key={sl}
-                        type="button"
-                        onClick={() => setMonthlySlotFilter(sl)}
-                        className={`px-2 py-1 rounded-full text-[11px] font-extrabold border whitespace-nowrap transition ${
-                          monthlySlotFilter === sl
-                            ? "bg-stone-900 text-white border-stone-900"
-                            : "bg-white text-stone-600 border-stone-200"
-                        }`}
-                      >
-                        {sl}
-                      </button>
-                    ))}
-                  </div>
                   <div className="relative flex-1 min-w-0">
                     <input
                       type="text"
@@ -17872,6 +18049,166 @@ ${validText}
                       </div>
                     )}
 
+                    {/* 상단 고정 서식·편집 툴바 (항목 선택 시 상단에 고정 표시) */}
+                    {!isPageBulkEditMode && canEditTab("pages") && editingBlockId && (() => {
+                      const activeBlkIdx = blocks.findIndex((b) => b.id === editingBlockId);
+                      const activeBlk = activeBlkIdx >= 0 ? blocks[activeBlkIdx] : null;
+                      if (!activeBlk) return null;
+                      return (
+                        <div
+                          onMouseDown={(e) => e.preventDefault()}
+                          className={`sticky ${isHeaderPinned ? "top-[58px]" : "top-2"} z-20 p-2 rounded-2xl bg-white/95 backdrop-blur-md border border-stone-300 shadow-md space-y-1.5`}
+                        >
+                          <div className="flex items-center justify-between gap-1.5 flex-wrap">
+                            <div className="flex items-center gap-1 flex-wrap">
+                              <div className="flex items-center gap-0.5 bg-stone-100 rounded-lg p-0.5">
+                                {PAGE_TEXT_SIZES.map((sz) => (
+                                  <button
+                                    key={sz.id}
+                                    type="button"
+                                    onClick={() => handleUpdatePageBlockStyle(currentPage, activeBlk.id, { fontSize: sz.id })}
+                                    className={`px-1.5 py-0.5 rounded text-[10.5px] font-extrabold whitespace-nowrap transition ${
+                                      (activeBlk.fontSize || "base") === sz.id ? "bg-stone-900 text-white" : "text-stone-600 hover:bg-white"
+                                    }`}
+                                  >
+                                    {sz.label}
+                                  </button>
+                                ))}
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => handleUpdatePageBlockStyle(currentPage, activeBlk.id, { bold: !activeBlk.bold })}
+                                className={`px-2 py-0.5 rounded-lg border text-[11px] font-black transition ${
+                                  activeBlk.bold ? "bg-stone-900 text-white border-stone-900" : "bg-white text-stone-700 border-stone-200"
+                                }`}
+                                title="굵게"
+                              >
+                                B
+                              </button>
+                              <select
+                                value={activeBlk.type}
+                                onMouseDown={(e) => e.stopPropagation()}
+                                onChange={(e) => {
+                                  const nt = e.target.value;
+                                  handleUpdatePageBlockStyle(currentPage, activeBlk.id, {
+                                    type: nt,
+                                    ...(nt === "todo" ? { checked: Boolean(activeBlk.checked) } : {}),
+                                    ...(nt === "heading" ? { color: activeBlk.color || "amber" } : {})
+                                  });
+                                }}
+                                className="px-1.5 py-0.5 rounded-lg bg-white border border-stone-200 text-[10.5px] font-extrabold text-stone-700"
+                                title="블록 유형 변경"
+                              >
+                                <option value="todo">☑️ 체크</option>
+                                <option value="heading">🏷️ 섹션</option>
+                                <option value="text">📝 메모</option>
+                              </select>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => handleUpdatePageBlockText(currentPage, activeBlk.id, editingBlockText)}
+                              className="px-2.5 py-1 rounded-lg bg-stone-900 text-white text-[11px] font-extrabold whitespace-nowrap shrink-0"
+                            >
+                              완료
+                            </button>
+                          </div>
+
+                          <div className="flex items-center justify-between gap-1.5 flex-wrap pt-1 border-t border-stone-100">
+                            <div className="flex items-center gap-1 flex-wrap">
+                              {PAGE_TEXT_COLORS.map((c) => (
+                                <button
+                                  key={c.id}
+                                  type="button"
+                                  onClick={() => handleUpdatePageBlockStyle(currentPage, activeBlk.id, { textColor: c.id })}
+                                  className={`w-4 h-4 rounded-full ${c.dot} ${
+                                    (activeBlk.textColor || "default") === c.id ? "ring-2 ring-stone-900 ring-offset-1" : "opacity-70 hover:opacity-100"
+                                  }`}
+                                  title={`글자색: ${c.label}`}
+                                />
+                              ))}
+                              {activeBlk.type === "heading" ? (
+                                <div className="flex items-center gap-1 pl-1.5 ml-0.5 border-l border-stone-200">
+                                  {PAGE_HEADING_COLORS.map((c) => (
+                                    <button
+                                      key={c.id}
+                                      type="button"
+                                      onClick={() => handleUpdatePageBlockStyle(currentPage, activeBlk.id, { color: c.id })}
+                                      className={`w-4 h-4 rounded-full ${c.dot} ${activeBlk.color === c.id ? "ring-2 ring-stone-900 ring-offset-1" : "opacity-70"}`}
+                                      title={`섹션색: ${c.label}`}
+                                    />
+                                  ))}
+                                </div>
+                              ) : (
+                                <div className="flex items-center gap-1 pl-1.5 ml-0.5 border-l border-stone-200">
+                                  {PAGE_TEXT_BG_COLORS.map((bg) => (
+                                    <button
+                                      key={bg.id}
+                                      type="button"
+                                      onClick={() => handleUpdatePageBlockStyle(currentPage, activeBlk.id, { bgColor: bg.id })}
+                                      className={`w-4 h-4 rounded ${bg.dot} ${
+                                        (activeBlk.bgColor || "none") === bg.id ? "ring-2 ring-stone-900 ring-offset-1" : "opacity-75 hover:opacity-100"
+                                      }`}
+                                      title={`형광펜: ${bg.label}`}
+                                    />
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+
+                            <div className="flex items-center gap-1 shrink-0">
+                              {activeBlk.type !== "heading" && (
+                                <>
+                                  <button
+                                    type="button"
+                                    disabled={(Number(activeBlk.indent) || 0) <= 0}
+                                    onClick={() => handleIndentPageBlock(currentPage, activeBlk.id, -1)}
+                                    className="px-1.5 py-0.5 rounded bg-stone-50 border border-stone-200 text-[10.5px] font-bold disabled:opacity-30"
+                                    title="내어쓰기"
+                                  >
+                                    ←
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={(Number(activeBlk.indent) || 0) >= 3}
+                                    onClick={() => handleIndentPageBlock(currentPage, activeBlk.id, 1)}
+                                    className="px-1.5 py-0.5 rounded bg-stone-50 border border-stone-200 text-[10.5px] font-bold disabled:opacity-30"
+                                    title="들여쓰기"
+                                  >
+                                    →
+                                  </button>
+                                </>
+                              )}
+                              <button
+                                type="button"
+                                disabled={activeBlkIdx === 0}
+                                onClick={() => handleMovePageBlock(currentPage, activeBlkIdx, -1)}
+                                className="px-1.5 py-0.5 rounded bg-stone-50 border border-stone-200 text-[10.5px] font-bold disabled:opacity-30"
+                                title="위로 이동"
+                              >
+                                ▲
+                              </button>
+                              <button
+                                type="button"
+                                disabled={activeBlkIdx === blocks.length - 1}
+                                onClick={() => handleMovePageBlock(currentPage, activeBlkIdx, 1)}
+                                className="px-1.5 py-0.5 rounded bg-stone-50 border border-stone-200 text-[10.5px] font-bold disabled:opacity-30"
+                                title="아래로 이동"
+                              >
+                                ▼
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeletePageBlock(currentPage, activeBlk.id)}
+                                className="px-1.5 py-0.5 rounded bg-rose-50 border border-rose-200 text-rose-600 text-[10.5px] font-extrabold whitespace-nowrap"
+                              >
+                                삭제
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })()}
+
                     {/* 노션 스타일 블록 리스트 */}
                     <div className="space-y-2">
                       {!isPageBulkEditMode && blocks.length === 0 && childPages.length === 0 && (
@@ -18329,164 +18666,31 @@ ${validText}
                         const txtColorMeta = PAGE_TEXT_COLORS.find((c) => c.id === blk.textColor) || PAGE_TEXT_COLORS[0];
                         const bgColorMeta = PAGE_TEXT_BG_COLORS.find((c) => c.id === blk.bgColor) || PAGE_TEXT_BG_COLORS[0];
                         if (isEditing) {
+                          const editIndentPx = blk.type !== "heading" ? Math.min(3, Number(blk.indent) || 0) * 20 : 0;
                           return (
-                            <div key={blk.id} className="p-2.5 rounded-2xl bg-stone-50 border border-stone-300 space-y-2">
-                              <div className="flex items-center gap-1.5">
-                                <input
-                                  type="text"
-                                  autoFocus
-                                  value={editingBlockText}
-                                  onChange={(e) => setEditingBlockText(e.target.value)}
-                                  onKeyDown={(e) => {
-                                    if (e.key === "Enter") handleUpdatePageBlockText(currentPage, blk.id, editingBlockText);
-                                    if (e.key === "Escape") setEditingBlockId(null);
-                                  }}
-                                  className={`flex-1 min-w-0 px-2.5 py-1.5 rounded-xl border border-stone-300 bg-white ${sizeMeta ? sizeMeta.cls : "text-[14px]"} ${blk.bold ? "font-black" : "font-semibold"} ${txtColorMeta.cls}`}
-                                />
-                                <button
-                                  type="button"
-                                  onClick={() => handleUpdatePageBlockText(currentPage, blk.id, editingBlockText)}
-                                  className="px-3 py-1.5 rounded-xl bg-stone-900 text-white text-[12px] font-extrabold shrink-0"
-                                >
-                                  완료
-                                </button>
-                              </div>
-
-                              {/* 서식 편집 바: 크기 · 굵기 · 글자색 · 형광펜 */}
-                              <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
-                                <div className="flex items-center gap-0.5 bg-white border border-stone-200 rounded-lg p-0.5">
-                                  {PAGE_TEXT_SIZES.map((sz) => (
-                                    <button
-                                      key={sz.id}
-                                      type="button"
-                                      onClick={() => handleUpdatePageBlockStyle(currentPage, blk.id, { fontSize: sz.id })}
-                                      className={`px-1.5 py-0.5 rounded text-[10.5px] font-extrabold transition ${
-                                        (blk.fontSize || "base") === sz.id ? "bg-stone-900 text-white" : "text-stone-500 hover:bg-stone-100"
-                                      }`}
-                                    >
-                                      {sz.label}
-                                    </button>
-                                  ))}
-                                </div>
-                                <button
-                                  type="button"
-                                  onClick={() => handleUpdatePageBlockStyle(currentPage, blk.id, { bold: !blk.bold })}
-                                  className={`px-2 py-0.5 rounded-lg border text-[11.5px] font-black transition ${
-                                    blk.bold ? "bg-stone-900 text-white border-stone-900" : "bg-white text-stone-700 border-stone-200"
-                                  }`}
-                                  title="굵게"
-                                >
-                                  B
-                                </button>
-                                <div className="flex items-center gap-1 px-1">
-                                  {PAGE_TEXT_COLORS.map((c) => (
-                                    <button
-                                      key={c.id}
-                                      type="button"
-                                      onClick={() => handleUpdatePageBlockStyle(currentPage, blk.id, { textColor: c.id })}
-                                      className={`w-4 h-4 rounded-full ${c.dot} ${
-                                        (blk.textColor || "default") === c.id ? "ring-2 ring-stone-900 ring-offset-1" : "opacity-65 hover:opacity-100"
-                                      }`}
-                                      title={`글자색: ${c.label}`}
-                                    />
-                                  ))}
-                                </div>
-                                {blk.type !== "heading" && (
-                                  <div className="flex items-center gap-1 pl-1 border-l border-stone-200">
-                                    {PAGE_TEXT_BG_COLORS.map((bg) => (
-                                      <button
-                                        key={bg.id}
-                                        type="button"
-                                        onClick={() => handleUpdatePageBlockStyle(currentPage, blk.id, { bgColor: bg.id })}
-                                        className={`w-4 h-4 rounded ${bg.dot} ${
-                                          (blk.bgColor || "none") === bg.id ? "ring-2 ring-stone-900 ring-offset-1" : "opacity-75 hover:opacity-100"
-                                        }`}
-                                        title={`형광펜: ${bg.label}`}
-                                      />
-                                    ))}
-                                  </div>
-                                )}
-                              </div>
-
-                              {/* 하단 컨트롤 바: 유형전환/강조색 · 들여쓰기 · 순서 · 삭제 */}
-                              <div className="flex items-center justify-between gap-1.5 pt-1 border-t border-stone-200/70 flex-wrap">
-                                <div className="flex items-center gap-1">
-                                  {blk.type === "heading" ? (
-                                    PAGE_HEADING_COLORS.map((c) => (
-                                      <button
-                                        key={c.id}
-                                        type="button"
-                                        onClick={() => handleUpdatePageBlockStyle(currentPage, blk.id, { color: c.id })}
-                                        className={`w-4 h-4 rounded-full ${c.dot} ${blk.color === c.id ? "ring-2 ring-stone-900 ring-offset-1" : "opacity-70"}`}
-                                        title={`섹션색: ${c.label}`}
-                                      />
-                                    ))
-                                  ) : (
-                                    <>
-                                      <button
-                                        type="button"
-                                        disabled={(Number(blk.indent) || 0) <= 0}
-                                        onClick={() => handleIndentPageBlock(currentPage, blk.id, -1)}
-                                        className="px-1.5 py-0.5 rounded bg-white border border-stone-200 text-[11px] font-bold disabled:opacity-30"
-                                        title="내어쓰기"
-                                      >
-                                        ←
-                                      </button>
-                                      <button
-                                        type="button"
-                                        disabled={(Number(blk.indent) || 0) >= 3}
-                                        onClick={() => handleIndentPageBlock(currentPage, blk.id, 1)}
-                                        className="px-1.5 py-0.5 rounded bg-white border border-stone-200 text-[11px] font-bold disabled:opacity-30"
-                                        title="들여쓰기"
-                                      >
-                                        →
-                                      </button>
-                                    </>
-                                  )}
-                                  <select
-                                    value={blk.type}
-                                    onChange={(e) => {
-                                      const nt = e.target.value;
-                                      handleUpdatePageBlockStyle(currentPage, blk.id, {
-                                        type: nt,
-                                        ...(nt === "todo" ? { checked: Boolean(blk.checked) } : {}),
-                                        ...(nt === "heading" ? { color: blk.color || "amber" } : {})
-                                      });
-                                    }}
-                                    className="px-1.5 py-0.5 rounded bg-white border border-stone-200 text-[10.5px] font-extrabold text-stone-600"
-                                    title="블록 유형 변경"
-                                  >
-                                    <option value="todo">☑️ 체크</option>
-                                    <option value="heading">🏷️ 섹션</option>
-                                    <option value="text">📝 메모</option>
-                                  </select>
-                                </div>
-                                <div className="flex items-center gap-1">
-                                  <button
-                                    type="button"
-                                    disabled={bIdx === 0}
-                                    onClick={() => handleMovePageBlock(currentPage, bIdx, -1)}
-                                    className="px-1.5 py-0.5 rounded bg-white border border-stone-200 text-[11px] font-bold disabled:opacity-30"
-                                  >
-                                    ▲
-                                  </button>
-                                  <button
-                                    type="button"
-                                    disabled={bIdx === blocks.length - 1}
-                                    onClick={() => handleMovePageBlock(currentPage, bIdx, 1)}
-                                    className="px-1.5 py-0.5 rounded bg-white border border-stone-200 text-[11px] font-bold disabled:opacity-30"
-                                  >
-                                    ▼
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleDeletePageBlock(currentPage, blk.id)}
-                                    className="px-2 py-0.5 rounded bg-rose-50 border border-rose-200 text-rose-600 text-[11px] font-extrabold"
-                                  >
-                                    삭제
-                                  </button>
-                                </div>
-                              </div>
+                            <div
+                              key={blk.id}
+                              style={editIndentPx ? { paddingLeft: `${editIndentPx}px` } : undefined}
+                              className="flex items-center gap-1.5 py-0.5"
+                            >
+                              <input
+                                type="text"
+                                autoFocus
+                                value={editingBlockText}
+                                onChange={(e) => setEditingBlockText(e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") handleUpdatePageBlockText(currentPage, blk.id, editingBlockText);
+                                  if (e.key === "Escape") setEditingBlockId(null);
+                                }}
+                                className={`flex-1 min-w-0 px-2.5 py-1 rounded-xl border-2 border-amber-400 bg-white shadow-2xs focus:outline-none ${sizeMeta ? sizeMeta.cls : "text-[14px]"} ${blk.bold ? "font-black" : "font-semibold"} ${txtColorMeta.cls} ${bgColorMeta.cls}`}
+                              />
+                              <button
+                                type="button"
+                                onClick={() => handleUpdatePageBlockText(currentPage, blk.id, editingBlockText)}
+                                className="px-2.5 py-1 rounded-xl bg-stone-900 text-white text-[11.5px] font-extrabold whitespace-nowrap shrink-0"
+                              >
+                                ✓
+                              </button>
                             </div>
                           );
                         }
@@ -20475,7 +20679,7 @@ ${validText}
                           onClick={() => {
                             setEditingDiaryEntry(null);
                             setPendingDiaryPhotoFile(null);
-                            setDiaryForm({ date: getTodayStr(), mood: "😊 행복", title: "", content: "", photoUrl: "", photos: [], childIds: [activeChild.id], textStyle: { ...DEFAULT_DIARY_TEXT_STYLE } });
+                            setDiaryForm({ date: getTodayStr(), mood: "😊 행복", title: "", content: "", contentHtml: "", photoUrl: "", photos: [], childIds: [activeChild.id], textStyle: { ...DEFAULT_DIARY_TEXT_STYLE } }); diarySavedRangeRef.current = null; setHasDiarySelection(false); setDiaryEditorSyncTick((t) => t + 1);
                           }}
                           className="text-[11.5px] font-extrabold text-stone-500 underline"
                         >
@@ -20531,13 +20735,13 @@ ${validText}
                     })()}
 
 
-                    {/* 날짜 · 오늘/어제 · 기분 1줄 컴팩트 바 */}
-                    <div className="flex items-center gap-1.5 flex-wrap">
+                    {/* 날짜 · 오늘/어제 · 기분 1줄 컴팩트 바 (날짜 잘림 방지) */}
+                    <div className="flex items-center gap-1 flex-wrap">
                       <input
                         type="date"
                         value={diaryForm.date}
                         onChange={(e) => setDiaryForm((p) => ({ ...p, date: e.target.value }))}
-                        className="h-8 px-2 rounded-lg border border-stone-200 bg-stone-50 text-[12px] font-bold min-w-0 flex-1"
+                        className="h-8 px-2 rounded-lg border border-stone-200 bg-stone-50 text-[12px] font-bold min-w-[132px] flex-1"
                       />
                       {[
                         { label: "오늘", val: getTodayStr() },
@@ -20547,7 +20751,7 @@ ${validText}
                           key={dOpt.label}
                           type="button"
                           onClick={() => setDiaryForm((p) => ({ ...p, date: dOpt.val }))}
-                          className={`h-8 px-2 rounded-lg text-[11px] font-extrabold border whitespace-nowrap shrink-0 transition ${
+                          className={`h-8 px-1.5 rounded-lg text-[11px] font-extrabold border whitespace-nowrap shrink-0 transition ${
                             diaryForm.date === dOpt.val
                               ? "bg-[#5E7A65] text-white border-[#5E7A65]"
                               : "bg-white text-stone-600 border-stone-200"
@@ -20560,7 +20764,7 @@ ${validText}
                         value={diaryForm.mood}
                         onChange={(e) => setDiaryForm((p) => ({ ...p, mood: e.target.value }))}
                         aria-label="오늘의 기분"
-                        className="h-8 px-2 rounded-lg border border-stone-200 bg-stone-50 text-[12px] font-bold shrink-0"
+                        className="h-8 px-1.5 rounded-lg border border-stone-200 bg-stone-50 text-[11.5px] font-bold shrink-0"
                       >
                         {["😊 행복", "🥰 감동", "😴 잘잠", "🍼 잘먹음", "🤒 컨디션관리", "🎉 첫성공"].map((md) => (
                           <option key={md} value={md}>{md}</option>
@@ -20579,10 +20783,11 @@ ${validText}
                       />
                       <button
                         type="button"
+                        onMouseDown={(e) => e.preventDefault()}
                         onClick={() => setIsDiaryFormatOpen((v) => !v)}
-                        title="글씨 크기 · 굵기 · 색상 · 형광펜 서식"
+                        title="블록 선택 시 선택 영역만, 미선택 시 전체 기본 서식 적용"
                         className={`h-9 px-2.5 rounded-xl border text-[11.5px] font-extrabold whitespace-nowrap shrink-0 transition ${
-                          isDiaryFormatOpen || isDiaryTextStyleCustom(diaryForm.textStyle)
+                          isDiaryFormatOpen || isDiaryTextStyleCustom(diaryForm.textStyle) || hasDiarySelection
                             ? "bg-[#EEF3EE] text-[#35503C] border-[#C9D8CC]"
                             : "bg-stone-50 text-stone-600 border-stone-200 hover:bg-stone-100"
                         }`}
@@ -20591,27 +20796,25 @@ ${validText}
                       </button>
                     </div>
 
-                    {/* 육아일기 글씨 서식 바 (크기 · 굵기 · 글자색 · 형광펜) */}
+                    {/* 육아일기 글씨 서식 바 (블록 선택 시 선택 영역만 · 미선택 시 기본 서식) */}
                     {isDiaryFormatOpen && (() => {
                       const curTs = diaryForm.textStyle || DEFAULT_DIARY_TEXT_STYLE;
-                      const updateTs = (patch) =>
-                        setDiaryForm((p) => ({
-                          ...p,
-                          textStyle: { ...(p.textStyle || DEFAULT_DIARY_TEXT_STYLE), ...patch }
-                        }));
                       return (
-                        <div className="p-2 rounded-xl bg-stone-50 border border-stone-200/90 space-y-1.5">
+                        <div
+                          onMouseDown={(e) => e.preventDefault()}
+                          className="p-2 rounded-xl bg-stone-50 border border-stone-200/90 space-y-1.5"
+                        >
                           <div className="flex items-center justify-between gap-1.5 flex-wrap">
                             <div className="flex items-center gap-1">
                               {PAGE_TEXT_SIZES.map((sz) => (
                                 <button
                                   key={sz.id}
                                   type="button"
-                                  onClick={() => updateTs({ size: sz.id })}
+                                  onClick={() => applyDiaryFormat({ size: sz.id })}
                                   className={`px-2 py-0.5 rounded-md text-[11px] font-extrabold border whitespace-nowrap transition ${
-                                    (curTs.size || "base") === sz.id
+                                    !hasDiarySelection && (curTs.size || "base") === sz.id
                                       ? "bg-stone-900 text-white border-stone-900"
-                                      : "bg-white text-stone-600 border-stone-200"
+                                      : "bg-white text-stone-600 border-stone-200 hover:bg-stone-100"
                                   }`}
                                 >
                                   {sz.label}
@@ -20619,25 +20822,36 @@ ${validText}
                               ))}
                               <button
                                 type="button"
-                                onClick={() => updateTs({ bold: !curTs.bold })}
+                                onClick={() => applyDiaryFormat({ toggleBold: true })}
                                 className={`px-2 py-0.5 rounded-md text-[11px] font-black border whitespace-nowrap transition ${
-                                  curTs.bold
+                                  !hasDiarySelection && curTs.bold
                                     ? "bg-stone-900 text-white border-stone-900"
-                                    : "bg-white text-stone-600 border-stone-200"
+                                    : "bg-white text-stone-600 border-stone-200 hover:bg-stone-100"
                                 }`}
                               >
                                 B
                               </button>
                             </div>
-                            {isDiaryTextStyleCustom(curTs) && (
-                              <button
-                                type="button"
-                                onClick={() => updateTs({ ...DEFAULT_DIARY_TEXT_STYLE })}
-                                className="px-2 py-0.5 rounded-md text-[10.5px] font-bold text-stone-500 hover:bg-stone-200/70 whitespace-nowrap"
+                            <div className="flex items-center gap-1.5">
+                              <span
+                                className={`px-1.5 py-0.5 rounded text-[10px] font-extrabold whitespace-nowrap ${
+                                  hasDiarySelection
+                                    ? "bg-emerald-100 text-emerald-800"
+                                    : "bg-stone-200/70 text-stone-500"
+                                }`}
                               >
-                                ↺ 초기화
-                              </button>
-                            )}
+                                {hasDiarySelection ? "✨ 선택 영역 적용" : "기본 서식"}
+                              </span>
+                              {(hasDiarySelection || isDiaryTextStyleCustom(curTs)) && (
+                                <button
+                                  type="button"
+                                  onClick={() => applyDiaryFormat({ reset: true })}
+                                  className="px-1.5 py-0.5 rounded-md text-[10.5px] font-bold text-stone-500 hover:bg-stone-200/70 whitespace-nowrap"
+                                >
+                                  ↺ 초기화
+                                </button>
+                              )}
+                            </div>
                           </div>
                           <div className="flex items-center justify-between gap-2 flex-wrap">
                             <div className="flex items-center gap-1.5">
@@ -20647,9 +20861,11 @@ ${validText}
                                   key={c.id}
                                   type="button"
                                   title={`글자색: ${c.label}`}
-                                  onClick={() => updateTs({ color: c.id })}
+                                  onClick={() => applyDiaryFormat({ color: c.id })}
                                   className={`w-5 h-5 rounded-full ${c.dot} transition ${
-                                    (curTs.color || "default") === c.id ? "ring-2 ring-offset-1 ring-stone-800 scale-110" : "opacity-80 hover:opacity-100"
+                                    !hasDiarySelection && (curTs.color || "default") === c.id
+                                      ? "ring-2 ring-offset-1 ring-stone-800 scale-110"
+                                      : "opacity-80 hover:opacity-100"
                                   }`}
                                 />
                               ))}
@@ -20661,9 +20877,11 @@ ${validText}
                                   key={bg.id}
                                   type="button"
                                   title={`형광펜: ${bg.label}`}
-                                  onClick={() => updateTs({ bg: bg.id })}
+                                  onClick={() => applyDiaryFormat({ bg: bg.id })}
                                   className={`w-5 h-5 rounded-full ${bg.dot} transition ${
-                                    (curTs.bg || "none") === bg.id ? "ring-2 ring-offset-1 ring-stone-800 scale-110" : "opacity-85 hover:opacity-100"
+                                    !hasDiarySelection && (curTs.bg || "none") === bg.id
+                                      ? "ring-2 ring-offset-1 ring-stone-800 scale-110"
+                                      : "opacity-85 hover:opacity-100"
                                   }`}
                                 />
                               ))}
@@ -20673,26 +20891,43 @@ ${validText}
                       );
                     })()}
 
-                    {/* 넓어진 육아일기 본문 작성창 */}
+                    {/* 넓어진 육아일기 본문 리치 작성창 (부분 선택 서식 지원) */}
                     <div className="relative">
-                      <textarea
-                        rows={8}
-                        placeholder={`${
-                          Array.isArray(diaryForm.childIds) && diaryForm.childIds.length >= 2
-                            ? "시목·시율"
-                            : (diaryForm.childIds?.[0] || activeChild.name)
-                        }의 오늘 기록을 자유롭게 남겨보세요...`}
-                        value={diaryForm.content}
-                        onChange={(e) => setDiaryForm((p) => ({ ...p, content: e.target.value }))}
+                      {!(diaryForm.content || "").trim() && (
+                        <div className="pointer-events-none absolute left-3.5 top-3 text-[13.5px] text-stone-400 select-none">
+                          {`${
+                            Array.isArray(diaryForm.childIds) && diaryForm.childIds.length >= 2
+                              ? "시목·시율"
+                              : (diaryForm.childIds?.[0] || activeChild.name)
+                          }의 오늘 기록을 자유롭게 남겨보세요...`}
+                        </div>
+                      )}
+                      <div
+                        ref={diaryEditorRef}
+                        contentEditable
+                        suppressContentEditableWarning
+                        role="textbox"
+                        aria-multiline="true"
+                        onInput={(e) => {
+                          const el = e.currentTarget;
+                          const plainTxt = (el.innerText || "").replace(/\r\n/g, "\n");
+                          const cleanHtml = sanitizeDiaryHtml(el.innerHTML);
+                          setDiaryForm((p) => ({ ...p, content: plainTxt, contentHtml: cleanHtml }));
+                        }}
+                        onPaste={(e) => {
+                          e.preventDefault();
+                          const text = e.clipboardData?.getData("text/plain") || "";
+                          document.execCommand("insertText", false, text);
+                        }}
                         onKeyDown={(e) => {
                           if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s") {
                             e.preventDefault();
                             handleSaveBabyDiary();
                           }
                         }}
-                        className={`w-full min-h-[190px] px-3.5 py-3 pb-7 rounded-xl border border-stone-200 leading-relaxed resize-y focus:outline-none focus:ring-2 focus:ring-[#5E7A65]/30 ${getDiaryTextStyleClasses(diaryForm.textStyle)}`}
+                        className={`w-full min-h-[195px] px-3.5 py-3 pb-7 rounded-xl border border-stone-200 leading-relaxed whitespace-pre-wrap break-words focus:outline-none focus:ring-2 focus:ring-[#5E7A65]/30 ${getDiaryTextStyleClasses(diaryForm.textStyle)}`}
                       />
-                      <span className="absolute right-2.5 bottom-2 text-[11px] font-bold text-stone-400 bg-white/80 px-1.5 rounded">
+                      <span className="absolute right-2.5 bottom-2 text-[11px] font-bold text-stone-400 bg-white/85 px-1.5 rounded pointer-events-none">
                         {(diaryForm.content || "").length}자
                       </span>
                     </div>
@@ -20754,11 +20989,15 @@ ${validText}
                                 mood: "😊 행복",
                                 title: "",
                                 content: "",
+                                contentHtml: "",
                                 photoUrl: "",
                                 photos: [],
                                 childIds: [selectedChildId],
                                 textStyle: { ...DEFAULT_DIARY_TEXT_STYLE }
                               });
+                              diarySavedRangeRef.current = null;
+                              setHasDiarySelection(false);
+                              setDiaryEditorSyncTick((t) => t + 1);
                             }}
                             className="px-3 py-2.5 rounded-xl bg-stone-200 hover:bg-stone-300 text-stone-700 text-[13.5px] font-extrabold whitespace-nowrap"
                           >
@@ -21104,11 +21343,15 @@ ${validText}
                                       mood: entry.mood || "😊 행복",
                                       title: entry.title || "",
                                       content: entry.content || "",
+                                      contentHtml: entry.contentHtml || "",
                                       photoUrl: ePhotos[0]?.url || "",
                                       photos: ePhotos,
                                       childIds: getDiaryEntryChildIds(entry),
                                       textStyle: entry.textStyle || { ...DEFAULT_DIARY_TEXT_STYLE }
                                     });
+                                    diarySavedRangeRef.current = null;
+                                    setHasDiarySelection(false);
+                                    setDiaryEditorSyncTick((t) => t + 1);
                                   }}
                                   className="p-1 text-stone-400 hover:text-stone-700"
                                 >
@@ -21136,8 +21379,15 @@ ${validText}
                               )}
                             </div>
                             {entry.title && <div className="text-[15.5px] font-black text-stone-900">{entry.title}</div>}
-                            {entry.content && (
-                              <div className={`whitespace-pre-wrap leading-relaxed ${entry.textStyle ? getDiaryTextStyleClasses(entry.textStyle) : "text-[13.5px] text-stone-700"}`}>{entry.content}</div>
+                            {(entry.contentHtml || entry.content) && (
+                              entry.contentHtml ? (
+                                <div
+                                  className={`whitespace-pre-wrap leading-relaxed break-words ${entry.textStyle ? getDiaryTextStyleClasses(entry.textStyle) : "text-[13.5px] text-stone-700"}`}
+                                  dangerouslySetInnerHTML={{ __html: sanitizeDiaryHtml(entry.contentHtml) }}
+                                />
+                              ) : (
+                                <div className={`whitespace-pre-wrap leading-relaxed ${entry.textStyle ? getDiaryTextStyleClasses(entry.textStyle) : "text-[13.5px] text-stone-700"}`}>{entry.content}</div>
+                              )
                             )}
                             {getDiaryEntryPhotos(entry).length > 0 && (
                               <div className={getDiaryEntryPhotos(entry).length >= 2 ? "grid grid-cols-2 gap-1.5" : "space-y-1.5"}>
@@ -21611,7 +21861,7 @@ ${validText}
                     label: "육아일기",
                     onClick: () => {
                       setEditingDiaryEntry(null);
-                      setDiaryForm({ date: getTodayStr(), mood: "😊 행복", title: "", content: "", photoUrl: "", photos: [], childIds: [selectedChildId], textStyle: { ...DEFAULT_DIARY_TEXT_STYLE } });
+                      setDiaryForm({ date: getTodayStr(), mood: "😊 행복", title: "", content: "", contentHtml: "", photoUrl: "", photos: [], childIds: [selectedChildId], textStyle: { ...DEFAULT_DIARY_TEXT_STYLE } }); diarySavedRangeRef.current = null; setHasDiarySelection(false); setDiaryEditorSyncTick((t) => t + 1);
                       setActiveTab("baby");
                       setBabySubTab("diary");
                       window.scrollTo({ top: 0, behavior: "instant" });
@@ -21722,7 +21972,7 @@ ${validText}
         </button>
       )}
 
-      {isEditorUnlocked && !isPageBulkEditMode && !isPagePasteModalOpen && !activeTableTaskModal && (
+      {isEditorUnlocked && !isPageBulkEditMode && !isPagePasteModalOpen && !activeTableTaskModal && !editingBlockId && (
         <button
           type="button"
           onClick={() => setIsQuickFabOpen((v) => !v)}
@@ -25961,10 +26211,13 @@ ${validText}
                       w ? `몸무게 ${w}kg` : "",
                       hd ? `머리둘레 ${hd}cm` : ""
                     ].filter(Boolean).join(" / ")}`;
-                    setDiaryForm((prev) => ({
-                      ...prev,
-                      content: prev.content ? `${prev.content.trim()}\n\n${gLine}` : gLine
-                    }));
+                    setDiaryForm((prev) => {
+                      const nextContent = prev.content ? `${prev.content.trim()}\n\n${gLine}` : gLine;
+                      const prevHtml = prev.contentHtml || plainTextToDiaryHtml(prev.content || "");
+                      const nextHtml = prevHtml ? `${prevHtml}<br><br>${plainTextToDiaryHtml(gLine)}` : plainTextToDiaryHtml(gLine);
+                      return { ...prev, content: nextContent, contentHtml: nextHtml };
+                    });
+                    setDiaryEditorSyncTick((t) => t + 1);
                     setDiaryImportModal(null);
                     showToast(`📏 ${gChild} 성장 기록을 저장하고 일기에 넣었습니다!`);
                   }}
@@ -25991,10 +26244,13 @@ ${validText}
                     return;
                   }
                   const summaryBlock = chosen.map((c) => c.text).join("\n");
-                  setDiaryForm((prev) => ({
-                    ...prev,
-                    content: prev.content ? `${prev.content.trim()}\n\n${summaryBlock}` : summaryBlock
-                  }));
+                  setDiaryForm((prev) => {
+                    const nextContent = prev.content ? `${prev.content.trim()}\n\n${summaryBlock}` : summaryBlock;
+                    const prevHtml = prev.contentHtml || plainTextToDiaryHtml(prev.content || "");
+                    const nextHtml = prevHtml ? `${prevHtml}<br><br>${plainTextToDiaryHtml(summaryBlock)}` : plainTextToDiaryHtml(summaryBlock);
+                    return { ...prev, content: nextContent, contentHtml: nextHtml };
+                  });
+                  setDiaryEditorSyncTick((t) => t + 1);
                   setDiaryImportModal(null);
                   showToast(`✨ 선택한 ${chosen.length}개 항목을 일기 본문에 불러왔습니다!`);
                 }}
@@ -26127,7 +26383,8 @@ ${validText}
                 const pColor = DIARY_STYLE_HEX_COLOR[ts.color] || "#44403C";
                 const pBg = DIARY_STYLE_HEX_BG[ts.bg] || "";
                 const pStyle = `font-size:${pFontPx}px;color:${pColor};${ts.bold ? "font-weight:700;" : ""}${pBg ? `background:${pBg};padding:6px 8px;border-radius:6px;` : ""}`;
-                return `<article class="entry"><div class="meta">${escHtml(d.date)} · ${escHtml(cNames)} ${escHtml(d.mood || "")}</div>${d.title ? `<h3>${escHtml(d.title)}</h3>` : ""}<p style="${pStyle}">${escHtml(d.content).replace(/\n/g, "<br/>")}</p>${imgs ? `<div class="photos">${imgs}</div>` : ""}</article>`;
+                const bodyHtml = d.contentHtml ? sanitizeDiaryHtml(d.contentHtml) : escHtml(d.content).replace(/\n/g, "<br/>");
+                return `<article class="entry"><div class="meta">${escHtml(d.date)} · ${escHtml(cNames)} ${escHtml(d.mood || "")}</div>${d.title ? `<h3>${escHtml(d.title)}</h3>` : ""}<p style="${pStyle}">${bodyHtml}</p>${imgs ? `<div class="photos">${imgs}</div>` : ""}</article>`;
               }).join("")
             : "<p>이달에 작성된 육아일기가 없어요.</p>";
           return `<!doctype html><html lang="ko"><head><meta charset="utf-8"/><title>김씨네 성장 매거진 ${yearNum}년 ${monthNum}월호</title><style>body{font-family:-apple-system,BlinkMacSystemFont,'Apple SD Gothic Neo',sans-serif;max-width:760px;margin:0 auto;padding:28px 20px;color:#1c1917;background:#faf8f3;line-height:1.6}header{text-align:center;border-bottom:2px solid #35503c;padding-bottom:16px;margin-bottom:20px}.kicker{font-size:11px;letter-spacing:2px;color:#5e7a65;font-weight:800}h1{margin:6px 0;font-size:26px}.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:16px 0}.stat{background:#fff;border:1px solid #e7e5e4;border-radius:12px;padding:10px;text-align:center}.stat b{display:block;font-size:18px;color:#35503c}h2{font-size:16px;border-left:4px solid #5e7a65;padding-left:8px;margin:22px 0 10px}.card,.entry{background:#fff;border:1px solid #e7e5e4;border-radius:12px;padding:14px;margin-bottom:10px}.meta{font-size:12px;color:#78716c;font-weight:700;margin-bottom:4px}.photos{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px;margin-top:10px}.photos img{width:100%;height:160px;object-fit:cover;border-radius:8px}@media print{body{background:#fff;padding:0}.entry,.card{break-inside:avoid}}</style></head><body><header><div class="kicker">KIM FAMILY TIME CAPSULE</div><h1>시목·시율 성장 매거진 ${yearNum}년 ${monthNum}월호</h1></header><div class="stats"><div class="stat"><b>${monthDiaries.length}편</b><span>육아일기</span></div><div class="stat"><b>${monthPhotoCount}장</b><span>추억 사진</span></div><div class="stat"><b>${monthMilestones.length}건</b><span>첫 발달</span></div><div class="stat"><b>${monthActivities.length}회</b><span>수유·케어</span></div></div><h2>🌱 성장 스냅샷</h2>${growthHtml}<h2>✨ 이달의 첫 발달</h2><ul>${msHtml}</ul><h2>📖 이달의 육아일기</h2>${diaryHtml}</body></html>`;
@@ -26251,7 +26508,14 @@ ${validText}
                             <span>{d.mood || ""}</span>
                           </div>
                           {d.title && <div className="text-[13.5px] font-black text-stone-900">{d.title}</div>}
-                          <div className={`whitespace-pre-wrap leading-relaxed ${d.textStyle ? getDiaryTextStyleClasses(d.textStyle) : "text-[12.5px] text-stone-700"}`}>{d.content}</div>
+                          {d.contentHtml ? (
+                            <div
+                              className={`whitespace-pre-wrap leading-relaxed break-words ${d.textStyle ? getDiaryTextStyleClasses(d.textStyle) : "text-[12.5px] text-stone-700"}`}
+                              dangerouslySetInnerHTML={{ __html: sanitizeDiaryHtml(d.contentHtml) }}
+                            />
+                          ) : (
+                            <div className={`whitespace-pre-wrap leading-relaxed ${d.textStyle ? getDiaryTextStyleClasses(d.textStyle) : "text-[12.5px] text-stone-700"}`}>{d.content}</div>
+                          )}
                           {photos.length > 0 && (
                             <div className={photos.length === 1 ? "pt-1" : "grid grid-cols-2 gap-1.5 pt-1"}>
                               {photos.map((pUrl, idx) => (
