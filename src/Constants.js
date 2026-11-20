@@ -1176,7 +1176,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v12.32";
+export const APP_CODE_VERSION = "v12.33";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1194,7 +1194,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-20 10:40";
+export const APP_BUILD_DATE = "2026-11-20 10:45";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1261,6 +1261,18 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v12.33",
+    version: "v12.33",
+    date: "2026-11-20",
+    title: "공유노트 최근항목 아이콘 잘림 수정 · 중복 홈/새페이지 버튼 정리 · 상단 검색 배치 · 앱 제목 '혁리나목율♡'",
+    items: [
+      "공유노트 최근 항목 카드 아이콘이 상단 커버 영역에 반쯤 잘려 보이던 쌓임 순서(z-index) 오류를 수정해 선명한 흰색 뱃지로 표시",
+      "하단 탭과 중복되던 상단 [🏠 홈] 버튼 및 중복 [+ 새 페이지]/[+ 페이지 추가] 버튼을 통합·제거하고, 통합 검색창을 최상단에 배치해 시각적 피로도 최소화",
+      "공유된 페이지 트리의 빈 하위 안내를 바로 누를 수 있는 [+ 하위 페이지 추가] 버튼으로 개선",
+      "앱 실행 아이콘 제목(manifest.json 및 document.title)을 '혁리나목율♡'으로 변경"
+    ]
+  },
   {
     id: "patch-v12.32",
     version: "v12.32",

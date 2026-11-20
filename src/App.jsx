@@ -760,6 +760,14 @@ function MainApp() {
         document.head.appendChild(meta);
       }
       meta.setAttribute("content", "#5E7A65");
+      document.title = "혁리나목율♡";
+      let appTitleMeta = document.querySelector('meta[name="apple-mobile-web-app-title"]');
+      if (!appTitleMeta) {
+        appTitleMeta = document.createElement("meta");
+        appTitleMeta.setAttribute("name", "apple-mobile-web-app-title");
+        document.head.appendChild(appTitleMeta);
+      }
+      appTitleMeta.setAttribute("content", "혁리나목율♡");
     } catch (e) {}
   }, []);
 
@@ -17431,9 +17439,18 @@ ${validText}
                     ) : (
                       <div
                         style={{ paddingLeft: `${34 + indentPx}px` }}
-                        className="py-1 text-[11.5px] font-semibold text-stone-400"
+                        className="py-1 flex items-center gap-2 text-[11.5px] font-semibold text-stone-400"
                       >
-                        하위 페이지 없음 · 우측 + 로 추가
+                        <span>하위 페이지 없음</span>
+                        {canEditTab("pages") && (
+                          <button
+                            type="button"
+                            onClick={() => openCreatePageModal(pg.id)}
+                            className="px-1.5 py-0.5 rounded-md bg-stone-100 hover:bg-stone-200 text-stone-600 text-[10.5px] font-extrabold whitespace-nowrap"
+                          >
+                            + 하위 추가
+                          </button>
+                        )}
                       </div>
                     )}
                   </div>
@@ -17447,24 +17464,28 @@ ${validText}
           <div className="p-3.5 space-y-3.5">
             {!currentPage ? (
               <>
-                {/* 상단 노션 스타일 퀵 알약 바 */}
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab("home")}
-                    className="flex-1 py-2 px-3 rounded-full bg-stone-100 hover:bg-stone-200/80 text-stone-800 text-[13px] font-extrabold flex items-center justify-center gap-1.5 whitespace-nowrap"
-                  >
-                    <Home className="w-3.5 h-3.5" />
-                    <span>홈</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => openCreatePageModal(null)}
-                    className="flex-1 py-2 px-3 rounded-full bg-stone-900 hover:bg-stone-800 text-white text-[13px] font-extrabold flex items-center justify-center gap-1.5 whitespace-nowrap"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>새 페이지</span>
-                  </button>
+                {/* 상단 통합 검색 바 (중복 홈·새페이지 버튼 정리) */}
+                <div className="relative">
+                  <Search className="w-4 h-4 text-stone-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <input
+                    type="text"
+                    value={pageSearchQuery}
+                    onChange={(e) => setPageSearchQuery(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Escape") setPageSearchQuery("");
+                    }}
+                    placeholder="페이지 · 체크리스트 · 표 검색..."
+                    className="w-full pl-10 pr-9 py-2.5 rounded-full bg-white border border-stone-200/90 shadow-sm text-[13.5px] font-semibold text-stone-800 placeholder:text-stone-400 focus:outline-none focus:ring-2 focus:ring-stone-300"
+                  />
+                  {pageSearchQuery && (
+                    <button
+                      type="button"
+                      onClick={() => setPageSearchQuery("")}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-700"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  )}
                 </div>
 
                 {/* 검색 결과 오버레이 (검색어 입력 시) */}
@@ -17538,8 +17559,8 @@ ${validText}
                                       </span>
                                     )}
                                   </div>
-                                  <div className="px-3 pb-3 -mt-4 space-y-1.5">
-                                    <div className="w-8 h-8 rounded-xl bg-white/95 border border-stone-100 shadow-sm flex items-center justify-center text-[18px]">
+                                  <div className="relative z-10 px-3 pb-3 -mt-4 space-y-1.5">
+                                    <div className="w-9 h-9 rounded-xl bg-white border border-stone-200/80 shadow-xs flex items-center justify-center text-[19px] leading-none">
                                       {pg.icon || "📄"}
                                     </div>
                                     <div className="text-[13px] font-extrabold text-stone-900 truncate">
@@ -17565,13 +17586,15 @@ ${validText}
                           <span>공유된 페이지</span>
                           {pagesSharedOpen ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => openCreatePageModal(null)}
-                          className="px-2 py-0.5 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 text-[11.5px] font-extrabold flex items-center gap-0.5"
-                        >
-                          <Plus className="w-3 h-3" /> 페이지 추가
-                        </button>
+                        {canEditTab("pages") && (
+                          <button
+                            type="button"
+                            onClick={() => openCreatePageModal(null)}
+                            className="px-2.5 py-1 rounded-lg bg-stone-900 hover:bg-stone-800 text-white text-[11.5px] font-extrabold flex items-center gap-1 whitespace-nowrap"
+                          >
+                            <Plus className="w-3 h-3" /> 새 페이지
+                          </button>
+                        )}
                       </div>
 
                       {pagesSharedOpen && (
@@ -18692,34 +18715,7 @@ ${validText}
               );
             })()}
 
-            {/* 하단 노션 스타일 통합 검색 바 */}
-            <div className="pt-1">
-              <div className="relative">
-                <Search className="w-4 h-4 text-stone-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-                <input
-                  type="text"
-                  value={pageSearchQuery}
-                  onChange={(e) => {
-                    setPageSearchQuery(e.target.value);
-                    if (selectedPageId && e.target.value.trim()) setSelectedPageId(null);
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === "Escape") setPageSearchQuery("");
-                  }}
-                  placeholder="무엇이든 검색하기..."
-                  className="w-full pl-10 pr-9 py-2.5 rounded-full bg-white border border-stone-200/90 shadow-sm text-[13.5px] font-semibold text-stone-800 placeholder:text-stone-400 focus:outline-none focus:ring-2 focus:ring-stone-300"
-                />
-                {pageSearchQuery && (
-                  <button
-                    type="button"
-                    onClick={() => setPageSearchQuery("")}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-700"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                )}
-              </div>
-            </div>
+
           </div>
         );
       })())}
