@@ -1176,7 +1176,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v12.35";
+export const APP_CODE_VERSION = "v12.36";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1194,7 +1194,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-20 13:30";
+export const APP_BUILD_DATE = "2026-11-20 13:50";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1261,6 +1261,18 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v12.36",
+    version: "v12.36",
+    date: "2026-11-20",
+    title: "버킷리스트 가족 지도(네이버·구글맵 연동) · 공유노트 상단 툴바(키보드 대응) · 육아일기 1줄 고정/작성창 확대 · 아기꿈나라 스타일 통일",
+    items: [
+      "버킷리스트에 [🗺️ 지도 | 📋 목록] 전환 및 가족별(수혁·아리·시목·시율)·상태별(📍 갈 곳 / ✅ 다녀옴) 필터 추가 — 실제 지도 위에 다녀온 곳(초록 핀)과 갈 곳(주황 핀)을 한눈에 표시",
+      "네이버지도·구글맵 바로 열기, 구글맵 URL 좌표 자동 추출, 장소명 무료 자동 위치검색(Nominatim) 및 지도 탭 좌표 지정 지원",
+      "공유노트 통합 서식 툴바를 화면 상단으로 복귀시키되 visualViewport.offsetTop 실시간 추적으로 모바일 키보드가 열려도 상단에 100% 고정 유지",
+      "육아일기 날짜·오늘/어제·기분(이모티콘)을 1줄(flex-nowrap)로 고정하고 본문 입력창을 min-h-[260px]로 확대, 빠른실행 [🌙 아기꿈나라] 색상을 다른 메뉴와 동일 양식으로 통일"
+    ]
+  },
   {
     id: "patch-v12.35",
     version: "v12.35",
