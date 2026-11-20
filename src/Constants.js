@@ -1177,7 +1177,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v12.49";
+export const APP_CODE_VERSION = "v12.50";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1195,7 +1195,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-20 23:05";
+export const APP_BUILD_DATE = "2026-11-20 23:25";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1262,6 +1262,19 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v12.50",
+    version: "v12.50",
+    date: "2026-11-20",
+    title: "일정 입력 렉 완전 제거 · 개인→가족 일정 이동 · 홈 예정일정 연동 · 초컴팩트 달력",
+    category: "성능 · 편의성",
+    changes: [
+      "개인·가족 일정 등록/편집 모달을 React.memo 독립 컴포넌트로 분리하고 음력 계산 Map 캐시 및 개인일정 날짜 인덱싱을 적용해 키보드 입력 딜레이 완전 제거",
+      "이미 등록된 개인 일정을 편집 창에서 '🏠 가족 일정으로 이동' 버튼 1탭으로 가족 공유 일정으로 전환 지원",
+      "홈 화면 '3일 내 일정' 카드에 로그인 본인의 예정 개인일정·다이어리(🔒) 및 진행 중인 다일정까지 통합 표시 (클릭 시 해당 일정 상세로 직행)",
+      "달력 셀 일정 글씨를 9px 초컴팩트 스타일로 조정하고 하루 최대 5건까지 한눈에 표시되도록 밀도 개선"
+    ]
+  },
   {
     id: "patch-v12.49",
     version: "v12.49",

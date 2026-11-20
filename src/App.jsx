@@ -310,9 +310,12 @@ const PRIVATE_CAL_COLORS = [
   { id: "purple", label: "보라", textCls: "text-purple-700", bgCls: "bg-purple-100/80", dotCls: "bg-purple-600" }
 ];
 
+const lunarDateCache = new Map();
 const getLunarDateLabel = (dateObj) => {
   try {
     if (!dateObj || Number.isNaN(dateObj.getTime())) return "";
+    const key = `${dateObj.getFullYear()}-${dateObj.getMonth()}-${dateObj.getDate()}`;
+    if (lunarDateCache.has(key)) return lunarDateCache.get(key);
     const parts = new Intl.DateTimeFormat("en-US-u-ca-chinese", {
       month: "numeric",
       day: "numeric"
@@ -321,12 +324,455 @@ const getLunarDateLabel = (dateObj) => {
     const dPart = parts.find((p) => p.type === "day")?.value || "";
     const lMonth = parseInt(mPart.replace(/[^\d]/g, ""), 10);
     const lDay = parseInt(dPart.replace(/[^\d]/g, ""), 10);
-    if (!Number.isFinite(lMonth) || !Number.isFinite(lDay)) return "";
-    return `${lMonth}.${lDay}`;
+    const res = Number.isFinite(lMonth) && Number.isFinite(lDay) ? `${lMonth}.${lDay}` : "";
+    lunarDateCache.set(key, res);
+    return res;
   } catch (e) {
     return "";
   }
 };
+
+// 입력 렉 완전 제거용 독립 메모이즈드 개인일정·다이어리 모달
+const PrivateCalFormModal = React.memo(({
+  initialForm,
+  isEditing,
+  currentAdminOwner,
+  onClose,
+  onSubmitForm,
+  onSwitchToFamilyNew,
+  onConvertToFamily
+}) => {
+  const [draft, setDraft] = useState(initialForm);
+
+  useEffect(() => {
+    setDraft(initialForm);
+  }, [initialForm]);
+
+  const handleSubmit = (e) => {
+    e?.preventDefault?.();
+    onSubmitForm(draft);
+  };
+
+  return (
+    <div
+      className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white rounded-3xl max-w-sm w-full p-5 space-y-3.5 max-h-[88vh] overflow-y-auto shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between">
+          <h3 className="text-[15.5px] font-black text-stone-900">
+            {isEditing ? "✏️ 개인 일정 수정" : "🔒 개인 일정 추가"}
+          </h3>
+          <button
+            type="button"
+            onClick={onClose}
+            className="p-1 text-stone-400 hover:text-stone-700"
+            aria-label="닫기"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-3">
+          <div className="flex items-center justify-between gap-2 px-3 py-2 rounded-xl bg-stone-100 text-[12px] font-extrabold text-stone-700">
+            <span className="truncate">🔒 {currentAdminOwner} 개인 일정 · 다이어리</span>
+            {isEditing ? (
+              <button
+                type="button"
+                onClick={() => onConvertToFamily(draft)}
+                className="px-2 py-0.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-[10.5px] font-black whitespace-nowrap shrink-0"
+              >
+                🏠 가족일정으로 이동
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => onSwitchToFamilyNew(draft)}
+                className="px-2 py-0.5 rounded-lg bg-white border border-stone-200 text-indigo-700 text-[10.5px] font-black whitespace-nowrap shrink-0"
+              >
+                🏠 가족 일정으로
+              </button>
+            )}
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="text-[11px] font-extrabold text-stone-500 block mb-1">시작일</label>
+              <input
+                type="date"
+                value={draft.date || ""}
+                onChange={(e) => setDraft((p) => ({ ...p, date: e.target.value }))}
+                className="w-full px-2.5 py-2 rounded-xl border border-stone-200 text-[12.5px] font-bold bg-stone-50"
+              />
+            </div>
+            <div>
+              <label className="text-[11px] font-extrabold text-stone-500 block mb-1">종료일 (선택)</label>
+              <input
+                type="date"
+                value={draft.endDate || ""}
+                min={draft.date || undefined}
+                onChange={(e) => setDraft((p) => ({ ...p, endDate: e.target.value }))}
+                className="w-full px-2.5 py-2 rounded-xl border border-stone-200 text-[12.5px] font-bold bg-stone-50"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="text-[11px] font-extrabold text-stone-500 block mb-1">시간 (선택)</label>
+            <input
+              type="text"
+              value={draft.time || ""}
+              onChange={(e) => setDraft((p) => ({ ...p, time: e.target.value }))}
+              placeholder="예: 2시, 10시반, 09:00~12:00"
+              className="w-full px-2.5 py-2 rounded-xl border border-stone-200 text-[12.5px] font-bold bg-stone-50"
+            />
+          </div>
+
+          <div>
+            <label className="text-[11px] font-extrabold text-stone-500 block mb-1">일정 내용</label>
+            <input
+              type="text"
+              autoFocus
+              value={draft.title || ""}
+              onChange={(e) => setDraft((p) => ({ ...p, title: e.target.value }))}
+              placeholder="예: 진오비, 입소서류, PC교체"
+              className="w-full px-3 py-2.5 rounded-xl border border-stone-200 text-[13.5px] font-bold bg-white focus:outline-none focus:ring-2 focus:ring-stone-400"
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-extrabold text-stone-500">글자 색상</span>
+              <label className="inline-flex items-center gap-1.5 text-[11px] font-bold text-stone-600 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={Boolean(draft.highlight)}
+                  onChange={(e) => setDraft((p) => ({ ...p, highlight: e.target.checked }))}
+                  className="rounded"
+                />
+                <span>배경 강조</span>
+              </label>
+            </div>
+            <div className="grid grid-cols-6 gap-1.5">
+              {PRIVATE_CAL_COLORS.map((c) => (
+                <button
+                  key={c.id}
+                  type="button"
+                  onClick={() => setDraft((p) => ({ ...p, color: c.id }))}
+                  className={`py-1.5 rounded-xl border flex flex-col items-center gap-1 text-[10px] font-extrabold transition ${
+                    draft.color === c.id ? "border-stone-900 bg-stone-100" : "border-stone-200 bg-white"
+                  }`}
+                >
+                  <span className={`w-3.5 h-3.5 rounded-full ${c.dotCls}`} />
+                  <span>{c.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <label className="flex items-center gap-2 text-[12px] font-bold text-stone-700 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={Boolean(draft.isAnnual)}
+              onChange={(e) => setDraft((p) => ({ ...p, isAnnual: e.target.checked }))}
+              className="rounded"
+            />
+            <span>매년 같은 날 반복 표시</span>
+          </label>
+
+          <textarea
+            rows={2}
+            value={draft.memo || ""}
+            onChange={(e) => setDraft((p) => ({ ...p, memo: e.target.value }))}
+            placeholder="오늘의 다이어리 · 상세 메모 (선택)"
+            className="w-full px-3 py-2 rounded-xl border border-stone-200 text-[12.5px] font-medium bg-stone-50 focus:bg-white"
+          />
+
+          <div className="flex items-center gap-2 pt-1">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 py-2.5 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-[13px] font-extrabold"
+            >
+              취소
+            </button>
+            <button
+              type="submit"
+              className="flex-[2] py-2.5 rounded-xl bg-stone-900 hover:bg-stone-800 text-white text-[13px] font-extrabold"
+            >
+              {isEditing ? "수정 저장" : "저장"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+});
+
+// 입력 렉 완전 제거용 독립 메모이즈드 가족일정 모달
+const ScheduleFormModal = React.memo(({
+  initialForm,
+  isEditing,
+  onClose,
+  onSubmitForm,
+  onReadAttachments,
+  onPreviewImage,
+  showToast
+}) => {
+  const [draft, setDraft] = useState(initialForm);
+
+  useEffect(() => {
+    setDraft(initialForm);
+  }, [initialForm]);
+
+  return (
+    <div
+      className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white rounded-3xl max-w-sm w-full p-5 space-y-3.5 max-h-[90vh] overflow-y-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between">
+          <h3 className="text-[15.5px] font-black">
+            {isEditing ? "가족 일정 수정" : "새 가족 일정 추가"}
+          </h3>
+          <button type="button" onClick={onClose} aria-label="닫기">
+            <X className="w-5 h-5 text-stone-400" />
+          </button>
+        </div>
+
+        <input
+          type="text"
+          autoFocus
+          placeholder="일정 제목 (예: 시목 어린이집상담 2시반, 병원 예약)"
+          value={draft.title || ""}
+          onChange={(e) => setDraft((p) => ({ ...p, title: e.target.value }))}
+          className="w-full px-3 py-2.5 rounded-xl border border-stone-200 text-[13.5px] font-bold"
+        />
+
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <label className="text-[11.5px] font-bold text-stone-500">날짜 (기준일)</label>
+            <input
+              type="date"
+              value={draft.date || ""}
+              onChange={(e) => setDraft((p) => ({ ...p, date: e.target.value }))}
+              className="w-full px-3 py-2 rounded-xl border border-stone-200 text-[13.5px] font-bold"
+            />
+          </div>
+          <div>
+            <label className="text-[11.5px] font-bold text-stone-500">분류</label>
+            <select
+              value={draft.category || "할일(To-Do)"}
+              onChange={(e) => setDraft((p) => ({ ...p, category: e.target.value }))}
+              className="w-full px-3 py-2 rounded-xl border border-stone-200 text-[13.5px] font-bold"
+            >
+              {SCHEDULE_CATEGORIES.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        <div>
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-[13.5px] font-bold text-stone-600">누구의 일정인가요?</span>
+            <button
+              type="button"
+              onClick={() => setDraft((p) => ({ ...p, members: ["수혁", "아리나", "시목", "시율"] }))}
+              className="px-2 py-0.5 rounded bg-stone-100 text-[11.5px] font-bold"
+            >
+              온가족 선택
+            </button>
+          </div>
+          <div className="grid grid-cols-4 gap-1.5">
+            {FAMILY_MEMBERS.map((m) => {
+              const sel = toSafeArray(draft.members).includes(m.id);
+              return (
+                <button
+                  key={m.id}
+                  type="button"
+                  onClick={() => {
+                    const cur = toSafeArray(draft.members);
+                    setDraft((p) => ({
+                      ...p,
+                      members: sel ? cur.filter((id) => id !== m.id) : [...cur, m.id]
+                    }));
+                  }}
+                  className={`py-1.5 rounded-xl text-[13.5px] font-extrabold border whitespace-nowrap flex items-center justify-center ${
+                    sel
+                      ? "bg-stone-900 text-white border-stone-900"
+                      : "bg-stone-50 text-stone-500 border-stone-200"
+                  }`}
+                >
+                  <span className="inline-flex items-center gap-1">
+                    <MemberAvatar member={m} size="sm" />
+                    <span>{m.name}</span>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="px-2.5 py-2 rounded-xl bg-stone-50/90 border border-stone-200 space-y-1.5">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[11px] font-extrabold text-stone-500 whitespace-nowrap">
+              기념일·D-Day 옵션
+            </span>
+            {(draft.isAnnual || draft.showDday || draft.hasOriginYear) && (
+              <button
+                type="button"
+                onClick={() => setDraft((p) => ({ ...p, isAnnual: false, showDday: false, hasOriginYear: false }))}
+                className="text-[10.5px] font-bold text-stone-400 hover:text-stone-700 whitespace-nowrap"
+              >
+                초기화
+              </button>
+            )}
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            <button
+              type="button"
+              onClick={() => setDraft((p) => ({ ...p, isAnnual: !p.isAnnual }))}
+              className={`px-2 py-1 rounded-lg text-[11px] font-extrabold border whitespace-nowrap transition ${
+                draft.isAnnual ? "bg-stone-900 text-white border-stone-900" : "bg-white text-stone-600 border-stone-200"
+              }`}
+            >
+              🔄 매년 반복
+            </button>
+            <button
+              type="button"
+              onClick={() => setDraft((p) => ({ ...p, showDday: !p.showDday }))}
+              className={`px-2 py-1 rounded-lg text-[11px] font-extrabold border whitespace-nowrap transition ${
+                draft.showDday ? "bg-amber-600 text-white border-amber-600" : "bg-white text-stone-600 border-stone-200"
+              }`}
+            >
+              ⭐ D-Day 고정
+            </button>
+            <button
+              type="button"
+              onClick={() => setDraft((p) => ({ ...p, hasOriginYear: !p.hasOriginYear }))}
+              className={`px-2 py-1 rounded-lg text-[11px] font-extrabold border whitespace-nowrap transition ${
+                draft.hasOriginYear ? "bg-emerald-700 text-white border-emerald-700" : "bg-white text-stone-600 border-stone-200"
+              }`}
+            >
+              📅 D+경과일
+            </button>
+          </div>
+        </div>
+
+        <div className="space-y-1">
+          <div className="flex items-center justify-between">
+            <label className="text-[11px] font-extrabold text-stone-500">📝 메모</label>
+            {draft.memo && (
+              <button
+                type="button"
+                onClick={() => setDraft((p) => ({ ...p, memo: "" }))}
+                className="text-[10.5px] font-bold text-stone-400 hover:text-stone-700"
+              >
+                지우기
+              </button>
+            )}
+          </div>
+          <textarea
+            rows={4}
+            placeholder="메모 (준비물, 병원 안내, 제출 기한 등)"
+            value={draft.memo || ""}
+            onChange={(e) => setDraft((p) => ({ ...p, memo: e.target.value }))}
+            className="w-full px-3 py-2 rounded-xl border border-stone-300 bg-white text-[13px] leading-relaxed focus:outline-none focus:ring-2 focus:ring-stone-400"
+          />
+        </div>
+
+        <div className="p-2.5 rounded-2xl bg-stone-50 border border-stone-200 space-y-2">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[12px] font-extrabold text-stone-700 whitespace-nowrap">
+              📎 파일 첨부 ({(draft.attachments || []).length}/5)
+            </span>
+            <label className="px-2.5 py-1 rounded-lg bg-white hover:bg-stone-100 border border-stone-200 text-[11.5px] font-extrabold text-stone-700 cursor-pointer whitespace-nowrap shrink-0">
+              + 파일 추가
+              <input
+                type="file"
+                multiple
+                className="hidden"
+                onChange={async (e) => {
+                  const rawFiles = e.target.files;
+                  const res = await onReadAttachments(rawFiles, draft.attachments || []);
+                  e.target.value = "";
+                  if (res.skippedLarge > 0) {
+                    showToast("⚠️ 500KB 초과 파일은 제외되었습니다.");
+                  }
+                  if (res.addedCount > 0) {
+                    setDraft((prev) => ({ ...prev, attachments: res.nextList }));
+                    showToast(`📎 ${res.addedCount}개 파일이 첨부되었습니다!`);
+                  }
+                }}
+              />
+            </label>
+          </div>
+          {(draft.attachments || []).length > 0 && (
+            <div className="space-y-1.5">
+              {(draft.attachments || []).map((att) => {
+                const isImg = String(att.mimeType || "").startsWith("image/") || /^data:image\//.test(String(att.dataUrl || ""));
+                return (
+                  <div key={att.id} className="flex items-center justify-between gap-2 bg-white px-2.5 py-1.5 rounded-xl border border-stone-200 text-[12px]">
+                    <div className="flex items-center gap-2 min-w-0 flex-1">
+                      {isImg && att.dataUrl ? (
+                        <img
+                          src={att.dataUrl}
+                          alt={att.name}
+                          loading="lazy"
+                          decoding="async"
+                          onClick={() => onPreviewImage(att.dataUrl)}
+                          className="w-8 h-8 rounded-lg object-cover border border-stone-200 cursor-pointer shrink-0"
+                        />
+                      ) : (
+                        <span className="text-sm shrink-0">📄</span>
+                      )}
+                      <a
+                        href={att.dataUrl}
+                        download={att.name}
+                        className="font-bold text-stone-700 truncate hover:underline"
+                      >
+                        {att.name}
+                      </a>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setDraft((prev) => ({
+                          ...prev,
+                          attachments: (prev.attachments || []).filter((x) => x.id !== att.id)
+                        }))
+                      }
+                      className="p-1 text-stone-400 hover:text-rose-600 shrink-0"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        <button
+          type="button"
+          onClick={() => onSubmitForm(draft)}
+          className="w-full py-3 rounded-xl bg-stone-900 hover:bg-stone-800 text-white font-extrabold text-[14px]"
+        >
+          {isEditing ? "수정 저장" : "일정 저장"}
+        </button>
+      </div>
+    </div>
+  );
+});
 
 const getLunarFiveDayLabel = (dateObj) => {
   const lbl = getLunarDateLabel(dateObj);
@@ -4678,15 +5124,62 @@ function MainApp() {
 
 
   const imminentSchedulesWithin3Days = useMemo(() => {
-    return schedules
+    const todayStr = getTodayStr();
+    const famList = schedules
       .filter((s) => !s.done)
       .map((s) => ({
         ...s,
+        _isPrivate: false,
         calc: calculateScheduleDday(s)
       }))
-      .filter((s) => s.calc.daysUntil >= 0 && s.calc.daysUntil <= 3)
-      .sort((a, b) => a.calc.daysUntil - b.calc.daysUntil);
-  }, [schedules]);
+      .filter((s) => s.calc.daysUntil >= 0 && s.calc.daysUntil <= 3);
+
+    const privList = isAdminUnlocked
+      ? privateSchedules
+          .filter((p) => !p.done && (p.owner || "수혁") === currentAdminOwner)
+          .map((p) => {
+            if (p.endDate && p.date && p.date <= todayStr && todayStr <= p.endDate) {
+              return {
+                ...p,
+                _isPrivate: true,
+                calc: { daysUntil: 0, dDayText: "진행중", elapsedDays: null }
+              };
+            }
+            return {
+              ...p,
+              _isPrivate: true,
+              calc: calculateScheduleDday(p)
+            };
+          })
+          .filter((p) => p.calc.daysUntil >= 0 && p.calc.daysUntil <= 3)
+      : [];
+
+    return [...famList, ...privList].sort((a, b) => a.calc.daysUntil - b.calc.daysUntil);
+  }, [schedules, privateSchedules, isAdminUnlocked, currentAdminOwner]);
+
+  // 1,800+건 개인일정 O(1) 날짜 인덱싱 (달력 렌더링·스와이프 초고속화)
+  const myPrivateScheduleIndex = useMemo(() => {
+    const byDate = new Map();
+    const annualByMmdd = new Map();
+    const multiDay = [];
+    if (!isAdminUnlocked) return { byDate, annualByMmdd, multiDay, all: [] };
+    const all = privateSchedules.filter((it) => (it.owner || "수혁") === currentAdminOwner);
+    all.forEach((it) => {
+      if (it.date) {
+        if (!byDate.has(it.date)) byDate.set(it.date, []);
+        byDate.get(it.date).push(it);
+      }
+      if (it.endDate && it.date && it.endDate > it.date) {
+        multiDay.push(it);
+      }
+      if (it.isAnnual && it.date) {
+        const mmdd = String(it.date).slice(5, 10);
+        if (!annualByMmdd.has(mmdd)) annualByMmdd.set(mmdd, []);
+        annualByMmdd.get(mmdd).push(it);
+      }
+    });
+    return { byDate, annualByMmdd, multiDay, all };
+  }, [privateSchedules, isAdminUnlocked, currentAdminOwner]);
 
 
   // ==========================================
@@ -4895,25 +5388,26 @@ function MainApp() {
   };
 
 
-  const handleSaveSchedule = async () => {
+  const handleSaveSchedule = async (overrideForm = null) => {
     if (!requireEditorAccess("schedule")) return;
-    if (!scheduleForm.title.trim()) return;
+    const srcForm = overrideForm || scheduleForm;
+    if (!String(srcForm.title || "").trim()) return;
     const id = editingSchedule ? editingSchedule.id : `sch-${Date.now()}`;
-    const safeMembers = toSafeArray(scheduleForm.members);
+    const safeMembers = toSafeArray(srcForm.members);
 
 
     const payload = {
       id,
-      title: scheduleForm.title.trim(),
-      date: scheduleForm.date || scheduleSelectedDate,
-      category: scheduleForm.category || "할일(To-Do)",
+      title: String(srcForm.title || "").trim(),
+      date: srcForm.date || scheduleSelectedDate,
+      category: srcForm.category || "할일(To-Do)",
       members: safeMembers.length > 0 ? safeMembers : ["수혁", "아리나", "시목", "시율"],
-      isAnnual: Boolean(scheduleForm.isAnnual),
-      showDday: Boolean(scheduleForm.showDday),
-      hasOriginYear: Boolean(scheduleForm.hasOriginYear),
+      isAnnual: Boolean(srcForm.isAnnual),
+      showDday: Boolean(srcForm.showDday),
+      hasOriginYear: Boolean(srcForm.hasOriginYear),
       done: editingSchedule ? Boolean(editingSchedule.done) : false,
-      memo: (scheduleForm.memo || "").trim(),
-      attachments: Array.isArray(scheduleForm.attachments) ? scheduleForm.attachments : []
+      memo: (srcForm.memo || "").trim(),
+      attachments: Array.isArray(srcForm.attachments) ? srcForm.attachments : []
     };
 
 
@@ -4941,7 +5435,7 @@ function MainApp() {
         return;
       }
     }
-    recordActivity("일정", editingSchedule ? "수정" : "등록", `${scheduleForm.title || ""}`);
+    recordActivity("일정", editingSchedule ? "수정" : "등록", `${payload.title || ""}`);
     showToast(editingSchedule ? "일정이 수정되었습니다." : "새 가족 일정이 등록되었습니다.");
   };
 
@@ -10029,19 +10523,20 @@ ${validText}
     }
   };
 
-  const handleSavePrivateSchedule = async (e) => {
-    e?.preventDefault?.();
+  const handleSavePrivateSchedule = async (draftOrEvent) => {
+    if (draftOrEvent?.preventDefault) draftOrEvent.preventDefault();
+    const srcForm = draftOrEvent && typeof draftOrEvent === "object" && !draftOrEvent.preventDefault ? draftOrEvent : privateCalForm;
     if (!isAdminUnlocked) {
       showToast("🔒 관리자 전용 기능입니다.");
       return;
     }
-    const title = String(privateCalForm.title || "").trim();
+    const title = String(srcForm.title || "").trim();
     if (!title) {
       showToast("일정 내용을 입력해 주세요.");
       return;
     }
-    const dateVal = String(privateCalForm.date || getTodayStr()).slice(0, 10);
-    const rawEnd = String(privateCalForm.endDate || "").slice(0, 10);
+    const dateVal = String(srcForm.date || getTodayStr()).slice(0, 10);
+    const rawEnd = String(srcForm.endDate || "").slice(0, 10);
     const endDateVal = rawEnd && rawEnd > dateVal ? rawEnd : "";
     const ownerVal = currentAdminOwner;
     const existing = editingPrivateCalId ? privateSchedules.find((p) => p.id === editingPrivateCalId) : null;
@@ -10056,11 +10551,11 @@ ${validText}
       title,
       date: dateVal,
       endDate: endDateVal,
-      time: String(privateCalForm.time || "").trim(),
-      color: privateCalForm.color || "default",
-      highlight: Boolean(privateCalForm.highlight),
-      isAnnual: Boolean(privateCalForm.isAnnual),
-      memo: String(privateCalForm.memo || "").trim(),
+      time: String(srcForm.time || "").trim(),
+      color: srcForm.color || "default",
+      highlight: Boolean(srcForm.highlight),
+      isAnnual: Boolean(srcForm.isAnnual),
+      memo: String(srcForm.memo || "").trim(),
       done: Boolean(existing?.done),
       updatedAtMs: Date.now()
     };
@@ -10085,6 +10580,60 @@ ${validText}
       }
     }
     showToast(existing ? "✏️ 개인 일정을 수정했습니다." : `🔒 ${ownerVal} 개인 일정에 등록했습니다.`);
+  };
+
+  const handleConvertPrivateToFamily = async (draftForm) => {
+    if (!isAdminUnlocked || !editingPrivateCalId) return;
+    const title = String(draftForm?.title || "").trim();
+    if (!title) {
+      showToast("일정 내용을 입력해 주세요.");
+      return;
+    }
+    if (!window.confirm("이 개인 일정을 가족 공유 일정으로 이동할까요?\n(기존 개인 일정에서는 삭제되고 가족 일정에 등록됩니다.)")) {
+      return;
+    }
+    const existing = privateSchedules.find((p) => p.id === editingPrivateCalId);
+    const dateVal = String(draftForm?.date || existing?.date || getTodayStr()).slice(0, 10);
+    const timeVal = String(draftForm?.time || "").trim();
+    const memoRaw = String(draftForm?.memo || "").trim();
+    const combinedMemo = timeVal ? `[${timeVal}]${memoRaw ? `\n${memoRaw}` : ""}` : memoRaw;
+    const famId = `sch-${Date.now()}`;
+    const famPayload = {
+      id: famId,
+      title,
+      date: dateVal,
+      category: "할일(To-Do)",
+      members: ["수혁", "아리나"],
+      isAnnual: Boolean(draftForm?.isAnnual),
+      showDday: false,
+      hasOriginYear: false,
+      done: Boolean(existing?.done),
+      memo: combinedMemo,
+      attachments: []
+    };
+
+    setSchedules((prev) => [famPayload, ...prev]);
+    const nextPrivAll = privateSchedules.filter((x) => x.id !== editingPrivateCalId);
+    setPrivateSchedules(nextPrivAll);
+    try {
+      localStorage.setItem("kim_private_schedules_cache_v1", JSON.stringify(nextPrivAll));
+    } catch (e) {}
+
+    setIsPrivateCalModalOpen(false);
+    setEditingPrivateCalId(null);
+    setScheduleSelectedDate(dateVal);
+    setScheduleMonth(dateVal.slice(0, 7));
+
+    if (user && db) {
+      await setDoc(getDocRef("family_schedules_v4", famId), famPayload).catch(() => {});
+      if (existing?._bucketDocId) {
+        await syncPrivateBucketInCloud(existing._bucketDocId, nextPrivAll);
+      } else {
+        await deleteDoc(getDocRef("admin_private_schedules_v1", editingPrivateCalId)).catch(() => {});
+      }
+    }
+    recordActivity("일정", "등록", title);
+    showToast("🏠 개인 일정을 가족 공유 일정으로 이동했습니다!");
   };
 
   const handleTogglePrivateScheduleDone = async (item) => {
@@ -12713,17 +13262,29 @@ ${validText}
                         const isTomorrowEv = ev.calc.daysUntil === 1;
                         return (
                           <button
-                            key={ev.id}
+                            key={`${ev._isPrivate ? "p" : "f"}-${ev.id}`}
                             type="button"
                             onClick={() => {
+                              const targetDate = ev.date || getTodayStr();
+                              setScheduleMonth(targetDate.slice(0, 7));
+                              setScheduleSelectedDate(targetDate);
+                              if (ev._isPrivate && scheduleCalScope === "family") {
+                                setScheduleCalScope("all");
+                              }
                               setScheduleSubTab("calendar");
                               setActiveTab("schedule");
+                              setCalDayPopupDate(targetDate);
+                              setCalDayPopupItem({ ...ev, _isFamily: !ev._isPrivate });
                             }}
                             className={`w-full px-2.5 py-1.5 rounded-xl border flex items-center justify-between gap-2 text-left ${
                               isTodayEv ? "bg-rose-50/70 border-rose-200" : "bg-stone-50/70 border-stone-200"
                             }`}
                           >
-                            <span className="text-[12.5px] font-extrabold text-stone-800 truncate">{ev.title}</span>
+                            <span className="text-[12.5px] font-extrabold text-stone-800 truncate">
+                              {ev._isPrivate ? "🔒 " : ""}
+                              {ev.time ? `${ev.time} ` : ""}
+                              {ev.title}
+                            </span>
                             <span
                               className={`px-1.5 py-0.5 rounded text-[11.5px] font-black shrink-0 ${
                                 isTodayEv
@@ -15042,21 +15603,26 @@ ${validText}
             const gridStart = new Date(uYear, uMonth - 1, 1 - startWeekday);
             const todayStr = getTodayStr();
             const effectiveScope = isAdminUnlocked ? scheduleCalScope : "family";
-            const myPrivateItems = isAdminUnlocked
-              ? privateSchedules.filter((it) => (it.owner || "수혁") === currentAdminOwner)
-              : [];
+            const myPrivateItems = myPrivateScheduleIndex.all;
 
             const getMyPrivateForDate = (dateStr) => {
               if (!isAdminUnlocked || effectiveScope === "family") return [];
               const mmdd = dateStr.slice(5, 10);
-              return myPrivateItems
-                .filter((it) => {
-                  if (it.date === dateStr) return true;
-                  if (it.endDate && it.date && it.date <= dateStr && dateStr <= it.endDate) return true;
-                  if (it.isAnnual && String(it.date || "").slice(5, 10) === mmdd) return true;
-                  return false;
-                })
-                .sort((a, b) => String(a.time || "99:99").localeCompare(String(b.time || "99:99")));
+              const direct = myPrivateScheduleIndex.byDate.get(dateStr) || [];
+              const annual = myPrivateScheduleIndex.annualByMmdd.get(mmdd) || [];
+              const ranged = myPrivateScheduleIndex.multiDay.filter((it) => it.date < dateStr && dateStr <= it.endDate);
+              if (annual.length === 0 && ranged.length === 0) {
+                return direct.length <= 1 ? direct : [...direct].sort((a, b) => String(a.time || "99:99").localeCompare(String(b.time || "99:99")));
+              }
+              const seen = new Set();
+              const merged = [];
+              [...direct, ...ranged, ...annual].forEach((it) => {
+                if (!seen.has(it.id)) {
+                  seen.add(it.id);
+                  merged.push(it);
+                }
+              });
+              return merged.sort((a, b) => String(a.time || "99:99").localeCompare(String(b.time || "99:99")));
             };
 
             const getFamilyForDate = (dateStr) => {
@@ -15402,7 +15968,7 @@ ${validText}
                           : cell.dow === 6
                           ? "text-sky-600"
                           : "text-stone-800";
-                        const compactMode = cell.combined.length >= 3;
+                        const compactMode = cell.combined.length >= 2;
 
                         return (
                           <button
@@ -15417,26 +15983,26 @@ ${validText}
                               setCalDayPopupItem(null);
                               setCalDayPopupDate(cell.dateStr);
                             }}
-                            className={`min-h-[88px] px-[2px] py-[2px] border-r border-b border-stone-200/75 last:border-r-0 text-left flex flex-col items-stretch justify-start transition ${cellBg} ${
+                            className={`min-h-[86px] px-[1.5px] py-[2px] border-r border-b border-stone-200/75 last:border-r-0 text-left flex flex-col items-stretch justify-start transition ${cellBg} ${
                               isSelected ? "ring-1 ring-inset ring-stone-700 z-10" : ""
                             }`}
                           >
-                            <div className="flex items-start justify-between gap-0.5 mb-0.5 px-[1px]">
+                            <div className="flex items-start justify-between gap-0.5 mb-[2px] px-[1px]">
                               <span
-                                className={`text-[12.5px] font-black leading-tight ${numColor} ${
-                                  isToday ? "bg-rose-300/80 text-stone-900 px-1 rounded-[3px] w-full" : ""
+                                className={`text-[11.5px] font-black leading-none ${numColor} ${
+                                  isToday ? "bg-rose-300/80 text-stone-900 px-1 py-[1px] rounded-[3px] w-full" : ""
                                 }`}
                               >
                                 {cell.dayNum}
                               </span>
                               {cell.lunarLbl && !isToday && (
-                                <span className="text-[8.5px] font-bold text-stone-400 leading-none pt-0.5 shrink-0">
+                                <span className="text-[8px] font-bold text-stone-400 leading-none shrink-0">
                                   {cell.lunarLbl}
                                 </span>
                               )}
                             </div>
-                            <div className="space-y-[2px] w-full overflow-hidden">
-                              {cell.combined.slice(0, 4).map((ev) => {
+                            <div className="space-y-[1.5px] w-full overflow-hidden">
+                              {cell.combined.slice(0, 5).map((ev) => {
                                 if (ev._isFamily) {
                                   const famCls =
                                     ev.category === "기념일/생일"
@@ -15447,7 +16013,7 @@ ${validText}
                                   return (
                                     <div
                                       key={`f-${ev.id}`}
-                                      className={`text-[10.5px] leading-[1.18] tracking-tight font-bold pl-[2px] pr-[1px] rounded-r-[2px] ${
+                                      className={`text-[9px] leading-[1.15] tracking-[-0.025em] font-bold pl-[2px] pr-[1px] rounded-r-[2px] ${
                                         compactMode ? "truncate" : "line-clamp-2 break-all"
                                       } ${famCls}`}
                                     >
@@ -15460,7 +16026,7 @@ ${validText}
                                 return (
                                   <div
                                     key={`p-${ev.id}`}
-                                    className={`text-[10.5px] leading-[1.18] tracking-tight font-bold px-[1px] rounded-[2px] ${
+                                    className={`text-[9px] leading-[1.15] tracking-[-0.025em] font-bold px-[1px] rounded-[2px] ${
                                       compactMode ? "truncate" : "line-clamp-2 break-all"
                                     } ${cMeta.textCls} ${
                                       ev.highlight && cMeta.bgCls ? cMeta.bgCls : ""
@@ -15470,9 +16036,9 @@ ${validText}
                                   </div>
                                 );
                               })}
-                              {cell.combined.length > 4 && (
-                                <div className="text-[9px] font-extrabold text-stone-400 px-[1px] leading-none">
-                                  +{cell.combined.length - 4}
+                              {cell.combined.length > 5 && (
+                                <div className="text-[8.5px] font-extrabold text-stone-400 px-[1px] leading-none">
+                                  +{cell.combined.length - 5}
                                 </div>
                               )}
                             </div>
@@ -24175,171 +24741,32 @@ ${validText}
           모달: 관리자 전용 개인 일정 추가·수정
       ========================================== */}
       {isPrivateCalModalOpen && (
-        <div
-          className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
-          onClick={() => setIsPrivateCalModalOpen(false)}
-        >
-          <div
-            className="bg-white rounded-3xl max-w-sm w-full p-5 space-y-3.5 max-h-[88vh] overflow-y-auto shadow-xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between">
-              <h3 className="text-[15.5px] font-black text-stone-900">
-                {editingPrivateCalId ? "✏️ 개인 일정 수정" : "🔒 개인 일정 추가"}
-              </h3>
-              <button
-                type="button"
-                onClick={() => setIsPrivateCalModalOpen(false)}
-                className="p-1 text-stone-400 hover:text-stone-700"
-                aria-label="닫기"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <form onSubmit={handleSavePrivateSchedule} className="space-y-3">
-              {/* 본인 전용 잠금 배지 + 신규 추가 시 1탭 가족 일정 전환 */}
-              <div className="flex items-center justify-between gap-2 px-3 py-2 rounded-xl bg-stone-100 text-[12px] font-extrabold text-stone-700">
-                <span>🔒 {currentAdminOwner} 개인 일정 · 다이어리</span>
-                {!editingPrivateCalId && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const d = privateCalForm.date || scheduleSelectedDate || getTodayStr();
-                      const t = privateCalForm.title || "";
-                      const m = privateCalForm.memo || "";
-                      setIsPrivateCalModalOpen(false);
-                      setEditingSchedule(null);
-                      setScheduleForm({
-                        title: t,
-                        date: d,
-                        category: "할일(To-Do)",
-                        members: ["수혁", "아리나"],
-                        isAnnual: Boolean(privateCalForm.isAnnual),
-                        showDday: false,
-                        hasOriginYear: false,
-                        memo: m
-                      });
-                      setIsScheduleModalOpen(true);
-                    }}
-                    className="px-2 py-0.5 rounded-lg bg-white border border-stone-200 text-indigo-700 text-[10.5px] font-black whitespace-nowrap"
-                  >
-                    🏠 가족 일정으로
-                  </button>
-                )}
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="text-[11px] font-extrabold text-stone-500 block mb-1">시작일</label>
-                  <input
-                    type="date"
-                    value={privateCalForm.date}
-                    onChange={(e) => setPrivateCalForm((p) => ({ ...p, date: e.target.value }))}
-                    className="w-full px-2.5 py-2 rounded-xl border border-stone-200 text-[12.5px] font-bold bg-stone-50"
-                  />
-                </div>
-                <div>
-                  <label className="text-[11px] font-extrabold text-stone-500 block mb-1">종료일 (선택)</label>
-                  <input
-                    type="date"
-                    value={privateCalForm.endDate}
-                    min={privateCalForm.date || undefined}
-                    onChange={(e) => setPrivateCalForm((p) => ({ ...p, endDate: e.target.value }))}
-                    className="w-full px-2.5 py-2 rounded-xl border border-stone-200 text-[12.5px] font-bold bg-stone-50"
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="text-[11px] font-extrabold text-stone-500 block mb-1">시간 (선택)</label>
-                <input
-                  type="text"
-                  value={privateCalForm.time}
-                  onChange={(e) => setPrivateCalForm((p) => ({ ...p, time: e.target.value }))}
-                  placeholder="예: 2시, 10시반, 09:00~12:00"
-                  className="w-full px-2.5 py-2 rounded-xl border border-stone-200 text-[12.5px] font-bold bg-stone-50"
-                />
-              </div>
-
-              <div>
-                <label className="text-[11px] font-extrabold text-stone-500 block mb-1">일정 내용</label>
-                <input
-                  type="text"
-                  autoFocus
-                  value={privateCalForm.title}
-                  onChange={(e) => setPrivateCalForm((p) => ({ ...p, title: e.target.value }))}
-                  placeholder="예: 진오비, 입소서류, PC교체"
-                  className="w-full px-3 py-2.5 rounded-xl border border-stone-200 text-[13.5px] font-bold bg-white focus:outline-none focus:ring-2 focus:ring-stone-400"
-                />
-              </div>
-
-              {/* 색상 태그 + 배경 강조 */}
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-extrabold text-stone-500">글자 색상</span>
-                  <label className="inline-flex items-center gap-1.5 text-[11px] font-bold text-stone-600 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={Boolean(privateCalForm.highlight)}
-                      onChange={(e) => setPrivateCalForm((p) => ({ ...p, highlight: e.target.checked }))}
-                      className="rounded"
-                    />
-                    <span>배경 강조</span>
-                  </label>
-                </div>
-                <div className="grid grid-cols-6 gap-1.5">
-                  {PRIVATE_CAL_COLORS.map((c) => (
-                    <button
-                      key={c.id}
-                      type="button"
-                      onClick={() => setPrivateCalForm((p) => ({ ...p, color: c.id }))}
-                      className={`py-1.5 rounded-xl border flex flex-col items-center gap-1 text-[10px] font-extrabold transition ${
-                        privateCalForm.color === c.id ? "border-stone-900 bg-stone-100" : "border-stone-200 bg-white"
-                      }`}
-                    >
-                      <span className={`w-3.5 h-3.5 rounded-full ${c.dotCls}`} />
-                      <span>{c.label}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <label className="flex items-center gap-2 text-[12px] font-bold text-stone-700 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={Boolean(privateCalForm.isAnnual)}
-                  onChange={(e) => setPrivateCalForm((p) => ({ ...p, isAnnual: e.target.checked }))}
-                  className="rounded"
-                />
-                <span>매년 같은 날 반복 표시</span>
-              </label>
-
-              <textarea
-                rows={2}
-                value={privateCalForm.memo}
-                onChange={(e) => setPrivateCalForm((p) => ({ ...p, memo: e.target.value }))}
-                placeholder="오늘의 다이어리 · 상세 메모 (선택)"
-                className="w-full px-3 py-2 rounded-xl border border-stone-200 text-[12.5px] font-medium bg-stone-50 focus:bg-white"
-              />
-
-              <div className="flex items-center gap-2 pt-1">
-                <button
-                  type="button"
-                  onClick={() => setIsPrivateCalModalOpen(false)}
-                  className="flex-1 py-2.5 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-[13px] font-extrabold"
-                >
-                  취소
-                </button>
-                <button
-                  type="submit"
-                  className="flex-[2] py-2.5 rounded-xl bg-stone-900 hover:bg-stone-800 text-white text-[13px] font-extrabold"
-                >
-                  {editingPrivateCalId ? "수정 저장" : "저장"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+        <PrivateCalFormModal
+          initialForm={privateCalForm}
+          isEditing={Boolean(editingPrivateCalId)}
+          currentAdminOwner={currentAdminOwner}
+          onClose={() => setIsPrivateCalModalOpen(false)}
+          onSubmitForm={(draft) => handleSavePrivateSchedule(draft)}
+          onConvertToFamily={(draft) => handleConvertPrivateToFamily(draft)}
+          onSwitchToFamilyNew={(draft) => {
+            const d = draft?.date || scheduleSelectedDate || getTodayStr();
+            const t = draft?.title || "";
+            const m = draft?.memo || "";
+            setIsPrivateCalModalOpen(false);
+            setEditingSchedule(null);
+            setScheduleForm({
+              title: t,
+              date: d,
+              category: "할일(To-Do)",
+              members: ["수혁", "아리나"],
+              isAnnual: Boolean(draft?.isAnnual),
+              showDday: false,
+              hasOriginYear: false,
+              memo: m
+            });
+            setIsScheduleModalOpen(true);
+          }}
+        />
       )}
 
       {/* ==========================================
@@ -25523,288 +25950,22 @@ ${validText}
 
 
       {isScheduleModalOpen && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-sm w-full p-5 space-y-3.5 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between">
-              <h3 className="text-[15.5px] font-black">
-                {editingSchedule ? "가족 일정 수정" : "새 가족 일정 추가"}
-              </h3>
-              <button onClick={() => setIsScheduleModalOpen(false)}>
-                <X className="w-5 h-5 text-stone-400" />
-              </button>
-            </div>
-
-
-            <input
-              type="text"
-              placeholder="일정 제목 (예: 시목 어린이집상담 2시반, 병원 예약)"
-              value={scheduleForm.title}
-              onChange={(e) => setScheduleForm({ ...scheduleForm, title: e.target.value })}
-              className="w-full px-3 py-2.5 rounded-xl border border-stone-200 text-[13.5px] font-bold"
-            />
-
-
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="text-[11.5px] font-bold text-stone-500">날짜 (기준일)</label>
-                <input
-                  type="date"
-                  value={scheduleForm.date}
-                  onChange={(e) => setScheduleForm({ ...scheduleForm, date: e.target.value })}
-                  className="w-full px-3 py-2 rounded-xl border border-stone-200 text-[13.5px] font-bold"
-                />
-              </div>
-              <div>
-                <label className="text-[11.5px] font-bold text-stone-500">분류</label>
-                <select
-                  value={scheduleForm.category}
-                  onChange={(e) => {
-                    const cat = e.target.value;
-                    setScheduleForm({
-                      ...scheduleForm,
-                      category: cat
-                    });
-                  }}
-                  className="w-full px-3 py-2 rounded-xl border border-stone-200 text-[13.5px] font-bold"
-                >
-                  {SCHEDULE_CATEGORIES.map((c) => (
-                    <option key={c} value={c}>
-                      {c}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-
-            <div>
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-[13.5px] font-bold text-stone-600">누구의 일정인가요?</span>
-                <button
-                  type="button"
-                  onClick={() =>
-                    setScheduleForm({
-                      ...scheduleForm,
-                      members: ["수혁", "아리나", "시목", "시율"]
-                    })
-                  }
-                  className="px-2 py-0.5 rounded bg-stone-100 text-[11.5px] font-bold"
-                >
-                  온가족 선택
-                </button>
-              </div>
-              <div className="grid grid-cols-4 gap-1.5">
-                {FAMILY_MEMBERS.map((m) => {
-                  const sel = toSafeArray(scheduleForm.members).includes(m.id);
-                  return (
-                    <button
-                      key={m.id}
-                      type="button"
-                      onClick={() => {
-                        const cur = toSafeArray(scheduleForm.members);
-                        setScheduleForm({
-                          ...scheduleForm,
-                          members: sel ? cur.filter((id) => id !== m.id) : [...cur, m.id]
-                        });
-                      }}
-                      className={`py-1.5 rounded-xl text-[13.5px] font-extrabold border whitespace-nowrap flex items-center justify-center ${
-                        sel
-                          ? "bg-stone-900 text-white border-stone-900"
-                          : "bg-stone-50 text-stone-500 border-stone-200"
-                      }`}
-                    >
-                      <span className="inline-flex items-center gap-1"><MemberAvatar member={m} size="sm" /><span>{m.name}</span></span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-
-            <div className="px-2.5 py-2 rounded-xl bg-stone-50/90 border border-stone-200 space-y-1.5">
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-[11px] font-extrabold text-stone-500 whitespace-nowrap">
-                  기념일·D-Day 옵션
-                </span>
-                {(scheduleForm.isAnnual || scheduleForm.showDday || scheduleForm.hasOriginYear) && (
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setScheduleForm({
-                        ...scheduleForm,
-                        isAnnual: false,
-                        showDday: false,
-                        hasOriginYear: false
-                      })
-                    }
-                    className="text-[10.5px] font-bold text-stone-400 hover:text-stone-700 whitespace-nowrap"
-                  >
-                    초기화
-                  </button>
-                )}
-              </div>
-              <div className="flex flex-wrap gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => setScheduleForm({ ...scheduleForm, isAnnual: !scheduleForm.isAnnual })}
-                  className={`px-2 py-1 rounded-lg text-[11px] font-extrabold border whitespace-nowrap transition ${
-                    scheduleForm.isAnnual
-                      ? "bg-stone-900 text-white border-stone-900"
-                      : "bg-white text-stone-600 border-stone-200"
-                  }`}
-                >
-                  🔄 매년 반복
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setScheduleForm({ ...scheduleForm, showDday: !scheduleForm.showDday })}
-                  className={`px-2 py-1 rounded-lg text-[11px] font-extrabold border whitespace-nowrap transition ${
-                    scheduleForm.showDday
-                      ? "bg-amber-600 text-white border-amber-600"
-                      : "bg-white text-stone-600 border-stone-200"
-                  }`}
-                >
-                  ⭐ D-Day 고정
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setScheduleForm({ ...scheduleForm, hasOriginYear: !scheduleForm.hasOriginYear })}
-                  className={`px-2 py-1 rounded-lg text-[11px] font-extrabold border whitespace-nowrap transition ${
-                    scheduleForm.hasOriginYear
-                      ? "bg-emerald-700 text-white border-emerald-700"
-                      : "bg-white text-stone-600 border-stone-200"
-                  }`}
-                >
-                  📅 D+경과일
-                </button>
-              </div>
-            </div>
-
-
-            <div className="space-y-1">
-              <div className="flex items-center justify-between">
-                <label className="text-[11px] font-extrabold text-stone-500">📝 메모</label>
-                {scheduleForm.memo && (
-                  <button
-                    type="button"
-                    onClick={() => setScheduleForm({ ...scheduleForm, memo: "" })}
-                    className="text-[10.5px] font-bold text-stone-400 hover:text-stone-700"
-                  >
-                    지우기
-                  </button>
-                )}
-              </div>
-              <textarea
-                rows={4}
-                placeholder="메모 (준비물, 병원 안내, 제출 기한 등)"
-                value={scheduleForm.memo}
-                onChange={(e) => setScheduleForm({ ...scheduleForm, memo: e.target.value })}
-                className="w-full px-3 py-2 rounded-xl border border-stone-300 bg-white text-[13px] leading-relaxed focus:outline-none focus:ring-2 focus:ring-stone-400"
-              />
-            </div>
-
-
-            <div className="p-2.5 rounded-2xl bg-stone-50 border border-stone-200 space-y-2">
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-[12px] font-extrabold text-stone-700 whitespace-nowrap">
-                  📎 파일 첨부 ({(scheduleForm.attachments || []).length}/5)
-                </span>
-                <label className="px-2.5 py-1 rounded-lg bg-white hover:bg-stone-100 border border-stone-200 text-[11.5px] font-extrabold text-stone-700 cursor-pointer whitespace-nowrap shrink-0">
-                  + 파일 추가
-                  <input
-                    type="file"
-                    multiple
-                    className="hidden"
-                    onChange={async (e) => {
-                      const rawFiles = e.target.files;
-                      const res = await readAttachmentsFromFiles(rawFiles, scheduleForm.attachments || []);
-                      e.target.value = "";
-                      if (res.skippedLarge > 0) {
-                        showToast("⚠️ 500KB 초과 파일은 제외되었습니다.");
-                      }
-                      if (res.addedCount > 0) {
-                        setScheduleForm((prev) => ({ ...prev, attachments: res.nextList }));
-                        showToast(`📎 ${res.addedCount}개 파일이 첨부되었습니다!`);
-                      }
-                    }}
-                  />
-                </label>
-              </div>
-              {(scheduleForm.attachments || []).length > 0 && (
-                <div className="space-y-1.5">
-                  {(scheduleForm.attachments || []).map((att) => {
-                    const isImg = String(att.mimeType || "").startsWith("image/") || /^data:image\//.test(String(att.dataUrl || ""));
-                    return (
-                      <div key={att.id} className="flex items-center justify-between gap-2 bg-white px-2.5 py-1.5 rounded-xl border border-stone-200 text-[12px]">
-                        <div className="flex items-center gap-2 min-w-0 flex-1">
-                          {isImg && att.dataUrl ? (
-                            <img
-                              src={att.dataUrl}
-                              alt={att.name}
-                              onClick={() => setDiaryLightboxUrl(att.dataUrl)}
-                              className="w-8 h-8 rounded-lg object-cover border border-stone-200 cursor-pointer shrink-0"
-                            />
-                          ) : (
-                            <span className="text-sm shrink-0">📄</span>
-                          )}
-                          <a
-                            href={att.dataUrl}
-                            download={att.name}
-                            onClick={(e) => {
-                              if (isImg) {
-                                e.preventDefault();
-                                setDiaryLightboxUrl(att.dataUrl);
-                              }
-                            }}
-                            className="font-bold text-stone-800 hover:underline truncate"
-                          >
-                            {att.name}
-                          </a>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setScheduleForm((prev) => ({
-                              ...prev,
-                              attachments: (prev.attachments || []).filter((x) => x.id !== att.id)
-                            }))
-                          }
-                          className="text-stone-400 hover:text-rose-600 font-black px-1 shrink-0"
-                          aria-label="첨부 삭제"
-                        >
-                          ✕
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-
-
-            <div className="flex gap-2 pt-2">
-              <button
-                onClick={() => setIsScheduleModalOpen(false)}
-                className="flex-1 py-2.5 rounded-xl bg-stone-100 text-stone-600 text-[13.5px] font-extrabold"
-              >
-                취소
-              </button>
-              <button
-                onClick={handleSaveSchedule}
-                className="flex-1 py-2.5 rounded-xl bg-stone-900 text-white text-[13.5px] font-extrabold"
-              >
-                저장하기
-              </button>
-            </div>
-          </div>
-        </div>
+        <ScheduleFormModal
+          initialForm={scheduleForm}
+          isEditing={Boolean(editingSchedule)}
+          onClose={() => setIsScheduleModalOpen(false)}
+          onSubmitForm={(draft) => handleSaveSchedule(draft)}
+          onReadAttachments={readAttachmentsFromFiles}
+          onPreviewImage={(url) => setDiaryLightboxUrl(url)}
+          showToast={showToast}
+        />
       )}
 
 
       {/* 모달 6: 식단표 이미지 AI 자동 스캔 모달 */}
       {isDaycareModalOpen && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-md w-full p-5 space-y-3.5 max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setIsDaycareModalOpen(false)}>
+          <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-3xl max-w-md w-full p-5 space-y-3.5 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="text-[15.5px] font-black text-stone-900">
@@ -26050,8 +26211,8 @@ ${validText}
 
       {/* 모달 7: 마트 영수증 실제 이미지 스캔 모달 */}
       {isReceiptModalOpen && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-sm w-full p-5 space-y-3 max-h-[85vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setIsReceiptModalOpen(false)}>
+          <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-3xl max-w-sm w-full p-5 space-y-3 max-h-[85vh] overflow-y-auto">
             <div className="flex items-center justify-between">
               <h3 className="text-[15.5px] font-black">🧾 마트 영수증 사진 고속 스캔</h3>
               <button onClick={() => setIsReceiptModalOpen(false)}>
@@ -26156,7 +26317,7 @@ ${validText}
                       </div>
                     </div>
                     <input
-                      type="number" inputMode="numeric"
+                      type="number" inputMode="decimal"
                       value={it.price}
                       onChange={(e) => {
                         const copy = [...scannedReceiptItems];
@@ -26232,7 +26393,7 @@ ${validText}
                         <div className="bg-white p-2 rounded-xl border border-stone-200 flex items-center justify-between gap-1">
                           <span className="text-stone-500 font-bold shrink-0">봉투 등</span>
                           <input
-                            type="number" inputMode="numeric"
+                            type="number" inputMode="decimal"
                             value={receiptExcludedAmount}
                             onChange={(e) => setReceiptExcludedAmount(e.target.value)}
                             className="w-16 text-right font-black text-stone-700 bg-transparent outline-none"
@@ -26242,7 +26403,7 @@ ${validText}
                       <div className="bg-white p-2 rounded-xl border border-stone-200 flex items-center justify-between gap-2 text-[12.5px]">
                         <span className="text-stone-500 font-bold">영수증 결제금액</span>
                         <input
-                          type="number" inputMode="numeric"
+                          type="number" inputMode="decimal"
                           placeholder="영수증 총액 입력"
                           value={receiptTotalAmount}
                           onChange={(e) => setReceiptTotalAmount(e.target.value)}
