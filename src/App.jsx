@@ -963,6 +963,43 @@ const RoutineTitleField = React.memo(({ initialValue, onSyncValue, onSubmitEnter
   );
 });
 
+
+// 조르테 일자 팝업 내 0ms 1줄 즉시 등록 입력바
+const QuickCalDayInput = React.memo(({ placeholder, onQuickAdd }) => {
+  const [text, setText] = useState("");
+  const submit = () => {
+    const trimmed = String(text || "").trim();
+    if (!trimmed) return;
+    setText("");
+    onQuickAdd(trimmed);
+  };
+  return (
+    <div className="px-2.5 py-2 border-t border-stone-200 bg-stone-50 flex items-center gap-1.5 shrink-0">
+      <input
+        type="text"
+        enterKeyHint="done"
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            submit();
+          }
+        }}
+        placeholder={placeholder}
+        className="flex-1 min-w-0 px-2.5 py-1.5 rounded-lg border border-stone-300 bg-white text-[12.5px] font-bold text-stone-800 focus:outline-none focus:ring-2 focus:ring-stone-400"
+      />
+      <button
+        type="button"
+        onClick={submit}
+        className="px-2.5 py-1.5 rounded-lg bg-stone-800 hover:bg-stone-900 text-white text-[11.5px] font-extrabold whitespace-nowrap shrink-0"
+      >
+        등록
+      </button>
+    </div>
+  );
+});
+
 const getLunarFiveDayLabel = (dateObj) => {
   const lbl = getLunarDateLabel(dateObj);
   if (!lbl) return "";
@@ -1417,6 +1454,141 @@ function MainApp() {
   const [newSlotTimeInput, setNewSlotTimeInput] = useState("14:00");
   const [newSlotWeekday, setNewSlotWeekday] = useState(true);
   const [newSlotWeekend, setNewSlotWeekend] = useState(true);
+  const [krHolidays, setKrHolidays] = useState(() => {
+    try {
+      const raw = localStorage.getItem("kim_kr_holidays_v1");
+      const parsed = raw ? JSON.parse(raw) : null;
+      return parsed && typeof parsed.map === "object" && parsed.map ? parsed.map : {};
+    } catch (e) {
+      return {};
+    }
+  });
+  const krHolidayMetaRef = useRef((() => {
+    try {
+      const raw = localStorage.getItem("kim_kr_holidays_v1");
+      const parsed = raw ? JSON.parse(raw) : null;
+      return parsed && typeof parsed.syncedYears === "object" && parsed.syncedYears ? parsed.syncedYears : {};
+    } catch (e) {
+      return {};
+    }
+  })());
+  const krHolidayFetchingRef = useRef(new Set());
+
+  const fetchKoreanHolidaysForYears = async (years) => {
+    const now = Date.now();
+    const TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7일 주기 자동 갱신
+    const toFetch = Array.from(new Set(years.map((y) => Number(y)).filter((y) => y >= 2015 && y <= 2035))).filter((y) => {
+      const lastMs = Number(krHolidayMetaRef.current[String(y)] || 0);
+      return !krHolidayFetchingRef.current.has(y) && now - lastMs > TTL_MS;
+    });
+    if (toFetch.length === 0) return;
+
+    const mergedUpdates = {};
+    const updatedSyncedYears = { ...krHolidayMetaRef.current };
+
+    await Promise.all(
+      toFetch.map(async (yr) => {
+        krHolidayFetchingRef.current.add(yr);
+        try {
+          let foundAny = false;
+          // 1순위: 한국 공휴일 JSON API (대체공휴일 포함 한글명)
+          try {
+            const res1 = await fetch(`https://holidays.hyunbin.page/${yr}.json`, { cache: "no-store" });
+            if (res1.ok) {
+              const data1 = await res1.json();
+              if (data1 && typeof data1 === "object" && !Array.isArray(data1)) {
+                Object.entries(data1).forEach(([dKey, names]) => {
+                  if (/^\d{4}-\d{2}-\d{2}$/.test(dKey)) {
+                    const label = Array.isArray(names) ? names.filter(Boolean).join("·") : String(names || "");
+                    if (label) {
+                      mergedUpdates[dKey] = label;
+                      foundAny = true;
+                    }
+                  }
+                });
+              }
+            }
+          } catch (e1) {}
+
+          // 2순위 폴백: Nager.Date Public Holidays API (KR)
+          if (!foundAny) {
+            try {
+              const res2 = await fetch(`https://date.nager.at/api/v3/PublicHolidays/${yr}/KR`, { cache: "no-store" });
+              if (res2.ok) {
+                const data2 = await res2.json();
+                if (Array.isArray(data2)) {
+                  data2.forEach((item) => {
+                    if (item?.date && /^\d{4}-\d{2}-\d{2}$/.test(item.date)) {
+                      mergedUpdates[item.date] = String(item.localName || item.name || "공휴일");
+                      foundAny = true;
+                    }
+                  });
+                }
+              }
+            } catch (e2) {}
+          }
+
+          if (foundAny) {
+            updatedSyncedYears[String(yr)] = now;
+          }
+        } finally {
+          krHolidayFetchingRef.current.delete(yr);
+        }
+      })
+    );
+
+    if (Object.keys(mergedUpdates).length > 0) {
+      krHolidayMetaRef.current = updatedSyncedYears;
+      setKrHolidays((prev) => {
+        const nextMap = { ...prev, ...mergedUpdates };
+        try {
+          localStorage.setItem(
+            "kim_kr_holidays_v1",
+            JSON.stringify({ map: nextMap, syncedYears: updatedSyncedYears })
+          );
+        } catch (e) {}
+        if (user && db && isAdminUnlocked) {
+          setDoc(
+            getDocRef("family_meta_v4", "kr_holidays"),
+            { map: nextMap, syncedYears: updatedSyncedYears, updatedAtMs: Date.now() },
+            { merge: true }
+          ).catch(() => {});
+        }
+        return nextMap;
+      });
+    }
+  };
+
+  useEffect(() => {
+    const y = new Date().getFullYear();
+    fetchKoreanHolidaysForYears([y - 1, y, y + 1]);
+  }, []);
+
+  useEffect(() => {
+    const yr = Number(String(scheduleMonth || "").slice(0, 4));
+    if (yr >= 2015 && yr <= 2035) {
+      fetchKoreanHolidaysForYears([yr]);
+    }
+  }, [scheduleMonth]);
+
+  const isHolidayOrWeekend = (dayStr) => {
+    const dStr = String(dayStr || "").slice(0, 10);
+    if (!dStr) return false;
+    if (krHolidays && krHolidays[dStr]) return true;
+    const dt = new Date(dStr + "T00:00:00");
+    if (Number.isNaN(dt.getTime())) return false;
+    const dow = dt.getDay();
+    return dow === 0 || dow === 6;
+  };
+
+  const getSlotLabelsForDayType = (isDayOff) => {
+    const filtered = [...routineSlotDefs]
+      .filter((s) => (isDayOff ? s.weekend !== false : s.weekday !== false))
+      .sort((a, b) => toTimeMinutes(a.startTime) - toTimeMinutes(b.startTime))
+      .map((s) => s.label);
+    return [...filtered, "상시"];
+  };
+
   const activeRoutineTimeSlots = useMemo(
     () => [...[...routineSlotDefs].sort((a, b) => toTimeMinutes(a.startTime) - toTimeMinutes(b.startTime)).map((s) => s.label), "상시"],
     [routineSlotDefs]
@@ -2387,7 +2559,7 @@ function MainApp() {
 
   const getRoutineResetKey = (rt, dayStr = currentDayKey) => {
     if (!rt) return dayStr;
-    if (rt.cycle === "weekly") return getIsoWeekKey(dayStr);
+    if (rt.cycle === "weekdays" ? "평일(공휴일 제외)" : rt.cycle === "weekend_holiday" ? "주말·공휴일" : rt.cycle === "weekly") return getIsoWeekKey(dayStr);
     if (rt.cycle === "monthly" || rt.cycle === "monthly_weekday") return String(dayStr).slice(0, 7);
     return dayStr;
   };
@@ -2429,6 +2601,8 @@ function MainApp() {
     const dStr = String(dayStr || "").slice(0, 10);
     if (rt.startDate && String(rt.startDate).slice(0, 10) > dStr) return false;
     if (!rt.cycle || rt.cycle === "daily") return true;
+    if (rt.cycle === "weekdays") return !isHolidayOrWeekend(dStr);
+    if (rt.cycle === "weekend_holiday") return isHolidayOrWeekend(dStr);
     if (rt.cycle === "interval") {
       const info = getIntervalRoutineInfo(rt, dStr);
       if (info?.done && rt.lastDoneKey !== dStr) return false;
@@ -2466,6 +2640,8 @@ function MainApp() {
     const dStr = String(dayStr || "").slice(0, 10);
     if (rt.startDate && String(rt.startDate).slice(0, 10) > dStr) return false;
     if (!rt.cycle || rt.cycle === "daily") return true;
+    if (rt.cycle === "weekdays") return !isHolidayOrWeekend(dStr);
+    if (rt.cycle === "weekend_holiday") return isHolidayOrWeekend(dStr);
     const base = new Date(dStr + "T00:00:00");
     if (Number.isNaN(base.getTime())) return true;
     if (rt.cycle === "weekly" && rt.weekDay !== undefined && rt.weekDay !== null) {
@@ -2647,7 +2823,7 @@ function MainApp() {
     const safeOverride = typeof overrideTitle === "string" ? overrideTitle : null;
     const title = String(safeOverride !== null ? safeOverride : (routineTitleLiveRef.current || newRoutineTitle || "")).trim();
     if (!title) return;
-    const cycleVal = ["daily", "interval", "weekly", "monthly", "monthly_weekday"].includes(newRoutineCycle)
+    const cycleVal = ["daily", "weekdays", "weekend_holiday", "interval", "weekly", "monthly", "monthly_weekday"].includes(newRoutineCycle)
       ? newRoutineCycle
       : "daily";
     const mDayVal = cycleVal === "monthly" ? Math.min(31, Math.max(1, Number(newRoutineMonthDay) || 1)) : null;
@@ -4130,6 +4306,21 @@ function MainApp() {
                 setBackupEmail(d.data().email);
                 try { localStorage.setItem("kim_family_backup_email", d.data().email); } catch (e) {}
               }
+            }
+            if (d.id === "kr_holidays" && d.data()?.map && typeof d.data().map === "object") {
+              const cloudMap = d.data().map;
+              const cloudSynced = d.data().syncedYears && typeof d.data().syncedYears === "object" ? d.data().syncedYears : {};
+              krHolidayMetaRef.current = { ...krHolidayMetaRef.current, ...cloudSynced };
+              setKrHolidays((prev) => {
+                const merged = { ...prev, ...cloudMap };
+                try {
+                  localStorage.setItem(
+                    "kim_kr_holidays_v1",
+                    JSON.stringify({ map: merged, syncedYears: krHolidayMetaRef.current })
+                  );
+                } catch (e) {}
+                return merged;
+              });
             }
             if (d.id === "access_config") {
               const cfgData = d.data() || {};
@@ -10937,6 +11128,61 @@ ${validText}
     showToast(`🔒 ${currentAdminOwner} 개인 일정·다이어리로 복사했습니다!`);
   };
 
+  const handleQuickAddFromCalPopup = async (dateStr, rawTitle, asPrivate) => {
+    const title = String(rawTitle || "").trim();
+    if (!title) return;
+    const dVal = String(dateStr || getTodayStr()).slice(0, 10);
+    if (asPrivate && isAdminUnlocked) {
+      const id = `priv-q-${Date.now()}`;
+      const payload = {
+        id,
+        owner: currentAdminOwner,
+        isPrivate: true,
+        title,
+        date: dVal,
+        endDate: "",
+        time: "",
+        color: "default",
+        highlight: false,
+        isAnnual: false,
+        memo: "",
+        done: false,
+        updatedAtMs: Date.now()
+      };
+      const nextAll = [payload, ...privateSchedules];
+      setPrivateSchedules(nextAll);
+      try {
+        localStorage.setItem("kim_private_schedules_cache_v1", JSON.stringify(nextAll));
+      } catch (e) {}
+      if (user && db) {
+        await setDoc(getDocRef("admin_private_schedules_v1", id), payload, { merge: true }).catch(() => {});
+      }
+      showToast(`🔒 ${currentAdminOwner} 개인 일정에 바로 등록했습니다.`);
+      return;
+    }
+    if (!requireEditorAccess("schedule")) return;
+    const id = `sch-${Date.now()}`;
+    const payload = {
+      id,
+      title,
+      date: dVal,
+      category: "할일(To-Do)",
+      members: ["수혁", "아리나"],
+      isAnnual: false,
+      showDday: false,
+      hasOriginYear: false,
+      done: false,
+      memo: "",
+      attachments: []
+    };
+    setSchedules((prev) => [payload, ...prev]);
+    if (user && db) {
+      await setDoc(getDocRef("family_schedules_v4", id), payload).catch(() => {});
+    }
+    recordActivity("일정", "등록", title);
+    showToast("🏠 가족 일정에 바로 등록했습니다.");
+  };
+
   const handleTogglePrivateScheduleDone = async (item) => {
     if (!isAdminUnlocked) return;
     const updated = { ...item, done: !item.done, updatedAtMs: Date.now() };
@@ -13304,14 +13550,14 @@ ${validText}
           dt.setDate(dt.getDate() + homeRoutineDayOffset);
           return formatDate(dt);
         })();
-        const isHomeDayWeekend = (() => {
-          const dt = new Date(homeRoutineDayStr + "T00:00:00");
-          const dow = dt.getDay();
-          return dow === 0 || dow === 6;
-        })();
-        const dueRoutines = homeRoutineDayOffset === 0
+        const isHomeDayWeekend = isHolidayOrWeekend(homeRoutineDayStr);
+        const homeHolidayName = krHolidays[homeRoutineDayStr] || "";
+        const homeAllowedSlots = getSlotLabelsForDayType(isHomeDayWeekend);
+        const homeAllowedSlotSet = new Set(homeAllowedSlots);
+        const dueRoutines = (homeRoutineDayOffset === 0
           ? familyRoutines.filter((r) => isRoutineDueTodayOrPast(r, currentDayKey))
-          : familyRoutines.filter((r) => isRoutineDueOnExactDay(r, homeRoutineDayStr));
+          : familyRoutines.filter((r) => isRoutineDueOnExactDay(r, homeRoutineDayStr))
+        ).filter((r) => homeAllowedSlotSet.has(r.timeSlot || "상시"));
         const activeRoutines = homeRoutineDayOffset === 0
           ? dueRoutines.filter((r) => !isRoutineDoneNow(r))
           : dueRoutines;
@@ -13470,18 +13716,19 @@ ${validText}
         };
 
 
+        const effHomeSlotFilter =
+          homeRoutineSlotFilter === "auto" || homeRoutineSlotFilter === "전체" || homeAllowedSlotSet.has(homeRoutineSlotFilter)
+            ? homeRoutineSlotFilter
+            : "auto";
         const slotFilteredRoutines =
-          homeRoutineSlotFilter === "전체"
+          effHomeSlotFilter === "전체"
             ? activeRoutines
-            : homeRoutineSlotFilter === "auto"
+            : effHomeSlotFilter === "auto"
             ? activeRoutines.filter((r) => {
                 const s = r.timeSlot || "상시";
-                const useWknd = homeRoutineDayOffset === 0 ? wkndNow : isHomeDayWeekend;
-                if (useWknd && s === "하원후") return false;
-                if (!useWknd && s === "오후") return false;
                 return homeRoutineDayOffset === 0 ? (s === curSlot || s === "상시") : true;
               })
-            : activeRoutines.filter((r) => (r.timeSlot || "상시") === homeRoutineSlotFilter);
+            : activeRoutines.filter((r) => (r.timeSlot || "상시") === effHomeSlotFilter);
         const visibleRoutineList = slotFilteredRoutines
           .filter((r) => matchesRoutineTarget(r, homeRoutineTargetFilter))
           .sort((a, b) => {
@@ -13630,17 +13877,28 @@ ${validText}
                     );
                   })()}
                   <div className="flex items-center justify-between gap-1.5 flex-wrap">
-                    <span className="text-[13.5px] font-black text-stone-900 truncate">
-                      🔄 {homeRoutineDayOffset === -1
-                        ? "어제 루틴"
-                        : homeRoutineDayOffset === 1
-                        ? "내일 예정 루틴"
-                        : homeRoutineSlotFilter === "auto"
-                        ? `지금(${curSlot}) 루틴`
-                        : homeRoutineSlotFilter === "전체"
-                        ? "오늘 남은 루틴"
-                        : `${homeRoutineSlotFilter} 루틴`} ({visibleRoutineList.length}건)
-                    </span>
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <span className="text-[13.5px] font-black text-stone-900 truncate">
+                        🔄 {homeRoutineDayOffset === -1
+                          ? "어제 루틴"
+                          : homeRoutineDayOffset === 1
+                          ? "내일 예정 루틴"
+                          : effHomeSlotFilter === "auto"
+                          ? `지금(${curSlot}) 루틴`
+                          : effHomeSlotFilter === "전체"
+                          ? "오늘 남은 루틴"
+                          : `${effHomeSlotFilter} 루틴`} ({visibleRoutineList.length}건)
+                      </span>
+                      <span
+                        className={`px-1.5 py-0.5 rounded-md text-[10px] font-black whitespace-nowrap shrink-0 ${
+                          isHomeDayWeekend
+                            ? "bg-rose-50 text-rose-700 border border-rose-200"
+                            : "bg-indigo-50 text-indigo-700 border border-indigo-200"
+                        }`}
+                      >
+                        {homeHolidayName ? `🇰🇷 ${homeHolidayName}` : isHomeDayWeekend ? "주말·공휴일" : "평일"}
+                      </span>
+                    </div>
                     <div className="flex items-center gap-1 shrink-0">
                       <div className="flex items-center bg-stone-100 rounded-lg p-0.5 border border-stone-200">
                         {[
@@ -13722,7 +13980,7 @@ ${validText}
                     {[
                       { id: "auto", label: `자동(${curSlot})` },
                       { id: "전체", label: `전체(${activeRoutines.length})` },
-                      ...activeRoutineTimeSlots.map((s) => ({ id: s, label: s }))
+                      ...homeAllowedSlots.map((s) => ({ id: s, label: s }))
                     ].map((opt) => (
                       <button
                         key={opt.id}
@@ -16358,16 +16616,18 @@ ${validText}
                       {cells.map((cell) => {
                         const isToday = cell.dateStr === todayStr;
                         const isSelected = cell.dateStr === scheduleSelectedDate;
+                        const holidayName = krHolidays[cell.dateStr] || "";
+                        const isRedDay = cell.dow === 0 || Boolean(holidayName);
                         const cellBg = !cell.inCurrentMonth
                           ? "bg-stone-100/75"
-                          : cell.dow === 0
+                          : isRedDay
                           ? "bg-rose-50/45"
                           : cell.dow === 6
                           ? "bg-sky-50/45"
                           : "bg-white";
                         const numColor = !cell.inCurrentMonth
                           ? "text-stone-400"
-                          : cell.dow === 0
+                          : isRedDay
                           ? "text-rose-600"
                           : cell.dow === 6
                           ? "text-sky-600"
@@ -16404,7 +16664,12 @@ ${validText}
                               )}
                             </div>
                             <div className="space-y-[1px] w-full overflow-hidden">
-                              {cell.combined.slice(0, 6).map((ev) => {
+                              {holidayName && (
+                                <div className="text-[7.5px] leading-[1.15] tracking-[-0.04em] font-bold text-rose-600 whitespace-nowrap overflow-hidden">
+                                  {holidayName}
+                                </div>
+                              )}
+                              {cell.combined.slice(0, holidayName ? 5 : 6).map((ev) => {
                                 if (ev._isFamily) {
                                   const famCls =
                                     ev.category === "기념일/생일"
@@ -25765,7 +26030,8 @@ ${validText}
         const [py, pm, pd] = calDayPopupDate.split("-").map(Number);
         const popDateObj = new Date(py, (pm || 1) - 1, pd || 1);
         const popLunar = getLunarDateLabel(popDateObj);
-        const popHeaderText = `${py}년 ${pm}월 ${pd}일 (${getDayName(calDayPopupDate)})${popLunar ? ` ${popLunar}` : ""}`;
+        const popHolidayName = krHolidays[calDayPopupDate] || "";
+        const popHeaderText = `${py}년 ${pm}월 ${pd}일 (${getDayName(calDayPopupDate)})${popLunar ? ` ${popLunar}` : ""}${popHolidayName ? ` · ${popHolidayName}` : ""}`;
         const effScope = isAdminUnlocked ? scheduleCalScope : "family";
 
         const popFamEvents =
@@ -25995,6 +26261,23 @@ ${validText}
                     })
                   )}
                 </div>
+              )}
+
+              {!activeDetail && (isAdminUnlocked || canEditTab("schedule")) && (
+                <QuickCalDayInput
+                  placeholder={
+                    isAdminUnlocked && effScope !== "family"
+                      ? `⚡ ${currentAdminOwner} 개인 일정·다이어리 한 줄 입력...`
+                      : "⚡ 가족 일정 한 줄 입력..."
+                  }
+                  onQuickAdd={(txt) =>
+                    handleQuickAddFromCalPopup(
+                      calDayPopupDate,
+                      txt,
+                      isAdminUnlocked && effScope !== "family"
+                    )
+                  }
+                />
               )}
 
               {/* 조르테 스타일 하단 액션 바 */}
@@ -26602,21 +26885,41 @@ ${validText}
             </div>
 
 
-            <div>
-              <label className="text-[11.5px] font-extrabold text-stone-500 block mb-1">시간대</label>
+            <div className="space-y-1.5">
+              <label className="text-[11.5px] font-extrabold text-stone-500 block">반복 주기</label>
               <div className="flex flex-wrap gap-1.5">
-                {activeRoutineTimeSlots.map((ts) => (
+                {[
+                  { id: "daily", label: "매일" },
+                  { id: "weekdays", label: "평일" },
+                  { id: "weekend_holiday", label: "주말·공휴일" },
+                  { id: "interval", label: "N일마다" },
+                  { id: "weekly", label: "매주" },
+                  { id: "monthly", label: "매월 일자" },
+                  { id: "monthly_weekday", label: "매월 N주차" }
+                ].map((c) => (
                   <button
-                    key={ts}
+                    key={c.id}
                     type="button"
-                    onClick={() => setNewRoutineTimeSlot(ts)}
+                    onClick={() => {
+                      setNewRoutineCycle(c.id);
+                      if (c.id === "weekdays" || c.id === "weekend_holiday") {
+                        const allowed = getSlotLabelsForDayType(c.id === "weekend_holiday");
+                        if (!allowed.includes(newRoutineTimeSlot)) {
+                          setNewRoutineTimeSlot(allowed[0] || "상시");
+                        }
+                      }
+                    }}
                     className={`px-2.5 py-1.5 rounded-xl text-[12.5px] font-extrabold border transition whitespace-nowrap ${
-                      newRoutineTimeSlot === ts
-                        ? "bg-stone-900 text-white border-stone-900"
+                      newRoutineCycle === c.id
+                        ? c.id === "weekdays"
+                          ? "bg-indigo-600 text-white border-indigo-600"
+                          : c.id === "weekend_holiday"
+                          ? "bg-teal-600 text-white border-teal-600"
+                          : "bg-stone-900 text-white border-stone-900"
                         : "bg-stone-50 text-stone-600 border-stone-200"
                     }`}
                   >
-                    {ts}
+                    {c.label}
                   </button>
                 ))}
               </div>
@@ -26625,8 +26928,54 @@ ${validText}
 
             <div>
               <div className="flex items-center justify-between mb-1">
+                <label className="text-[11.5px] font-extrabold text-stone-500">시간대</label>
+                {newRoutineCycle === "weekdays" && (
+                  <span className="text-[10.5px] font-bold text-indigo-600">평일 전용 시간대만 표시</span>
+                )}
+                {newRoutineCycle === "weekend_holiday" && (
+                  <span className="text-[10.5px] font-bold text-teal-600">주말·공휴일 시간대만 표시</span>
+                )}
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {(newRoutineCycle === "weekdays"
+                  ? getSlotLabelsForDayType(false)
+                  : newRoutineCycle === "weekend_holiday"
+                  ? getSlotLabelsForDayType(true)
+                  : activeRoutineTimeSlots
+                ).map((ts) => {
+                  const def = routineSlotDefs.find((d) => d.label === ts);
+                  const tag =
+                    newRoutineCycle !== "weekdays" && newRoutineCycle !== "weekend_holiday" && def
+                      ? def.weekday && !def.weekend
+                        ? "·평"
+                        : !def.weekday && def.weekend
+                        ? "·주"
+                        : ""
+                      : "";
+                  return (
+                    <button
+                      key={ts}
+                      type="button"
+                      onClick={() => setNewRoutineTimeSlot(ts)}
+                      className={`px-2.5 py-1.5 rounded-xl text-[12.5px] font-extrabold border transition whitespace-nowrap ${
+                        newRoutineTimeSlot === ts
+                          ? "bg-stone-900 text-white border-stone-900"
+                          : "bg-stone-50 text-stone-600 border-stone-200"
+                      }`}
+                    >
+                      {ts}
+                      {tag && <span className="ml-0.5 text-[10px] opacity-70">{tag}</span>}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+
+            <div>
+              <div className="flex items-center justify-between mb-1">
                 <label className="text-[11.5px] font-extrabold text-stone-500 whitespace-nowrap">
-                  수행 시간 태그 (선택 · 예: 17시30분)
+                  수행 시간 태그 (선택)
                 </label>
                 {newRoutineScheduledTime && (
                   <button
@@ -26671,29 +27020,6 @@ ${validText}
 
 
             <div className="space-y-1.5">
-              <label className="text-[11.5px] font-extrabold text-stone-500 block">반복 주기</label>
-              <div className="flex flex-wrap gap-1.5">
-                {[
-                  { id: "daily", label: "매일" },
-                  { id: "interval", label: "N일마다" },
-                  { id: "weekly", label: "매주" },
-                  { id: "monthly", label: "매월 일자" },
-                  { id: "monthly_weekday", label: "매월 N주차" }
-                ].map((c) => (
-                  <button
-                    key={c.id}
-                    type="button"
-                    onClick={() => setNewRoutineCycle(c.id)}
-                    className={`px-2.5 py-1.5 rounded-xl text-[12.5px] font-extrabold border transition whitespace-nowrap ${
-                      newRoutineCycle === c.id
-                        ? "bg-stone-900 text-white border-stone-900"
-                        : "bg-stone-50 text-stone-600 border-stone-200"
-                    }`}
-                  >
-                    {c.label}
-                  </button>
-                ))}
-              </div>
 
 
               {newRoutineCycle === "interval" && (

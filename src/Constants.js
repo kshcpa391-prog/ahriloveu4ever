@@ -1177,7 +1177,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v12.59";
+export const APP_CODE_VERSION = "v12.61";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1195,7 +1195,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-21 07:48";
+export const APP_BUILD_DATE = "2026-11-21 08:35";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1262,6 +1262,30 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v12.61",
+    version: "v12.61",
+    date: "2026-11-21",
+    title: "한국 공휴일 외부 API 자동 연동 · 루틴 평일/주말·공휴일 분리 · 홈 시간대 오류 수정",
+    category: "기능 고도화 · 버그 수정",
+    changes: [
+      "코드 하드코딩 없이 외부 공휴일 API(holidays.hyunbin.page + date.nager.at 폴백)로 한국 공휴일·대체공휴일을 7일 주기로 자동 동기화해 클라우드/로컬 캐싱하고 통합 달력에 빨간날·공휴일명 표시",
+      "루틴 반복 주기에 '평일(공휴일 제외)'과 '주말·공휴일'을 추가하고, 선택한 주기에 맞는 시간대만 자동 필터링·표시해 작성 혼선 제거",
+      "주말·공휴일에 홈 화면 루틴 필터와 남은 루틴 목록에 평일 전용 시간대(하원후·점심 등)가 포함되던 오류 수정 및 평일/주말·공휴일 상태 배지 표시",
+      "루틴 작성 모달에서 반복 주기를 시간대 위로 배치하고 중복 예시 문구 정리"
+    ]
+  },
+  {
+    id: "patch-v12.60",
+    version: "v12.60",
+    date: "2026-11-21",
+    title: "조르테 일자 팝업 1줄 즉시 입력(0ms) 추가 및 6대 런타임 오류 유형 전수 감사 완료",
+    category: "편의성 · 무결성",
+    changes: [
+      "조르테 일자 팝업 목록 하단에 1줄 빠른 입력란(QuickCalDayInput · React.memo 0ms)을 추가해 모달을 또 열지 않고 엔터만으로 개인·가족 일정 즉시 등록 지원",
+      "전체 3만2천여 줄 코드 대상 6대 오류 유형(이벤트 객체 오전달, onChange 오용, 상태 배열 직접 변이, useEffect(async), 중복 JSX/객체 키, AST 미선언 변수) 전수 스캔 결과 0건 확인"
+    ]
+  },
   {
     id: "patch-v12.59",
     version: "v12.59",
