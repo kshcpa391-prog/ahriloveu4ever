@@ -140,7 +140,6 @@ import {
   getChildAgeStats,
   addMonthsToDateStr,
   BABY_MILESTONES,
-  evaluateGrowthMetric,
   BABY_VACCINES_AND_CHECKUPS,
   buildDaycareMeals,
   callReliableAiEngine,
@@ -156,6 +155,44 @@ import {
   blocksToNotionMarkdown
 } from "./Constants";
 
+
+const DEFAULT_DIARY_TEXT_STYLE = { size: "base", color: "default", bold: false, bg: "none" };
+
+const DIARY_STYLE_HEX_COLOR = {
+  default: "#44403C",
+  rose: "#E11D48",
+  sky: "#2383E2",
+  emerald: "#047857",
+  amber: "#B45309",
+  violet: "#6D28D9",
+  muted: "#A8A29E"
+};
+
+const DIARY_STYLE_HEX_BG = {
+  none: "",
+  amber: "#FEF3C7",
+  emerald: "#D1FAE5",
+  sky: "#E0F2FE",
+  rose: "#FFE4E6"
+};
+
+const getDiaryTextStyleClasses = (ts) => {
+  const s = ts || DEFAULT_DIARY_TEXT_STYLE;
+  const sizeCls = (PAGE_TEXT_SIZES.find((x) => x.id === s.size) || PAGE_TEXT_SIZES[1]).cls;
+  const colorCls = (PAGE_TEXT_COLORS.find((x) => x.id === s.color) || PAGE_TEXT_COLORS[0]).cls;
+  const bgCls = (PAGE_TEXT_BG_COLORS.find((x) => x.id === s.bg) || PAGE_TEXT_BG_COLORS[0]).cls;
+  return `${sizeCls} ${colorCls} ${s.bold ? "font-bold" : ""} ${bgCls}`.trim();
+};
+
+const isDiaryTextStyleCustom = (ts) => {
+  if (!ts) return false;
+  return (
+    (ts.size && ts.size !== "base") ||
+    (ts.color && ts.color !== "default") ||
+    Boolean(ts.bold) ||
+    (ts.bg && ts.bg !== "none")
+  );
+};
 
 const MemberAvatar = ({ member, id, size = "sm", className = "" }) => {
   const resolved = member || FAMILY_MEMBERS.find((f) => f.id === id);
@@ -655,8 +692,21 @@ function MainApp() {
     content: "",
     photoUrl: "",
     photos: [],
-    childIds: ["시율"]
+    childIds: ["시율"],
+    textStyle: { ...DEFAULT_DIARY_TEXT_STYLE }
   });
+  const [isDiaryFormatOpen, setIsDiaryFormatOpen] = useState(false);
+  useEffect(() => {
+    try {
+      let meta = document.querySelector('meta[name="theme-color"]');
+      if (!meta) {
+        meta = document.createElement("meta");
+        meta.setAttribute("name", "theme-color");
+        document.head.appendChild(meta);
+      }
+      meta.setAttribute("content", "#5E7A65");
+    } catch (e) {}
+  }, []);
   const [editingDiaryEntry, setEditingDiaryEntry] = useState(null);
   const [diaryExportPreviewUrl, setDiaryExportPreviewUrl] = useState("");
   const [diaryExportFilename, setDiaryExportFilename] = useState("육아일기.png");
@@ -885,7 +935,8 @@ function MainApp() {
   const [monthlySubTab, setMonthlySubTab] = useState("calendar");
   const [currentMonth, setCurrentMonth] = useState(() => getCurrentYearMonth());
   const [monthlyMember, setMonthlyMember] = useState("시목");
-  const [monthlyCalViewMode, setMonthlyCalViewMode] = useState("calendar");
+  const [monthlyCalViewMode, setMonthlyCalViewMode] = useState("list");
+  const [monthlyListOrder, setMonthlyListOrder] = useState("desc");
   const [monthlySlotFilter, setMonthlySlotFilter] = useState("전체");
   const [monthlySearchQuery, setMonthlySearchQuery] = useState("");
   const [expenseSearchQuery, setExpenseSearchQuery] = useState("");
@@ -7024,6 +7075,7 @@ ${validText}
         mood: diaryForm.mood || "😊 행복",
         title: (diaryForm.title || "").trim(),
         content: (diaryForm.content || "").trim(),
+        textStyle: diaryForm.textStyle || { ...DEFAULT_DIARY_TEXT_STYLE },
         photoUrl: finalUrls[0] && String(finalUrls[0]).startsWith("http") ? finalUrls[0] : "",
         photoUrls: finalUrls,
         author: actorName || "관리자",
@@ -7047,7 +7099,8 @@ ${validText}
         content: "",
         photoUrl: "",
         photos: [],
-        childIds: [selectedChildId]
+        childIds: [selectedChildId],
+        textStyle: { ...DEFAULT_DIARY_TEXT_STYLE }
       });
       recordActivity("육아", editingDiaryEntry ? "일기수정" : "일기등록", `${primaryChildLabel} · ${payload.date}`, {
         targetSubTab: "diary",
@@ -7941,9 +7994,15 @@ ${validText}
     const loadedImgs = (await Promise.all(rawUrls.map((u) => loadImg(u)))).filter(Boolean);
 
 
+    const ts = entry.textStyle || DEFAULT_DIARY_TEXT_STYLE;
+    const exportFontPx = ts.size === "sm" ? 28 : ts.size === "lg" ? 37 : ts.size === "xl" ? 42 : 32;
+    const exportLineH = Math.round(exportFontPx * 1.62);
+    const exportWeight = ts.bold ? "700" : "500";
+    const exportColorHex = DIARY_STYLE_HEX_COLOR[ts.color] || "#44403C";
+    const exportBgHex = DIARY_STYLE_HEX_BG[ts.bg] || "";
     const tmpCanvas = document.createElement("canvas");
     const tCtx = tmpCanvas.getContext("2d");
-    tCtx.font = "500 32px sans-serif";
+    tCtx.font = `${exportWeight} ${exportFontPx}px sans-serif`;
     const wrapLines = (rawText) => {
       const result = [];
       String(rawText || "").split("\n").forEach((para) => {
@@ -7969,7 +8028,7 @@ ${validText}
       return { im, w: maxBoxW, h: Math.round((nh / nw) * maxBoxW) };
     });
     const totalPhotoH = photoDims.reduce((acc, d) => acc + d.h + 32, 0);
-    const H = Math.max(900, 320 + (photoDims.length > 0 ? totalPhotoH + 28 : 0) + (entry.title ? 74 : 0) + bodyLines.length * 52 + 150);
+    const H = Math.max(900, 320 + (photoDims.length > 0 ? totalPhotoH + 28 : 0) + (entry.title ? 74 : 0) + bodyLines.length * exportLineH + 150);
 
 
     const canvas = document.createElement("canvas");
@@ -8020,8 +8079,12 @@ ${validText}
     }
 
 
-    ctx.fillStyle = "#44403C";
-    ctx.font = "500 32px sans-serif";
+    if (exportBgHex && bodyLines.length > 0) {
+      ctx.fillStyle = exportBgHex;
+      ctx.fillRect(padX + 10, curY - exportFontPx - 4, W - (padX + 10) * 2, bodyLines.length * exportLineH + 16);
+    }
+    ctx.fillStyle = exportColorHex;
+    ctx.font = `${exportWeight} ${exportFontPx}px sans-serif`;
     bodyLines.forEach((ln) => {
       ctx.fillText(ln, padX + 24, curY);
       ctx.strokeStyle = "#EFECE4";
@@ -8030,7 +8093,7 @@ ${validText}
       ctx.moveTo(padX + 24, curY + 14);
       ctx.lineTo(W - padX - 24, curY + 14);
       ctx.stroke();
-      curY += 52;
+      curY += exportLineH;
     });
 
 
@@ -10112,7 +10175,7 @@ ${validText}
               notices: "다정한 가족 공지사항 📌",
               recipes: "보글보글 가족 레시피북 📖",
               bucket: "설레는 가족 버킷리스트 🌟",
-              pages: "가족공유노트 🗂️",
+              pages: "공유노트 🗂️",
               ai: "똑똑한 AI 식단·요리 ✨"
             }[activeTab] || "우리 가족 홈 ♡"}
           </h1>
@@ -10656,7 +10719,7 @@ ${validText}
             onClick: () => setActiveTab("notices")
           },
           pages: {
-            title: "🗂️ 가족공유노트",
+            title: "🗂️ 공유노트",
             actionLabel: "열기 >",
             actionColor: "text-stone-500",
             borderHover: "hover:border-stone-400",
@@ -12340,11 +12403,15 @@ ${validText}
             });
             const todayStr = getTodayStr();
             const selectedDayMeals = (mealsByDate[selectedDate] || []).slice().sort((a, b) => slotRank(a.slot) - slotRank(b.slot));
-            const activeDates = Object.keys(mealsByDate).sort();
+            const activeMonthlyMemberName =
+              FAMILY_MEMBERS.find((f) => f.id === monthlyMember)?.name || monthlyMember;
+            const activeDates = Object.keys(mealsByDate).sort((a, b) =>
+              monthlyListOrder === "desc" ? b.localeCompare(a) : a.localeCompare(b)
+            );
 
             return (
               <div className="space-y-2.5">
-                {/* 슬림 가족 구성원 선택 + 달력/한눈에 보기 전환 */}
+                {/* 슬림 가족 구성원 선택 + 한눈에/달력 전환 */}
                 <div className="flex items-center justify-between gap-1.5">
                   <div className="flex items-center gap-1 overflow-x-auto pb-0.5">
                     {FAMILY_MEMBERS.map((m) => (
@@ -12365,8 +12432,8 @@ ${validText}
                   </div>
                   <div className="inline-flex items-center bg-stone-200/80 p-0.5 rounded-xl shrink-0">
                     {[
-                      { id: "calendar", label: "📅 달력" },
-                      { id: "list", label: "📋 한눈에" }
+                      { id: "list", label: "📋 한눈에" },
+                      { id: "calendar", label: "📅 달력" }
                     ].map((vm) => (
                       <button
                         key={vm.id}
@@ -12509,7 +12576,7 @@ ${validText}
                     <div className="bg-white p-3.5 rounded-2xl border border-stone-200 shadow-sm space-y-2">
                       <div className="flex items-center justify-between gap-2">
                         <div className="text-[13.5px] font-black text-stone-900">
-                          📌 {selectedDate.slice(5)} ({getDayName(selectedDate)}) {monthlyMember} 식단
+                          📌 {selectedDate.slice(5)} ({getDayName(selectedDate)}) {activeMonthlyMemberName} 식단
                         </div>
                         {canEditTab("daily") && (
                           <button
@@ -12557,28 +12624,63 @@ ${validText}
                 ) : (
                   /* 📋 한눈에 보기: 월간 식단표 전체 리스트 */
                   <div className="bg-white rounded-2xl border border-stone-200 shadow-sm overflow-hidden">
-                    <div className="px-3.5 py-2.5 bg-stone-50 border-b border-stone-100 flex items-center justify-between gap-2">
-                      <span className="text-[12.5px] font-black text-stone-800">
-                        {currentMonth.slice(5)}월 {monthlyMember} 식단표 ({activeDates.length}일)
+                    <div className="px-3 py-2 bg-stone-50 border-b border-stone-100 flex items-center justify-between gap-1.5">
+                      <span className="text-[12.5px] font-black text-stone-800 truncate">
+                        {currentMonth.slice(5)}월 {activeMonthlyMemberName} 식단 ({activeDates.length}일)
                       </span>
-                      {activeDates.length > 0 && (
-                        <button
-                          type="button"
-                          onClick={async () => {
-                            const lines = [`📅 ${currentMonth} ${monthlyMember} 식단표`];
-                            activeDates.forEach((d) => {
-                              const items = (mealsByDate[d] || [])
-                                .map((m) => `${m.slot}: ${cleanMenuLabel(m.menu)}`)
-                                .join(" / ");
-                              lines.push(`- ${d.slice(5)}(${getDayName(d)}) ${items}`);
-                            });
-                            await copyTextSafe(lines.join("\n"), `📋 ${currentMonth.slice(5)}월 식단표를 복사했습니다!`);
-                          }}
-                          className="px-2.5 py-1 rounded-full bg-[#EEF3EE] text-[#35503C] border border-[#C9D8CC] text-[11px] font-extrabold whitespace-nowrap"
-                        >
-                          📋 월간 복사
-                        </button>
-                      )}
+                      <div className="flex items-center gap-1 shrink-0">
+                        {activeDates.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => setMonthlyListOrder((o) => (o === "desc" ? "asc" : "desc"))}
+                            className="px-2 py-1 rounded-full bg-white hover:bg-stone-100 border border-stone-200 text-stone-600 text-[10.5px] font-extrabold whitespace-nowrap"
+                          >
+                            {monthlyListOrder === "desc" ? "↓ 최신순" : "↑ 날짜순"}
+                          </button>
+                        )}
+                        {activeDates.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              const filterLabel = monthlySlotFilter !== "전체" ? ` (${monthlySlotFilter})` : "";
+                              const lines = [`📅 ${currentMonth} ${activeMonthlyMemberName} 식단표${filterLabel}`];
+                              activeDates.forEach((d) => {
+                                const items = (mealsByDate[d] || [])
+                                  .map((m) => `${m.slot}: ${cleanMenuLabel(m.menu)}`)
+                                  .join(" / ");
+                                lines.push(`- ${d.slice(5)}(${getDayName(d)}) ${items}`);
+                              });
+                              await copyTextSafe(lines.join("\n"), `📋 ${currentMonth.slice(5)}월 식단표를 복사했습니다!`);
+                            }}
+                            className="px-2 py-1 rounded-full bg-[#EEF3EE] text-[#35503C] border border-[#C9D8CC] text-[10.5px] font-extrabold whitespace-nowrap"
+                          >
+                            📋 복사
+                          </button>
+                        )}
+                        {canEditTab("daily") && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingMeal(null);
+                              setMealForm({
+                                date: getTodayStr().startsWith(currentMonth) ? getTodayStr() : `${currentMonth}-01`,
+                                slot: monthlySlotFilter !== "전체" ? monthlySlotFilter : "저녁",
+                                menu: "",
+                                members: [monthlyMember],
+                                ingredients: "",
+                                note: "",
+                                sourceType: "집밥",
+                                cost: "",
+                                isPlanned: false
+                              });
+                              setIsMealModalOpen(true);
+                            }}
+                            className="px-2 py-1 rounded-full bg-stone-900 hover:bg-stone-800 text-white text-[10.5px] font-extrabold whitespace-nowrap"
+                          >
+                            + 식단
+                          </button>
+                        )}
+                      </div>
                     </div>
                     {activeDates.length === 0 ? (
                       <div className="py-8 text-center text-[12.5px] font-semibold text-stone-400">
@@ -12589,6 +12691,7 @@ ${validText}
                         {activeDates.map((d) => {
                           const dMeals = mealsByDate[d] || [];
                           const dow = new Date(`${d}T00:00:00`).getDay();
+                          const isTodayRow = d === getTodayStr();
                           return (
                             <div
                               key={d}
@@ -12596,16 +12699,29 @@ ${validText}
                                 setSelectedDate(d);
                                 setMonthlyCalViewMode("calendar");
                               }}
-                              className="px-3.5 py-2.5 hover:bg-stone-50/70 cursor-pointer flex items-start gap-2.5 transition"
+                              className={`px-3.5 py-2.5 cursor-pointer flex items-start gap-2.5 transition ${
+                                isTodayRow ? "bg-[#EEF3EE]/55 hover:bg-[#EEF3EE]/80" : "hover:bg-stone-50/70"
+                              }`}
                             >
-                              <div className="w-[54px] shrink-0 pt-0.5">
+                              <div className="w-[58px] shrink-0 pt-0.5 flex flex-col items-start gap-0.5">
                                 <span
-                                  className={`text-[12px] font-black ${
-                                    dow === 0 ? "text-rose-500" : dow === 6 ? "text-sky-600" : "text-stone-700"
+                                  className={`text-[12px] font-black whitespace-nowrap ${
+                                    isTodayRow
+                                      ? "text-[#35503C]"
+                                      : dow === 0
+                                      ? "text-rose-500"
+                                      : dow === 6
+                                      ? "text-sky-600"
+                                      : "text-stone-700"
                                   }`}
                                 >
                                   {d.slice(8)}일({getDayName(d)})
                                 </span>
+                                {isTodayRow && (
+                                  <span className="px-1.5 py-0.2 rounded bg-[#5E7A65] text-white text-[9.5px] font-extrabold whitespace-nowrap">
+                                    오늘
+                                  </span>
+                                )}
                               </div>
                               <div className="flex-1 min-w-0 flex flex-wrap gap-1">
                                 {dMeals.map((m) => (
@@ -12630,17 +12746,18 @@ ${validText}
           })() : (
             <div className="space-y-4">
               <div className="bg-stone-900 text-white p-4 rounded-2xl shadow-md">
-                <div className="flex items-center justify-between text-[13.5px] text-stone-300 mb-1">
-                  <span>{currentMonth}월 총 식비 지출 (냉장고 소진 시에도 유지됨)</span>
+                <div className="flex items-center justify-between gap-2 text-[13px] text-stone-300 mb-1">
+                  <span className="font-bold whitespace-nowrap">{currentMonth}월 총 식비</span>
                   <button
+                    type="button"
                     onClick={() => {
                       const next = prompt("월 목표 식비 예산(원)을 입력하세요:", monthlyBudget);
                       if (next && !isNaN(Number(next))) {
                         setMonthlyBudget(Number(next));
-                        localStorage.setItem("kim_family_budget", String(Number(next)));
+                        try { localStorage.setItem("kim_family_budget", String(Number(next))); } catch (e) {}
                       }
                     }}
-                    className="underline text-amber-300 font-bold"
+                    className="underline text-amber-300 font-bold whitespace-nowrap shrink-0"
                   >
                     예산: {monthlyBudget.toLocaleString()}원
                   </button>
@@ -16952,7 +17069,7 @@ ${validText}
       {/* ==========================================
           탭 8-3: 🗂️ 노션 스타일 가족 공유 노트 (계층형 페이지 · 최근 항목 · 체크리스트)
       ========================================== */}
-      {activeTab === "pages" && (!canViewTab("pages") ? renderLockedTabScreen("🗂️ 가족공유노트") : (() => {
+      {activeTab === "pages" && (!canViewTab("pages") ? renderLockedTabScreen("🗂️ 공유노트") : (() => {
         const currentPage = selectedPageId ? familyPages.find((p) => p.id === selectedPageId) || null : null;
         const sq = pageSearchQuery.trim().toLowerCase();
 
@@ -17358,7 +17475,7 @@ ${validText}
                       className="flex items-center gap-1 text-[13px] font-extrabold text-stone-600 hover:text-stone-900 min-w-0"
                     >
                       <ChevronLeft className="w-4 h-4 shrink-0" />
-                      <span className="truncate">{parentPage ? `${parentPage.icon || "📄"} ${parentPage.title}` : "가족공유노트"}</span>
+                      <span className="truncate">{parentPage ? `${parentPage.icon || "📄"} ${parentPage.title}` : "공유노트"}</span>
                     </button>
                     <div className="flex items-center gap-1 shrink-0">
                       {isPageBulkEditMode ? (
@@ -17613,7 +17730,7 @@ ${validText}
                         {/* 상단: 작성/미리보기 탭 + 1탭 서식 버튼 */}
                         <div className="px-2.5 py-2 bg-stone-50 border-b border-stone-200/80 space-y-2">
                           <div className="flex items-center justify-between gap-2">
-                            <div className="inline-flex items-center bg-stone-200/70 p-0.5 rounded-xl">
+                            <div className="inline-flex items-center bg-stone-200/70 p-0.5 rounded-xl shrink-0">
                               {[
                                 { id: "write", label: "✍️ 작성" },
                                 { id: "preview", label: "👀 미리보기" }
@@ -17622,7 +17739,7 @@ ${validText}
                                   key={t.id}
                                   type="button"
                                   onClick={() => setPageBulkEditorTab(t.id)}
-                                  className={`px-2.5 py-1 rounded-lg text-[11.5px] font-extrabold transition ${
+                                  className={`px-2.5 py-1 rounded-lg text-[11px] font-extrabold whitespace-nowrap shrink-0 transition ${
                                     pageBulkEditorTab === t.id ? "bg-white text-stone-900 shadow-2xs" : "text-stone-500"
                                   }`}
                                 >
@@ -17630,8 +17747,8 @@ ${validText}
                                 </button>
                               ))}
                             </div>
-                            <span className="text-[11px] font-bold text-stone-400">
-                              복사·붙여넣기 자유롭게 가능
+                            <span className="text-[10.5px] font-bold text-stone-400 whitespace-nowrap shrink-0">
+                              {pageBulkEditText.split("\n").filter((l) => l.trim()).length}줄
                             </span>
                           </div>
 
@@ -20358,7 +20475,7 @@ ${validText}
                           onClick={() => {
                             setEditingDiaryEntry(null);
                             setPendingDiaryPhotoFile(null);
-                            setDiaryForm({ date: getTodayStr(), mood: "😊 행복", title: "", content: "", photoUrl: "", photos: [], childIds: [activeChild.id] });
+                            setDiaryForm({ date: getTodayStr(), mood: "😊 행복", title: "", content: "", photoUrl: "", photos: [], childIds: [activeChild.id], textStyle: { ...DEFAULT_DIARY_TEXT_STYLE } });
                           }}
                           className="text-[11.5px] font-extrabold text-stone-500 underline"
                         >
@@ -20414,38 +20531,36 @@ ${validText}
                     })()}
 
 
-                    <div className="grid grid-cols-2 gap-2">
-                      <div className="space-y-1">
-                        <input
-                          type="date"
-                          value={diaryForm.date}
-                          onChange={(e) => setDiaryForm((p) => ({ ...p, date: e.target.value }))}
-                          className="w-full px-3 py-2 rounded-xl border border-stone-200 bg-stone-50 text-[13.5px] font-bold"
-                        />
-                        <div className="flex items-center gap-1">
-                          {[
-                            { label: "오늘", val: getTodayStr() },
-                            { label: "어제", val: getOffsetDateStr(getTodayStr(), -1) }
-                          ].map((dOpt) => (
-                            <button
-                              key={dOpt.label}
-                              type="button"
-                              onClick={() => setDiaryForm((p) => ({ ...p, date: dOpt.val }))}
-                              className={`px-2 py-0.5 rounded-lg text-[11.5px] font-extrabold border ${
-                                diaryForm.date === dOpt.val
-                                  ? "bg-[#5E7A65] text-white border-[#5E7A65]"
-                                  : "bg-white text-stone-600 border-stone-200"
-                              }`}
-                            >
-                              {dOpt.label}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
+                    {/* 날짜 · 오늘/어제 · 기분 1줄 컴팩트 바 */}
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <input
+                        type="date"
+                        value={diaryForm.date}
+                        onChange={(e) => setDiaryForm((p) => ({ ...p, date: e.target.value }))}
+                        className="h-8 px-2 rounded-lg border border-stone-200 bg-stone-50 text-[12px] font-bold min-w-0 flex-1"
+                      />
+                      {[
+                        { label: "오늘", val: getTodayStr() },
+                        { label: "어제", val: getOffsetDateStr(getTodayStr(), -1) }
+                      ].map((dOpt) => (
+                        <button
+                          key={dOpt.label}
+                          type="button"
+                          onClick={() => setDiaryForm((p) => ({ ...p, date: dOpt.val }))}
+                          className={`h-8 px-2 rounded-lg text-[11px] font-extrabold border whitespace-nowrap shrink-0 transition ${
+                            diaryForm.date === dOpt.val
+                              ? "bg-[#5E7A65] text-white border-[#5E7A65]"
+                              : "bg-white text-stone-600 border-stone-200"
+                          }`}
+                        >
+                          {dOpt.label}
+                        </button>
+                      ))}
                       <select
                         value={diaryForm.mood}
                         onChange={(e) => setDiaryForm((p) => ({ ...p, mood: e.target.value }))}
-                        className="px-3 py-2 rounded-xl border border-stone-200 bg-stone-50 text-[13.5px] font-bold"
+                        aria-label="오늘의 기분"
+                        className="h-8 px-2 rounded-lg border border-stone-200 bg-stone-50 text-[12px] font-bold shrink-0"
                       >
                         {["😊 행복", "🥰 감동", "😴 잘잠", "🍼 잘먹음", "🤒 컨디션관리", "🎉 첫성공"].map((md) => (
                           <option key={md} value={md}>{md}</option>
@@ -20453,17 +20568,115 @@ ${validText}
                       </select>
                     </div>
 
+                    {/* 한 줄 제목 + 글씨 서식 토글 */}
+                    <div className="flex items-center gap-1.5">
+                      <input
+                        type="text"
+                        placeholder="오늘의 한 줄 (예: 첫 뒤집기!)"
+                        value={diaryForm.title}
+                        onChange={(e) => setDiaryForm((p) => ({ ...p, title: e.target.value }))}
+                        className="flex-1 min-w-0 h-9 px-3 rounded-xl border border-stone-200 text-[13px] font-bold"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setIsDiaryFormatOpen((v) => !v)}
+                        title="글씨 크기 · 굵기 · 색상 · 형광펜 서식"
+                        className={`h-9 px-2.5 rounded-xl border text-[11.5px] font-extrabold whitespace-nowrap shrink-0 transition ${
+                          isDiaryFormatOpen || isDiaryTextStyleCustom(diaryForm.textStyle)
+                            ? "bg-[#EEF3EE] text-[#35503C] border-[#C9D8CC]"
+                            : "bg-stone-50 text-stone-600 border-stone-200 hover:bg-stone-100"
+                        }`}
+                      >
+                        Aa 서식
+                      </button>
+                    </div>
 
-                    <input
-                      type="text"
-                      placeholder="오늘의 한 줄 (예: 첫 뒤집기!)"
-                      value={diaryForm.title}
-                      onChange={(e) => setDiaryForm((p) => ({ ...p, title: e.target.value }))}
-                      className="w-full px-3 py-2 rounded-xl border border-stone-200 text-[13.5px] font-bold"
-                    />
+                    {/* 육아일기 글씨 서식 바 (크기 · 굵기 · 글자색 · 형광펜) */}
+                    {isDiaryFormatOpen && (() => {
+                      const curTs = diaryForm.textStyle || DEFAULT_DIARY_TEXT_STYLE;
+                      const updateTs = (patch) =>
+                        setDiaryForm((p) => ({
+                          ...p,
+                          textStyle: { ...(p.textStyle || DEFAULT_DIARY_TEXT_STYLE), ...patch }
+                        }));
+                      return (
+                        <div className="p-2 rounded-xl bg-stone-50 border border-stone-200/90 space-y-1.5">
+                          <div className="flex items-center justify-between gap-1.5 flex-wrap">
+                            <div className="flex items-center gap-1">
+                              {PAGE_TEXT_SIZES.map((sz) => (
+                                <button
+                                  key={sz.id}
+                                  type="button"
+                                  onClick={() => updateTs({ size: sz.id })}
+                                  className={`px-2 py-0.5 rounded-md text-[11px] font-extrabold border whitespace-nowrap transition ${
+                                    (curTs.size || "base") === sz.id
+                                      ? "bg-stone-900 text-white border-stone-900"
+                                      : "bg-white text-stone-600 border-stone-200"
+                                  }`}
+                                >
+                                  {sz.label}
+                                </button>
+                              ))}
+                              <button
+                                type="button"
+                                onClick={() => updateTs({ bold: !curTs.bold })}
+                                className={`px-2 py-0.5 rounded-md text-[11px] font-black border whitespace-nowrap transition ${
+                                  curTs.bold
+                                    ? "bg-stone-900 text-white border-stone-900"
+                                    : "bg-white text-stone-600 border-stone-200"
+                                }`}
+                              >
+                                B
+                              </button>
+                            </div>
+                            {isDiaryTextStyleCustom(curTs) && (
+                              <button
+                                type="button"
+                                onClick={() => updateTs({ ...DEFAULT_DIARY_TEXT_STYLE })}
+                                className="px-2 py-0.5 rounded-md text-[10.5px] font-bold text-stone-500 hover:bg-stone-200/70 whitespace-nowrap"
+                              >
+                                ↺ 초기화
+                              </button>
+                            )}
+                          </div>
+                          <div className="flex items-center justify-between gap-2 flex-wrap">
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-[10.5px] font-bold text-stone-400 whitespace-nowrap">글자</span>
+                              {PAGE_TEXT_COLORS.map((c) => (
+                                <button
+                                  key={c.id}
+                                  type="button"
+                                  title={`글자색: ${c.label}`}
+                                  onClick={() => updateTs({ color: c.id })}
+                                  className={`w-5 h-5 rounded-full ${c.dot} transition ${
+                                    (curTs.color || "default") === c.id ? "ring-2 ring-offset-1 ring-stone-800 scale-110" : "opacity-80 hover:opacity-100"
+                                  }`}
+                                />
+                              ))}
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-[10.5px] font-bold text-stone-400 whitespace-nowrap">배경</span>
+                              {PAGE_TEXT_BG_COLORS.map((bg) => (
+                                <button
+                                  key={bg.id}
+                                  type="button"
+                                  title={`형광펜: ${bg.label}`}
+                                  onClick={() => updateTs({ bg: bg.id })}
+                                  className={`w-5 h-5 rounded-full ${bg.dot} transition ${
+                                    (curTs.bg || "none") === bg.id ? "ring-2 ring-offset-1 ring-stone-800 scale-110" : "opacity-85 hover:opacity-100"
+                                  }`}
+                                />
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })()}
+
+                    {/* 넓어진 육아일기 본문 작성창 */}
                     <div className="relative">
                       <textarea
-                        rows={4}
+                        rows={8}
                         placeholder={`${
                           Array.isArray(diaryForm.childIds) && diaryForm.childIds.length >= 2
                             ? "시목·시율"
@@ -20471,9 +20684,15 @@ ${validText}
                         }의 오늘 기록을 자유롭게 남겨보세요...`}
                         value={diaryForm.content}
                         onChange={(e) => setDiaryForm((p) => ({ ...p, content: e.target.value }))}
-                        className="w-full px-3 py-2 pb-6 rounded-xl border border-stone-200 text-[13.5px] leading-relaxed"
+                        onKeyDown={(e) => {
+                          if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s") {
+                            e.preventDefault();
+                            handleSaveBabyDiary();
+                          }
+                        }}
+                        className={`w-full min-h-[190px] px-3.5 py-3 pb-7 rounded-xl border border-stone-200 leading-relaxed resize-y focus:outline-none focus:ring-2 focus:ring-[#5E7A65]/30 ${getDiaryTextStyleClasses(diaryForm.textStyle)}`}
                       />
-                      <span className="absolute right-2.5 bottom-2 text-[11.5px] font-bold text-stone-400">
+                      <span className="absolute right-2.5 bottom-2 text-[11px] font-bold text-stone-400 bg-white/80 px-1.5 rounded">
                         {(diaryForm.content || "").length}자
                       </span>
                     </div>
@@ -20537,7 +20756,8 @@ ${validText}
                                 content: "",
                                 photoUrl: "",
                                 photos: [],
-                                childIds: [selectedChildId]
+                                childIds: [selectedChildId],
+                                textStyle: { ...DEFAULT_DIARY_TEXT_STYLE }
                               });
                             }}
                             className="px-3 py-2.5 rounded-xl bg-stone-200 hover:bg-stone-300 text-stone-700 text-[13.5px] font-extrabold whitespace-nowrap"
@@ -20886,7 +21106,8 @@ ${validText}
                                       content: entry.content || "",
                                       photoUrl: ePhotos[0]?.url || "",
                                       photos: ePhotos,
-                                      childIds: getDiaryEntryChildIds(entry)
+                                      childIds: getDiaryEntryChildIds(entry),
+                                      textStyle: entry.textStyle || { ...DEFAULT_DIARY_TEXT_STYLE }
                                     });
                                   }}
                                   className="p-1 text-stone-400 hover:text-stone-700"
@@ -20916,7 +21137,7 @@ ${validText}
                             </div>
                             {entry.title && <div className="text-[15.5px] font-black text-stone-900">{entry.title}</div>}
                             {entry.content && (
-                              <div className="text-[13.5px] text-stone-700 whitespace-pre-wrap leading-relaxed">{entry.content}</div>
+                              <div className={`whitespace-pre-wrap leading-relaxed ${entry.textStyle ? getDiaryTextStyleClasses(entry.textStyle) : "text-[13.5px] text-stone-700"}`}>{entry.content}</div>
                             )}
                             {getDiaryEntryPhotos(entry).length > 0 && (
                               <div className={getDiaryEntryPhotos(entry).length >= 2 ? "grid grid-cols-2 gap-1.5" : "space-y-1.5"}>
@@ -21390,7 +21611,7 @@ ${validText}
                     label: "육아일기",
                     onClick: () => {
                       setEditingDiaryEntry(null);
-                      setDiaryForm({ date: getTodayStr(), mood: "😊 행복", title: "", content: "", photoUrl: "", photos: [], childIds: [selectedChildId] });
+                      setDiaryForm({ date: getTodayStr(), mood: "😊 행복", title: "", content: "", photoUrl: "", photos: [], childIds: [selectedChildId], textStyle: { ...DEFAULT_DIARY_TEXT_STYLE } });
                       setActiveTab("baby");
                       setBabySubTab("diary");
                       window.scrollTo({ top: 0, behavior: "instant" });
@@ -21430,7 +21651,7 @@ ${validText}
                   {
                     tab: "pages",
                     icon: "🗂️",
-                    label: "가족공유노트",
+                    label: "공유노트",
                     onClick: () => {
                       setActiveTab("pages");
                       openCreatePageModal(null);
@@ -21562,7 +21783,7 @@ ${validText}
                 {
                   title: "🗂️ 기록 · 소통 · 도구",
                   items: [
-                    { id: "pages", label: "가족공유노트", icon: "🗂️" },
+                    { id: "pages", label: "공유노트", icon: "🗂️" },
                     { id: "notices", label: "가족공지", icon: "📌" },
                     { id: "bucket", label: "버킷리스트", icon: "🌟" },
                     { id: "kitchen_timer", label: "조리타이머", icon: "⏱️" }
@@ -25863,7 +26084,7 @@ ${validText}
           }).map((ms) => ({
             childName: c.name,
             childId: c.id,
-            title: ms.title,
+            title: ms.title || ms.label,
             date: babyChecks[`${c.id}_${ms.id}`]?.doneDate || ""
           }))
         ).sort((a, b) => String(a.date).localeCompare(String(b.date)));
@@ -25874,12 +26095,13 @@ ${validText}
             .filter((g) => g.childId === c.id && String(g.date || "") <= ymEndDate)
             .sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")));
           const latest = logs[0] || null;
+          const hVal = latest ? (latest.height ?? latest.heightCm ?? null) : null;
+          const wVal = latest ? (latest.weight ?? latest.weightKg ?? null) : null;
           const birth = new Date(c.birthDate + "T00:00:00");
           const refD = new Date(`${ym}-15T00:00:00`);
           const ageM = Math.max(0, (refD.getFullYear() - birth.getFullYear()) * 12 + (refD.getMonth() - birth.getMonth()));
-          const hEval = latest?.heightCm ? evaluateGrowthMetric(c.id, ageM, "height", Number(latest.heightCm)) : null;
-          const wEval = latest?.weightKg ? evaluateGrowthMetric(c.id, ageM, "weight", Number(latest.weightKg)) : null;
-          return { child: c, ageM, latest, hEval, wEval };
+          const gEval = latest ? evaluateKoreanGrowthPercentile(c, latest.date, hVal, wVal) : null;
+          return { child: c, ageM, latest, hVal, wVal, hEval: gEval?.height || null, wEval: gEval?.weight || null };
         });
 
 
@@ -25887,7 +26109,7 @@ ${validText}
           const escHtml = (s) => String(s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
           const growthHtml = growthSnapshots.map((gs) => {
             if (!gs.latest) return `<div class="card"><strong>${escHtml(gs.child.name)} (${gs.ageM}개월)</strong><p>아직 기록된 성장 측정치가 없어요.</p></div>`;
-            return `<div class="card"><strong>${escHtml(gs.child.name)} (${gs.ageM}개월 · ${escHtml(gs.latest.date)})</strong><p>키 ${escHtml(gs.latest.heightCm || "-")}cm${gs.hEval ? ` (상위 ${Math.max(1, 100 - Math.round(gs.hEval.percentile))}%)` : ""} · 몸무게 ${escHtml(gs.latest.weightKg || "-")}kg${gs.wEval ? ` (상위 ${Math.max(1, 100 - Math.round(gs.wEval.percentile))}%)` : ""}</p></div>`;
+            return `<div class="card"><strong>${escHtml(gs.child.name)} (${gs.ageM}개월 · ${escHtml(gs.latest.date)})</strong><p>키 ${escHtml(gs.hVal ?? "-")}cm${gs.hEval ? ` (${gs.hEval.pct}백분위)` : ""} · 몸무게 ${escHtml(gs.wVal ?? "-")}kg${gs.wEval ? ` (${gs.wEval.pct}백분위)` : ""}</p></div>`;
           }).join("");
           const msHtml = monthMilestones.length > 0
             ? monthMilestones.map((m) => `<li><strong>[${escHtml(m.childName)}]</strong> ${escHtml(m.title)} <span>(${escHtml(m.date)})</span></li>`).join("")
@@ -25895,8 +26117,17 @@ ${validText}
           const diaryHtml = monthDiaries.length > 0
             ? monthDiaries.map((d) => {
                 const cNames = getDiaryEntryChildIds(d).join(" · ");
-                const imgs = getDiaryEntryPhotos(d).map((p) => `<img src="${escHtml(p.url)}" alt="사진" />`).join("");
-                return `<article class="entry"><div class="meta">${escHtml(d.date)} · ${escHtml(cNames)} ${escHtml(d.mood || "")}</div>${d.title ? `<h3>${escHtml(d.title)}</h3>` : ""}<p>${escHtml(d.content).replace(/\n/g, "<br/>")}</p>${imgs ? `<div class="photos">${imgs}</div>` : ""}</article>`;
+                const imgs = getDiaryEntryPhotos(d)
+                  .map((p) => (typeof p === "string" ? p : p?.url || ""))
+                  .filter(Boolean)
+                  .map((u) => `<img src="${escHtml(u)}" alt="일기 사진" />`)
+                  .join("");
+                const ts = d.textStyle || DEFAULT_DIARY_TEXT_STYLE;
+                const pFontPx = ts.size === "sm" ? 13 : ts.size === "lg" ? 17 : ts.size === "xl" ? 20 : 15;
+                const pColor = DIARY_STYLE_HEX_COLOR[ts.color] || "#44403C";
+                const pBg = DIARY_STYLE_HEX_BG[ts.bg] || "";
+                const pStyle = `font-size:${pFontPx}px;color:${pColor};${ts.bold ? "font-weight:700;" : ""}${pBg ? `background:${pBg};padding:6px 8px;border-radius:6px;` : ""}`;
+                return `<article class="entry"><div class="meta">${escHtml(d.date)} · ${escHtml(cNames)} ${escHtml(d.mood || "")}</div>${d.title ? `<h3>${escHtml(d.title)}</h3>` : ""}<p style="${pStyle}">${escHtml(d.content).replace(/\n/g, "<br/>")}</p>${imgs ? `<div class="photos">${imgs}</div>` : ""}</article>`;
               }).join("")
             : "<p>이달에 작성된 육아일기가 없어요.</p>";
           return `<!doctype html><html lang="ko"><head><meta charset="utf-8"/><title>김씨네 성장 매거진 ${yearNum}년 ${monthNum}월호</title><style>body{font-family:-apple-system,BlinkMacSystemFont,'Apple SD Gothic Neo',sans-serif;max-width:760px;margin:0 auto;padding:28px 20px;color:#1c1917;background:#faf8f3;line-height:1.6}header{text-align:center;border-bottom:2px solid #35503c;padding-bottom:16px;margin-bottom:20px}.kicker{font-size:11px;letter-spacing:2px;color:#5e7a65;font-weight:800}h1{margin:6px 0;font-size:26px}.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:16px 0}.stat{background:#fff;border:1px solid #e7e5e4;border-radius:12px;padding:10px;text-align:center}.stat b{display:block;font-size:18px;color:#35503c}h2{font-size:16px;border-left:4px solid #5e7a65;padding-left:8px;margin:22px 0 10px}.card,.entry{background:#fff;border:1px solid #e7e5e4;border-radius:12px;padding:14px;margin-bottom:10px}.meta{font-size:12px;color:#78716c;font-weight:700;margin-bottom:4px}.photos{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px;margin-top:10px}.photos img{width:100%;height:160px;object-fit:cover;border-radius:8px}@media print{body{background:#fff;padding:0}.entry,.card{break-inside:avoid}}</style></head><body><header><div class="kicker">KIM FAMILY TIME CAPSULE</div><h1>시목·시율 성장 매거진 ${yearNum}년 ${monthNum}월호</h1></header><div class="stats"><div class="stat"><b>${monthDiaries.length}편</b><span>육아일기</span></div><div class="stat"><b>${monthPhotoCount}장</b><span>추억 사진</span></div><div class="stat"><b>${monthMilestones.length}건</b><span>첫 발달</span></div><div class="stat"><b>${monthActivities.length}회</b><span>수유·케어</span></div></div><h2>🌱 성장 스냅샷</h2>${growthHtml}<h2>✨ 이달의 첫 발달</h2><ul>${msHtml}</ul><h2>📖 이달의 육아일기</h2>${diaryHtml}</body></html>`;
@@ -25958,8 +26189,8 @@ ${validText}
                         <div className="text-[12px] font-black text-stone-800">{gs.child.name} · {gs.ageM}개월</div>
                         {gs.latest ? (
                           <div className="text-[11px] font-semibold text-stone-600">
-                            <div>키 {gs.latest.heightCm || "-"}cm {gs.hEval ? `(${Math.round(gs.hEval.percentile)}백분위)` : ""}</div>
-                            <div>체중 {gs.latest.weightKg || "-"}kg {gs.wEval ? `(${Math.round(gs.wEval.percentile)}백분위)` : ""}</div>
+                            <div>키 {gs.hVal ?? "-"}cm {gs.hEval ? `(${gs.hEval.pct}백분위)` : ""}</div>
+                            <div>체중 {gs.wVal ?? "-"}kg {gs.wEval ? `(${gs.wEval.pct}백분위)` : ""}</div>
                           </div>
                         ) : (
                           <div className="text-[11px] text-stone-400">측정 기록 없음</div>
@@ -26010,7 +26241,9 @@ ${validText}
                     </div>
                   ) : (
                     monthDiaries.map((d) => {
-                      const photos = getDiaryEntryPhotos(d);
+                      const photos = getDiaryEntryPhotos(d)
+                        .map((p) => (typeof p === "string" ? p : p?.url || ""))
+                        .filter(Boolean);
                       return (
                         <div key={d.id} className="bg-white rounded-2xl p-3 border border-stone-200 space-y-1.5">
                           <div className="flex items-center justify-between gap-2 text-[11px] font-bold text-stone-400">
@@ -26018,11 +26251,18 @@ ${validText}
                             <span>{d.mood || ""}</span>
                           </div>
                           {d.title && <div className="text-[13.5px] font-black text-stone-900">{d.title}</div>}
-                          <div className="text-[12.5px] text-stone-700 whitespace-pre-wrap leading-relaxed">{d.content}</div>
+                          <div className={`whitespace-pre-wrap leading-relaxed ${d.textStyle ? getDiaryTextStyleClasses(d.textStyle) : "text-[12.5px] text-stone-700"}`}>{d.content}</div>
                           {photos.length > 0 && (
-                            <div className="grid grid-cols-2 gap-1.5 pt-1">
-                              {photos.map((p, idx) => (
-                                <img key={idx} src={p.url} alt="일기 사진" loading="lazy" className="w-full h-28 object-cover rounded-xl border border-stone-100" />
+                            <div className={photos.length === 1 ? "pt-1" : "grid grid-cols-2 gap-1.5 pt-1"}>
+                              {photos.map((pUrl, idx) => (
+                                <img
+                                  key={idx}
+                                  src={pUrl}
+                                  alt={`${d.title || "일기 사진"} ${idx + 1}`}
+                                  loading="lazy"
+                                  onClick={() => setDiaryLightboxUrl(pUrl)}
+                                  className={`w-full object-cover rounded-xl border border-stone-100 cursor-pointer hover:opacity-95 transition ${photos.length === 1 ? "max-h-60" : "h-32"}`}
+                                />
                               ))}
                             </div>
                           )}
@@ -26041,7 +26281,7 @@ ${validText}
                     const lines = [
                       `📰 [김씨네 ${yearNum}년 ${monthNum}월 성장 매거진]`,
                       `• 일기 ${monthDiaries.length}편 · 사진 ${monthPhotoCount}장 · 첫 발달 ${monthMilestones.length}건 · 케어 ${monthActivities.length}회`,
-                      ...growthSnapshots.filter((g) => g.latest).map((g) => `• ${g.child.name}(${g.ageM}m): ${g.latest.heightCm || "-"}cm / ${g.latest.weightKg || "-"}kg`),
+                      ...growthSnapshots.filter((g) => g.latest).map((g) => `• ${g.child.name}(${g.ageM}m): ${g.hVal ?? "-"}cm / ${g.wVal ?? "-"}kg`),
                       ...(monthMilestones.length > 0 ? ["", "🌱 이달의 첫 발달", ...monthMilestones.map((m) => `- ${m.childName}: ${m.title} (${m.date})`)] : []),
                       ...(monthDiaries.length > 0 ? ["", "📖 이달의 하이라이트", ...monthDiaries.slice(0, 5).map((d) => `- ${d.date} ${d.title || String(d.content || "").slice(0, 35)}`)] : [])
                     ];

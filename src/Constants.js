@@ -1176,7 +1176,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v12.28";
+export const APP_CODE_VERSION = "v12.30";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1194,7 +1194,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-20 08:25";
+export const APP_BUILD_DATE = "2026-11-20 10:10";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1216,7 +1216,7 @@ export const HELPER_CONFIGURABLE_TABS = [
   { id: "recipes", label: "📖 레시피북" },
   { id: "baby", label: "👶 육아수첩" },
   { id: "schedule", label: "🗓️ 일정·루틴" },
-  { id: "pages", label: "🗂️ 가족공유노트" },
+  { id: "pages", label: "🗂️ 공유노트" },
   { id: "ai", label: "✨ AI추천" },
   { id: "monthly", label: "💰 월간·식비" }
 ];
@@ -1261,6 +1261,29 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v12.30",
+    version: "v12.30",
+    date: "2026-11-20",
+    title: "월간식단 [한눈에] 기본값 전환 · 최신순/날짜순 토글 · 오늘 강조 · 가족사진 폴라로이드 앱 아이콘",
+    items: [
+      "월간식단 기본 화면을 [📋 한눈에] 리스트로 전환하고, [↓ 최신순 / ↑ 날짜순] 1탭 정렬·오늘 날짜 강조 배지·헤더 [+ 식단] 바로 추가 버튼 추가",
+      "월간식단·월간복사 잔여 호칭('아리나'→'아리') 통일 및 월간 식비 헤더 장황한 부연 문구 슬림화, 예산 저장 try/catch 안전 가드 보강",
+      "안드로이드 홈 화면용 앱 아이콘을 실제 가족사진 비율 유지 + 세이지그린·아이보리 폴라로이드 프레임(app-icon-512.png)으로 제작"
+    ]
+  },
+  {
+    id: "patch-v12.29",
+    version: "v12.29",
+    date: "2026-11-20",
+    title: "공유노트 명칭·줄바꿈 정리 · 육아일기 서식(크기·색상·굵기·형광펜)·작성창 확대 · 성장매거진 사진/성장스냅샷 수정",
+    items: [
+      "더보기·빠른실행·홈·헤더의 '가족공유노트'를 '공유노트'로 통일해 말줄임 현상 해소 및 작성/미리보기 탭 줄바꿈·중복 문구 제거",
+      "육아일기 날짜·기분 선택 바를 1줄 슬림 바로 압축하고 본문 입력창을 대폭 확대(rows=8), 글씨 크기·굵기·7색 글자색·형광펜 서식 편집(카드·매거진·한 장 내보내기 연동) 및 Ctrl/Cmd+S 저장 추가",
+      "성장매거진 사진 미노출(p.url 참조 오류) 수정·사진 클릭 라이트박스 확대 추가 및 성장 스냅샷(키·체중·KDCA 백분위)·발달 제목 오류 동시 해결",
+      "안드로이드 홈 화면용 1:1 정사각 앱 아이콘(app-icon-512.png) 및 PWA manifest.json·테마컬러 메타 연동 지원"
+    ]
+  },
   {
     id: "patch-v12.28",
     version: "v12.28",
