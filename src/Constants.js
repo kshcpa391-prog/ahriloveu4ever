@@ -1177,7 +1177,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v12.43";
+export const APP_CODE_VERSION = "v12.47";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1195,7 +1195,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-20 20:45";
+export const APP_BUILD_DATE = "2026-11-20 22:30";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1262,6 +1262,55 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v12.47",
+    version: "v12.47",
+    date: "2026-11-20",
+    title: "통합 조르테 달력(가족+개인/다이어리) 전환 및 수혁·아리나 개별 관리자 비밀번호",
+    category: "UX 통합 · 보안",
+    changes: [
+      "별도 개인일정 메뉴를 없애고 메인 '일정' 탭 달력을 조르테 스타일 통합 6주 달력으로 일원화 (상단 전체/가족/내 일정·다이어리 필터)",
+      "수혁·아리나 관리자 비밀번호를 각각 별도로 설정·저장 가능하도록 확장하고, 로그인한 본인에게만 자신의 개인일정·다이어리 노출",
+      "관리자 계정 전환(수혁↔아리나) 시 상대방 비밀번호 인증을 거치도록 보안 강화 (서로의 개인 다이어리 완전 분리)",
+      "통합 달력에서 가족 일정(🏠)과 내 개인 일정·다이어리(🔒)를 한눈에 구분하고, 날짜 패널에서 1탭으로 선택 등록 및 본인 전용 CSV 클라우드 연동 지원"
+    ]
+  },
+  {
+    id: "patch-v12.46",
+    version: "v12.46",
+    date: "2026-11-20",
+    title: "개인 일정 조르테 CSV 클라우드 가져오기·내보내기 및 다일정 지원",
+    category: "기능 고도화",
+    changes: [
+      "조르테(Jorte) CSV 파일(따옴표 줄바꿈·쉼표·다일정·매년 반복 포함)을 브라우저에서 분석해 수혁/아리나 클라우드 DB에 바로 일괄 저장",
+      "대용량 일정(수천 건)을 연도별 버킷 문서로 묶어 클라우드 읽기·쓰기 속도 대폭 최적화 및 중복 자동 방지",
+      "클라우드에 저장된 개인 일정을 조르테 호환 CSV 파일로 언제든 내보내기(백업) 지원",
+      "개인 캘린더 시작일~종료일(다일정) 기간 표시 및 추가·수정 모달 종료일 입력 지원"
+    ]
+  },
+  {
+    id: "patch-v12.45",
+    version: "v12.45",
+    date: "2026-11-20",
+    title: "관리자 전용 개인 일정(조르테 6주 풀그리드 · 수혁/아리나 완전 분리 · 5일 간격 음력 · 색상 태그) 신설",
+    items: [
+      "가족 일정과 100% 분리된 전용 DB 컬렉션(admin_private_schedules_v1) 기반의 관리자 전용 [🔒 개인일정] 화면 신설 (육아지원군·미로그인 화면에서는 메뉴 숨김 및 열람 차단)",
+      "수혁·아리나 각자의 개인 일정을 완전히 분리 관리(현재 로그인한 관리자 자동 선택 + 상단 [수혁 | 아리나] 전환 토글 지원)",
+      "조르테(Jorte) 스타일 6주 풀그리드 UI 구현: 일/토 파스텔 배경, 오늘 코랄 하이라이트, 5일 간격 음력(10.1·10.5·10.10 등) 표시, 날짜 칸 내 직관 텍스트 표시, 글자/배경 색상 태그 및 매년 반복 지원",
+      "홈 화면 카드·하단 [더보기] 시트·기존 [일정] 탭 상단 서브탭 3곳 모두 연결(관리자 로그인 시에만 표시) 및 ESC·뒤로가기·JSON 전체 백업/복원 연동"
+    ]
+  },
+  {
+    id: "patch-v12.44",
+    version: "v12.44",
+    date: "2026-11-20",
+    title: "모바일 숫자 전용 키패드 최적화(17곳) · 더보기 메뉴 실시간 카운트 배지 · 클라우드 동기화 스토리지 예외 전면 방어",
+    items: [
+      "아이 키·몸무게·체온·수량·금액·분유량 등 17개 숫자 입력창에 inputMode('decimal'/'numeric')를 일괄 적용해 모바일에서 숫자 전용 키패드가 바로 열리도록 개선",
+      "하단 [더보기] 전체 메뉴 시트의 장보기(남은 품목)·가족공지(진행 중)·버킷리스트(갈 곳) 버튼에 실시간 소형 카운트 배지 추가 및 중복 스크롤 호출 정리",
+      "Firestore 실시간 동기화(onSnapshot) 및 설정 저장 핸들러 내 미보호 localStorage 호출 13곳에 try/catch 예외 방어를 전면 적용해 제한 브라우저·저장공간 초과 시에도 동기화가 중단되지 않도록 고도화"
+    ]
+  },
   {
     id: "patch-v12.43",
     version: "v12.43",

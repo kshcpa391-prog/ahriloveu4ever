@@ -301,6 +301,36 @@ const ensureLeafletLoaded = () => {
   return leafletLoadPromise;
 };
 
+const PRIVATE_CAL_COLORS = [
+  { id: "default", label: "기본", textCls: "text-stone-900", bgCls: "", dotCls: "bg-stone-800" },
+  { id: "rose", label: "빨강", textCls: "text-rose-700", bgCls: "bg-rose-100/80", dotCls: "bg-rose-600" },
+  { id: "blue", label: "파랑", textCls: "text-sky-700", bgCls: "bg-sky-100/80", dotCls: "bg-sky-600" },
+  { id: "green", label: "초록", textCls: "text-emerald-700", bgCls: "bg-emerald-100/80", dotCls: "bg-emerald-600" },
+  { id: "amber", label: "주황", textCls: "text-amber-800", bgCls: "bg-amber-100/80", dotCls: "bg-amber-500" },
+  { id: "purple", label: "보라", textCls: "text-purple-700", bgCls: "bg-purple-100/80", dotCls: "bg-purple-600" }
+];
+
+const getLunarFiveDayLabel = (dateObj) => {
+  try {
+    if (!dateObj || Number.isNaN(dateObj.getTime())) return "";
+    const parts = new Intl.DateTimeFormat("en-US-u-ca-chinese", {
+      month: "numeric",
+      day: "numeric"
+    }).formatToParts(dateObj);
+    const mPart = parts.find((p) => p.type === "month")?.value || "";
+    const dPart = parts.find((p) => p.type === "day")?.value || "";
+    const lMonth = parseInt(mPart.replace(/[^\d]/g, ""), 10);
+    const lDay = parseInt(dPart.replace(/[^\d]/g, ""), 10);
+    if (!Number.isFinite(lMonth) || !Number.isFinite(lDay)) return "";
+    if (lDay === 1 || lDay % 5 === 0) {
+      return `${lMonth}.${lDay}`;
+    }
+    return "";
+  } catch (e) {
+    return "";
+  }
+};
+
 const BucketMapView = ({ items, selectedId, onSelectItem, onPickCoords }) => {
   const mapElRef = useRef(null);
   const mapInstRef = useRef(null);
@@ -911,13 +941,52 @@ function MainApp() {
       return EDITOR_INVITE_CODE;
     }
   });
-  const [adminCodeDraft, setAdminCodeDraft] = useState(() => {
+  const [suhyeokCode, setSuhyeokCode] = useState(() => {
     try {
-      return localStorage.getItem("family_admin_code_v1") || EDITOR_INVITE_CODE;
+      return (
+        localStorage.getItem("family_suhyeok_code_v1") ||
+        localStorage.getItem("family_admin_code_v1") ||
+        EDITOR_INVITE_CODE
+      );
     } catch (e) {
       return EDITOR_INVITE_CODE;
     }
   });
+  const [suhyeokCodeDraft, setSuhyeokCodeDraft] = useState(() => {
+    try {
+      return (
+        localStorage.getItem("family_suhyeok_code_v1") ||
+        localStorage.getItem("family_admin_code_v1") ||
+        EDITOR_INVITE_CODE
+      );
+    } catch (e) {
+      return EDITOR_INVITE_CODE;
+    }
+  });
+  const [arinaCode, setArinaCode] = useState(() => {
+    try {
+      return (
+        localStorage.getItem("family_arina_code_v1") ||
+        localStorage.getItem("family_admin_code_v1") ||
+        EDITOR_INVITE_CODE
+      );
+    } catch (e) {
+      return EDITOR_INVITE_CODE;
+    }
+  });
+  const [arinaCodeDraft, setArinaCodeDraft] = useState(() => {
+    try {
+      return (
+        localStorage.getItem("family_arina_code_v1") ||
+        localStorage.getItem("family_admin_code_v1") ||
+        EDITOR_INVITE_CODE
+      );
+    } catch (e) {
+      return EDITOR_INVITE_CODE;
+    }
+  });
+  const [loginAdminTarget, setLoginAdminTarget] = useState("수혁");
+  const [switchAdminPinInput, setSwitchAdminPinInput] = useState("");
   const [helperCode, setHelperCode] = useState(() => {
     try {
       return localStorage.getItem("family_helper_code_v1") || DEFAULT_HELPER_CODE;
@@ -967,10 +1036,17 @@ function MainApp() {
       const params = new URLSearchParams(window.location.search);
       const inv = params.get("invite");
       const savedAdmin = localStorage.getItem("family_admin_code_v1") || EDITOR_INVITE_CODE;
+      const savedSuhyeok = localStorage.getItem("family_suhyeok_code_v1") || savedAdmin;
+      const savedArina = localStorage.getItem("family_arina_code_v1") || savedAdmin;
       const savedHelper = localStorage.getItem("family_helper_code_v1") || DEFAULT_HELPER_CODE;
-      if (inv && inv === savedAdmin) {
+      if (inv && (inv === savedSuhyeok || inv === savedArina || inv === savedAdmin)) {
         localStorage.setItem("family_access_role_v1", "admin");
         localStorage.setItem("family_editor_unlocked_v1", "true");
+        if (inv === savedArina && inv !== savedSuhyeok) {
+          localStorage.setItem("family_actor_name_v1", "아리나");
+        } else if (inv === savedSuhyeok && inv !== savedArina) {
+          localStorage.setItem("family_actor_name_v1", "수혁");
+        }
         params.delete("invite");
         const cleanQuery = params.toString();
         const cleanUrl = window.location.pathname + (cleanQuery ? `?${cleanQuery}` : "") + window.location.hash;
@@ -1416,8 +1492,6 @@ function MainApp() {
   const [expenseLedgerExpanded, setExpenseLedgerExpanded] = useState(false);
   const [noticeHideDone, setNoticeHideDone] = useState(false);
   const [bucketList, setBucketList] = useState([]);
-  const [bucketCatFilter, setBucketCatFilter] = useState("전체");
-  const [bucketWeatherOnly, setBucketWeatherOnly] = useState(false);
   const [bucketForm, setBucketForm] = useState({
     title: "",
     category: "나들이/여행",
@@ -1432,8 +1506,6 @@ function MainApp() {
     lng: null
   });
   const [bucketViewMode, setBucketViewMode] = useState("map");
-  const [bucketMemberFilter, setBucketMemberFilter] = useState("전체");
-  const [bucketStatusFilter, setBucketStatusFilter] = useState("all");
   const [selectedBucketMapItem, setSelectedBucketMapItem] = useState(null);
   const [isGeocodingBucket, setIsGeocodingBucket] = useState(false);
   const [isBucketModalOpen, setIsBucketModalOpen] = useState(false);
@@ -1441,6 +1513,27 @@ function MainApp() {
   const [bucketSearchQuery, setBucketSearchQuery] = useState("");
   const [bucketSearchResults, setBucketSearchResults] = useState([]);
   const [bucketSearchError, setBucketSearchError] = useState("");
+  const [privateSchedules, setPrivateSchedules] = useState([]);
+  const [scheduleCalScope, setScheduleCalScope] = useState("all"); // "all" | "family" | "private"
+  const [privateCalSearchOpen, setPrivateCalSearchOpen] = useState(false);
+  const [privateCalSearchQuery, setPrivateCalSearchQuery] = useState("");
+  const currentAdminOwner = actorName === "아리나" ? "아리나" : "수혁";
+  const [isPrivateCalModalOpen, setIsPrivateCalModalOpen] = useState(false);
+  const [editingPrivateCalId, setEditingPrivateCalId] = useState(null);
+  const [privateCalForm, setPrivateCalForm] = useState({
+    title: "",
+    date: getTodayStr(),
+    endDate: "",
+    time: "",
+    color: "default",
+    highlight: false,
+    isAnnual: false,
+    memo: "",
+    owner: "수혁"
+  });
+  const [isPrivateCalCsvModalOpen, setIsPrivateCalCsvModalOpen] = useState(false);
+  const [privateCalCsvPreview, setPrivateCalCsvPreview] = useState(null);
+  const [privateCalCsvBusy, setPrivateCalCsvBusy] = useState(false);
   const [familyPages, setFamilyPages] = useState([]);
   const [selectedPageId, setSelectedPageId] = useState(null);
   const [pagesRecentOpen, setPagesRecentOpen] = useState(true);
@@ -2619,7 +2712,9 @@ function MainApp() {
 
 
   const saveAccessConfigToCloud = async (cfg = {}) => {
-    const nextAdmin = String(cfg.adminCode ?? adminCode).trim() || EDITOR_INVITE_CODE;
+    const nextSuhyeok = String(cfg.suhyeokCode ?? cfg.adminCode ?? suhyeokCode).trim() || EDITOR_INVITE_CODE;
+    const nextArina = String(cfg.arinaCode ?? arinaCode).trim() || nextSuhyeok;
+    const nextAdmin = String(cfg.adminCode ?? nextSuhyeok).trim() || EDITOR_INVITE_CODE;
     const nextHelper = String(cfg.helperCode ?? helperCode).trim() || DEFAULT_HELPER_CODE;
     const nextGuest = Array.isArray(cfg.guestAllowedTabs)
       ? Array.from(new Set(["home", ...cfg.guestAllowedTabs]))
@@ -2632,7 +2727,10 @@ function MainApp() {
 
 
     setAdminCode(nextAdmin);
-    setAdminCodeDraft(nextAdmin);
+    setSuhyeokCode(nextSuhyeok);
+    setSuhyeokCodeDraft(nextSuhyeok);
+    setArinaCode(nextArina);
+    setArinaCodeDraft(nextArina);
     setHelperCode(nextHelper);
     setHelperCodeDraft(nextHelper);
     setGuestAllowedTabs(nextGuest);
@@ -2640,6 +2738,8 @@ function MainApp() {
     setHelperEditTabs(nextEdit);
     try {
       localStorage.setItem("family_admin_code_v1", nextAdmin);
+      localStorage.setItem("family_suhyeok_code_v1", nextSuhyeok);
+      localStorage.setItem("family_arina_code_v1", nextArina);
       localStorage.setItem("family_helper_code_v1", nextHelper);
       localStorage.setItem("family_guest_tabs_v1", JSON.stringify(nextGuest));
       localStorage.setItem("family_helper_tabs_v1", JSON.stringify(nextView));
@@ -2652,6 +2752,8 @@ function MainApp() {
           getDocRef("family_meta_v4", "access_config"),
           {
             adminCode: nextAdmin,
+            suhyeokCode: nextSuhyeok,
+            arinaCode: nextArina,
             helperCode: nextHelper,
             guestAllowedTabs: nextGuest,
             helperAllowedTabs: nextView,
@@ -2668,14 +2770,46 @@ function MainApp() {
   };
 
 
-  const applyLoginCode = (rawCode) => {
+  const applyLoginCode = (rawCode, forcedAdminTarget = null) => {
     const code = String(rawCode || "").trim();
     if (!code) {
       showToast("비밀번호를 입력해 주세요.");
       return false;
     }
-    if (code === adminCode) {
-      const nextActor = actorName && actorName !== "육아지원군" ? actorName : "수혁";
+    const isSuhyeokMatch = code === suhyeokCode;
+    const isArinaMatch = code === arinaCode;
+    const isLegacyAdminMatch = code === adminCode;
+
+    if (forcedAdminTarget === "수혁" || forcedAdminTarget === "아리나") {
+      const targetOk =
+        forcedAdminTarget === "아리나"
+          ? isArinaMatch
+          : isSuhyeokMatch || isLegacyAdminMatch;
+      if (!targetOk) {
+        showToast(`❌ ${forcedAdminTarget} 비밀번호가 일치하지 않습니다.`);
+        return false;
+      }
+      try {
+        localStorage.setItem("family_access_role_v1", "admin");
+        localStorage.setItem("family_editor_unlocked_v1", "true");
+        localStorage.setItem("family_actor_name_v1", forcedAdminTarget);
+      } catch (e) {}
+      setAccessRole("admin");
+      setActorName(forcedAdminTarget);
+      setEditorCodeInput("");
+      setSwitchAdminPinInput("");
+      setIsEditorUnlockModalOpen(false);
+      showToast(`👑 관리자(${forcedAdminTarget}) 계정으로 전환되었습니다!`);
+      return true;
+    }
+
+    if (isSuhyeokMatch || isArinaMatch || isLegacyAdminMatch) {
+      let nextActor = loginAdminTarget === "아리나" ? "아리나" : "수혁";
+      if (isArinaMatch && !isSuhyeokMatch) {
+        nextActor = "아리나";
+      } else if (isSuhyeokMatch && !isArinaMatch) {
+        nextActor = "수혁";
+      }
       try {
         localStorage.setItem("family_access_role_v1", "admin");
         localStorage.setItem("family_editor_unlocked_v1", "true");
@@ -2684,6 +2818,7 @@ function MainApp() {
       setAccessRole("admin");
       setActorName(nextActor);
       setEditorCodeInput("");
+      setSwitchAdminPinInput("");
       setIsEditorUnlockModalOpen(false);
       showToast(`👑 관리자(${nextActor}) 권한으로 로그인되었습니다!`);
       return true;
@@ -2878,7 +3013,7 @@ function MainApp() {
       setDeletedIds((prev) => {
         const next = prev.filter((x) => x !== itemId);
         try {
-          localStorage.setItem("kim_family_deleted_ids", JSON.stringify(next));
+          try { localStorage.setItem("kim_family_deleted_ids", JSON.stringify(next)); } catch (e) {}
         } catch (e) {}
         return next;
       });
@@ -3284,7 +3419,7 @@ function MainApp() {
             if (d.id === "deleted_tracker") {
               const list = toSafeArray(d.data().ids);
               setDeletedIds(list);
-              localStorage.setItem("kim_family_deleted_ids", JSON.stringify(list));
+              try { localStorage.setItem("kim_family_deleted_ids", JSON.stringify(list)); } catch (e) {}
             }
             if (d.id === "daily_routines" && Array.isArray(d.data().items)) {
               const cloudRoutines = toSafeArray(d.data().items);
@@ -3309,34 +3444,56 @@ function MainApp() {
                 if (sharedKey.startsWith("AIzaSy") || sharedKey.startsWith("AQ.")) {
                   setGeminiApiKey(sharedKey);
                   setTempKeyInput(sharedKey);
-                  localStorage.setItem("kim_family_gemini_key", sharedKey);
+                  try { localStorage.setItem("kim_family_gemini_key", sharedKey); } catch (e) {}
                 }
               }
               if (d.data().openaiKey) {
                 const sharedOpenai = String(d.data().openaiKey).trim();
                 setOpenaiApiKey(sharedOpenai);
                 setTempOpenaiKeyInput(sharedOpenai);
-                localStorage.setItem("kim_family_openai_key", sharedOpenai);
+                try { localStorage.setItem("kim_family_openai_key", sharedOpenai); } catch (e) {}
               }
               if (d.data().aiProvider) {
                 setAiProvider(d.data().aiProvider);
-                localStorage.setItem("kim_family_ai_provider", d.data().aiProvider);
+                try { localStorage.setItem("kim_family_ai_provider", d.data().aiProvider); } catch (e) {}
               }
             }
             if (d.id === "backup_status" && d.data().lastSlot) {
               setLastAutoBackupSlot(d.data().lastSlot);
-              localStorage.setItem("kim_twice_daily_backup_slot", d.data().lastSlot);
+              try { localStorage.setItem("kim_twice_daily_backup_slot", d.data().lastSlot); } catch (e) {}
               if (d.data().email) {
                 setBackupEmail(d.data().email);
-                localStorage.setItem("kim_family_backup_email", d.data().email);
+                try { localStorage.setItem("kim_family_backup_email", d.data().email); } catch (e) {}
               }
             }
             if (d.id === "access_config") {
-              if (d.data().adminCode) {
-                const ac = String(d.data().adminCode).trim();
+              const cfgData = d.data() || {};
+              if (cfgData.adminCode) {
+                const ac = String(cfgData.adminCode).trim();
                 setAdminCode(ac);
-                setAdminCodeDraft(ac);
                 try { localStorage.setItem("family_admin_code_v1", ac); } catch (e) {}
+                if (!cfgData.suhyeokCode) {
+                  setSuhyeokCode(ac);
+                  setSuhyeokCodeDraft(ac);
+                  try { localStorage.setItem("family_suhyeok_code_v1", ac); } catch (e) {}
+                }
+                if (!cfgData.arinaCode) {
+                  setArinaCode(ac);
+                  setArinaCodeDraft(ac);
+                  try { localStorage.setItem("family_arina_code_v1", ac); } catch (e) {}
+                }
+              }
+              if (cfgData.suhyeokCode) {
+                const sc = String(cfgData.suhyeokCode).trim();
+                setSuhyeokCode(sc);
+                setSuhyeokCodeDraft(sc);
+                try { localStorage.setItem("family_suhyeok_code_v1", sc); } catch (e) {}
+              }
+              if (cfgData.arinaCode) {
+                const arc = String(cfgData.arinaCode).trim();
+                setArinaCode(arc);
+                setArinaCodeDraft(arc);
+                try { localStorage.setItem("family_arina_code_v1", arc); } catch (e) {}
               }
               if (d.data().helperCode) {
                 const c = String(d.data().helperCode).trim();
@@ -3625,6 +3782,34 @@ function MainApp() {
         (snap) => {
           const loaded = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
           setBucketList(loaded);
+        },
+        () => {}
+      )
+    );
+
+    unsubscribers.push(
+      onSnapshot(
+        getColRef("admin_private_schedules_v1"),
+        (snap) => {
+          const loaded = [];
+          snap.docs.forEach((d) => {
+            const data = d.data() || {};
+            if (data.isYearBucket && Array.isArray(data.items)) {
+              const bucketOwner = data.owner === "아리나" ? "아리나" : "수혁";
+              data.items.forEach((it) => {
+                if (it && it.id) {
+                  loaded.push({
+                    ...it,
+                    owner: it.owner === "아리나" ? "아리나" : bucketOwner,
+                    _bucketDocId: d.id
+                  });
+                }
+              });
+            } else {
+              loaded.push({ id: d.id, ...data });
+            }
+          });
+          setPrivateSchedules(loaded);
         },
         () => {}
       )
@@ -3937,7 +4122,7 @@ function MainApp() {
           { merge: true }
         );
         setLastAutoBackupSlot(currentSlot);
-        localStorage.setItem("kim_twice_daily_backup_slot", currentSlot);
+        try { localStorage.setItem("kim_twice_daily_backup_slot", currentSlot); } catch (e) {}
         try { localStorage.setItem("kim_last_backup_sig_v1", dataSig); } catch (e) {}
       } catch (e) {
         console.warn("Auto snapshot warning:", e);
@@ -4028,7 +4213,7 @@ function MainApp() {
   const markIdDeleted = async (id) => {
     const next = Array.from(new Set([...deletedIds, id]));
     setDeletedIds(next);
-    localStorage.setItem("kim_family_deleted_ids", JSON.stringify(next));
+    try { localStorage.setItem("kim_family_deleted_ids", JSON.stringify(next)); } catch (e) {}
     if (user && db) {
       try {
         await setDoc(
@@ -4052,15 +4237,15 @@ function MainApp() {
     if (cleanedGemini) {
       setGeminiApiKey(cleanedGemini);
       setTempKeyInput(cleanedGemini);
-      localStorage.setItem("kim_family_gemini_key", cleanedGemini);
+      try { localStorage.setItem("kim_family_gemini_key", cleanedGemini); } catch (e) {}
     }
     setOpenaiApiKey(cleanedOpenai);
     setTempOpenaiKeyInput(cleanedOpenai);
-    localStorage.setItem("kim_family_openai_key", cleanedOpenai);
+    try { localStorage.setItem("kim_family_openai_key", cleanedOpenai); } catch (e) {}
 
 
     setAiProvider(providerVal);
-    localStorage.setItem("kim_family_ai_provider", providerVal);
+    try { localStorage.setItem("kim_family_ai_provider", providerVal); } catch (e) {}
 
 
     setAiErrorMsg("");
@@ -4144,7 +4329,7 @@ function MainApp() {
         homeTimeRanges,
         routineTimeRanges,
         routineSlotDefs,
-        ...(isAdminUnlocked ? { babyDiaryEntries: safeDiaryEntries } : {})
+        ...(isAdminUnlocked ? { babyDiaryEntries: safeDiaryEntries, privateSchedules } : {})
       }
     };
     return JSON.stringify(fullSnapshot, null, 2);
@@ -4340,9 +4525,43 @@ function MainApp() {
       if (Array.isArray(payload.babyGrowthLogs)) setBabyGrowthLogs(payload.babyGrowthLogs);
       if (Array.isArray(payload.babyMedicalNotes)) setBabyMedicalNotes(payload.babyMedicalNotes);
       if (isAdminUnlocked && Array.isArray(payload.babyDiaryEntries)) setBabyDiaryEntries(payload.babyDiaryEntries);
+      if (isAdminUnlocked && Array.isArray(payload.privateSchedules)) {
+        const groupedBuckets = {};
+        const hydrated = payload.privateSchedules
+          .filter((ps) => ps && ps.id)
+          .map((ps) => {
+            const ow = ps.owner === "아리나" ? "아리나" : "수혁";
+            const yr = /^\d{4}/.test(String(ps.date || "")) ? String(ps.date).slice(0, 4) : "misc";
+            const bId = `bucket_${ow}_${yr}`;
+            const { _bucketDocId, ...cleanPs } = ps;
+            const norm = { ...cleanPs, owner: ow };
+            if (!groupedBuckets[bId]) groupedBuckets[bId] = { owner: ow, year: yr, items: [] };
+            groupedBuckets[bId].items.push(norm);
+            return { ...norm, _bucketDocId: bId };
+          });
+        setPrivateSchedules(hydrated);
+        if (user && db) {
+          const entries = Object.entries(groupedBuckets);
+          (async () => {
+            for (let i = 0; i < entries.length; i += 400) {
+              const batch = writeBatch(db);
+              entries.slice(i, i + 400).forEach(([bId, bData]) => {
+                batch.set(getDocRef("admin_private_schedules_v1", bId), {
+                  isYearBucket: true,
+                  owner: bData.owner,
+                  year: bData.year,
+                  items: bData.items,
+                  updatedAtMs: Date.now()
+                });
+              });
+              await batch.commit().catch(() => {});
+            }
+          })();
+        }
+      }
       if (Array.isArray(payload.deletedIds)) {
         setDeletedIds(payload.deletedIds);
-        localStorage.setItem("kim_family_deleted_ids", JSON.stringify(payload.deletedIds));
+        try { localStorage.setItem("kim_family_deleted_ids", JSON.stringify(payload.deletedIds)); } catch (e) {}
       }
 
 
@@ -9729,6 +9948,470 @@ ${validText}
     showToast("버킷리스트 항목을 삭제했습니다.");
   };
 
+  const openPrivateCalModal = (dateStr, editItem = null) => {
+    if (!isAdminUnlocked) {
+      showToast("🔒 관리자 로그인 후 개인 일정을 관리할 수 있습니다.");
+      return;
+    }
+    if (editItem) {
+      setEditingPrivateCalId(editItem.id);
+      setPrivateCalForm({
+        title: editItem.title || "",
+        date: editItem.date || dateStr || getTodayStr(),
+        endDate: editItem.endDate || "",
+        time: editItem.time || "",
+        color: editItem.color || "default",
+        highlight: Boolean(editItem.highlight),
+        isAnnual: Boolean(editItem.isAnnual),
+        memo: editItem.memo || "",
+        owner: editItem.owner === "아리나" ? "아리나" : "수혁"
+      });
+    } else {
+      setEditingPrivateCalId(null);
+      setPrivateCalForm({
+        title: "",
+        date: dateStr || scheduleSelectedDate || getTodayStr(),
+        endDate: "",
+        time: "",
+        color: "default",
+        highlight: false,
+        isAnnual: false,
+        memo: "",
+        owner: currentAdminOwner
+      });
+    }
+    setIsPrivateCalModalOpen(true);
+  };
+
+  const stripPrivateMeta = (it) => {
+    const { _bucketDocId, ...rest } = it || {};
+    return rest;
+  };
+
+  const syncPrivateBucketInCloud = async (bucketDocId, allItems) => {
+    if (!user || !db || !bucketDocId) return;
+    const bucketItems = allItems
+      .filter((x) => x._bucketDocId === bucketDocId)
+      .map(stripPrivateMeta);
+    if (bucketItems.length === 0) {
+      await deleteDoc(getDocRef("admin_private_schedules_v1", bucketDocId)).catch(() => {});
+    } else {
+      const parts = String(bucketDocId).split("_");
+      const owner = parts[1] === "아리나" ? "아리나" : "수혁";
+      const year = parts[2] || "misc";
+      await setDoc(getDocRef("admin_private_schedules_v1", bucketDocId), {
+        isYearBucket: true,
+        owner,
+        year,
+        items: bucketItems,
+        updatedAtMs: Date.now()
+      }).catch(() => {});
+    }
+  };
+
+  const handleSavePrivateSchedule = async (e) => {
+    e?.preventDefault?.();
+    if (!isAdminUnlocked) {
+      showToast("🔒 관리자 전용 기능입니다.");
+      return;
+    }
+    const title = String(privateCalForm.title || "").trim();
+    if (!title) {
+      showToast("일정 내용을 입력해 주세요.");
+      return;
+    }
+    const dateVal = String(privateCalForm.date || getTodayStr()).slice(0, 10);
+    const rawEnd = String(privateCalForm.endDate || "").slice(0, 10);
+    const endDateVal = rawEnd && rawEnd > dateVal ? rawEnd : "";
+    const ownerVal = currentAdminOwner;
+    const existing = editingPrivateCalId ? privateSchedules.find((p) => p.id === editingPrivateCalId) : null;
+    const id = existing ? existing.id : `priv-${Date.now()}`;
+    const prevBucketId = existing?._bucketDocId || null;
+    const targetYear = /^\d{4}/.test(dateVal) ? dateVal.slice(0, 4) : "misc";
+    const nextBucketId = prevBucketId ? `bucket_${ownerVal}_${targetYear}` : null;
+    const payload = {
+      ...stripPrivateMeta(existing || {}),
+      id,
+      owner: ownerVal,
+      title,
+      date: dateVal,
+      endDate: endDateVal,
+      time: String(privateCalForm.time || "").trim(),
+      color: privateCalForm.color || "default",
+      highlight: Boolean(privateCalForm.highlight),
+      isAnnual: Boolean(privateCalForm.isAnnual),
+      memo: String(privateCalForm.memo || "").trim(),
+      done: Boolean(existing?.done),
+      updatedAtMs: Date.now()
+    };
+    const statePayload = nextBucketId ? { ...payload, _bucketDocId: nextBucketId } : payload;
+    const nextAll = existing
+      ? privateSchedules.map((x) => (x.id === id ? statePayload : x))
+      : [statePayload, ...privateSchedules];
+    setPrivateSchedules(nextAll);
+    setScheduleSelectedDate(dateVal);
+    setScheduleMonth(dateVal.slice(0, 7));
+    setIsPrivateCalModalOpen(false);
+    setEditingPrivateCalId(null);
+    if (user && db) {
+      if (prevBucketId) {
+        await syncPrivateBucketInCloud(prevBucketId, nextAll);
+        if (nextBucketId && nextBucketId !== prevBucketId) {
+          await syncPrivateBucketInCloud(nextBucketId, nextAll);
+        }
+      } else {
+        await setDoc(getDocRef("admin_private_schedules_v1", id), payload, { merge: true }).catch(() => {});
+      }
+    }
+    showToast(existing ? "✏️ 개인 일정을 수정했습니다." : `🔒 ${ownerVal} 개인 일정에 등록했습니다.`);
+  };
+
+  const handleTogglePrivateScheduleDone = async (item) => {
+    if (!isAdminUnlocked) return;
+    const updated = { ...item, done: !item.done, updatedAtMs: Date.now() };
+    const nextAll = privateSchedules.map((x) => (x.id === item.id ? updated : x));
+    setPrivateSchedules(nextAll);
+    if (user && db) {
+      if (item._bucketDocId) {
+        await syncPrivateBucketInCloud(item._bucketDocId, nextAll);
+      } else {
+        await setDoc(getDocRef("admin_private_schedules_v1", item.id), stripPrivateMeta(updated), { merge: true }).catch(() => {});
+      }
+    }
+  };
+
+  const handleDeletePrivateSchedule = async (id) => {
+    if (!isAdminUnlocked) return;
+    const target = privateSchedules.find((x) => x.id === id);
+    const nextAll = privateSchedules.filter((x) => x.id !== id);
+    setPrivateSchedules(nextAll);
+    if (user && db) {
+      if (target?._bucketDocId) {
+        await syncPrivateBucketInCloud(target._bucketDocId, nextAll);
+      } else {
+        await deleteDoc(getDocRef("admin_private_schedules_v1", id)).catch(() => {});
+      }
+    }
+    showToast("개인 일정을 삭제했습니다.");
+  };
+
+  // ==========================================
+  // 개인 일정 조르테(Jorte) CSV 파싱 · 클라우드 일괄 저장 · 내보내기
+  // ==========================================
+  const parseRfc4180CsvRows = (rawText) => {
+    const text = String(rawText || "").replace(/^\uFEFF/, "");
+    const rows = [];
+    let row = [];
+    let field = "";
+    let inQuotes = false;
+    for (let i = 0; i < text.length; i += 1) {
+      const ch = text[i];
+      if (inQuotes) {
+        if (ch === '"') {
+          if (text[i + 1] === '"') {
+            field += '"';
+            i += 1;
+          } else {
+            inQuotes = false;
+          }
+        } else {
+          field += ch;
+        }
+      } else if (ch === '"') {
+        inQuotes = true;
+      } else if (ch === ",") {
+        row.push(field);
+        field = "";
+      } else if (ch === "\r" || ch === "\n") {
+        if (ch === "\r" && text[i + 1] === "\n") i += 1;
+        row.push(field);
+        field = "";
+        if (row.some((cell) => String(cell).trim() !== "")) {
+          rows.push(row);
+        }
+        row = [];
+      } else {
+        field += ch;
+      }
+    }
+    row.push(field);
+    if (row.some((cell) => String(cell).trim() !== "")) {
+      rows.push(row);
+    }
+    return rows;
+  };
+
+  const normalizeCsvDateStr = (val) => {
+    const s = String(val || "").trim();
+    const m = s.match(/^(\d{4})[\/\-.\s]+(\d{1,2})[\/\-.\s]+(\d{1,2})/);
+    if (!m) return "";
+    return `${m[1]}-${String(Number(m[2])).padStart(2, "0")}-${String(Number(m[3])).padStart(2, "0")}`;
+  };
+
+  const parseJorteCsvToPrivateItems = (rawText, ownerVal) => {
+    const rows = parseRfc4180CsvRows(rawText);
+    if (rows.length < 2) return [];
+    const headers = rows[0].map((h) => String(h || "").trim().toLowerCase());
+    const idxOf = (candidates) => {
+      for (const c of candidates) {
+        const idx = headers.indexOf(c);
+        if (idx >= 0) return idx;
+      }
+      return -1;
+    };
+    const iStart = idxOf(["dtstart", "date", "start_date", "시작일"]);
+    const iEnd = idxOf(["dtend", "enddate", "end_date", "종료일"]);
+    const iTimeStart = idxOf(["time_start", "time", "시작시간"]);
+    const iTimeEnd = idxOf(["time_end", "종료시간"]);
+    const iTitle = idxOf(["title", "subject", "제목", "내용"]);
+    const iContent = idxOf(["content", "memo", "description", "메모"]);
+    const iLocation = idxOf(["location", "장소"]);
+    const iImportance = idxOf(["importance", "중요"]);
+    const iCompletion = idxOf(["completion", "done", "완료"]);
+    const iColor = idxOf(["char_color", "color", "색상"]);
+    const iRrule = idxOf(["rrule"]);
+    const iLunarRrule = idxOf(["lunar_calendar_rrule"]);
+
+    if (iStart < 0 || iTitle < 0) return [];
+    const colorMap = { "1": "rose", "2": "blue", "3": "emerald", "4": "amber", "5": "purple" };
+    const nowMs = Date.now();
+    const parsed = [];
+
+    for (let r = 1; r < rows.length; r += 1) {
+      const cols = rows[r];
+      const dateStr = normalizeCsvDateStr(cols[iStart]);
+      const rawTitle = String(cols[iTitle] || "").trim();
+      if (!dateStr || !rawTitle) continue;
+      const endRaw = iEnd >= 0 ? normalizeCsvDateStr(cols[iEnd]) : "";
+      const endDate = endRaw && endRaw > dateStr ? endRaw : "";
+      const tStart = iTimeStart >= 0 ? String(cols[iTimeStart] || "").trim() : "";
+      const tEnd = iTimeEnd >= 0 ? String(cols[iTimeEnd] || "").trim() : "";
+      const timeStr = tStart && tEnd ? `${tStart}~${tEnd}` : (tStart || tEnd || "");
+      const hasMultilineTitle = /\r?\n/.test(rawTitle);
+      const title = rawTitle.replace(/\r?\n+/g, " / ").replace(/\s{2,}/g, " ").trim();
+      const contentVal = iContent >= 0 ? String(cols[iContent] || "").trim() : "";
+      const locVal = iLocation >= 0 ? String(cols[iLocation] || "").trim() : "";
+      const memoParts = [];
+      if (hasMultilineTitle && !contentVal) memoParts.push(rawTitle);
+      if (contentVal) memoParts.push(contentVal);
+      if (locVal) memoParts.push(`📍 ${locVal}`);
+      const importance = iImportance >= 0 && String(cols[iImportance] || "").trim() === "1";
+      const completion = iCompletion >= 0 && String(cols[iCompletion] || "").trim() === "1";
+      const rawColor = iColor >= 0 ? String(cols[iColor] || "").trim() : "";
+      const color = importance
+        ? "rose"
+        : (colorMap[rawColor] || (["rose", "blue", "emerald", "amber", "purple"].includes(rawColor) ? rawColor : "default"));
+      const rruleStr = `${iRrule >= 0 ? cols[iRrule] || "" : ""} ${iLunarRrule >= 0 ? cols[iLunarRrule] || "" : ""}`;
+      const isAnnual = /FREQ=YEARLY/i.test(rruleStr);
+      parsed.push({
+        id: `priv-csv-${ownerVal === "아리나" ? "ar" : "sh"}-${dateStr.replace(/-/g, "")}-${r}-${(nowMs % 100000)}`,
+        owner: ownerVal,
+        title,
+        date: dateStr,
+        endDate,
+        time: timeStr,
+        color,
+        highlight: importance,
+        isAnnual,
+        memo: memoParts.join("\n"),
+        done: completion,
+        updatedAtMs: nowMs
+      });
+    }
+    return parsed;
+  };
+
+  const handleSelectPrivateCalCsvFile = (e) => {
+    const file = e?.target?.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const text = String(reader.result || "");
+        const parsed = parseJorteCsvToPrivateItems(text, currentAdminOwner);
+        if (parsed.length === 0) {
+          showToast("인식된 일정이 없습니다. 조르테 CSV(dtstart, title 포함) 파일인지 확인해 주세요.");
+          setPrivateCalCsvPreview(null);
+          return;
+        }
+        const existingKeys = new Set(
+          privateSchedules
+            .filter((x) => (x.owner || "수혁") === currentAdminOwner)
+            .map((x) => `${x.date || ""}|${x.endDate || ""}|${String(x.title || "").trim()}`)
+        );
+        const seenInFile = new Set();
+        const freshItems = [];
+        let dupCount = 0;
+        parsed.forEach((it) => {
+          const key = `${it.date}|${it.endDate || ""}|${it.title}`;
+          if (existingKeys.has(key) || seenInFile.has(key)) {
+            dupCount += 1;
+          } else {
+            seenInFile.add(key);
+            freshItems.push(it);
+          }
+        });
+        const sortedDates = parsed.map((x) => x.date).sort();
+        setPrivateCalCsvPreview({
+          fileName: file.name,
+          owner: currentAdminOwner,
+          totalCount: parsed.length,
+          freshCount: freshItems.length,
+          dupCount,
+          minDate: sortedDates[0] || "",
+          maxDate: sortedDates[sortedDates.length - 1] || "",
+          items: freshItems
+        });
+      } catch (err) {
+        showToast("CSV 파일을 읽는 중 오류가 발생했습니다.");
+        setPrivateCalCsvPreview(null);
+      }
+    };
+    reader.readAsText(file, "UTF-8");
+    if (e?.target) e.target.value = "";
+  };
+
+  const handleImportPrivateCalCsvToCloud = async () => {
+    if (!isAdminUnlocked || !privateCalCsvPreview || privateCalCsvBusy) return;
+    if (privateCalCsvPreview.items.length === 0) {
+      showToast("추가할 신규 일정이 없습니다. (모두 이미 등록됨)");
+      return;
+    }
+    setPrivateCalCsvBusy(true);
+    try {
+      const targetOwner = privateCalCsvPreview.owner === "아리나" ? "아리나" : "수혁";
+      const touchedBucketIds = new Set();
+      const newHydrated = privateCalCsvPreview.items.map((it) => {
+        const yr = /^\d{4}/.test(it.date) ? it.date.slice(0, 4) : "misc";
+        const bId = `bucket_${targetOwner}_${yr}`;
+        touchedBucketIds.add(bId);
+        return { ...it, owner: targetOwner, _bucketDocId: bId };
+      });
+      const nextAll = [...privateSchedules, ...newHydrated];
+      setPrivateSchedules(nextAll);
+
+      if (user && db) {
+        const bucketList = Array.from(touchedBucketIds);
+        for (let i = 0; i < bucketList.length; i += 400) {
+          const batch = writeBatch(db);
+          bucketList.slice(i, i + 400).forEach((bId) => {
+            const parts = bId.split("_");
+            const year = parts[2] || "misc";
+            const itemsInBucket = nextAll
+              .filter((x) => x._bucketDocId === bId)
+              .map(stripPrivateMeta);
+            batch.set(getDocRef("admin_private_schedules_v1", bId), {
+              isYearBucket: true,
+              owner: targetOwner,
+              year,
+              items: itemsInBucket,
+              updatedAtMs: Date.now()
+            });
+          });
+          await batch.commit();
+        }
+      }
+
+      showToast(`☁️ ${targetOwner} 클라우드에 ${newHydrated.length.toLocaleString()}건 저장 완료!`);
+      setPrivateCalCsvPreview(null);
+      setIsPrivateCalCsvModalOpen(false);
+    } catch (err) {
+      showToast("클라우드 저장 중 오류가 발생했습니다. 네트워크 연결을 확인해 주세요.");
+    } finally {
+      setPrivateCalCsvBusy(false);
+    }
+  };
+
+  const handleExportPrivateCalCsv = () => {
+    if (!isAdminUnlocked) return;
+    const ownerItems = privateSchedules
+      .filter((x) => (x.owner || "수혁") === currentAdminOwner)
+      .sort((a, b) => String(a.date || "").localeCompare(String(b.date || "")));
+    if (ownerItems.length === 0) {
+      showToast(`${currentAdminOwner} 개인 일정에 내보낼 데이터가 없습니다.`);
+      return;
+    }
+    const escCsv = (val) => {
+      const s = String(val ?? "");
+      return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    const toJorteDate = (dStr) => {
+      const m = String(dStr || "").match(/^(\d{4})-(\d{2})-(\d{2})/);
+      return m ? `${m[1]}/${Number(m[2])}/${Number(m[3])}` : String(dStr || "");
+    };
+    const revColor = { rose: "1", blue: "2", emerald: "3", amber: "4", purple: "5" };
+    const header = [
+      "dtstart", "dtend", "time_start", "time_end", "title",
+      "rrule", "content", "importance", "completion", "char_color"
+    ];
+    const lines = [header.join(",")];
+    ownerItems.forEach((it) => {
+      const dStart = toJorteDate(it.date);
+      const dEnd = toJorteDate(it.endDate || it.date);
+      const tParts = String(it.time || "").split("~").map((s) => s.trim());
+      const tStart = tParts[0] || "";
+      const tEnd = tParts[1] || "";
+      lines.push([
+        dStart,
+        dEnd,
+        tStart,
+        tEnd,
+        it.title || "",
+        it.isAnnual ? "FREQ=YEARLY" : "",
+        it.memo || "",
+        it.highlight ? "1" : "0",
+        it.done ? "1" : "0",
+        revColor[it.color] || "0"
+      ].map(escCsv).join(","));
+    });
+    const blob = new Blob(["\uFEFF" + lines.join("\r\n")], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `개인일정_${currentAdminOwner}_${getTodayStr().replace(/-/g, "")}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    showToast(`📤 ${currentAdminOwner} 일정 ${ownerItems.length.toLocaleString()}건을 CSV로 내보냈습니다.`);
+  };
+
+  const handleClearOwnerPrivateSchedules = async () => {
+    if (!isAdminUnlocked || privateCalCsvBusy) return;
+    const ownerItems = privateSchedules.filter((x) => (x.owner || "수혁") === currentAdminOwner);
+    if (ownerItems.length === 0) {
+      showToast(`${currentAdminOwner} 개인 일정이 이미 비어 있습니다.`);
+      return;
+    }
+    if (!window.confirm(`🔒 ${currentAdminOwner} 개인 일정 ${ownerItems.length.toLocaleString()}건을 클라우드에서 모두 삭제할까요?\n(먼저 CSV 내보내기로 백업하는 것을 권장합니다.)`)) {
+      return;
+    }
+    setPrivateCalCsvBusy(true);
+    try {
+      const docIdsToDelete = new Set();
+      ownerItems.forEach((it) => {
+        docIdsToDelete.add(it._bucketDocId || it.id);
+      });
+      setPrivateSchedules((prev) => prev.filter((x) => (x.owner || "수혁") !== currentAdminOwner));
+      if (user && db) {
+        const ids = Array.from(docIdsToDelete);
+        for (let i = 0; i < ids.length; i += 400) {
+          const batch = writeBatch(db);
+          ids.slice(i, i + 400).forEach((docId) => {
+            batch.delete(getDocRef("admin_private_schedules_v1", docId));
+          });
+          await batch.commit();
+        }
+      }
+      setPrivateCalCsvPreview(null);
+      showToast(`🗑️ ${currentAdminOwner} 개인 일정을 모두 비웠습니다.`);
+    } catch (err) {
+      showToast("일정 비우기 중 오류가 발생했습니다.");
+    } finally {
+      setPrivateCalCsvBusy(false);
+    }
+  };
+
   useEffect(() => {
     if (activeTab !== "pages") {
       setIsPageVisualEditMode(false);
@@ -10519,7 +11202,7 @@ ${validText}
   const handleRestoreAllDeleted = async () => {
     if (!requireEditorAccess()) return;
     setDeletedIds([]);
-    localStorage.removeItem("kim_family_deleted_ids");
+    try { localStorage.removeItem("kim_family_deleted_ids"); } catch (e) {}
     if (user && db) {
       try {
         await setDoc(getDocRef("family_meta_v4", "deleted_tracker"), { ids: [] });
@@ -10583,6 +11266,8 @@ ${validText}
       !isDreamLinksModalOpen &&
       !isPatchModalOpen &&
       !isBucketModalOpen &&
+      !isPrivateCalModalOpen &&
+      !isPrivateCalCsvModalOpen &&
       !isScheduleModalOpen &&
       !isMealModalOpen &&
       !isFridgeModalOpen &&
@@ -10620,6 +11305,8 @@ ${validText}
         setIsDreamLinksModalOpen(false);
         setIsPatchModalOpen(false);
         setIsBucketModalOpen(false);
+        setIsPrivateCalModalOpen(false);
+        setIsPrivateCalCsvModalOpen(false);
         setIsScheduleModalOpen(false);
         setIsMealModalOpen(false);
         setIsFridgeModalOpen(false);
@@ -10636,7 +11323,7 @@ ${validText}
     };
     window.addEventListener("keydown", onEsc);
     return () => window.removeEventListener("keydown", onEsc);
-  }, [isQuickFabOpen, isRoutineModalOpen, isActivityModalOpen, isEditorUnlockModalOpen, isMealCopyModalOpen, diaryExportPreviewUrl, diaryLightboxUrl, isWeatherModalOpen, liveActivityPopup, activityEditModal, zipImportPicker, magazineMonth, isSettingsOpen, isHeroPhotoModalOpen, isPageModalOpen, pageMenuTargetId, isPagePasteModalOpen, activeTableTaskModal, isDreamLinksModalOpen, isPatchModalOpen, isBucketModalOpen, isScheduleModalOpen, isMealModalOpen, isFridgeModalOpen, isNoticeModalOpen, isRecipeModalOpen, isDaycareModalOpen, isReceiptModalOpen, isInventoryExportOpen, stockInItem, quickLogRecipe, cookingConfirmModal, quickFridgeItem]);
+  }, [isQuickFabOpen, isRoutineModalOpen, isActivityModalOpen, isEditorUnlockModalOpen, isMealCopyModalOpen, diaryExportPreviewUrl, diaryLightboxUrl, isWeatherModalOpen, liveActivityPopup, activityEditModal, zipImportPicker, magazineMonth, isSettingsOpen, isHeroPhotoModalOpen, isPageModalOpen, pageMenuTargetId, isPagePasteModalOpen, activeTableTaskModal, isDreamLinksModalOpen, isPatchModalOpen, isBucketModalOpen, isPrivateCalModalOpen, isPrivateCalCsvModalOpen, isScheduleModalOpen, isMealModalOpen, isFridgeModalOpen, isNoticeModalOpen, isRecipeModalOpen, isDaycareModalOpen, isReceiptModalOpen, isInventoryExportOpen, stockInItem, quickLogRecipe, cookingConfirmModal, quickFridgeItem]);
 
   // ==========================================
   // 모바일·브라우저 뒤로가기 이전 화면 이동 (Chrome User-Gesture History API + URL 해시)
@@ -10673,6 +11360,8 @@ ${validText}
     isMoreNavOpen ||
     isQuickFabOpen ||
     isBucketModalOpen ||
+    isPrivateCalModalOpen ||
+    isPrivateCalCsvModalOpen ||
     isScheduleModalOpen ||
     isMealModalOpen ||
     isFridgeModalOpen ||
@@ -10711,6 +11400,8 @@ ${validText}
       setIsMoreNavOpen(false);
       setIsQuickFabOpen(false);
       setIsBucketModalOpen(false);
+      setIsPrivateCalModalOpen(false);
+      setIsPrivateCalCsvModalOpen(false);
       setIsScheduleModalOpen(false);
       setIsMealModalOpen(false);
       setIsFridgeModalOpen(false);
@@ -10911,6 +11602,8 @@ ${validText}
     if (typeof document === "undefined") return;
     const shouldLock = Boolean(
       isBucketModalOpen ||
+      isPrivateCalModalOpen ||
+      isPrivateCalCsvModalOpen ||
       isPatchModalOpen ||
       isSettingsOpen ||
       isScheduleModalOpen ||
@@ -10930,6 +11623,8 @@ ${validText}
     };
   }, [
     isBucketModalOpen,
+    isPrivateCalModalOpen,
+    isPrivateCalCsvModalOpen,
     isPatchModalOpen,
     isSettingsOpen,
     isScheduleModalOpen,
@@ -14214,7 +14909,7 @@ ${validText}
           </div>
 
 
-          <div className="grid grid-cols-3 gap-1.5 bg-stone-100 p-1 rounded-2xl">
+          <div className="grid grid-cols-3 gap-1 bg-stone-100 p-1 rounded-2xl">
             <button
               type="button"
               onClick={() => setScheduleSubTab("calendar")}
@@ -14303,315 +14998,638 @@ ${validText}
 
           {scheduleSubTab === "calendar" && (
             <>
-          {/* [1순위 최상단 배치] 월간 가족 일정 캘린더 */}
-          <div className="bg-white p-3.5 rounded-2xl border border-stone-200 shadow-sm space-y-3">
-            <div className="flex items-center justify-between">
-              <button
-                onClick={() => {
-                  const prevM = shiftYearMonth(scheduleMonth, -1);
-                  setScheduleMonth(prevM);
-                  setScheduleSelectedDate(`${prevM}-01`);
-                }}
-                className="p-1.5 rounded-xl bg-stone-100 hover:bg-stone-200"
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </button>
-              <div className="flex items-center gap-2">
-                <input
-                  type="month"
-                  value={scheduleMonth}
-                  onChange={(e) => {
-                    if (e.target.value) {
-                      setScheduleMonth(e.target.value);
-                      setScheduleSelectedDate(`${e.target.value}-01`);
-                    }
-                  }}
-                  className="text-[15.5px] font-black text-stone-900 bg-transparent focus:outline-none"
-                />
-                <button
-                  onClick={() => {
-                    const today = getTodayStr();
-                    setScheduleMonth(today.slice(0, 7));
-                    setScheduleSelectedDate(today);
-                  }}
-                  className="px-2 py-0.5 rounded-full text-[11.5px] font-extrabold bg-stone-100 text-stone-700 whitespace-nowrap shrink-0 hover:bg-stone-200"
-                >
-                  오늘
-                </button>
-              </div>
-              <button
-                onClick={() => {
-                  const nextM = shiftYearMonth(scheduleMonth, 1);
-                  setScheduleMonth(nextM);
-                  setScheduleSelectedDate(`${nextM}-01`);
-                }}
-                className="p-1.5 rounded-xl bg-stone-100 hover:bg-stone-200"
-              >
-                <ChevronRight className="w-4 h-4" />
-              </button>
-            </div>
+          {/* [1순위 최상단 배치] 통합 조르테 스타일 달력 (가족 일정 + 내 개인일정·다이어리) */}
+          {(() => {
+            const [uYear, uMonth] = scheduleMonth.split("-").map(Number);
+            const firstDayOfMonth = new Date(uYear, uMonth - 1, 1);
+            const startWeekday = firstDayOfMonth.getDay();
+            const gridStart = new Date(uYear, uMonth - 1, 1 - startWeekday);
+            const todayStr = getTodayStr();
+            const effectiveScope = isAdminUnlocked ? scheduleCalScope : "family";
+            const myPrivateItems = isAdminUnlocked
+              ? privateSchedules.filter((it) => (it.owner || "수혁") === currentAdminOwner)
+              : [];
 
+            const getMyPrivateForDate = (dateStr) => {
+              if (!isAdminUnlocked || effectiveScope === "family") return [];
+              const mmdd = dateStr.slice(5, 10);
+              return myPrivateItems
+                .filter((it) => {
+                  if (it.date === dateStr) return true;
+                  if (it.endDate && it.date && it.date <= dateStr && dateStr <= it.endDate) return true;
+                  if (it.isAnnual && String(it.date || "").slice(5, 10) === mmdd) return true;
+                  return false;
+                })
+                .sort((a, b) => String(a.time || "99:99").localeCompare(String(b.time || "99:99")));
+            };
 
-            <div className="flex gap-1 overflow-x-auto pb-1">
-              {["전체", ...SCHEDULE_CATEGORIES].map((cat) => (
-                <button
-                  key={cat}
-                  onClick={() => setScheduleCatFilter(cat)}
-                  className={`px-2.5 py-1 rounded-full text-[11.5px] font-extrabold shrink-0 border ${
-                    scheduleCatFilter === cat
-                      ? "bg-pink-600 text-white border-pink-600"
-                      : "bg-stone-50 text-stone-600 border-stone-200"
-                  }`}
-                >
-                  {cat}
-                </button>
-              ))}
-            </div>
+            const getFamilyForDate = (dateStr) => {
+              if (effectiveScope === "private") return [];
+              return getSchedulesForDate(dateStr, scheduleMemberFilter, scheduleCatFilter);
+            };
 
+            const cells = Array.from({ length: 42 }, (_, idx) => {
+              const d = new Date(gridStart.getFullYear(), gridStart.getMonth(), gridStart.getDate() + idx);
+              const dateStr = formatDate(d);
+              const inCurrentMonth = d.getMonth() === uMonth - 1;
+              const dow = d.getDay();
+              const lunarLbl = getLunarFiveDayLabel(d);
+              const famEvs = getFamilyForDate(dateStr).map((ev) => ({ ...ev, _isFamily: true }));
+              const privEvs = getMyPrivateForDate(dateStr).map((ev) => ({ ...ev, _isFamily: false }));
+              const combined = [...famEvs, ...privEvs];
+              return { d, dateStr, dayNum: d.getDate(), inCurrentMonth, dow, lunarLbl, combined };
+            });
 
-            <div className="grid grid-cols-7 gap-1 text-center text-[11.5px] font-extrabold text-stone-400">
-              {["일", "월", "화", "수", "목", "금", "토"].map((d) => (
-                <div key={d}>{d}</div>
-              ))}
-            </div>
+            const selectedFamilyEvents = getFamilyForDate(scheduleSelectedDate);
+            const selectedPrivateEvents = getMyPrivateForDate(scheduleSelectedDate);
 
+            const uq = privateCalSearchQuery.trim().toLowerCase();
+            const unifiedSearchMatches = uq
+              ? [
+                  ...(effectiveScope !== "private"
+                    ? familySchedules
+                        .filter(
+                          (it) =>
+                            String(it.title || "").toLowerCase().includes(uq) ||
+                            String(it.memo || "").toLowerCase().includes(uq) ||
+                            String(it.date || "").includes(uq)
+                        )
+                        .map((it) => ({ ...it, _isFamily: true }))
+                    : []),
+                  ...(isAdminUnlocked && effectiveScope !== "family"
+                    ? myPrivateItems
+                        .filter(
+                          (it) =>
+                            String(it.title || "").toLowerCase().includes(uq) ||
+                            String(it.memo || "").toLowerCase().includes(uq) ||
+                            String(it.date || "").includes(uq)
+                        )
+                        .map((it) => ({ ...it, _isFamily: false }))
+                    : [])
+                ]
+                  .sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")))
+                  .slice(0, 60)
+              : [];
 
-            <div className="grid grid-cols-7 gap-1">
-              {Array.from(
-                { length: new Date(`${scheduleMonth}-01T00:00:00`).getDay() || 0 },
-                (_, idx) => (
-                  <div key={`empty-${idx}`} className="min-h-[54px]" />
-                )
-              )}
-              {Array.from({ length: getDaysInMonth(scheduleMonth) }, (_, i) => {
-                const dayNum = String(i + 1).padStart(2, "0");
-                const dateStr = `${scheduleMonth}-${dayNum}`;
-                const daySchedules = getSchedulesForDate(
-                  dateStr,
-                  scheduleMemberFilter,
-                  scheduleCatFilter
-                );
-                const isSel = scheduleSelectedDate === dateStr;
-                const isToday = getTodayStr() === dateStr;
-
-
-                return (
-                  <button
-                    key={dateStr}
-                    onClick={() => setScheduleSelectedDate(dateStr)}
-                    className={`p-1 rounded-xl border text-left min-h-[56px] transition flex flex-col justify-between overflow-hidden ${
-                      isSel
-                        ? "bg-stone-900 text-white border-stone-900 shadow-sm"
-                        : isToday
-                        ? "bg-amber-50 text-stone-900 border-amber-400"
-                        : "bg-stone-50 text-stone-700 border-stone-200 hover:bg-stone-100"
-                    }`}
-                  >
-                    <div className="flex items-center justify-between gap-0.5 w-full">
-                      <span className="text-[11.5px] font-black shrink-0">{i + 1}</span>
-                      {isToday && (
-                        <span className="text-[8px] font-extrabold px-1 rounded bg-amber-400 text-stone-900 whitespace-nowrap shrink-0 leading-tight">
-                          오늘
-                        </span>
-                      )}
-                    </div>
-                    <div className="space-y-0.5 w-full mt-0.5">
-                      {daySchedules.slice(0, 2).map((ev) => (
-                        <div
-                          key={ev.id}
-                          className={`text-[8px] font-extrabold px-1 py-0.2 rounded truncate ${
-                            ev.category === "기념일/생일"
-                              ? isSel
-                                ? "bg-pink-400 text-stone-900"
-                                : "bg-pink-100 text-pink-800"
-                              : ev.done
-                              ? "bg-stone-200 text-stone-400 line-through"
-                              : isSel
-                              ? "bg-amber-400 text-stone-900"
-                              : "bg-indigo-100 text-indigo-800"
-                          }`}
+            return (
+              <div className="space-y-3">
+                <div className="bg-white rounded-2xl border border-stone-200 shadow-sm overflow-hidden">
+                  {/* 상단 통합 컨트롤 바 */}
+                  <div className="px-3 py-2.5 border-b border-stone-200 space-y-2">
+                    <div className="flex items-center justify-between gap-1.5">
+                      <div className="flex items-center gap-0.5 min-w-0">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const prevM = shiftYearMonth(scheduleMonth, -1);
+                            setScheduleMonth(prevM);
+                            setScheduleSelectedDate(`${prevM}-01`);
+                          }}
+                          className="p-1 rounded-lg hover:bg-stone-100 text-stone-600"
+                          aria-label="이전 달"
                         >
-                          {ev.title}
-                        </div>
-                      ))}
-                      {daySchedules.length > 2 && (
-                        <div className="text-[8px] font-bold opacity-75 text-center">
-                          +{daySchedules.length - 2}건
-                        </div>
-                      )}
+                          <ChevronLeft className="w-4 h-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const t = getTodayStr();
+                            setScheduleMonth(t.slice(0, 7));
+                            setScheduleSelectedDate(t);
+                          }}
+                          className="text-left leading-none whitespace-nowrap px-1"
+                          title="오늘로 이동"
+                        >
+                          <span className="text-[15.5px] font-black text-stone-800">{uYear}</span>
+                          <span className="text-[11px] font-bold text-stone-500 mr-1">년</span>
+                          <span className="text-[19px] font-black text-stone-900">{uMonth}</span>
+                          <span className="text-[11px] font-bold text-stone-500">월</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const nextM = shiftYearMonth(scheduleMonth, 1);
+                            setScheduleMonth(nextM);
+                            setScheduleSelectedDate(`${nextM}-01`);
+                          }}
+                          className="p-1 rounded-lg hover:bg-stone-100 text-stone-600"
+                          aria-label="다음 달"
+                        >
+                          <ChevronRight className="w-4 h-4" />
+                        </button>
+                      </div>
+
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setPrivateCalSearchOpen((v) => !v);
+                            if (privateCalSearchOpen) setPrivateCalSearchQuery("");
+                          }}
+                          className={`p-1.5 rounded-xl border ${
+                            privateCalSearchOpen ? "bg-stone-900 text-white border-stone-900" : "bg-stone-50 text-stone-600 border-stone-200"
+                          }`}
+                          title="일정 검색"
+                          aria-label="일정 검색"
+                        >
+                          <Search className="w-3.5 h-3.5" />
+                        </button>
+                        {isAdminUnlocked && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setPrivateCalCsvPreview(null);
+                              setIsPrivateCalCsvModalOpen(true);
+                            }}
+                            className="px-2 py-1.5 rounded-xl border border-stone-200 bg-stone-50 hover:bg-stone-100 text-stone-700 text-[11px] font-extrabold whitespace-nowrap flex items-center gap-0.5"
+                            title={`${currentAdminOwner} 개인 일정 CSV 클라우드 연동`}
+                          >
+                            <CloudUpload className="w-3.5 h-3.5" />
+                            <span>CSV</span>
+                          </button>
+                        )}
+                      </div>
                     </div>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
 
-
-          {/* [2순위 배치] 선택한 날짜의 상세 일정 관리 */}
-          <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-sm space-y-2.5">
-            <div className="flex items-center justify-between">
-              <div className="text-[13.5px] font-black text-stone-900">
-                📌 {scheduleSelectedDate} ({getDayName(scheduleSelectedDate)}) 상세 일정
-              </div>
-              <button
-                onClick={() => {
-                  setEditingSchedule(null);
-                  setScheduleForm({
-                    title: "",
-                    date: scheduleSelectedDate,
-                    category: "할일(To-Do)",
-                    members: ["수혁", "아리나"],
-                    isAnnual: false,
-                    showDday: false,
-                    hasOriginYear: false,
-                    memo: ""
-                  });
-                  setIsScheduleModalOpen(true);
-                }}
-                className="text-[12.5px] font-extrabold text-pink-600 hover:underline"
-              >
-                + 이 날짜에 추가
-              </button>
-            </div>
-
-
-            {getSchedulesForDate(scheduleSelectedDate, scheduleMemberFilter, scheduleCatFilter)
-              .length === 0 ? (
-              <div className="text-[13.5px] text-stone-400 py-4 text-center bg-stone-50 rounded-xl border border-dashed border-stone-200">
-                이 날짜에 등록된 일정이나 기념일이 없습니다.
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {getSchedulesForDate(
-                  scheduleSelectedDate,
-                  scheduleMemberFilter,
-                  scheduleCatFilter
-                ).map((ev) => {
-                  const dInfo = calculateScheduleDday(ev);
-                  return (
-                    <div
-                      key={ev.id}
-                      className={`p-3 rounded-xl border flex flex-col gap-1.5 ${
-                        ev.category === "기념일/생일"
-                          ? "bg-pink-50/60 border-pink-200"
-                          : ev.done
-                          ? "bg-stone-100 border-stone-200 opacity-70"
-                          : "bg-stone-50 border-stone-200"
-                      }`}
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex flex-wrap items-center gap-1">
-                          <span className="px-2 py-0.5 rounded-md text-[11.5px] font-extrabold bg-white border border-stone-200 text-stone-700">
-                            {ev.category}
-                          </span>
-                          {ev.isAnnual && (
-                            <span className="px-2 py-0.5 rounded-md text-[11.5px] font-extrabold bg-pink-600 text-white">
-                              🔄 매년 반복
-                            </span>
-                          )}
-                          <span className="px-2 py-0.5 rounded-md text-[11.5px] font-extrabold bg-amber-100 text-amber-900">
-                            {dInfo.dDayText}
-                          </span>
-                          {dInfo.elapsedDays !== null && (
-                            <span className="px-2 py-0.5 rounded-md text-[11.5px] font-extrabold bg-emerald-100 text-emerald-800">
-                              D+{dInfo.elapsedDays.toLocaleString()}일째
-                            </span>
-                          )}
-                          {toSafeArray(ev.members).map((mId) => {
-                            const info = FAMILY_MEMBERS.find((f) => f.id === mId);
-                            return info ? (
-                              <span
-                                key={mId}
-                                className={`px-1.5 py-0.5 rounded text-[11.5px] font-bold border ${info.color}`}
-                              >
-                                <span className="inline-flex items-center gap-1"><MemberAvatar member={info} size="sm" /><span>{info.name}</span></span>
-                              </span>
-                            ) : null;
-                          })}
-                        </div>
-
-
-                        <div className="flex items-center gap-1 shrink-0">
-                          {ev.category !== "기념일/생일" && (
+                    {/* 관리자 전용 범위 필터 (전체 / 가족 / 내 일정·다이어리) */}
+                    {isAdminUnlocked && (
+                      <div className="flex items-center justify-between gap-1.5">
+                        <div className="inline-flex items-center bg-stone-100 p-0.5 rounded-xl">
+                          {[
+                            { id: "all", label: "전체" },
+                            { id: "family", label: "🏠 가족" },
+                            { id: "private", label: `🔒 ${currentAdminOwner}만` }
+                          ].map((sc) => (
                             <button
-                              onClick={() => handleToggleScheduleDone(ev)}
-                              className={`px-2 py-0.5 rounded-lg text-[11.5px] font-extrabold border ${
-                                ev.done
-                                  ? "bg-emerald-600 text-white border-emerald-600"
-                                  : "bg-white text-stone-600 border-stone-300"
+                              key={sc.id}
+                              type="button"
+                              onClick={() => setScheduleCalScope(sc.id)}
+                              className={`px-2.5 py-1 rounded-lg text-[11px] font-extrabold whitespace-nowrap transition ${
+                                scheduleCalScope === sc.id ? "bg-stone-900 text-white shadow-2xs" : "text-stone-500"
                               }`}
                             >
-                              {ev.done ? "✓ 완료" : "완료체크"}
+                              {sc.label}
+                            </button>
+                          ))}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSwitchAdminPinInput("");
+                            setIsEditorUnlockModalOpen(true);
+                          }}
+                          className="text-[10.5px] font-extrabold text-stone-400 hover:text-stone-700 whitespace-nowrap"
+                          title="관리자 계정 전환"
+                        >
+                          👑 {currentAdminOwner} ▾
+                        </button>
+                      </div>
+                    )}
+
+                    {/* 카테고리 필터 (가족 일정 포함 시) */}
+                    {effectiveScope !== "private" && (
+                      <div className="flex gap-1 overflow-x-auto pb-0.5">
+                        {["전체", ...SCHEDULE_CATEGORIES].map((cat) => (
+                          <button
+                            key={cat}
+                            type="button"
+                            onClick={() => setScheduleCatFilter(cat)}
+                            className={`px-2 py-0.5 rounded-full text-[11px] font-extrabold shrink-0 border ${
+                              scheduleCatFilter === cat
+                                ? "bg-pink-600 text-white border-pink-600"
+                                : "bg-stone-50 text-stone-600 border-stone-200"
+                            }`}
+                          >
+                            {cat}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* 통합 검색창 */}
+                    {privateCalSearchOpen && (
+                      <div className="space-y-1.5">
+                        <div className="relative">
+                          <input
+                            type="text"
+                            autoFocus
+                            value={privateCalSearchQuery}
+                            onChange={(e) => setPrivateCalSearchQuery(e.target.value)}
+                            onKeyDown={(e) => { if (e.key === "Escape") setPrivateCalSearchQuery(""); }}
+                            placeholder={isAdminUnlocked ? `🔍 가족 · ${currentAdminOwner} 개인 일정 검색...` : "🔍 가족 일정 검색..."}
+                            className="w-full px-3 py-1.5 pr-8 rounded-xl border border-stone-200 bg-stone-50 text-[12px] font-bold"
+                          />
+                          {privateCalSearchQuery && (
+                            <button
+                              type="button"
+                              onClick={() => setPrivateCalSearchQuery("")}
+                              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-700"
+                            >
+                              <X className="w-3.5 h-3.5" />
                             </button>
                           )}
-                          <button
-                            onClick={() => {
-                              setEditingSchedule(ev);
-                              setScheduleForm({
-                                title: ev.title,
-                                date: ev.date,
-                                category: ev.category,
-                                members: toSafeArray(ev.members),
-                                isAnnual: Boolean(ev.isAnnual),
-                                showDday: Boolean(ev.showDday),
-                                hasOriginYear: Boolean(ev.hasOriginYear),
-                                memo: ev.memo || "",
-                                attachments: Array.isArray(ev.attachments) ? ev.attachments : []
-                              });
-                              setIsScheduleModalOpen(true);
-                            }}
-                            className="p-1 rounded-lg hover:bg-stone-200 text-stone-500"
-                          >
-                            <Edit2 className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            onClick={() => handleDeleteSchedule(ev)}
-                            className="p-1 rounded-lg hover:bg-red-100 text-red-500"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
                         </div>
+                        {uq && (
+                          <div className="bg-stone-50 border border-stone-200 rounded-xl divide-y divide-stone-200/70 max-h-44 overflow-y-auto">
+                            {unifiedSearchMatches.length === 0 ? (
+                              <div className="py-3 text-center text-[11.5px] font-bold text-stone-400">검색 결과가 없습니다.</div>
+                            ) : (
+                              unifiedSearchMatches.map((it) => (
+                                <button
+                                  key={`${it._isFamily ? "f" : "p"}-${it.id}`}
+                                  type="button"
+                                  onClick={() => {
+                                    setScheduleSelectedDate(it.date);
+                                    setScheduleMonth(String(it.date || "").slice(0, 7));
+                                    setPrivateCalSearchOpen(false);
+                                    setPrivateCalSearchQuery("");
+                                  }}
+                                  className="w-full text-left px-2.5 py-1.5 hover:bg-white flex items-center justify-between gap-2 text-[12px]"
+                                >
+                                  <span className="font-bold text-stone-800 truncate">
+                                    {it._isFamily ? "🏠 " : "🔒 "}{it.time ? `${it.time} ` : ""}{it.title}
+                                  </span>
+                                  <span className="text-[11px] font-bold text-stone-400 shrink-0">{it.date}</span>
+                                </button>
+                              ))
+                            )}
+                          </div>
+                        )}
                       </div>
+                    )}
+                  </div>
 
-
+                  {/* 조르테 스타일 요일 헤더 + 6주 풀그리드 */}
+                  <div className="grid grid-cols-7 text-center text-[11.5px] font-black text-white">
+                    {["일", "월", "화", "수", "목", "금", "토"].map((dayLbl, idx) => (
                       <div
-                        className={`text-[15.5px] font-black break-keep ${
-                          ev.done ? "line-through text-stone-400" : "text-stone-900"
-                        }`}
+                        key={dayLbl}
+                        className="py-1"
+                        style={{
+                          backgroundColor: idx === 0 ? "#966B6B" : idx === 6 ? "#5C7899" : "#7A7A7A"
+                        }}
                       >
-                        {ev.title}
+                        {dayLbl}
                       </div>
-                      {ev.memo && <div className="text-[12.5px] text-stone-600 line-clamp-2">💬 {ev.memo}</div>}
-                      {Array.isArray(ev.attachments) && ev.attachments.length > 0 && (
-                        <div className="flex flex-wrap gap-1 pt-0.5">
-                          {ev.attachments.map((att) => {
-                            const isImg = String(att.mimeType || "").startsWith("image/") || /^data:image\//.test(String(att.dataUrl || ""));
+                    ))}
+                  </div>
+                  <div className="grid grid-cols-7 border-t border-stone-200/80">
+                    {cells.map((cell) => {
+                      const isToday = cell.dateStr === todayStr;
+                      const isSelected = cell.dateStr === scheduleSelectedDate;
+                      const cellBg = !cell.inCurrentMonth
+                        ? "bg-stone-100/75"
+                        : cell.dow === 0
+                        ? "bg-rose-50/45"
+                        : cell.dow === 6
+                        ? "bg-sky-50/45"
+                        : "bg-white";
+                      const numColor = !cell.inCurrentMonth
+                        ? "text-stone-400"
+                        : cell.dow === 0
+                        ? "text-rose-600"
+                        : cell.dow === 6
+                        ? "text-sky-600"
+                        : "text-stone-800";
+
+                      return (
+                        <button
+                          key={cell.dateStr}
+                          type="button"
+                          onClick={() => {
+                            if (scheduleSelectedDate === cell.dateStr) {
+                              if (isAdminUnlocked && effectiveScope !== "family") {
+                                openPrivateCalModal(cell.dateStr, null);
+                              } else {
+                                setEditingSchedule(null);
+                                setScheduleForm({
+                                  title: "",
+                                  date: cell.dateStr,
+                                  category: "할일(To-Do)",
+                                  members: scheduleMemberFilter === "전체" ? ["수혁", "아리나", "시목", "시율"] : [scheduleMemberFilter],
+                                  isAnnual: false,
+                                  showDday: false,
+                                  hasOriginYear: false,
+                                  memo: ""
+                                });
+                                setIsScheduleModalOpen(true);
+                              }
+                            } else {
+                              setScheduleSelectedDate(cell.dateStr);
+                              if (!cell.inCurrentMonth) {
+                                setScheduleMonth(cell.dateStr.slice(0, 7));
+                              }
+                            }
+                          }}
+                          className={`min-h-[78px] p-1 border-r border-b border-stone-200/70 last:border-r-0 text-left flex flex-col items-stretch justify-start transition ${cellBg} ${
+                            isSelected ? "ring-2 ring-inset ring-stone-800 z-10" : ""
+                          }`}
+                        >
+                          <div className="flex items-start justify-between gap-0.5 mb-0.5">
+                            <span
+                              className={`text-[12px] font-black leading-tight ${numColor} ${
+                                isToday ? "bg-rose-300/75 text-stone-900 px-1 rounded-[3px] w-full" : ""
+                              }`}
+                            >
+                              {cell.dayNum}
+                            </span>
+                            {cell.lunarLbl && !isToday && (
+                              <span className="text-[8.5px] font-bold text-stone-400 leading-none pt-0.5 shrink-0">
+                                {cell.lunarLbl}
+                              </span>
+                            )}
+                          </div>
+                          <div className="space-y-0.5 w-full overflow-hidden">
+                            {cell.combined.slice(0, 4).map((ev) => {
+                              if (ev._isFamily) {
+                                const famCls =
+                                  ev.category === "기념일/생일"
+                                    ? "bg-pink-100/90 text-pink-800"
+                                    : ev.done
+                                    ? "bg-stone-200/70 text-stone-400 line-through"
+                                    : "bg-indigo-50 text-indigo-800";
+                                return (
+                                  <div
+                                    key={`f-${ev.id}`}
+                                    className={`text-[9.5px] leading-[1.2] font-extrabold truncate px-0.5 rounded-[2px] ${famCls}`}
+                                  >
+                                    {effectiveScope === "all" ? `🏠${ev.title}` : ev.title}
+                                  </div>
+                                );
+                              }
+                              const cMeta = PRIVATE_CAL_COLORS.find((c) => c.id === ev.color) || PRIVATE_CAL_COLORS[0];
+                              const dispText = `${ev.time ? `${ev.time} ` : ""}${ev.title}`;
+                              return (
+                                <div
+                                  key={`p-${ev.id}`}
+                                  className={`text-[9.5px] leading-[1.2] font-bold truncate px-0.5 rounded-[2px] ${cMeta.textCls} ${
+                                    ev.highlight && cMeta.bgCls ? cMeta.bgCls : ""
+                                  } ${ev.done ? "line-through opacity-45" : ""}`}
+                                >
+                                  {dispText}
+                                </div>
+                              );
+                            })}
+                            {cell.combined.length > 4 && (
+                              <div className="text-[9px] font-extrabold text-stone-400 px-0.5">
+                                +{cell.combined.length - 4}
+                              </div>
+                            )}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* [2순위 배치] 선택한 날짜의 통합 상세 일정 · 다이어리 */}
+                <div className="bg-white p-3.5 rounded-2xl border border-stone-200 shadow-sm space-y-3">
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <div className="text-[13.5px] font-black text-stone-900">
+                      📌 {scheduleSelectedDate} ({getDayName(scheduleSelectedDate)})
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingSchedule(null);
+                          setScheduleForm({
+                            title: "",
+                            date: scheduleSelectedDate,
+                            category: "할일(To-Do)",
+                            members: ["수혁", "아리나"],
+                            isAnnual: false,
+                            showDday: false,
+                            hasOriginYear: false,
+                            memo: ""
+                          });
+                          setIsScheduleModalOpen(true);
+                        }}
+                        className="px-2.5 py-1 rounded-xl bg-pink-50 hover:bg-pink-100 border border-pink-200 text-pink-700 text-[11.5px] font-extrabold whitespace-nowrap"
+                      >
+                        + 🏠 가족
+                      </button>
+                      {isAdminUnlocked && (
+                        <button
+                          type="button"
+                          onClick={() => openPrivateCalModal(scheduleSelectedDate, null)}
+                          className="px-2.5 py-1 rounded-xl bg-stone-900 hover:bg-stone-800 text-white text-[11.5px] font-extrabold whitespace-nowrap"
+                        >
+                          + 🔒 내 일정·다이어리
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {selectedFamilyEvents.length === 0 && selectedPrivateEvents.length === 0 ? (
+                    <div className="text-[12.5px] text-stone-400 py-4 text-center bg-stone-50 rounded-xl border border-dashed border-stone-200">
+                      등록된 일정이 없습니다. 날짜를 한 번 더 누르거나 위 버튼으로 추가해 보세요.
+                    </div>
+                  ) : (
+                    <div className="space-y-2.5">
+                      {/* 가족 공유 일정 */}
+                      {selectedFamilyEvents.length > 0 && (
+                        <div className="space-y-2">
+                          {isAdminUnlocked && effectiveScope === "all" && (
+                            <div className="text-[11px] font-black text-indigo-700 flex items-center gap-1">
+                              <span>🏠 가족 공유 일정</span>
+                              <span className="text-stone-400">({selectedFamilyEvents.length})</span>
+                            </div>
+                          )}
+                          {selectedFamilyEvents.map((ev) => {
+                            const dInfo = calculateScheduleDday(ev);
                             return (
-                              <a
-                                key={att.id}
-                                href={att.dataUrl}
-                                download={att.name}
-                                onClick={(e) => {
-                                  if (isImg) {
-                                    e.preventDefault();
-                                    setDiaryLightboxUrl(att.dataUrl);
-                                  }
-                                }}
-                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-sky-50 hover:bg-sky-100 border border-sky-200 text-sky-900 text-[11px] font-bold max-w-[180px]"
+                              <div
+                                key={ev.id}
+                                className={`p-3 rounded-xl border flex flex-col gap-1.5 ${
+                                  ev.category === "기념일/생일"
+                                    ? "bg-pink-50/60 border-pink-200"
+                                    : ev.done
+                                    ? "bg-stone-100 border-stone-200 opacity-70"
+                                    : "bg-stone-50 border-stone-200"
+                                }`}
                               >
-                                <span>{isImg ? "🖼️" : "📎"}</span>
-                                <span className="truncate">{att.name}</span>
-                              </a>
+                                <div className="flex items-start justify-between gap-2">
+                                  <div className="flex flex-wrap items-center gap-1">
+                                    <span className="px-2 py-0.5 rounded-md text-[11px] font-extrabold bg-white border border-stone-200 text-stone-700">
+                                      {ev.category}
+                                    </span>
+                                    {ev.isAnnual && (
+                                      <span className="px-2 py-0.5 rounded-md text-[11px] font-extrabold bg-pink-600 text-white">
+                                        🔄 매년 반복
+                                      </span>
+                                    )}
+                                    <span className="px-2 py-0.5 rounded-md text-[11px] font-extrabold bg-amber-100 text-amber-900">
+                                      {dInfo.dDayText}
+                                    </span>
+                                    {dInfo.elapsedDays !== null && (
+                                      <span className="px-2 py-0.5 rounded-md text-[11px] font-extrabold bg-emerald-100 text-emerald-800">
+                                        D+{dInfo.elapsedDays.toLocaleString()}일째
+                                      </span>
+                                    )}
+                                    {toSafeArray(ev.members).map((mId) => {
+                                      const info = FAMILY_MEMBERS.find((f) => f.id === mId);
+                                      return info ? (
+                                        <span
+                                          key={mId}
+                                          className={`px-1.5 py-0.5 rounded text-[11px] font-bold border ${info.color}`}
+                                        >
+                                          <span className="inline-flex items-center gap-1"><MemberAvatar member={info} size="sm" /><span>{info.name}</span></span>
+                                        </span>
+                                      ) : null;
+                                    })}
+                                  </div>
+
+                                  <div className="flex items-center gap-1 shrink-0">
+                                    {ev.category !== "기념일/생일" && (
+                                      <button
+                                        onClick={() => handleToggleScheduleDone(ev)}
+                                        className={`px-2 py-0.5 rounded-lg text-[11px] font-extrabold border ${
+                                          ev.done
+                                            ? "bg-emerald-600 text-white border-emerald-600"
+                                            : "bg-white text-stone-600 border-stone-300"
+                                        }`}
+                                      >
+                                        {ev.done ? "✓ 완료" : "완료체크"}
+                                      </button>
+                                    )}
+                                    <button
+                                      onClick={() => {
+                                        setEditingSchedule(ev);
+                                        setScheduleForm({
+                                          title: ev.title,
+                                          date: ev.date,
+                                          category: ev.category,
+                                          members: toSafeArray(ev.members),
+                                          isAnnual: Boolean(ev.isAnnual),
+                                          showDday: Boolean(ev.showDday),
+                                          hasOriginYear: Boolean(ev.hasOriginYear),
+                                          memo: ev.memo || "",
+                                          attachments: Array.isArray(ev.attachments) ? ev.attachments : []
+                                        });
+                                        setIsScheduleModalOpen(true);
+                                      }}
+                                      className="p-1 rounded-lg hover:bg-stone-200 text-stone-500"
+                                    >
+                                      <Edit2 className="w-3.5 h-3.5" />
+                                    </button>
+                                    <button
+                                      onClick={() => handleDeleteSchedule(ev)}
+                                      className="p-1 rounded-lg hover:bg-red-100 text-red-500"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
+                                </div>
+
+                                <div
+                                  className={`text-[14.5px] font-black break-keep ${
+                                    ev.done ? "line-through text-stone-400" : "text-stone-900"
+                                  }`}
+                                >
+                                  {ev.title}
+                                </div>
+                                {ev.memo && <div className="text-[12.5px] text-stone-600 line-clamp-2">💬 {ev.memo}</div>}
+                                {Array.isArray(ev.attachments) && ev.attachments.length > 0 && (
+                                  <div className="flex flex-wrap gap-1 pt-0.5">
+                                    {ev.attachments.map((att) => {
+                                      const isImg = String(att.mimeType || "").startsWith("image/") || /^data:image\//.test(String(att.dataUrl || ""));
+                                      return (
+                                        <a
+                                          key={att.id}
+                                          href={att.dataUrl}
+                                          download={att.name}
+                                          onClick={(e) => {
+                                            if (isImg) {
+                                              e.preventDefault();
+                                              setDiaryLightboxUrl(att.dataUrl);
+                                            }
+                                          }}
+                                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-sky-50 hover:bg-sky-100 border border-sky-200 text-sky-900 text-[11px] font-bold max-w-[180px]"
+                                        >
+                                          <span>{isImg ? "🖼️" : "📎"}</span>
+                                          <span className="truncate">{att.name}</span>
+                                        </a>
+                                      );
+                                    })}
+                                  </div>
+                                )}
+                              </div>
                             );
                           })}
                         </div>
                       )}
+
+                      {/* 관리자 본인 전용 개인 일정 · 다이어리 */}
+                      {isAdminUnlocked && selectedPrivateEvents.length > 0 && (
+                        <div className="space-y-1.5">
+                          <div className="text-[11px] font-black text-stone-600 flex items-center gap-1">
+                            <span>🔒 {currentAdminOwner} 개인 일정 · 다이어리</span>
+                            <span className="text-stone-400">({selectedPrivateEvents.length})</span>
+                          </div>
+                          <div className="rounded-xl border border-stone-200 divide-y divide-stone-100 bg-stone-50/40 px-2.5">
+                            {selectedPrivateEvents.map((ev) => {
+                              const cMeta = PRIVATE_CAL_COLORS.find((c) => c.id === ev.color) || PRIVATE_CAL_COLORS[0];
+                              return (
+                                <div key={ev.id} className="py-2 flex items-start justify-between gap-2">
+                                  <div className="flex items-start gap-2 min-w-0 flex-1">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleTogglePrivateScheduleDone(ev)}
+                                      className={`w-4 h-4 mt-0.5 rounded border flex items-center justify-center shrink-0 ${
+                                        ev.done ? "bg-stone-800 border-stone-800 text-white" : "border-stone-300 bg-white"
+                                      }`}
+                                    >
+                                      {ev.done && <Check className="w-3 h-3" />}
+                                    </button>
+                                    <div className="min-w-0 flex-1">
+                                      <div className={`text-[13px] font-black break-keep ${cMeta.textCls} ${ev.done ? "line-through opacity-50" : ""}`}>
+                                        {ev.time ? <span className="mr-1 opacity-75">{ev.time}</span> : null}
+                                        {ev.title}
+                                        {ev.endDate && ev.endDate > ev.date && (
+                                          <span className="ml-1.5 px-1 py-0.5 rounded bg-amber-50 text-amber-700 text-[9.5px] font-bold">
+                                            {String(ev.date || "").slice(5)}~{String(ev.endDate || "").slice(5)}
+                                          </span>
+                                        )}
+                                        {ev.isAnnual && (
+                                          <span className="ml-1.5 px-1 py-0.5 rounded bg-stone-100 text-stone-500 text-[9.5px] font-bold">매년</span>
+                                        )}
+                                      </div>
+                                      {ev.memo && (
+                                        <div className="text-[11.5px] text-stone-500 mt-0.5 whitespace-pre-line break-keep">{ev.memo}</div>
+                                      )}
+                                    </div>
+                                  </div>
+                                  <div className="flex items-center gap-0.5 shrink-0">
+                                    <button
+                                      type="button"
+                                      onClick={() => openPrivateCalModal(ev.date, ev)}
+                                      className="p-1.5 rounded-lg hover:bg-stone-200/70 text-stone-400 hover:text-stone-700"
+                                      title="수정"
+                                    >
+                                      <Edit2 className="w-3.5 h-3.5" />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDeletePrivateSchedule(ev.id)}
+                                      className="p-1.5 rounded-lg hover:bg-rose-50 text-stone-400 hover:text-rose-600"
+                                      title="삭제"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
                     </div>
-                  );
-                })}
+                  )}
+                </div>
               </div>
-            )}
-          </div>
+            );
+          })()}
 
 
           {/* ==========================================
@@ -17943,464 +18961,9 @@ ${validText}
       {/* ==========================================
           탭 8-2: 📖 가족 레시피북
       ========================================== */}
-      {activeTab === "bucket" && (() => {
-        const isBadWeather = Boolean(
-          weatherInfo &&
-          (String(weatherInfo.rainAlertText || "").includes("비") ||
-            String(weatherInfo.rainAlertText || "").includes("눈") ||
-            Number(weatherInfo.pm10 || 0) > 80)
-        );
-        const weatherRecType = isBadWeather ? "실내" : "맑음";
-        const doneCount = bucketList.filter((b) => b.done).length;
-        const plannedCount = bucketList.length - doneCount;
-        const getItemMembers = (it) =>
-          Array.isArray(it?.members) && it.members.length > 0 ? it.members : ["수혁", "아리나", "시목", "시율"];
-
-        const filtered = [...bucketList]
-          .filter((b) => bucketCatFilter === "전체" || (b.category || "나들이/여행") === bucketCatFilter)
-          .filter((b) => bucketMemberFilter === "전체" || getItemMembers(b).includes(bucketMemberFilter))
-          .filter((b) => bucketStatusFilter === "all" || (bucketStatusFilter === "done" ? b.done : !b.done))
-          .filter((b) => !bucketWeatherOnly || b.weather === weatherRecType || b.weather === "무관")
-          .sort((a, b) => {
-            if (Boolean(a.done) !== Boolean(b.done)) return a.done ? 1 : -1;
-            return (Number(b.updatedAtMs) || 0) - (Number(a.updatedAtMs) || 0);
-          });
-
-        const hasActiveFilter =
-          bucketMemberFilter !== "전체" ||
-          bucketCatFilter !== "전체" ||
-          bucketStatusFilter !== "all" ||
-          bucketWeatherOnly;
-        const pinnedCount = filtered.filter((b) => Number.isFinite(Number(b.lat)) && Number.isFinite(Number(b.lng)) && Number(b.lat) !== 0).length;
-        const unpinnedItems = filtered.filter((b) => !Number.isFinite(Number(b.lat)) || !Number.isFinite(Number(b.lng)) || Number(b.lat) === 0);
-
-        return (
-          <div className="space-y-3">
-            {/* 단순화된 상단 컨트롤 바 (핵심 2줄) */}
-            <div className="bg-white p-3 rounded-2xl border border-stone-200 shadow-sm space-y-2.5">
-              {/* 1줄: 지도/목록 전환 + 현황 + 장소 추가 */}
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2 min-w-0">
-                  <div className="inline-flex items-center bg-stone-200/80 p-0.5 rounded-xl shrink-0">
-                    {[
-                      { id: "map", label: "🗺️ 지도" },
-                      { id: "list", label: "📋 목록" }
-                    ].map((vm) => (
-                      <button
-                        key={vm.id}
-                        type="button"
-                        onClick={() => setBucketViewMode(vm.id)}
-                        className={`px-2.5 py-1 rounded-lg text-[11.5px] font-extrabold whitespace-nowrap transition ${
-                          bucketViewMode === vm.id ? "bg-white text-stone-900 shadow-2xs" : "text-stone-500"
-                        }`}
-                      >
-                        {vm.label}
-                      </button>
-                    ))}
-                  </div>
-                  <span className="text-[12px] font-extrabold text-stone-500 whitespace-nowrap truncate">
-                    갈 곳 <b className="text-amber-600">{plannedCount}</b> · 다녀옴 <b className="text-[#35503C]">{doneCount}</b>
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => openBucketAddModal(null)}
-                  className="px-3 py-1.5 rounded-xl bg-stone-900 hover:bg-stone-800 text-white text-[12px] font-extrabold whitespace-nowrap shrink-0 flex items-center gap-1 shadow-xs"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  <span>장소 추가</span>
-                </button>
-              </div>
-
-              {/* 2줄: 상태 + 가족/분류 슬림 필터 */}
-              <div className="flex items-center gap-1.5 flex-wrap">
-                <div className="inline-flex items-center bg-stone-100 p-0.5 rounded-xl shrink-0">
-                  {[
-                    { id: "all", label: "전체" },
-                    { id: "planned", label: "갈 곳" },
-                    { id: "done", label: "다녀옴" }
-                  ].map((st) => (
-                    <button
-                      key={st.id}
-                      type="button"
-                      onClick={() => setBucketStatusFilter(st.id)}
-                      className={`px-2 py-1 rounded-lg text-[11px] font-extrabold whitespace-nowrap transition ${
-                        bucketStatusFilter === st.id ? "bg-[#5E7A65] text-white" : "text-stone-600"
-                      }`}
-                    >
-                      {st.label}
-                    </button>
-                  ))}
-                </div>
-                <select
-                  value={bucketMemberFilter}
-                  onChange={(e) => setBucketMemberFilter(e.target.value)}
-                  aria-label="가족 필터"
-                  className="px-2 py-1 rounded-xl border border-stone-200 bg-stone-50 text-[11.5px] font-bold text-stone-700"
-                >
-                  <option value="전체">👨‍👩‍👧‍👦 가족 전체</option>
-                  {FAMILY_MEMBERS.map((m) => (
-                    <option key={m.id} value={m.id}>{m.name}</option>
-                  ))}
-                </select>
-                <select
-                  value={bucketCatFilter}
-                  onChange={(e) => setBucketCatFilter(e.target.value)}
-                  aria-label="분류 필터"
-                  className="px-2 py-1 rounded-xl border border-stone-200 bg-stone-50 text-[11.5px] font-bold text-stone-700"
-                >
-                  {["전체", "나들이/여행", "키즈카페/체험", "맛집", "우리집 목표"].map((cat) => (
-                    <option key={cat} value={cat}>{cat === "전체" ? "🏷️ 분류 전체" : cat}</option>
-                  ))}
-                </select>
-                {weatherInfo && (
-                  <button
-                    type="button"
-                    onClick={() => setBucketWeatherOnly((v) => !v)}
-                    className={`px-2 py-1 rounded-xl text-[11px] font-extrabold border whitespace-nowrap ${
-                      bucketWeatherOnly
-                        ? "bg-stone-900 text-white border-stone-900"
-                        : "bg-[#FAF8F3] text-stone-600 border-stone-200"
-                    }`}
-                  >
-                    {isBadWeather ? "☔ 실내" : "☀️ 야외"}
-                  </button>
-                )}
-                {hasActiveFilter && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setBucketStatusFilter("all");
-                      setBucketMemberFilter("전체");
-                      setBucketCatFilter("전체");
-                      setBucketWeatherOnly(false);
-                    }}
-                    className="px-2 py-1 rounded-xl text-[11px] font-extrabold text-stone-500 hover:text-stone-800 whitespace-nowrap"
-                  >
-                    초기화
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {/* 🗺️ 지도 뷰 */}
-            {bucketViewMode === "map" && (
-              <div className="space-y-2.5">
-                <div className="flex items-center justify-between px-1 text-[11px] font-bold text-stone-500">
-                  <div className="flex items-center gap-2.5">
-                    <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-amber-600" /> 갈 곳</span>
-                    <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-[#35503C]" /> 다녀옴</span>
-                  </div>
-                  <span>지도 핀 {pinnedCount}/{filtered.length}곳</span>
-                </div>
-
-                <BucketMapView
-                  items={filtered}
-                  selectedId={selectedBucketMapItem?.id || null}
-                  onSelectItem={(it) => setSelectedBucketMapItem(it)}
-                />
-
-                {/* 지도에서 선택한 핀 상세 카드 */}
-                {selectedBucketMapItem && (() => {
-                  const sel = bucketList.find((x) => x.id === selectedBucketMapItem.id);
-                  if (!sel) return null;
-                  const mNames = getItemMembers(sel)
-                    .map((id) => FAMILY_MEMBERS.find((f) => f.id === id)?.name || id)
-                    .join(" · ");
-                  return (
-                    <div className="bg-white rounded-2xl border-2 border-[#5E7A65] p-3.5 shadow-sm space-y-2.5">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            <span className={`px-1.5 py-0.5 rounded text-[10px] font-black ${sel.done ? "bg-[#EEF3EE] text-[#35503C]" : "bg-amber-100 text-amber-800"}`}>
-                              {sel.done ? "✅ 다녀옴" : "📍 갈 곳"}
-                            </span>
-                            <span className="text-[14.5px] font-black text-stone-900">{sel.title}</span>
-                          </div>
-                          <div className="text-[11.5px] font-bold text-stone-500 mt-1">
-                            👨‍👩‍👧‍👦 {mNames} · {sel.category || "나들이/여행"}{sel.doneDate ? ` · ${sel.doneDate}` : ""}
-                          </div>
-                          {sel.address && (
-                            <div className="text-[11px] text-stone-400 mt-0.5 truncate">{sel.address}</div>
-                          )}
-                          {sel.memo && (
-                            <div className="text-[12px] font-semibold text-stone-700 mt-1">{sel.memo}</div>
-                          )}
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => setSelectedBucketMapItem(null)}
-                          className="p-1 text-stone-400 hover:text-stone-700"
-                          aria-label="닫기"
-                        >
-                          <X className="w-4 h-4" />
-                        </button>
-                      </div>
-                      <div className="flex items-center justify-between gap-1.5 flex-wrap pt-1 border-t border-stone-100">
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <a
-                            href={getNaverMapUrl(sel)}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="px-2.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-extrabold whitespace-nowrap"
-                          >
-                            네이버지도
-                          </a>
-                          <a
-                            href={getGoogleMapUrl(sel)}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="px-2.5 py-1.5 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-[11px] font-extrabold whitespace-nowrap"
-                          >
-                            구글맵
-                          </a>
-                          <button
-                            type="button"
-                            onClick={() => handleToggleBucketDone(sel)}
-                            className="px-2.5 py-1.5 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-800 text-[11px] font-extrabold whitespace-nowrap"
-                          >
-                            {sel.done ? "↩️ 갈 곳으로" : "✅ 다녀옴"}
-                          </button>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <button
-                            type="button"
-                            onClick={() => openBucketAddModal(sel)}
-                            className="px-2 py-1.5 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-[11px] font-extrabold whitespace-nowrap"
-                          >
-                            ✏️ 수정
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setEditingSchedule(null);
-                              setScheduleForm({
-                                title: sel.title,
-                                date: getTodayStr(),
-                                category: "가족행사",
-                                members: getItemMembers(sel),
-                                isAnnual: false,
-                                showDday: true,
-                                hasOriginYear: false,
-                                memo: sel.memo || ""
-                              });
-                              setIsScheduleModalOpen(true);
-                            }}
-                            className="px-2 py-1.5 rounded-xl bg-[#EEF3EE] text-[#35503C] text-[11px] font-extrabold whitespace-nowrap"
-                          >
-                            📅 일정
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteBucketItem(sel.id)}
-                            className="p-1.5 rounded-xl hover:bg-rose-50 text-stone-400 hover:text-rose-600"
-                            title="삭제"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })()}
-
-                {/* 위치 미등록 항목 -> 누르면 검색·확인 모달 오픈 */}
-                {unpinnedItems.length > 0 && (
-                  <div className="bg-white rounded-2xl border border-stone-200 p-3 space-y-1.5">
-                    <div className="text-[11.5px] font-extrabold text-stone-500">
-                      📌 위치 미지정 ({unpinnedItems.length}건) · 눌러서 검색 후 지도 핀 지정
-                    </div>
-                    <div className="flex flex-wrap gap-1.5">
-                      {unpinnedItems.map((it) => (
-                        <button
-                          key={it.id}
-                          type="button"
-                          onClick={() => openBucketAddModal(it, true)}
-                          className="px-2.5 py-1 rounded-xl bg-stone-50 hover:bg-[#EEF3EE] border border-stone-200 text-[11.5px] font-extrabold text-stone-700 whitespace-nowrap"
-                        >
-                          🔍 {it.title}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* 📋 목록 뷰 */}
-            {bucketViewMode === "list" && (
-              filtered.length === 0 ? (
-                renderStatusState({
-                  type: "empty",
-                  title: "표시할 버킷리스트가 없어요",
-                  description: "오른쪽 위 [+ 장소 추가]를 눌러 위치를 검색하고 확인한 뒤 추가해 보세요."
-                })
-              ) : (
-                <div className="space-y-2">
-                  {filtered.map((item) => {
-                    const mNames = getItemMembers(item)
-                      .map((id) => FAMILY_MEMBERS.find((f) => f.id === id)?.name || id)
-                      .join("·");
-                    const hasCoords = Number.isFinite(Number(item.lat)) && Number.isFinite(Number(item.lng)) && Number(item.lat) !== 0;
-                    return (
-                      <div
-                        key={item.id}
-                        className={`p-3 rounded-2xl border flex items-start justify-between gap-2.5 transition ${
-                          item.done ? "bg-stone-50 border-stone-200" : "bg-white border-stone-200 shadow-sm"
-                        }`}
-                      >
-                        <button
-                          type="button"
-                          onClick={() => handleToggleBucketDone(item)}
-                          className={`w-5 h-5 mt-0.5 rounded-lg border flex items-center justify-center shrink-0 ${
-                            item.done ? "bg-[#5E7A65] border-[#5E7A65] text-white" : "bg-white border-stone-300"
-                          }`}
-                          title={item.done ? "갈 곳으로 되돌리기" : "다녀옴 체크"}
-                        >
-                          {item.done && <Check className="w-3.5 h-3.5" />}
-                        </button>
-                        <div className="flex-1 min-w-0 space-y-1">
-                          <div className={`text-[13.5px] font-black break-keep ${item.done ? "text-stone-500 line-through" : "text-stone-900"}`}>
-                            {item.title}
-                          </div>
-                          <div className="flex items-center gap-1 flex-wrap text-[10.5px] font-bold">
-                            <span className="px-1.5 py-0.5 rounded bg-[#EEF3EE] text-[#35503C] whitespace-nowrap">{mNames}</span>
-                            <span className="px-1.5 py-0.5 rounded bg-stone-100 text-stone-600 whitespace-nowrap">{item.category || "나들이/여행"}</span>
-                            {item.doneDate && <span className="text-emerald-700 whitespace-nowrap">{item.doneDate}</span>}
-                            {item.memo && <span className="text-stone-500 truncate">{item.memo}</span>}
-                          </div>
-                          <div className="flex items-center gap-1.5 pt-0.5 flex-wrap">
-                            <a
-                              href={getNaverMapUrl(item)}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="px-2 py-0.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-800 text-[10.5px] font-extrabold whitespace-nowrap"
-                            >
-                              네이버
-                            </a>
-                            <a
-                              href={getGoogleMapUrl(item)}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="px-2 py-0.5 rounded-lg bg-sky-50 hover:bg-sky-100 border border-sky-200 text-sky-800 text-[10.5px] font-extrabold whitespace-nowrap"
-                            >
-                              구글맵
-                            </a>
-                            {hasCoords ? (
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setSelectedBucketMapItem(item);
-                                  setBucketViewMode("map");
-                                }}
-                                className="px-2 py-0.5 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 text-[10.5px] font-extrabold whitespace-nowrap"
-                              >
-                                🗺️ 지도보기
-                              </button>
-                            ) : (
-                              <button
-                                type="button"
-                                onClick={() => openBucketAddModal(item, true)}
-                                className="px-2 py-0.5 rounded-lg bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-800 text-[10.5px] font-extrabold whitespace-nowrap"
-                              >
-                                🔍 위치 지정
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-0.5 shrink-0">
-                          <button
-                            type="button"
-                            onClick={() => openBucketAddModal(item)}
-                            className="p-1.5 rounded-lg hover:bg-stone-100 text-stone-400 hover:text-stone-700"
-                            title="수정"
-                          >
-                            <Edit2 className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setEditingSchedule(null);
-                              setScheduleForm({
-                                title: item.title,
-                                date: getTodayStr(),
-                                category: "가족행사",
-                                members: getItemMembers(item),
-                                isAnnual: false,
-                                showDday: true,
-                                hasOriginYear: false,
-                                memo: item.memo || ""
-                              });
-                              setIsScheduleModalOpen(true);
-                            }}
-                            className="p-1.5 rounded-lg hover:bg-[#EEF3EE] text-[#35503C]"
-                            title="일정으로 잡기"
-                          >
-                            <CalendarDays className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteBucketItem(item.id)}
-                            className="p-1.5 rounded-lg hover:bg-rose-50 text-stone-400 hover:text-rose-600"
-                            title="삭제"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })}
-                  <div className="pt-1 flex items-center justify-between gap-2">
-                    {plannedCount > 0 ? (
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          const targets = filtered.filter((b) => !b.done);
-                          if (targets.length === 0) {
-                            showToast("복사할 '갈 곳' 항목이 없습니다.");
-                            return;
-                          }
-                          const lines = [
-                            `🌟 우리 가족 갈 곳 리스트 (${targets.length}곳)`,
-                            ...targets.map((b, idx) => `${idx + 1}. ${b.title}${b.memo ? ` - ${b.memo}` : ""}`)
-                          ];
-                          await copyTextSafe(lines.join("\n"), `📋 갈 곳 ${targets.length}곳을 복사했습니다!`);
-                        }}
-                        className="px-2.5 py-1 rounded-xl text-[11px] font-bold text-[#35503C] bg-[#EEF3EE] hover:bg-[#DFE9E0]"
-                      >
-                        📋 갈 곳 목록 복사
-                      </button>
-                    ) : <span />}
-                    {doneCount > 0 && (
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          if (!requireEditorAccess()) return;
-                          if (!window.confirm(`다녀온 버킷리스트 ${doneCount}건을 정리할까요?`)) return;
-                          const doneIds = bucketList.filter((b) => b.done).map((b) => b.id);
-                          setBucketList((prev) => prev.filter((b) => !b.done));
-                          if (selectedBucketMapItem && doneIds.includes(selectedBucketMapItem.id)) {
-                            setSelectedBucketMapItem(null);
-                          }
-                          if (user && db) {
-                            await Promise.all(doneIds.map((bid) => deleteDoc(getDocRef("family_bucket_v1", bid)).catch(() => {})));
-                          }
-                          showToast(`🧹 다녀온 항목 ${doneIds.length}건을 정리했습니다.`);
-                        }}
-                        className="px-2.5 py-1 rounded-xl text-[11px] font-bold text-stone-400 hover:text-rose-600 hover:bg-rose-50"
-                      >
-                        🧹 다녀옴 일괄 정리 ({doneCount}건)
-                      </button>
-                    )}
-                  </div>
-                </div>
-              )
-            )}
-          </div>
-        );
-      })()}
-
-
+      {/* ==========================================
+          관리자 전용 탭: 🔒 개인일정 (조르테 6주 풀그리드 · 수혁/아리나 완전 분리)
+      ========================================== */}
       {/* ==========================================
           탭 8-3: 🗂️ 노션 스타일 가족 공유 노트 (계층형 페이지 · 최근 항목 · 체크리스트)
       ========================================== */}
@@ -21294,7 +21857,7 @@ ${validText}
                     />
                     <input
                       id="baby-growth-height-input"
-                      type="number"
+                      type="number" inputMode="decimal"
                       step="0.1"
                       placeholder="키 (cm)"
                       value={growthForm.height}
@@ -21302,7 +21865,7 @@ ${validText}
                       className="px-2.5 py-2 rounded-xl border border-stone-200 text-[13.5px] font-bold"
                     />
                     <input
-                      type="number"
+                      type="number" inputMode="decimal"
                       step="0.1"
                       placeholder="몸무게 (kg)"
                       value={growthForm.weight}
@@ -21310,7 +21873,7 @@ ${validText}
                       className="px-2.5 py-2 rounded-xl border border-stone-200 text-[13.5px] font-bold"
                     />
                     <input
-                      type="number"
+                      type="number" inputMode="decimal"
                       step="0.1"
                       placeholder="머리둘레 (cm, 선택)"
                       value={growthForm.head}
@@ -21619,7 +22182,7 @@ ${validText}
                       className="px-2.5 py-2 rounded-xl border border-stone-200 text-[13.5px] font-bold"
                     />
                     <input
-                      type="number"
+                      type="number" inputMode="decimal"
                       step="0.1"
                       placeholder="체온 °C (예: 37.8)"
                       value={medNoteForm.temp}
@@ -23377,9 +23940,19 @@ ${validText}
                 <div key={grp.title} className="space-y-1.5">
                   <div className="text-[11px] font-extrabold text-stone-400 px-0.5">{grp.title}</div>
                   <div className="grid grid-cols-4 gap-1.5">
-                    {grp.items.map((m) => (
+                    {grp.items.map((m) => {
+                      const badgeCount =
+                        m.id === "shopping"
+                          ? shoppingList.filter((s) => !s.checked).length
+                          : m.id === "notices"
+                          ? notices.filter((n) => !n.done).length
+                          : m.id === "bucket"
+                          ? bucketList.filter((b) => !b.done).length
+                          : 0;
+                      return (
                       <button
                         key={m.id}
+                        type="button"
                         onClick={() => {
                           if (m.id === "kitchen_timer") {
                             setKitchenTimer((p) => ({ ...p, open: true }));
@@ -23393,19 +23966,26 @@ ${validText}
                             if (m.id === "pages") setSelectedPageId(null);
                             setActiveTab(m.id);
                             setIsMoreNavOpen(false);
-                            window.scrollTo({ top: 0, behavior: "instant" });
                           }
                         }}
-                        className={`py-2.5 px-1.5 rounded-2xl border text-[12px] font-extrabold flex flex-col items-center gap-1 transition ${
+                        className={`relative py-2.5 px-1.5 rounded-2xl border text-[12px] font-extrabold flex flex-col items-center gap-1 transition ${
                           activeTab === m.id
                             ? "bg-stone-900 text-white border-stone-900"
                             : "bg-stone-50 text-stone-800 border-stone-200 hover:bg-amber-50"
                         }`}
                       >
+                        {badgeCount > 0 && (
+                          <span className={`absolute top-1.5 right-1.5 min-w-[16px] h-4 px-1 rounded-full text-[9.5px] font-black flex items-center justify-center leading-none ${
+                            activeTab === m.id ? "bg-amber-400 text-stone-950" : "bg-amber-500 text-white"
+                          }`}>
+                            {badgeCount > 99 ? "99+" : badgeCount}
+                          </span>
+                        )}
                         <span className="text-[17px]">{m.id === "kitchen_timer" || m.id === "baby_dream" || canViewTab(m.id) ? m.icon : "🔒"}</span>
                         <span className="truncate w-full text-center">{m.label}</span>
                       </button>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               ))}
@@ -23490,6 +24070,283 @@ ${validText}
       {/* ==========================================
           모달: 패치노트 (업데이트 히스토리 열람 및 새 기록 작성)
       ========================================== */}
+      {/* ==========================================
+          모달: 관리자 전용 개인 일정 추가·수정
+      ========================================== */}
+      {isPrivateCalModalOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+          onClick={() => setIsPrivateCalModalOpen(false)}
+        >
+          <div
+            className="bg-white rounded-3xl max-w-sm w-full p-5 space-y-3.5 max-h-[88vh] overflow-y-auto shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between">
+              <h3 className="text-[15.5px] font-black text-stone-900">
+                {editingPrivateCalId ? "✏️ 개인 일정 수정" : "🔒 개인 일정 추가"}
+              </h3>
+              <button
+                type="button"
+                onClick={() => setIsPrivateCalModalOpen(false)}
+                className="p-1 text-stone-400 hover:text-stone-700"
+                aria-label="닫기"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSavePrivateSchedule} className="space-y-3">
+              {/* 본인 전용 잠금 배지 (관리자 간 비공개 분리) */}
+              <div className="flex items-center justify-between px-3 py-2 rounded-xl bg-stone-100 text-[12px] font-extrabold text-stone-700">
+                <span>🔒 {currentAdminOwner} 전용 일정 · 다이어리</span>
+                <span className="text-[10.5px] font-bold text-stone-400">나만 보기</span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-[11px] font-extrabold text-stone-500 block mb-1">시작일</label>
+                  <input
+                    type="date"
+                    value={privateCalForm.date}
+                    onChange={(e) => setPrivateCalForm((p) => ({ ...p, date: e.target.value }))}
+                    className="w-full px-2.5 py-2 rounded-xl border border-stone-200 text-[12.5px] font-bold bg-stone-50"
+                  />
+                </div>
+                <div>
+                  <label className="text-[11px] font-extrabold text-stone-500 block mb-1">종료일 (선택)</label>
+                  <input
+                    type="date"
+                    value={privateCalForm.endDate}
+                    min={privateCalForm.date || undefined}
+                    onChange={(e) => setPrivateCalForm((p) => ({ ...p, endDate: e.target.value }))}
+                    className="w-full px-2.5 py-2 rounded-xl border border-stone-200 text-[12.5px] font-bold bg-stone-50"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="text-[11px] font-extrabold text-stone-500 block mb-1">시간 (선택)</label>
+                <input
+                  type="text"
+                  value={privateCalForm.time}
+                  onChange={(e) => setPrivateCalForm((p) => ({ ...p, time: e.target.value }))}
+                  placeholder="예: 2시, 10시반, 09:00~12:00"
+                  className="w-full px-2.5 py-2 rounded-xl border border-stone-200 text-[12.5px] font-bold bg-stone-50"
+                />
+              </div>
+
+              <div>
+                <label className="text-[11px] font-extrabold text-stone-500 block mb-1">일정 내용</label>
+                <input
+                  type="text"
+                  autoFocus
+                  value={privateCalForm.title}
+                  onChange={(e) => setPrivateCalForm((p) => ({ ...p, title: e.target.value }))}
+                  placeholder="예: 진오비, 입소서류, PC교체"
+                  className="w-full px-3 py-2.5 rounded-xl border border-stone-200 text-[13.5px] font-bold bg-white focus:outline-none focus:ring-2 focus:ring-stone-400"
+                />
+              </div>
+
+              {/* 색상 태그 + 배경 강조 */}
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-extrabold text-stone-500">글자 색상</span>
+                  <label className="inline-flex items-center gap-1.5 text-[11px] font-bold text-stone-600 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(privateCalForm.highlight)}
+                      onChange={(e) => setPrivateCalForm((p) => ({ ...p, highlight: e.target.checked }))}
+                      className="rounded"
+                    />
+                    <span>배경 강조</span>
+                  </label>
+                </div>
+                <div className="grid grid-cols-6 gap-1.5">
+                  {PRIVATE_CAL_COLORS.map((c) => (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onClick={() => setPrivateCalForm((p) => ({ ...p, color: c.id }))}
+                      className={`py-1.5 rounded-xl border flex flex-col items-center gap-1 text-[10px] font-extrabold transition ${
+                        privateCalForm.color === c.id ? "border-stone-900 bg-stone-100" : "border-stone-200 bg-white"
+                      }`}
+                    >
+                      <span className={`w-3.5 h-3.5 rounded-full ${c.dotCls}`} />
+                      <span>{c.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <label className="flex items-center gap-2 text-[12px] font-bold text-stone-700 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={Boolean(privateCalForm.isAnnual)}
+                  onChange={(e) => setPrivateCalForm((p) => ({ ...p, isAnnual: e.target.checked }))}
+                  className="rounded"
+                />
+                <span>매년 같은 날 반복 표시</span>
+              </label>
+
+              <textarea
+                rows={2}
+                value={privateCalForm.memo}
+                onChange={(e) => setPrivateCalForm((p) => ({ ...p, memo: e.target.value }))}
+                placeholder="오늘의 다이어리 · 상세 메모 (선택)"
+                className="w-full px-3 py-2 rounded-xl border border-stone-200 text-[12.5px] font-medium bg-stone-50 focus:bg-white"
+              />
+
+              <div className="flex items-center gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setIsPrivateCalModalOpen(false)}
+                  className="flex-1 py-2.5 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-[13px] font-extrabold"
+                >
+                  취소
+                </button>
+                <button
+                  type="submit"
+                  className="flex-[2] py-2.5 rounded-xl bg-stone-900 hover:bg-stone-800 text-white text-[13px] font-extrabold"
+                >
+                  {editingPrivateCalId ? "수정 저장" : "저장"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ==========================================
+          모달: 개인 일정 클라우드 CSV 가져오기 · 내보내기
+      ========================================== */}
+      {isPrivateCalCsvModalOpen && isAdminUnlocked && (() => {
+        const ownerCount = privateSchedules.filter((x) => (x.owner || "수혁") === currentAdminOwner).length;
+        return (
+          <div
+            className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+            onClick={() => !privateCalCsvBusy && setIsPrivateCalCsvModalOpen(false)}
+          >
+            <div
+              className="bg-white rounded-3xl max-w-sm w-full p-5 space-y-4 max-h-[88vh] overflow-y-auto shadow-xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-[15.5px] font-black text-stone-900 flex items-center gap-1.5">
+                    <CloudUpload className="w-4 h-4 text-stone-700" />
+                    <span>클라우드 CSV 연동</span>
+                  </h3>
+                  <p className="text-[11px] font-bold text-stone-400 mt-0.5">
+                    코드에 저장하지 않고 Firestore 클라우드에 직접 저장·내보내기합니다.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  disabled={privateCalCsvBusy}
+                  onClick={() => setIsPrivateCalCsvModalOpen(false)}
+                  className="p-1 text-stone-400 hover:text-stone-700"
+                  aria-label="닫기"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* 로그인한 본인 전용 표시 */}
+              <div className="flex items-center justify-between px-3 py-2 rounded-xl bg-stone-100 text-[12px] font-extrabold text-stone-800">
+                <span>🔒 {currentAdminOwner} 개인 클라우드</span>
+                <span className="text-[11.5px] font-black text-stone-500">{ownerCount.toLocaleString()}건 저장됨</span>
+              </div>
+
+              {/* 1. CSV 가져오기 -> 클라우드 저장 */}
+              <div className="rounded-2xl border border-stone-200 bg-stone-50/70 p-3.5 space-y-2.5">
+                <div className="text-[12.5px] font-black text-stone-800 flex items-center gap-1.5">
+                  <Upload className="w-3.5 h-3.5 text-stone-700" />
+                  <span>조르테 CSV 불러오기 → 클라우드 저장</span>
+                </div>
+                <p className="text-[11px] text-stone-500 leading-relaxed">
+                  조르테 앱에서 내보낸 CSV 파일을 선택하면 중복 일정을 자동 제외한 뒤 연도별로 묶어 클라우드에 빠르게 저장합니다.
+                </p>
+                <label className="block w-full text-center py-2.5 px-3 rounded-xl border border-dashed border-stone-300 bg-white hover:bg-stone-50 text-[12.5px] font-extrabold text-stone-700 cursor-pointer transition">
+                  <span>📂 CSV 파일 선택 (.csv)</span>
+                  <input
+                    type="file"
+                    accept=".csv,text/csv"
+                    disabled={privateCalCsvBusy}
+                    onChange={handleSelectPrivateCalCsvFile}
+                    className="hidden"
+                  />
+                </label>
+
+                {privateCalCsvPreview && (
+                  <div className="rounded-xl bg-white border border-stone-200 p-3 space-y-2">
+                    <div className="text-[11.5px] font-extrabold text-stone-700 truncate">
+                      📄 {privateCalCsvPreview.fileName}
+                    </div>
+                    <div className="grid grid-cols-3 gap-1.5 text-center">
+                      <div className="rounded-lg bg-stone-50 py-1.5">
+                        <div className="text-[10px] font-bold text-stone-400">전체 인식</div>
+                        <div className="text-[13px] font-black text-stone-800">{privateCalCsvPreview.totalCount.toLocaleString()}</div>
+                      </div>
+                      <div className="rounded-lg bg-emerald-50 py-1.5">
+                        <div className="text-[10px] font-bold text-emerald-600">신규 등록</div>
+                        <div className="text-[13px] font-black text-emerald-700">{privateCalCsvPreview.freshCount.toLocaleString()}</div>
+                      </div>
+                      <div className="rounded-lg bg-amber-50 py-1.5">
+                        <div className="text-[10px] font-bold text-amber-600">중복 제외</div>
+                        <div className="text-[13px] font-black text-amber-700">{privateCalCsvPreview.dupCount.toLocaleString()}</div>
+                      </div>
+                    </div>
+                    {privateCalCsvPreview.minDate && (
+                      <div className="text-[10.5px] font-bold text-stone-400 text-center">
+                        기간: {privateCalCsvPreview.minDate} ~ {privateCalCsvPreview.maxDate}
+                      </div>
+                    )}
+                    <button
+                      type="button"
+                      disabled={privateCalCsvBusy || privateCalCsvPreview.freshCount === 0}
+                      onClick={handleImportPrivateCalCsvToCloud}
+                      className="w-full py-2.5 rounded-xl bg-stone-900 hover:bg-stone-800 disabled:opacity-45 text-white text-[12.5px] font-black transition"
+                    >
+                      {privateCalCsvBusy
+                        ? "☁️ 클라우드 저장 중..."
+                        : `☁️ ${privateCalCsvPreview.owner} 클라우드에 ${privateCalCsvPreview.freshCount.toLocaleString()}건 저장`}
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* 2. 클라우드 CSV 내보내기 */}
+              <div className="rounded-2xl border border-stone-200 bg-white p-3.5 space-y-2">
+                <div className="text-[12.5px] font-black text-stone-800 flex items-center gap-1.5">
+                  <Download className="w-3.5 h-3.5 text-stone-700" />
+                  <span>클라우드 일정 CSV 내보내기</span>
+                </div>
+                <button
+                  type="button"
+                  disabled={privateCalCsvBusy || ownerCount === 0}
+                  onClick={handleExportPrivateCalCsv}
+                  className="w-full py-2.5 rounded-xl bg-stone-100 hover:bg-stone-200 disabled:opacity-45 text-stone-800 text-[12.5px] font-extrabold transition"
+                >
+                  📤 {currentAdminOwner} 일정 {ownerCount.toLocaleString()}건 CSV 다운로드
+                </button>
+              </div>
+
+              {/* 3. 현재 소유자 일정 일괄 초기화 */}
+              {ownerCount > 0 && (
+                <button
+                  type="button"
+                  disabled={privateCalCsvBusy}
+                  onClick={handleClearOwnerPrivateSchedules}
+                  className="w-full py-2 rounded-xl border border-rose-200 bg-rose-50/60 hover:bg-rose-50 text-rose-600 text-[11.5px] font-extrabold transition"
+                >
+                  🗑️ {currentAdminOwner} 클라우드 일정 전체 비우기
+                </button>
+              )}
+            </div>
+          </div>
+        );
+      })()}
+
       {/* ==========================================
           모달: 버킷리스트 위치 검색·확인 후 추가/수정
       ========================================== */}
@@ -24823,7 +25680,7 @@ ${validText}
                       <div className="flex items-center gap-1 mt-1">
                         <span className="text-[11.5px] font-bold text-stone-400 shrink-0">수량</span>
                         <input
-                          type="number"
+                          type="number" inputMode="decimal"
                           min="0"
                           step="any"
                           value={it.quantity}
@@ -24856,7 +25713,7 @@ ${validText}
                       </div>
                     </div>
                     <input
-                      type="number"
+                      type="number" inputMode="numeric"
                       value={it.price}
                       onChange={(e) => {
                         const copy = [...scannedReceiptItems];
@@ -24932,7 +25789,7 @@ ${validText}
                         <div className="bg-white p-2 rounded-xl border border-stone-200 flex items-center justify-between gap-1">
                           <span className="text-stone-500 font-bold shrink-0">봉투 등</span>
                           <input
-                            type="number"
+                            type="number" inputMode="numeric"
                             value={receiptExcludedAmount}
                             onChange={(e) => setReceiptExcludedAmount(e.target.value)}
                             className="w-16 text-right font-black text-stone-700 bg-transparent outline-none"
@@ -24942,7 +25799,7 @@ ${validText}
                       <div className="bg-white p-2 rounded-xl border border-stone-200 flex items-center justify-between gap-2 text-[12.5px]">
                         <span className="text-stone-500 font-bold">영수증 결제금액</span>
                         <input
-                          type="number"
+                          type="number" inputMode="numeric"
                           placeholder="영수증 총액 입력"
                           value={receiptTotalAmount}
                           onChange={(e) => setReceiptTotalAmount(e.target.value)}
@@ -25573,7 +26430,7 @@ ${validText}
                 <option value="외식/배달">🛵 외식/배달</option>
               </select>
               <input
-                type="number"
+                type="number" inputMode="numeric"
                 placeholder="외식/배달 지출액(원)"
                 value={mealForm.cost}
                 onChange={(e) => setMealForm({ ...mealForm, cost: e.target.value })}
@@ -25754,7 +26611,7 @@ ${validText}
               <div>
                 <label className="text-[11.5px] font-bold text-stone-500">구입 금액(원)</label>
                 <input
-                  type="number"
+                  type="number" inputMode="numeric"
                   placeholder="예: 12000"
                   value={fridgeForm.price}
                   onChange={(e) => setFridgeForm({ ...fridgeForm, price: e.target.value })}
@@ -25861,7 +26718,7 @@ ${validText}
               </div>
             </div>
             <input
-              type="number"
+              type="number" inputMode="numeric"
               placeholder="결제 금액(원) 입력 (선택)"
               value={stockInPrice}
               onChange={(e) => setStockInPrice(e.target.value)}
@@ -26387,6 +27244,8 @@ ${validText}
                     onClick={async () => {
                       await saveAccessConfigToCloud({
                         adminCode: EDITOR_INVITE_CODE,
+                        suhyeokCode: EDITOR_INVITE_CODE,
+                        arinaCode: EDITOR_INVITE_CODE,
                         helperCode: DEFAULT_HELPER_CODE,
                         guestAllowedTabs: GUEST_ALLOWED_TABS,
                         helperViewTabs: DEFAULT_HELPER_TABS,
@@ -26404,31 +27263,31 @@ ${validText}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   <div className="bg-white p-2 rounded-xl border border-emerald-200 space-y-1">
                     <div className="flex items-center justify-between text-[11.5px] font-extrabold text-emerald-900">
-                      <span>👑 관리자 비밀번호</span>
-                      <span>현재: {adminCode}</span>
+                      <span>👑 수혁 관리자 비밀번호</span>
+                      <span>현재: {suhyeokCode}</span>
                     </div>
                     <div className="flex items-center gap-1">
                       <input
                         type="text"
-                        value={adminCodeDraft}
-                        onChange={(e) => setAdminCodeDraft(e.target.value)}
-                        placeholder="관리자 비밀번호"
+                        value={suhyeokCodeDraft}
+                        onChange={(e) => setSuhyeokCodeDraft(e.target.value)}
+                        placeholder="수혁 비밀번호 (4자리+)"
                         className="flex-1 min-w-0 px-2.5 py-1 rounded-lg border border-emerald-200 text-[13.5px] font-bold"
                       />
                       <button
                         type="button"
                         onClick={async () => {
-                          const nextA = adminCodeDraft.trim();
-                          if (nextA.length < 4) {
+                          const nextS = suhyeokCodeDraft.trim();
+                          if (nextS.length < 4) {
                             showToast("비밀번호는 4자리 이상으로 입력해 주세요.");
                             return;
                           }
-                          if (nextA === helperCode) {
+                          if (nextS === helperCode) {
                             showToast("육아지원군 비밀번호와 다른 번호를 입력해 주세요.");
                             return;
                           }
-                          await saveAccessConfigToCloud({ adminCode: nextA });
-                          showToast(`👑 관리자 비밀번호가 [${nextA}]로 변경되었습니다!`);
+                          await saveAccessConfigToCloud({ suhyeokCode: nextS, adminCode: nextS });
+                          showToast(`👑 수혁 관리자 비밀번호가 [${nextS}]로 변경되었습니다!`);
                         }}
                         className="px-2.5 py-1 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-[12.5px] font-extrabold shrink-0"
                       >
@@ -26438,7 +27297,43 @@ ${validText}
                   </div>
 
 
-                  <div className="bg-white p-2 rounded-xl border border-sky-200 space-y-1">
+                  <div className="bg-white p-2 rounded-xl border border-pink-200 space-y-1">
+                    <div className="flex items-center justify-between text-[11.5px] font-extrabold text-pink-900">
+                      <span>👑 아리나 관리자 비밀번호</span>
+                      <span>현재: {arinaCode}</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <input
+                        type="text"
+                        value={arinaCodeDraft}
+                        onChange={(e) => setArinaCodeDraft(e.target.value)}
+                        placeholder="아리나 비밀번호 (4자리+)"
+                        className="flex-1 min-w-0 px-2.5 py-1 rounded-lg border border-pink-200 text-[13.5px] font-bold"
+                      />
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          const nextAr = arinaCodeDraft.trim();
+                          if (nextAr.length < 4) {
+                            showToast("비밀번호는 4자리 이상으로 입력해 주세요.");
+                            return;
+                          }
+                          if (nextAr === helperCode) {
+                            showToast("육아지원군 비밀번호와 다른 번호를 입력해 주세요.");
+                            return;
+                          }
+                          await saveAccessConfigToCloud({ arinaCode: nextAr });
+                          showToast(`👑 아리나 관리자 비밀번호가 [${nextAr}]로 변경되었습니다!`);
+                        }}
+                        className="px-2.5 py-1 rounded-lg bg-pink-600 hover:bg-pink-700 text-white text-[12.5px] font-extrabold shrink-0"
+                      >
+                        저장
+                      </button>
+                    </div>
+                  </div>
+
+
+                  <div className="bg-white p-2 rounded-xl border border-sky-200 space-y-1 sm:col-span-2">
                     <div className="flex items-center justify-between text-[11.5px] font-extrabold text-sky-900">
                       <span>🌿 육아지원군 비밀번호</span>
                       <span>현재: {helperCode}</span>
@@ -26459,7 +27354,7 @@ ${validText}
                             showToast("비밀번호는 4자리 이상으로 입력해 주세요.");
                             return;
                           }
-                          if (nextC === adminCode) {
+                          if (nextC === suhyeokCode || nextC === arinaCode || nextC === adminCode) {
                             showToast("관리자 비밀번호와 다른 번호를 입력해 주세요.");
                             return;
                           }
@@ -26550,16 +27445,26 @@ ${validText}
                 </div>
 
 
-                <div className="grid grid-cols-2 gap-1.5">
+                <div className="grid grid-cols-3 gap-1.5">
                   <button
                     type="button"
                     onClick={async () => {
-                      const url = `${window.location.origin}/?invite=${adminCode}`;
-                      await copyTextSafe(url, "🔗 관리자 접속 링크 복사 완료!");
+                      const url = `${window.location.origin}/?invite=${suhyeokCode}`;
+                      await copyTextSafe(url, "🔗 수혁 관리자 접속 링크 복사 완료!");
                     }}
-                    className="py-1.5 rounded-xl bg-white hover:bg-emerald-50 text-emerald-800 border border-emerald-200 text-[11.5px] font-extrabold"
+                    className="py-1.5 rounded-xl bg-white hover:bg-emerald-50 text-emerald-800 border border-emerald-200 text-[11px] font-extrabold"
                   >
-                    🔗 관리자 링크 복사
+                    🔗 수혁 링크
+                  </button>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const url = `${window.location.origin}/?invite=${arinaCode}`;
+                      await copyTextSafe(url, "🔗 아리나 관리자 접속 링크 복사 완료!");
+                    }}
+                    className="py-1.5 rounded-xl bg-white hover:bg-pink-50 text-pink-800 border border-pink-200 text-[11px] font-extrabold"
+                  >
+                    🔗 아리나 링크
                   </button>
                   <button
                     type="button"
@@ -26567,9 +27472,9 @@ ${validText}
                       const url = `${window.location.origin}/?invite=${helperCode}`;
                       await copyTextSafe(url, "🔗 육아지원군 링크 복사 완료!");
                     }}
-                    className="py-1.5 rounded-xl bg-white hover:bg-sky-100 text-sky-800 border border-sky-200 text-[11.5px] font-extrabold"
+                    className="py-1.5 rounded-xl bg-white hover:bg-sky-100 text-sky-800 border border-sky-200 text-[11px] font-extrabold"
                   >
-                    🔗 육아지원군 링크 복사
+                    🔗 지원군 링크
                   </button>
                 </div>
               </div>
@@ -27488,7 +28393,7 @@ ${validText}
                     <div>
                       <label className="text-[11.5px] font-bold text-stone-400">왼쪽 (분)</label>
                       <input
-                        type="number"
+                        type="number" inputMode="numeric"
                         min="0"
                         value={activityEditModal.leftMin ?? 0}
                         onChange={(e) =>
@@ -27510,7 +28415,7 @@ ${validText}
                     <div>
                       <label className="text-[11.5px] font-bold text-stone-400">오른쪽 (분)</label>
                       <input
-                        type="number"
+                        type="number" inputMode="numeric"
                         min="0"
                         value={activityEditModal.rightMin ?? 0}
                         onChange={(e) =>
@@ -27582,7 +28487,7 @@ ${validText}
                     용량 ({actMeta.unit || "ml"})
                   </label>
                   <input
-                    type="number"
+                    type="number" inputMode="numeric"
                     value={activityEditModal.amountMl || ""}
                     placeholder="예: 40"
                     onChange={(e) => setActivityEditModal((p) => ({ ...p, amountMl: e.target.value }))}
@@ -27785,7 +28690,7 @@ ${validText}
                 </div>
                 <div className="grid grid-cols-3 gap-1.5">
                   <input
-                    type="number"
+                    type="number" inputMode="decimal"
                     step="0.1"
                     placeholder="키 (cm)"
                     value={diaryImportModal.quickHeight || ""}
@@ -27793,7 +28698,7 @@ ${validText}
                     className="px-2 py-1.5 rounded-xl border border-stone-200 bg-white text-[12.5px] font-bold"
                   />
                   <input
-                    type="number"
+                    type="number" inputMode="decimal"
                     step="0.01"
                     placeholder="몸무게 (kg)"
                     value={diaryImportModal.quickWeight || ""}
@@ -27801,7 +28706,7 @@ ${validText}
                     className="px-2 py-1.5 rounded-xl border border-stone-200 bg-white text-[12.5px] font-bold"
                   />
                   <input
-                    type="number"
+                    type="number" inputMode="decimal"
                     step="0.1"
                     placeholder="머리둘레"
                     value={diaryImportModal.quickHead || ""}
@@ -28452,75 +29357,114 @@ ${validText}
 
             {isEditorUnlocked ? (
               <div className="space-y-3">
-                <div className="p-3 rounded-2xl bg-stone-50 border border-stone-200 space-y-2">
-                  <div className="text-[12.5px] font-extrabold text-stone-600">
-                    현재 수정자 이름 (홈 최근 수정 알림에 기록됩니다)
-                  </div>
-                  <div className="flex flex-wrap gap-1.5">
-                    {(isAdminUnlocked ? ["수혁", "아리나"] : ["육아지원군", "가족"]).map((nm) => (
-                      <button
-                        key={nm}
-                        type="button"
-                        onClick={() => {
-                          setActorName(nm);
-                          try { localStorage.setItem("family_actor_name_v1", nm); } catch (e) {}
-                          showToast(`수정자 이름이 [${nm}]로 설정되었습니다.`);
-                        }}
-                        className={`px-3 py-1.5 rounded-xl text-[13.5px] font-extrabold border ${
-                          actorName === nm
-                            ? "bg-stone-900 text-white border-stone-900"
-                            : "bg-white text-stone-700 border-stone-200"
-                        }`}
-                      >
-                        {nm}
-                      </button>
-                    ))}
-                  </div>
-                  <div className="flex items-center gap-1 pt-0.5">
-                    <input
-                      type="text"
-                      value={actorNameDraft}
-                      onChange={(e) => setActorNameDraft(e.target.value)}
-                      placeholder="직접 입력 (예: 친정엄마, 이모님)"
-                      className="flex-1 min-w-0 px-2.5 py-1 rounded-lg border border-stone-200 bg-white text-[12.5px] font-bold"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const custom = actorNameDraft.trim();
-                        if (!custom) return;
-                        setActorName(custom);
-                        setActorNameDraft("");
-                        try { localStorage.setItem("family_actor_name_v1", custom); } catch (e) {}
-                        showToast(`수정자 이름이 [${custom}]로 설정되었습니다.`);
-                      }}
-                      className="px-2.5 py-1 rounded-lg bg-stone-800 text-white text-[11.5px] font-extrabold shrink-0"
-                    >
-                      적용
-                    </button>
-                  </div>
-                </div>
-
-
                 {isAdminUnlocked ? (
                   <>
-                    <p className="text-[13.5px] text-stone-600 leading-relaxed">
-                      모든 메뉴 열람·편집과 설정(API 키, 백업, 육아지원군 비밀번호 변경)이 가능합니다.
+                    <div className="p-3 rounded-2xl bg-stone-50 border border-stone-200 space-y-2.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[12.5px] font-extrabold text-stone-600">현재 로그인 계정</span>
+                        <span className="px-2.5 py-0.5 rounded-full bg-stone-900 text-white text-[12px] font-black">
+                          👑 {currentAdminOwner}
+                        </span>
+                      </div>
+                      {(() => {
+                        const otherAdmin = currentAdminOwner === "아리나" ? "수혁" : "아리나";
+                        return (
+                          <div className="pt-2 border-t border-stone-200/80 space-y-1.5">
+                            <div className="text-[11.5px] font-extrabold text-stone-500">
+                              🔄 {otherAdmin} 계정으로 전환 (개인 일정 분리)
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              <input
+                                type="password"
+                                inputMode="numeric"
+                                value={switchAdminPinInput}
+                                onChange={(e) => setSwitchAdminPinInput(e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") applyLoginCode(switchAdminPinInput, otherAdmin);
+                                }}
+                                placeholder={`${otherAdmin} 비밀번호 입력`}
+                                className="flex-1 min-w-0 px-2.5 py-1.5 rounded-xl border border-stone-300 bg-white text-[13px] font-bold text-center tracking-widest"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => applyLoginCode(switchAdminPinInput, otherAdmin)}
+                                className="px-3 py-1.5 rounded-xl bg-stone-900 hover:bg-stone-800 text-white text-[12px] font-extrabold shrink-0"
+                              >
+                                전환
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })()}
+                    </div>
+                    <p className="text-[12.5px] text-stone-500 leading-relaxed">
+                      모든 메뉴 열람·편집과 설정(수혁·아리나 개별 비밀번호, 백업)이 가능하며, 개인 일정·다이어리는 본인 계정에서만 보입니다.
                     </p>
                     <button
                       onClick={async () => {
-                        const inviteUrl = `${window.location.origin}/?invite=${adminCode}`;
-                        await copyTextSafe(inviteUrl, "🔗 관리자 초대 링크가 복사되었습니다!");
+                        const myCode = currentAdminOwner === "아리나" ? arinaCode : suhyeokCode;
+                        const inviteUrl = `${window.location.origin}/?invite=${myCode}`;
+                        await copyTextSafe(inviteUrl, `🔗 ${currentAdminOwner} 관리자 접속 링크가 복사되었습니다!`);
                       }}
-                      className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-[13.5px] font-extrabold"
+                      className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-[13px] font-extrabold"
                     >
-                      🔗 관리자 초대 링크 복사하기
+                      🔗 {currentAdminOwner} 전용 접속 링크 복사
                     </button>
                   </>
                 ) : (
-                  <p className="text-[13.5px] text-stone-600 leading-relaxed">
-                    허용된 메뉴({helperAllowedTabs.filter((x) => x !== "home").length}개)의 열람 및 편집이 가능합니다.
-                  </p>
+                  <>
+                    <div className="p-3 rounded-2xl bg-stone-50 border border-stone-200 space-y-2">
+                      <div className="text-[12.5px] font-extrabold text-stone-600">
+                        현재 수정자 이름 (홈 최근 수정 알림에 기록됩니다)
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {["육아지원군", "가족"].map((nm) => (
+                          <button
+                            key={nm}
+                            type="button"
+                            onClick={() => {
+                              setActorName(nm);
+                              try { localStorage.setItem("family_actor_name_v1", nm); } catch (e) {}
+                              showToast(`수정자 이름이 [${nm}]로 설정되었습니다.`);
+                            }}
+                            className={`px-3 py-1.5 rounded-xl text-[13.5px] font-extrabold border ${
+                              actorName === nm
+                                ? "bg-stone-900 text-white border-stone-900"
+                                : "bg-white text-stone-700 border-stone-200"
+                            }`}
+                          >
+                            {nm}
+                          </button>
+                        ))}
+                      </div>
+                      <div className="flex items-center gap-1 pt-0.5">
+                        <input
+                          type="text"
+                          value={actorNameDraft}
+                          onChange={(e) => setActorNameDraft(e.target.value)}
+                          placeholder="직접 입력 (예: 친정엄마, 이모님)"
+                          className="flex-1 min-w-0 px-2.5 py-1 rounded-lg border border-stone-200 bg-white text-[12.5px] font-bold"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const custom = actorNameDraft.trim();
+                            if (!custom) return;
+                            setActorName(custom);
+                            setActorNameDraft("");
+                            try { localStorage.setItem("family_actor_name_v1", custom); } catch (e) {}
+                            showToast(`수정자 이름이 [${custom}]로 설정되었습니다.`);
+                          }}
+                          className="px-2.5 py-1 rounded-lg bg-stone-800 text-white text-[11.5px] font-extrabold shrink-0"
+                        >
+                          적용
+                        </button>
+                      </div>
+                    </div>
+                    <p className="text-[13px] text-stone-600 leading-relaxed">
+                      허용된 메뉴({helperAllowedTabs.filter((x) => x !== "home").length}개)의 열람 및 편집이 가능합니다.
+                    </p>
+                  </>
                 )}
 
 
@@ -28533,15 +29477,29 @@ ${validText}
               </div>
             ) : (
               <div className="space-y-3">
-                <div className="bg-stone-50 p-3 rounded-2xl border border-stone-200 space-y-1 text-[12.5px] text-stone-600">
+                <div className="bg-stone-50 p-3 rounded-2xl border border-stone-200 space-y-1 text-[12px] text-stone-600">
                   <div>· <strong className="text-stone-800">미로그인</strong>: 가족사진 및 식단·레시피 일부만 열람</div>
                   <div>· <strong className="text-sky-800">육아지원군</strong>: 허용 메뉴 열람 및 편집 가능</div>
-                  <div>· <strong className="text-emerald-800">관리자</strong>: 전체 메뉴·설정·비밀번호 관리</div>
+                  <div>· <strong className="text-emerald-800">관리자(수혁·아리나)</strong>: 전체 메뉴·설정 및 본인 개인 일정</div>
+                </div>
+                <div className="grid grid-cols-2 gap-1.5 bg-stone-100 p-1 rounded-xl">
+                  {["수혁", "아리나"].map((nm) => (
+                    <button
+                      key={nm}
+                      type="button"
+                      onClick={() => setLoginAdminTarget(nm)}
+                      className={`py-1.5 rounded-lg text-[12.5px] font-black transition ${
+                        loginAdminTarget === nm ? "bg-stone-900 text-white shadow-xs" : "text-stone-500"
+                      }`}
+                    >
+                      👑 {nm}
+                    </button>
+                  ))}
                 </div>
                 <input
                   type="password"
                   inputMode="numeric"
-                  placeholder="관리자 또는 육아지원군 비밀번호 입력"
+                  placeholder="수혁 · 아리나 또는 육아지원군 비밀번호 입력"
                   value={editorCodeInput}
                   onChange={(e) => setEditorCodeInput(e.target.value)}
                   onKeyDown={(e) => {
