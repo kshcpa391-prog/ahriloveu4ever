@@ -1177,7 +1177,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v12.76";
+export const APP_CODE_VERSION = "v12.77";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1195,7 +1195,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-21 19:05";
+export const APP_BUILD_DATE = "2026-11-21 19:52";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1262,6 +1262,18 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v12.77",
+    version: "v12.77",
+    date: "2026-11-21",
+    title: "영수증 AI 스캔 항목별 소비기한 1탭 조절(1일·3일·1주·한달) 및 가족 일정 모달 날짜 빠른선택 추가",
+    category: "편의성 · 고도화",
+    changes: [
+      "영수증 AI 스캔 고도화: 스캔된 각 품목 카드에 [1일 · 3일 · 1주 · 한달] 소비기한 1탭 버튼을 추가해 일괄 입고 전 품목별 소비기한을 손쉽게 조정 가능",
+      "가족 일정 등록·수정 모달 편의성: 날짜 입력 아래 [오늘 · 내일 · 주말 · 1주뒤] 4종 빠른 날짜 선택 버튼 추가",
+      "전체 AST·TDZ·JSX·미선언 변수·import/export 1:1 정합성 최종 전수 검증 완료"
+    ]
+  },
   {
     id: "patch-v12.76",
     version: "v12.76",

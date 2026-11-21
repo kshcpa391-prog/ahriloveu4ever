@@ -579,6 +579,37 @@ const ScheduleFormModal = React.memo(({
             </select>
           </div>
         </div>
+        <div className="grid grid-cols-4 gap-1.5">
+          {[
+            { label: "오늘", offset: 0 },
+            { label: "내일", offset: 1 },
+            {
+              label: "주말",
+              offset: (() => {
+                const d = new Date().getDay();
+                return d === 6 ? 0 : d === 0 ? 0 : 6 - d;
+              })()
+            },
+            { label: "1주뒤", offset: 7 }
+          ].map((opt) => {
+            const tDate = addMonthsToDateStr(getTodayStr(), 0, opt.offset);
+            const isSel = draft.date === tDate;
+            return (
+              <button
+                key={opt.label}
+                type="button"
+                onClick={() => setDraft((p) => ({ ...p, date: tDate }))}
+                className={`py-1 rounded-xl text-[11px] font-extrabold border whitespace-nowrap transition ${
+                  isSel
+                    ? "bg-stone-900 text-white border-stone-900"
+                    : "bg-stone-50 hover:bg-stone-100 text-stone-600 border-stone-200"
+                }`}
+              >
+                {opt.label}
+              </button>
+            );
+          })}
+        </div>
 
         <div>
           <div className="flex items-center justify-between mb-1">
@@ -28545,6 +28576,38 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                             ⚠️ 수량 확인
                           </span>
                         )}
+                      </div>
+                      <div className="flex items-center gap-1 mt-1 flex-wrap">
+                        <span className="text-[10.5px] font-bold text-stone-400 whitespace-nowrap">
+                          📅 {it.expiryDate || "기한"}
+                        </span>
+                        {[
+                          { label: "1일", addM: 0, addD: 1 },
+                          { label: "3일", addM: 0, addD: 3 },
+                          { label: "1주", addM: 0, addD: 7 },
+                          { label: "한달", addM: 1, addD: 0 }
+                        ].map((opt) => {
+                          const targetExp = addMonthsToDateStr(getTodayStr(), opt.addM, opt.addD);
+                          const isSel = it.expiryDate === targetExp;
+                          return (
+                            <button
+                              key={opt.label}
+                              type="button"
+                              onClick={() => {
+                                const copy = [...scannedReceiptItems];
+                                copy[idx] = { ...copy[idx], expiryDate: targetExp };
+                                setScannedReceiptItems(copy);
+                              }}
+                              className={`px-1.5 py-0.5 rounded-md text-[10px] font-extrabold border whitespace-nowrap transition ${
+                                isSel
+                                  ? "bg-emerald-600 text-white border-emerald-600"
+                                  : "bg-white hover:bg-stone-100 text-stone-600 border-stone-200"
+                              }`}
+                            >
+                              {opt.label}
+                            </button>
+                          );
+                        })}
                       </div>
                     </div>
                     <input
