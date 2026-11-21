@@ -1178,7 +1178,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v12.84";
+export const APP_CODE_VERSION = "v12.85";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1196,7 +1196,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-21 20:58";
+export const APP_BUILD_DATE = "2026-11-21 21:08";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1264,6 +1264,18 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v12.85",
+    version: "v12.85",
+    date: "2026-11-21",
+    title: "🤝 육아 인수인계 임의 일자(오늘/내일/모레·달력) 추출 및 🗂️ 공유노트 내용 첨부 양방향 연계",
+    category: "기능 고도화 · 메뉴 연계",
+    changes: [
+      "기준 일자 자유 선택: [오늘 / 내일 / 모레] 1탭 버튼과 날짜 선택기(date)로 원하는 날의 루틴·할일·식단을 정확히 추출해 미리 인수인계서 작성 가능",
+      "🗂️ 공유노트 내용 첨부: 인수인계 모달에서 공유노트 페이지를 선택하면 본문·체크리스트(☑/☐)가 카톡 복사 텍스트·인포그래픽 PNG 카드·공지 고정에 자동 포함",
+      "양방향 메뉴 연계: 공유노트 페이지 옵션 메뉴에 [🤝 육아 인수인계에 첨부하기]를 추가해 노트를 바로 첨부한 상태로 인수인계 모달 열기 지원 및 AST·TDZ·배포 정합성 전수 검증 완료"
+    ]
+  },
   {
     id: "patch-v12.84",
     version: "v12.84",

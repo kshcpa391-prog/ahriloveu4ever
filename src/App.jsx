@@ -2357,7 +2357,14 @@ function MainApp() {
   const [isHouseModalOpen, setIsHouseModalOpen] = useState(false);
   const [isHandoverModalOpen, setIsHandoverModalOpen] = useState(false);
   const [handoverTarget, setHandoverTarget] = useState("전체");
-  const [handoverDayMode, setHandoverDayMode] = useState("today");
+  const [handoverDate, setHandoverDate] = useState(() => getTodayStr());
+  const [handoverAttachedPageId, setHandoverAttachedPageId] = useState(() => {
+    try {
+      return localStorage.getItem("kim_handover_page_id_v1") || "";
+    } catch (e) {
+      return "";
+    }
+  });
   const [handoverModalTab, setHandoverModalTab] = useState("config");
   const [handoverSections, setHandoverSections] = useState({
     mealFeed: true,
@@ -34325,8 +34332,28 @@ ${item.memo}` : `${item.title} 다녀옴!`,
       {/* 모달: 🏠 살림수첩 등록 · 수정 (수납지도 · 보증/AS · 상비약함) */}
       {isHandoverModalOpen && (() => {
         const today = getTodayStr();
-        const targetDate = handoverDayMode === "tomorrow" ? addMonthsToDateStr(today, 0, 1) : today;
-        const dayLabel = handoverDayMode === "tomorrow" ? "내일" : "오늘";
+        const tomorrowStr = addMonthsToDateStr(today, 0, 1);
+        const dayAfterStr = addMonthsToDateStr(today, 0, 2);
+        const targetDate = handoverDate || today;
+        const isTodayTarget = targetDate === today;
+        const targetDow = ["일", "월", "화", "수", "목", "금", "토"][new Date(`${targetDate}T12:00:00`).getDay()] || "";
+        const dayLabel = isTodayTarget
+          ? "오늘"
+          : targetDate === tomorrowStr
+          ? "내일"
+          : targetDate === dayAfterStr
+          ? "모레"
+          : `${targetDate.slice(5)}(${targetDow})`;
+        const attachedPage = handoverAttachedPageId
+          ? familyPages.find((p) => p.id === handoverAttachedPageId) || null
+          : null;
+        const attachedPageText = attachedPage
+          ? blocksToNotionMarkdown(attachedPage.blocks || [])
+              .replace(/^- \[x\] /gim, "☑ ")
+              .replace(/^- \[ \] /gim, "☐ ")
+              .replace(/^#{1,3}\s+/gm, "▪ ")
+              .trim()
+          : "";
         const nowMs = activityTimerTick || Date.now();
         const nowTimeLabel = formatTime12Ko(nowMs);
         const targetChildren = handoverTarget === "전체"
@@ -34407,12 +34434,12 @@ ${item.memo}` : `${item.title} 다녀옴!`,
           };
         });
 
-        // 오늘 or 내일 루틴 추출
+        // 지정 일자(오늘/내일/특정일) 루틴 추출
         const targetRoutines = familyRoutines
           .filter((r) => {
-            const matchDay = handoverDayMode === "tomorrow"
-              ? isRoutineDueOnExactDay(r, targetDate)
-              : isRoutineDueTodayOrPast(r, today) && !isRoutineDoneNow(r);
+            const matchDay = isTodayTarget
+              ? isRoutineDueTodayOrPast(r, today) && !isRoutineDoneNow(r)
+              : isRoutineDueOnExactDay(r, targetDate);
             if (!matchDay) return false;
             if (handoverTarget === "전체") return true;
             const rt = r.target || "공통";
@@ -34519,6 +34546,9 @@ ${item.memo}` : `${item.title} 다녀옴!`,
             }
           }
 
+          if (attachedPage && attachedPageText) {
+            out.push(`\n🗂️ [공유노트 첨부: ${attachedPage.title}]\n${attachedPageText.slice(0, 600)}${attachedPageText.length > 600 ? "\n..." : ""}`);
+          }
           if (handoverNote.trim()) {
             out.push(`\n💬 [전달 메모]\n${handoverNote.trim()}`);
           }
@@ -34574,6 +34604,17 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                 rows.push(`일정·할일: ${targetSchedules.slice(0, 5).map((s) => s.title).join(" · ")}`);
               }
               sectionsToDraw.push({ title: `🔄 ${dayLabel} 루틴 · 할 일`, accent: "#9A6700", bg: "#FDF9EE", rows });
+            }
+            if (attachedPage && attachedPageText) {
+              const noteLines = attachedPageText.split("\n").map((l) => l.trim()).filter(Boolean).slice(0, 6);
+              if (noteLines.length > 0) {
+                sectionsToDraw.push({
+                  title: `🗂️ 첨부 노트 · ${attachedPage.title}`,
+                  accent: "#4338CA",
+                  bg: "#EEF2FF",
+                  rows: noteLines
+                });
+              }
             }
             if (handoverNote.trim()) {
               sectionsToDraw.push({ title: "💬 교대자 전달 메모", accent: "#44403C", bg: "#F5F5F4", rows: [handoverNote.trim()] });
@@ -34696,26 +34737,40 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                 </button>
               </div>
 
-              {/* 날짜(오늘/내일) + 대상 + 구성/미리보기 탭 */}
-              <div className="flex items-center justify-between gap-1.5 flex-wrap shrink-0">
-                <div className="inline-flex bg-stone-200/80 p-0.5 rounded-xl">
-                  {[
-                    { id: "today", label: "오늘 기준" },
-                    { id: "tomorrow", label: "내일 기준" }
-                  ].map((d) => (
-                    <button
-                      key={d.id}
-                      type="button"
-                      onClick={() => setHandoverDayMode(d.id)}
-                      className={`px-2.5 py-1 rounded-lg text-[11.5px] font-extrabold whitespace-nowrap ${
-                        handoverDayMode === d.id ? "bg-white text-stone-900 shadow-sm" : "text-stone-600"
-                      }`}
-                    >
-                      {d.label}
-                    </button>
-                  ))}
+              {/* 기준 일자(오늘/내일/모레/날짜선택) + 구성/미리보기 탭 */}
+              <div className="space-y-1.5 shrink-0">
+                <div className="flex items-center justify-between gap-1.5">
+                  <div className="inline-flex items-center gap-1 flex-wrap">
+                    {[
+                      { label: "오늘", val: today },
+                      { label: "내일", val: tomorrowStr },
+                      { label: "모레", val: dayAfterStr }
+                    ].map((d) => (
+                      <button
+                        key={d.label}
+                        type="button"
+                        onClick={() => setHandoverDate(d.val)}
+                        className={`px-2 py-1 rounded-lg text-[11px] font-extrabold border whitespace-nowrap ${
+                          targetDate === d.val
+                            ? "bg-stone-900 text-white border-stone-900"
+                            : "bg-white text-stone-600 border-stone-200"
+                        }`}
+                      >
+                        {d.label}
+                      </button>
+                    ))}
+                    <input
+                      type="date"
+                      value={targetDate}
+                      onChange={(e) => {
+                        if (e.target.value) setHandoverDate(e.target.value);
+                      }}
+                      className="px-2 py-0.5 rounded-lg border border-stone-200 bg-white text-[11px] font-extrabold text-stone-700"
+                      title="인수인계 기준 일자 직접 선택"
+                    />
+                  </div>
                 </div>
-                <div className="inline-flex bg-stone-200/80 p-0.5 rounded-xl">
+                <div className="inline-flex bg-stone-200/80 p-0.5 rounded-xl w-full grid grid-cols-2">
                   {[
                     { id: "config", label: "⚙️ 항목선택" },
                     { id: "preview", label: "👁️ 카톡미리보기" }
@@ -34815,7 +34870,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                             <span className="text-[11.5px] font-black text-stone-700">
                               🔄 {dayLabel} 루틴 {targetRoutines.length}건 · 할일 {targetSchedules.length}건
                             </span>
-                            {handoverDayMode === "today" && targetRoutines.length > 0 && (
+                            {isTodayTarget && targetRoutines.length > 0 && (
                               <span className="text-[10px] font-bold text-stone-400">탭해 완료</span>
                             )}
                           </div>
@@ -34826,11 +34881,11 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                                   key={r.id}
                                   type="button"
                                   onClick={() => {
-                                    if (handoverDayMode === "today") handleToggleRoutine(r.id);
+                                    if (isTodayTarget) handleToggleRoutine(r.id);
                                   }}
                                   className="px-2 py-0.5 rounded-lg bg-stone-100 hover:bg-emerald-50 text-stone-700 text-[11px] font-bold whitespace-nowrap"
                                 >
-                                  {handoverDayMode === "today" ? "☐ " : "• "}
+                                  {isTodayTarget ? "☐ " : "• "}
                                   {r.scheduledTime ? `⏰${formatRoutineTimeLabel(r.scheduledTime)} ` : ""}
                                   {r.title}
                                 </button>
@@ -34871,6 +34926,63 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                           )}
                         </div>
                       </div>
+
+                      {canViewTab("pages") && familyPages.length > 0 && (
+                        <div className="space-y-1">
+                          <div className="flex items-center justify-between gap-2">
+                            <label className="text-[11px] font-extrabold text-stone-500">🗂️ 공유노트 내용 첨부 (선택)</label>
+                            {attachedPage && (
+                              <div className="flex items-center gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setSelectedPageId(attachedPage.id);
+                                    setActiveTab("pages");
+                                    setIsHandoverModalOpen(false);
+                                  }}
+                                  className="text-[10.5px] font-extrabold text-indigo-700 hover:underline whitespace-nowrap"
+                                >
+                                  노트 열기 →
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setHandoverAttachedPageId("");
+                                    try { localStorage.removeItem("kim_handover_page_id_v1"); } catch (err) {}
+                                  }}
+                                  className="text-[10.5px] font-extrabold text-stone-400 hover:text-stone-700 whitespace-nowrap"
+                                >
+                                  해제
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                          <select
+                            value={handoverAttachedPageId}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setHandoverAttachedPageId(val);
+                              try {
+                                if (val) localStorage.setItem("kim_handover_page_id_v1", val);
+                                else localStorage.removeItem("kim_handover_page_id_v1");
+                              } catch (err) {}
+                            }}
+                            className="w-full px-3 py-2 rounded-xl bg-white border border-stone-200 text-[12px] font-bold text-stone-800"
+                          >
+                            <option value="">첨부 안 함</option>
+                            {familyPages.map((pg) => (
+                              <option key={pg.id} value={pg.id}>
+                                {pg.icon || "📄"} {pg.title || "제목 없는 노트"}
+                              </option>
+                            ))}
+                          </select>
+                          {attachedPage && attachedPageText && (
+                            <div className="px-2.5 py-1.5 rounded-xl bg-indigo-50/70 border border-indigo-200/80 text-[11px] text-indigo-950 line-clamp-2 whitespace-pre-wrap">
+                              {attachedPageText}
+                            </div>
+                          )}
+                        </div>
+                      )}
 
                       <div className="space-y-1">
                         <label className="text-[11px] font-extrabold text-stone-500">💬 이번 교대 전달 메모 (선택)</label>
@@ -35378,6 +35490,24 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                 >
                   <Pin className="w-4 h-4 text-indigo-600" />
                   <span>가족공지로 공유하기</span>
+                </button>
+              )}
+              {accessRole !== "guest" && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setHandoverAttachedPageId(targetPg.id);
+                    try { localStorage.setItem("kim_handover_page_id_v1", targetPg.id); } catch (err) {}
+                    setHandoverTarget("전체");
+                    setHandoverModalTab("config");
+                    setPageMenuTargetId(null);
+                    setIsHandoverModalOpen(true);
+                    showToast(`🤝 '${targetPg.title}' 노트를 인수인계에 첨부했습니다!`);
+                  }}
+                  className="w-full py-2.5 px-3 rounded-xl hover:bg-sky-50 text-left text-[13.5px] font-extrabold text-sky-800 flex items-center gap-2"
+                >
+                  <span className="text-[15px] leading-none">🤝</span>
+                  <span>육아 인수인계에 첨부하기</span>
                 </button>
               )}
               <button
