@@ -1178,7 +1178,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v12.83";
+export const APP_CODE_VERSION = "v12.84";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1196,7 +1196,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-21 20:46";
+export const APP_BUILD_DATE = "2026-11-21 20:58";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1264,6 +1264,18 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v12.84",
+    version: "v12.84",
+    date: "2026-11-21",
+    title: "🤝 카톡 육아 인수인계 실전 고도화 (오늘/내일 전환·식사간격/식단·수면방식·약/진료 자동추출·카드 PNG 저장)",
+    category: "기능 고도화 · 시각화 · 메뉴 연계",
+    changes: [
+      "실전 데이터 자동 추출: 앱 내 기록에서 [오늘/내일 기준] 루틴·할일, 평균 수유 간격 및 다음 예상 시각, 먹은/예정 식단·이유식, 평균 수면시간·수면 방식 가이드, 최근 3일 진료·체온 및 살림수첩 상비약 복용량을 자동 집계",
+      "카톡 전달 최적화 (2탭 + 이미지 카드): [⚙️ 항목선택]에서 필요한 정보만 켜고 끄고 [👁️ 카톡미리보기]로 확인한 뒤, [🖼️ 카드저장(인포그래픽 PNG)] 또는 [📋 카톡복사]로 바로 전송 가능",
+      "메뉴 연계·UI 슬림화: 인수인계 모달 내 [🍽️ 식단] 빠른 이동 추가, 육아 활동 탭 중복 라벨(📋) 슬림화 및 AST·TDZ·배포 정합성 최종 검증 완료"
+    ]
+  },
   {
     id: "patch-v12.83",
     version: "v12.83",
