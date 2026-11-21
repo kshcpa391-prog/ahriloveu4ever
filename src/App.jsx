@@ -3209,6 +3209,7 @@ function MainApp() {
   const [stockInItem, setStockInItem] = useState(null);
   const [stockInPrice, setStockInPrice] = useState("");
   const [stockInLocation, setStockInLocation] = useState("냉장실");
+  const [stockInExpiry, setStockInExpiry] = useState("");
 
 
   // 가족 공지사항 상태
@@ -10513,6 +10514,39 @@ ${validText}
   };
 
 
+  const handleQuickUpdateFridgeExpiry = async (item, nextExpiryDate, presetLabel = "") => {
+    if (!requireEditorAccess("fridge") || !item?.id || !nextExpiryDate) return;
+    const updated = { ...item, expiryDate: nextExpiryDate, updatedAt: Date.now() };
+    setFridgeMap((prev) => {
+      const nextV4 = prev.v4?.[item.id] ? { ...prev.v4, [item.id]: updated } : prev.v4;
+      const nextV3 = prev.v3?.[item.id] ? { ...prev.v3, [item.id]: updated } : prev.v3;
+      const nextLocal = { ...(prev.local || {}), [item.id]: updated };
+      return { ...prev, v4: nextV4, v3: nextV3, local: nextLocal };
+    });
+    setQuickFridgeItem((prev) => (prev && prev.id === item.id ? updated : prev));
+    if (user && db) {
+      beginWrite();
+      let ok = false;
+      let errMsg = "";
+      try {
+        const batch = writeBatch(db);
+        batch.set(getDocRef("family_fridge_v4", item.id), updated, { merge: true });
+        if (fridgeMap.v3?.[item.id]) {
+          batch.set(getDocRef("family_fridge_v3", item.id), updated, { merge: true });
+        }
+        await batch.commit();
+        ok = true;
+      } catch (e) {
+        errMsg = e?.message || "소비기한 변경 동기화 오류";
+      } finally {
+        endWrite(ok, errMsg);
+      }
+    }
+    recordActivity("냉장고", "소비기한 변경", `${item.name} → ${nextExpiryDate}`);
+    showToast(`📅 ${item.name} 소비기한을 ${presetLabel ? `${presetLabel}(${nextExpiryDate})` : nextExpiryDate}로 변경했습니다.`);
+  };
+
+
   const handleConfirmStockIn = async () => {
     if (!requireEditorAccess()) return;
     if (!stockInItem) return;
@@ -10540,7 +10574,7 @@ ${validText}
       category: itemCat,
       quantity: parsedQty,
       unit: parsedUnit,
-      expiryDate: defaultExp || formatDate(expDateObj),
+      expiryDate: stockInExpiry || defaultExp || formatDate(expDateObj),
       price: priceNum,
       purchaseDate: selectedDate
     };
@@ -19773,6 +19807,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                     onClick={() => {
                       setStockInItem(item);
                       setStockInPrice("");
+                      setStockInExpiry(getDefaultExpiryForLocation(stockInLocation));
                     }}
                     className="px-2.5 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-[12.5px] font-extrabold whitespace-nowrap"
                   >
@@ -29437,6 +29472,34 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                 />
               </div>
             </div>
+            <div className="grid grid-cols-4 gap-1.5">
+              {[
+                { label: "1일뒤", addM: 0, addD: 1 },
+                { label: "3일뒤", addM: 0, addD: 3 },
+                { label: "1주뒤", addM: 0, addD: 7 },
+                { label: "한달뒤", addM: 1, addD: 0 }
+              ].map((opt) => {
+                const targetExp = addMonthsToDateStr(getTodayStr(), opt.addM, opt.addD);
+                const isSel = fridgeForm.expiryDate === targetExp;
+                return (
+                  <button
+                    key={opt.label}
+                    type="button"
+                    onClick={() => {
+                      setIsExpiryManuallyEdited(true);
+                      setFridgeForm({ ...fridgeForm, expiryDate: targetExp });
+                    }}
+                    className={`py-1.5 px-1 rounded-xl text-[11.5px] font-extrabold border whitespace-nowrap transition ${
+                      isSel
+                        ? "bg-emerald-600 text-white border-emerald-600 shadow-sm"
+                        : "bg-stone-50 hover:bg-stone-100 text-stone-700 border-stone-200"
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                );
+              })}
+            </div>
 
 
             {fridgeConflictData && (
@@ -29515,8 +29578,8 @@ ${item.memo}` : `${item.title} 다녀옴!`,
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setStockInItem(null)}>
           <div className="bg-white rounded-3xl max-w-sm w-full p-5 space-y-3" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-[15.5px] font-black">🛒 구매 완료 및 냉장고 입고</h3>
-            <p className="text-[13.5px] text-stone-600">
-              <b>{stockInItem.name}</b> 품목을 냉장고에 입고합니다. 결제 금액을 입력하면 식비 가계부에도 영구 기록됩니다.
+            <p className="text-[13px] text-stone-600">
+              <b>{stockInItem.name}</b> 입고 (금액 입력 시 가계부 자동 기록)
             </p>
             <div className="space-y-1.5">
               <label className="text-[12.5px] font-black text-stone-700 block">보관 위치 선택</label>
@@ -29525,8 +29588,11 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                   <button
                     key={loc}
                     type="button"
-                    onClick={() => setStockInLocation(loc)}
-                    className={`py-2 px-2 rounded-xl text-[12.5px] font-extrabold border transition ${
+                    onClick={() => {
+                      setStockInLocation(loc);
+                      setStockInExpiry(getDefaultExpiryForLocation(loc));
+                    }}
+                    className={`py-2 px-2 rounded-xl text-[12.5px] font-extrabold border whitespace-nowrap transition ${
                       stockInLocation === loc
                         ? "bg-emerald-600 text-white border-emerald-600"
                         : "bg-stone-50 text-stone-700 border-stone-200"
@@ -29535,6 +29601,40 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                     {loc}
                   </button>
                 ))}
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-[12.5px] font-black text-stone-700 block">📅 소비기한</label>
+              <input
+                type="date"
+                value={stockInExpiry || getDefaultExpiryForLocation(stockInLocation)}
+                onChange={(e) => setStockInExpiry(e.target.value)}
+                className="w-full px-3 py-2 rounded-xl border border-stone-200 text-[13px] font-bold"
+              />
+              <div className="grid grid-cols-4 gap-1.5">
+                {[
+                  { label: "1일뒤", addM: 0, addD: 1 },
+                  { label: "3일뒤", addM: 0, addD: 3 },
+                  { label: "1주뒤", addM: 0, addD: 7 },
+                  { label: "한달뒤", addM: 1, addD: 0 }
+                ].map((opt) => {
+                  const targetExp = addMonthsToDateStr(getTodayStr(), opt.addM, opt.addD);
+                  const isSel = (stockInExpiry || getDefaultExpiryForLocation(stockInLocation)) === targetExp;
+                  return (
+                    <button
+                      key={opt.label}
+                      type="button"
+                      onClick={() => setStockInExpiry(targetExp)}
+                      className={`py-1.5 px-1 rounded-xl text-[11.5px] font-extrabold border whitespace-nowrap transition ${
+                        isSel
+                          ? "bg-emerald-600 text-white border-emerald-600 shadow-sm"
+                          : "bg-stone-50 hover:bg-stone-100 text-stone-700 border-stone-200"
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  );
+                })}
               </div>
             </div>
             <input
@@ -33055,6 +33155,37 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                   <option key={z} value={z}>{z}</option>
                 ))}
               </select>
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-[12.5px] font-black text-stone-700 block">
+                📅 소비기한 빠른 설정 {quickFridgeItem.expiryDate ? <span className="text-stone-400 font-bold">({quickFridgeItem.expiryDate})</span> : null}
+              </label>
+              <div className="grid grid-cols-4 gap-1.5">
+                {[
+                  { label: "1일뒤", addM: 0, addD: 1 },
+                  { label: "3일뒤", addM: 0, addD: 3 },
+                  { label: "1주뒤", addM: 0, addD: 7 },
+                  { label: "한달뒤", addM: 1, addD: 0 }
+                ].map((opt) => {
+                  const targetExp = addMonthsToDateStr(getTodayStr(), opt.addM, opt.addD);
+                  const isSel = quickFridgeItem.expiryDate === targetExp;
+                  return (
+                    <button
+                      key={opt.label}
+                      type="button"
+                      onClick={() => handleQuickUpdateFridgeExpiry(quickFridgeItem, targetExp, opt.label)}
+                      className={`py-1.5 px-1 rounded-xl text-[11.5px] font-extrabold border whitespace-nowrap transition ${
+                        isSel
+                          ? "bg-emerald-600 text-white border-emerald-600 shadow-sm"
+                          : "bg-stone-50 hover:bg-stone-100 text-stone-700 border-stone-200"
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
 

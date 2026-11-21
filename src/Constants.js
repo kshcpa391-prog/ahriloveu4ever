@@ -1177,7 +1177,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v12.75";
+export const APP_CODE_VERSION = "v12.76";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1195,7 +1195,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-21 18:55";
+export const APP_BUILD_DATE = "2026-11-21 19:05";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1262,6 +1262,18 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v12.76",
+    version: "v12.76",
+    date: "2026-11-21",
+    title: "소비기한 원탭 프리셋(1일뒤·3일뒤·1주뒤·한달뒤) 3곳 전면 적용 및 장보기 입고 소비기한 고도화",
+    category: "편의성 · 고도화 · 시각정리",
+    changes: [
+      "소비기한 원탭 설정(1일뒤 · 3일뒤 · 1주뒤 · 한달뒤) 추가: 냉장고 재료 등록·수정 모달, 장보기→냉장고 입고 모달, 냉장고 퀵 액션 시트 3곳 모두에서 탭 한 번으로 오늘 기준 소비기한을 즉시 설정·수정 가능",
+      "장보기 입고 모달 고도화: 입고 시 보관 위치에 맞춰 소비기한을 직접 선택·조절할 수 있도록 날짜 입력 및 프리셋 버튼 추가, 설명 문구 슬림화",
+      "냉장고 퀵시트 소비기한 즉시 동기화(handleQuickUpdateFridgeExpiry) 구현 및 전체 AST·TDZ·JSX·배포 정합성 전수 검증 완료"
+    ]
+  },
   {
     id: "patch-v12.75",
     version: "v12.75",
