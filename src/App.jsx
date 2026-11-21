@@ -2356,6 +2356,15 @@ function MainApp() {
   const [houseFilter, setHouseFilter] = useState("전체");
   const [isHouseModalOpen, setIsHouseModalOpen] = useState(false);
   const [isHandoverModalOpen, setIsHandoverModalOpen] = useState(false);
+  const [isHomeDdayPickerOpen, setIsHomeDdayPickerOpen] = useState(false);
+  const [homeMiniDdayIds, setHomeMiniDdayIds] = useState(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem("kim_home_mini_dday_ids_v1") || "[]");
+      return Array.isArray(saved) ? saved : [];
+    } catch (e) {
+      return [];
+    }
+  });
   const [handoverTarget, setHandoverTarget] = useState("전체");
   const [handoverDate, setHandoverDate] = useState(() => getTodayStr());
   const [handoverAttachedPageId, setHandoverAttachedPageId] = useState(() => {
@@ -2376,24 +2385,53 @@ function MainApp() {
     notices: true,
     includeDoorCode: false
   });
+  const [handoverGuideSubTab, setHandoverGuideSubTab] = useState("시율");
+  const [handoverCustomText, setHandoverCustomText] = useState("");
+  const [isHandoverEditingPreview, setIsHandoverEditingPreview] = useState(false);
+  const [handoverExcludedIds, setHandoverExcludedIds] = useState([]);
   const [handoverProfile, setHandoverProfile] = useState(() => {
+    const emptyChild = { formulaGuide: "", sleepGuide: "", bathGuide: "", cautionGuide: "" };
     const empty = {
-      formulaGuide: "",
-      sleepGuide: "",
-      bathGuide: "",
-      cautionGuide: "",
       momMealGuide: "",
       houseworkGuide: "",
       emergencyContacts: "",
-      doorCode: ""
+      doorCode: "",
+      childGuides: {
+        "시목": { ...emptyChild },
+        "시율": { ...emptyChild }
+      }
     };
     try {
       const saved = JSON.parse(localStorage.getItem("kim_handover_profile_v1") || "null");
       const legacySleep = localStorage.getItem("kim_handover_sleep_guide_v1") || "";
       if (saved && typeof saved === "object") {
-        return { ...empty, ...saved, sleepGuide: saved.sleepGuide || legacySleep };
+        const cg = saved.childGuides && typeof saved.childGuides === "object" ? saved.childGuides : {};
+        return {
+          ...empty,
+          momMealGuide: saved.momMealGuide || "",
+          houseworkGuide: saved.houseworkGuide || "",
+          emergencyContacts: saved.emergencyContacts || "",
+          doorCode: saved.doorCode || "",
+          childGuides: {
+            "시목": { ...emptyChild, ...(cg["시목"] || {}) },
+            "시율": {
+              ...emptyChild,
+              formulaGuide: saved.formulaGuide || "",
+              sleepGuide: saved.sleepGuide || legacySleep,
+              bathGuide: saved.bathGuide || "",
+              cautionGuide: saved.cautionGuide || "",
+              ...(cg["시율"] || {})
+            }
+          }
+        };
       }
-      return { ...empty, sleepGuide: legacySleep };
+      return {
+        ...empty,
+        childGuides: {
+          "시목": { ...emptyChild },
+          "시율": { ...emptyChild, sleepGuide: legacySleep }
+        }
+      };
     } catch (e) {
       return empty;
     }
@@ -4860,19 +4898,43 @@ function MainApp() {
           if (snap.exists()) {
             const d = snap.data() || {};
             setHandoverProfile((prev) => {
+              const prevCg = prev.childGuides || {};
+              const dCg = d.childGuides && typeof d.childGuides === "object" ? d.childGuides : {};
+              const mergeChild = (cid, useLegacy = false) => ({
+                formulaGuide: typeof dCg[cid]?.formulaGuide === "string" ? dCg[cid].formulaGuide : (useLegacy && typeof d.formulaGuide === "string" ? d.formulaGuide : (prevCg[cid]?.formulaGuide || "")),
+                sleepGuide: typeof dCg[cid]?.sleepGuide === "string" ? dCg[cid].sleepGuide : (useLegacy && typeof d.sleepGuide === "string" ? d.sleepGuide : (prevCg[cid]?.sleepGuide || "")),
+                bathGuide: typeof dCg[cid]?.bathGuide === "string" ? dCg[cid].bathGuide : (useLegacy && typeof d.bathGuide === "string" ? d.bathGuide : (prevCg[cid]?.bathGuide || "")),
+                cautionGuide: typeof dCg[cid]?.cautionGuide === "string" ? dCg[cid].cautionGuide : (useLegacy && typeof d.cautionGuide === "string" ? d.cautionGuide : (prevCg[cid]?.cautionGuide || ""))
+              });
               const merged = {
-                formulaGuide: typeof d.formulaGuide === "string" ? d.formulaGuide : prev.formulaGuide,
-                sleepGuide: typeof d.sleepGuide === "string" ? d.sleepGuide : prev.sleepGuide,
-                bathGuide: typeof d.bathGuide === "string" ? d.bathGuide : prev.bathGuide,
-                cautionGuide: typeof d.cautionGuide === "string" ? d.cautionGuide : prev.cautionGuide,
                 momMealGuide: typeof d.momMealGuide === "string" ? d.momMealGuide : prev.momMealGuide,
                 houseworkGuide: typeof d.houseworkGuide === "string" ? d.houseworkGuide : prev.houseworkGuide,
                 emergencyContacts: typeof d.emergencyContacts === "string" ? d.emergencyContacts : prev.emergencyContacts,
-                doorCode: typeof d.doorCode === "string" ? d.doorCode : prev.doorCode
+                doorCode: typeof d.doorCode === "string" ? d.doorCode : prev.doorCode,
+                childGuides: {
+                  "시목": mergeChild("시목", false),
+                  "시율": mergeChild("시율", true)
+                }
               };
               try { localStorage.setItem("kim_handover_profile_v1", JSON.stringify(merged)); } catch (e) {}
               return merged;
             });
+          }
+        },
+        () => {}
+      )
+    );
+
+    unsubscribers.push(
+      onSnapshot(
+        getDocRef("family_meta_v4", "home_mini_ddays_v1"),
+        (snap) => {
+          if (snap.exists()) {
+            const d = snap.data() || {};
+            if (Array.isArray(d.ids)) {
+              setHomeMiniDdayIds(d.ids);
+              try { localStorage.setItem("kim_home_mini_dday_ids_v1", JSON.stringify(d.ids)); } catch (e) {}
+            }
           }
         },
         () => {}
@@ -5085,6 +5147,7 @@ function MainApp() {
       houseItems,
       familyPages,
       handoverProfile,
+      homeMiniDdayIds,
       mealFavorites: { combos: favoriteMealCombos, singles: favoriteSingleMenus },
       notices,
       schedules,
@@ -5340,6 +5403,7 @@ function MainApp() {
         houseItems,
         familyPages,
         handoverProfile,
+        homeMiniDdayIds,
         homeLayoutConfig,
         homeTimeRanges,
         routineTimeRanges,
@@ -5506,6 +5570,10 @@ function MainApp() {
             return nextP;
           });
         }
+        if (Array.isArray(payload.homeMiniDdayIds)) {
+          setHomeMiniDdayIds(payload.homeMiniDdayIds);
+          try { localStorage.setItem("kim_home_mini_dday_ids_v1", JSON.stringify(payload.homeMiniDdayIds)); } catch (e) {}
+        }
       if (Array.isArray(payload.recipes)) setRecipes(payload.recipes);
       if (payload.mealFavorites && typeof payload.mealFavorites === "object") {
         const rCombos = toSafeArray(payload.mealFavorites.combos);
@@ -5655,6 +5723,15 @@ function MainApp() {
             setDoc(
               getDocRef("family_meta_v4", "handover_profile_v1"),
               { ...payload.handoverProfile, updatedAtMs: Date.now() },
+              { merge: true }
+            )
+          );
+        }
+        if (Array.isArray(payload.homeMiniDdayIds)) {
+          writePromises.push(
+            setDoc(
+              getDocRef("family_meta_v4", "home_mini_ddays_v1"),
+              { ids: payload.homeMiniDdayIds, updatedAtMs: Date.now() },
               { merge: true }
             )
           );
@@ -12253,15 +12330,22 @@ ${item.memo}` : `${item.title} 다녀옴!`,
   };
 
   const saveHandoverProfileToCloud = async (nextProfile) => {
+    const rawCg = nextProfile?.childGuides || {};
+    const cleanChild = (cid) => ({
+      formulaGuide: String(rawCg[cid]?.formulaGuide || "").trim(),
+      sleepGuide: String(rawCg[cid]?.sleepGuide || "").trim(),
+      bathGuide: String(rawCg[cid]?.bathGuide || "").trim(),
+      cautionGuide: String(rawCg[cid]?.cautionGuide || "").trim()
+    });
     const clean = {
-      formulaGuide: String(nextProfile?.formulaGuide || "").trim(),
-      sleepGuide: String(nextProfile?.sleepGuide || "").trim(),
-      bathGuide: String(nextProfile?.bathGuide || "").trim(),
-      cautionGuide: String(nextProfile?.cautionGuide || "").trim(),
       momMealGuide: String(nextProfile?.momMealGuide || "").trim(),
       houseworkGuide: String(nextProfile?.houseworkGuide || "").trim(),
       emergencyContacts: String(nextProfile?.emergencyContacts || "").trim(),
-      doorCode: String(nextProfile?.doorCode || "").trim()
+      doorCode: String(nextProfile?.doorCode || "").trim(),
+      childGuides: {
+        "시목": cleanChild("시목"),
+        "시율": cleanChild("시율")
+      }
     };
     setHandoverProfile(clean);
     try { localStorage.setItem("kim_handover_profile_v1", JSON.stringify(clean)); } catch (e) {}
@@ -12278,6 +12362,26 @@ ${item.memo}` : `${item.title} 다녀옴!`,
       }
     } else {
       showToast("💾 고정 가이드가 기기에 저장되었습니다.");
+    }
+  };
+
+  const toggleHomeMiniDdayId = async (schId) => {
+    if (!schId) return;
+    const nextIds = homeMiniDdayIds.includes(schId)
+      ? homeMiniDdayIds.filter((id) => id !== schId)
+      : [...homeMiniDdayIds, schId];
+    setHomeMiniDdayIds(nextIds);
+    try { localStorage.setItem("kim_home_mini_dday_ids_v1", JSON.stringify(nextIds)); } catch (e) {}
+    if (user && db) {
+      try {
+        await setDoc(
+          getDocRef("family_meta_v4", "home_mini_ddays_v1"),
+          { ids: nextIds, updatedAtMs: Date.now() },
+          { merge: true }
+        );
+      } catch (e) {
+        setSyncErrorMsg(e?.message || "홈 미니 D-Day 동기화 오류");
+      }
     }
   };
 
@@ -13086,6 +13190,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
       !isBucketModalOpen &&
       !isHouseModalOpen &&
       !isHandoverModalOpen &&
+      !isHomeDdayPickerOpen &&
       !isPrivateCalModalOpen &&
       !isPrivateCalCsvModalOpen &&
       !calDayPopupDate &&
@@ -13130,6 +13235,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
         setIsBucketModalOpen(false);
         setIsHouseModalOpen(false);
         setIsHandoverModalOpen(false);
+        setIsHomeDdayPickerOpen(false);
         setIsPrivateCalModalOpen(false);
         setIsPrivateCalCsvModalOpen(false);
         setCalDayPopupDate(null);
@@ -13150,7 +13256,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
     };
     window.addEventListener("keydown", onEsc);
     return () => window.removeEventListener("keydown", onEsc);
-  }, [isQuickFabOpen, isRoutineModalOpen, isActivityModalOpen, isEditorUnlockModalOpen, isMealCopyModalOpen, diaryExportPreviewUrl, diaryLightboxUrl, diaryImportModal, cropModal, isWeatherModalOpen, liveActivityPopup, activityEditModal, zipImportPicker, magazineMonth, isSettingsOpen, isHeroPhotoModalOpen, isPageModalOpen, pageMenuTargetId, isPagePasteModalOpen, activeTableTaskModal, isDreamLinksModalOpen, isPatchModalOpen, isBucketModalOpen, isHouseModalOpen, isHandoverModalOpen, isPrivateCalModalOpen, isPrivateCalCsvModalOpen, calDayPopupDate, isScheduleModalOpen, isMealModalOpen, isFridgeModalOpen, isNoticeModalOpen, isRecipeModalOpen, isDaycareModalOpen, isReceiptModalOpen, isInventoryExportOpen, stockInItem, quickLogRecipe, cookingConfirmModal, quickFridgeItem]);
+  }, [isQuickFabOpen, isRoutineModalOpen, isActivityModalOpen, isEditorUnlockModalOpen, isMealCopyModalOpen, diaryExportPreviewUrl, diaryLightboxUrl, diaryImportModal, cropModal, isWeatherModalOpen, liveActivityPopup, activityEditModal, zipImportPicker, magazineMonth, isSettingsOpen, isHeroPhotoModalOpen, isPageModalOpen, pageMenuTargetId, isPagePasteModalOpen, activeTableTaskModal, isDreamLinksModalOpen, isPatchModalOpen, isBucketModalOpen, isHouseModalOpen, isHandoverModalOpen, isHomeDdayPickerOpen, isPrivateCalModalOpen, isPrivateCalCsvModalOpen, calDayPopupDate, isScheduleModalOpen, isMealModalOpen, isFridgeModalOpen, isNoticeModalOpen, isRecipeModalOpen, isDaycareModalOpen, isReceiptModalOpen, isInventoryExportOpen, stockInItem, quickLogRecipe, cookingConfirmModal, quickFridgeItem]);
 
   // ==========================================
   // 모바일·브라우저 뒤로가기 이전 화면 이동 (Chrome User-Gesture History API + URL 해시)
@@ -13193,6 +13299,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
     isBucketModalOpen ||
     isHouseModalOpen ||
     isHandoverModalOpen ||
+    isHomeDdayPickerOpen ||
     isPrivateCalModalOpen ||
     isPrivateCalCsvModalOpen ||
     Boolean(calDayPopupDate) ||
@@ -13267,6 +13374,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
       setCookingConfirmModal(null);
       setIsHouseModalOpen(false);
       setIsHandoverModalOpen(false);
+      setIsHomeDdayPickerOpen(false);
       setQuickFridgeItem(null);
       setLiveActivityPopup(null);
       setActivityEditModal(null);
@@ -13797,6 +13905,59 @@ ${item.memo}` : `${item.title} 다녀옴!`,
             </div>
           </div>
         )}
+        {activeTab === "home" && canViewTab("schedule") && (() => {
+          const selectedDdays = schedules
+            .filter((s) => s.showDday && homeMiniDdayIds.includes(s.id))
+            .map((s) => ({ ...s, calc: calculateScheduleDday(s) }))
+            .sort((a, b) => {
+              const ad = a.calc.daysUntil >= 0 ? a.calc.daysUntil : 9999 + Math.abs(a.calc.daysUntil);
+              const bd = b.calc.daysUntil >= 0 ? b.calc.daysUntil : 9999 + Math.abs(b.calc.daysUntil);
+              return ad - bd;
+            });
+          return (
+            <div className="flex items-center gap-1 overflow-x-auto no-scrollbar mb-2 px-0.5">
+              {selectedDdays.map((d) => {
+                const badge = d.calc.daysUntil === 0 ? "D-Day" : d.calc.dDayText;
+                const isSoon = d.calc.daysUntil >= 0 && d.calc.daysUntil <= 7;
+                return (
+                  <button
+                    key={d.id}
+                    type="button"
+                    onClick={() => {
+                      const targetD = d.calc.nextDateStr || d.date || getTodayStr();
+                      setScheduleMonth(String(targetD).slice(0, 7));
+                      setScheduleSelectedDate(targetD);
+                      setActiveTab("schedule");
+                      setCalDayPopupDate(targetD);
+                      setCalDayPopupItem({ ...d, _isFamily: true });
+                    }}
+                    className={`px-2 py-0.5 rounded-full border text-[10.5px] font-extrabold whitespace-nowrap shrink-0 flex items-center gap-1 transition ${
+                      isSoon
+                        ? "bg-amber-50 border-amber-200 text-amber-900 hover:bg-amber-100"
+                        : "bg-white border-stone-200 text-stone-700 hover:bg-stone-50"
+                    }`}
+                    title={`${d.title} (${d.calc.nextDateStr || d.date}) · 일정 보기`}
+                  >
+                    <span className="max-w-[96px] truncate">{d.title}</span>
+                    <span className={isSoon ? "text-amber-700 font-black" : "text-[#35503C] font-black"}>
+                      {badge}
+                    </span>
+                  </button>
+                );
+              })}
+              {canEditTab("schedule") && (
+                <button
+                  type="button"
+                  onClick={() => setIsHomeDdayPickerOpen(true)}
+                  className="px-2 py-0.5 rounded-full border border-dashed border-stone-300 bg-stone-50/80 hover:bg-stone-100 text-stone-500 text-[10px] font-extrabold whitespace-nowrap shrink-0"
+                  title="홈 상단에 표시할 D-Day 선택"
+                >
+                  {selectedDdays.length === 0 ? "+ D-Day 선택" : "⚙️"}
+                </button>
+              )}
+            </div>
+          );
+        })()}
 
 
         <div className="flex items-center justify-between gap-1">
@@ -24925,12 +25086,14 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                           <button
                             type="button"
                             onClick={() => {
+                              const tStr = getTodayStr();
+                              if (!handoverDate || handoverDate < tStr) setHandoverDate(tStr);
                               setHandoverTarget(activeChild?.id || "전체");
                               setHandoverModalTab("config");
                               setIsHandoverModalOpen(true);
                             }}
                             className="px-2 py-1 rounded-full bg-sky-50 hover:bg-sky-100 border border-sky-200 text-sky-800 text-[11.5px] font-extrabold whitespace-nowrap"
-                            title="1탭 육아 인수인계 요약 카드 열기 (테스트)"
+                            title="1탭 카톡 육아 인수인계 열기"
                           >
                             🤝 인수인계
                           </button>
@@ -27667,7 +27830,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                     { id: "house", label: "살림수첩", icon: "🏠" },
                     { id: "kitchen_timer", label: "조리타이머", icon: "⏱️" },
                     { id: "baby_dream", label: "아기꿈나라", icon: "🌙" },
-                    { id: "handover", label: "인수인계", icon: "🤝", isBeta: true }
+                    { id: "handover", label: "인수인계", icon: "🤝" }
                   ]
                 }
               ].map((grp) => (
@@ -27699,7 +27862,10 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                             setIsDreamLinksModalOpen(true);
                             setIsMoreNavOpen(false);
                           } else if (m.id === "handover") {
+                            const tStr = getTodayStr();
+                            if (!handoverDate || handoverDate < tStr) setHandoverDate(tStr);
                             setHandoverTarget("전체");
+                            setHandoverModalTab("config");
                             setIsHandoverModalOpen(true);
                             setIsMoreNavOpen(false);
                           } else {
@@ -27721,11 +27887,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                             {badgeCount > 99 ? "99+" : badgeCount}
                           </span>
                         )}
-                        {m.isBeta && (
-                          <span className="absolute top-1 right-1 px-1 py-0.5 rounded bg-sky-100 text-sky-800 text-[8.5px] font-black leading-none">
-                            BETA
-                          </span>
-                        )}
+
                         <span className="text-[17px]">{m.id === "kitchen_timer" || m.id === "baby_dream" || canViewTab(m.id) ? m.icon : "🔒"}</span>
                         <span className="truncate w-full text-center">{m.label}</span>
                       </button>
@@ -34427,6 +34589,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
         const dayAfterStr = addMonthsToDateStr(today, 0, 2);
         const targetDate = handoverDate || today;
         const isTodayTarget = targetDate === today;
+        const isFutureTarget = targetDate > today;
         const targetDow = ["일", "월", "화", "수", "목", "금", "토"][new Date(`${targetDate}T12:00:00`).getDay()] || "";
         const dayLabel = isTodayTarget
           ? "오늘"
@@ -34443,6 +34606,13 @@ ${item.memo}` : `${item.title} 다녀옴!`,
 
         const recentCutoffStr = addMonthsToDateStr(today, 0, -2);
         const extractMembers = (obj) => (Array.isArray(obj?.members) ? obj.members : obj?.member ? [obj.member] : []);
+        const isItemIncluded = (key) => !handoverExcludedIds.includes(key);
+        const toggleHandoverItem = (key) => {
+          setHandoverExcludedIds((prev) =>
+            prev.includes(key) ? prev.filter((x) => x !== key) : [...prev, key]
+          );
+          setHandoverCustomText("");
+        };
 
         const attachedPage = handoverAttachedPageId
           ? familyPages.find((p) => p.id === handoverAttachedPageId) || null
@@ -34455,19 +34625,38 @@ ${item.memo}` : `${item.title} 다녀옴!`,
               .trim()
           : "";
 
-        const GUIDE_FIELDS = [
-          { key: "formulaGuide", label: "🍼 분유·수유·젖병 소독", ph: "예: 압타밀 40°C / 1스푼 30ml / UV소독기 주방 좌측" },
-          { key: "sleepGuide", label: "😴 수면 방식·트림·재우는 법", ph: "예: 속싸개+백색소음 / 수유 후 15분 세워 트림 / 등센서 있음" },
-          { key: "bathGuide", label: "🛁 목욕·로션·기저귀 케어", ph: "예: 오후 4시 38°C 목욕 / 비판텐 기저귀발진 시 도포" },
-          { key: "cautionGuide", label: "⚠️ 알레르기·배꼽·절대 주의사항", ph: "예: 엎드려 재우기 금지 / 태열 있어 실내 22~23°C 유지" },
+        const COMMON_GUIDE_FIELDS = [
           { key: "momMealGuide", label: "🍱 산모 식사·기피음식·간식", ph: "예: 매운 음식·카페인 제외 / 따뜻한 미역국·물 위주" },
           { key: "houseworkGuide", label: "🧺 세탁(아기빨래)·청소·가사", ph: "예: 아기빨래 단독 울코스(세탁실 상단 아기세제) / 분리수거" },
           { key: "emergencyContacts", label: "📞 비상연락처 · 지정 소아과", ph: "예: 아빠 010-XXXX-XXXX / 엄마 010-XXXX-XXXX / OO소아과" },
           { key: "doorCode", label: "🔑 출입 안내 (선택 포함 · 보안)", ph: "예: 공동현관 #1234* / 현관문 비밀번호 (필요 시만 포함)", optional: true }
         ];
-        const missingGuideLabels = GUIDE_FIELDS
-          .filter((f) => !f.optional && !String(handoverProfile[f.key] || "").trim())
-          .map((f) => f.label.replace(/^[^\s]+\s/, ""));
+        const getChildGuideFields = (cid) =>
+          cid === "시목"
+            ? [
+                { key: "formulaGuide", label: "🍚 시목 식사·우유·간식 가이드", ph: "예: 유아식 3끼 + 오후 우유·과일 간식 / 알레르기 식품 주의" },
+                { key: "sleepGuide", label: "😴 시목 수면 방식·낮잠·재우는 법", ph: "예: 낮잠 1회(13시~15시) / 밤 9시 소등·애착인형" },
+                { key: "bathGuide", label: "🛁 시목 목욕·양치·로션 케어", ph: "예: 저녁 7시 목욕 / 자기전 양치·코뽑기·로션" },
+                { key: "cautionGuide", label: "⚠️ 시목 주의사항·특이사항", ph: "예: 동생(시율) 만질 때 손 씻기 / 모서리 주의" }
+              ]
+            : [
+                { key: "formulaGuide", label: "🍼 시율 분유·수유·젖병 소독", ph: "예: 압타밀 40°C / 1스푼 30ml / UV소독기 주방 좌측" },
+                { key: "sleepGuide", label: "😴 시율 수면 방식·트림·재우는 법", ph: "예: 속싸개+백색소음 / 수유 후 15분 세워 트림 / 등센서 있음" },
+                { key: "bathGuide", label: "🛁 시율 목욕·로션·기저귀 케어", ph: "예: 오후 4시 38°C 목욕 / 비판텐 기저귀발진 시 도포" },
+                { key: "cautionGuide", label: "⚠️ 시율 배꼽·태열·절대 주의사항", ph: "예: 엎드려 재우기 금지 / 태열 있어 실내 22~23°C 유지" }
+              ];
+
+        const getChildGuideObj = (cid) => (handoverProfile.childGuides && handoverProfile.childGuides[cid]) || {};
+        const countMissingCommon = COMMON_GUIDE_FIELDS.filter((f) => !f.optional && !String(handoverProfile[f.key] || "").trim()).length;
+        const countMissingChild = (cid) => {
+          const obj = getChildGuideObj(cid);
+          return ["formulaGuide", "sleepGuide", "cautionGuide"].filter((k) => !String(obj[k] || "").trim()).length;
+        };
+        const totalMissingGuideCount =
+          countMissingCommon +
+          (handoverTarget === "전체"
+            ? countMissingChild("시목") + countMissingChild("시율")
+            : countMissingChild(handoverTarget));
 
         const childDataList = targetChildren.map((ch) => {
           const sum = computeActivitySummaryForChild(ch.id);
@@ -34482,14 +34671,19 @@ ${item.memo}` : `${item.title} 다녀옴!`,
             ? Math.round(intervals.reduce((a, b) => a + b, 0) / intervals.length)
             : sum.feedIntervalMs;
           const avgIntervalLabel = avgIntervalMs ? formatElapsedKo(avgIntervalMs) : "기록 누적중";
-          const nextFeedEst = sum.lastFeed && avgIntervalMs
+          const nextFeedEst = !isFutureTarget && sum.lastFeed && avgIntervalMs
             ? formatTime12Ko((Number(sum.lastFeed.startMs) || 0) + avgIntervalMs)
             : "";
+
+          const recentFeedAmounts = feeds.slice(0, 5).map((f) => Number(f.amountMl) || 0).filter((v) => v > 0);
+          const avgFeedMl = recentFeedAmounts.length > 0
+            ? Math.round(recentFeedAmounts.reduce((a, b) => a + b, 0) / recentFeedAmounts.length)
+            : 0;
 
           const lastFeedText = sum.lastFeed
             ? `${formatTime12Ko(sum.lastFeed.startMs)} ${sum.lastFeed.type}${
                 sum.lastFeed.amountMl ? ` ${sum.lastFeed.amountMl}ml` : sum.lastFeed.durationMin ? ` ${sum.lastFeed.durationMin}분` : ""
-              } (${formatElapsedKo(nowMs - sum.lastFeed.startMs)} 전)`
+              }${isTodayTarget ? ` (${formatElapsedKo(nowMs - sum.lastFeed.startMs)} 전)` : ""}`
             : "기록 없음";
 
           const childMeals = meals
@@ -34512,19 +34706,22 @@ ${item.memo}` : `${item.title} 다녀옴!`,
             new Set(recentSleeps.map((a) => String(a.memo || "").trim()).filter(Boolean))
           ).slice(0, 2);
           const lastSleepText = sum.lastSleep
-            ? `${formatTime12Ko(sum.lastSleep.startMs)}${sum.lastSleep.durationMin ? ` (${sum.lastSleep.durationMin}분)` : ""} · ${formatElapsedKo(nowMs - sum.lastSleep.startMs)} 전`
+            ? `${formatTime12Ko(sum.lastSleep.startMs)}${sum.lastSleep.durationMin ? ` (${sum.lastSleep.durationMin}분)` : ""}${isTodayTarget ? ` · ${formatElapsedKo(nowMs - sum.lastSleep.startMs)} 전` : ""}`
             : "기록 없음";
 
           const recentMeds = babyMedicalNotes
             .filter((n) => n.childId === ch.id && String(n.date || "") >= recentCutoffStr)
             .slice(0, 3);
-          const childMedicines = houseItems
+          const allChildMeds = houseItems
             .filter((it) => it.kind === "medicine" && (it.target === ch.id || it.target === "공통"))
-            .slice(0, 4);
+            .slice(0, 5);
+          const selectedChildMeds = allChildMeds.filter((m) => isItemIncluded(`med:${m.id}`));
 
           return {
             ch,
+            guide: getChildGuideObj(ch.id),
             avgIntervalLabel,
+            avgFeedMl,
             nextFeedEst,
             lastFeedText,
             mealSummaryList,
@@ -34532,11 +34729,13 @@ ${item.memo}` : `${item.title} 다녀옴!`,
             recentSleepMemos,
             lastSleepText,
             recentMeds,
-            childMedicines
+            allChildMeds,
+            selectedChildMeds
           };
         });
 
-        const targetRoutines = familyRoutines
+        // 전체 후보 루틴/일정/공지/수납 + 개별 선택 필터링
+        const allTargetRoutines = familyRoutines
           .filter((r) => {
             const matchDay = isTodayTarget
               ? isRoutineDueTodayOrPast(r, today) && !isRoutineDoneNow(r)
@@ -34547,45 +34746,57 @@ ${item.memo}` : `${item.title} 다녀옴!`,
             return rt === handoverTarget || rt === "공통";
           })
           .sort((a, b) => String(a.scheduledTime || "99:99").localeCompare(String(b.scheduledTime || "99:99")));
+        const selectedRoutines = allTargetRoutines.filter((r) => isItemIncluded(`rt:${r.id}`));
 
-        const targetSchedules = schedules.filter((s) => {
+        const allTargetSchedules = schedules.filter((s) => {
           if (s.date !== targetDate || s.done) return false;
           if (handoverTarget === "전체") return true;
           const mems = extractMembers(s);
           return mems.includes(handoverTarget) || mems.length === 0 || mems.includes("전체");
         });
+        const selectedSchedules = allTargetSchedules.filter((s) => isItemIncluded(`sch:${s.id}`));
 
-        const pinnedNotices = notices.filter((n) => !n.done && n.pinned).slice(0, 3);
-        const keyStorageItems = houseItems
+        const allPinnedNotices = notices.filter((n) => !n.done && n.pinned).slice(0, 4);
+        const selectedNotices = allPinnedNotices.filter((n) => isItemIncluded(`nt:${n.id}`));
+
+        const allKeyStorage = houseItems
           .filter((it) => it.kind === "storage" && (it.room === "아기방" || /기저귀|분유|젖병|물티슈|체온|약|손수건|여벌|세제|로션/.test(it.title || "")))
           .slice(0, 6);
+        const selectedStorage = allKeyStorage.filter((it) => isItemIncluded(`st:${it.id}`));
 
         const buildKakaoHandoverText = () => {
           const isHelperMode = handoverPreset === "helper";
+          const modeTag = isFutureTarget ? "사전 안내" : "실시간 교대";
           const out = isHelperMode
             ? [
-                `안녕하세요 이모님! ${dayLabel}(${targetDate})도 잘 부탁드립니다 🙏`,
-                `🤝 [산후관리·육아 인수인계서]`,
-                `대상: ${handoverTarget === "전체" ? "시목·시율" : handoverTarget} | 기준: ${nowTimeLabel}`,
+                isFutureTarget
+                  ? `안녕하세요 이모님! ${dayLabel}(${targetDate} ${targetDow}) 사전 인수인계 미리 전달드립니다 🙏`
+                  : `안녕하세요 이모님! ${dayLabel}(${targetDate} ${targetDow})도 잘 부탁드립니다 🙏`,
+                `🤝 [산후관리·육아 인수인계 · ${modeTag}]`,
+                `대상: ${handoverTarget === "전체" ? "시목·시율" : handoverTarget} | 작성: ${today.slice(5)} ${nowTimeLabel}`,
                 `━━━━━━━━━━━━━━━━━━`
               ]
             : [
-                `🤝 [육아 인수인계서 · ${dayLabel}(${targetDate})]`,
-                `대상: ${handoverTarget === "전체" ? "시목·시율" : handoverTarget} | 작성: ${nowTimeLabel}`,
+                `🤝 [육아 인수인계서 · ${dayLabel}(${targetDate} ${targetDow}) ${modeTag}]`,
+                `대상: ${handoverTarget === "전체" ? "시목·시율" : handoverTarget} | 작성: ${today.slice(5)} ${nowTimeLabel}`,
                 `━━━━━━━━━━━━━━━━━━`
               ];
 
           if (handoverSections.mealFeed) {
-            out.push(`\n🍼 [식사·수유 간격 & ${dayLabel} 식단]`);
-            if (handoverProfile.formulaGuide) {
-              out.push(`▸ 분유·소독: ${handoverProfile.formulaGuide}`);
-            }
+            out.push(`\n🍼 [식사·수유 패턴 & ${dayLabel} ${isFutureTarget ? "예정 " : ""}식단]`);
             childDataList.forEach((d) => {
               out.push(`▸ ${d.ch.name}`);
-              out.push(`  • 수유 간격: 평균 ${d.avgIntervalLabel}${d.nextFeedEst ? ` (다음 예상 ${d.nextFeedEst})` : ""}`);
-              out.push(`  • 마지막 수유: ${d.lastFeedText}`);
+              if (d.guide.formulaGuide) out.push(`  • 식사·분유 가이드: ${d.guide.formulaGuide}`);
+              if (isFutureTarget) {
+                out.push(
+                  `  • 평소 수유 패턴: 평균 ${d.avgIntervalLabel} 간격${d.avgFeedMl > 0 ? ` · 1회 약 ${d.avgFeedMl}ml` : ""}`
+                );
+              } else {
+                out.push(`  • 수유 간격: 평균 ${d.avgIntervalLabel}${d.nextFeedEst ? ` (다음 예상 ${d.nextFeedEst})` : ""}`);
+                out.push(`  • 마지막 수유: ${d.lastFeedText}`);
+              }
               if (d.mealSummaryList.length > 0) {
-                out.push(`  • ${dayLabel} 식사: ${d.mealSummaryList.join(" / ")}`);
+                out.push(`  • ${dayLabel} ${isFutureTarget ? "예정 " : ""}식사: ${d.mealSummaryList.join(" / ")}`);
               }
             });
           }
@@ -34595,15 +34806,13 @@ ${item.memo}` : `${item.title} 다녀옴!`,
             childDataList.forEach((d) => {
               const sleepBits = [];
               if (d.avgSleepTxt) sleepBits.push(`평균 ${d.avgSleepTxt}`);
-              sleepBits.push(`최근 ${d.lastSleepText}`);
-              out.push(`▸ ${d.ch.name}: ${sleepBits.join(" · ")}`);
-              if (d.recentSleepMemos.length > 0) {
-                out.push(`  • 최근 수면 메모: ${d.recentSleepMemos.join(" / ")}`);
-              }
+              if (!isFutureTarget) sleepBits.push(`최근 ${d.lastSleepText}`);
+              out.push(`▸ ${d.ch.name}${sleepBits.length > 0 ? `: ${sleepBits.join(" · ")}` : ""}`);
+              if (d.recentSleepMemos.length > 0) out.push(`  • 수면 참고 메모: ${d.recentSleepMemos.join(" / ")}`);
+              if (d.guide.sleepGuide) out.push(`  • 수면 방식: ${d.guide.sleepGuide}`);
+              if (d.guide.bathGuide) out.push(`  • 목욕·케어: ${d.guide.bathGuide}`);
+              if (d.guide.cautionGuide) out.push(`  • ⚠️ 주의사항: ${d.guide.cautionGuide}`);
             });
-            if (handoverProfile.sleepGuide) out.push(`▸ 수면 방식: ${handoverProfile.sleepGuide}`);
-            if (handoverProfile.bathGuide) out.push(`▸ 목욕·케어: ${handoverProfile.bathGuide}`);
-            if (handoverProfile.cautionGuide) out.push(`▸ ⚠️ 주의사항: ${handoverProfile.cautionGuide}`);
           }
 
           if (handoverSections.meds) {
@@ -34618,32 +34827,31 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                     .join(" / ")}`
                 );
               }
-              if (d.childMedicines.length > 0) {
+              if (d.selectedChildMeds.length > 0) {
                 hasAnyMed = true;
                 out.push(
-                  `▸ ${d.ch.name} 상비약: ${d.childMedicines
+                  `▸ ${d.ch.name} 상비약: ${d.selectedChildMeds
                     .map((m) => `${m.title}${m.dosage ? `(${m.dosage})` : ""}`)
                     .join(", ")}`
                 );
               }
             });
-            if (!hasAnyMed) out.push(`▸ 현재 복용 중인 약·최근 진료 특이사항 없음`);
+            if (!hasAnyMed) out.push(`▸ 선택된 약·최근 진료 특이사항 없음`);
           }
 
           if (handoverSections.routines) {
-            out.push(`\n🔄 [${dayLabel} 루틴 · 할 일]`);
-            if (targetRoutines.length > 0) {
+            out.push(`\n🔄 [${dayLabel}(${targetDate.slice(5)} ${targetDow}) ${isFutureTarget ? "예정 " : ""}루틴 · 할 일]`);
+            if (selectedRoutines.length > 0) {
               out.push(
-                `▸ 루틴(${targetRoutines.length}건): ${targetRoutines
-                  .slice(0, 8)
+                `▸ 루틴(${selectedRoutines.length}건): ${selectedRoutines
                   .map((r) => (r.scheduledTime ? `⏰${formatRoutineTimeLabel(r.scheduledTime)} ${r.title}` : r.title))
                   .join(" · ")}`
               );
             } else {
-              out.push(`▸ 예정/남은 루틴 없음`);
+              out.push(`▸ 선택된 루틴 없음`);
             }
-            if (targetSchedules.length > 0) {
-              out.push(`▸ 일정·할일(${targetSchedules.length}건): ${targetSchedules.slice(0, 6).map((s) => s.title).join(" · ")}`);
+            if (selectedSchedules.length > 0) {
+              out.push(`▸ 일정·할일(${selectedSchedules.length}건): ${selectedSchedules.map((s) => s.title).join(" · ")}`);
             }
           }
 
@@ -34657,12 +34865,12 @@ ${item.memo}` : `${item.title} 다녀옴!`,
             }
           }
 
-          if (handoverSections.notices && (pinnedNotices.length > 0 || keyStorageItems.length > 0)) {
+          if (handoverSections.notices && (selectedNotices.length > 0 || selectedStorage.length > 0)) {
             out.push(`\n📌 [공지 · 주요 물건 위치]`);
-            pinnedNotices.forEach((n) => out.push(`▸ 공지: ${n.title}`));
-            if (keyStorageItems.length > 0) {
+            selectedNotices.forEach((n) => out.push(`▸ 공지: ${n.title}`));
+            if (selectedStorage.length > 0) {
               out.push(
-                `▸ 물건 위치: ${keyStorageItems
+                `▸ 물건 위치: ${selectedStorage
                   .map((it) => `${it.title}(${it.room}${it.detailLoc ? ` ${it.detailLoc}` : ""})`)
                   .join(" / ")}`
               );
@@ -34678,6 +34886,10 @@ ${item.memo}` : `${item.title} 다녀옴!`,
           return out.join("\n");
         };
 
+        const autoGeneratedText = buildKakaoHandoverText();
+        const isUsingCustomText = Boolean(handoverCustomText.trim());
+        const finalKakaoText = isUsingCustomText ? handoverCustomText : autoGeneratedText;
+
         const handleDownloadHandoverCard = () => {
           try {
             const W = 900;
@@ -34685,73 +34897,95 @@ ${item.memo}` : `${item.title} 다녀옴!`,
             const innerW = W - pad * 2;
             const sectionsToDraw = [];
 
-            if (handoverSections.mealFeed) {
-              const rows = [];
-              if (handoverProfile.formulaGuide) rows.push(`분유·소독: ${handoverProfile.formulaGuide}`);
-              childDataList.forEach((d) => {
-                rows.push(`${d.ch.name} · 평균 ${d.avgIntervalLabel}${d.nextFeedEst ? ` → 다음 예상 ${d.nextFeedEst}` : ""}`);
-                rows.push(`  마지막 수유: ${d.lastFeedText}`);
-                if (d.mealSummaryList.length > 0) rows.push(`  ${dayLabel} 식사: ${d.mealSummaryList.join(" / ")}`);
+            if (isUsingCustomText) {
+              const rawLines = finalKakaoText.split("\n").map((l) => l.trim()).filter((l) => l && !/^━+$/.test(l));
+              sectionsToDraw.push({
+                title: "📝 직접 수정된 육아 인수인계서",
+                accent: "#2F6F4E",
+                bg: "#FFFFFF",
+                rows: rawLines
               });
-              sectionsToDraw.push({ title: `🍼 식사·수유 간격 & ${dayLabel} 식단`, accent: "#2F6F4E", bg: "#F2F8F4", rows });
-            }
-            if (handoverSections.sleep) {
-              const rows = [];
-              childDataList.forEach((d) => {
-                rows.push(`${d.ch.name}: ${d.avgSleepTxt ? `평균 ${d.avgSleepTxt} · ` : ""}최근 ${d.lastSleepText}`);
-                if (d.recentSleepMemos.length > 0) rows.push(`  메모: ${d.recentSleepMemos.join(" / ")}`);
-              });
-              if (handoverProfile.sleepGuide) rows.push(`수면 방식: ${handoverProfile.sleepGuide}`);
-              if (handoverProfile.bathGuide) rows.push(`목욕·케어: ${handoverProfile.bathGuide}`);
-              if (handoverProfile.cautionGuide) rows.push(`⚠️ 주의사항: ${handoverProfile.cautionGuide}`);
-              sectionsToDraw.push({ title: "😴 수면 방식 · 목욕 · 주의사항", accent: "#3B5998", bg: "#F2F5FB", rows });
-            }
-            if (handoverSections.meds) {
-              const rows = [];
-              childDataList.forEach((d) => {
-                if (d.recentMeds.length > 0) {
-                  rows.push(`${d.ch.name} 진료: ${d.recentMeds.map((m) => `${m.title}${m.temp ? `(${m.temp}°C)` : ""}`).join(" / ")}`);
-                }
-                if (d.childMedicines.length > 0) {
-                  rows.push(`${d.ch.name} 약: ${d.childMedicines.map((m) => `${m.title}${m.dosage ? `(${m.dosage})` : ""}`).join(", ")}`);
-                }
-              });
-              if (rows.length === 0) rows.push("복용 중인 약·최근 진료 특이사항 없음");
-              sectionsToDraw.push({ title: "💊 약 복용 · 최근 진료/체온", accent: "#B83B5E", bg: "#FDF3F5", rows });
-            }
-            if (handoverSections.routines) {
-              const rows = [];
-              if (targetRoutines.length > 0) {
-                rows.push(`루틴: ${targetRoutines.slice(0, 7).map((r) => (r.scheduledTime ? `⏰${formatRoutineTimeLabel(r.scheduledTime)} ${r.title}` : r.title)).join(" · ")}`);
-              } else {
-                rows.push("예정/남은 루틴 없음");
-              }
-              if (targetSchedules.length > 0) {
-                rows.push(`일정·할일: ${targetSchedules.slice(0, 5).map((s) => s.title).join(" · ")}`);
-              }
-              sectionsToDraw.push({ title: `🔄 ${dayLabel} 루틴 · 할 일`, accent: "#9A6700", bg: "#FDF9EE", rows });
-            }
-            if (handoverSections.careGuide && (handoverProfile.momMealGuide || handoverProfile.houseworkGuide || handoverProfile.emergencyContacts)) {
-              const rows = [];
-              if (handoverProfile.momMealGuide) rows.push(`산모 식사: ${handoverProfile.momMealGuide}`);
-              if (handoverProfile.houseworkGuide) rows.push(`세탁·가사: ${handoverProfile.houseworkGuide}`);
-              if (handoverProfile.emergencyContacts) rows.push(`비상연락: ${handoverProfile.emergencyContacts}`);
-              if (handoverSections.includeDoorCode && handoverProfile.doorCode) rows.push(`출입안내: ${handoverProfile.doorCode}`);
-              sectionsToDraw.push({ title: "🏠 산모 식사 · 가사 · 비상연락", accent: "#0F766E", bg: "#F0FDFA", rows });
-            }
-            if (attachedPage && attachedPageText) {
-              const noteLines = attachedPageText.split("\n").map((l) => l.trim()).filter(Boolean).slice(0, 6);
-              if (noteLines.length > 0) {
-                sectionsToDraw.push({
-                  title: `🗂️ 첨부 노트 · ${attachedPage.title}`,
-                  accent: "#4338CA",
-                  bg: "#EEF2FF",
-                  rows: noteLines
+            } else {
+              if (handoverSections.mealFeed) {
+                const rows = [];
+                childDataList.forEach((d) => {
+                  rows.push(
+                    isFutureTarget
+                      ? `${d.ch.name} · 평소 평균 ${d.avgIntervalLabel} 간격${d.avgFeedMl > 0 ? ` (1회 약 ${d.avgFeedMl}ml)` : ""}`
+                      : `${d.ch.name} · 평균 ${d.avgIntervalLabel}${d.nextFeedEst ? ` → 다음 예상 ${d.nextFeedEst}` : ""}`
+                  );
+                  if (d.guide.formulaGuide) rows.push(`  가이드: ${d.guide.formulaGuide}`);
+                  if (!isFutureTarget) rows.push(`  마지막 수유: ${d.lastFeedText}`);
+                  if (d.mealSummaryList.length > 0) rows.push(`  ${dayLabel} 식사: ${d.mealSummaryList.join(" / ")}`);
                 });
+                sectionsToDraw.push({ title: `🍼 식사·수유 패턴 & ${dayLabel} 식단`, accent: "#2F6F4E", bg: "#F2F8F4", rows });
               }
-            }
-            if (handoverNote.trim()) {
-              sectionsToDraw.push({ title: "💬 교대자 전달 메모", accent: "#44403C", bg: "#F5F5F4", rows: [handoverNote.trim()] });
+              if (handoverSections.sleep) {
+                const rows = [];
+                childDataList.forEach((d) => {
+                  const sb = `${d.avgSleepTxt ? `평균 ${d.avgSleepTxt}` : ""}${!isFutureTarget ? `${d.avgSleepTxt ? " · " : ""}최근 ${d.lastSleepText}` : ""}`;
+                  if (sb) rows.push(`${d.ch.name}: ${sb}`);
+                  if (d.guide.sleepGuide) rows.push(`  수면방식: ${d.guide.sleepGuide}`);
+                  if (d.guide.bathGuide) rows.push(`  목욕·케어: ${d.guide.bathGuide}`);
+                  if (d.guide.cautionGuide) rows.push(`  ⚠️ 주의: ${d.guide.cautionGuide}`);
+                });
+                if (rows.length > 0) sectionsToDraw.push({ title: "😴 수면 방식 · 목욕 · 주의사항", accent: "#3B5998", bg: "#F2F5FB", rows });
+              }
+              if (handoverSections.meds) {
+                const rows = [];
+                childDataList.forEach((d) => {
+                  if (d.recentMeds.length > 0) {
+                    rows.push(`${d.ch.name} 진료: ${d.recentMeds.map((m) => `${m.title}${m.temp ? `(${m.temp}°C)` : ""}`).join(" / ")}`);
+                  }
+                  if (d.selectedChildMeds.length > 0) {
+                    rows.push(`${d.ch.name} 약: ${d.selectedChildMeds.map((m) => `${m.title}${m.dosage ? `(${m.dosage})` : ""}`).join(", ")}`);
+                  }
+                });
+                if (rows.length === 0) rows.push("복용 중인 약·최근 진료 특이사항 없음");
+                sectionsToDraw.push({ title: "💊 약 복용 · 최근 진료/체온", accent: "#B83B5E", bg: "#FDF3F5", rows });
+              }
+              if (handoverSections.routines) {
+                const rows = [];
+                if (selectedRoutines.length > 0) {
+                  rows.push(`루틴: ${selectedRoutines.map((r) => (r.scheduledTime ? `⏰${formatRoutineTimeLabel(r.scheduledTime)} ${r.title}` : r.title)).join(" · ")}`);
+                } else {
+                  rows.push("선택된 루틴 없음");
+                }
+                if (selectedSchedules.length > 0) {
+                  rows.push(`일정·할일: ${selectedSchedules.map((s) => s.title).join(" · ")}`);
+                }
+                sectionsToDraw.push({ title: `🔄 ${dayLabel} ${isFutureTarget ? "예정 " : ""}루틴 · 할 일`, accent: "#9A6700", bg: "#FDF9EE", rows });
+              }
+              if (handoverSections.careGuide && (handoverProfile.momMealGuide || handoverProfile.houseworkGuide || handoverProfile.emergencyContacts)) {
+                const rows = [];
+                if (handoverProfile.momMealGuide) rows.push(`산모 식사: ${handoverProfile.momMealGuide}`);
+                if (handoverProfile.houseworkGuide) rows.push(`세탁·가사: ${handoverProfile.houseworkGuide}`);
+                if (handoverProfile.emergencyContacts) rows.push(`비상연락: ${handoverProfile.emergencyContacts}`);
+                if (handoverSections.includeDoorCode && handoverProfile.doorCode) rows.push(`출입안내: ${handoverProfile.doorCode}`);
+                sectionsToDraw.push({ title: "🏠 산모 식사 · 가사 · 비상연락", accent: "#0F766E", bg: "#F0FDFA", rows });
+              }
+              if (handoverSections.notices && (selectedNotices.length > 0 || selectedStorage.length > 0)) {
+                const rows = [];
+                selectedNotices.forEach((n) => rows.push(`공지: ${n.title}`));
+                if (selectedStorage.length > 0) {
+                  rows.push(`위치: ${selectedStorage.map((it) => `${it.title}(${it.room}${it.detailLoc ? ` ${it.detailLoc}` : ""})`).join(" / ")}`);
+                }
+                sectionsToDraw.push({ title: "📌 공지 · 주요 물건 위치", accent: "#7C2D12", bg: "#FFF7ED", rows });
+              }
+              if (attachedPage && attachedPageText) {
+                const noteLines = attachedPageText.split("\n").map((l) => l.trim()).filter(Boolean).slice(0, 6);
+                if (noteLines.length > 0) {
+                  sectionsToDraw.push({
+                    title: `🗂️ 첨부 노트 · ${attachedPage.title}`,
+                    accent: "#4338CA",
+                    bg: "#EEF2FF",
+                    rows: noteLines
+                  });
+                }
+              }
+              if (handoverNote.trim()) {
+                sectionsToDraw.push({ title: "💬 교대자 전달 메모", accent: "#44403C", bg: "#F5F5F4", rows: [handoverNote.trim()] });
+              }
             }
 
             const canvas = document.createElement("canvas");
@@ -34793,15 +35027,19 @@ ${item.memo}` : `${item.title} 다녀옴!`,
             ctx.fillStyle = "#5E7A65";
             ctx.fillRect(0, 0, W, 128);
             ctx.fillStyle = "#FFFFFF";
-            ctx.font = "800 34px -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif";
+            ctx.font = "800 32px -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif";
             ctx.fillText(
-              `${handoverPreset === "helper" ? "🤝 산후관리·육아 인수인계" : "🤝 육아 인수인계 카드"} · ${dayLabel}(${targetDate})`,
+              `${handoverPreset === "helper" ? "🤝 산후관리·육아 인수인계" : "🤝 육아 인수인계"} · ${dayLabel}(${targetDate})`,
               pad,
               62
             );
             ctx.fillStyle = "#E6F0E8";
-            ctx.font = "600 21px -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif";
-            ctx.fillText(`대상: ${handoverTarget === "전체" ? "시목 · 시율" : handoverTarget}   |   생성: ${nowTimeLabel}`, pad, 102);
+            ctx.font = "600 20px -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif";
+            ctx.fillText(
+              `대상: ${handoverTarget === "전체" ? "시목 · 시율" : handoverTarget}  |  ${isFutureTarget ? "사전 안내" : "실시간 교대"}  |  작성: ${nowTimeLabel}`,
+              pad,
+              102
+            );
 
             let y = 154;
             prepared.forEach((sec) => {
@@ -34846,23 +35084,27 @@ ${item.memo}` : `${item.title} 다녀옴!`,
           }
         };
 
-        const previewText = buildKakaoHandoverText();
+        const activeTabKey = handoverModalTab === "guide" ? "guide" : "config";
 
         return (
           <div
-            className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+            className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-3 sm:p-4"
             onClick={() => setIsHandoverModalOpen(false)}
           >
             <div
-              className="bg-[#FAF8F3] border border-stone-200 rounded-3xl max-w-md w-full p-4 shadow-2xl space-y-2.5 max-h-[89vh] flex flex-col"
+              className="bg-[#FAF8F3] border border-stone-200 rounded-3xl max-w-lg w-full p-4 shadow-2xl space-y-2.5 max-h-[90vh] flex flex-col"
               onClick={(e) => e.stopPropagation()}
             >
               {/* 상단 헤더 */}
               <div className="flex items-center justify-between gap-2 pb-2 border-b border-stone-200 shrink-0">
                 <div className="flex items-center gap-1.5 min-w-0">
                   <h3 className="text-[15.5px] font-black text-stone-900 whitespace-nowrap">🤝 카톡 육아 인수인계</h3>
-                  <span className="px-1.5 py-0.5 rounded-md bg-sky-100 text-sky-800 text-[10px] font-black whitespace-nowrap">
-                    BETA
+                  <span
+                    className={`px-2 py-0.5 rounded-full text-[10px] font-black whitespace-nowrap ${
+                      isFutureTarget ? "bg-indigo-100 text-indigo-800" : "bg-[#EEF3EE] text-[#35503C]"
+                    }`}
+                  >
+                    {isFutureTarget ? `${dayLabel} 사전안내` : "오늘 실시간"}
                   </span>
                 </div>
                 <button
@@ -34874,26 +35116,25 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                 </button>
               </div>
 
-              {/* 3탭 네비게이션 */}
-              <div className="grid grid-cols-3 gap-1 bg-stone-200/80 p-0.5 rounded-xl shrink-0">
+              {/* 2탭 슬림 네비게이션 (구성과 미리보기 즉각 연동!) */}
+              <div className="grid grid-cols-2 gap-1 bg-stone-200/80 p-0.5 rounded-xl shrink-0">
                 {[
-                  { id: "config", label: "⚙️ 구성" },
-                  { id: "guide", label: `📝 고정가이드`, badge: missingGuideLabels.length },
-                  { id: "preview", label: "👁️ 미리보기" }
+                  { id: "config", label: "🤝 구성 · 실시간 미리보기" },
+                  { id: "guide", label: "📝 고정가이드(클라우드)", badge: totalMissingGuideCount }
                 ].map((tb) => (
                   <button
                     key={tb.id}
                     type="button"
                     onClick={() => setHandoverModalTab(tb.id)}
-                    className={`py-1.5 px-1 rounded-lg text-[11.5px] font-extrabold whitespace-nowrap flex items-center justify-center gap-1 ${
-                      handoverModalTab === tb.id ? "bg-[#5E7A65] text-white shadow-sm" : "text-stone-600"
+                    className={`py-1.5 px-2 rounded-lg text-[11.5px] font-extrabold whitespace-nowrap flex items-center justify-center gap-1 ${
+                      activeTabKey === tb.id ? "bg-[#5E7A65] text-white shadow-sm" : "text-stone-600"
                     }`}
                   >
                     <span>{tb.label}</span>
                     {tb.badge > 0 && (
                       <span
-                        className={`px-1 rounded-full text-[9.5px] font-black ${
-                          handoverModalTab === tb.id ? "bg-amber-300 text-stone-950" : "bg-amber-500 text-white"
+                        className={`px-1.5 rounded-full text-[9.5px] font-black ${
+                          activeTabKey === tb.id ? "bg-amber-300 text-stone-950" : "bg-amber-500 text-white"
                         }`}
                       >
                         {tb.badge}
@@ -34905,64 +35146,47 @@ ${item.memo}` : `${item.title} 다녀옴!`,
 
               {/* 본문 스크롤 영역 */}
               <div className="overflow-y-auto space-y-2.5 pr-0.5 flex-1">
-                {handoverModalTab === "config" && (
+                {activeTabKey === "config" && (
                   <>
-                    {/* 전달 대상 프리셋(산후도우미용 / 가족교대용) */}
-                    <div className="grid grid-cols-2 gap-1.5">
-                      {[
-                        { id: "helper", label: "👶 산후도우미용", desc: "인사·분유·산모식사·가사 포함" },
-                        { id: "family", label: "👨‍👩‍👧‍👦 가족교대용", desc: "수유·식단·루틴 핵심 요약" }
-                      ].map((pr) => (
-                        <button
-                          key={pr.id}
-                          type="button"
-                          onClick={() => {
-                            setHandoverPreset(pr.id);
-                            if (pr.id === "helper") {
-                              setHandoverSections((p) => ({
-                                ...p,
-                                mealFeed: true,
-                                sleep: true,
-                                meds: true,
-                                routines: true,
-                                careGuide: true,
-                                notices: true
-                              }));
-                            } else {
-                              setHandoverSections((p) => ({ ...p, careGuide: false }));
-                            }
-                          }}
-                          className={`p-2 rounded-2xl border text-left transition ${
-                            handoverPreset === pr.id
-                              ? "bg-stone-900 text-white border-stone-900"
-                              : "bg-white text-stone-700 border-stone-200"
-                          }`}
-                        >
-                          <div className="text-[12px] font-black whitespace-nowrap">{pr.label}</div>
-                          <div className={`text-[10px] font-bold mt-0.5 ${handoverPreset === pr.id ? "text-stone-300" : "text-stone-400"}`}>
-                            {pr.desc}
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-
-                    {/* 미기재 고정 가이드 안내 배너 */}
-                    {handoverPreset === "helper" && missingGuideLabels.length > 0 && (
-                      <button
-                        type="button"
-                        onClick={() => setHandoverModalTab("guide")}
-                        className="w-full px-3 py-2 rounded-2xl bg-amber-50 hover:bg-amber-100 border border-amber-200 text-left flex items-center justify-between gap-2"
-                      >
-                        <div className="text-[11.5px] font-extrabold text-amber-950 leading-snug">
-                          ⚠️ 클라우드 고정 가이드 미기재 ({missingGuideLabels.length}건):{" "}
-                          <span className="font-bold text-amber-800">{missingGuideLabels.slice(0, 3).join(", ")}{missingGuideLabels.length > 3 ? " 등" : ""}</span>
-                        </div>
-                        <span className="text-[11px] font-black text-amber-900 whitespace-nowrap shrink-0">입력 →</span>
-                      </button>
-                    )}
-
-                    {/* 기준 일자 + 아이 대상 */}
+                    {/* 프리셋 + 기준 일자 + 아이 대상 (컴팩트 1카드) */}
                     <div className="bg-white rounded-2xl border border-stone-200 p-2.5 space-y-2">
+                      <div className="grid grid-cols-2 gap-1.5">
+                        {[
+                          { id: "helper", label: "👶 산후도우미용" },
+                          { id: "family", label: "👨‍👩‍👧‍👦 가족교대용" }
+                        ].map((pr) => (
+                          <button
+                            key={pr.id}
+                            type="button"
+                            onClick={() => {
+                              setHandoverPreset(pr.id);
+                              setHandoverCustomText("");
+                              setIsHandoverEditingPreview(false);
+                              if (pr.id === "helper") {
+                                setHandoverSections((p) => ({
+                                  ...p,
+                                  mealFeed: true,
+                                  sleep: true,
+                                  meds: true,
+                                  routines: true,
+                                  careGuide: true,
+                                  notices: true
+                                }));
+                              } else {
+                                setHandoverSections((p) => ({ ...p, careGuide: false }));
+                              }
+                            }}
+                            className={`py-1.5 px-2 rounded-xl border text-[11.5px] font-black whitespace-nowrap transition ${
+                              handoverPreset === pr.id
+                                ? "bg-stone-900 text-white border-stone-900"
+                                : "bg-stone-50 text-stone-600 border-stone-200"
+                            }`}
+                          >
+                            {pr.label}
+                          </button>
+                        ))}
+                      </div>
+
                       <div className="flex items-center gap-1 flex-wrap">
                         {[
                           { label: "오늘", val: today },
@@ -34972,7 +35196,10 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                           <button
                             key={d.label}
                             type="button"
-                            onClick={() => setHandoverDate(d.val)}
+                            onClick={() => {
+                              setHandoverDate(d.val);
+                              setHandoverCustomText("");
+                            }}
                             className={`px-2 py-1 rounded-lg text-[11px] font-extrabold border whitespace-nowrap ${
                               targetDate === d.val
                                 ? "bg-stone-900 text-white border-stone-900"
@@ -34986,49 +35213,91 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                           type="date"
                           value={targetDate}
                           onChange={(e) => {
-                            if (e.target.value) setHandoverDate(e.target.value);
+                            if (e.target.value) {
+                              setHandoverDate(e.target.value);
+                              setHandoverCustomText("");
+                            }
                           }}
                           className="px-2 py-0.5 rounded-lg border border-stone-200 bg-stone-50 text-[11px] font-extrabold text-stone-700"
                         />
-                      </div>
-                      <div className="flex items-center gap-1 flex-wrap">
-                        {["전체", ...CHILDREN_INFO.map((c) => c.id)].map((tg) => (
-                          <button
-                            key={tg}
-                            type="button"
-                            onClick={() => setHandoverTarget(tg)}
-                            className={`px-2.5 py-1 rounded-full text-[11px] font-extrabold border whitespace-nowrap ${
-                              handoverTarget === tg
-                                ? "bg-[#5E7A65] text-white border-[#5E7A65]"
-                                : "bg-stone-50 text-stone-600 border-stone-200"
-                            }`}
-                          >
-                            {tg === "전체" ? "전체 (시목·시율)" : tg}
-                          </button>
-                        ))}
+                        <div className="ml-auto flex items-center gap-1">
+                          {["전체", ...CHILDREN_INFO.map((c) => c.id)].map((tg) => (
+                            <button
+                              key={tg}
+                              type="button"
+                              onClick={() => {
+                                setHandoverTarget(tg);
+                                setHandoverCustomText("");
+                              }}
+                              className={`px-2 py-1 rounded-full text-[10.5px] font-extrabold border whitespace-nowrap ${
+                                handoverTarget === tg
+                                  ? "bg-[#5E7A65] text-white border-[#5E7A65]"
+                                  : "bg-stone-50 text-stone-600 border-stone-200"
+                              }`}
+                            >
+                              {tg}
+                            </button>
+                          ))}
+                        </div>
                       </div>
                     </div>
 
-                    {/* 포함 항목 토글 칩 */}
-                    <div className="bg-white rounded-2xl border border-stone-200 p-2.5 space-y-1.5">
-                      <div className="text-[11px] font-black text-stone-500">포함할 항목 선택</div>
+                    {/* 미기재 고정 가이드 안내 배너 */}
+                    {handoverPreset === "helper" && totalMissingGuideCount > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setHandoverGuideSubTab(
+                            countMissingChild("시율") > 0 ? "시율" : countMissingChild("시목") > 0 ? "시목" : "공통"
+                          );
+                          setHandoverModalTab("guide");
+                        }}
+                        className="w-full px-3 py-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 border border-amber-200 text-left flex items-center justify-between gap-2"
+                      >
+                        <span className="text-[11px] font-extrabold text-amber-950">
+                          ⚠️ 클라우드 고정 가이드 미기재 {totalMissingGuideCount}건
+                        </span>
+                        <span className="text-[11px] font-black text-amber-900 whitespace-nowrap">입력 →</span>
+                      </button>
+                    )}
+
+                    {/* 섹션 포함/제외 + 개별 세부 항목 선택 */}
+                    <div className="bg-white rounded-2xl border border-stone-200 p-2.5 space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-[11px] font-black text-stone-500">포함 섹션 & 개별 항목 선택 (탭해 포함/제외)</span>
+                        {handoverExcludedIds.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setHandoverExcludedIds([]);
+                              setHandoverCustomText("");
+                            }}
+                            className="text-[10.5px] font-extrabold text-sky-700 hover:underline whitespace-nowrap"
+                          >
+                            🔄 전체포함
+                          </button>
+                        )}
+                      </div>
                       <div className="flex flex-wrap gap-1">
                         {[
-                          { key: "mealFeed", label: "🍼 식사·수유간격" },
-                          { key: "sleep", label: "😴 수면·주의사항" },
+                          { key: "mealFeed", label: "🍼 식사·수유" },
+                          { key: "sleep", label: "😴 수면·주의" },
                           { key: "meds", label: "💊 약·진료" },
                           { key: "routines", label: `🔄 ${dayLabel} 루틴·할일` },
-                          { key: "careGuide", label: "🏠 산모식사·가사·연락처" },
-                          { key: "notices", label: "📌 공지·수납위치" },
-                          { key: "includeDoorCode", label: "🔑 출입비번 포함" }
+                          { key: "careGuide", label: "🏠 산모·가사·연락" },
+                          { key: "notices", label: "📌 공지·수납" },
+                          { key: "includeDoorCode", label: "🔑 출입비번" }
                         ].map((sec) => {
                           const active = handoverSections[sec.key];
                           return (
                             <button
                               key={sec.key}
                               type="button"
-                              onClick={() => setHandoverSections((p) => ({ ...p, [sec.key]: !p[sec.key] }))}
-                              className={`px-2 py-1 rounded-full text-[11px] font-extrabold border whitespace-nowrap transition ${
+                              onClick={() => {
+                                setHandoverSections((p) => ({ ...p, [sec.key]: !p[sec.key] }));
+                                setHandoverCustomText("");
+                              }}
+                              className={`px-2 py-0.5 rounded-full text-[11px] font-extrabold border whitespace-nowrap transition ${
                                 active
                                   ? "bg-[#EEF3EE] text-[#35503C] border-[#B6CBB9]"
                                   : "bg-stone-50 text-stone-400 border-stone-200"
@@ -35039,196 +35308,501 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                           );
                         })}
                       </div>
-                    </div>
 
-                    {/* 오늘 루틴 즉시 체크 (오늘 기준일 때만) */}
-                    {handoverSections.routines && targetRoutines.length > 0 && (
-                      <div className="bg-white rounded-2xl border border-stone-200 p-2.5 space-y-1.5">
-                        <div className="flex items-center justify-between">
-                          <span className="text-[11.5px] font-black text-stone-700">
-                            🔄 {dayLabel} 루틴 {targetRoutines.length}건 · 할일 {targetSchedules.length}건
-                          </span>
-                          {isTodayTarget && <span className="text-[10px] font-bold text-stone-400">탭해 완료</span>}
-                        </div>
-                        <div className="flex flex-wrap gap-1">
-                          {targetRoutines.slice(0, 6).map((r) => (
-                            <button
-                              key={r.id}
-                              type="button"
-                              onClick={() => {
-                                if (isTodayTarget) handleToggleRoutine(r.id);
-                              }}
-                              className="px-2 py-0.5 rounded-lg bg-stone-100 hover:bg-emerald-50 text-stone-700 text-[11px] font-bold whitespace-nowrap"
-                            >
-                              {isTodayTarget ? "☐ " : "• "}
-                              {r.scheduledTime ? `⏰${formatRoutineTimeLabel(r.scheduledTime)} ` : ""}
-                              {r.title}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* 공유노트 첨부 + 이번 교대 한 줄 메모 */}
-                    <div className="space-y-2">
-                      {canViewTab("pages") && familyPages.length > 0 && (
-                        <div className="space-y-1">
-                          <div className="flex items-center justify-between gap-2">
-                            <label className="text-[11px] font-extrabold text-stone-500">🗂️ 공유노트 내용 첨부 (선택)</label>
-                            {attachedPage && (
-                              <div className="flex items-center gap-1.5">
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setSelectedPageId(attachedPage.id);
-                                    setActiveTab("pages");
-                                    setIsHandoverModalOpen(false);
-                                  }}
-                                  className="text-[10.5px] font-extrabold text-indigo-700 hover:underline whitespace-nowrap"
-                                >
-                                  노트 열기 →
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setHandoverAttachedPageId("");
-                                    try { localStorage.removeItem("kim_handover_page_id_v1"); } catch (err) {}
-                                  }}
-                                  className="text-[10.5px] font-extrabold text-stone-400 hover:text-stone-700 whitespace-nowrap"
-                                >
-                                  해제
-                                </button>
-                              </div>
+                      {/* 개별 루틴 선택 */}
+                      {handoverSections.routines && allTargetRoutines.length > 0 && (
+                        <div className="pt-1.5 border-t border-stone-100 space-y-1">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10.5px] font-black text-stone-600">
+                              🔄 공유할 {dayLabel} 루틴 ({selectedRoutines.length}/{allTargetRoutines.length})
+                            </span>
+                            {canViewTab("schedule") && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setActiveTab("schedule");
+                                  setIsHandoverModalOpen(false);
+                                }}
+                                className="text-[10px] font-extrabold text-stone-400 hover:text-stone-700 whitespace-nowrap"
+                              >
+                                원본 편집 →
+                              </button>
                             )}
                           </div>
+                          <div className="flex flex-wrap gap-1">
+                            {allTargetRoutines.map((r) => {
+                              const inc = isItemIncluded(`rt:${r.id}`);
+                              return (
+                                <button
+                                  key={r.id}
+                                  type="button"
+                                  onClick={() => toggleHandoverItem(`rt:${r.id}`)}
+                                  className={`px-2 py-0.5 rounded-lg text-[10.5px] font-bold border whitespace-nowrap transition ${
+                                    inc
+                                      ? "bg-amber-50 text-amber-950 border-amber-200"
+                                      : "bg-stone-50 text-stone-400 border-stone-200 line-through"
+                                  }`}
+                                >
+                                  {inc ? "✓ " : ""}{r.scheduledTime ? `⏰${formatRoutineTimeLabel(r.scheduledTime)} ` : ""}{r.title}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* 개별 일정·할일 선택 */}
+                      {handoverSections.routines && allTargetSchedules.length > 0 && (
+                        <div className="pt-1.5 border-t border-stone-100 space-y-1">
+                          <span className="text-[10.5px] font-black text-stone-600">
+                            🗓️ 공유할 {dayLabel} 일정·할일 ({selectedSchedules.length}/{allTargetSchedules.length})
+                          </span>
+                          <div className="flex flex-wrap gap-1">
+                            {allTargetSchedules.map((s) => {
+                              const inc = isItemIncluded(`sch:${s.id}`);
+                              return (
+                                <button
+                                  key={s.id}
+                                  type="button"
+                                  onClick={() => toggleHandoverItem(`sch:${s.id}`)}
+                                  className={`px-2 py-0.5 rounded-lg text-[10.5px] font-bold border whitespace-nowrap ${
+                                    inc
+                                      ? "bg-sky-50 text-sky-900 border-sky-200"
+                                      : "bg-stone-50 text-stone-400 border-stone-200 line-through"
+                                  }`}
+                                >
+                                  {inc ? "✓ " : ""}{s.title}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* 개별 상비약 / 공지 / 수납위치 선택 */}
+                      {handoverSections.meds && childDataList.some((d) => d.allChildMeds.length > 0) && (
+                        <div className="pt-1.5 border-t border-stone-100 space-y-1">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10.5px] font-black text-stone-600">💊 공유할 상비약</span>
+                            {canViewTab("house") && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setHouseSubTab("medicine");
+                                  setActiveTab("house");
+                                  setIsHandoverModalOpen(false);
+                                }}
+                                className="text-[10px] font-extrabold text-stone-400 hover:text-stone-700 whitespace-nowrap"
+                              >
+                                원본 편집 →
+                              </button>
+                            )}
+                          </div>
+                          <div className="flex flex-wrap gap-1">
+                            {Array.from(
+                              new Map(childDataList.flatMap((d) => d.allChildMeds).map((m) => [m.id, m])).values()
+                            ).map((m) => {
+                              const inc = isItemIncluded(`med:${m.id}`);
+                              return (
+                                <button
+                                  key={m.id}
+                                  type="button"
+                                  onClick={() => toggleHandoverItem(`med:${m.id}`)}
+                                  className={`px-2 py-0.5 rounded-lg text-[10.5px] font-bold border whitespace-nowrap ${
+                                    inc
+                                      ? "bg-rose-50 text-rose-900 border-rose-200"
+                                      : "bg-stone-50 text-stone-400 border-stone-200 line-through"
+                                  }`}
+                                >
+                                  {inc ? "✓ " : ""}{m.title}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+
+                      {handoverSections.notices && (allPinnedNotices.length > 0 || allKeyStorage.length > 0) && (
+                        <div className="pt-1.5 border-t border-stone-100 space-y-1">
+                          <span className="text-[10.5px] font-black text-stone-600">
+                            📌 공유할 공지·물건위치 ({selectedNotices.length + selectedStorage.length}/{allPinnedNotices.length + allKeyStorage.length})
+                          </span>
+                          <div className="flex flex-wrap gap-1">
+                            {allPinnedNotices.map((n) => {
+                              const inc = isItemIncluded(`nt:${n.id}`);
+                              return (
+                                <button
+                                  key={n.id}
+                                  type="button"
+                                  onClick={() => toggleHandoverItem(`nt:${n.id}`)}
+                                  className={`px-2 py-0.5 rounded-lg text-[10.5px] font-bold border whitespace-nowrap ${
+                                    inc
+                                      ? "bg-indigo-50 text-indigo-900 border-indigo-200"
+                                      : "bg-stone-50 text-stone-400 border-stone-200 line-through"
+                                  }`}
+                                >
+                                  {inc ? "✓ " : ""}📌 {n.title}
+                                </button>
+                              );
+                            })}
+                            {allKeyStorage.map((it) => {
+                              const inc = isItemIncluded(`st:${it.id}`);
+                              return (
+                                <button
+                                  key={it.id}
+                                  type="button"
+                                  onClick={() => toggleHandoverItem(`st:${it.id}`)}
+                                  className={`px-2 py-0.5 rounded-lg text-[10.5px] font-bold border whitespace-nowrap ${
+                                    inc
+                                      ? "bg-emerald-50 text-emerald-900 border-emerald-200"
+                                      : "bg-stone-50 text-stone-400 border-stone-200 line-through"
+                                  }`}
+                                >
+                                  {inc ? "✓ " : ""}🔎 {it.title}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* 공유노트 첨부 + 이번 교대 한 줄 메모 */}
+                    <div className="grid grid-cols-1 gap-1.5">
+                      {canViewTab("pages") && familyPages.length > 0 && (
+                        <div className="flex items-center gap-1.5 bg-white border border-stone-200 rounded-xl px-2.5 py-1.5">
+                          <span className="text-[11px] font-extrabold text-stone-500 whitespace-nowrap">🗂️ 노트</span>
                           <select
                             value={handoverAttachedPageId}
                             onChange={(e) => {
                               const val = e.target.value;
                               setHandoverAttachedPageId(val);
+                              setHandoverCustomText("");
                               try {
                                 if (val) localStorage.setItem("kim_handover_page_id_v1", val);
                                 else localStorage.removeItem("kim_handover_page_id_v1");
                               } catch (err) {}
                             }}
-                            className="w-full px-3 py-2 rounded-xl bg-white border border-stone-200 text-[12px] font-bold text-stone-800"
+                            className="flex-1 bg-transparent text-[11.5px] font-bold text-stone-800 focus:outline-none min-w-0"
                           >
-                            <option value="">첨부 안 함</option>
+                            <option value="">공유노트 첨부 안 함</option>
                             {familyPages.map((pg) => (
                               <option key={pg.id} value={pg.id}>
                                 {pg.icon || "📄"} {pg.title || "제목 없는 노트"}
                               </option>
                             ))}
                           </select>
-                          {attachedPage && attachedPageText && (
-                            <div className="px-2.5 py-1.5 rounded-xl bg-indigo-50/70 border border-indigo-200/80 text-[11px] text-indigo-950 line-clamp-2 whitespace-pre-wrap">
-                              {attachedPageText}
-                            </div>
+                          {attachedPage && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedPageId(attachedPage.id);
+                                setActiveTab("pages");
+                                setIsHandoverModalOpen(false);
+                              }}
+                              className="text-[10.5px] font-extrabold text-indigo-700 whitespace-nowrap"
+                            >
+                              편집→
+                            </button>
                           )}
                         </div>
                       )}
 
-                      <div className="space-y-1">
-                        <label className="text-[11px] font-extrabold text-stone-500">💬 이번 교대 전달 메모 (선택)</label>
-                        <div className="flex items-center gap-1.5 bg-white border border-stone-200 rounded-xl px-3 py-1.5">
-                          <input
-                            type="text"
-                            value={handoverNote}
-                            onChange={(e) => {
-                              const v = e.target.value;
-                              setHandoverNote(v);
-                              try { localStorage.setItem("kim_handover_note_v1", v); } catch (err) {}
+                      <div className="flex items-center gap-1.5 bg-white border border-stone-200 rounded-xl px-2.5 py-1.5">
+                        <span className="text-[11px] font-extrabold text-stone-500 whitespace-nowrap">💬 메모</span>
+                        <input
+                          type="text"
+                          value={handoverNote}
+                          onChange={(e) => {
+                            const v = e.target.value;
+                            setHandoverNote(v);
+                            try { localStorage.setItem("kim_handover_note_v1", v); } catch (err) {}
+                          }}
+                          placeholder="이번 교대 한 줄 전달사항 (실시간 반영)"
+                          className="flex-1 bg-transparent text-[11.5px] font-bold text-stone-800 focus:outline-none"
+                        />
+                        {handoverNote && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setHandoverNote("");
+                              try { localStorage.removeItem("kim_handover_note_v1"); } catch (err) {}
                             }}
-                            placeholder="예: 오늘 소아과 다녀와서 오후에 미열 체크 부탁드려요"
-                            className="flex-1 bg-transparent text-[12px] font-bold text-stone-800 focus:outline-none"
-                          />
-                          {handoverNote && (
+                            className="text-stone-400 hover:text-stone-700"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* 실시간 연동 카톡 미리보기 말풍선 (위 선택과 즉각 동기화!) */}
+                    <div className="bg-[#BACEE0] rounded-2xl p-2.5 space-y-1.5">
+                      <div className="flex items-center justify-between gap-2 px-0.5">
+                        <span className="text-[10.5px] font-extrabold text-slate-800 whitespace-nowrap">
+                          {isUsingCustomText ? "✏️ 직접 수정본 적용 중" : "💬 실시간 카톡 미리보기"}
+                        </span>
+                        <div className="flex items-center gap-1">
+                          {isUsingCustomText && (
                             <button
                               type="button"
                               onClick={() => {
-                                setHandoverNote("");
-                                try { localStorage.removeItem("kim_handover_note_v1"); } catch (err) {}
+                                setHandoverCustomText("");
+                                setIsHandoverEditingPreview(false);
+                                showToast("🔄 자동 연동 원본으로 복원했습니다.");
                               }}
-                              className="text-stone-400 hover:text-stone-700"
+                              className="px-2 py-0.5 rounded-lg bg-white/85 hover:bg-white text-slate-700 text-[10px] font-extrabold whitespace-nowrap"
                             >
-                              <X className="w-3.5 h-3.5" />
+                              🔄 원본복원
                             </button>
                           )}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (!isHandoverEditingPreview) {
+                                if (!handoverCustomText) setHandoverCustomText(autoGeneratedText);
+                                setIsHandoverEditingPreview(true);
+                              } else {
+                                setIsHandoverEditingPreview(false);
+                              }
+                            }}
+                            className={`px-2 py-0.5 rounded-lg text-[10px] font-extrabold whitespace-nowrap ${
+                              isHandoverEditingPreview
+                                ? "bg-stone-900 text-white"
+                                : "bg-white/90 hover:bg-white text-stone-900"
+                            }`}
+                          >
+                            {isHandoverEditingPreview ? "✓ 완료" : "✏️ 말풍선 수정"}
+                          </button>
                         </div>
                       </div>
+                      {isHandoverEditingPreview ? (
+                        <textarea
+                          rows={10}
+                          value={handoverCustomText}
+                          onChange={(e) => setHandoverCustomText(e.target.value)}
+                          className="w-full bg-[#FEE500] rounded-2xl rounded-tr-sm p-2.5 text-[11.5px] leading-relaxed font-semibold text-stone-900 shadow-sm focus:outline-none resize-y"
+                        />
+                      ) : (
+                        <div
+                          onClick={() => {
+                            if (!handoverCustomText) setHandoverCustomText(autoGeneratedText);
+                            setIsHandoverEditingPreview(true);
+                          }}
+                          title="말풍선을 누르면 바로 문구를 수정할 수 있어요"
+                          className="bg-[#FEE500] rounded-2xl rounded-tr-sm p-2.5 text-[11.5px] leading-relaxed font-semibold text-stone-900 whitespace-pre-wrap shadow-sm cursor-text max-h-56 overflow-y-auto"
+                        >
+                          {finalKakaoText}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* 원천 데이터(원본) 1탭 빠른 편집 바 */}
+                    <div className="flex items-center gap-1 flex-wrap px-0.5">
+                      <span className="text-[10px] font-extrabold text-stone-400 whitespace-nowrap">⚡ 원본 바로수정:</span>
+                      <button
+                        type="button"
+                        onClick={() => setHandoverModalTab("guide")}
+                        className="px-2 py-0.5 rounded-full bg-white border border-stone-200 text-stone-700 text-[10.5px] font-extrabold whitespace-nowrap"
+                      >
+                        📝 고정가이드
+                      </button>
+                      {canViewTab("baby") && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (handoverTarget !== "전체") setSelectedChildId(handoverTarget);
+                              setBabySubTab("activity");
+                              setActiveTab("baby");
+                              setIsHandoverModalOpen(false);
+                            }}
+                            className="px-2 py-0.5 rounded-full bg-white border border-stone-200 text-stone-700 text-[10.5px] font-extrabold whitespace-nowrap"
+                          >
+                            🍼 수유·수면
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (handoverTarget !== "전체") setSelectedChildId(handoverTarget);
+                              setBabySubTab("medical");
+                              setActiveTab("baby");
+                              setIsHandoverModalOpen(false);
+                            }}
+                            className="px-2 py-0.5 rounded-full bg-white border border-stone-200 text-stone-700 text-[10.5px] font-extrabold whitespace-nowrap"
+                          >
+                            🩺 진료·체온
+                          </button>
+                        </>
+                      )}
+                      {canViewTab("daily") && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedDate(targetDate);
+                            setActiveTab("daily");
+                            setIsHandoverModalOpen(false);
+                          }}
+                          className="px-2 py-0.5 rounded-full bg-white border border-stone-200 text-stone-700 text-[10.5px] font-extrabold whitespace-nowrap"
+                        >
+                          🍽️ 식단
+                        </button>
+                      )}
+                      {canViewTab("schedule") && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setActiveTab("schedule");
+                            setIsHandoverModalOpen(false);
+                          }}
+                          className="px-2 py-0.5 rounded-full bg-white border border-stone-200 text-stone-700 text-[10.5px] font-extrabold whitespace-nowrap"
+                        >
+                          🔄 루틴
+                        </button>
+                      )}
+                      {canViewTab("house") && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setHouseSubTab("storage");
+                            setActiveTab("house");
+                            setIsHandoverModalOpen(false);
+                          }}
+                          className="px-2 py-0.5 rounded-full bg-white border border-stone-200 text-stone-700 text-[10.5px] font-extrabold whitespace-nowrap"
+                        >
+                          🔎 수납·약
+                        </button>
+                      )}
                     </div>
                   </>
                 )}
 
-                {handoverModalTab === "guide" && (
+                {activeTabKey === "guide" && (
                   <div className="space-y-2.5">
-                    <div className="px-3 py-2 rounded-2xl bg-[#EEF3EE] border border-[#C9D8CC] text-[11.5px] font-bold text-[#35503C] leading-snug">
-                      ☁️ 한 번 적어두면 클라우드에 저장되어 엄마·아빠 폰에 실시간 동기화되고, 수면 유의사항 등이 바뀔 때 언제든 수정할 수 있어요.
-                    </div>
-                    {GUIDE_FIELDS.map((f) => (
-                      <div key={f.key} className="space-y-1">
-                        <label className="text-[11.5px] font-extrabold text-stone-700 flex items-center justify-between">
-                          <span>{f.label}</span>
-                          {!f.optional && !String(handoverProfile[f.key] || "").trim() && (
-                            <span className="text-[10px] font-black text-amber-600">미기재</span>
+                    <div className="grid grid-cols-3 gap-1">
+                      {[
+                        { id: "시율", label: "👶 시율", miss: countMissingChild("시율") },
+                        { id: "시목", label: "👦 시목", miss: countMissingChild("시목") },
+                        { id: "공통", label: "🏠 집·산모", miss: countMissingCommon }
+                      ].map((st) => (
+                        <button
+                          key={st.id}
+                          type="button"
+                          onClick={() => setHandoverGuideSubTab(st.id)}
+                          className={`py-1.5 px-2 rounded-xl border text-[11.5px] font-extrabold whitespace-nowrap flex items-center justify-center gap-1 ${
+                            handoverGuideSubTab === st.id
+                              ? "bg-stone-900 text-white border-stone-900"
+                              : "bg-white text-stone-700 border-stone-200"
+                          }`}
+                        >
+                          <span>{st.label}</span>
+                          {st.miss > 0 && (
+                            <span
+                              className={`px-1 rounded-full text-[9.5px] font-black ${
+                                handoverGuideSubTab === st.id ? "bg-amber-300 text-stone-950" : "bg-amber-100 text-amber-800"
+                              }`}
+                            >
+                              {st.miss}
+                            </span>
                           )}
-                        </label>
-                        <textarea
-                          rows={2}
-                          value={handoverProfile[f.key] || ""}
-                          onChange={(e) => setHandoverProfile((p) => ({ ...p, [f.key]: e.target.value }))}
-                          placeholder={f.ph}
-                          className="w-full px-3 py-2 rounded-xl bg-white border border-stone-200 text-[12px] font-semibold text-stone-800 resize-none"
-                        />
-                      </div>
-                    ))}
-                    <div className="flex items-center justify-between gap-2 pt-1">
-                      <div className="flex items-center gap-1">
+                        </button>
+                      ))}
+                    </div>
+
+                    {handoverGuideSubTab === "공통" ? (
+                      COMMON_GUIDE_FIELDS.map((f) => (
+                        <div key={f.key} className="space-y-1">
+                          <label className="text-[11.5px] font-extrabold text-stone-700 flex items-center justify-between">
+                            <span>{f.label}</span>
+                            {!f.optional && !String(handoverProfile[f.key] || "").trim() && (
+                              <span className="text-[10px] font-black text-amber-600">미기재</span>
+                            )}
+                          </label>
+                          <textarea
+                            rows={2}
+                            value={handoverProfile[f.key] || ""}
+                            onChange={(e) => setHandoverProfile((p) => ({ ...p, [f.key]: e.target.value }))}
+                            placeholder={f.ph}
+                            className="w-full px-3 py-2 rounded-xl bg-white border border-stone-200 text-[12px] font-semibold text-stone-800 resize-none"
+                          />
+                        </div>
+                      ))
+                    ) : (
+                      getChildGuideFields(handoverGuideSubTab).map((f) => {
+                        const curObj = getChildGuideObj(handoverGuideSubTab);
+                        return (
+                          <div key={`${handoverGuideSubTab}-${f.key}`} className="space-y-1">
+                            <label className="text-[11.5px] font-extrabold text-stone-700 flex items-center justify-between">
+                              <span>{f.label}</span>
+                              {f.key !== "bathGuide" && !String(curObj[f.key] || "").trim() && (
+                                <span className="text-[10px] font-black text-amber-600">미기재</span>
+                              )}
+                            </label>
+                            <textarea
+                              rows={2}
+                              value={curObj[f.key] || ""}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setHandoverProfile((p) => ({
+                                  ...p,
+                                  childGuides: {
+                                    ...(p.childGuides || {}),
+                                    [handoverGuideSubTab]: {
+                                      ...((p.childGuides && p.childGuides[handoverGuideSubTab]) || {}),
+                                      [f.key]: val
+                                    }
+                                  }
+                                }));
+                              }}
+                              placeholder={f.ph}
+                              className="w-full px-3 py-2 rounded-xl bg-white border border-stone-200 text-[12px] font-semibold text-stone-800 resize-none"
+                            />
+                          </div>
+                        );
+                      })
+                    )}
+
+                    <div className="flex items-center justify-between gap-2 pt-1 flex-wrap">
+                      <div className="flex items-center gap-1 flex-wrap">
+                        {handoverGuideSubTab !== "공통" && canViewTab("baby") && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedChildId(handoverGuideSubTab);
+                              setBabySubTab("medical");
+                              setActiveTab("baby");
+                              setIsHandoverModalOpen(false);
+                            }}
+                            className="px-2 py-1 rounded-full bg-rose-50 border border-rose-200 text-rose-800 text-[10.5px] font-extrabold whitespace-nowrap"
+                          >
+                            🩺 {handoverGuideSubTab} 진료·약 →
+                          </button>
+                        )}
                         {canViewTab("house") && (
-                          <>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setHouseSubTab("storage");
-                                setActiveTab("house");
-                                setIsHandoverModalOpen(false);
-                              }}
-                              className="px-2 py-1 rounded-full bg-white border border-stone-200 text-stone-700 text-[10.5px] font-extrabold whitespace-nowrap"
-                            >
-                              🔎 수납지도 →
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setHouseSubTab("medicine");
-                                setActiveTab("house");
-                                setIsHandoverModalOpen(false);
-                              }}
-                              className="px-2 py-1 rounded-full bg-white border border-stone-200 text-stone-700 text-[10.5px] font-extrabold whitespace-nowrap"
-                            >
-                              💊 상비약함 →
-                            </button>
-                          </>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setHouseSubTab(handoverGuideSubTab === "공통" ? "storage" : "medicine");
+                              setActiveTab("house");
+                              setIsHandoverModalOpen(false);
+                            }}
+                            className="px-2 py-1 rounded-full bg-white border border-stone-200 text-stone-700 text-[10.5px] font-extrabold whitespace-nowrap"
+                          >
+                            {handoverGuideSubTab === "공통" ? "🔎 수납지도 →" : "💊 상비약함 →"}
+                          </button>
                         )}
                       </div>
                       <button
                         type="button"
-                        onClick={() => saveHandoverProfileToCloud(handoverProfile)}
+                        onClick={() => {
+                          saveHandoverProfileToCloud(handoverProfile);
+                          setHandoverCustomText("");
+                          setHandoverModalTab("config");
+                        }}
                         className="px-4 py-2 rounded-xl bg-[#5E7A65] hover:bg-[#4F6956] text-white text-[12px] font-black whitespace-nowrap shadow-sm"
                       >
-                        ☁️ 클라우드 저장
+                        ☁️ 저장 후 미리보기
                       </button>
-                    </div>
-                  </div>
-                )}
-
-                {handoverModalTab === "preview" && (
-                  <div className="bg-[#BACEE0] rounded-2xl p-3 space-y-1.5">
-                    <div className="text-[10.5px] font-extrabold text-slate-700 px-1">
-                      카카오톡 전송 미리보기 ({handoverPreset === "helper" ? "산후도우미용" : "가족교대용"})
-                    </div>
-                    <div className="bg-[#FEE500] rounded-2xl rounded-tr-sm p-3 text-[12px] leading-relaxed font-semibold text-stone-900 whitespace-pre-wrap shadow-sm">
-                      {previewText}
                     </div>
                   </div>
                 )}
@@ -35246,7 +35820,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                 <button
                   type="button"
                   onClick={async () => {
-                    await copyTextSafe(previewText, "📋 산후도우미·육아 인수인계 카톡을 복사했습니다!");
+                    await copyTextSafe(finalKakaoText, "📋 산후도우미·육아 인수인계 카톡을 복사했습니다!");
                   }}
                   className="py-2.5 px-2 rounded-2xl bg-[#5E7A65] hover:bg-[#4F6956] text-white text-[12px] font-black whitespace-nowrap shadow-sm"
                 >
@@ -35259,7 +35833,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                       setEditingNotice(null);
                       setNoticeForm({
                         title: `🤝 ${handoverPreset === "helper" ? "산후관리" : "육아"} 인수인계 (${dayLabel} ${targetDate})`,
-                        content: previewText,
+                        content: finalKakaoText,
                         category: "가족공지",
                         author: actorName || "수혁",
                         pinned: true
@@ -35280,6 +35854,107 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                     닫기
                   </button>
                 )}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {isHomeDdayPickerOpen && (() => {
+        const allDdaySchedules = schedules
+          .filter((s) => s.showDday)
+          .map((s) => ({ ...s, calc: calculateScheduleDday(s) }))
+          .sort((a, b) => {
+            const ad = a.calc.daysUntil >= 0 ? a.calc.daysUntil : 9999 + Math.abs(a.calc.daysUntil);
+            const bd = b.calc.daysUntil >= 0 ? b.calc.daysUntil : 9999 + Math.abs(b.calc.daysUntil);
+            return ad - bd;
+          });
+        return (
+          <div
+            className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+            onClick={() => setIsHomeDdayPickerOpen(false)}
+          >
+            <div
+              className="bg-[#FAF8F3] border border-stone-200 rounded-3xl max-w-sm w-full p-4 shadow-2xl space-y-3 max-h-[80vh] flex flex-col"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between gap-2 pb-2 border-b border-stone-200 shrink-0">
+                <h3 className="text-[15px] font-black text-stone-900">📌 홈 상단 미니 D-Day 선택</h3>
+                <button
+                  type="button"
+                  onClick={() => setIsHomeDdayPickerOpen(false)}
+                  className="p-1.5 rounded-full hover:bg-stone-200/70 text-stone-500"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              <div className="overflow-y-auto space-y-1.5 flex-1">
+                {allDdaySchedules.length === 0 ? (
+                  <div className="py-6 text-center text-[12.5px] font-bold text-stone-500">
+                    D-Day로 설정된 일정이 아직 없어요.
+                  </div>
+                ) : (
+                  allDdaySchedules.map((d) => {
+                    const checked = homeMiniDdayIds.includes(d.id);
+                    return (
+                      <button
+                        key={d.id}
+                        type="button"
+                        onClick={() => toggleHomeMiniDdayId(d.id)}
+                        className={`w-full px-3 py-2 rounded-2xl border flex items-center justify-between gap-2 text-left transition ${
+                          checked
+                            ? "bg-[#EEF3EE] border-[#B6CBB9] text-[#35503C]"
+                            : "bg-white border-stone-200 text-stone-700 hover:bg-stone-50"
+                        }`}
+                      >
+                        <div className="min-w-0">
+                          <div className="text-[13px] font-extrabold truncate">{d.title}</div>
+                          <div className="text-[11px] font-bold text-stone-400">
+                            {d.calc.nextDateStr || d.date} · {d.calc.daysUntil === 0 ? "D-Day" : d.calc.dDayText}
+                          </div>
+                        </div>
+                        <span
+                          className={`w-5 h-5 rounded-lg border flex items-center justify-center shrink-0 text-[11px] font-black ${
+                            checked ? "bg-[#5E7A65] border-[#5E7A65] text-white" : "bg-white border-stone-300 text-transparent"
+                          }`}
+                        >
+                          ✓
+                        </span>
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+              <div className="flex items-center justify-between gap-2 pt-1 border-t border-stone-200 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditingSchedule(null);
+                    setScheduleForm({
+                      title: "",
+                      date: getTodayStr(),
+                      category: "기념일/생일",
+                      members: ["수혁", "아리나", "시목", "시율"],
+                      isAnnual: false,
+                      showDday: true,
+                      hasOriginYear: false,
+                      memo: "",
+                      attachments: []
+                    });
+                    setIsHomeDdayPickerOpen(false);
+                    setIsScheduleModalOpen(true);
+                  }}
+                  className="px-3 py-2 rounded-xl bg-white border border-stone-200 text-stone-700 text-[12px] font-extrabold whitespace-nowrap"
+                >
+                  + 새 D-Day 추가
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsHomeDdayPickerOpen(false)}
+                  className="px-4 py-2 rounded-xl bg-stone-900 text-white text-[12px] font-black whitespace-nowrap"
+                >
+                  완료
+                </button>
               </div>
             </div>
           </div>

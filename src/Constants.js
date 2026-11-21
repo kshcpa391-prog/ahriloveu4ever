@@ -1178,7 +1178,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v12.86";
+export const APP_CODE_VERSION = "v12.89";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1196,7 +1196,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-21 21:14";
+export const APP_BUILD_DATE = "2026-11-21 21:44";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1264,6 +1264,42 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v12.89",
+    version: "v12.89",
+    date: "2026-11-21",
+    title: "🤝 육아 인수인계 실시간 구성·미리보기 통합 · 사전 안내(내일/미래) 분기 및 개별 항목 선택 공유",
+    category: "기능 고도화 · 시각 최적화 · 메뉴 연계",
+    changes: [
+      "사전 안내(내일/미래) vs 실시간 교대(오늘) 지능형 분기: 오늘 밤에 내일 육아 담당자에게 미리 전달할 때 불필요한 '오늘 다음 수유 예상'을 빼고 평소 평균 수유 간격·1회 평균량·내일 예정 식단·예정 루틴 중심으로 문구와 카드를 자동 최적화",
+      "구성 · 실시간 카톡 미리보기 1화면 통합: 기존 3탭을 2탭([🤝 구성·실시간 미리보기] | [📝 고정가이드])으로 줄여 칩·메모·항목 선택 시 노란 카톡 말풍선이 즉각 반영",
+      "개별 항목 세부 선택 & 원천 데이터 빠른 편집: 루틴·일정/할일·상비약·공지·수납위치를 항목별 칩으로 1탭 포함/제외할 수 있으며, 하단 [⚡ 원본 바로수정] 바로가기로 원천 데이터를 즉시 수정 가능"
+    ]
+  },
+  {
+    id: "patch-v12.88",
+    version: "v12.88",
+    date: "2026-11-21",
+    title: "📌 홈 상단 초슬림 선택형 미니 D-Day 바 추가 · 🤝 육아 인수인계 정식화(BETA 제거)",
+    category: "신규 기능 · 시각 최적화 · 안정화",
+    changes: [
+      "홈 상단 초슬림 미니 D-Day 바 신설: 가족사진 바로 아래에 내가 선택한 D-Day 일정만 아주 작은 1줄 칩으로 표시(클라우드 실시간 동기화 + 백업/복원 포함)하며, 칩을 누르면 해당 일정 상세로 즉시 이동",
+      "🤝 육아 인수인계 정식 기능 전환: 모달 헤더·더보기 메뉴·툴팁의 BETA 및 테스트 문구를 모두 제거하고, 모달을 열 때 과거 날짜가 남아있으면 자동으로 오늘 날짜로 보정",
+      "홈 D-Day 선택 모달의 ESC·안드로이드 뒤로가기 연동 및 AST·TDZ·JSX·배포 정합성 최종 전수 검증 완료"
+    ]
+  },
+  {
+    id: "patch-v12.87",
+    version: "v12.87",
+    date: "2026-11-21",
+    title: "👶👦 시목·시율 고정가이드 분리(클라우드) · ✏️ 카톡 미리보기 말풍선 직접 수정 및 원본 빠른 점프",
+    category: "기능 고도화 · 편의성 · 메뉴 연계",
+    changes: [
+      "고정가이드 3단 분리(👶 시율 / 👦 시목 / 🏠 집·산모): 아이별로 다른 식사·분유, 수면 방식, 목욕, 주의사항을 분리해 클라우드 저장하고 대상 선택 시 해당 아이 가이드만 정확히 추출",
+      "✏️ 카톡 미리보기 직접 수정: 노란 카톡 말풍선을 탭하거나 [✏️ 직접수정]을 누르면 그 자리에서 바로 문구를 고쳐 [📋 카톡복사]·[🖼️ 카드저장]·[📌 공지고정]에 반영 ([🔄 원본복원] 지원)",
+      "빠른 메뉴 연계: 고정가이드 아이별 탭에 [🩺 시목/시율 진료·약 →], 미리보기 하단에 [⚡ 원본수정] 4종 점프 칩 추가 및 AST·TDZ·배포 정합성 최종 검증 완료"
+    ]
+  },
   {
     id: "patch-v12.86",
     version: "v12.86",
