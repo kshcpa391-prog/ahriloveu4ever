@@ -1178,7 +1178,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v12.81";
+export const APP_CODE_VERSION = "v12.83";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1196,7 +1196,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-21 20:35";
+export const APP_BUILD_DATE = "2026-11-21 20:46";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1264,6 +1264,30 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v12.83",
+    version: "v12.83",
+    date: "2026-11-21",
+    title: "홈 화면 인수인계 버튼 제거(더보기 BETA 이동) · 인수인계 모달 루틴 즉시 체크 및 공지→장보기 연계",
+    category: "시각 최적화 · 고도화 · 메뉴 연계",
+    changes: [
+      "홈 화면 슬림화: 테스트 기능인 [🤝 인수인계] 버튼을 홈 상단에서 제거하고, 더보기(☰) 메뉴(BETA 배지)와 육아 활동 탭 2곳에서만 깔끔하게 진입하도록 정리",
+      "🤝 인수인계 모달 고도화: 모달 안에서 남은 루틴을 1탭으로 바로 완료 체크(☐)할 수 있게 개선하고, 교대자 전달 메모 자동 임시저장(✕ 초기화) 및 [📅 일정·루틴] 빠른 이동 추가",
+      "메뉴 연계 및 문구 정리: 가족공지 카드 → [🛒 장보기] 1탭 담기 연계 추가, 육아 활동 버튼 라벨 슬림화(📋 요약) 및 버킷리스트 안내 문구 축약 완료"
+    ]
+  },
+  {
+    id: "patch-v12.82",
+    version: "v12.82",
+    date: "2026-11-21",
+    title: "🤝 1탭 육아 인수인계 요약 카드(BETA) 추가 · 홈/육아 멀티 진입 및 카톡 복사·공지 고정 연계",
+    category: "신규 기능(BETA) · 메뉴 연계",
+    changes: [
+      "🤝 육아 인수인계 요약 모달(BETA) 신설: 시목·시율별 마지막 수유/기저귀/수면 경과시간, 오늘 누적량, 당일 진료·체온 메모, 남은 루틴, 고정 공지를 한 화면에 실시간 집계",
+      "멀티 진입 및 연계: 홈 상단(📋 브리핑 옆)과 육아 활동 탭(📋 오늘 요약 옆) 양쪽에서 바로 열 수 있으며, 모달 내 [📋 카톡 복사], [📌 공지로 고정], [👶 활동기록·💊 상비약함·🔎 수납지도] 빠른 이동 지원",
+      "안드로이드 뒤로가기·ESC 닫기 핸들러 연동 및 AST·TDZ·배포 정합성 전수 검증 완료"
+    ]
+  },
   {
     id: "patch-v12.81",
     version: "v12.81",
