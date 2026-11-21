@@ -11631,6 +11631,170 @@ ${validText}
       await setDoc(getDocRef("family_pages_v1", pageObj.id), pageObj, { merge: true }).catch(() => {});
     }
   };
+  // === 메뉴 간 원탭 연계 헬퍼 (v12.65) ===
+  const handleSendPageTodosToShopping = async (page) => {
+    if (!requireEditorAccess("shopping") || !page) return;
+    const uncheckedTodos = (Array.isArray(page.blocks) ? page.blocks : [])
+      .filter((b) => b && b.type === "todo" && !b.checked && String(b.text || "").trim());
+    if (uncheckedTodos.length === 0) {
+      showToast("장보기에 담을 미완료 체크 항목이 없습니다.");
+      return;
+    }
+    const existingSet = new Set(
+      shoppingList
+        .filter((s) => !s.checked)
+        .map((s) => String(s.name || "").trim().toLowerCase())
+    );
+    const toAdd = [];
+    const seen = new Set();
+    uncheckedTodos.forEach((b) => {
+      const clean = String(b.text || "").trim();
+      const lower = clean.toLowerCase();
+      if (!clean || existingSet.has(lower) || seen.has(lower)) return;
+      seen.add(lower);
+      toAdd.push(clean);
+    });
+    if (toAdd.length === 0) {
+      showToast("미완료 항목이 이미 장보기 목록에 담겨 있습니다.");
+      return;
+    }
+    const nowMs = Date.now();
+    const created = toAdd.map((name, idx) => ({
+      id: `sh-${nowMs}-${idx}-${Math.random().toString(36).slice(2, 5)}`,
+      name,
+      quantity: "1개",
+      category: "기타",
+      urgent: false,
+      checked: false,
+      memo: `공유노트: ${page.title || ""}`.trim()
+    }));
+    setShoppingList((prev) => [...created, ...prev]);
+    if (user && db) {
+      beginWrite();
+      let ok = false;
+      let errMsg = "";
+      try {
+        const batch = writeBatch(db);
+        created.forEach((item) => batch.set(getDocRef("family_shopping_v4", item.id), item));
+        await batch.commit();
+        ok = true;
+      } catch (e) {
+        errMsg = e?.message || "공유노트→장보기 동기화 오류";
+      } finally {
+        endWrite(ok, errMsg);
+      }
+    }
+    recordActivity("장보기", "일괄등록", `${page.title || "공유노트"} ${created.length}건`);
+    showToast(`🛒 미완료 ${created.length}건을 장보기에 담았습니다!`);
+  };
+
+  const handleOpenOrCreateBucketNote = async (item) => {
+    if (!item?.title) return;
+    if (!canViewTab("pages")) {
+      showToast("공유노트 열람 권한이 없습니다.");
+      return;
+    }
+    const baseTitle = String(item.title).trim();
+    const existing = familyPages.find(
+      (p) => String(p.title || "").trim().toLowerCase().includes(baseTitle.toLowerCase())
+    );
+    if (existing) {
+      setActiveTab("pages");
+      openFamilyPage(existing.id);
+      showToast(`🗂️ '${existing.title}' 노트를 열었습니다.`);
+      return;
+    }
+    if (!requireEditorAccess("pages")) return;
+    const nowMs = Date.now();
+    const newId = `pg-${nowMs}-${Math.random().toString(36).slice(2, 5)}`;
+    const newPage = {
+      id: newId,
+      parentId: null,
+      title: `${baseTitle} 준비물`,
+      icon: "🧳",
+      coverColor: "sage",
+      order: familyPages.filter((p) => !p.parentId).length,
+      blocks: [
+        { id: `blk-${nowMs}-h1`, type: "heading", text: "출발 전 체크", color: "amber" },
+        { id: `blk-${nowMs}-t1`, type: "todo", text: "운영시간·예약·주차 확인", checked: false },
+        { id: `blk-${nowMs}-t2`, type: "todo", text: "아이 여벌옷·물·간식·기저귀 챙기기", checked: false },
+        ...(item.memo ? [{ id: `blk-${nowMs}-m1`, type: "text", text: `메모: ${item.memo}` }] : [])
+      ],
+      createdAtMs: nowMs,
+      updatedAtMs: nowMs
+    };
+    await savePageToCloud(newPage);
+    setActiveTab("pages");
+    openFamilyPage(newId);
+    recordActivity("노트", "생성", newPage.title);
+    showToast(`🗂️ '${newPage.title}' 노트를 만들었습니다!`);
+  };
+
+  const handleBucketToDiary = (item) => {
+    if (!isAdminUnlocked || !item) return;
+    setEditingDiaryEntry(null);
+    setPendingDiaryPhotoFile(null);
+    setDiaryForm({
+      date: getTodayStr(),
+      mood: "😊 행복",
+      title: item.title || "",
+      content: item.memo ? `${item.title} 다녀옴!
+${item.memo}` : `${item.title} 다녀옴!`,
+      contentHtml: "",
+      photoUrl: "",
+      photos: [],
+      childIds: ["시목", "시율"],
+      textStyle: { ...DEFAULT_DIARY_TEXT_STYLE }
+    });
+    diarySavedRangeRef.current = null;
+    setHasDiarySelection(false);
+    setDiaryEditorSyncTick((t) => t + 1);
+    setBabySubTab("diary");
+    setActiveTab("baby");
+    showToast(`📖 '${item.title}' 육아일기 작성 화면으로 이동했습니다.`);
+  };
+
+  const handleMealToRecipe = (meal) => {
+    if (!meal) return;
+    const cleanTitle = String(meal.menu || "").replace(/\[.*?\]\s*/g, "").trim();
+    if (!cleanTitle) return;
+    const matched = recipes.find(
+      (r) => String(r.title || "").trim().toLowerCase() === cleanTitle.toLowerCase()
+    );
+    if (matched) {
+      setRecipeSearch(matched.title);
+      setActiveTab("recipes");
+      showToast(`📖 레시피북에서 '${matched.title}'을(를) 열었습니다.`);
+      return;
+    }
+    if (!requireEditorAccess("recipes")) return;
+    openNewRecipeModal({
+      title: cleanTitle,
+      ingredients: toSafeArray(meal.ingredients),
+      memo: meal.note || ""
+    });
+  };
+
+  const handleFridgeToRecipeSearch = (itemName) => {
+    const q = String(itemName || "").trim();
+    if (!q) return;
+    setRecipeSearch(q);
+    setActiveTab("recipes");
+    showToast(`📖 '${q}' 관련 레시피를 검색했습니다.`);
+  };
+
+  const handleExpiringToAiChef = (itemNames) => {
+    if (!canViewTab("ai")) {
+      showToast("AI추천 열람 권한이 없습니다.");
+      return;
+    }
+    const list = toSafeArray(itemNames).filter(Boolean);
+    if (list.length > 0) setSelectedAiIngredients(list);
+    setAiSubMode("recipe");
+    setActiveTab("ai");
+    showToast(list.length > 0 ? `✨ 재료 ${list.length}개를 담아 AI추천으로 이동했습니다.` : "✨ AI추천으로 이동했습니다.");
+  };
+
 
 
   const openCreatePageModal = (parentId = null) => {
@@ -15298,17 +15462,30 @@ ${validText}
                                         </div>
                                       )}
                                     </div>
-                                    <button
-                                      type="button"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleDeleteMeal(it);
-                                      }}
-                                      className="p-1 text-stone-400 hover:text-rose-600 shrink-0"
-                                      title="삭제"
-                                    >
-                                      <X className="w-3.5 h-3.5" />
-                                    </button>
+                                    <div className="flex items-center gap-0.5 shrink-0">
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleMealToRecipe(it);
+                                        }}
+                                        className="p-1 text-stone-400 hover:text-[#35503C] text-[12px] leading-none"
+                                        title="레시피북 보기·등록"
+                                      >
+                                        📖
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleDeleteMeal(it);
+                                        }}
+                                        className="p-1 text-stone-400 hover:text-rose-600 shrink-0"
+                                        title="삭제"
+                                      >
+                                        <X className="w-3.5 h-3.5" />
+                                      </button>
+                                    </div>
                                   </div>
                                 );
                               })}
@@ -15643,29 +15820,41 @@ ${validText}
                         <div className="text-[13.5px] font-black text-stone-900">
                           📌 {selectedDate.slice(5)} ({getDayName(selectedDate)}) {activeMonthlyMemberName} 식단
                         </div>
-                        {canEditTab("daily") && (
+                        <div className="flex items-center gap-1 shrink-0">
                           <button
                             type="button"
                             onClick={() => {
-                              setEditingMeal(null);
-                              setMealForm({
-                                date: selectedDate,
-                                slot: monthlySlotFilter !== "전체" ? monthlySlotFilter : "저녁",
-                                menu: "",
-                                members: [monthlyMember],
-                                ingredients: [],
-                                note: "",
-                                sourceType: "집밥/온가족식",
-                                cost: "",
-                                mealStatus: "recorded"
-                              });
-                              setIsMealModalOpen(true);
+                              setSelectedMember("전체");
+                              setActiveTab("daily");
                             }}
-                            className="px-2.5 py-1 rounded-xl bg-stone-900 text-white text-[11.5px] font-extrabold whitespace-nowrap"
+                            className="px-2 py-1 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-[11px] font-extrabold whitespace-nowrap"
                           >
-                            + 추가
+                            🍽️ 식단탭
                           </button>
-                        )}
+                          {canEditTab("daily") && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditingMeal(null);
+                                setMealForm({
+                                  date: selectedDate,
+                                  slot: monthlySlotFilter !== "전체" ? monthlySlotFilter : "저녁",
+                                  menu: "",
+                                  members: [monthlyMember],
+                                  ingredients: [],
+                                  note: "",
+                                  sourceType: "집밥/온가족식",
+                                  cost: "",
+                                  mealStatus: "recorded"
+                                });
+                                setIsMealModalOpen(true);
+                              }}
+                              className="px-2.5 py-1 rounded-xl bg-stone-900 text-white text-[11.5px] font-extrabold whitespace-nowrap"
+                            >
+                              + 추가
+                            </button>
+                          )}
+                        </div>
                       </div>
                       {selectedDayMeals.length === 0 ? (
                         <div className="py-4 text-center text-[12px] font-semibold text-stone-400 bg-stone-50/70 rounded-xl border border-dashed border-stone-200">
@@ -18177,9 +18366,20 @@ ${validText}
           </div>
           {expiringItems.length > 0 && (
             <div className="bg-orange-50 border border-orange-200 rounded-2xl p-3">
-              <div className="flex items-center gap-1.5 text-[13.5px] font-black text-orange-900 mb-1.5">
-                <AlertCircle className="w-4 h-4 text-orange-600" />
-                <span>임박·경과 재료 ({expiringItems.length}건)</span>
+              <div className="flex items-center justify-between gap-2 mb-1.5">
+                <div className="flex items-center gap-1.5 text-[13.5px] font-black text-orange-900">
+                  <AlertCircle className="w-4 h-4 text-orange-600" />
+                  <span>임박·경과 재료 ({expiringItems.length}건)</span>
+                </div>
+                {canViewTab("ai") && (
+                  <button
+                    type="button"
+                    onClick={() => handleExpiringToAiChef(expiringItems.slice(0, 4).map((i) => i.name))}
+                    className="px-2 py-0.5 rounded-lg bg-orange-600 hover:bg-orange-700 text-white text-[11px] font-extrabold whitespace-nowrap shrink-0"
+                  >
+                    ✨ AI 추천
+                  </button>
+                )}
               </div>
               <div className="flex flex-wrap gap-1.5">
                 {expiringItems.map((item) => (
@@ -19401,6 +19601,30 @@ ${validText}
 
 
                   <div className="flex items-center gap-1 shrink-0">
+                    {canEditTab("schedule") && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingSchedule(null);
+                          setScheduleForm({
+                            title: n.title || "",
+                            date: getTodayStr(),
+                            category: "할일(To-Do)",
+                            members: ["수혁", "아리나"],
+                            isAnnual: false,
+                            showDday: false,
+                            hasOriginYear: false,
+                            memo: n.content || "",
+                            attachments: []
+                          });
+                          setIsScheduleModalOpen(true);
+                        }}
+                        className="px-2 py-0.5 rounded-lg bg-[#EEF3EE] hover:bg-[#DFE9E0] text-[#35503C] text-[11.5px] font-extrabold whitespace-nowrap"
+                        title="일정·할 일로 등록"
+                      >
+                        🗓️ 할일
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={async () => {
@@ -19412,6 +19636,7 @@ ${validText}
                       📋 복사
                     </button>
                     <button
+                      type="button"
                       onClick={() => handleToggleNoticeDone(n)}
                       className={`px-2 py-0.5 rounded-lg text-[11.5px] font-extrabold border whitespace-nowrap ${
                         n.done
@@ -19422,6 +19647,7 @@ ${validText}
                       {n.done ? "✓ 확인완료" : "완료체크"}
                     </button>
                     <button
+                      type="button"
                       onClick={() => {
                         setEditingNotice(n);
                         setNoticeForm({
@@ -19438,6 +19664,7 @@ ${validText}
                       <Edit2 className="w-3.5 h-3.5" />
                     </button>
                     <button
+                      type="button"
                       onClick={() => handleDeleteNotice(n.id)}
                       className="p-1 text-stone-400 hover:text-red-500"
                     >
@@ -19920,11 +20147,8 @@ ${validText}
               <div>
                 <h2 className="text-[15.5px] font-black text-stone-900 flex items-center gap-1.5">
                   <Sparkles className="w-4 h-4 text-amber-500" />
-                  <span>Gemini 3.8 AI 실시간 맞춤 셰프</span>
+                  <span>AI 냉장고 맞춤 셰프</span>
                 </h2>
-                <p className="text-[12.5px] text-stone-500 mt-0.5">
-                  선택한 냉장고 재료들의 실제 맛 궁합과 조리법을 AI가 설계합니다.
-                </p>
               </div>
               <span className="px-2 py-0.5 rounded-full text-[11.5px] font-extrabold bg-emerald-50 text-emerald-700 border border-emerald-200 shrink-0">
                 ⚡ Gemini 직통 활성
@@ -20049,11 +20273,8 @@ ${validText}
           {aiRecipes.length === 0 ? (
             <div className="bg-white p-6 rounded-2xl border border-dashed border-stone-300 text-center space-y-1">
               <div className="text-2xl">👩‍🍳👨‍🍳</div>
-              <div className="text-[13.5px] font-extrabold text-stone-700">
-                위에서 냉장고 재료를 선택하고 AI 추천 버튼을 눌러보세요!
-              </div>
-              <div className="text-[12.5px] text-stone-400">
-                선택하신 재료들을 바탕으로 즉석에서 조리법과 팁을 설계합니다.
+              <div className="text-[13px] font-extrabold text-stone-600">
+                위에서 재료를 고르고 AI 추천을 눌러보세요
               </div>
             </div>
           ) : (
@@ -20530,6 +20751,23 @@ ${validText}
                           >
                             ✏️ 수정
                           </button>
+                          {sel.done && isAdminUnlocked ? (
+                            <button
+                              type="button"
+                              onClick={() => handleBucketToDiary(sel)}
+                              className="px-2 py-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-900 text-[11px] font-extrabold whitespace-nowrap"
+                            >
+                              📖 일기
+                            </button>
+                          ) : canViewTab("pages") ? (
+                            <button
+                              type="button"
+                              onClick={() => handleOpenOrCreateBucketNote(sel)}
+                              className="px-2 py-1.5 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-[11px] font-extrabold whitespace-nowrap"
+                            >
+                              🗂️ 노트
+                            </button>
+                          ) : null}
                           <button
                             type="button"
                             onClick={() => {
@@ -20537,12 +20775,13 @@ ${validText}
                               setScheduleForm({
                                 title: sel.title,
                                 date: getTodayStr(),
-                                category: "가족행사",
+                                category: "가족행사/경조사",
                                 members: getItemMembers(sel),
                                 isAnnual: false,
                                 showDday: true,
                                 hasOriginYear: false,
-                                memo: sel.memo || ""
+                                memo: sel.memo || "",
+                                attachments: []
                               });
                               setIsScheduleModalOpen(true);
                             }}
@@ -20677,6 +20916,25 @@ ${validText}
                           >
                             <Edit2 className="w-3.5 h-3.5" />
                           </button>
+                          {item.done && isAdminUnlocked ? (
+                            <button
+                              type="button"
+                              onClick={() => handleBucketToDiary(item)}
+                              className="p-1.5 rounded-lg hover:bg-amber-50 text-amber-700 text-[13px] leading-none"
+                              title="육아일기 쓰기"
+                            >
+                              📖
+                            </button>
+                          ) : canViewTab("pages") ? (
+                            <button
+                              type="button"
+                              onClick={() => handleOpenOrCreateBucketNote(item)}
+                              className="p-1.5 rounded-lg hover:bg-stone-100 text-stone-600 text-[13px] leading-none"
+                              title="준비물 공유노트 열기·만들기"
+                            >
+                              🗂️
+                            </button>
+                          ) : null}
                           <button
                             type="button"
                             onClick={() => {
@@ -20684,12 +20942,13 @@ ${validText}
                               setScheduleForm({
                                 title: item.title,
                                 date: getTodayStr(),
-                                category: "가족행사",
+                                category: "가족행사/경조사",
                                 members: getItemMembers(item),
                                 isAnnual: false,
                                 showDday: true,
                                 hasOriginYear: false,
-                                memo: item.memo || ""
+                                memo: item.memo || "",
+                                attachments: []
                               });
                               setIsScheduleModalOpen(true);
                             }}
@@ -21359,6 +21618,16 @@ ${validText}
                           <span className="text-[11.5px] font-extrabold text-[#2383E2] whitespace-nowrap">
                             {doneTodoCount}/{todoBlocks.length} 완료
                           </span>
+                          {todoBlocks.length > doneTodoCount && canEditTab("shopping") && (
+                            <button
+                              type="button"
+                              onClick={() => handleSendPageTodosToShopping(currentPage)}
+                              className="px-2 py-0.5 rounded-full bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-900 text-[10.5px] font-extrabold whitespace-nowrap"
+                              title="미완료 체크 항목을 장보기 목록에 일괄 추가"
+                            >
+                              🛒 장보기 담기
+                            </button>
+                          )}
                           {doneTodoCount > 0 && (
                             <button
                               type="button"
@@ -24027,12 +24296,39 @@ ${validText}
                             <div className="text-[13.5px] font-black text-stone-900 mt-1">{n.title}</div>
                             {n.memo && <div className="text-[12.5px] text-stone-600 mt-0.5">💬 {n.memo}</div>}
                           </div>
-                          <button
-                            onClick={() => handleDeleteMedicalNote(n.id)}
-                            className="p-1.5 text-stone-400 hover:text-red-500"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
+                          <div className="flex items-center gap-0.5 shrink-0">
+                            {canEditTab("schedule") && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEditingSchedule(null);
+                                  setScheduleForm({
+                                    title: `${activeChild.name} ${n.title || "소아과 재진"}`,
+                                    date: getTodayStr(),
+                                    category: "육아/병원",
+                                    members: [activeChild.id],
+                                    isAnnual: false,
+                                    showDday: true,
+                                    hasOriginYear: false,
+                                    memo: n.memo || "",
+                                    attachments: []
+                                  });
+                                  setIsScheduleModalOpen(true);
+                                }}
+                                className="px-2 py-1 rounded-lg bg-[#EEF3EE] hover:bg-[#DFE9E0] text-[#35503C] text-[10.5px] font-extrabold whitespace-nowrap"
+                                title="다음 진료 일정 등록"
+                              >
+                                🗓️ 일정
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteMedicalNote(n.id)}
+                              className="p-1.5 text-stone-400 hover:text-red-500"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         </div>
                       );
                     })}
@@ -25916,7 +26212,7 @@ ${validText}
                     <span>클라우드 CSV 연동</span>
                   </h3>
                   <p className="text-[11px] font-bold text-stone-400 mt-0.5">
-                    코드에 저장하지 않고 Firestore 클라우드에 직접 저장·내보내기합니다.
+                    개인 클라우드 가져오기 · 내보내기
                   </p>
                 </div>
                 <button
@@ -25942,8 +26238,8 @@ ${validText}
                   <Upload className="w-3.5 h-3.5 text-stone-700" />
                   <span>조르테 CSV 불러오기 → 클라우드 저장</span>
                 </div>
-                <p className="text-[11px] text-stone-500 leading-relaxed">
-                  조르테 CSV로 불러온 모든 일정은 로그인한 본인의 개인일정(🔒)으로만 클라우드에 저장되며 중복은 자동 제외됩니다.
+                <p className="text-[11px] text-stone-500">
+                  본인 개인일정(🔒)으로 저장 · 중복 자동 제외
                 </p>
                 <label className="block w-full text-center py-2.5 px-3 rounded-xl border border-dashed border-stone-300 bg-white hover:bg-stone-50 text-[12.5px] font-extrabold text-stone-700 cursor-pointer transition">
                   <span>📂 CSV 파일 선택 (.csv)</span>
@@ -28983,8 +29279,8 @@ ${validText}
                 <div className="text-[13.5px] font-extrabold text-amber-900">
                   🔒 관리자 전용 설정 영역입니다
                 </div>
-                <p className="text-[12.5px] text-amber-800">
-                  API 키 설정, 육아지원군 비밀번호 관리 및 DB 복원은 관리자 비밀번호로 로그인해야 이용할 수 있습니다.
+                <p className="text-[12px] text-amber-800">
+                  API 키·권한·DB 복원은 관리자 로그인 후 이용할 수 있습니다.
                 </p>
                 <button
                   onClick={() => {
@@ -31185,8 +31481,8 @@ ${validText}
                         );
                       })()}
                     </div>
-                    <p className="text-[12.5px] text-stone-500 leading-relaxed">
-                      모든 메뉴 열람·편집과 설정(수혁·아리나 개별 비밀번호, 백업)이 가능하며, 개인 일정·다이어리는 본인 계정에서만 보입니다.
+                    <p className="text-[12px] text-stone-500">
+                      전체 권한 · 개인 일정은 본인 계정 전용
                     </p>
                     <button
                       onClick={async () => {
@@ -32040,6 +32336,7 @@ ${validText}
 
             <div className="grid grid-cols-2 gap-1.5 pt-1">
               <button
+                type="button"
                 onClick={() => {
                   const target = quickFridgeItem;
                   setQuickFridgeItem(null);
@@ -32050,6 +32347,7 @@ ${validText}
                 🌗 반만먹음
               </button>
               <button
+                type="button"
                 onClick={() => {
                   const target = quickFridgeItem;
                   setQuickFridgeItem(null);
@@ -32060,6 +32358,7 @@ ${validText}
                 ✓ 다 먹음
               </button>
               <button
+                type="button"
                 onClick={() => {
                   const target = quickFridgeItem;
                   setQuickFridgeItem(null);
@@ -32070,6 +32369,7 @@ ${validText}
                 + 장보기
               </button>
               <button
+                type="button"
                 onClick={() => {
                   const target = quickFridgeItem;
                   setQuickFridgeItem(null);
@@ -32079,6 +32379,32 @@ ${validText}
               >
                 🗑️ 폐기
               </button>
+            </div>
+            <div className="grid grid-cols-2 gap-1.5 pt-1 border-t border-stone-100">
+              <button
+                type="button"
+                onClick={() => {
+                  const targetName = quickFridgeItem?.name;
+                  setQuickFridgeItem(null);
+                  handleFridgeToRecipeSearch(targetName);
+                }}
+                className="py-2 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-800 text-[12px] font-extrabold"
+              >
+                📖 레시피 찾기
+              </button>
+              {canViewTab("ai") && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const targetName = quickFridgeItem?.name;
+                    setQuickFridgeItem(null);
+                    handleExpiringToAiChef([targetName]);
+                  }}
+                  className="py-2 rounded-xl bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-900 text-[12px] font-extrabold"
+                >
+                  ✨ AI 요리추천
+                </button>
+              )}
             </div>
           </div>
         </div>

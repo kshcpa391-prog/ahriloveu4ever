@@ -1177,7 +1177,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v12.64";
+export const APP_CODE_VERSION = "v12.65";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1195,7 +1195,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-21 09:40";
+export const APP_BUILD_DATE = "2026-11-21 10:15";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1262,6 +1262,18 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v12.65",
+    version: "v12.65",
+    date: "2026-11-21",
+    title: "전 메뉴 8대 원탭 연계 구현 · 시각적 문구 슬림화 및 버킷 일정 카테고리·문자 오류 수정",
+    category: "메뉴 연계 · 고도화 · 오류수정",
+    changes: [
+      "메뉴 간 8대 원탭 연계 구현: 가족공지→할일 등록, 냉장고 임박재료·퀵시트→AI추천/레시피북 검색, 식단→레시피북 조회·자동프리필 등록, 월간식단→해당일 식단탭 직행, 공유노트 미완료 체크리스트→장보기 일괄 담기, 버킷리스트→준비노트 자동생성·육아일기 쓰기, 육아 진료기록→재진 일정 등록",
+      "시각적 피로도 최소화: AI추천·조르테 CSV·설정 잠금·로그인 모달의 장황·중복 설명 문구 5곳을 1줄 핵심 문구로 압축",
+      "잠재 오류 수정: 버킷리스트 일정 잡기 카테고리 불일치('가족행사'→'가족행사/경조사') 2건 수정, 페이지 수정 토스트 깨진 문자 복구, 수정 영역 버튼 type='button' 보강 및 AST·TDZ·배포 전수 검증 완료"
+    ]
+  },
   {
     id: "patch-v12.64",
     version: "v12.64",
