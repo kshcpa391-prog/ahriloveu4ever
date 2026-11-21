@@ -16038,8 +16038,19 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                       </div>
                     </div>
                     {activeDates.length === 0 ? (
-                      <div className="py-8 text-center text-[12.5px] font-semibold text-stone-400">
-                        조건에 맞는 식단 기록이 없습니다.
+                      <div className="py-8 text-center space-y-2">
+                        <div className="text-[12.5px] font-semibold text-stone-400">
+                          조건에 맞는 식단 기록이 없습니다.
+                        </div>
+                        {(monthlySearchQuery || monthlySlotFilter !== "전체") && (
+                          <button
+                            type="button"
+                            onClick={() => { setMonthlySearchQuery(""); setMonthlySlotFilter("전체"); }}
+                            className="px-3 py-1 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-[11.5px] font-extrabold"
+                          >
+                            🔄 필터 초기화
+                          </button>
+                        )}
                       </div>
                     ) : (
                       <div className="divide-y divide-stone-100">
@@ -16072,11 +16083,26 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                                 >
                                   {d.slice(8)}일({getDayName(d)})
                                 </span>
-                                {isTodayRow && (
-                                  <span className="px-1.5 py-0.2 rounded bg-[#5E7A65] text-white text-[9.5px] font-extrabold whitespace-nowrap">
-                                    오늘
-                                  </span>
-                                )}
+                                <div className="flex items-center gap-1">
+                                  {isTodayRow && (
+                                    <span className="px-1.5 py-0.2 rounded bg-[#5E7A65] text-white text-[9.5px] font-extrabold whitespace-nowrap">
+                                      오늘
+                                    </span>
+                                  )}
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setSelectedDate(d);
+                                      setSelectedMember("전체");
+                                      setActiveTab("daily");
+                                    }}
+                                    className="px-1 py-0.2 rounded bg-stone-100 hover:bg-stone-200 text-stone-600 text-[9.5px] font-extrabold whitespace-nowrap"
+                                    title="식단 탭에서 보기"
+                                  >
+                                    🍽️
+                                  </button>
+                                </div>
                               </div>
                               <div className="flex-1 min-w-0 flex flex-wrap gap-1">
                                 {dMeals.map((m) => (
@@ -19890,6 +19916,40 @@ ${item.memo}` : `${item.title} 다녀옴!`,
 
 
                   <div className="flex items-center gap-1 shrink-0">
+                    {canEditTab("pages") && (
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          const nowMs = Date.now();
+                          const newId = `pg-${nowMs}-${Math.random().toString(36).slice(2, 5)}`;
+                          const parsedBlocks = n.content
+                            ? parseNotionMarkdownToBlocks(n.content, "amber")
+                            : [];
+                          const newPage = {
+                            id: newId,
+                            parentId: null,
+                            title: String(n.title || "가족 공지 노트").trim(),
+                            icon: "📌",
+                            coverColor: "peach",
+                            order: familyPages.filter((p) => !p.parentId).length,
+                            blocks: parsedBlocks.length > 0
+                              ? parsedBlocks
+                              : [{ id: `blk-${nowMs}-1`, type: "text", text: String(n.title || "") }],
+                            createdAtMs: nowMs,
+                            updatedAtMs: nowMs
+                          };
+                          await savePageToCloud(newPage);
+                          setActiveTab("pages");
+                          openFamilyPage(newId);
+                          recordActivity("노트", "생성", newPage.title);
+                          showToast(`🗂️ '${newPage.title}' 공유노트로 저장했습니다!`);
+                        }}
+                        className="px-2 py-0.5 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-900 text-[11.5px] font-extrabold whitespace-nowrap"
+                        title="공유노트 페이지로 저장"
+                      >
+                        🗂️ 노트
+                      </button>
+                    )}
                     {canEditTab("schedule") && (
                       <button
                         type="button"
@@ -27543,7 +27603,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                 </h3>
 
               </div>
-              <button onClick={() => setIsPatchModalOpen(false)}>
+              <button type="button" onClick={() => setIsPatchModalOpen(false)}>
                 <X className="w-5 h-5 text-stone-400" />
               </button>
             </div>
@@ -28075,7 +28135,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                   손글씨·인쇄물 식단표를 자동 인식합니다.
                 </p>
               </div>
-              <button onClick={() => setIsDaycareModalOpen(false)}>
+              <button type="button" onClick={() => setIsDaycareModalOpen(false)}>
                 <X className="w-5 h-5 text-stone-400" />
               </button>
             </div>
@@ -28318,7 +28378,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
           <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-3xl max-w-sm w-full p-5 space-y-3 max-h-[85vh] overflow-y-auto">
             <div className="flex items-center justify-between">
               <h3 className="text-[15.5px] font-black">🧾 마트 영수증 사진 고속 스캔</h3>
-              <button onClick={() => setIsReceiptModalOpen(false)}>
+              <button type="button" onClick={() => setIsReceiptModalOpen(false)}>
                 <X className="w-5 h-5 text-stone-400" />
               </button>
             </div>
@@ -29200,7 +29260,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
               <h3 className="text-[15.5px] font-black">
                 {editingFridge ? "냉장고 재료 수정" : "냉장고 재료 추가"}
               </h3>
-              <button onClick={() => { setFridgeConflictData(null); setIsFridgeModalOpen(false); }}>
+              <button type="button" onClick={() => { setFridgeConflictData(null); setIsFridgeModalOpen(false); }}>
                 <X className="w-5 h-5 text-stone-400" />
               </button>
             </div>
@@ -29537,7 +29597,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
           <div className="bg-white rounded-3xl max-w-sm w-full p-5 space-y-3.5" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between">
               <h3 className="text-[15.5px] font-black">🍳 요리 완료 · 재고 차감 확인</h3>
-              <button onClick={() => setCookingConfirmModal(null)}>
+              <button type="button" onClick={() => setCookingConfirmModal(null)}>
                 <X className="w-5 h-5 text-stone-400" />
               </button>
             </div>
@@ -32045,7 +32105,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                   ? "🌿 육아지원군 권한 활성화됨"
                   : "🔐 가족 · 육아지원군 로그인"}
               </h3>
-              <button onClick={() => setIsEditorUnlockModalOpen(false)}>
+              <button type="button" onClick={() => setIsEditorUnlockModalOpen(false)}>
                 <X className="w-5 h-5 text-stone-400" />
               </button>
             </div>

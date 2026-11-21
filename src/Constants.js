@@ -1177,7 +1177,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v12.71";
+export const APP_CODE_VERSION = "v12.72";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1195,7 +1195,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-21 14:50";
+export const APP_BUILD_DATE = "2026-11-21 15:00";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1262,6 +1262,18 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v12.72",
+    version: "v12.72",
+    date: "2026-11-21",
+    title: "월간 한눈에→식단탭 직행·필터초기화 · 가족공지→공유노트 변환 · 전역 미지정 버튼 0건 달성",
+    category: "메뉴 연계 · 편의성 · 안정화",
+    changes: [
+      "추가 2대 원탭 연계: 월간 식단 [📋 한눈에] 날짜별 행에 [🍽️ 보기] 버튼을 추가해 해당 날짜 식단 탭으로 즉시 이동, 가족공지 카드에 [🗂️ 노트] 버튼을 추가해 공지 본문을 공유노트 체크리스트/페이지로 자동 변환·저장",
+      "사용자 편의성: 월간 식단 [📋 한눈에]에서 검색·끼니 필터로 결과가 0건일 때 1탭 [🔄 필터 초기화] 버튼 표시",
+      "전역 안정성·배포 검증: 잔여 단일행 미지정 <button onClick> 6곳까지 type='button'을 보강해 앱 전체 미지정 버튼 0건 달성 및 AST·TDZ·JSX·배포 정합성 전수 검증 완료"
+    ]
+  },
   {
     id: "patch-v12.71",
     version: "v12.71",
