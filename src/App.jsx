@@ -2601,6 +2601,8 @@ function MainApp() {
     if (!rt) return false;
     const dStr = String(dayStr || "").slice(0, 10);
     if (rt.startDate && String(rt.startDate).slice(0, 10) > dStr) return false;
+    const allowedSlots = getSlotLabelsForDayType(isHolidayOrWeekend(dStr));
+    if (!allowedSlots.includes(rt.timeSlot || "상시")) return false;
     if (!rt.cycle || rt.cycle === "daily") return true;
     if (rt.cycle === "weekdays") return !isHolidayOrWeekend(dStr);
     if (rt.cycle === "weekend_holiday") return isHolidayOrWeekend(dStr);
@@ -2638,6 +2640,8 @@ function MainApp() {
     if (!rt) return false;
     const dStr = String(dayStr || "").slice(0, 10);
     if (rt.startDate && String(rt.startDate).slice(0, 10) > dStr) return false;
+    const allowedSlots = getSlotLabelsForDayType(isHolidayOrWeekend(dStr));
+    if (!allowedSlots.includes(rt.timeSlot || "상시")) return false;
     if (!rt.cycle || rt.cycle === "daily") return true;
     if (rt.cycle === "weekdays") return !isHolidayOrWeekend(dStr);
     if (rt.cycle === "weekend_holiday") return isHolidayOrWeekend(dStr);
@@ -15540,7 +15544,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                                         )}
                                         <div className="text-[13.5px] font-extrabold text-stone-900 break-keep leading-snug min-w-0 flex-1">
                                           {it.mealStatus === "planned" && (
-                                            <span className="inline-block mr-1 px-1.5 py-0.5 rounded bg-[#EEF3EE] text-[#35503C] border border-[#C9D8CC] text-[10.5px] font-black align-middle">
+                                            <span className="inline-block mr-1 px-1.5 py-0.5 rounded bg-[#EEF3EE] text-[#35503C] border border-[#C9D8CC] text-[10.5px] font-black align-middle whitespace-nowrap">
                                               계획
                                             </span>
                                           )}
@@ -17146,7 +17150,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                                       {ev.category}
                                     </span>
                                     {ev.isAnnual && (
-                                      <span className="px-2 py-0.5 rounded-md text-[11px] font-extrabold bg-pink-600 text-white">
+                                      <span className="px-2 py-0.5 rounded-md text-[11px] font-extrabold bg-pink-600 text-white whitespace-nowrap">
                                         🔄 매년 반복
                                       </span>
                                     )}
@@ -17154,7 +17158,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                                       {dInfo.dDayText}
                                     </span>
                                     {dInfo.elapsedDays !== null && (
-                                      <span className="px-2 py-0.5 rounded-md text-[11px] font-extrabold bg-emerald-100 text-emerald-800">
+                                      <span className="px-2 py-0.5 rounded-md text-[11px] font-extrabold bg-emerald-100 text-emerald-800 whitespace-nowrap">
                                         D+{dInfo.elapsedDays.toLocaleString()}일째
                                       </span>
                                     )}
@@ -17286,7 +17290,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                                           </span>
                                         )}
                                         {ev.isAnnual && (
-                                          <span className="ml-1.5 px-1 py-0.5 rounded bg-stone-100 text-stone-500 text-[9.5px] font-bold">매년</span>
+                                          <span className="ml-1.5 px-1 py-0.5 rounded bg-stone-100 text-stone-500 text-[9.5px] font-bold whitespace-nowrap">매년</span>
                                         )}
                                       </div>
                                       {ev.memo && (
@@ -17403,7 +17407,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                             {dayGroup.date.slice(5).replace("-", "월 ")}일 ({dayGroup.dayName})
                           </span>
                           {isToday && (
-                            <span className="px-1.5 py-0.2 rounded bg-amber-400 text-stone-900 text-[10.5px] font-black">
+                            <span className="px-1.5 py-0.2 rounded bg-amber-400 text-stone-900 text-[10.5px] font-black whitespace-nowrap">
                               오늘
                             </span>
                           )}
@@ -17485,7 +17489,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
               <div className="min-w-0">
                 <h3 className="text-[13.5px] font-black text-stone-900 flex items-center gap-1.5 whitespace-nowrap">
                   <span>🔄 반복 루틴</span>
-                  <span className="px-2 py-0.5 rounded-full bg-stone-100 text-stone-800 text-[11px] font-black shrink-0">
+                  <span className="px-2 py-0.5 rounded-full bg-stone-100 text-stone-800 text-[11px] font-black shrink-0 whitespace-nowrap">
                     남은 {familyRoutines.filter((r) => isRoutineDueTodayOrPast(r, currentDayKey) && !isRoutineDoneNow(r)).length}건
                   </span>
                 </h3>
@@ -18047,7 +18051,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                             })()}
                             <div className="flex flex-wrap items-center gap-1 mt-1">
                               {parseRoutineSteps(rt.title).length >= 2 && (
-                                <span className="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 text-[10.5px] font-black">
+                                <span className="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 text-[10.5px] font-black whitespace-nowrap">
                                   진행 {doneNow ? parseRoutineSteps(rt.title).length : getRoutineSubStepDoneSet(rt).size}/{parseRoutineSteps(rt.title).length}
                                 </span>
                               )}
@@ -19208,7 +19212,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                           <div className="flex items-baseline gap-2 flex-wrap">
                             <span className="text-[15.5px] font-black text-stone-900">{item.name}</span>
                             {Number(item.quantity) > 0 && Number(item.quantity) < 1 && (
-                              <span className="px-1.5 py-0.5 rounded bg-[#EEF3EE] text-[#35503C] border border-[#C9D8CC] text-[10.5px] font-black">
+                              <span className="px-1.5 py-0.5 rounded bg-[#EEF3EE] text-[#35503C] border border-[#C9D8CC] text-[10.5px] font-black whitespace-nowrap">
                                 🌗 반남음
                               </span>
                             )}
@@ -19743,7 +19747,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                   <div className="min-w-0">
                     <div className="flex items-center gap-1.5 flex-wrap">
                       {item.urgent && (
-                        <span className="px-1.5 py-0.5 rounded text-[10.5px] font-black bg-red-100 text-red-700">
+                        <span className="px-1.5 py-0.5 rounded text-[10.5px] font-black bg-red-100 text-red-700 whitespace-nowrap">
                           급함
                         </span>
                       )}
@@ -20374,7 +20378,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                                     </button>
                                     <div className="flex items-center gap-1.5">
                                       {hasExisting && (
-                                        <span className="px-1.5 py-0.5 rounded bg-rose-100 text-rose-800 text-[11.5px] font-extrabold">
+                                        <span className="px-1.5 py-0.5 rounded bg-rose-100 text-rose-800 text-[11.5px] font-extrabold whitespace-nowrap">
                                           기존 식단 있음(추가)
                                         </span>
                                       )}
@@ -20862,10 +20866,10 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                     🍽️ {platingResult.dishName}
                   </span>
                   <div className="flex items-center gap-1 shrink-0">
-                    <span className="px-2 py-0.5 rounded-lg bg-white border border-rose-200 text-[11.5px] font-extrabold text-rose-800">
+                    <span className="px-2 py-0.5 rounded-lg bg-white border border-rose-200 text-[11.5px] font-extrabold text-rose-800 whitespace-nowrap">
                       색감 {platingResult.colorScore === "미평가" ? "미평가" : `${platingResult.colorScore}/5`}
                     </span>
-                    <span className="px-2 py-0.5 rounded-lg bg-white border border-rose-200 text-[11.5px] font-extrabold text-rose-800">
+                    <span className="px-2 py-0.5 rounded-lg bg-white border border-rose-200 text-[11.5px] font-extrabold text-rose-800 whitespace-nowrap">
                       구성 {platingResult.layoutScore === "미평가" ? "미평가" : `${platingResult.layoutScore}/5`}
                     </span>
                   </div>
@@ -23393,11 +23397,11 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                           <span className="px-2 py-0.5 rounded-md bg-stone-100 text-stone-700 text-[11.5px] font-bold">
                             ⏱️ {r.cookTime || "20분"}
                           </span>
-                          <span className="px-2 py-0.5 rounded-md bg-amber-50 text-amber-800 text-[11.5px] font-bold">
+                          <span className="px-2 py-0.5 rounded-md bg-amber-50 text-amber-800 text-[11.5px] font-bold whitespace-nowrap">
                             난이도: {r.difficulty || "쉬움"}
                           </span>
                           {r.platingCoach && (
-                            <span className="px-2 py-0.5 rounded-md bg-rose-50 text-rose-700 text-[11.5px] font-bold">
+                            <span className="px-2 py-0.5 rounded-md bg-rose-50 text-rose-700 text-[11.5px] font-bold whitespace-nowrap">
                               🎨 플레이팅 연동
                             </span>
                           )}
@@ -23555,7 +23559,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                     <div className="flex items-center justify-between">
                       <MemberAvatar id={ch.id} size="lg" />
                       <span
-                        className={`text-[11.5px] font-extrabold px-2 py-0.5 rounded-full ${
+                        className={`whitespace-nowrap text-[11.5px] font-extrabold px-2 py-0.5 rounded-full ${
                           isSel ? "bg-amber-400 text-stone-900" : "bg-stone-100 text-stone-600"
                         }`}
                       >
@@ -24082,7 +24086,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                                               : act.type}
                                           </span>
                                           {act.inProgress && (
-                                            <span className="px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 text-[10px] font-bold">진행중</span>
+                                            <span className="px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 text-[10px] font-bold whitespace-nowrap">진행중</span>
                                           )}
                                         </div>
                                         {(detailParts.length > 0 || act.memo) && (
@@ -24191,7 +24195,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                       <div className="flex items-center justify-between">
                         <span className="text-[13.5px] font-black text-stone-900">{ms.label}</span>
                         {isCurrent && (
-                          <span className="px-2 py-0.5 rounded-full bg-amber-500 text-white text-[11.5px] font-black">
+                          <span className="px-2 py-0.5 rounded-full bg-amber-500 text-white text-[11.5px] font-black whitespace-nowrap">
                             ⭐ 지금 {activeChild.id} 시기
                           </span>
                         )}
@@ -24731,12 +24735,12 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                             <div className="text-[12.5px] font-bold text-stone-500 flex items-center gap-1.5 flex-wrap">
                               <span>{g.date}</span>
                               {rowCmp?.height && (
-                                <span className="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 text-[10px] font-extrabold">
+                                <span className="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 text-[10px] font-extrabold whitespace-nowrap">
                                   키 P{rowCmp.height.pct}
                                 </span>
                               )}
                               {rowCmp?.weight && (
-                                <span className="px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 text-[10px] font-extrabold">
+                                <span className="px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 text-[10px] font-extrabold whitespace-nowrap">
                                   체중 P{rowCmp.weight.pct}
                                 </span>
                               )}
@@ -25670,7 +25674,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                                 </div>
                               )}
                               {getDiaryEntryPhotos(entry).length > 0 && (
-                                <span className="inline-flex items-center px-2 py-0.5 rounded-lg bg-[#EEF3EE] text-[#35503C] text-[11.5px] font-extrabold">
+                                <span className="inline-flex items-center px-2 py-0.5 rounded-lg bg-[#EEF3EE] text-[#35503C] text-[11.5px] font-extrabold whitespace-nowrap">
                                   📸 사진 {getDiaryEntryPhotos(entry).length}장
                                 </span>
                               )}
@@ -27158,11 +27162,20 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                         📌 공지 올리기
                       </button>
                     )}
+                    {activeDetail._isFamily && activeDetail.category === "할일(To-Do)" && !activeDetail.done && canEditTab("shopping") && (
+                      <button
+                        type="button"
+                        onClick={() => handleTodoToShopping(activeDetail)}
+                        className="px-2.5 py-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-900 text-[11.5px] font-extrabold whitespace-nowrap transition"
+                      >
+                        🛒 장보기
+                      </button>
+                    )}
                     {!activeDetail.isAnnual && (
                       <button
                         type="button"
                         onClick={() => handlePostponeEventByOneDay(activeDetail)}
-                        className="px-2.5 py-1.5 rounded-lg border border-stone-300 bg-stone-50 hover:bg-stone-100 text-stone-800 text-[11.5px] font-extrabold transition"
+                        className="px-2.5 py-1.5 rounded-lg border border-stone-300 bg-stone-50 hover:bg-stone-100 text-stone-800 text-[11.5px] font-extrabold whitespace-nowrap transition"
                       >
                         ⏭️ 내일로 미루기 (+1일)
                       </button>

@@ -1177,7 +1177,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v12.74";
+export const APP_CODE_VERSION = "v12.75";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1195,7 +1195,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-21 17:35";
+export const APP_BUILD_DATE = "2026-11-21 18:55";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1262,6 +1262,18 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v12.75",
+    version: "v12.75",
+    date: "2026-11-21",
+    title: "홈·일정배지·루틴탭·브리핑 루틴 건수 100% 통일 · 전역 배지 20곳 줄바꿈 교정 · 조르테 할일→장보기 연계",
+    category: "정합화 · 시각정돈 · 메뉴연계",
+    changes: [
+      "루틴 건수 100% 통일: isRoutineDueTodayOrPast 및 isRoutineDueOnExactDay에 평일/주말·공휴일 허용 시간대 판정을 통합해 주말·공휴일에 평일 전용 시간대(하원후·점심 등) 루틴이 일정 배지·루틴 탭·오늘 브리핑 건수에 섞여 홈과 숫자가 다르던 불일치 완전 해소",
+      "전역 배지 줄바꿈 교정: 앱 전체 20개 배지(계획·매년 반복·남은 건·반남음·급함·진행중·지금 시기·키/체중 P·사진 장 등) 및 조르테 [⏭️ 내일로 미루기 (+1일)] 버튼에 whitespace-nowrap을 AST 기반으로 일괄 적용",
+      "메뉴 연계 확장: 조르테 상세 팝업에서 가족 [할일(To-Do)] 항목일 때 [🛒 장보기] 1탭 담기 버튼 추가 및 AST·TDZ·배포 정합성 최종 전수 검증 완료"
+    ]
+  },
   {
     id: "patch-v12.74",
     version: "v12.74",
