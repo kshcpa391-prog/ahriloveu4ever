@@ -1178,7 +1178,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v12.85";
+export const APP_CODE_VERSION = "v12.86";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1196,7 +1196,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-21 21:08";
+export const APP_BUILD_DATE = "2026-11-21 21:14";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1264,6 +1264,18 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v12.86",
+    version: "v12.86",
+    date: "2026-11-21",
+    title: "👶 산후도우미 원클릭 카톡 인수인계 완성 · ☁️ 클라우드 고정가이드(수면/분유/산모식사/가사/비상연락) 동기화",
+    category: "기능 고도화 · 클라우드 동기화",
+    changes: [
+      "☁️ 클라우드 고정 가이드(family_meta_v4/handover_profile_v1) 신설: 분유·소독법, 수면 방식, 목욕·케어, 주의사항, 산모 식사, 세탁·가사, 비상연락처, 출입안내(보안 선택 포함)를 클라우드에 저장·실시간 동기화하고 JSON 백업/복원에도 완전 포함",
+      "👶 산후도우미용 / 👨‍👩‍👧‍👦 가족교대용 원클릭 프리셋: 산후도우미용 선택 시 인사말과 필수 케어 항목이 자동 포함되며, 아직 입력하지 않은 필수 항목은 [미기재 N건] 배지로 바로 알려 입력 유도",
+      "3탭 슬림화(⚙️ 구성 · 📝 고정가이드 · 👁️ 미리보기)로 중복 입력 제거 및 AST·TDZ·배포 정합성 최종 검증 완료"
+    ]
+  },
   {
     id: "patch-v12.85",
     version: "v12.85",
