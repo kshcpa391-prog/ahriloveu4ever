@@ -153,7 +153,9 @@ import {
   parseNotionMarkdownToBlocks,
   blocksToNotionMarkdown,
   INITIAL_BABY_DREAM_LINKS,
-  BABY_DREAM_ICON_PRESETS
+  BABY_DREAM_ICON_PRESETS,
+  HOUSE_STORAGE_ROOMS,
+  HOUSE_MEDICINE_TARGETS
 } from "./Constants";
 
 
@@ -2348,6 +2350,31 @@ function MainApp() {
   const [bucketMemberFilter, setBucketMemberFilter] = useState("전체");
   const [bucketStatusFilter, setBucketStatusFilter] = useState("all");
   const [selectedBucketMapItem, setSelectedBucketMapItem] = useState(null);
+  const [houseItems, setHouseItems] = useState([]);
+  const [houseSubTab, setHouseSubTab] = useState("storage"); // storage | warranty | medicine
+  const [houseSearch, setHouseSearch] = useState("");
+  const [houseFilter, setHouseFilter] = useState("전체");
+  const [isHouseModalOpen, setIsHouseModalOpen] = useState(false);
+  const [editingHouseItem, setEditingHouseItem] = useState(null);
+  const [houseForm, setHouseForm] = useState({
+    kind: "storage",
+    title: "",
+    room: "거실",
+    detailLoc: "",
+    brand: "",
+    purchaseDate: getTodayStr(),
+    warrantyEnd: "",
+    asPhone: "",
+    price: "",
+    target: "공통",
+    openedDate: "",
+    expiryDate: "",
+    dosage: "",
+    memo: "",
+    photoUrl: ""
+  });
+  const housePhotoInputRef = useRef(null);
+
   const [isGeocodingBucket, setIsGeocodingBucket] = useState(false);
   const [isBucketModalOpen, setIsBucketModalOpen] = useState(false);
   const [editingBucketId, setEditingBucketId] = useState(null);
@@ -3467,7 +3494,9 @@ function MainApp() {
     "장보기": "shopping",
     "공지": "notices",
     "레시피": "recipes",
-    "노트": "pages"
+    "노트": "pages",
+    "버킷": "bucket",
+    "살림수첩": "house"
   };
   const visibleRecentActivities = useMemo(() => {
     if (isAdminUnlocked) return recentActivities;
@@ -4680,6 +4709,17 @@ function MainApp() {
 
     unsubscribers.push(
       onSnapshot(
+        getColRef("family_house_items_v1"),
+        (snap) => {
+          const loaded = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+          setHouseItems(loaded);
+        },
+        () => {}
+      )
+    );
+
+    unsubscribers.push(
+      onSnapshot(
         getColRef("admin_private_schedules_v1"),
         (snap) => {
           const loaded = [];
@@ -4965,6 +5005,7 @@ function MainApp() {
       recipesMeta: recipes.map(({ photoDataUrl, ...rest }) => rest),
       familyRoutines,
       bucketList,
+      houseItems,
       familyPages,
       mealFavorites: { combos: favoriteMealCombos, singles: favoriteSingleMenus },
       notices,
@@ -5218,6 +5259,7 @@ function MainApp() {
         babyActivities,
         familyRoutines,
         bucketList,
+        houseItems,
         familyPages,
         homeLayoutConfig,
         homeTimeRanges,
@@ -5376,6 +5418,7 @@ function MainApp() {
       if (Array.isArray(payload.expenses)) setExpenses(payload.expenses);
       if (Array.isArray(payload.shoppingList)) setShoppingList(payload.shoppingList);
       if (Array.isArray(payload.bucketList)) setBucketList(payload.bucketList);
+      if (Array.isArray(payload.houseItems)) setHouseItems(payload.houseItems);
       if (Array.isArray(payload.familyPages)) setFamilyPages(payload.familyPages);
       if (Array.isArray(payload.recipes)) setRecipes(payload.recipes);
       if (payload.mealFavorites && typeof payload.mealFavorites === "object") {
@@ -5483,6 +5526,9 @@ function MainApp() {
         });
         (payload.shoppingList || []).forEach((sh) => {
           if (sh?.id) writePromises.push(setDoc(getDocRef("family_shopping_v4", sh.id), sh));
+        });
+        (payload.houseItems || []).forEach((hi) => {
+          if (hi?.id) writePromises.push(setDoc(getDocRef("family_house_items_v1", hi.id), hi));
         });
         (payload.recipes || []).forEach((rc) => {
           if (rc?.id) writePromises.push(setDoc(getDocRef("family_recipes_v8", rc.id), rc));
@@ -8525,6 +8571,20 @@ ${validText}
       const unchk = shoppingList.filter((s) => !s.checked);
       if (unchk.length > 0) {
         linesOut.push(`🛒 장보기(${unchk.length}건): ${unchk.slice(0, 6).map((s) => s.name).join(", ")}`);
+      }
+    }
+    if (canViewTab("house")) {
+      const dueHouse = houseItems.filter((it) => {
+        const dt = it.kind === "warranty" ? it.warrantyEnd : it.kind === "medicine" ? it.expiryDate : "";
+        return dt && getDaysDiff(dt) <= 7;
+      });
+      if (dueHouse.length > 0) {
+        linesOut.push(
+          `🏠 상비약·A/S 만료임박(${dueHouse.length}건): ${dueHouse
+            .slice(0, 4)
+            .map((it) => `${it.title}(${getDaysDiff(it.kind === "warranty" ? it.warrantyEnd : it.expiryDate) < 0 ? "만료" : `D-${getDaysDiff(it.kind === "warranty" ? it.warrantyEnd : it.expiryDate)}`})`)
+            .join(", ")}`
+        );
       }
     }
     const textOut = linesOut.join("\n");
@@ -11948,6 +12008,151 @@ ${item.memo}` : `${item.title} 다녀옴!`,
     setIsNoticeModalOpen(true);
   };
 
+
+  // === 🏠 살림수첩 (수납지도 · 보증/AS · 상비약함) 핸들러 (v12.78) ===
+  const openHouseModal = (kind = houseSubTab, editItem = null) => {
+    if (!requireEditorAccess("house")) return;
+    const k = editItem?.kind || kind || "storage";
+    setEditingHouseItem(editItem || null);
+    setHouseForm({
+      kind: k,
+      title: editItem?.title || "",
+      room: editItem?.room || "거실",
+      detailLoc: editItem?.detailLoc || "",
+      brand: editItem?.brand || "",
+      purchaseDate: editItem?.purchaseDate || getTodayStr(),
+      warrantyEnd: editItem?.warrantyEnd || (k === "warranty" ? addMonthsToDateStr(getTodayStr(), 12, 0) : ""),
+      asPhone: editItem?.asPhone || "",
+      price: editItem?.price || "",
+      target: editItem?.target || "공통",
+      openedDate: editItem?.openedDate || "",
+      expiryDate: editItem?.expiryDate || (k === "medicine" ? addMonthsToDateStr(getTodayStr(), 3, 0) : ""),
+      dosage: editItem?.dosage || "",
+      memo: editItem?.memo || "",
+      photoUrl: editItem?.photoUrl || ""
+    });
+    setIsHouseModalOpen(true);
+  };
+
+  const handleHousePhotoSelect = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    try {
+      const b64 = await fileToBase64(file, { maxSide: 720, quality: 0.65 });
+      const compressed = await compressDataUrlForFirestore(b64.previewUrl, 720, 0.65);
+      setHouseForm((prev) => ({ ...prev, photoUrl: compressed || b64.previewUrl || "" }));
+      showToast("📷 사진이 첨부되었습니다.");
+    } catch {
+      showToast("사진을 불러오지 못했습니다.");
+    }
+  };
+
+  const handleSaveHouseItem = async () => {
+    if (!requireEditorAccess("house")) return;
+    const title = String(houseForm.title || "").trim();
+    if (!title) {
+      showToast("이름을 입력해 주세요.");
+      return;
+    }
+    const nowMs = Date.now();
+    const id = editingHouseItem?.id || `hs-${nowMs}-${Math.random().toString(36).slice(2, 5)}`;
+    const payload = {
+      id,
+      kind: houseForm.kind || "storage",
+      title,
+      room: houseForm.room || "거실",
+      detailLoc: String(houseForm.detailLoc || "").trim(),
+      brand: String(houseForm.brand || "").trim(),
+      purchaseDate: houseForm.purchaseDate || "",
+      warrantyEnd: houseForm.warrantyEnd || "",
+      asPhone: String(houseForm.asPhone || "").trim(),
+      price: houseForm.price ? Number(houseForm.price) || 0 : 0,
+      target: houseForm.target || "공통",
+      openedDate: houseForm.openedDate || "",
+      expiryDate: houseForm.expiryDate || "",
+      dosage: String(houseForm.dosage || "").trim(),
+      memo: String(houseForm.memo || "").trim(),
+      photoUrl: houseForm.photoUrl || "",
+      createdAtMs: editingHouseItem?.createdAtMs || nowMs,
+      updatedAtMs: nowMs
+    };
+    setHouseItems((prev) => {
+      const exists = prev.some((x) => x.id === id);
+      return exists ? prev.map((x) => (x.id === id ? payload : x)) : [payload, ...prev];
+    });
+    setHouseSubTab(payload.kind);
+    setIsHouseModalOpen(false);
+    setEditingHouseItem(null);
+    if (user && db) {
+      beginWrite();
+      let ok = false;
+      let errMsg = "";
+      try {
+        await setDoc(getDocRef("family_house_items_v1", id), payload, { merge: true });
+        ok = true;
+      } catch (e) {
+        errMsg = e?.message || "살림수첩 저장 동기화 오류";
+      } finally {
+        endWrite(ok, errMsg);
+      }
+    }
+    const kindLabel = payload.kind === "storage" ? "수납지도" : payload.kind === "warranty" ? "보증·A/S" : "상비약함";
+    recordActivity("살림수첩", editingHouseItem ? "수정" : "등록", `[${kindLabel}] ${title}`);
+    showToast(`🏠 '${title}'이(가) 저장되었습니다.`);
+  };
+
+  const handleDeleteHouseItem = async (item) => {
+    if (!requireEditorAccess("house") || !item?.id) return;
+    if (!window.confirm(`'${item.title}' 항목을 삭제할까요?`)) return;
+    setHouseItems((prev) => prev.filter((x) => x.id !== item.id));
+    if (user && db) {
+      beginWrite();
+      let ok = false;
+      let errMsg = "";
+      try {
+        await deleteDoc(getDocRef("family_house_items_v1", item.id));
+        ok = true;
+      } catch (e) {
+        errMsg = e?.message || "살림수첩 삭제 동기화 오류";
+      } finally {
+        endWrite(ok, errMsg);
+      }
+    }
+    recordActivity("살림수첩", "삭제", item.title || "");
+    showToast("삭제되었습니다.");
+  };
+
+  const handleMedicineToShopping = async (med) => {
+    if (!requireEditorAccess("shopping") || !med?.title) return;
+    const cleanName = String(med.title).trim();
+    const norm = cleanName.toLowerCase();
+    if (shoppingList.some((s) => !s.checked && String(s.name || "").trim().toLowerCase() === norm)) {
+      showToast(`이미 장보기에 '${cleanName}'이(가) 담겨 있습니다.`);
+      return;
+    }
+    const id = `sh-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`;
+    const payload = {
+      id,
+      name: cleanName,
+      quantity: "1개",
+      category: "기타",
+      urgent: med.expiryDate ? getDaysDiff(med.expiryDate) <= 7 : false,
+      checked: false,
+      memo: `상비약 재구매 (${med.target || "공통"})`
+    };
+    setShoppingList((prev) => [payload, ...prev]);
+    if (user && db) {
+      try {
+        await setDoc(getDocRef("family_shopping_v4", id), payload);
+      } catch (e) {
+        setSyncErrorMsg(e?.message || "상비약→장보기 동기화 오류");
+      }
+    }
+    recordActivity("장보기", "등록", cleanName);
+    showToast(`🛒 '${cleanName}'을(를) 장보기에 담았습니다!`);
+  };
+
   const handleExpiringToAiChef = (itemNames) => {
     if (!canViewTab("ai")) {
       showToast("AI추천 열람 권한이 없습니다.");
@@ -12749,6 +12954,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
       !isDreamLinksModalOpen &&
       !isPatchModalOpen &&
       !isBucketModalOpen &&
+      !isHouseModalOpen &&
       !isPrivateCalModalOpen &&
       !isPrivateCalCsvModalOpen &&
       !calDayPopupDate &&
@@ -12789,6 +12995,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
         setIsDreamLinksModalOpen(false);
         setIsPatchModalOpen(false);
         setIsBucketModalOpen(false);
+        setIsHouseModalOpen(false);
         setIsPrivateCalModalOpen(false);
         setIsPrivateCalCsvModalOpen(false);
         setCalDayPopupDate(null);
@@ -12809,7 +13016,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
     };
     window.addEventListener("keydown", onEsc);
     return () => window.removeEventListener("keydown", onEsc);
-  }, [isQuickFabOpen, isRoutineModalOpen, isActivityModalOpen, isEditorUnlockModalOpen, isMealCopyModalOpen, diaryExportPreviewUrl, diaryLightboxUrl, isWeatherModalOpen, liveActivityPopup, activityEditModal, zipImportPicker, magazineMonth, isSettingsOpen, isHeroPhotoModalOpen, isPageModalOpen, pageMenuTargetId, isPagePasteModalOpen, activeTableTaskModal, isDreamLinksModalOpen, isPatchModalOpen, isBucketModalOpen, isPrivateCalModalOpen, isPrivateCalCsvModalOpen, calDayPopupDate, isScheduleModalOpen, isMealModalOpen, isFridgeModalOpen, isNoticeModalOpen, isRecipeModalOpen, isDaycareModalOpen, isReceiptModalOpen, isInventoryExportOpen, stockInItem, quickLogRecipe, cookingConfirmModal, quickFridgeItem]);
+  }, [isQuickFabOpen, isRoutineModalOpen, isActivityModalOpen, isEditorUnlockModalOpen, isMealCopyModalOpen, diaryExportPreviewUrl, diaryLightboxUrl, isWeatherModalOpen, liveActivityPopup, activityEditModal, zipImportPicker, magazineMonth, isSettingsOpen, isHeroPhotoModalOpen, isPageModalOpen, pageMenuTargetId, isPagePasteModalOpen, activeTableTaskModal, isDreamLinksModalOpen, isPatchModalOpen, isBucketModalOpen, isHouseModalOpen, isPrivateCalModalOpen, isPrivateCalCsvModalOpen, calDayPopupDate, isScheduleModalOpen, isMealModalOpen, isFridgeModalOpen, isNoticeModalOpen, isRecipeModalOpen, isDaycareModalOpen, isReceiptModalOpen, isInventoryExportOpen, stockInItem, quickLogRecipe, cookingConfirmModal, quickFridgeItem]);
 
   // ==========================================
   // 모바일·브라우저 뒤로가기 이전 화면 이동 (Chrome User-Gesture History API + URL 해시)
@@ -13027,7 +13234,8 @@ ${item.memo}` : `${item.title} 다녀옴!`,
       bucket: "버킷리스트",
       pages: "공유노트",
       recipes: "레시피",
-      baby: "육아"
+      baby: "육아",
+      house: "살림수첩"
     };
     if (typeof document !== "undefined") {
       const label = TAB_TITLES[activeTab];
@@ -13455,6 +13663,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
               notices: "다정한 가족 공지사항 📌",
               recipes: "보글보글 가족 레시피북 📖",
               bucket: "설레는 가족 버킷리스트 🌟",
+              house: "든든한 우리집 살림수첩 🏠",
               pages: "공유노트 🗂️",
               ai: "똑똑한 AI 식단·요리 ✨"
             }[activeTab] || "우리 가족 홈 ♡"}
@@ -14038,6 +14247,36 @@ ${item.memo}` : `${item.title} 다녀옴!`,
               );
             })(),
             onClick: () => setActiveTab("bucket")
+          },
+          house: {
+            title: "🏠 살림수첩",
+            actionLabel: "열기 >",
+            actionColor: (() => {
+              const alertCnt = houseItems.filter((it) => {
+                if (it.kind === "medicine" && it.expiryDate) return getDaysDiff(it.expiryDate) <= 30;
+                if (it.kind === "warranty" && it.warrantyEnd) return getDaysDiff(it.warrantyEnd) <= 30;
+                return false;
+              }).length;
+              return alertCnt > 0 ? "text-rose-600" : "text-stone-500";
+            })(),
+            borderHover: "hover:border-stone-400",
+            sub: (() => {
+              const medAlert = houseItems.filter((it) => it.kind === "medicine" && it.expiryDate && getDaysDiff(it.expiryDate) <= 30).length;
+              const warAlert = houseItems.filter((it) => it.kind === "warranty" && it.warrantyEnd && getDaysDiff(it.warrantyEnd) <= 30).length;
+              if (medAlert > 0 || warAlert > 0) {
+                return (
+                  <span className="text-rose-600 font-black">
+                    {medAlert > 0 ? `약 임박 ${medAlert}` : ""}{medAlert > 0 && warAlert > 0 ? " · " : ""}{warAlert > 0 ? `A/S ${warAlert}` : ""}
+                  </span>
+                );
+              }
+              return houseItems.length > 0 ? (
+                <span className="text-stone-500">수납·보증·약 {houseItems.length}건</span>
+              ) : (
+                <span className="text-stone-400">수납·보증·상비약</span>
+              );
+            })(),
+            onClick: () => setActiveTab("house")
           },
           ai: {
             title: "✨ AI추천",
@@ -21495,6 +21734,408 @@ ${item.memo}` : `${item.title} 다녀옴!`,
       })()}
 
 
+
+      {/* ==========================================
+          신규 탭 (v12.78): 🏠 살림수첩 (수납지도 · 보증/A/S · 상비약함)
+      ========================================== */}
+      {activeTab === "house" && (!canViewTab("house") ? renderLockedTabScreen("🏠 살림수첩") : (() => {
+        const storageCount = houseItems.filter((x) => (x.kind || "storage") === "storage").length;
+        const warrantyCount = houseItems.filter((x) => x.kind === "warranty").length;
+        const medicineCount = houseItems.filter((x) => x.kind === "medicine").length;
+        const hq = houseSearch.trim().toLowerCase();
+
+        const visibleHouseItems = houseItems
+          .filter((x) => (x.kind || "storage") === houseSubTab)
+          .filter((x) => {
+            if (houseSubTab === "storage" && houseFilter !== "전체" && x.room !== houseFilter) return false;
+            if (houseSubTab === "medicine" && houseFilter !== "전체") {
+              if (houseFilter === "임박·만료") {
+                if (!x.expiryDate || getDaysDiff(x.expiryDate) > 30) return false;
+              } else if ((x.target || "공통") !== houseFilter && (x.target || "공통") !== "공통") {
+                return false;
+              }
+            }
+            if (houseSubTab === "warranty" && houseFilter === "임박·만료") {
+              if (!x.warrantyEnd || getDaysDiff(x.warrantyEnd) > 30) return false;
+            }
+            if (!hq) return true;
+            return (
+              String(x.title || "").toLowerCase().includes(hq) ||
+              String(x.room || "").toLowerCase().includes(hq) ||
+              String(x.detailLoc || "").toLowerCase().includes(hq) ||
+              String(x.brand || "").toLowerCase().includes(hq) ||
+              String(x.dosage || "").toLowerCase().includes(hq) ||
+              String(x.memo || "").toLowerCase().includes(hq)
+            );
+          })
+          .sort((a, b) => {
+            if (houseSubTab === "medicine") {
+              return getDaysDiff(a.expiryDate) - getDaysDiff(b.expiryDate);
+            }
+            if (houseSubTab === "warranty") {
+              return getDaysDiff(a.warrantyEnd) - getDaysDiff(b.warrantyEnd);
+            }
+            return (Number(b.updatedAtMs) || 0) - (Number(a.updatedAtMs) || 0);
+          });
+
+        return (
+          <div className="p-4 space-y-3.5">
+            {/* 상단 3분할 서브탭 + 등록 버튼 */}
+            <div className="flex items-center gap-1.5">
+              <div className="flex-1 grid grid-cols-3 gap-1 bg-stone-200/80 p-1 rounded-2xl">
+                {[
+                  { id: "storage", label: `🔎 수납(${storageCount})` },
+                  { id: "warranty", label: `🛠️ 보증(${warrantyCount})` },
+                  { id: "medicine", label: `💊 상비약(${medicineCount})` }
+                ].map((st) => (
+                  <button
+                    key={st.id}
+                    type="button"
+                    onClick={() => {
+                      setHouseSubTab(st.id);
+                      setHouseFilter("전체");
+                    }}
+                    className={`py-1.5 px-1 rounded-xl text-[11.5px] font-extrabold whitespace-nowrap transition ${
+                      houseSubTab === st.id
+                        ? "bg-white text-stone-900 shadow-sm"
+                        : "text-stone-600 hover:text-stone-900"
+                    }`}
+                  >
+                    {st.label}
+                  </button>
+                ))}
+              </div>
+              {canEditTab("house") && (
+                <button
+                  type="button"
+                  onClick={() => openHouseModal(houseSubTab)}
+                  className="px-2.5 py-2 rounded-2xl bg-stone-900 hover:bg-stone-800 text-white text-[12px] font-extrabold whitespace-nowrap shrink-0 flex items-center gap-0.5"
+                >
+                  <Plus className="w-3.5 h-3.5" /> 추가
+                </button>
+              )}
+            </div>
+
+            {/* 검색창 + 서브탭별 필터 칩 */}
+            <div className="space-y-2">
+              <div className="relative">
+                <input
+                  type="text"
+                  value={houseSearch}
+                  onChange={(e) => setHouseSearch(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Escape") setHouseSearch(""); }}
+                  enterKeyHint="search"
+                  placeholder={
+                    houseSubTab === "storage"
+                      ? "🔍 물건·방·서랍 위치 검색 (여권, 열쇠 등)"
+                      : houseSubTab === "warranty"
+                      ? "🔍 가전·육아템·브랜드 검색 (유모차, 건조기 등)"
+                      : "🔍 약품명·증상·복용량 검색 (해열제, 연고 등)"
+                  }
+                  className="w-full px-3 py-2 pr-8 rounded-xl border border-stone-200 bg-white text-[13px] font-semibold text-stone-800 placeholder:text-stone-400"
+                />
+                {houseSearch && (
+                  <button
+                    type="button"
+                    onClick={() => setHouseSearch("")}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-700 text-[12px] font-black"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5">
+                {(houseSubTab === "storage"
+                  ? ["전체", ...HOUSE_STORAGE_ROOMS]
+                  : houseSubTab === "warranty"
+                  ? ["전체", "임박·만료"]
+                  : ["전체", "임박·만료", ...HOUSE_MEDICINE_TARGETS]
+                ).map((chip) => (
+                  <button
+                    key={chip}
+                    type="button"
+                    onClick={() => setHouseFilter(chip)}
+                    className={`px-2.5 py-1 rounded-full text-[11.5px] font-extrabold border whitespace-nowrap shrink-0 transition ${
+                      houseFilter === chip
+                        ? chip === "임박·만료"
+                          ? "bg-rose-600 text-white border-rose-600"
+                          : "bg-stone-900 text-white border-stone-900"
+                        : "bg-white text-stone-600 border-stone-200"
+                    }`}
+                  >
+                    {chip === "임박·만료" ? "⏰ 임박·만료" : chip}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* 목록 렌더링 */}
+            {visibleHouseItems.length === 0 ? (
+              <div className="bg-white rounded-2xl border border-stone-200 p-6 text-center space-y-2">
+                <div className="text-[13px] font-bold text-stone-400">
+                  {houseSearch || houseFilter !== "전체"
+                    ? "조건에 맞는 기록이 없습니다."
+                    : houseSubTab === "storage"
+                    ? "여권·예비열쇠·서류 등 자주 찾는 물건 위치를 등록해 보세요."
+                    : houseSubTab === "warranty"
+                    ? "유모차·가전제품의 무상 A/S 만료일과 영수증을 보관해 보세요."
+                    : "해열제·상비약의 개봉일·유통기한·복용량을 기록해 보세요."}
+                </div>
+                {(houseSearch || houseFilter !== "전체") && (
+                  <button
+                    type="button"
+                    onClick={() => { setHouseSearch(""); setHouseFilter("전체"); }}
+                    className="px-3 py-1 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-[11.5px] font-extrabold whitespace-nowrap"
+                  >
+                    🔄 필터 초기화
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-2.5">
+                {visibleHouseItems.map((it) => {
+                  const dateTarget = houseSubTab === "warranty" ? it.warrantyEnd : it.expiryDate;
+                  const diff = dateTarget ? getDaysDiff(dateTarget) : 999;
+                  const isUrgent = dateTarget && diff <= 30;
+                  return (
+                    <div
+                      key={it.id}
+                      className={`bg-white p-3.5 rounded-2xl border shadow-sm space-y-2 ${
+                        isUrgent && diff < 0
+                          ? "border-rose-300 bg-rose-50/30"
+                          : isUrgent
+                          ? "border-amber-300 bg-amber-50/20"
+                          : "border-stone-200"
+                      }`}
+                    >
+                      <div className="flex items-start gap-2.5">
+                        {it.photoUrl && (
+                          <img
+                            loading="lazy"
+                            decoding="async"
+                            src={it.photoUrl}
+                            alt={it.title}
+                            onClick={() => setDiaryLightboxUrl(it.photoUrl)}
+                            className="w-14 h-14 rounded-xl object-cover border border-stone-200 shrink-0 cursor-pointer"
+                            title="눌러서 사진 확대"
+                          />
+                        )}
+                        <div className="flex-1 min-w-0 space-y-1">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            {houseSubTab === "storage" && (
+                              <span className="px-2 py-0.5 rounded-md bg-[#EEF3EE] text-[#35503C] text-[11px] font-extrabold whitespace-nowrap">
+                                📍 {it.room || "기타"}
+                              </span>
+                            )}
+                            {houseSubTab === "warranty" && it.brand && (
+                              <span className="px-2 py-0.5 rounded-md bg-stone-100 text-stone-700 text-[11px] font-extrabold whitespace-nowrap">
+                                {it.brand}
+                              </span>
+                            )}
+                            {houseSubTab === "medicine" && (
+                              <span className="px-2 py-0.5 rounded-md bg-sky-50 text-sky-800 border border-sky-200 text-[11px] font-extrabold whitespace-nowrap">
+                                {it.target || "공통"}
+                              </span>
+                            )}
+                            {(houseSubTab === "warranty" || houseSubTab === "medicine") && dateTarget && (
+                              <span
+                                className={`px-2 py-0.5 rounded-md text-[11px] font-extrabold whitespace-nowrap ${
+                                  diff < 0
+                                    ? "bg-rose-600 text-white"
+                                    : diff <= 30
+                                    ? "bg-amber-100 text-amber-900"
+                                    : "bg-stone-100 text-stone-600"
+                                }`}
+                              >
+                                {diff < 0
+                                  ? `${Math.abs(diff)}일 지남`
+                                  : diff === 0
+                                  ? "오늘 만료"
+                                  : `D-${diff} (${dateTarget})`}
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="text-[14.5px] font-black text-stone-900 break-keep">{it.title}</div>
+
+                          {houseSubTab === "storage" && it.detailLoc && (
+                            <div className="text-[12.5px] font-bold text-stone-700">📦 {it.detailLoc}</div>
+                          )}
+                          {houseSubTab === "warranty" && (
+                            <div className="text-[12px] text-stone-500 flex items-center gap-2 flex-wrap">
+                              {it.purchaseDate && <span>구매 {it.purchaseDate}</span>}
+                              {Number(it.price) > 0 && <span>· {Number(it.price).toLocaleString()}원</span>}
+                              {it.asPhone && <span>· A/S {it.asPhone}</span>}
+                            </div>
+                          )}
+                          {houseSubTab === "medicine" && (
+                            <div className="text-[12px] text-stone-600 space-y-0.5">
+                              {it.openedDate && <div className="text-stone-500">개봉일: {it.openedDate}</div>}
+                              {it.dosage && <div className="font-bold text-[#35503C]">💧 복용: {it.dosage}</div>}
+                            </div>
+                          )}
+                          {it.memo && (
+                            <div className="text-[12px] text-stone-500 whitespace-pre-line">💬 {it.memo}</div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* 하단 메뉴 연계 액션 바 */}
+                      <div className="flex items-center justify-between gap-1 pt-2 border-t border-stone-100">
+                        <div className="flex items-center gap-1 flex-wrap">
+                          {houseSubTab === "storage" && (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => copyTextSafe(`📍 [${it.room}] ${it.title}${it.detailLoc ? ` → ${it.detailLoc}` : ""}`, "📋 물건 위치를 복사했습니다!")}
+                                className="px-2 py-1 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 text-[11px] font-extrabold whitespace-nowrap"
+                              >
+                                📋 복사
+                              </button>
+                              {canEditTab("notices") && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setEditingNotice(null);
+                                    setNoticeForm({
+                                      title: `📍 ${it.title} 위치 공유`,
+                                      content: `위치: ${it.room}${it.detailLoc ? ` · ${it.detailLoc}` : ""}${it.memo ? `\n${it.memo}` : ""}`,
+                                      category: "가족공지",
+                                      author: actorName || "수혁",
+                                      pinned: false
+                                    });
+                                    setIsNoticeModalOpen(true);
+                                  }}
+                                  className="px-2 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-800 text-[11px] font-extrabold whitespace-nowrap"
+                                >
+                                  📌 공지
+                                </button>
+                              )}
+                            </>
+                          )}
+                          {houseSubTab === "warranty" && (
+                            <>
+                              {it.asPhone && (
+                                <a
+                                  href={`tel:${String(it.asPhone).replace(/[^0-9+*#-]/g, "")}`}
+                                  className="px-2 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-[11px] font-extrabold whitespace-nowrap"
+                                >
+                                  📞 전화
+                                </a>
+                              )}
+                              {it.warrantyEnd && canEditTab("schedule") && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setEditingSchedule(null);
+                                    setScheduleForm({
+                                      title: `🛠️ ${it.title} 무상 A/S 만료 점검`,
+                                      date: it.warrantyEnd,
+                                      category: "할일(To-Do)",
+                                      members: ["수혁", "아리나"],
+                                      isAnnual: false,
+                                      showDday: true,
+                                      hasOriginYear: false,
+                                      memo: [it.brand ? `브랜드: ${it.brand}` : "", it.asPhone ? `A/S: ${it.asPhone}` : "", it.memo || ""].filter(Boolean).join("\n"),
+                                      attachments: []
+                                    });
+                                    setIsScheduleModalOpen(true);
+                                  }}
+                                  className="px-2 py-1 rounded-lg bg-[#EEF3EE] hover:bg-[#DFE9E0] text-[#35503C] text-[11px] font-extrabold whitespace-nowrap"
+                                >
+                                  🗓️ 만료알림
+                                </button>
+                              )}
+                            </>
+                          )}
+                          {houseSubTab === "medicine" && (
+                            <>
+                              {canEditTab("baby") && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    if (it.target === "시목" || it.target === "시율") setSelectedChildId(it.target);
+                                    setMedNoteForm({
+                                      date: getTodayStr(),
+                                      temp: "",
+                                      title: `💊 ${it.title} 복용`,
+                                      memo: it.dosage || it.memo || ""
+                                    });
+                                    setBabySubTab("medical");
+                                    setActiveTab("baby");
+                                    showToast(`🩺 '${it.title}' 복용 기록 화면으로 이동했습니다.`);
+                                  }}
+                                  className="px-2 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-800 text-[11px] font-extrabold whitespace-nowrap"
+                                >
+                                  🏥 복용기록
+                                </button>
+                              )}
+                              {canEditTab("shopping") && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleMedicineToShopping(it)}
+                                  className="px-2 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-900 text-[11px] font-extrabold whitespace-nowrap"
+                                >
+                                  🛒 재구매
+                                </button>
+                              )}
+                              {it.expiryDate && canEditTab("schedule") && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setEditingSchedule(null);
+                                    setScheduleForm({
+                                      title: `💊 ${it.title} 유통기한 확인·폐기`,
+                                      date: it.expiryDate,
+                                      category: "할일(To-Do)",
+                                      members: ["수혁", "아리나"],
+                                      isAnnual: false,
+                                      showDday: true,
+                                      hasOriginYear: false,
+                                      memo: it.dosage || it.memo || "",
+                                      attachments: []
+                                    });
+                                    setIsScheduleModalOpen(true);
+                                  }}
+                                  className="px-2 py-1 rounded-lg bg-[#EEF3EE] hover:bg-[#DFE9E0] text-[#35503C] text-[11px] font-extrabold whitespace-nowrap"
+                                >
+                                  🗓️ 폐기일정
+                                </button>
+                              )}
+                            </>
+                          )}
+                        </div>
+                        {canEditTab("house") && (
+                          <div className="flex items-center gap-0.5 shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => openHouseModal(it.kind, it)}
+                              className="p-1.5 rounded-lg hover:bg-stone-100 text-stone-500"
+                              title="수정"
+                            >
+                              <Edit2 className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteHouseItem(it)}
+                              className="p-1.5 rounded-lg hover:bg-rose-50 text-stone-400 hover:text-rose-600"
+                              title="삭제"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        );
+      })())}
+
       {activeTab === "pages" && (!canViewTab("pages") ? renderLockedTabScreen("🗂️ 공유노트") : (() => {
         const currentPage = selectedPageId ? familyPages.find((p) => p.id === selectedPageId) || null : null;
         const sq = pageSearchQuery.trim().toLowerCase();
@@ -24868,8 +25509,23 @@ ${item.memo}` : `${item.title} 다녀옴!`,
             {babySubTab === "medical" && (
               <div className="space-y-3">
                 <div className="bg-white p-3.5 rounded-2xl border border-stone-200 shadow-sm space-y-2.5">
-                  <div className="text-[13.5px] font-black text-stone-900">
-                    🩺 {activeChild.name} 소아과 진료 · 체온 메모
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="text-[13.5px] font-black text-stone-900 truncate">
+                      🩺 {activeChild.name} 소아과 진료 · 체온 메모
+                    </div>
+                    {canViewTab("house") && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setHouseSubTab("medicine");
+                          setHouseFilter(activeChild.id);
+                          setActiveTab("house");
+                        }}
+                        className="px-2 py-1 rounded-xl bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-800 text-[11px] font-extrabold whitespace-nowrap shrink-0"
+                      >
+                        💊 상비약함 →
+                      </button>
+                    )}
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     <input
@@ -26287,6 +26943,15 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                     }
                   },
                   {
+                    tab: "house",
+                    icon: "🏠",
+                    label: "살림수첩",
+                    onClick: () => {
+                      setActiveTab("house");
+                      openHouseModal(houseSubTab, null);
+                    }
+                  },
+                  {
                     tab: "daily",
                     icon: "📤",
                     label: "식단내보내기",
@@ -26693,6 +27358,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                     { id: "pages", label: "공유노트", icon: "🗂️" },
                     { id: "notices", label: "가족공지", icon: "📌" },
                     { id: "bucket", label: "버킷리스트", icon: "🌟" },
+                    { id: "house", label: "살림수첩", icon: "🏠" },
                     { id: "kitchen_timer", label: "조리타이머", icon: "⏱️" },
                     { id: "baby_dream", label: "아기꿈나라", icon: "🌙" }
                   ]
@@ -26709,6 +27375,8 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                           ? notices.filter((n) => !n.done).length
                           : m.id === "bucket"
                           ? bucketList.filter((b) => !b.done).length
+                          : m.id === "house"
+                          ? houseItems.filter((it) => (it.kind === "medicine" && it.expiryDate && getDaysDiff(it.expiryDate) <= 30) || (it.kind === "warranty" && it.warrantyEnd && getDaysDiff(it.warrantyEnd) <= 30)).length
                           : 0;
                       return (
                       <button
@@ -26813,14 +27481,14 @@ ${item.memo}` : `${item.title} 다녀옴!`,
           ref={moreNavBtnRef}
           onClick={() => setIsMoreNavOpen((v) => !v)}
           className={`flex flex-col items-center justify-center py-1.5 rounded-xl transition ${
-            ["monthly", "shopping", "notices", "ai", "recipes", "bucket", "pages"].includes(activeTab) || isMoreNavOpen
+            ["monthly", "shopping", "notices", "ai", "recipes", "bucket", "pages", "house"].includes(activeTab) || isMoreNavOpen
               ? "text-[#35503C] font-black bg-[#EEF3EE]"
               : "text-stone-400 font-semibold"
           }`}
         >
           <LayoutGrid
             className={`w-4 h-4 ${
-              ["monthly", "shopping", "notices", "ai", "recipes", "bucket", "pages"].includes(activeTab) || isMoreNavOpen
+              ["monthly", "shopping", "notices", "ai", "recipes", "bucket", "pages", "house"].includes(activeTab) || isMoreNavOpen
                 ? "text-amber-600"
                 : ""
             }`}
@@ -30050,7 +30718,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                 <code className="text-[11px] font-bold text-emerald-700">{lastAutoBackupSlot || getTwiceDailySlotKey()}</code>
               </div>
               <div className="text-[11.5px] font-semibold text-emerald-800">
-                📦 식단 {meals.length} · 냉장고 {fridge.length} · 일정 {schedules.length} · 버킷 {bucketList.length} · 노트 {familyPages.length}
+                📦 식단 {meals.length} · 냉장고 {fridge.length} · 일정 {schedules.length} · 버킷 {bucketList.length} · 노트 {familyPages.length} · 살림 {houseItems.length}
               </div>
             </div>
 
@@ -33435,6 +34103,297 @@ ${item.memo}` : `${item.title} 다녀옴!`,
       )}
 
       {/* 모달: 공유 노트 페이지 ... 옵션 시트 */}
+
+      {/* 모달: 🏠 살림수첩 등록 · 수정 (수납지도 · 보증/AS · 상비약함) */}
+      {isHouseModalOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+          onClick={() => setIsHouseModalOpen(false)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-3xl max-w-sm w-full p-5 space-y-3 max-h-[88vh] overflow-y-auto shadow-2xl"
+          >
+            <div className="flex items-center justify-between gap-2">
+              <h3 className="text-[15.5px] font-black text-stone-900">
+                🏠 {editingHouseItem ? "살림 기록 수정" : "살림 기록 추가"}
+              </h3>
+              <button
+                type="button"
+                onClick={() => setIsHouseModalOpen(false)}
+                className="p-1 text-stone-400 hover:text-stone-700"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-3 gap-1 bg-stone-100 p-1 rounded-xl">
+              {[
+                { id: "storage", label: "🔎 수납지도" },
+                { id: "warranty", label: "🛠️ 보증·A/S" },
+                { id: "medicine", label: "💊 상비약함" }
+              ].map((k) => (
+                <button
+                  key={k.id}
+                  type="button"
+                  onClick={() => setHouseForm((p) => ({ ...p, kind: k.id }))}
+                  className={`py-1.5 rounded-lg text-[11.5px] font-extrabold whitespace-nowrap transition ${
+                    houseForm.kind === k.id ? "bg-white text-stone-900 shadow-sm" : "text-stone-500"
+                  }`}
+                >
+                  {k.label}
+                </button>
+              ))}
+            </div>
+
+            <input
+              type="text"
+              placeholder={
+                houseForm.kind === "storage"
+                  ? "물건 이름 (예: 가족 여권, 예비 열쇠)"
+                  : houseForm.kind === "warranty"
+                  ? "제품명 (예: 부가부 유모차, LG 건조기)"
+                  : "약품명 (예: 챔프 빨강 해열제, 비판텐)"
+              }
+              value={houseForm.title}
+              onChange={(e) => setHouseForm((p) => ({ ...p, title: e.target.value }))}
+              className="w-full px-3 py-2.5 rounded-xl border border-stone-200 text-[13.5px] font-bold"
+            />
+
+            {houseForm.kind === "storage" && (
+              <>
+                <div className="flex flex-wrap gap-1.5">
+                  {HOUSE_STORAGE_ROOMS.map((rm) => (
+                    <button
+                      key={rm}
+                      type="button"
+                      onClick={() => setHouseForm((p) => ({ ...p, room: rm }))}
+                      className={`px-2.5 py-1 rounded-full text-[11.5px] font-extrabold border whitespace-nowrap ${
+                        houseForm.room === rm
+                          ? "bg-stone-900 text-white border-stone-900"
+                          : "bg-stone-50 text-stone-600 border-stone-200"
+                      }`}
+                    >
+                      {rm}
+                    </button>
+                  ))}
+                </div>
+                <input
+                  type="text"
+                  placeholder="세부 위치 (예: 안방 장롱 상단 2번 박스)"
+                  value={houseForm.detailLoc}
+                  onChange={(e) => setHouseForm((p) => ({ ...p, detailLoc: e.target.value }))}
+                  className="w-full px-3 py-2 rounded-xl border border-stone-200 text-[13px] font-bold"
+                />
+              </>
+            )}
+
+            {houseForm.kind === "warranty" && (
+              <>
+                <div className="grid grid-cols-2 gap-2">
+                  <input
+                    type="text"
+                    placeholder="브랜드 (예: LG, 부가부)"
+                    value={houseForm.brand}
+                    onChange={(e) => setHouseForm((p) => ({ ...p, brand: e.target.value }))}
+                    className="px-3 py-2 rounded-xl border border-stone-200 text-[13px] font-bold"
+                  />
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    placeholder="구매가 (원)"
+                    value={houseForm.price}
+                    onChange={(e) => setHouseForm((p) => ({ ...p, price: e.target.value }))}
+                    className="px-3 py-2 rounded-xl border border-stone-200 text-[13px] font-bold"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-[11px] font-bold text-stone-500">구매일</label>
+                    <input
+                      type="date"
+                      value={houseForm.purchaseDate}
+                      onChange={(e) => setHouseForm((p) => ({ ...p, purchaseDate: e.target.value }))}
+                      className="w-full px-2.5 py-2 rounded-xl border border-stone-200 text-[12.5px] font-bold"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-bold text-stone-500">무상 A/S 만료일</label>
+                    <input
+                      type="date"
+                      value={houseForm.warrantyEnd}
+                      onChange={(e) => setHouseForm((p) => ({ ...p, warrantyEnd: e.target.value }))}
+                      className="w-full px-2.5 py-2 rounded-xl border border-stone-200 text-[12.5px] font-bold"
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-3 gap-1.5">
+                  {[
+                    { label: "구매+1년", m: 12 },
+                    { label: "구매+2년", m: 24 },
+                    { label: "구매+3년", m: 36 }
+                  ].map((opt) => {
+                    const targetD = addMonthsToDateStr(houseForm.purchaseDate || getTodayStr(), opt.m, 0);
+                    return (
+                      <button
+                        key={opt.label}
+                        type="button"
+                        onClick={() => setHouseForm((p) => ({ ...p, warrantyEnd: targetD }))}
+                        className={`py-1 rounded-xl text-[11px] font-extrabold border whitespace-nowrap ${
+                          houseForm.warrantyEnd === targetD
+                            ? "bg-emerald-600 text-white border-emerald-600"
+                            : "bg-stone-50 text-stone-600 border-stone-200"
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    );
+                  })}
+                </div>
+                <input
+                  type="tel"
+                  placeholder="A/S 고객센터 전화번호 (예: 1544-7777)"
+                  value={houseForm.asPhone}
+                  onChange={(e) => setHouseForm((p) => ({ ...p, asPhone: e.target.value }))}
+                  className="w-full px-3 py-2 rounded-xl border border-stone-200 text-[13px] font-bold"
+                />
+              </>
+            )}
+
+            {houseForm.kind === "medicine" && (
+              <>
+                <div className="grid grid-cols-4 gap-1.5">
+                  {HOUSE_MEDICINE_TARGETS.map((tg) => (
+                    <button
+                      key={tg}
+                      type="button"
+                      onClick={() => setHouseForm((p) => ({ ...p, target: tg }))}
+                      className={`py-1.5 rounded-xl text-[11.5px] font-extrabold border whitespace-nowrap ${
+                        houseForm.target === tg
+                          ? "bg-sky-600 text-white border-sky-600"
+                          : "bg-stone-50 text-stone-600 border-stone-200"
+                      }`}
+                    >
+                      {tg}
+                    </button>
+                  ))}
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-[11px] font-bold text-stone-500">개봉일 (선택)</label>
+                    <input
+                      type="date"
+                      value={houseForm.openedDate}
+                      onChange={(e) => setHouseForm((p) => ({ ...p, openedDate: e.target.value }))}
+                      className="w-full px-2.5 py-2 rounded-xl border border-stone-200 text-[12.5px] font-bold"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-bold text-stone-500">유통기한·폐기일</label>
+                    <input
+                      type="date"
+                      value={houseForm.expiryDate}
+                      onChange={(e) => setHouseForm((p) => ({ ...p, expiryDate: e.target.value }))}
+                      className="w-full px-2.5 py-2 rounded-xl border border-stone-200 text-[12.5px] font-bold"
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-4 gap-1.5">
+                  {[
+                    { label: "1달뒤", m: 1 },
+                    { label: "3달뒤", m: 3 },
+                    { label: "6달뒤", m: 6 },
+                    { label: "1년뒤", m: 12 }
+                  ].map((opt) => {
+                    const targetD = addMonthsToDateStr(houseForm.openedDate || getTodayStr(), opt.m, 0);
+                    return (
+                      <button
+                        key={opt.label}
+                        type="button"
+                        onClick={() => setHouseForm((p) => ({ ...p, expiryDate: targetD }))}
+                        className={`py-1 rounded-xl text-[11px] font-extrabold border whitespace-nowrap ${
+                          houseForm.expiryDate === targetD
+                            ? "bg-emerald-600 text-white border-emerald-600"
+                            : "bg-stone-50 text-stone-600 border-stone-200"
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    );
+                  })}
+                </div>
+                <input
+                  type="text"
+                  placeholder="복용량 · 주의 (예: 1회 3ml, 4시간 간격)"
+                  value={houseForm.dosage}
+                  onChange={(e) => setHouseForm((p) => ({ ...p, dosage: e.target.value }))}
+                  className="w-full px-3 py-2 rounded-xl border border-stone-200 text-[13px] font-bold"
+                />
+              </>
+            )}
+
+            <textarea
+              rows={2}
+              placeholder="메모 (선택)"
+              value={houseForm.memo}
+              onChange={(e) => setHouseForm((p) => ({ ...p, memo: e.target.value }))}
+              className="w-full px-3 py-2 rounded-xl border border-stone-200 text-[13px]"
+            />
+
+            <div className="flex items-center gap-2">
+              <input
+                ref={housePhotoInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleHousePhotoSelect}
+                className="hidden"
+              />
+              <button
+                type="button"
+                onClick={() => housePhotoInputRef.current?.click()}
+                className="px-3 py-1.5 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-[12px] font-extrabold whitespace-nowrap flex items-center gap-1"
+              >
+                <Camera className="w-3.5 h-3.5" />
+                <span>{houseForm.photoUrl ? "사진 변경" : "사진 첨부"}</span>
+              </button>
+              {houseForm.photoUrl && (
+                <div className="flex items-center gap-1.5">
+                  <img
+                    src={houseForm.photoUrl}
+                    alt="미리보기"
+                    className="w-9 h-9 rounded-lg object-cover border border-stone-200"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setHouseForm((p) => ({ ...p, photoUrl: "" }))}
+                    className="text-[11px] font-bold text-rose-600 whitespace-nowrap"
+                  >
+                    제거
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <div className="flex gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => setIsHouseModalOpen(false)}
+                className="flex-1 py-2.5 rounded-xl bg-stone-100 text-stone-600 text-[13px] font-extrabold whitespace-nowrap"
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveHouseItem}
+                className="flex-1 py-2.5 rounded-xl bg-stone-900 hover:bg-stone-800 text-white text-[13px] font-extrabold whitespace-nowrap"
+              >
+                💾 저장
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {pageMenuTargetId && (() => {
         const targetPg = familyPages.find((p) => p.id === pageMenuTargetId);
         if (!targetPg) return null;

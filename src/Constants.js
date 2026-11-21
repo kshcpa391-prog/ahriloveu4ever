@@ -235,6 +235,7 @@ export const DEFAULT_HOME_MENU_ORDER = [
   "notices",
   "pages",
   "bucket",
+  "house",
   "ai"
 ];
 
@@ -254,7 +255,7 @@ export const DEFAULT_HOME_LAYOUT = {
     hiddenMenus: [],
     blockSizes: {},
     menuSizes: {},
-    menuOrder: ["daily", "fridge", "shopping", "ai", "routine_tab", "monthly_cal", "monthly_exp", "baby", "recipes", "notices", "pages", "bucket"]
+    menuOrder: ["daily", "fridge", "shopping", "ai", "routine_tab", "monthly_cal", "monthly_exp", "baby", "recipes", "notices", "pages", "bucket", "house"]
   },
   night: {
     blocks: ["action_feed", "menu_grid"],
@@ -262,7 +263,7 @@ export const DEFAULT_HOME_LAYOUT = {
     hiddenMenus: [],
     blockSizes: {},
     menuSizes: {},
-    menuOrder: ["daily", "monthly_exp", "routine_tab", "fridge", "shopping", "monthly_cal", "baby", "recipes", "notices", "pages", "bucket", "ai"]
+    menuOrder: ["daily", "monthly_exp", "routine_tab", "fridge", "shopping", "monthly_cal", "baby", "recipes", "notices", "pages", "bucket", "house", "ai"]
   }
 };
 
@@ -1177,7 +1178,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v12.77";
+export const APP_CODE_VERSION = "v12.79";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1195,7 +1196,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-21 19:52";
+export const APP_BUILD_DATE = "2026-11-21 20:10";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1219,7 +1220,8 @@ export const HELPER_CONFIGURABLE_TABS = [
   { id: "schedule", label: "🗓️ 일정·루틴" },
   { id: "pages", label: "🗂️ 공유노트" },
   { id: "ai", label: "✨ AI추천" },
-  { id: "monthly", label: "💰 월간·식비" }
+  { id: "monthly", label: "💰 월간·식비" },
+  { id: "house", label: "🏠 살림수첩" }
 ];
 
 
@@ -1262,6 +1264,30 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v12.79",
+    version: "v12.79",
+    date: "2026-11-21",
+    title: "살림수첩 전역 완전 통합(JSON 복원 · 알림 바로가기 · 빠른실행(+) · 헤더 · 설정현황 · 오늘브리핑)",
+    category: "메뉴 연계 · 안정화",
+    changes: [
+      "JSON 1초 복원 보강: 백업 복원(handleImportJson) 시 살림수첩(houseItems)이 로컬·Firestore(family_house_items_v1) 모두 정상 복원되도록 완결",
+      "최근 수정 알림 바로가기 보강: ACTIVITY_CAT_TAB_MAP에 '살림수첩' 및 누락돼 있던 '버킷' 매핑을 추가해 알림 터치 시 해당 탭으로 즉시 이동",
+      "전역 UX 통일: 우측 하단 빠른실행(+) [🏠 살림수첩] 추가, 상단 헤더 맞춤 타이틀('든든한 우리집 살림수첩 🏠'), 설정 데이터 건수 표시, 오늘 브리핑 7일 이내 만료 상비약·보증 자동 알림 및 AST·TDZ·배포 전수 검증 완료"
+    ]
+  },
+  {
+    id: "patch-v12.78",
+    version: "v12.78",
+    date: "2026-11-21",
+    title: "신규 [🏠 살림수첩](수납지도 · 가전/육아템 보증·A/S · 상비약함) 신설 및 6대 기존 메뉴 전면 연계",
+    category: "신규 기능 · 메뉴 연계",
+    changes: [
+      "신규 통합 메뉴 [🏠 살림수첩] 신설 (Firestore family_house_items_v1 실시간 동기화 · JSON 전체 백업 포함): ① 🔎 수납지도(방·세부위치·사진 검색) ② 🛠️ 보증·A/S(구매일·무상 A/S 만료 D-Day·원탭 전화·영수증 사진) ③ 💊 상비약함(대상별 개봉일·유통기한 D-Day·복용량 메모)",
+      "기존 메뉴와 6대 양방향 연계: 상비약함→육아수첩 진료·열체크 복용기록 직행 / 상비약함→장보기 1탭 재구매 / 상비약·보증만료→일정 D-Day 등록 / 수납지도→가족공지 공유 / 육아수첩 진료·열체크 상단→상비약함 1탭 바로가기 / 홈 카드·더보기 배지 실시간 임박 알림",
+      "만료일 원탭 프리셋(보증 1·2·3년뒤 / 상비약 1·3·6달·1년뒤) 적용 및 전체 AST·TDZ·JSX·배포 정합성 최종 전수 검증 완료"
+    ]
+  },
   {
     id: "patch-v12.77",
     version: "v12.77",
@@ -5386,3 +5412,5 @@ export const INITIAL_BABY_DREAM_LINKS = [
 ];
 
 export const BABY_DREAM_ICON_PRESETS = ["🗣️", "📄", "🎵", "🤫", "🌊", "🌧️", "🚗", "🌙", "🧸", "💤"];
+export const HOUSE_STORAGE_ROOMS = ["거실", "안방", "아이방", "주방", "현관·베란다", "기타"];
+export const HOUSE_MEDICINE_TARGETS = ["공통", "시목", "시율", "어른"];
