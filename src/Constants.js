@@ -1177,7 +1177,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v12.65";
+export const APP_CODE_VERSION = "v12.66";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1195,7 +1195,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-21 10:15";
+export const APP_BUILD_DATE = "2026-11-21 13:15";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1262,6 +1262,18 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v12.66",
+    version: "v12.66",
+    date: "2026-11-21",
+    title: "5대 메뉴 추가 연계(일정→공지·할일→장보기·장보기→식비·성장→일기·지출→식단) · 급함필터/공지검색 · 첨부상태 누락 수정",
+    category: "메뉴 연계 · 편의성 · 안정화",
+    changes: [
+      "추가 5대 원탭 연계: 조르테 가족 일정 상세→공지 올리기, 미완료 할 일→장보기 즉시 보내기, 장보기 헤더→이달 식비 가계부 직행 배지, 육아 성장기록(키·체중·백분위)→육아일기 자동 채움, 식비 지출원장 날짜→해당일 식단탭 직행",
+      "사용자 편의성·고도화: 장보기 목록에 급함 품목 전용 [🚨 급함] 필터 칩 추가 및 가족공지 3건 이상 시 실시간 검색창(ESC 초기화) 자동 표시",
+      "시각적 정리·오류 수정: 루틴·레시피·식단표스캔·비밀번호·수정자 안내 문구 5곳 슬림화, 일정 등록 모달 초기화(setScheduleForm) 8곳의 attachments 누락 일괄 보강 및 AST·TDZ·배포 전수 검증 완료"
+    ]
+  },
   {
     id: "patch-v12.65",
     version: "v12.65",

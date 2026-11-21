@@ -2295,6 +2295,7 @@ function MainApp() {
   const [expenseCatFilter, setExpenseCatFilter] = useState("전체");
   const [expenseLedgerExpanded, setExpenseLedgerExpanded] = useState(false);
   const [noticeHideDone, setNoticeHideDone] = useState(false);
+  const [noticeSearchQuery, setNoticeSearchQuery] = useState("");
   const [bucketList, setBucketList] = useState([]);
   const [bucketForm, setBucketForm] = useState({
     title: "",
@@ -11783,6 +11784,81 @@ ${item.memo}` : `${item.title} 다녀옴!`,
     showToast(`📖 '${q}' 관련 레시피를 검색했습니다.`);
   };
 
+
+  // === 추가 메뉴 간 연계 헬퍼 (v12.66) ===
+  const handleTodoToShopping = async (todo) => {
+    if (!requireEditorAccess("shopping") || !todo?.title) return;
+    const cleanName = String(todo.title).trim();
+    const norm = cleanName.toLowerCase();
+    if (shoppingList.some((s) => !s.checked && String(s.name || "").trim().toLowerCase() === norm)) {
+      showToast(`이미 장보기에 '${cleanName}'이(가) 담겨 있습니다.`);
+      return;
+    }
+    const id = `sh-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`;
+    const payload = {
+      id,
+      name: cleanName,
+      quantity: "1개",
+      category: "기타",
+      urgent: false,
+      checked: false,
+      memo: todo.memo ? `할일: ${todo.memo}` : "할 일에서 추가"
+    };
+    setShoppingList((prev) => [payload, ...prev]);
+    if (user && db) {
+      try {
+        await setDoc(getDocRef("family_shopping_v4", id), payload);
+      } catch (e) {
+        setSyncErrorMsg(e?.message || "할일→장보기 동기화 오류");
+      }
+    }
+    recordActivity("장보기", "등록", cleanName);
+    showToast(`🛒 '${cleanName}'을(를) 장보기에 담았습니다!`);
+  };
+
+  const handleGrowthToDiary = (g, childObj, cmp) => {
+    if (!isAdminUnlocked || !g || !childObj) return;
+    const parts = [];
+    if (g.height) parts.push(`키 ${g.height}cm${cmp?.height ? ` (P${cmp.height.pct})` : ""}`);
+    if (g.weight) parts.push(`몸무게 ${g.weight}kg${cmp?.weight ? ` (P${cmp.weight.pct})` : ""}`);
+    if (g.head) parts.push(`머리둘레 ${g.head}cm`);
+    const summaryLine = parts.join(" · ");
+    setEditingDiaryEntry(null);
+    setPendingDiaryPhotoFile(null);
+    setDiaryForm({
+      date: g.date || getTodayStr(),
+      mood: "😊 행복",
+      title: `${childObj.name} 성장 기록 (${summaryLine || g.date})`,
+      content: [summaryLine ? `📏 ${summaryLine}` : "", g.memo ? `💬 ${g.memo}` : ""].filter(Boolean).join("\n"),
+      contentHtml: "",
+      photoUrl: "",
+      photos: [],
+      childIds: [childObj.id],
+      textStyle: { ...DEFAULT_DIARY_TEXT_STYLE }
+    });
+    diarySavedRangeRef.current = null;
+    setHasDiarySelection(false);
+    setDiaryEditorSyncTick((t) => t + 1);
+    setBabySubTab("diary");
+    setActiveTab("baby");
+    showToast(`📖 ${childObj.name} 성장 수치를 일기에 불러왔습니다.`);
+  };
+
+  const handleScheduleToNotice = (ev) => {
+    if (!requireEditorAccess("notices") || !ev) return;
+    setEditingNotice(null);
+    setNoticeForm({
+      title: ev.title || "",
+      content: [ev.date ? `📅 일정: ${ev.date}${ev.time ? ` ${ev.time}` : ""}` : "", ev.memo || ""].filter(Boolean).join("\n"),
+      category: ev.category === "육아/병원" ? "육아/아이들" : "가족공지",
+      author: actorName || "수혁",
+      pinned: true
+    });
+    setCalDayPopupDate(null);
+    setCalDayPopupItem(null);
+    setIsNoticeModalOpen(true);
+  };
+
   const handleExpiringToAiChef = (itemNames) => {
     if (!canViewTab("ai")) {
       showToast("AI추천 열람 권한이 없습니다.");
@@ -13942,7 +14018,8 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                             isAnnual: false,
                             showDday: false,
                             hasOriginYear: false,
-                            memo: ""
+                            memo: "",
+                            attachments: []
                           });
                           setIsScheduleModalOpen(true);
                         }}
@@ -14326,7 +14403,8 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                             isAnnual: false,
                             showDday: false,
                             hasOriginYear: false,
-                            memo: ""
+                            memo: "",
+                            attachments: []
                           });
                           setIsScheduleModalOpen(true);
                         }}
@@ -16282,8 +16360,20 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                           <div key={exp.id} className="py-2 flex items-center justify-between gap-2 text-[13.5px]">
                             <div className="min-w-0">
                               <div className="font-bold text-stone-800 truncate">{exp.title}</div>
-                              <div className="text-[11.5px] text-stone-400 whitespace-nowrap">
-                                {exp.date} · {exp.category}
+                              <div className="text-[11.5px] text-stone-400 whitespace-nowrap flex items-center gap-1">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    if (exp.date) setSelectedDate(exp.date);
+                                    setSelectedMember("전체");
+                                    setActiveTab("daily");
+                                  }}
+                                  className="hover:text-[#35503C] hover:underline font-bold"
+                                  title="이 날짜 식단 보기"
+                                >
+                                  {exp.date}
+                                </button>
+                                <span>· {exp.category}</span>
                               </div>
                             </div>
                             <span className="font-extrabold text-stone-900 whitespace-nowrap shrink-0">
@@ -16603,8 +16693,9 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                                 isAnnual: false,
                                 showDday: false,
                                 hasOriginYear: false,
-                                memo: ""
-                              });
+                                memo: "",
+                            attachments: []
+                          });
                               setIsScheduleModalOpen(true);
                             }
                           }}
@@ -16919,7 +17010,8 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                             isAnnual: false,
                             showDday: false,
                             hasOriginYear: false,
-                            memo: ""
+                            memo: "",
+                            attachments: []
                           });
                           setIsScheduleModalOpen(true);
                         }}
@@ -17742,7 +17834,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
 
             {familyRoutines.length === 0 ? (
               <div className="text-center py-3 text-[13.5px] text-stone-400">
-                등록된 루틴이 없습니다. 위에서 매일/매주 반복 루틴을 추가해 보세요.
+                등록된 루틴이 없습니다.
               </div>
             ) : (
               <div className="space-y-1.5">
@@ -18237,7 +18329,18 @@ ${item.memo}` : `${item.title} 다녀옴!`,
 
 
                     <div className="flex items-center gap-1 shrink-0">
+                      {!todo.done && canEditTab("shopping") && (
+                        <button
+                          type="button"
+                          onClick={() => handleTodoToShopping(todo)}
+                          className="p-1 text-stone-400 hover:text-amber-700 text-[12px] leading-none"
+                          title="장보기 목록에 담기"
+                        >
+                          🛒
+                        </button>
+                      )}
                       <button
+                        type="button"
                         onClick={() => {
                           setEditingSchedule(todo);
                           setScheduleForm({
@@ -18258,6 +18361,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                         <Edit2 className="w-3.5 h-3.5" />
                       </button>
                       <button
+                        type="button"
                         onClick={() => handleDeleteSchedule(todo)}
                         className="p-1 text-stone-400 hover:text-red-500"
                       >
@@ -19129,6 +19233,19 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                 <ShoppingCart className="w-4 h-4 text-emerald-600" />
                 <span>장보기 품목 등록</span>
               </h2>
+              {canViewTab("monthly") && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMonthlySubTab("expense");
+                    setActiveTab("monthly");
+                  }}
+                  className="px-2 py-1 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-[11px] font-extrabold whitespace-nowrap shrink-0"
+                  title="이달 식비 가계부 보기"
+                >
+                  💰 이달 {monthlyExpenseSummary.total.toLocaleString()}원
+                </button>
+              )}
             </div>
 
 
@@ -19401,6 +19518,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                 {[
                   { id: "all", label: "전체" },
                   { id: "todo", label: "남음" },
+                  ...(shoppingList.some((s) => !s.checked && s.urgent) ? [{ id: "urgent", label: "🚨급함" }] : []),
                   { id: "done", label: "담음" }
                 ].map((fOpt) => (
                   <button
@@ -19425,6 +19543,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
             {[...shoppingList]
               .filter((item) => {
                 if (shoppingStatusFilter === "todo" && item.checked) return false;
+                if (shoppingStatusFilter === "urgent" && (item.checked || !item.urgent)) return false;
                 if (shoppingStatusFilter === "done" && !item.checked) return false;
                 const sq = shoppingSearchQuery.trim().toLowerCase();
                 if (!sq) return true;
@@ -19565,9 +19684,41 @@ ${item.memo}` : `${item.title} 다녀옴!`,
           </div>
 
 
+          {notices.length >= 3 && (
+            <div className="relative">
+              <input
+                type="text"
+                value={noticeSearchQuery}
+                onChange={(e) => setNoticeSearchQuery(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Escape") setNoticeSearchQuery(""); }}
+                enterKeyHint="search"
+                placeholder="🔍 공지 제목·내용 검색..."
+                className="w-full px-3 py-1.5 pr-7 rounded-xl border border-stone-200 bg-white text-[12.5px] font-semibold text-stone-800"
+              />
+              {noticeSearchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setNoticeSearchQuery("")}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-700 text-[11.5px] font-black"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+          )}
+
           <div className="space-y-2.5">
             {[...notices]
               .filter((n) => !noticeHideDone || !n.done)
+              .filter((n) => {
+                const nq = noticeSearchQuery.trim().toLowerCase();
+                if (!nq) return true;
+                return (
+                  String(n.title || "").toLowerCase().includes(nq) ||
+                  String(n.content || "").toLowerCase().includes(nq) ||
+                  String(n.category || "").toLowerCase().includes(nq)
+                );
+              })
               .sort((a, b) => {
                 if (Boolean(a.done) !== Boolean(b.done)) return a.done ? 1 : -1;
                 if (Boolean(a.pinned) !== Boolean(b.pinned)) return a.pinned ? -1 : 1;
@@ -22747,7 +22898,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                 조건에 맞는 가족 레시피가 없습니다.
               </div>
               <div className="text-[12.5px] text-stone-400">
-                직접 등록하거나 AI추천 → 플레이팅 코치 결과를 바로 저장해 보세요!
+                새 레시피를 등록하거나 플레이팅 결과를 저장해 보세요.
               </div>
             </div>
           ) : recipeViewMode === "summary" ? (
@@ -24202,12 +24353,25 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                             </div>
                             {g.memo && <div className="text-[12.5px] text-stone-500 mt-0.5">💬 {g.memo}</div>}
                           </div>
-                          <button
-                            onClick={() => handleDeleteGrowthLog(g.id)}
-                            className="p-1.5 text-stone-400 hover:text-red-500"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
+                          <div className="flex items-center gap-0.5 shrink-0">
+                            {isAdminUnlocked && (
+                              <button
+                                type="button"
+                                onClick={() => handleGrowthToDiary(g, activeChild, rowCmp)}
+                                className="px-2 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-900 text-[10.5px] font-extrabold whitespace-nowrap"
+                                title="성장 수치로 육아일기 쓰기"
+                              >
+                                📖 일기
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteGrowthLog(g.id)}
+                              className="p-1.5 text-stone-400 hover:text-red-500"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         </div>
                       );
                     })}
@@ -25518,8 +25682,9 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                         isAnnual: false,
                         showDday: false,
                         hasOriginYear: false,
-                        memo: ""
-                      });
+                        memo: "",
+                            attachments: []
+                          });
                       setIsScheduleModalOpen(true);
                     }
                   },
@@ -25547,8 +25712,9 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                         isAnnual: false,
                         showDday: false,
                         hasOriginYear: false,
-                        memo: ""
-                      });
+                        memo: "",
+                            attachments: []
+                          });
                       setIsScheduleModalOpen(true);
                     }
                   },
@@ -26184,8 +26350,9 @@ ${item.memo}` : `${item.title} 다녀옴!`,
               isAnnual: Boolean(draft?.isAnnual),
               showDday: false,
               hasOriginYear: false,
-              memo: m
-            });
+              memo: m,
+                            attachments: []
+                          });
             setIsScheduleModalOpen(true);
           }}
         />
@@ -26499,8 +26666,17 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                       </div>
                     )}
                   </div>
-                  {/* 조르테 스타일 하단 우측 빠른 액션 (+1일 미루기 · 가족→개인 복사) */}
+                  {/* 조르테 스타일 하단 우측 빠른 액션 (+1일 미루기 · 가족→공지/개인 복사) */}
                   <div className="pt-3 mt-auto flex flex-wrap items-center justify-end gap-1.5">
+                    {activeDetail._isFamily && canEditTab("notices") && (
+                      <button
+                        type="button"
+                        onClick={() => handleScheduleToNotice(activeDetail)}
+                        className="px-2.5 py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-800 text-[11.5px] font-extrabold whitespace-nowrap transition"
+                      >
+                        📌 공지 올리기
+                      </button>
+                    )}
                     {!activeDetail.isAnnual && (
                       <button
                         type="button"
@@ -26681,8 +26857,9 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                           isAnnual: false,
                           showDday: false,
                           hasOriginYear: false,
-                          memo: ""
-                        });
+                          memo: "",
+                            attachments: []
+                          });
                         setIsScheduleModalOpen(true);
                       }
                     }}
@@ -27490,7 +27667,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                   📸 식단표 이미지 AI 고속 스캔 (손글씨·인쇄물)
                 </h3>
                 <p className="text-[12.5px] text-stone-500">
-                  화이트보드 손글씨(아/점/저) 및 인쇄물 식단표를 즉시 해독합니다.
+                  손글씨·인쇄물 식단표를 자동 인식합니다.
                 </p>
               </div>
               <button onClick={() => setIsDaycareModalOpen(false)}>
@@ -29396,7 +29573,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
 
                   {suhyeokCode === arinaCode && (
                     <div className="sm:col-span-2 px-2.5 py-1.5 rounded-xl bg-amber-50 border border-amber-200 text-[11px] font-bold text-amber-900">
-                      💡 수혁·아리나 비밀번호를 서로 다르게 설정하면 로그인 시 자동으로 본인 계정과 개인일정에 바로 접속됩니다.
+                      💡 비밀번호를 다르게 설정하면 본인 계정으로 바로 접속됩니다.
                     </div>
                   )}
                   <div className="bg-white p-2 rounded-xl border border-sky-200 space-y-1 sm:col-span-2">
@@ -31499,7 +31676,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                   <>
                     <div className="p-3 rounded-2xl bg-stone-50 border border-stone-200 space-y-2">
                       <div className="text-[12.5px] font-extrabold text-stone-600">
-                        현재 수정자 이름 (홈 최근 수정 알림에 기록됩니다)
+                        수정자 이름 (알림에 표시)
                       </div>
                       <div className="flex flex-wrap gap-1.5">
                         {["육아지원군", "가족"].map((nm) => (
