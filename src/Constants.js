@@ -1178,7 +1178,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v12.89";
+export const APP_CODE_VERSION = "v12.91";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1196,7 +1196,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-21 21:44";
+export const APP_BUILD_DATE = "2026-11-21 22:06";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1264,6 +1264,30 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v12.91",
+    version: "v12.91",
+    date: "2026-11-21",
+    title: "🌡️ 진료·체온 1탭 프리셋 & 인수인계 즉시 연계 · 홈 미니 D-Day 초기화 및 안정화",
+    category: "편의성 · 메뉴 연계 · 안정화",
+    changes: [
+      "🩺 소아과 진료·체온 메모 고도화: 새벽이나 급발열 시 소수점 입력 없이 1탭으로 고르는 체온 프리셋(36.8° 정상 · 37.5° 미열 · 38.0° 발열 · 38.5° 고열)과 기록 직후 바로 공유하는 [🤝 인수인계] 연계 버튼 추가",
+      "홈 상단 미니 D-Day·경과일 선택 모달에 [초기화] 1탭 버튼 추가(클라우드 동기화) 및 ESC 닫기 시 복귀 대기 상태 정리 보완",
+      "불필요 버튼 문구 슬림화 및 AST·TDZ·JSX·미선언 변수·배포 정합성 최종 전수 검증 0건 통과"
+    ]
+  },
+  {
+    id: "patch-v12.90",
+    version: "v12.90",
+    date: "2026-11-21",
+    title: "👶 홈 상단 생후 경과일(시목·시율 D+N)·기념일 경과일 선택 지원 · ↩️ 인수인계 원본수정 후 뒤로가기 자동 복귀",
+    category: "편의성 · 메뉴 연계 · 고도화",
+    changes: [
+      "홈 상단 미니바 경과일 확장: 시목·시율 생후 경과일(D+N일)과 기념일·일정의 경과일(D+N)까지 선택해 홈 상단에 초슬림 칩으로 띄울 수 있으며, 아이 칩을 누르면 해당 아이 육아 탭으로 바로 이동",
+      "원본 바로수정 → 뒤로가기 자동 복귀: 인수인계 모달에서 [⚡ 원본 바로수정] 또는 [원본 편집 →]으로 이동해 데이터를 수정한 뒤 뒤로가기(또는 하단 [← 🤝 인수인계로 복귀] 칩)를 누르면 기존 인수인계 화면으로 즉시 복귀",
+      "AST·TDZ·JSX·미선언 변수·배포 정합성 최종 전수 검증 0건 통과"
+    ]
+  },
   {
     id: "patch-v12.89",
     version: "v12.89",

@@ -2356,6 +2356,7 @@ function MainApp() {
   const [houseFilter, setHouseFilter] = useState("전체");
   const [isHouseModalOpen, setIsHouseModalOpen] = useState(false);
   const [isHandoverModalOpen, setIsHandoverModalOpen] = useState(false);
+  const [returnToHandoverPending, setReturnToHandoverPending] = useState(false);
   const [isHomeDdayPickerOpen, setIsHomeDdayPickerOpen] = useState(false);
   const [homeMiniDdayIds, setHomeMiniDdayIds] = useState(() => {
     try {
@@ -13235,6 +13236,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
         setIsBucketModalOpen(false);
         setIsHouseModalOpen(false);
         setIsHandoverModalOpen(false);
+        setReturnToHandoverPending(false);
         setIsHomeDdayPickerOpen(false);
         setIsPrivateCalModalOpen(false);
         setIsPrivateCalCsvModalOpen(false);
@@ -13385,6 +13387,11 @@ ${item.memo}` : `${item.title} 다녀옴!`,
       setDiaryImportModal(null);
       setCropModal(null);
       return "modal_closed";
+    }
+    if (returnToHandoverPending) {
+      setReturnToHandoverPending(false);
+      setIsHandoverModalOpen(true);
+      return "handover_return";
     }
     if (navHistoryRef.current.length > 0) {
       const prev = navHistoryRef.current.pop();
@@ -13905,17 +13912,81 @@ ${item.memo}` : `${item.title} 다녀옴!`,
             </div>
           </div>
         )}
-        {activeTab === "home" && canViewTab("schedule") && (() => {
-          const selectedDdays = schedules
-            .filter((s) => s.showDday && homeMiniDdayIds.includes(s.id))
-            .map((s) => ({ ...s, calc: calculateScheduleDday(s) }))
-            .sort((a, b) => {
-              const ad = a.calc.daysUntil >= 0 ? a.calc.daysUntil : 9999 + Math.abs(a.calc.daysUntil);
-              const bd = b.calc.daysUntil >= 0 ? b.calc.daysUntil : 9999 + Math.abs(b.calc.daysUntil);
-              return ad - bd;
+        {activeTab === "home" && (() => {
+          const todayStr = getTodayStr();
+          const todayMs = new Date(`${todayStr}T00:00:00`).getTime();
+          const selectedChildChips = CHILDREN_INFO
+            .filter((ch) => homeMiniDdayIds.includes(`child_elapsed:${ch.id}`))
+            .map((ch) => {
+              const birthMs = new Date(`${ch.birthDate}T00:00:00`).getTime();
+              const days = Math.max(1, Math.floor((todayMs - birthMs) / 86400000) + 1);
+              return { ch, days };
             });
+
+          const selectedDdays = canViewTab("schedule")
+            ? schedules
+                .filter((s) => s.showDday && homeMiniDdayIds.includes(s.id))
+                .map((s) => ({ ...s, calc: calculateScheduleDday(s) }))
+                .sort((a, b) => {
+                  const ad = a.calc.daysUntil >= 0 ? a.calc.daysUntil : 9999 + Math.abs(a.calc.daysUntil);
+                  const bd = b.calc.daysUntil >= 0 ? b.calc.daysUntil : 9999 + Math.abs(b.calc.daysUntil);
+                  return ad - bd;
+                })
+            : [];
+
+          const selectedElapsedSchedules = canViewTab("schedule")
+            ? schedules
+                .filter((s) => homeMiniDdayIds.includes(`elapsed:${s.id}`))
+                .map((s) => {
+                  const calc = calculateScheduleDday(s);
+                  const rawDate = String(s.date || todayStr).slice(0, 10);
+                  const origMs = new Date(`${rawDate}T00:00:00`).getTime();
+                  const fallbackElapsed = Number.isFinite(origMs) ? Math.floor((todayMs - origMs) / 86400000) + 1 : null;
+                  const elapsedDays = calc.elapsedDays ?? (fallbackElapsed && fallbackElapsed > 0 ? fallbackElapsed : null);
+                  return { ...s, calc, elapsedDays };
+                })
+                .filter((s) => s.elapsedDays && s.elapsedDays > 0)
+            : [];
+
+          const totalShown = selectedChildChips.length + selectedDdays.length + selectedElapsedSchedules.length;
           return (
             <div className="flex items-center gap-1 overflow-x-auto no-scrollbar mb-2 px-0.5">
+              {selectedChildChips.map(({ ch, days }) => (
+                <button
+                  key={`child_elapsed:${ch.id}`}
+                  type="button"
+                  onClick={() => {
+                    if (canViewTab("baby")) {
+                      setSelectedChildId(ch.id);
+                      setActiveTab("baby");
+                    }
+                  }}
+                  className="px-2 py-0.5 rounded-full border border-sky-200 bg-sky-50/80 hover:bg-sky-100 text-sky-900 text-[10.5px] font-extrabold whitespace-nowrap shrink-0 flex items-center gap-1 transition"
+                  title={`${ch.name} (${ch.birthDate}생 · 생후 ${days}일)`}
+                >
+                  <span>{ch.emoji || "👶"} {ch.name}</span>
+                  <span className="text-sky-700 font-black">D+{days}</span>
+                </button>
+              ))}
+              {selectedElapsedSchedules.map((d) => (
+                <button
+                  key={`elapsed:${d.id}`}
+                  type="button"
+                  onClick={() => {
+                    const targetD = d.calc.nextDateStr || d.date || todayStr;
+                    setScheduleMonth(String(targetD).slice(0, 7));
+                    setScheduleSelectedDate(targetD);
+                    setActiveTab("schedule");
+                    setCalDayPopupDate(targetD);
+                    setCalDayPopupItem({ ...d, _isFamily: true });
+                  }}
+                  className="px-2 py-0.5 rounded-full border border-rose-200 bg-rose-50/70 hover:bg-rose-100 text-rose-900 text-[10.5px] font-extrabold whitespace-nowrap shrink-0 flex items-center gap-1 transition"
+                  title={`${d.title} (${d.date}부터 ${d.elapsedDays}일째) · 일정 보기`}
+                >
+                  <span className="max-w-[96px] truncate">{d.title}</span>
+                  <span className="text-rose-700 font-black">D+{d.elapsedDays}</span>
+                </button>
+              ))}
               {selectedDdays.map((d) => {
                 const badge = d.calc.daysUntil === 0 ? "D-Day" : d.calc.dDayText;
                 const isSoon = d.calc.daysUntil >= 0 && d.calc.daysUntil <= 7;
@@ -13924,7 +13995,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                     key={d.id}
                     type="button"
                     onClick={() => {
-                      const targetD = d.calc.nextDateStr || d.date || getTodayStr();
+                      const targetD = d.calc.nextDateStr || d.date || todayStr;
                       setScheduleMonth(String(targetD).slice(0, 7));
                       setScheduleSelectedDate(targetD);
                       setActiveTab("schedule");
@@ -13945,14 +14016,14 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                   </button>
                 );
               })}
-              {canEditTab("schedule") && (
+              {accessRole !== "guest" && (
                 <button
                   type="button"
                   onClick={() => setIsHomeDdayPickerOpen(true)}
                   className="px-2 py-0.5 rounded-full border border-dashed border-stone-300 bg-stone-50/80 hover:bg-stone-100 text-stone-500 text-[10px] font-extrabold whitespace-nowrap shrink-0"
-                  title="홈 상단에 표시할 D-Day 선택"
+                  title="홈 상단에 표시할 D-Day · 경과일 선택"
                 >
-                  {selectedDdays.length === 0 ? "+ D-Day 선택" : "⚙️"}
+                  {totalShown === 0 ? "+ D-Day·경과일" : "⚙️"}
                 </button>
               )}
             </div>
@@ -25952,19 +26023,37 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                     <div className="text-[13.5px] font-black text-stone-900 truncate">
                       🩺 {activeChild.name} 소아과 진료 · 체온 메모
                     </div>
-                    {canViewTab("house") && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setHouseSubTab("medicine");
-                          setHouseFilter(activeChild.id);
-                          setActiveTab("house");
-                        }}
-                        className="px-2 py-1 rounded-xl bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-800 text-[11px] font-extrabold whitespace-nowrap shrink-0"
-                      >
-                        💊 상비약함 →
-                      </button>
-                    )}
+                    <div className="flex items-center gap-1 shrink-0">
+                      {accessRole !== "guest" && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const tStr = getTodayStr();
+                            if (!handoverDate || handoverDate < tStr) setHandoverDate(tStr);
+                            setHandoverTarget(activeChild?.id || "전체");
+                            setHandoverModalTab("config");
+                            setIsHandoverModalOpen(true);
+                          }}
+                          className="px-2 py-1 rounded-xl bg-sky-50 hover:bg-sky-100 border border-sky-200 text-sky-800 text-[11px] font-extrabold whitespace-nowrap"
+                          title="방금 기록한 진료·체온 포함 인수인계 열기"
+                        >
+                          🤝 인수인계
+                        </button>
+                      )}
+                      {canViewTab("house") && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setHouseSubTab("medicine");
+                            setHouseFilter(activeChild.id);
+                            setActiveTab("house");
+                          }}
+                          className="px-2 py-1 rounded-xl bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-800 text-[11px] font-extrabold whitespace-nowrap"
+                        >
+                          💊 상비약함 →
+                        </button>
+                      )}
+                    </div>
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     <input
@@ -25981,6 +26070,25 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                       onChange={(e) => setMedNoteForm({ ...medNoteForm, temp: e.target.value })}
                       className="px-2.5 py-2 rounded-xl border border-stone-200 text-[13.5px] font-bold"
                     />
+                  </div>
+                  <div className="flex items-center gap-1 flex-wrap">
+                    {[
+                      { val: "36.8", label: "36.8° 정상", tone: "bg-stone-50 text-stone-600 border-stone-200" },
+                      { val: "37.5", label: "37.5° 미열", tone: "bg-amber-50 text-amber-800 border-amber-200" },
+                      { val: "38.0", label: "38.0° 발열", tone: "bg-rose-50 text-rose-700 border-rose-200" },
+                      { val: "38.5", label: "38.5° 고열", tone: "bg-rose-100 text-rose-900 border-rose-300" }
+                    ].map((tp) => (
+                      <button
+                        key={tp.val}
+                        type="button"
+                        onClick={() => setMedNoteForm((p) => ({ ...p, temp: tp.val }))}
+                        className={`px-2 py-0.5 rounded-full border text-[11px] font-extrabold whitespace-nowrap transition ${
+                          String(medNoteForm.temp) === tp.val ? "ring-2 ring-stone-900/30 " + tp.tone : tp.tone
+                        }`}
+                      >
+                        {tp.label}
+                      </button>
+                    ))}
                   </div>
                   <input
                     type="text"
@@ -26001,7 +26109,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                     onClick={handleAddMedicalNote}
                     className="w-full py-2.5 rounded-xl bg-stone-900 text-white text-[13.5px] font-extrabold"
                   >
-                    + 진료·열 체크 저장하기
+                    + 진료·체온 저장
                   </button>
                 </div>
 
@@ -34583,6 +34691,29 @@ ${item.memo}` : `${item.title} 다녀옴!`,
       {/* 모달: 공유 노트 페이지 ... 옵션 시트 */}
 
       {/* 모달: 🏠 살림수첩 등록 · 수정 (수납지도 · 보증/AS · 상비약함) */}
+      {returnToHandoverPending && !isHandoverModalOpen && (
+        <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-40 flex items-center gap-1 bg-stone-900/95 text-white pl-3 pr-2 py-1.5 rounded-full shadow-xl border border-stone-700">
+          <button
+            type="button"
+            onClick={() => {
+              setReturnToHandoverPending(false);
+              setIsHandoverModalOpen(true);
+            }}
+            className="text-[12px] font-black whitespace-nowrap flex items-center gap-1"
+          >
+            <span>← 🤝 인수인계로 복귀</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setReturnToHandoverPending(false)}
+            className="p-0.5 rounded-full hover:bg-white/15 text-stone-300"
+            title="복귀 안내 닫기"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
+
       {isHandoverModalOpen && (() => {
         const today = getTodayStr();
         const tomorrowStr = addMonthsToDateStr(today, 0, 1);
@@ -34607,6 +34738,11 @@ ${item.memo}` : `${item.title} 다녀옴!`,
         const recentCutoffStr = addMonthsToDateStr(today, 0, -2);
         const extractMembers = (obj) => (Array.isArray(obj?.members) ? obj.members : obj?.member ? [obj.member] : []);
         const isItemIncluded = (key) => !handoverExcludedIds.includes(key);
+        const jumpFromHandover = (navFn) => {
+          setReturnToHandoverPending(true);
+          setIsHandoverModalOpen(false);
+          if (typeof navFn === "function") navFn();
+        };
         const toggleHandoverItem = (key) => {
           setHandoverExcludedIds((prev) =>
             prev.includes(key) ? prev.filter((x) => x !== key) : [...prev, key]
@@ -35319,10 +35455,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                             {canViewTab("schedule") && (
                               <button
                                 type="button"
-                                onClick={() => {
-                                  setActiveTab("schedule");
-                                  setIsHandoverModalOpen(false);
-                                }}
+                                onClick={() => jumpFromHandover(() => setActiveTab("schedule"))}
                                 className="text-[10px] font-extrabold text-stone-400 hover:text-stone-700 whitespace-nowrap"
                               >
                                 원본 편집 →
@@ -35387,11 +35520,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                             {canViewTab("house") && (
                               <button
                                 type="button"
-                                onClick={() => {
-                                  setHouseSubTab("medicine");
-                                  setActiveTab("house");
-                                  setIsHandoverModalOpen(false);
-                                }}
+                                onClick={() => jumpFromHandover(() => { setHouseSubTab("medicine"); setActiveTab("house"); })}
                                 className="text-[10px] font-extrabold text-stone-400 hover:text-stone-700 whitespace-nowrap"
                               >
                                 원본 편집 →
@@ -35495,11 +35624,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                           {attachedPage && (
                             <button
                               type="button"
-                              onClick={() => {
-                                setSelectedPageId(attachedPage.id);
-                                setActiveTab("pages");
-                                setIsHandoverModalOpen(false);
-                              }}
+                              onClick={() => jumpFromHandover(() => { setSelectedPageId(attachedPage.id); setActiveTab("pages"); })}
                               className="text-[10.5px] font-extrabold text-indigo-700 whitespace-nowrap"
                             >
                               편집→
@@ -35611,24 +35736,14 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                         <>
                           <button
                             type="button"
-                            onClick={() => {
-                              if (handoverTarget !== "전체") setSelectedChildId(handoverTarget);
-                              setBabySubTab("activity");
-                              setActiveTab("baby");
-                              setIsHandoverModalOpen(false);
-                            }}
+                            onClick={() => jumpFromHandover(() => { if (handoverTarget !== "전체") setSelectedChildId(handoverTarget); setBabySubTab("activity"); setActiveTab("baby"); })}
                             className="px-2 py-0.5 rounded-full bg-white border border-stone-200 text-stone-700 text-[10.5px] font-extrabold whitespace-nowrap"
                           >
                             🍼 수유·수면
                           </button>
                           <button
                             type="button"
-                            onClick={() => {
-                              if (handoverTarget !== "전체") setSelectedChildId(handoverTarget);
-                              setBabySubTab("medical");
-                              setActiveTab("baby");
-                              setIsHandoverModalOpen(false);
-                            }}
+                            onClick={() => jumpFromHandover(() => { if (handoverTarget !== "전체") setSelectedChildId(handoverTarget); setBabySubTab("medical"); setActiveTab("baby"); })}
                             className="px-2 py-0.5 rounded-full bg-white border border-stone-200 text-stone-700 text-[10.5px] font-extrabold whitespace-nowrap"
                           >
                             🩺 진료·체온
@@ -35638,11 +35753,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                       {canViewTab("daily") && (
                         <button
                           type="button"
-                          onClick={() => {
-                            setSelectedDate(targetDate);
-                            setActiveTab("daily");
-                            setIsHandoverModalOpen(false);
-                          }}
+                          onClick={() => jumpFromHandover(() => { setSelectedDate(targetDate); setActiveTab("daily"); })}
                           className="px-2 py-0.5 rounded-full bg-white border border-stone-200 text-stone-700 text-[10.5px] font-extrabold whitespace-nowrap"
                         >
                           🍽️ 식단
@@ -35651,10 +35762,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                       {canViewTab("schedule") && (
                         <button
                           type="button"
-                          onClick={() => {
-                            setActiveTab("schedule");
-                            setIsHandoverModalOpen(false);
-                          }}
+                          onClick={() => jumpFromHandover(() => setActiveTab("schedule"))}
                           className="px-2 py-0.5 rounded-full bg-white border border-stone-200 text-stone-700 text-[10.5px] font-extrabold whitespace-nowrap"
                         >
                           🔄 루틴
@@ -35663,11 +35771,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                       {canViewTab("house") && (
                         <button
                           type="button"
-                          onClick={() => {
-                            setHouseSubTab("storage");
-                            setActiveTab("house");
-                            setIsHandoverModalOpen(false);
-                          }}
+                          onClick={() => jumpFromHandover(() => { setHouseSubTab("storage"); setActiveTab("house"); })}
                           className="px-2 py-0.5 rounded-full bg-white border border-stone-200 text-stone-700 text-[10.5px] font-extrabold whitespace-nowrap"
                         >
                           🔎 수납·약
@@ -35767,12 +35871,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                         {handoverGuideSubTab !== "공통" && canViewTab("baby") && (
                           <button
                             type="button"
-                            onClick={() => {
-                              setSelectedChildId(handoverGuideSubTab);
-                              setBabySubTab("medical");
-                              setActiveTab("baby");
-                              setIsHandoverModalOpen(false);
-                            }}
+                            onClick={() => jumpFromHandover(() => { setSelectedChildId(handoverGuideSubTab); setBabySubTab("medical"); setActiveTab("baby"); })}
                             className="px-2 py-1 rounded-full bg-rose-50 border border-rose-200 text-rose-800 text-[10.5px] font-extrabold whitespace-nowrap"
                           >
                             🩺 {handoverGuideSubTab} 진료·약 →
@@ -35781,11 +35880,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                         {canViewTab("house") && (
                           <button
                             type="button"
-                            onClick={() => {
-                              setHouseSubTab(handoverGuideSubTab === "공통" ? "storage" : "medicine");
-                              setActiveTab("house");
-                              setIsHandoverModalOpen(false);
-                            }}
+                            onClick={() => jumpFromHandover(() => { setHouseSubTab(handoverGuideSubTab === "공통" ? "storage" : "medicine"); setActiveTab("house"); })}
                             className="px-2 py-1 rounded-full bg-white border border-stone-200 text-stone-700 text-[10.5px] font-extrabold whitespace-nowrap"
                           >
                             {handoverGuideSubTab === "공통" ? "🔎 수납지도 →" : "💊 상비약함 →"}
@@ -35861,9 +35956,18 @@ ${item.memo}` : `${item.title} 다녀옴!`,
       })()}
 
       {isHomeDdayPickerOpen && (() => {
-        const allDdaySchedules = schedules
-          .filter((s) => s.showDday)
-          .map((s) => ({ ...s, calc: calculateScheduleDday(s) }))
+        const todayStr = getTodayStr();
+        const todayMs = new Date(`${todayStr}T00:00:00`).getTime();
+        const candidateSchedules = schedules
+          .filter((s) => s.showDday || s.hasOriginYear)
+          .map((s) => {
+            const calc = calculateScheduleDday(s);
+            const rawDate = String(s.date || todayStr).slice(0, 10);
+            const origMs = new Date(`${rawDate}T00:00:00`).getTime();
+            const fallbackElapsed = Number.isFinite(origMs) ? Math.floor((todayMs - origMs) / 86400000) + 1 : null;
+            const elapsedDays = calc.elapsedDays ?? (s.hasOriginYear && fallbackElapsed && fallbackElapsed > 0 ? fallbackElapsed : null);
+            return { ...s, calc, elapsedDays };
+          })
           .sort((a, b) => {
             const ad = a.calc.daysUntil >= 0 ? a.calc.daysUntil : 9999 + Math.abs(a.calc.daysUntil);
             const bd = b.calc.daysUntil >= 0 ? b.calc.daysUntil : 9999 + Math.abs(b.calc.daysUntil);
@@ -35875,11 +35979,11 @@ ${item.memo}` : `${item.title} 다녀옴!`,
             onClick={() => setIsHomeDdayPickerOpen(false)}
           >
             <div
-              className="bg-[#FAF8F3] border border-stone-200 rounded-3xl max-w-sm w-full p-4 shadow-2xl space-y-3 max-h-[80vh] flex flex-col"
+              className="bg-[#FAF8F3] border border-stone-200 rounded-3xl max-w-sm w-full p-4 shadow-2xl space-y-3 max-h-[82vh] flex flex-col"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex items-center justify-between gap-2 pb-2 border-b border-stone-200 shrink-0">
-                <h3 className="text-[15px] font-black text-stone-900">📌 홈 상단 미니 D-Day 선택</h3>
+                <h3 className="text-[15px] font-black text-stone-900">📌 홈 상단 D-Day · 경과일 선택</h3>
                 <button
                   type="button"
                   onClick={() => setIsHomeDdayPickerOpen(false)}
@@ -35888,42 +35992,94 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                   <X className="w-4 h-4" />
                 </button>
               </div>
-              <div className="overflow-y-auto space-y-1.5 flex-1">
-                {allDdaySchedules.length === 0 ? (
-                  <div className="py-6 text-center text-[12.5px] font-bold text-stone-500">
-                    D-Day로 설정된 일정이 아직 없어요.
-                  </div>
-                ) : (
-                  allDdaySchedules.map((d) => {
-                    const checked = homeMiniDdayIds.includes(d.id);
-                    return (
-                      <button
-                        key={d.id}
-                        type="button"
-                        onClick={() => toggleHomeMiniDdayId(d.id)}
-                        className={`w-full px-3 py-2 rounded-2xl border flex items-center justify-between gap-2 text-left transition ${
-                          checked
-                            ? "bg-[#EEF3EE] border-[#B6CBB9] text-[#35503C]"
-                            : "bg-white border-stone-200 text-stone-700 hover:bg-stone-50"
-                        }`}
-                      >
-                        <div className="min-w-0">
-                          <div className="text-[13px] font-extrabold truncate">{d.title}</div>
-                          <div className="text-[11px] font-bold text-stone-400">
-                            {d.calc.nextDateStr || d.date} · {d.calc.daysUntil === 0 ? "D-Day" : d.calc.dDayText}
-                          </div>
-                        </div>
-                        <span
-                          className={`w-5 h-5 rounded-lg border flex items-center justify-center shrink-0 text-[11px] font-black ${
-                            checked ? "bg-[#5E7A65] border-[#5E7A65] text-white" : "bg-white border-stone-300 text-transparent"
+              <div className="overflow-y-auto space-y-3 flex-1">
+                {/* 1. 아이 생후 경과일 */}
+                <div className="space-y-1.5">
+                  <div className="text-[11px] font-black text-stone-500 px-0.5">👶 아이 생후 경과일</div>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {CHILDREN_INFO.map((ch) => {
+                      const key = `child_elapsed:${ch.id}`;
+                      const checked = homeMiniDdayIds.includes(key);
+                      const birthMs = new Date(`${ch.birthDate}T00:00:00`).getTime();
+                      const days = Math.max(1, Math.floor((todayMs - birthMs) / 86400000) + 1);
+                      return (
+                        <button
+                          key={key}
+                          type="button"
+                          onClick={() => toggleHomeMiniDdayId(key)}
+                          className={`p-2.5 rounded-2xl border text-left transition ${
+                            checked
+                              ? "bg-sky-50 border-sky-300 text-sky-950"
+                              : "bg-white border-stone-200 text-stone-700 hover:bg-stone-50"
                           }`}
                         >
-                          ✓
-                        </span>
-                      </button>
-                    );
-                  })
-                )}
+                          <div className="flex items-center justify-between gap-1">
+                            <span className="text-[12.5px] font-black whitespace-nowrap">{ch.emoji || "👶"} {ch.name}</span>
+                            <span className={`text-[11px] font-black ${checked ? "text-sky-700" : "text-stone-400"}`}>
+                              {checked ? "✓" : "+"}
+                            </span>
+                          </div>
+                          <div className="text-[11.5px] font-extrabold text-sky-700 mt-0.5">생후 D+{days}일</div>
+                          <div className="text-[10px] font-bold text-stone-400">{ch.birthDate}생</div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* 2. 일정 D-Day · 경과일 */}
+                <div className="space-y-1.5">
+                  <div className="text-[11px] font-black text-stone-500 px-0.5">📅 일정 D-Day · 경과일</div>
+                  {candidateSchedules.length === 0 ? (
+                    <div className="py-4 text-center text-[12px] font-bold text-stone-400">
+                      D-Day 또는 경과일이 설정된 일정이 없어요.
+                    </div>
+                  ) : (
+                    candidateSchedules.map((d) => {
+                      const ddayChecked = homeMiniDdayIds.includes(d.id);
+                      const elapsedChecked = homeMiniDdayIds.includes(`elapsed:${d.id}`);
+                      return (
+                        <div
+                          key={d.id}
+                          className="px-3 py-2 rounded-2xl border border-stone-200 bg-white flex items-center justify-between gap-2"
+                        >
+                          <div className="min-w-0">
+                            <div className="text-[12.5px] font-extrabold text-stone-800 truncate">{d.title}</div>
+                            <div className="text-[10.5px] font-bold text-stone-400">{d.calc.nextDateStr || d.date}</div>
+                          </div>
+                          <div className="flex items-center gap-1 shrink-0">
+                            {d.showDday && (
+                              <button
+                                type="button"
+                                onClick={() => toggleHomeMiniDdayId(d.id)}
+                                className={`px-2 py-1 rounded-lg border text-[11px] font-extrabold whitespace-nowrap ${
+                                  ddayChecked
+                                    ? "bg-[#5E7A65] text-white border-[#5E7A65]"
+                                    : "bg-stone-50 text-stone-600 border-stone-200"
+                                }`}
+                              >
+                                {ddayChecked ? "✓ " : ""}{d.calc.daysUntil === 0 ? "D-Day" : d.calc.dDayText}
+                              </button>
+                            )}
+                            {d.elapsedDays > 0 && (
+                              <button
+                                type="button"
+                                onClick={() => toggleHomeMiniDdayId(`elapsed:${d.id}`)}
+                                className={`px-2 py-1 rounded-lg border text-[11px] font-extrabold whitespace-nowrap ${
+                                  elapsedChecked
+                                    ? "bg-rose-600 text-white border-rose-600"
+                                    : "bg-rose-50/70 text-rose-700 border-rose-200"
+                                }`}
+                              >
+                                {elapsedChecked ? "✓ " : ""}D+{d.elapsedDays}
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
               </div>
               <div className="flex items-center justify-between gap-2 pt-1 border-t border-stone-200 shrink-0">
                 <button
@@ -35937,7 +36093,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                       members: ["수혁", "아리나", "시목", "시율"],
                       isAnnual: false,
                       showDday: true,
-                      hasOriginYear: false,
+                      hasOriginYear: true,
                       memo: "",
                       attachments: []
                     });
@@ -35946,15 +36102,35 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                   }}
                   className="px-3 py-2 rounded-xl bg-white border border-stone-200 text-stone-700 text-[12px] font-extrabold whitespace-nowrap"
                 >
-                  + 새 D-Day 추가
+                  + 새 일정 추가
                 </button>
-                <button
-                  type="button"
-                  onClick={() => setIsHomeDdayPickerOpen(false)}
-                  className="px-4 py-2 rounded-xl bg-stone-900 text-white text-[12px] font-black whitespace-nowrap"
-                >
-                  완료
-                </button>
+                <div className="flex items-center gap-1.5">
+                  {homeMiniDdayIds.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        setHomeMiniDdayIds([]);
+                        try { localStorage.setItem("kim_home_mini_dday_ids_v1", "[]"); } catch (e) {}
+                        if (user && db) {
+                          try {
+                            await setDoc(getDocRef("family_meta_v4", "home_mini_ddays_v1"), { ids: [], updatedAtMs: Date.now() }, { merge: true });
+                          } catch (e) {}
+                        }
+                        showToast("🔄 홈 상단 미니 D-Day 선택을 초기화했습니다.");
+                      }}
+                      className="px-2.5 py-2 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-600 text-[11.5px] font-extrabold whitespace-nowrap"
+                    >
+                      초기화
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setIsHomeDdayPickerOpen(false)}
+                    className="px-4 py-2 rounded-xl bg-stone-900 text-white text-[12px] font-black whitespace-nowrap"
+                  >
+                    완료
+                  </button>
+                </div>
               </div>
             </div>
           </div>
