@@ -1177,7 +1177,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v12.66";
+export const APP_CODE_VERSION = "v12.68";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1195,7 +1195,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-21 13:15";
+export const APP_BUILD_DATE = "2026-11-21 13:40";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1262,6 +1262,30 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v12.68",
+    version: "v12.68",
+    date: "2026-11-21",
+    title: "추가 3대 메뉴 연계(AI레시피→레시피북·완료접종→진료메모·공유노트→가족공지) 및 원장·레시피 빈 화면 필터 초기화",
+    category: "메뉴 연계 · 편의성 · 시각정리",
+    changes: [
+      "추가 3대 원탭 연계: AI 맞춤 셰프 추천 카드 [📖 레시피북 저장] 즉시 프리필 등록, 완료된 예방접종·검진 카드 [🏥 열·메모] 진료기록 탭 직행, 공유노트 옵션 메뉴 [📌 가족공지로 공유] 추가",
+      "사용자 편의성: 월간 식비 지출 원장 및 레시피북에서 필터 조건으로 결과 0건일 때 1탭 [🔄 필터 초기화] 버튼 자동 표시",
+      "시각적 정리·안정화: AI 플레이팅 코치 중복 부연 설명 제거, AI 레시피·플레이팅 버튼 type='button' 보강 및 AST·TDZ·배포 정합성 전수 검증 완료"
+    ]
+  },
+  {
+    id: "patch-v12.67",
+    version: "v12.67",
+    date: "2026-11-21",
+    title: "추가 4대 메뉴 연계(식단→장보기·냉장고리스트→레시피·공유노트→할일·레시피→냉장고) 및 계획식단 수정 상태 유실 버그 수정",
+    category: "메뉴 연계 · 버그수정 · 안정화",
+    changes: [
+      "추가 4대 원탭 연계: 재료가 있는 식단 카드에서 부족 재료 [🛒] 바로 장보기 담기, 냉장고 리스트 카드에서 [📖] 레시피 바로 검색, 공유노트 미완료 체크리스트 [🗓️ 할일] 즉시 등록, 레시피북 보유 재료(✓) 칩 탭 시 냉장고 재고·소비기한 바로 확인",
+      "실제 버그 수정: 일별 식단에서 계획 식단(planned)을 수정할 때 mealStatus가 누락되어 상태가 초기화되던 오류(및 신규 등록 2곳) 수정",
+      "시각적 정리·안정화: 레시피 재료 안내 문구 슬림화, 냉장고 리스트·레시피 카드 버튼 type='button' 보강 및 AST·TDZ·배포 정합성 전수 검증 완료"
+    ]
+  },
   {
     id: "patch-v12.66",
     version: "v12.66",
