@@ -19581,25 +19581,44 @@ ${item.memo}` : `${item.title} 다녀옴!`,
 
 
           <div className="space-y-2">
-            {[...shoppingList]
-              .filter((item) => {
-                if (shoppingStatusFilter === "todo" && item.checked) return false;
-                if (shoppingStatusFilter === "urgent" && (item.checked || !item.urgent)) return false;
-                if (shoppingStatusFilter === "done" && !item.checked) return false;
-                const sq = shoppingSearchQuery.trim().toLowerCase();
-                if (!sq) return true;
+            {(() => {
+              const filteredShopping = [...shoppingList]
+                .filter((item) => {
+                  if (shoppingStatusFilter === "todo" && item.checked) return false;
+                  if (shoppingStatusFilter === "urgent" && (item.checked || !item.urgent)) return false;
+                  if (shoppingStatusFilter === "done" && !item.checked) return false;
+                  const sq = shoppingSearchQuery.trim().toLowerCase();
+                  if (!sq) return true;
+                  return (
+                    String(item.name || "").toLowerCase().includes(sq) ||
+                    String(item.memo || "").toLowerCase().includes(sq) ||
+                    String(item.category || "").toLowerCase().includes(sq)
+                  );
+                })
+                .sort((a, b) => {
+                  if (Boolean(a.checked) !== Boolean(b.checked)) return a.checked ? 1 : -1;
+                  if (Boolean(a.urgent) !== Boolean(b.urgent)) return a.urgent ? -1 : 1;
+                  return 0;
+                });
+              if (filteredShopping.length === 0) {
                 return (
-                  String(item.name || "").toLowerCase().includes(sq) ||
-                  String(item.memo || "").toLowerCase().includes(sq) ||
-                  String(item.category || "").toLowerCase().includes(sq)
+                  <div className="bg-white rounded-2xl border border-stone-200 p-6 text-center space-y-2">
+                    <div className="text-[13px] font-bold text-stone-400">
+                      {shoppingList.length === 0 ? "장보기 목록이 비어 있습니다." : "조건에 맞는 장보기 품목이 없습니다."}
+                    </div>
+                    {(shoppingSearchQuery || shoppingStatusFilter !== "all") && (
+                      <button
+                        type="button"
+                        onClick={() => { setShoppingSearchQuery(""); setShoppingStatusFilter("all"); }}
+                        className="px-3 py-1 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-[11.5px] font-extrabold"
+                      >
+                        🔄 필터 초기화
+                      </button>
+                    )}
+                  </div>
                 );
-              })
-              .sort((a, b) => {
-                if (Boolean(a.checked) !== Boolean(b.checked)) return a.checked ? 1 : -1;
-                if (Boolean(a.urgent) !== Boolean(b.urgent)) return a.urgent ? -1 : 1;
-                return 0;
-              })
-              .map((item) => (
+              }
+              return filteredShopping.map((item) => (
               <div
                 key={item.id}
                 className={`p-3.5 rounded-2xl border transition flex items-center justify-between gap-2 ${
@@ -19646,6 +19665,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
 
                 <div className="flex items-center gap-1.5 shrink-0">
                   <button
+                    type="button"
                     onClick={() => {
                       setStockInItem(item);
                       setStockInPrice("");
@@ -19655,6 +19675,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                     ❄️ 입고
                   </button>
                   <button
+                    type="button"
                     onClick={() => handleDeleteShopping(item.id)}
                     className="p-1.5 rounded-lg text-stone-400 hover:text-red-500"
                   >
@@ -19662,7 +19683,8 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                   </button>
                 </div>
               </div>
-            ))}
+              ));
+            })()}
           </div>
         </div>
       ))}
@@ -19749,23 +19771,42 @@ ${item.memo}` : `${item.title} 다녀옴!`,
           )}
 
           <div className="space-y-2.5">
-            {[...notices]
-              .filter((n) => !noticeHideDone || !n.done)
-              .filter((n) => {
-                const nq = noticeSearchQuery.trim().toLowerCase();
-                if (!nq) return true;
+            {(() => {
+              const filteredNotices = [...notices]
+                .filter((n) => !noticeHideDone || !n.done)
+                .filter((n) => {
+                  const nq = noticeSearchQuery.trim().toLowerCase();
+                  if (!nq) return true;
+                  return (
+                    String(n.title || "").toLowerCase().includes(nq) ||
+                    String(n.content || "").toLowerCase().includes(nq) ||
+                    String(n.category || "").toLowerCase().includes(nq)
+                  );
+                })
+                .sort((a, b) => {
+                  if (Boolean(a.done) !== Boolean(b.done)) return a.done ? 1 : -1;
+                  if (Boolean(a.pinned) !== Boolean(b.pinned)) return a.pinned ? -1 : 1;
+                  return String(b.createdAt || "").localeCompare(String(a.createdAt || ""));
+                });
+              if (filteredNotices.length === 0) {
                 return (
-                  String(n.title || "").toLowerCase().includes(nq) ||
-                  String(n.content || "").toLowerCase().includes(nq) ||
-                  String(n.category || "").toLowerCase().includes(nq)
+                  <div className="bg-white rounded-2xl border border-stone-200 p-6 text-center space-y-2">
+                    <div className="text-[13px] font-bold text-stone-400">
+                      {notices.length === 0 ? "등록된 가족 공지가 없습니다." : "조건에 맞는 공지가 없습니다."}
+                    </div>
+                    {(noticeSearchQuery || noticeHideDone) && (
+                      <button
+                        type="button"
+                        onClick={() => { setNoticeSearchQuery(""); setNoticeHideDone(false); }}
+                        className="px-3 py-1 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-[11.5px] font-extrabold"
+                      >
+                        🔄 필터 초기화
+                      </button>
+                    )}
+                  </div>
                 );
-              })
-              .sort((a, b) => {
-                if (Boolean(a.done) !== Boolean(b.done)) return a.done ? 1 : -1;
-                if (Boolean(a.pinned) !== Boolean(b.pinned)) return a.pinned ? -1 : 1;
-                return String(b.createdAt || "").localeCompare(String(a.createdAt || ""));
-              })
-              .map((n) => (
+              }
+              return filteredNotices.map((n) => (
               <div
                 key={n.id}
                 className={`p-4 rounded-2xl border transition ${
@@ -19877,7 +19918,8 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                   <div className="text-[13.5px] text-stone-600 mt-1 whitespace-pre-line">{n.content}</div>
                 )}
               </div>
-            ))}
+              ));
+            })()}
           </div>
         </div>
       ))}
@@ -23839,6 +23881,35 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                                       </div>
                                     </div>
                                     <div className="flex items-center gap-1.5 shrink-0">
+                                      {act.type === "이유식" && canEditTab("daily") && (
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            const dObj = new Date(Number(act.startMs) || Date.now());
+                                            const hh = dObj.getHours();
+                                            const autoSlot = hh < 10 ? "아침" : hh < 12 ? "오전간식" : hh < 15 ? "점심" : hh < 17 ? "오후간식" : "저녁";
+                                            const menuLabel = [act.memo ? act.memo : "이유식", Number(act.amountMl) > 0 ? `${act.amountMl}g` : ""].filter(Boolean).join(" ");
+                                            setEditingMeal(null);
+                                            setMealForm({
+                                              date: act.date || formatDate(dObj),
+                                              slot: autoSlot,
+                                              menu: menuLabel,
+                                              members: [act.childId || activeChild.id],
+                                              ingredients: [],
+                                              note: "육아수첩 이유식 연동",
+                                              sourceType: "유아식/이유식",
+                                              cost: "",
+                                              mealStatus: "recorded"
+                                            });
+                                            setIsMealModalOpen(true);
+                                          }}
+                                          className="px-2 py-0.5 rounded-lg bg-teal-50 hover:bg-teal-100 border border-teal-200 text-teal-800 text-[10.5px] font-extrabold whitespace-nowrap"
+                                          title="식단표에 이유식 바로 기록"
+                                        >
+                                          🍽️ 식단
+                                        </button>
+                                      )}
                                       {act.photoUrl && (
                                         <img
                                           loading="lazy"
@@ -25228,13 +25299,34 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                       );
                     });
                     if (childDiaries.length === 0) {
-                      return renderStatusState({
-                        type: "empty",
-                        title: q ? `'${diarySearchQuery}' 검색 결과가 없습니다` : `${activeChild.name}의 첫 육아일기를 남겨보세요`,
-                        description: q
-                          ? "다른 키워드로 검색하거나 검색어를 지워보세요."
-                          : "사진과 함께 오늘의 순간을 기록해 보세요."
-                      });
+                      const hasDiaryFilter = Boolean(q || diaryMonthFilter !== "all" || diaryPhotoOnlyFilter || diaryChildFilter !== "active");
+                      return (
+                        <div className="space-y-2">
+                          {renderStatusState({
+                            type: "empty",
+                            title: hasDiaryFilter ? "조건에 맞는 육아일기가 없습니다" : `${activeChild.name}의 첫 육아일기를 남겨보세요`,
+                            description: hasDiaryFilter
+                              ? "필터를 초기화하면 전체 일기를 볼 수 있습니다."
+                              : "사진과 함께 오늘의 순간을 기록해 보세요."
+                          })}
+                          {hasDiaryFilter && (
+                            <div className="flex justify-center">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setDiarySearchQuery("");
+                                  setDiaryMonthFilter("all");
+                                  setDiaryPhotoOnlyFilter(false);
+                                  setDiaryChildFilter("active");
+                                }}
+                                className="px-3 py-1.5 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-[12px] font-extrabold"
+                              >
+                                🔄 필터 초기화
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      );
                     }
                     return (
                     <div className="space-y-2.5">

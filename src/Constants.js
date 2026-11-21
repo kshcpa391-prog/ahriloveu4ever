@@ -1177,7 +1177,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v12.68";
+export const APP_CODE_VERSION = "v12.69";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1195,7 +1195,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-21 13:40";
+export const APP_BUILD_DATE = "2026-11-21 13:45";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1262,6 +1262,18 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v12.69",
+    version: "v12.69",
+    date: "2026-11-21",
+    title: "이유식 기록→식단 원탭 연계 · 장보기/공지/육아일기 빈 화면 필터 초기화 통일 및 최종 전수 검증",
+    category: "메뉴 연계 · 편의성 · 안정화",
+    changes: [
+      "메뉴 연계 확장: 육아수첩 [🍼 수유·생활] 타임라인의 이유식 기록에 [🍽️ 식단] 버튼을 추가해 날짜·시간대별 끼니·양(g)·메모가 채워진 식단 등록 모달로 즉시 연동",
+      "전 탭 빈 화면 UX 일원화: 장보기·가족공지·육아일기에서 검색이나 필터 조건으로 결과가 0건일 때 1탭 [🔄 필터 초기화] 버튼 자동 표시",
+      "안정화·배포 검증: 장보기 카드 입고/삭제 버튼 type='button' 보강 및 전체 AST·TDZ·JSX·미선언 변수·import/export 1:1 정합성 전수 검증 완료"
+    ]
+  },
   {
     id: "patch-v12.68",
     version: "v12.68",
