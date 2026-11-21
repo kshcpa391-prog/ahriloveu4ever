@@ -1177,7 +1177,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v12.69";
+export const APP_CODE_VERSION = "v12.71";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1195,7 +1195,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-21 13:45";
+export const APP_BUILD_DATE = "2026-11-21 14:50";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1262,6 +1262,30 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v12.71",
+    version: "v12.71",
+    date: "2026-11-21",
+    title: "수유·생활 오늘요약→육아일기 직행 · AI 3일식단 반영 후 식단탭 이동 · 전역 버튼 type='button' 100% 보강",
+    category: "메뉴 연계 · 안정화 · 시각정리",
+    changes: [
+      "추가 2대 원탭 연계: 육아수첩 [수유·생활] 오늘 요약 바에 [📖 일기쓰기] 버튼을 추가해 오늘 수유·기저귀·수면 통계를 육아일기 본문에 자동 채움, AI 3일치 식단표 반영 완료 후 [🍽️ 반영된 식단표 보러가기 →] 1탭 직행 추가",
+      "시각적 정합성: 냉장고 칸별 뷰의 구버전 라벨('3단 + 채소칸 2개')을 통합 구조에 맞춰 '3단 + 채소칸'으로 교정",
+      "전역 안정성·배포 검증: 앱 전체 일반 <button>에 누락돼 있던 type='button' 속성을 일괄 보강하고 AST·TDZ·JSX·미선언 변수·import/export 1:1 정합성 전수 검증 완료"
+    ]
+  },
+  {
+    id: "patch-v12.70",
+    version: "v12.70",
+    date: "2026-11-21",
+    title: "조르테 일자 팝업↔식단·육아일기 직행 연계 · 남은 루틴 1탭 복사 · 할일 검색 초기화 및 용어 통일",
+    category: "메뉴 연계 · 편의성 · 시각정리",
+    changes: [
+      "달력 중심 허브 연계: 조르테 일자 팝업에서 해당 날짜에 식단 또는 육아일기 기록이 있을 때 상단 1줄 요약 바(🍽️ 식단 N건 · 📖 육아일기 N편)를 자동 표시하고 1탭으로 해당 날짜 화면에 직행",
+      "사용자 편의성·고도화: 반복 루틴 상단에 오늘 남은 루틴 목록을 카톡 공유용으로 복사하는 [📋] 버튼 추가 및 할 일(To-Do) 검색 결과 0건 시 [🔄 검색 초기화] 버튼 표시",
+      "시각적 정리·안정화: 루틴 시간대 미리보기 '주말:' 라벨을 '주말·공휴일:'로 통일, 하단 더보기·할일 추가 버튼 type='button' 보강 및 AST·TDZ·배포 전수 검증 완료"
+    ]
+  },
   {
     id: "patch-v12.69",
     version: "v12.69",

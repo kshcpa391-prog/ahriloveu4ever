@@ -1284,6 +1284,7 @@ class ErrorBoundary extends React.Component {
             <h2 className="text-[15.5px] font-black text-stone-900">화면 자동 복구</h2>
             <p className="text-[13.5px] text-stone-600 break-all">{this.state.errorMsg}</p>
             <button
+              type="button"
               onClick={async () => { try { if ("caches" in window) { const ks = await caches.keys(); await Promise.all(ks.map((k) => caches.delete(k))); } } catch (e) {} window.location.reload(); }}
               className="w-full py-2.5 rounded-xl bg-stone-900 text-white text-[13.5px] font-extrabold"
             >
@@ -13186,12 +13187,14 @@ ${item.memo}` : `${item.title} 다녀옴!`,
             </div>
             <div className="flex items-center gap-1 shrink-0">
               <button
+                type="button"
                 onClick={() => handleSendBackupToGmailOrDrive(false)}
                 className="px-2.5 py-1 rounded-xl bg-stone-900 text-white text-[12.5px] font-black"
               >
                 1초 백업
               </button>
               <button
+                type="button"
                 onClick={() => {
                   const curYm = getCurrentYearMonth();
                   try { localStorage.setItem("kim_backup_done_month", curYm); } catch (e) {}
@@ -13242,6 +13245,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
               </span>
             </button>
             <button
+              type="button"
               onClick={() => setIsPatchModalOpen(true)}
               className="px-1.5 py-0.5 rounded-full text-[10px] font-extrabold bg-stone-100 hover:bg-stone-200 text-stone-700 border border-stone-200 inline-flex items-center gap-0.5 whitespace-nowrap shrink-0"
               title="패치노트 기록 및 히스토리"
@@ -13250,6 +13254,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
               <span>{APP_CODE_VERSION}</span>
             </button>
             <button
+              type="button"
               onClick={() => setIsEditorUnlockModalOpen(true)}
               className={`px-1.5 py-0.5 rounded-full text-[10px] font-extrabold border inline-flex items-center gap-0.5 whitespace-nowrap shrink-0 ${
                 isAdminUnlocked
@@ -13304,6 +13309,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
               </button>
             )}
             <button
+              type="button"
               onClick={() => {
                 setTempKeyInput(geminiApiKey);
                 setTempOpenaiKeyInput(openaiApiKey);
@@ -13370,6 +13376,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
           {activeTab !== "home" && (
             <div className="flex items-center gap-1 shrink-0">
               <button
+                type="button"
                 onClick={handleToggleHeaderPin}
                 className={`px-2 py-1 rounded-lg text-[11.5px] font-extrabold border flex items-center gap-0.5 transition ${
                   isHeaderPinned
@@ -16492,6 +16499,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
           {!(scheduleSubTab === "calendar" && isAdminUnlocked && scheduleCalScope === "private") && (
           <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 sm:grid sm:grid-cols-5 sm:gap-1">
             <button
+              type="button"
               onClick={() => {
                 setScheduleMemberFilter("전체");
                 setRoutineTargetFilter("전체");
@@ -16507,6 +16515,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
             </button>
             {FAMILY_MEMBERS.map((m) => (
               <button
+                type="button"
                 key={m.id}
                 onClick={() => {
                   setScheduleMemberFilter(m.id);
@@ -17120,6 +17129,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                                   <div className="flex items-center gap-1 shrink-0">
                                     {ev.category !== "기념일/생일" && (
                                       <button
+                                        type="button"
                                         onClick={() => handleToggleScheduleDone(ev)}
                                         className={`px-2 py-0.5 rounded-lg text-[11px] font-extrabold border ${
                                           ev.done
@@ -17131,6 +17141,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                                       </button>
                                     )}
                                     <button
+                                      type="button"
                                       onClick={() => {
                                         setEditingSchedule(ev);
                                         setScheduleForm({
@@ -17151,6 +17162,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                                       <Edit2 className="w-3.5 h-3.5" />
                                     </button>
                                     <button
+                                      type="button"
                                       onClick={() => handleDeleteSchedule(ev)}
                                       className="p-1 rounded-lg hover:bg-red-100 text-red-500"
                                     >
@@ -17282,6 +17294,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
               </div>
               <div className="flex items-center gap-1">
                 <button
+                  type="button"
                   onClick={() => {
                     const d = new Date(scheduleSelectedDate + "T00:00:00");
                     d.setDate(d.getDate() - 7);
@@ -17294,6 +17307,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                   &lt; 이전주
                 </button>
                 <button
+                  type="button"
                   onClick={() => {
                     const today = getTodayStr();
                     setScheduleSelectedDate(today);
@@ -17304,6 +17318,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                   이번주
                 </button>
                 <button
+                  type="button"
                   onClick={() => {
                     const d = new Date(scheduleSelectedDate + "T00:00:00");
                     d.setDate(d.getDate() + 7);
@@ -17365,6 +17380,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                               <div className="flex items-center gap-1.5 min-w-0">
                                 {ev.category !== "기념일/생일" && (
                                   <button
+                                    type="button"
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       handleToggleScheduleDone(ev);
@@ -17451,6 +17467,25 @@ ${item.memo}` : `${item.title} 다녀옴!`,
               <div className="flex items-center gap-1 shrink-0">
                 <button
                   type="button"
+                  onClick={async () => {
+                    const rem = familyRoutines.filter((r) => isRoutineDueTodayOrPast(r, currentDayKey) && !isRoutineDoneNow(r));
+                    if (rem.length === 0) {
+                      showToast("🎉 오늘 남은 루틴을 모두 완료했습니다!");
+                      return;
+                    }
+                    const lines = [
+                      `🔄 오늘 남은 루틴 (${rem.length}건)`,
+                      ...rem.map((r, i) => `${i + 1}. [${r.timeSlot || "상시"}${r.scheduledTime ? ` ${r.scheduledTime}` : ""}] ${r.title}`)
+                    ];
+                    await copyTextSafe(lines.join("\n"), `📋 남은 루틴 ${rem.length}건을 복사했습니다!`);
+                  }}
+                  className="px-2 py-1.5 rounded-xl text-[11.5px] font-extrabold border bg-stone-50 hover:bg-stone-100 text-stone-700 border-stone-200 whitespace-nowrap"
+                  title="오늘 남은 루틴 복사"
+                >
+                  📋
+                </button>
+                <button
+                  type="button"
                   onClick={() => setIsRoutineRangeEditOpen((v) => !v)}
                   className={`px-2 py-1.5 rounded-xl text-[11.5px] font-extrabold border whitespace-nowrap ${
                     isRoutineRangeEditOpen
@@ -17521,7 +17556,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                       </span>
                     </div>
                     <div>
-                      <span className="font-black text-teal-800">주말:</span>{" "}
+                      <span className="font-black text-teal-800">주말·공휴일:</span>{" "}
                       <span className="font-semibold text-teal-700">
                         {weList.length > 0
                           ? weList.map((s, idx) => `${s.label} ${s.startTime}~${weList[(idx + 1) % weList.length].startTime}`).join(" · ")
@@ -18119,6 +18154,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                     { id: "completed", label: "완료됨" }
                   ].map((tab) => (
                     <button
+                      type="button"
                       key={tab.id}
                       onClick={() => setTodoStatusFilter(tab.id)}
                       className={`px-2.5 py-1 rounded-md text-[11.5px] font-extrabold whitespace-nowrap transition ${
@@ -18149,6 +18185,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                 {todoIncludeOtherCats ? "표시: 할일 + 병원·행사" : "표시: 할일만"}
               </span>
               <button
+                type="button"
                 onClick={() => setTodoIncludeOtherCats((v) => !v)}
                 className={`px-2.5 py-1 rounded-lg text-[11.5px] font-extrabold border transition whitespace-nowrap shrink-0 ${
                   todoIncludeOtherCats
@@ -18219,6 +18256,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                   className="flex-1 min-w-0 px-2.5 py-1.5 rounded-lg border border-stone-200 text-[13px] font-bold bg-white"
                 />
                 <button
+                  type="button"
                   onClick={handleQuickAddTodo}
                   className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[12.5px] font-extrabold whitespace-nowrap shrink-0"
                 >
@@ -18277,8 +18315,19 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                 : allTodoChecklistItems;
               if (visibleTodoItems.length === 0) {
                 return (
-                  <div className="text-[13.5px] text-stone-400 py-4 text-center bg-stone-50 rounded-xl border border-dashed border-stone-200">
-                    {tq ? "검색어와 일치하는 할 일이 없습니다." : "표시할 To-Do 체크리스트 항목이 없습니다."}
+                  <div className="py-4 text-center bg-stone-50 rounded-xl border border-dashed border-stone-200 space-y-1.5">
+                    <div className="text-[13px] text-stone-400 font-bold">
+                      {tq ? "검색어와 일치하는 할 일이 없습니다." : "표시할 To-Do 체크리스트 항목이 없습니다."}
+                    </div>
+                    {tq && (
+                      <button
+                        type="button"
+                        onClick={() => setTodoSearchQuery("")}
+                        className="px-2.5 py-1 rounded-xl bg-white hover:bg-stone-100 border border-stone-200 text-stone-700 text-[11.5px] font-extrabold"
+                      >
+                        🔄 검색 초기화
+                      </button>
+                    )}
                   </div>
                 );
               }
@@ -18570,6 +18619,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
               <div className="flex gap-1 bg-stone-200 p-1 rounded-xl overflow-x-auto">
                 {["전체", ...STORAGE_LOCATIONS].map((loc) => (
                   <button
+                    type="button"
                     key={loc}
                     onClick={() => setFridgeLocFilter(loc)}
                     className={`px-2 py-1 rounded-lg text-[11px] font-extrabold whitespace-nowrap transition ${
@@ -18596,6 +18646,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
               </button>
             )}
             <button
+              type="button"
               onClick={openAddFridgeModal}
               className="px-2.5 py-1.5 rounded-xl bg-stone-900 text-white text-[11.5px] font-extrabold flex items-center gap-1 shrink-0 whitespace-nowrap"
             >
@@ -18606,6 +18657,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
 
           <div className="flex items-center justify-between gap-2 bg-stone-100 p-1 rounded-xl">
             <button
+              type="button"
               onClick={() => { setFridgeViewMode("list"); setBulkMoveMode(false); setSelectedBulkFridgeIds([]); }}
               className={`flex-1 py-1.5 rounded-lg text-[12px] font-extrabold whitespace-nowrap transition ${
                 fridgeViewMode === "list" ? "bg-white text-stone-900 shadow-sm" : "text-stone-500"
@@ -18614,6 +18666,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
               📋 리스트 뷰
             </button>
             <button
+              type="button"
               onClick={() => setFridgeViewMode("visual")}
               className={`flex-1 py-1.5 rounded-lg text-[12px] font-extrabold whitespace-nowrap transition ${
                 fridgeViewMode === "visual" ? "bg-white text-stone-900 shadow-sm" : "text-stone-500"
@@ -18627,6 +18680,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
           <div className="flex gap-1.5 overflow-x-auto pb-1">
             {["전체", ...FRIDGE_CATEGORIES].map((cat) => (
               <button
+                type="button"
                 key={cat}
                 onClick={() => setFridgeCatFilter(cat)}
                 className={`px-2.5 py-1 rounded-full text-[12.5px] font-bold shrink-0 border ${
@@ -18695,6 +18749,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                 현재 표시할 냉장고 재료가 없습니다.
               </div>
               <button
+                type="button"
                 onClick={handleRestoreAllDeleted}
                 className="px-3 py-1.5 rounded-xl bg-amber-100 text-amber-900 text-[13.5px] font-extrabold"
               >
@@ -18976,7 +19031,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
 
                     {(fridgeLocFilter === "전체" || fridgeLocFilter === "냉장실") && (
                       <div className="space-y-1.5">
-                        <div className="text-[11.5px] font-extrabold text-sky-800 px-0.5">❄️ 상부 냉장실 (3단 + 채소칸 2개)</div>
+                        <div className="text-[11.5px] font-extrabold text-sky-800 px-0.5">❄️ 상부 냉장실 (3단 + 채소칸)</div>
                         {renderShelfBox("냉장 1단(상단)", "1단 · 상단 (유제품·계란·유아식)", "bg-white border-sky-200")}
                         {renderShelfBox("냉장 2단(중단)", "2단 · 중단 (반찬·김치)", "bg-white border-sky-200")}
                         {renderShelfBox("냉장 3단(하단)", "3단 · 하단 (육류·소스·기타)", "bg-white border-sky-200")}
@@ -19729,6 +19784,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
               )}
             </div>
             <button
+              type="button"
               onClick={() => {
                 setEditingNotice(null);
                 setNoticeForm({
@@ -19975,6 +20031,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                       { id: "family", label: "온가족식" }
                     ].map((opt) => (
                       <button
+                        type="button"
                         key={opt.id}
                         onClick={() => setPlanTarget(opt.id)}
                         className={`py-2 px-1.5 rounded-xl text-[13.5px] font-extrabold border transition ${
@@ -19991,6 +20048,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                     <div className="flex items-center gap-1.5 flex-wrap pt-1">
                       {["일반 집밥", "다이어트·저탄수", "고단백·체력보충", "간편 원플레이트"].map((st) => (
                         <button
+                          type="button"
                           key={st}
                           onClick={() => setPlanAdultStyle(st)}
                           className={`px-2.5 py-1 rounded-full text-[12.5px] font-bold border ${
@@ -20022,6 +20080,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                       className="flex-1 px-3 py-1.5 rounded-xl border border-stone-200 text-[13.5px] font-bold bg-white"
                     />
                     <button
+                      type="button"
                       onClick={() => {
                         if (!planAddDateInput) return;
                         setPlanScheduleMap((prev) =>
@@ -20051,6 +20110,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                             <div className="flex items-center gap-1.5">
                               <span className="text-[13.5px] font-black text-stone-800">{dStr}</span>
                               <button
+                                type="button"
                                 onClick={() =>
                                   setPlanScheduleMap((prev) => ({
                                     ...prev,
@@ -20067,6 +20127,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                                 const on = slots.includes(sName);
                                 return (
                                   <button
+                                    type="button"
                                     key={sName}
                                     onClick={() =>
                                       setPlanScheduleMap((prev) => {
@@ -20090,6 +20151,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                                 );
                               })}
                               <button
+                                type="button"
                                 onClick={() =>
                                   setPlanScheduleMap((prev) => {
                                     const copy = { ...prev };
@@ -20115,6 +20177,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                     <div>⚠️ {planErrorMsg}</div>
                     {toSafeArray(planSnapshotMeta?.missingPairs).length > 0 && (
                       <button
+                        type="button"
                         onClick={handleGenerateMissingPlanSlots}
                         disabled={isPlanLoading}
                         className="px-3 py-1.5 rounded-lg bg-rose-600 text-white text-[12.5px] font-extrabold"
@@ -20127,6 +20190,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
 
 
                 <button
+                  type="button"
                   onClick={handleGenerate3DayPlan}
                   disabled={isPlanLoading}
                   className={`w-full py-3 rounded-2xl text-white text-[13.5px] font-black flex items-center justify-center gap-1.5 shadow-sm ${
@@ -20166,6 +20230,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                           ))}
                         </div>
                         <button
+                          type="button"
                           onClick={() => handleAddMissingIngredientsToShopping(allMissing)}
                           className="w-full py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-[13.5px] font-extrabold"
                         >
@@ -20181,6 +20246,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                           추천 식단 미리보기 ({planItems.filter((x) => x.selected).length}끼 선택됨)
                         </span>
                         <button
+                          type="button"
                           onClick={() => {
                             const allSel = planItems.every((x) => x.selected);
                             setPlanItems((prev) => prev.map((x) => ({ ...x, selected: !allSel })));
@@ -20213,6 +20279,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                                 >
                                   <div className="flex items-center justify-between gap-2">
                                     <button
+                                      type="button"
                                       onClick={() =>
                                         setPlanItems((prev) =>
                                           prev.map((x) => (x.id === it.id ? { ...x, selected: !x.selected } : x))
@@ -20233,6 +20300,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                                         </span>
                                       )}
                                       <button
+                                        type="button"
                                         onClick={() => handleRegenerateSinglePlanSlot(it)}
                                         disabled={regeneratingPlanId === it.id}
                                         className="px-2 py-1 rounded-lg bg-white border border-stone-200 text-[12.5px] font-extrabold text-stone-700 hover:bg-stone-100"
@@ -20302,6 +20370,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                                   {toSafeArray(it.usedIngredients).length > 0 && (
                                     <div className="pt-1 flex justify-end">
                                       <button
+                                        type="button"
                                         onClick={() =>
                                           handleCompleteRecipeCooking({
                                             title: it.mealName,
@@ -20329,6 +20398,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                           <div className="flex items-center gap-1.5">
                             <span>기존 식단 충돌 시:</span>
                             <button
+                              type="button"
                               onClick={() => setPlanConflictMode("skip")}
                               className={`px-2 py-0.5 rounded-md border ${
                                 planConflictMode === "skip"
@@ -20339,6 +20409,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                               건너뛰기
                             </button>
                             <button
+                              type="button"
                               onClick={() => setPlanConflictMode("append")}
                               className={`px-2 py-0.5 rounded-md border ${
                                 planConflictMode === "append"
@@ -20352,6 +20423,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                         </div>
                       )}
                       <button
+                        type="button"
                         onClick={handleApply3DayPlan}
                         disabled={isSavingPlan || planSnapshotMeta?.applied}
                         className={`w-full py-3 rounded-2xl text-white text-[13.5px] font-black ${
@@ -20366,6 +20438,20 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                           ? "식단표에 반영 중..."
                           : `✅ 선택한 ${planItems.filter((x) => x.selected).length}끼 일별 식단표에 반영하기`}
                       </button>
+                      {planSnapshotMeta?.applied && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const firstDate = planItems.find((x) => x.selected && x.date)?.date || getTodayStr();
+                            setSelectedDate(firstDate);
+                            setSelectedMember("전체");
+                            setActiveTab("daily");
+                          }}
+                          className="w-full py-2.5 rounded-2xl bg-[#EEF3EE] hover:bg-[#DFE9E0] border border-[#C9D8CC] text-[#35503C] text-[12.5px] font-extrabold"
+                        >
+                          🍽️ 반영된 식단표 보러가기 →
+                        </button>
+                      )}
                     </div>
                   </div>
                 );
@@ -20396,6 +20482,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                   Step 1. 사용할 냉장고 재료 선택 ({selectedAiIngredients.length}개 선택됨)
                 </span>
                 <button
+                  type="button"
                   onClick={() =>
                     setSelectedAiIngredients(
                       selectedAiIngredients.length > 0
@@ -20414,6 +20501,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                   const diff = getDaysDiff(item.expiryDate);
                   return (
                     <button
+                      type="button"
                       key={item.id}
                       onClick={() =>
                         setSelectedAiIngredients((prev) =>
@@ -20453,6 +20541,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                   "시율이 이유식/유아식"
                 ].map((tg) => (
                   <button
+                    type="button"
                     key={tg}
                     onClick={() => setAiTargetGroup(tg)}
                     className={`py-2 px-3 rounded-xl text-[13.5px] font-extrabold border transition ${
@@ -20485,6 +20574,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
 
 
             <button
+              type="button"
               onClick={handleRunAiRecommend}
               disabled={isAiLoading}
               className="w-full py-3 rounded-2xl bg-stone-900 hover:bg-stone-800 text-white font-black text-[13.5px] flex items-center justify-center gap-2 shadow-md"
@@ -20725,6 +20815,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
 
 
                 <button
+                  type="button"
                   onClick={handleSendPlatingToRecipeBook}
                   className="w-full py-2 px-3 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-[13.5px] font-extrabold flex items-center justify-center gap-1.5 shadow-sm"
                 >
@@ -20733,6 +20824,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
 
 
                 <button
+                  type="button"
                   onClick={handleGeneratePlatingExampleImage}
                   disabled={isPlatingImageLoading}
                   className="w-full py-2.5 px-3 rounded-xl bg-stone-900 hover:bg-stone-800 text-white text-[13.5px] font-extrabold flex items-center justify-center gap-1.5 shadow-sm"
@@ -22901,6 +22993,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                 </p>
               </div>
               <button
+                type="button"
                 onClick={() => openNewRecipeModal()}
                 className="px-3 py-2 rounded-xl bg-stone-900 text-white text-[13.5px] font-extrabold shrink-0 whitespace-nowrap"
               >
@@ -22913,6 +23006,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
               <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 flex items-center justify-between gap-2 text-[12.5px]">
                 <span className="font-bold text-amber-900">🔒 열람 잠금 중입니다.</span>
                 <button
+                  type="button"
                   onClick={() => requireEditorAccess()}
                   className="px-2.5 py-1 rounded-lg bg-amber-600 text-white font-extrabold shrink-0"
                 >
@@ -22985,6 +23079,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
             <div className="flex gap-1.5 overflow-x-auto pb-0.5">
               {["전체", ...RECIPE_CATEGORIES].map((cat) => (
                 <button
+                  type="button"
                   key={cat}
                   onClick={() => setRecipeCatFilter(cat)}
                   className={`px-2.5 py-1 rounded-full text-[12.5px] font-bold shrink-0 border ${
@@ -23001,6 +23096,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
 
             <div className="flex items-center gap-1 bg-stone-100 p-1 rounded-xl">
               <button
+                type="button"
                 onClick={() => setRecipeViewMode("cards")}
                 className={`flex-1 py-1.5 rounded-lg text-[13.5px] font-extrabold transition ${
                   recipeViewMode === "cards" ? "bg-white text-stone-900 shadow-sm" : "text-stone-500"
@@ -23009,6 +23105,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                 🖼️ 상세 카드 보기
               </button>
               <button
+                type="button"
                 onClick={() => setRecipeViewMode("summary")}
                 className={`flex-1 py-1.5 rounded-lg text-[13.5px] font-extrabold transition ${
                   recipeViewMode === "summary" ? "bg-white text-stone-900 shadow-sm" : "text-stone-500"
@@ -23115,6 +23212,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                         재현
                       </button>
                       <button
+                        type="button"
                         onClick={() => {
                           if (!requireEditorAccess()) return;
                           setEditingRecipe(r);
@@ -23179,6 +23277,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                           </div>
                           <div className="flex items-center gap-0.5 shrink-0">
                             <button
+                              type="button"
                               onClick={() => {
                                 if (!requireEditorAccess()) return;
                                 setEditingRecipe(r);
@@ -23360,6 +23459,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                 const isSel = selectedChildId === ch.id;
                 return (
                   <button
+                    type="button"
                     key={ch.id}
                     onClick={() => {
                       setSelectedChildId(ch.id);
@@ -23404,6 +23504,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                 { id: "medical", label: "🩺 진료·열" }
               ].map((st) => (
                 <button
+                  type="button"
                   key={st.id}
                   onClick={() => {
                     setBabySubTab(st.id);
@@ -23682,7 +23783,39 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                       const sTxt = sMin >= 60 ? `${Math.floor(sMin / 60)}h${sMin % 60}m` : `${sMin}분`;
                       return (
                         <div className="flex items-center justify-between gap-1.5 px-3.5 py-1.5 bg-[#F8F9FA] border-t border-stone-100 text-[11px] font-semibold text-stone-600 flex-wrap">
-                          <span>📅 오늘 요약</span>
+                          <div className="flex items-center gap-1.5">
+                            <span>📅 오늘 요약</span>
+                            {isAdminUnlocked && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const feedPart = `${fMl > 0 ? `${fMl}ml` : ""}${fMl > 0 && bMin > 0 ? " + " : ""}${bMin > 0 ? `모유 ${bMin}분` : fMl === 0 ? "0분" : ""}`;
+                                  const careLine = `🍼 수유 ${fCount}회 (${feedPart}) · 🧷 기저귀 ${dCount}회(소${dPee}·대${dPoo}) · 😴 수면 ${sTxt}`;
+                                  setEditingDiaryEntry(null);
+                                  setPendingDiaryPhotoFile(null);
+                                  setDiaryForm({
+                                    date: getTodayStr(),
+                                    mood: "😊 행복",
+                                    title: `${activeChild.name} 오늘의 기록`,
+                                    content: careLine,
+                                    contentHtml: "",
+                                    photoUrl: "",
+                                    photos: [],
+                                    childIds: [activeChild.id],
+                                    textStyle: { ...DEFAULT_DIARY_TEXT_STYLE }
+                                  });
+                                  diarySavedRangeRef.current = null;
+                                  setHasDiarySelection(false);
+                                  setDiaryEditorSyncTick((t) => t + 1);
+                                  setBabySubTab("diary");
+                                  showToast("📖 오늘 케어 요약을 육아일기에 불러왔습니다.");
+                                }}
+                                className="px-1.5 py-0.5 rounded-md bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-900 text-[10px] font-extrabold whitespace-nowrap"
+                              >
+                                📖 일기쓰기
+                              </button>
+                            )}
+                          </div>
                           <span>수유 {fCount}회 ({fMl > 0 ? `${fMl}ml` : ""}{fMl > 0 && bMin > 0 ? " + " : ""}{bMin > 0 ? `모유 ${bMin}분` : fMl === 0 ? "0분" : ""}) · 기저귀 {dCount}회(소{dPee}·대{dPoo}) · 수면 {sTxt}</span>
                         </div>
                       );
@@ -23955,6 +24088,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
               <div className="space-y-2.5">
                 <div className="flex justify-end">
                   <button
+                    type="button"
                     onClick={() =>
                       currentMilestoneRef.current?.scrollIntoView({ behavior: "smooth", block: "center" })
                     }
@@ -24289,6 +24423,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                     className="w-full px-3 py-2 rounded-xl border border-stone-200 text-[13.5px]"
                   />
                   <button
+                    type="button"
                     onClick={handleAddGrowthLog}
                     className="w-full py-2.5 rounded-xl bg-stone-900 text-white text-[13.5px] font-extrabold"
                   >
@@ -24618,6 +24753,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                     className="w-full px-3 py-2 rounded-xl border border-stone-200 text-[13.5px]"
                   />
                   <button
+                    type="button"
                     onClick={handleAddMedicalNote}
                     className="w-full py-2.5 rounded-xl bg-stone-900 text-white text-[13.5px] font-extrabold"
                   >
@@ -26379,6 +26515,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
             <div className="flex items-center justify-between">
               <span className="text-[15.5px] font-black text-stone-900">전체 메뉴 바로가기</span>
               <button
+                type="button"
                 ref={moreSheetCloseRef}
                 onClick={() => {
                   setIsMoreNavOpen(false);
@@ -26483,6 +26620,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
           const active = activeTab === item.id;
           return (
             <button
+              type="button"
               key={item.id}
               onClick={() => {
                 if (activeTab === item.id) {
@@ -26522,6 +26660,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
           );
         })}
         <button
+          type="button"
           ref={moreNavBtnRef}
           onClick={() => setIsMoreNavOpen((v) => !v)}
           className={`flex flex-col items-center justify-center py-1.5 rounded-xl transition ${
@@ -26742,6 +26881,10 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                 .map((ev) => ({ ...ev, _isFamily: false }));
 
         const popAllEvents = [...popFamEvents, ...popPrivEvents];
+        const popDayMealsCount = meals.filter((m) => m.date === calDayPopupDate).length;
+        const popDayDiaryCount = isAdminUnlocked
+          ? babyDiaryEntries.filter((d) => d.date === calDayPopupDate).length
+          : 0;
         const activeDetail = calDayPopupItem
           ? popAllEvents.find((x) => x.id === calDayPopupItem.id && x._isFamily === calDayPopupItem._isFamily) || calDayPopupItem
           : null;
@@ -26813,6 +26956,45 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                   </button>
                 )}
               </div>
+
+              {!activeDetail && (popDayMealsCount > 0 || popDayDiaryCount > 0) && (
+                <div className="px-3 py-1.5 bg-stone-50 border-b border-stone-200 flex items-center gap-1.5 flex-wrap shrink-0">
+                  {popDayMealsCount > 0 && canViewTab("daily") && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const targetD = calDayPopupDate;
+                        setCalDayPopupDate(null);
+                        setCalDayPopupItem(null);
+                        setSelectedDate(targetD);
+                        setSelectedMember("전체");
+                        setActiveTab("daily");
+                      }}
+                      className="px-2 py-0.5 rounded-full bg-white hover:bg-[#EEF3EE] border border-stone-200 text-[#35503C] text-[11px] font-extrabold whitespace-nowrap"
+                    >
+                      🍽️ 이 날 식단 {popDayMealsCount}건 →
+                    </button>
+                  )}
+                  {popDayDiaryCount > 0 && isAdminUnlocked && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const targetYm = calDayPopupDate.slice(0, 7);
+                        setCalDayPopupDate(null);
+                        setCalDayPopupItem(null);
+                        setDiaryMonthFilter(targetYm);
+                        setDiaryChildFilter("all");
+                        setDiarySearchQuery("");
+                        setBabySubTab("diary");
+                        setActiveTab("baby");
+                      }}
+                      className="px-2 py-0.5 rounded-full bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-900 text-[11px] font-extrabold whitespace-nowrap"
+                    >
+                      📖 이 날 육아일기 {popDayDiaryCount}편 →
+                    </button>
+                  )}
+                </div>
+              )}
 
               {/* 본문 영역: 상세 보기 OR 일자 목록 */}
               {activeDetail ? (
@@ -27373,6 +27555,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                   🔎 현재 실행 코드: <span className="text-indigo-700">{APP_CODE_VERSION}</span> ({APP_BUILD_DATE})
                 </div>
                 <button
+                  type="button"
                   onClick={async () => {
                     try {
                       if ("caches" in window) {
@@ -27423,6 +27606,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                 className="w-full px-2.5 py-1.5 rounded-xl border border-stone-200 text-[13.5px] bg-white"
               />
               <button
+                type="button"
                 onClick={handleAddPatchNote}
                 className="w-full py-2 rounded-xl bg-stone-900 text-white text-[13.5px] font-extrabold"
               >
@@ -27481,6 +27665,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                     <div className="flex items-center gap-1.5">
                       <span className="text-[11.5px] font-bold text-stone-400">{pn.date}</span>
                       <button
+                        type="button"
                         onClick={() => handleDeletePatchNote(pn.id)}
                         className="text-stone-300 hover:text-red-500"
                         title="삭제"
@@ -27949,6 +28134,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                 className="hidden"
               />
               <button
+                type="button"
                 onClick={() => menuFileInputRef.current?.click()}
                 disabled={isMenuScanning}
                 className="w-full py-3.5 px-4 rounded-2xl bg-amber-500 hover:bg-amber-600 text-white font-black text-[13.5px] flex items-center justify-center gap-2 shadow-sm transition"
@@ -28039,6 +28225,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                           </span>
                         </div>
                         <button
+                          type="button"
                           onClick={() =>
                             setScannedMenuDays((prev) => prev.filter((_, i) => i !== idx))
                           }
@@ -28113,6 +28300,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
 
             {scannedMenuDays.length > 0 && (
               <button
+                type="button"
                 onClick={handleSaveScannedMenuDays}
                 className="w-full py-3 rounded-2xl bg-stone-900 text-white text-[13.5px] font-black shadow-md"
               >
@@ -28144,6 +28332,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
               className="hidden"
             />
             <button
+              type="button"
               onClick={() => receiptFileInputRef.current?.click()}
               disabled={isReceiptScanning}
               className="w-full py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white text-[13.5px] font-black flex items-center justify-center gap-2"
@@ -28242,6 +28431,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                       className="w-20 font-extrabold text-emerald-700 bg-white px-2 py-1 rounded border border-stone-200 text-[13.5px] text-right"
                     />
                     <button
+                      type="button"
                       onClick={() => setScannedReceiptItems((prev) => prev.filter((_, i) => i !== idx))}
                       className="w-7 h-7 flex items-center justify-center rounded-lg text-stone-400 hover:text-rose-600 shrink-0"
                       title="품목 제외"
@@ -28270,6 +28460,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                         </div>
                         <div className="flex items-center gap-1.5">
                           <button
+                            type="button"
                             onClick={() =>
                               setScannedReceiptItems((prev) => [
                                 ...prev,
@@ -28291,6 +28482,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                           </button>
                           {lastReceiptImagePart && (
                             <button
+                              type="button"
                               onClick={() => runReceiptOcrWithImagePart(lastReceiptImagePart)}
                               disabled={isReceiptScanning}
                               className="px-2 py-1 rounded-lg bg-amber-100 border border-amber-300 text-[12.5px] font-extrabold text-amber-900"
@@ -28346,6 +28538,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                       {receiptRawLines.length > 0 && (
                         <div className="pt-1">
                           <button
+                            type="button"
                             onClick={() => setShowReceiptRawLines((v) => !v)}
                             className="text-[12.5px] font-bold text-stone-500 hover:text-stone-800 underline"
                           >
@@ -28367,6 +28560,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                   );
                 })()}
                 <button
+                  type="button"
                   disabled={isSavingReceipt}
                   onClick={async () => {
                     if (!requireEditorAccess()) return;
@@ -28974,12 +29168,14 @@ ${item.memo}` : `${item.title} 다녀옴!`,
 
             <div className="flex gap-2 pt-2">
               <button
+                type="button"
                 onClick={() => setIsMealModalOpen(false)}
                 className="flex-1 py-2.5 rounded-xl bg-stone-100 text-stone-600 text-[13.5px] font-extrabold"
               >
                 취소
               </button>
               <button
+                type="button"
                 onClick={handleSaveMeal}
                 className="flex-1 py-2.5 rounded-xl bg-stone-900 text-white text-[13.5px] font-extrabold"
               >
@@ -29204,12 +29400,14 @@ ${item.memo}` : `${item.title} 다녀옴!`,
 
             <div className="flex gap-2 pt-2">
               <button
+                type="button"
                 onClick={() => { setFridgeConflictData(null); setIsFridgeModalOpen(false); }}
                 className="flex-1 py-2.5 rounded-xl bg-stone-100 text-stone-600 text-[13.5px] font-extrabold"
               >
                 취소
               </button>
               <button
+                type="button"
                 onClick={() => handleSaveFridge()}
                 className="flex-1 py-2.5 rounded-xl bg-stone-900 text-white text-[13.5px] font-extrabold"
               >
@@ -29256,12 +29454,14 @@ ${item.memo}` : `${item.title} 다녀옴!`,
             />
             <div className="flex gap-2">
               <button
+                type="button"
                 onClick={() => setStockInItem(null)}
                 className="flex-1 py-2.5 rounded-xl bg-stone-100 text-stone-600 text-[13.5px] font-extrabold"
               >
                 취소
               </button>
               <button
+                type="button"
                 onClick={handleConfirmStockIn}
                 className="flex-1 py-2.5 rounded-xl bg-emerald-600 text-white text-[13.5px] font-extrabold"
               >
@@ -29297,6 +29497,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
             <div className="grid grid-cols-3 gap-1.5">
               {MEAL_SLOTS.map((s) => (
                 <button
+                  type="button"
                   key={s.id}
                   onClick={() => setQuickLogSlot(s.id)}
                   className={`py-2 rounded-xl text-[13.5px] font-extrabold border ${
@@ -29311,12 +29512,14 @@ ${item.memo}` : `${item.title} 다녀옴!`,
             </div>
             <div className="flex gap-2 pt-1">
               <button
+                type="button"
                 onClick={() => setQuickLogRecipe(null)}
                 className="flex-1 py-2.5 rounded-xl bg-stone-100 text-stone-600 font-extrabold text-[13.5px]"
               >
                 취소
               </button>
               <button
+                type="button"
                 onClick={handleConfirmQuickLog}
                 className="flex-1 py-2.5 rounded-xl bg-stone-900 text-white font-extrabold text-[13.5px]"
               >
@@ -29355,6 +29558,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                   </div>
                   <div className="flex items-center gap-1.5">
                     <button
+                      type="button"
                       onClick={() => {
                         const copy = [...cookingConfirmModal.items];
                         copy[idx].deductQty = Math.max(0, copy[idx].deductQty - 1);
@@ -29368,6 +29572,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                       -{entry.deductQty}
                     </span>
                     <button
+                      type="button"
                       onClick={() => {
                         const copy = [...cookingConfirmModal.items];
                         copy[idx].deductQty = Math.min(
@@ -29386,12 +29591,14 @@ ${item.memo}` : `${item.title} 다녀옴!`,
             </div>
             <div className="flex gap-2 pt-1">
               <button
+                type="button"
                 onClick={() => setCookingConfirmModal(null)}
                 className="flex-1 py-2.5 rounded-xl bg-stone-100 text-stone-600 text-[13.5px] font-extrabold"
               >
                 취소
               </button>
               <button
+                type="button"
                 onClick={handleConfirmCookingDeduction}
                 disabled={isCookingDeducting}
                 className={`flex-1 py-2.5 rounded-xl text-white text-[13.5px] font-extrabold ${
@@ -29680,6 +29887,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                   API 키·권한·DB 복원은 관리자 로그인 후 이용할 수 있습니다.
                 </p>
                 <button
+                  type="button"
                   onClick={() => {
                     setIsSettingsOpen(false);
                     setIsEditorUnlockModalOpen(true);
@@ -30033,6 +30241,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
 
               <div className="grid grid-cols-2 gap-1.5">
                 <button
+                  type="button"
                   onClick={() => {
                     handleSaveApiKey(tempKeyInput, tempOpenaiKeyInput, aiProvider);
                     setAiDiagStatus(`✅ 설정이 저장되었습니다! (엔진: ${aiProvider}, OpenAI: ${tempOpenaiKeyInput ? "입력됨" : "없음"}, Gemini: ${tempKeyInput ? "입력됨" : "없음"})`);
@@ -30042,6 +30251,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                   AI 설정 저장
                 </button>
                 <button
+                  type="button"
                   onClick={handleRunAiDiagnostic}
                   className="py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-[13.5px] font-extrabold"
                 >
@@ -30058,6 +30268,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                 <div className="flex items-center justify-between">
                   <span className="text-[13.5px] font-black text-stone-800">🩺 AI 오류센터 (최근 호출 기록)</span>
                   <button
+                    type="button"
                     onClick={() => setAiCallLogs([])}
                     className="text-[11.5px] font-bold text-stone-400 hover:text-stone-700"
                   >
@@ -30091,6 +30302,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                   🧪 핵심 로직 자가진단 (단위·날짜·매칭·완성도)
                 </span>
                 <button
+                  type="button"
                   onClick={runCoreLogicSelfTests}
                   className="px-2.5 py-1 rounded-lg bg-stone-900 text-white text-[12.5px] font-extrabold shrink-0"
                 >
@@ -30120,6 +30332,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                   </span>
                   {deletedLogs.length > 0 && (
                     <button
+                      type="button"
                       onClick={() => {
                         setDeletedLogs([]);
                         try {
@@ -30149,6 +30362,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                           </div>
                         </div>
                         <button
+                          type="button"
                           onClick={() => restoreDeletedLogEntry(log)}
                           disabled={restoringLogIds.includes(log.logId)}
                           className={`px-3 py-1.5 rounded-lg text-[13.5px] font-extrabold shrink-0 ${
@@ -30168,6 +30382,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
 
 
             <button
+              type="button"
               onClick={handleRestoreAllDeleted}
               className="w-full py-2.5 rounded-xl bg-stone-200 hover:bg-stone-300 text-stone-800 text-[13.5px] font-extrabold flex items-center justify-center gap-1.5"
             >
@@ -30177,6 +30392,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
 
 
             <button
+              type="button"
               onClick={handleExportCsv}
               className="w-full py-2.5 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white text-[13.5px] font-extrabold flex items-center justify-center gap-1.5"
             >
@@ -31882,6 +32098,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                       전체 권한 · 개인 일정은 본인 계정 전용
                     </p>
                     <button
+                      type="button"
                       onClick={async () => {
                         const myCode = currentAdminOwner === "아리나" ? arinaCode : suhyeokCode;
                         const inviteUrl = `${window.location.origin}/?invite=${myCode}`;
@@ -31950,6 +32167,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
 
 
                 <button
+                  type="button"
                   onClick={logoutToGuest}
                   className="w-full py-2 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-[13.5px] font-bold"
                 >
@@ -31990,6 +32208,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                   className="w-full px-3 py-2.5 rounded-xl border border-stone-300 text-[15.5px] font-bold text-center tracking-widest"
                 />
                 <button
+                  type="button"
                   onClick={() => applyLoginCode(editorCodeInput)}
                   className="w-full py-2.5 rounded-xl bg-stone-900 hover:bg-stone-800 text-white text-[13.5px] font-extrabold"
                 >
@@ -32010,6 +32229,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                   📤 식단 · 전체 재고 통합 내보내기
                 </h3>
                 <button
+                  type="button"
                   onClick={() => setIsInventoryExportOpen(false)}
                   className="w-8 h-8 flex items-center justify-center rounded-xl bg-stone-100 text-stone-600"
                 >
@@ -32153,6 +32373,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
 
               <div className="grid grid-cols-3 gap-1.5">
                 <button
+                  type="button"
                   onClick={async () => {
                     await copyTextSafe(exportText, "📋 전체 재고 텍스트가 복사되었습니다!");
                   }}
@@ -32161,6 +32382,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                   📋 복사하기
                 </button>
                 <button
+                  type="button"
                   onClick={() => {
                     const blob = new Blob([exportText], { type: "text/plain;charset=utf-8" });
                     const url = URL.createObjectURL(blob);
@@ -32178,6 +32400,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                   📄 TXT 저장
                 </button>
                 <button
+                  type="button"
                   onClick={async () => {
                     if (navigator.share) {
                       try {
@@ -32270,6 +32493,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
               />
               <div className="flex gap-2">
                 <button
+                  type="button"
                   onClick={() => recipePhotoInputRef.current?.click()}
                   className="flex-1 py-2 rounded-xl bg-stone-100 hover:bg-stone-200 text-[13.5px] font-extrabold text-stone-700"
                 >
@@ -32277,6 +32501,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                 </button>
                 {recipeForm.photoDataUrl && (
                   <button
+                    type="button"
                     onClick={() => openCropModalWithUrl(recipeForm.photoDataUrl)}
                     className="px-3 py-2 rounded-xl bg-rose-50 hover:bg-rose-100 border border-rose-200 text-[13.5px] font-extrabold text-rose-700 shrink-0"
                   >
@@ -32495,6 +32720,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
 
 
             <button
+              type="button"
               onClick={handleSaveRecipe}
               className="w-full py-2.5 rounded-xl bg-stone-900 text-white text-[13.5px] font-extrabold"
             >
@@ -32512,6 +32738,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                 <p className="text-[12.5px] text-stone-500">사각형을 드래그해 이동하고 모서리 핸들로 크기를 조절하세요.</p>
               </div>
               <button
+                type="button"
                 onClick={() => setCropModal(null)}
                 className="p-1.5 rounded-xl bg-stone-100 text-stone-600"
               >
@@ -32528,6 +32755,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                 { id: "16:9", label: "16:9" }
               ].map((ar) => (
                 <button
+                  type="button"
                   key={ar.id}
                   onClick={() => {
                     setCropAspect(ar.id);
@@ -32550,6 +32778,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                 </button>
               ))}
               <button
+                type="button"
                 onClick={() => {
                   setCropAspect("free");
                   setCropRect({ x: 0, y: 0, w: 1, h: 1 });
@@ -32609,6 +32838,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
 
             <div className="grid grid-cols-2 gap-2">
               <button
+                type="button"
                 onClick={async () => {
                   const safeUrl = await compressDataUrlForFirestore(cropModal.srcUrl, 720, 0.65);
                   setRecipeForm((prev) => ({ ...prev, photoDataUrl: safeUrl || cropModal.srcUrl }));
@@ -32619,6 +32849,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                 원본 그대로 사용
               </button>
               <button
+                type="button"
                 onClick={handleApplyCrop}
                 className="py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-[13.5px] font-extrabold"
               >
@@ -32638,6 +32869,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
           <div className="w-full max-w-md flex items-center justify-between text-white mb-2 px-1">
             <span className="text-[15.5px] font-black truncate">{zoomedRecipePhoto.title}</span>
             <button
+              type="button"
               onClick={() => setZoomedRecipePhoto(null)}
               className="p-1.5 rounded-full bg-white/15 hover:bg-white/25 text-white"
             >
@@ -32677,6 +32909,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                 </div>
               </div>
               <button
+                type="button"
                 onClick={() => setQuickFridgeItem(null)}
                 className="p-1.5 rounded-xl bg-stone-100 text-stone-600"
               >
@@ -32689,6 +32922,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
               <span className="text-[13.5px] font-extrabold text-stone-700">현재 수량</span>
               <div className="flex items-center gap-2">
                 <button
+                  type="button"
                   onClick={() => {
                     handleAdjustQuantity(quickFridgeItem, -1);
                     setQuickFridgeItem((prev) =>
@@ -32703,6 +32937,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                   {Number(quickFridgeItem.quantity) || 0}{quickFridgeItem.unit}
                 </span>
                 <button
+                  type="button"
                   onClick={() => {
                     handleAdjustQuantity(quickFridgeItem, 1);
                     setQuickFridgeItem((prev) =>
