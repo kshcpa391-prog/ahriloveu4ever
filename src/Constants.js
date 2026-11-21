@@ -1177,7 +1177,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v12.72";
+export const APP_CODE_VERSION = "v12.73";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1195,7 +1195,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-21 15:00";
+export const APP_BUILD_DATE = "2026-11-21 15:10";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1262,6 +1262,18 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v12.73",
+    version: "v12.73",
+    date: "2026-11-21",
+    title: "전역 짧은 한글 버튼 줄바꿈 깨짐(112곳) 일괄 교정 · 불러올 기록 선택(수유·생활 연동 및 버그 2건 수정)",
+    category: "시각 정돈 · 메뉴 연계 · 버그수정",
+    changes: [
+      "전역 줄바꿈 깨짐 일괄 교정: [불러올 기록 선택]의 '전체선택/전체해제' 및 안내 문구 잘림을 포함해 앱 전체 112개 짧은 한글 버튼에 whitespace-nowrap·shrink-0을 AST 기반으로 일괄 적용해 어색한 단어 중간 줄바꿈 완전 해소",
+      "불러올 기록 선택 고도화·연계: 해당 날짜의 [🍼 수유·생활 요약(수유·기저귀·수면)] 항목을 일기 불러오기 목록에 자동 연동",
+      "잠재 버그 2건 수정: 불러올 기록 선택에서 진료 메모(n.note→n.memo·체온) 및 할 일 완료 표시(t.completed→t.done)가 누락되던 필드명 오류 수정 및 AST·TDZ·배포 정합성 전수 검증 완료"
+    ]
+  },
   {
     id: "patch-v12.72",
     version: "v12.72",

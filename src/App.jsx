@@ -586,7 +586,7 @@ const ScheduleFormModal = React.memo(({
             <button
               type="button"
               onClick={() => setDraft((p) => ({ ...p, members: ["수혁", "아리나", "시목", "시율"] }))}
-              className="px-2 py-0.5 rounded bg-stone-100 text-[11.5px] font-bold"
+              className="px-2 py-0.5 rounded bg-stone-100 text-[11.5px] font-bold whitespace-nowrap"
             >
               온가족 선택
             </button>
@@ -674,7 +674,7 @@ const ScheduleFormModal = React.memo(({
               <button
                 type="button"
                 onClick={() => setDraft((p) => ({ ...p, memo: "" }))}
-                className="text-[10.5px] font-bold text-stone-400 hover:text-stone-700"
+                className="text-[10.5px] font-bold text-stone-400 hover:text-stone-700 whitespace-nowrap"
               >
                 지우기
               </button>
@@ -3742,14 +3742,14 @@ function MainApp() {
           <button
             type="button"
             onClick={() => setIsEditorUnlockModalOpen(true)}
-            className="px-4 py-2 rounded-xl bg-stone-900 hover:bg-stone-800 text-white text-[13.5px] font-extrabold"
+            className="px-4 py-2 rounded-xl bg-stone-900 hover:bg-stone-800 text-white text-[13.5px] font-extrabold whitespace-nowrap"
           >
             🔑 로그인 / 권한 변경
           </button>
           <button
             type="button"
             onClick={() => setActiveTab("home")}
-            className="px-3.5 py-2 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-[13.5px] font-bold"
+            className="px-3.5 py-2 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-[13.5px] font-bold whitespace-nowrap"
           >
             🏠 홈으로
           </button>
@@ -9554,12 +9554,33 @@ ${validText}
         });
       }
     }
+    const dayActs = babyActivities.filter(
+      (a) => a.date === targetDate && targetIds.includes(a.childId || "시율")
+    );
+    if (dayActs.length > 0) {
+      const fCnt = dayActs.filter((a) => ["모유", "분유", "유축수유"].includes(a.type)).length;
+      const fMl = dayActs.filter((a) => a.type === "분유" || a.type === "유축수유").reduce((s, a) => s + (Number(a.amountMl) || 0), 0);
+      const bMin = dayActs.filter((a) => a.type === "모유").reduce((s, a) => s + (Number(a.durationMin) || 0), 0);
+      const dPee = dayActs.filter((a) => a.type === "기저귀" && String(a.subType).includes("소변")).length;
+      const dPoo = dayActs.filter((a) => a.type === "기저귀" && String(a.subType).includes("대변")).length;
+      const dCnt = dayActs.filter((a) => a.type === "기저귀").length;
+      const sMin = dayActs.filter((a) => a.type === "수면").reduce((s, a) => s + (Number(a.durationMin) || 0), 0);
+      const sTxt = sMin >= 60 ? `${Math.floor(sMin / 60)}시간 ${sMin % 60}분` : `${sMin}분`;
+      const feedPart = `${fMl > 0 ? `${fMl}ml` : ""}${fMl > 0 && bMin > 0 ? "+" : ""}${bMin > 0 ? `모유${bMin}분` : fMl === 0 ? "0분" : ""}`;
+      candidates.push({
+        key: "care_activity",
+        label: `수유 · 기저귀 · 수면 (${dayActs.length}건)`,
+        icon: "🍼",
+        text: `🍼 수유 ${fCnt}회(${feedPart}) · 기저귀 ${dCnt}회(소${dPee}·대${dPoo}) · 수면 ${sTxt}`,
+        selected: true
+      });
+    }
     if (dayMed.length > 0) {
       candidates.push({
         key: "medical",
         label: "진료 · 체온 · 투약 메모",
         icon: "🩺",
-        text: `🩺 메모: ${dayMed.map((n) => n.title + (n.note ? `(${n.note})` : "")).join(", ")}`,
+        text: `🩺 메모: ${dayMed.map((n) => `${n.title}${n.temp ? ` ${n.temp}°C` : ""}${n.memo ? `(${n.memo})` : ""}`).join(", ")}`,
         selected: true
       });
     }
@@ -9586,7 +9607,7 @@ ${validText}
         key: "todos",
         label: `할 일 (${dayTodos.length}건)`,
         icon: "✅",
-        text: `✅ 할 일: ${dayTodos.map((t) => `${t.completed ? "[완료] " : ""}${t.title}`).join(", ")}`,
+        text: `✅ 할 일: ${dayTodos.map((t) => `${t.done ? "[완료] " : ""}${t.title}`).join(", ")}`,
         selected: false
       });
     }
@@ -13189,7 +13210,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
               <button
                 type="button"
                 onClick={() => handleSendBackupToGmailOrDrive(false)}
-                className="px-2.5 py-1 rounded-xl bg-stone-900 text-white text-[12.5px] font-black"
+                className="px-2.5 py-1 rounded-xl bg-stone-900 text-white text-[12.5px] font-black whitespace-nowrap"
               >
                 1초 백업
               </button>
@@ -13695,7 +13716,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
           <button
             type="button"
             onClick={() => setIsEditorUnlockModalOpen(true)}
-            className="px-2 py-0.5 rounded-lg bg-amber-600 text-white text-[11.5px] font-extrabold shrink-0"
+            className="px-2 py-0.5 rounded-lg bg-amber-600 text-white text-[11.5px] font-extrabold shrink-0 whitespace-nowrap"
           >
             권한 변경
           </button>
@@ -14673,7 +14694,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                         syncHomeSettingsToCloud(null, DEFAULT_HOME_TIME_RANGES);
                         showToast("시간대 기준 시각을 기본값(05/11/20시)으로 되돌렸습니다.");
                       }}
-                      className="text-[11.5px] font-extrabold text-stone-500 underline"
+                      className="text-[11.5px] font-extrabold text-stone-500 underline whitespace-nowrap"
                     >
                       시각 초기화
                     </button>
@@ -15047,7 +15068,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                           document.getElementById(`weekly-day-${todayKey}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
                         }, 160);
                       }}
-                      className="px-2 py-0.5 rounded-lg bg-stone-900 text-white text-[11.5px] font-extrabold shrink-0"
+                      className="px-2 py-0.5 rounded-lg bg-stone-900 text-white text-[11.5px] font-extrabold shrink-0 whitespace-nowrap"
                     >
                       식단 ({morningRoutineLeft > 0 ? `루틴 ${morningRoutineLeft}` : "확인"})
                     </button>
@@ -15113,7 +15134,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                 <button
                   type="button"
                   onClick={() => setIsEditorUnlockModalOpen(true)}
-                  className="px-3 py-1.5 rounded-xl bg-stone-900 hover:bg-stone-800 text-white text-[12.5px] font-extrabold shrink-0"
+                  className="px-3 py-1.5 rounded-xl bg-stone-900 hover:bg-stone-800 text-white text-[12.5px] font-extrabold shrink-0 whitespace-nowrap"
                 >
                   🔑 로그인
                 </button>
@@ -15216,7 +15237,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                     setSelectedDate(nextStr);
                     setCurrentMonth(nextStr.slice(0, 7));
                   }}
-                  className="px-2 py-1 rounded-lg bg-stone-100 hover:bg-stone-200 text-[11.5px] font-extrabold text-stone-700"
+                  className="px-2 py-1 rounded-lg bg-stone-100 hover:bg-stone-200 text-[11.5px] font-extrabold text-stone-700 whitespace-nowrap"
                 >
                   &lt; 이전주
                 </button>
@@ -15241,7 +15262,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                       document.getElementById(`weekly-day-${today}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
                     }, 120);
                   }}
-                  className="px-2 py-1 rounded-lg bg-stone-900 text-white text-[11.5px] font-extrabold"
+                  className="px-2 py-1 rounded-lg bg-stone-900 text-white text-[11.5px] font-extrabold whitespace-nowrap"
                 >
                   오늘로
                 </button>
@@ -15254,7 +15275,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                     setSelectedDate(nextStr);
                     setCurrentMonth(nextStr.slice(0, 7));
                   }}
-                  className="px-2 py-1 rounded-lg bg-stone-100 hover:bg-stone-200 text-[11.5px] font-extrabold text-stone-700"
+                  className="px-2 py-1 rounded-lg bg-stone-100 hover:bg-stone-200 text-[11.5px] font-extrabold text-stone-700 whitespace-nowrap"
                 >
                   다음주 &gt;
                 </button>
@@ -15417,7 +15438,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                           });
                           setIsMealModalOpen(true);
                         }}
-                        className="px-2 py-0.5 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 text-[11.5px] font-extrabold"
+                        className="px-2 py-0.5 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 text-[11.5px] font-extrabold whitespace-nowrap"
                       >
                         + 식단 추가
                       </button>
@@ -15476,7 +15497,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                               <button
                                 type="button"
                                 onClick={openAddForSlot}
-                                className="px-1.5 py-0.5 rounded bg-stone-100 hover:bg-stone-200 text-stone-600 text-[11.5px] font-extrabold"
+                                className="px-1.5 py-0.5 rounded bg-stone-100 hover:bg-stone-200 text-stone-600 text-[11.5px] font-extrabold whitespace-nowrap"
                               >
                                 + 추가
                               </button>
@@ -15530,7 +15551,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                                             <button
                                               type="button"
                                               onClick={(e) => handleMarkPlannedMealRecorded(e, it)}
-                                              className="ml-1.5 px-1.5 py-0.5 rounded bg-[#5E7A65] text-white text-[10.5px] font-extrabold align-middle"
+                                              className="ml-1.5 px-1.5 py-0.5 rounded bg-[#5E7A65] text-white text-[10.5px] font-extrabold align-middle whitespace-nowrap"
                                             >
                                               ✓ 먹음
                                             </button>
@@ -16046,7 +16067,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                           <button
                             type="button"
                             onClick={() => { setMonthlySearchQuery(""); setMonthlySlotFilter("전체"); }}
-                            className="px-3 py-1 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-[11.5px] font-extrabold"
+                            className="px-3 py-1 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-[11.5px] font-extrabold whitespace-nowrap"
                           >
                             🔄 필터 초기화
                           </button>
@@ -16409,7 +16430,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                             <button
                               type="button"
                               onClick={() => { setExpenseSearchQuery(""); setExpenseCatFilter("전체"); }}
-                              className="px-2.5 py-1 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-[11.5px] font-extrabold"
+                              className="px-2.5 py-1 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-[11.5px] font-extrabold whitespace-nowrap"
                             >
                               🔄 필터 초기화
                             </button>
@@ -17328,7 +17349,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                     setScheduleSelectedDate(nextStr);
                     setScheduleMonth(nextStr.slice(0, 7));
                   }}
-                  className="px-2 py-0.5 rounded-lg bg-stone-100 hover:bg-stone-200 text-[11.5px] font-extrabold text-stone-700"
+                  className="px-2 py-0.5 rounded-lg bg-stone-100 hover:bg-stone-200 text-[11.5px] font-extrabold text-stone-700 whitespace-nowrap"
                 >
                   &lt; 이전주
                 </button>
@@ -17339,7 +17360,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                     setScheduleSelectedDate(today);
                     setScheduleMonth(today.slice(0, 7));
                   }}
-                  className="px-2 py-0.5 rounded-lg bg-indigo-50 text-indigo-700 text-[11.5px] font-extrabold"
+                  className="px-2 py-0.5 rounded-lg bg-indigo-50 text-indigo-700 text-[11.5px] font-extrabold whitespace-nowrap"
                 >
                   이번주
                 </button>
@@ -17352,7 +17373,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                     setScheduleSelectedDate(nextStr);
                     setScheduleMonth(nextStr.slice(0, 7));
                   }}
-                  className="px-2 py-0.5 rounded-lg bg-stone-100 hover:bg-stone-200 text-[11.5px] font-extrabold text-stone-700"
+                  className="px-2 py-0.5 rounded-lg bg-stone-100 hover:bg-stone-200 text-[11.5px] font-extrabold text-stone-700 whitespace-nowrap"
                 >
                   다음주 &gt;
                 </button>
@@ -17565,7 +17586,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                         persistSlots(DEFAULT_ROUTINE_SLOT_DEFS);
                         showToast("루틴 시간대를 기본값으로 초기화했습니다.");
                       }}
-                      className="text-[11.5px] font-extrabold text-indigo-700 underline shrink-0"
+                      className="text-[11.5px] font-extrabold text-indigo-700 underline shrink-0 whitespace-nowrap"
                     >
                       기본값 초기화
                     </button>
@@ -17659,7 +17680,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                                 recordActivity("루틴", "시간대 삭제", slot.label);
                                 showToast(`[${slot.label}] 시간대가 삭제되었습니다.`);
                               }}
-                              className="px-2 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 text-[11.5px] font-extrabold shrink-0"
+                              className="px-2 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 text-[11.5px] font-extrabold shrink-0 whitespace-nowrap"
                             >
                               삭제
                             </button>
@@ -17801,7 +17822,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                         recordActivity("루틴", "시간대 추가", `${lbl} (${newSlotTimeInput || "14:00"})`);
                         showToast(`⏰ [${lbl}] 시간대가 추가되었습니다!`);
                       }}
-                      className="px-2.5 py-1.5 rounded-lg bg-indigo-700 hover:bg-indigo-800 text-white text-[11.5px] font-extrabold"
+                      className="px-2.5 py-1.5 rounded-lg bg-indigo-700 hover:bg-indigo-800 text-white text-[11.5px] font-extrabold whitespace-nowrap"
                     >
                       + 추가
                     </button>
@@ -18349,7 +18370,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                       <button
                         type="button"
                         onClick={() => setTodoSearchQuery("")}
-                        className="px-2.5 py-1 rounded-xl bg-white hover:bg-stone-100 border border-stone-200 text-stone-700 text-[11.5px] font-extrabold"
+                        className="px-2.5 py-1 rounded-xl bg-white hover:bg-stone-100 border border-stone-200 text-stone-700 text-[11.5px] font-extrabold whitespace-nowrap"
                       >
                         🔄 검색 초기화
                       </button>
@@ -19691,7 +19712,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                       <button
                         type="button"
                         onClick={() => { setShoppingSearchQuery(""); setShoppingStatusFilter("all"); }}
-                        className="px-3 py-1 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-[11.5px] font-extrabold"
+                        className="px-3 py-1 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-[11.5px] font-extrabold whitespace-nowrap"
                       >
                         🔄 필터 초기화
                       </button>
@@ -19880,7 +19901,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                       <button
                         type="button"
                         onClick={() => { setNoticeSearchQuery(""); setNoticeHideDone(false); }}
-                        className="px-3 py-1 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-[11.5px] font-extrabold"
+                        className="px-3 py-1 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-[11.5px] font-extrabold whitespace-nowrap"
                       >
                         🔄 필터 초기화
                       </button>
@@ -20061,7 +20082,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
             <button
               type="button"
               onClick={() => setAiSubMode("plan3d")}
-              className={`py-2 px-3 rounded-xl text-[13.5px] font-extrabold transition ${
+              className={`whitespace-nowrap py-2 px-3 rounded-xl text-[13.5px] font-extrabold transition ${
                 aiSubMode === "plan3d"
                   ? "bg-stone-900 text-white shadow-sm"
                   : "text-stone-600 hover:text-stone-900"
@@ -20149,7 +20170,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                             : { ...prev, [planAddDateInput]: ["아침", "저녁"] }
                         );
                       }}
-                      className="px-3 py-1.5 rounded-xl bg-stone-800 text-white text-[13.5px] font-extrabold shrink-0"
+                      className="px-3 py-1.5 rounded-xl bg-stone-800 text-white text-[13.5px] font-extrabold shrink-0 whitespace-nowrap"
                     >
                       + 날짜 추가
                     </button>
@@ -20460,7 +20481,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                             <button
                               type="button"
                               onClick={() => setPlanConflictMode("skip")}
-                              className={`px-2 py-0.5 rounded-md border ${
+                              className={`whitespace-nowrap px-2 py-0.5 rounded-md border ${
                                 planConflictMode === "skip"
                                   ? "bg-stone-900 text-white border-stone-900"
                                   : "bg-white text-stone-600 border-stone-200"
@@ -20471,7 +20492,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                             <button
                               type="button"
                               onClick={() => setPlanConflictMode("append")}
-                              className={`px-2 py-0.5 rounded-md border ${
+                              className={`whitespace-nowrap px-2 py-0.5 rounded-md border ${
                                 planConflictMode === "append"
                                   ? "bg-stone-900 text-white border-stone-900"
                                   : "bg-white text-stone-600 border-stone-200"
@@ -20701,7 +20722,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                     <button
                       type="button"
                       onClick={() => handleAddMissingIngredientsToShopping(rec.usedIngredients)}
-                      className="py-2 px-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-[12.5px] font-extrabold"
+                      className="py-2 px-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-[12.5px] font-extrabold whitespace-nowrap"
                     >
                       🛒 부족재료 담기
                     </button>
@@ -21671,7 +21692,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                       <button
                         type="button"
                         onClick={() => setPageSearchQuery("")}
-                        className="text-stone-400 hover:text-stone-700"
+                        className="text-stone-400 hover:text-stone-700 whitespace-nowrap"
                       >
                         지우기
                       </button>
@@ -21786,14 +21807,14 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                               <button
                                 type="button"
                                 onClick={handleCreateSamplePackingPages}
-                                className="px-3.5 py-2 rounded-xl bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300 text-[12.5px] font-extrabold"
+                                className="px-3.5 py-2 rounded-xl bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300 text-[12.5px] font-extrabold whitespace-nowrap"
                               >
                                 ✨ 여행준비물 샘플 만들기
                               </button>
                               <button
                                 type="button"
                                 onClick={() => openCreatePageModal(null)}
-                                className="px-3.5 py-2 rounded-xl bg-stone-900 hover:bg-stone-800 text-white text-[12.5px] font-extrabold"
+                                className="px-3.5 py-2 rounded-xl bg-stone-900 hover:bg-stone-800 text-white text-[12.5px] font-extrabold whitespace-nowrap"
                               >
                                 + 새 페이지 만들기
                               </button>
@@ -21957,7 +21978,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                                 if (nextT) savePageToCloud({ ...currentPage, title: nextT, updatedAtMs: Date.now() });
                                 setIsEditingPageTitle(false);
                               }}
-                              className="px-2.5 py-1.5 rounded-xl bg-stone-900 text-white text-[12px] font-extrabold shrink-0"
+                              className="px-2.5 py-1.5 rounded-xl bg-stone-900 text-white text-[12px] font-extrabold shrink-0 whitespace-nowrap"
                             >
                               저장
                             </button>
@@ -22434,7 +22455,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                                     });
                                     await copyTextSafe(mdLines.join("\n"), "📋 이 마크다운 표를 복사했습니다!");
                                   }}
-                                  className="text-[11px] font-bold text-stone-400 hover:text-stone-700"
+                                  className="text-[11px] font-bold text-stone-400 hover:text-stone-700 whitespace-nowrap"
                                 >
                                   📋 복사
                                 </button>
@@ -22449,7 +22470,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                                       setPagePasteMode("replace");
                                       setIsPagePasteModalOpen(true);
                                     }}
-                                    className="text-[11px] font-bold text-stone-400 hover:text-stone-700"
+                                    className="text-[11px] font-bold text-stone-400 hover:text-stone-700 whitespace-nowrap"
                                   >
                                     ✏️ 표 수정
                                   </button>
@@ -22461,7 +22482,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                                         handleDeletePageBlock(currentPage, blk.id);
                                       }
                                     }}
-                                    className="text-[11px] font-bold text-stone-400 hover:text-rose-600"
+                                    className="text-[11px] font-bold text-stone-400 hover:text-rose-600 whitespace-nowrap"
                                   >
                                     삭제
                                   </button>
@@ -22555,7 +22576,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                                             rows: [...(t.rows || []), newRow]
                                           }));
                                         }}
-                                        className="px-2.5 py-1 rounded-lg bg-[#2383E2] hover:bg-[#1a73cc] text-white text-[12px] font-extrabold flex items-center gap-1 shadow-xs"
+                                        className="px-2.5 py-1 rounded-lg bg-[#2383E2] hover:bg-[#1a73cc] text-white text-[12px] font-extrabold flex items-center gap-1 shadow-xs whitespace-nowrap"
                                         title="새 행 추가"
                                       >
                                         <Plus className="w-3.5 h-3.5" /> 행 추가
@@ -22691,7 +22712,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                                                   setNewTableColName("");
                                                   setAddingColBlockId(null);
                                                 }}
-                                                className="px-1.5 py-0.5 rounded bg-stone-900 text-white text-[10.5px] font-extrabold"
+                                                className="px-1.5 py-0.5 rounded bg-stone-900 text-white text-[10.5px] font-extrabold whitespace-nowrap"
                                               >
                                                 추가
                                               </button>
@@ -22703,7 +22724,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                                                 setAddingColBlockId(blk.id);
                                                 setNewTableColName("");
                                               }}
-                                              className="px-2 py-0.5 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-600 text-[11px] font-extrabold flex items-center gap-0.5"
+                                              className="px-2 py-0.5 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-600 text-[11px] font-extrabold flex items-center gap-0.5 whitespace-nowrap"
                                               title="우측에 새 열 추가"
                                             >
                                               <Plus className="w-3 h-3" /> 열 추가
@@ -23068,7 +23089,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                 <button
                   type="button"
                   onClick={() => requireEditorAccess()}
-                  className="px-2.5 py-1 rounded-lg bg-amber-600 text-white font-extrabold shrink-0"
+                  className="px-2.5 py-1 rounded-lg bg-amber-600 text-white font-extrabold shrink-0 whitespace-nowrap"
                 >
                   잠금 해제
                 </button>
@@ -23190,7 +23211,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                     setRecipeCatFilter("전체");
                     setRecipeDiffFilter("전체");
                   }}
-                  className="px-3 py-1.5 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-[12px] font-extrabold"
+                  className="px-3 py-1.5 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-[12px] font-extrabold whitespace-nowrap"
                 >
                   🔄 필터 초기화
                 </button>
@@ -24937,7 +24958,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                             setPendingDiaryPhotoFile(null);
                             setDiaryForm({ date: getTodayStr(), mood: "😊 행복", title: "", content: "", contentHtml: "", photoUrl: "", photos: [], childIds: [activeChild.id], textStyle: { ...DEFAULT_DIARY_TEXT_STYLE } }); diarySavedRangeRef.current = null; setHasDiarySelection(false); setDiaryEditorSyncTick((t) => t + 1);
                           }}
-                          className="text-[11.5px] font-extrabold text-stone-500 underline"
+                          className="text-[11.5px] font-extrabold text-stone-500 underline whitespace-nowrap"
                         >
                           새 일기로
                         </button>
@@ -25515,7 +25536,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                                   setDiaryPhotoOnlyFilter(false);
                                   setDiaryChildFilter("active");
                                 }}
-                                className="px-3 py-1.5 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-[12px] font-extrabold"
+                                className="px-3 py-1.5 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-[12px] font-extrabold whitespace-nowrap"
                               >
                                 🔄 필터 초기화
                               </button>
@@ -26383,7 +26404,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                           <button
                             type="button"
                             onClick={() => setEditingDreamLinkId(null)}
-                            className="px-3 py-1 rounded-lg bg-stone-100 text-stone-600 text-[11.5px] font-extrabold"
+                            className="px-3 py-1 rounded-lg bg-stone-100 text-stone-600 text-[11.5px] font-extrabold whitespace-nowrap"
                           >
                             취소
                           </button>
@@ -26402,7 +26423,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                               saveBabyDreamLinksToCloud(nextList, `🌙 '${cleanLabel}' 링크를 수정했습니다!`);
                               setEditingDreamLinkId(null);
                             }}
-                            className="px-3 py-1 rounded-lg bg-indigo-900 text-white text-[11.5px] font-extrabold"
+                            className="px-3 py-1 rounded-lg bg-indigo-900 text-white text-[11.5px] font-extrabold whitespace-nowrap"
                           >
                             저장
                           </button>
@@ -27152,7 +27173,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                       <button
                         type="button"
                         onClick={() => handleCopyFamilyEventToPrivate(activeDetail)}
-                        className="px-2.5 py-1.5 rounded-lg border border-stone-300 bg-white hover:bg-stone-100 text-stone-800 text-[11.5px] font-extrabold transition"
+                        className="px-2.5 py-1.5 rounded-lg border border-stone-300 bg-white hover:bg-stone-100 text-stone-800 text-[11.5px] font-extrabold transition whitespace-nowrap"
                       >
                         🔒 내 다이어리로 복사
                       </button>
@@ -27230,7 +27251,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                       }
                       setCalDayPopupItem(null);
                     }}
-                    className="py-2 rounded-md bg-[#707070] hover:bg-rose-600 text-white text-[12.5px] font-bold transition"
+                    className="py-2 rounded-md bg-[#707070] hover:bg-rose-600 text-white text-[12.5px] font-bold transition whitespace-nowrap"
                   >
                     삭제
                   </button>
@@ -27258,7 +27279,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                       const copyBody = `[${activeDetail.date}${activeDetail.time ? ` ${activeDetail.time}` : ""}] ${activeDetail.title}${activeDetail.memo ? `\n${activeDetail.memo}` : ""}`;
                       copyTextSafe(copyBody, "📋 일정 내용을 복사했습니다.");
                     }}
-                    className="py-2 rounded-md bg-[#707070] hover:bg-[#828282] text-white text-[12.5px] font-bold transition"
+                    className="py-2 rounded-md bg-[#707070] hover:bg-[#828282] text-white text-[12.5px] font-bold transition whitespace-nowrap"
                   >
                     복사
                   </button>
@@ -27286,7 +27307,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                         openPrivateCalModal(target.date, target);
                       }
                     }}
-                    className="py-2 rounded-md bg-stone-200 hover:bg-white text-stone-900 text-[12.5px] font-black transition"
+                    className="py-2 rounded-md bg-stone-200 hover:bg-white text-stone-900 text-[12.5px] font-black transition whitespace-nowrap"
                   >
                     편집
                   </button>
@@ -27627,7 +27648,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                     url.searchParams.set("_v", String(Date.now()));
                     window.location.replace(url.toString());
                   }}
-                  className="px-2.5 py-1 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-[11.5px] font-extrabold shrink-0"
+                  className="px-2.5 py-1 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-[11.5px] font-extrabold shrink-0 whitespace-nowrap"
                 >
                   🔄 캐시 비우고 새로고침
                 </button>
@@ -27922,7 +27943,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                   <button
                     type="button"
                     onClick={() => setNewRoutineScheduledTime("")}
-                    className="text-[11.5px] font-extrabold text-stone-400 hover:text-stone-700"
+                    className="text-[11.5px] font-extrabold text-stone-400 hover:text-stone-700 whitespace-nowrap"
                   >
                     지우기
                   </button>
@@ -28254,7 +28275,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                       }
                     ]);
                   }}
-                  className="px-2.5 py-1 rounded-lg bg-stone-100 hover:bg-stone-200 text-[12.5px] font-extrabold"
+                  className="px-2.5 py-1 rounded-lg bg-stone-100 hover:bg-stone-200 text-[12.5px] font-extrabold whitespace-nowrap"
                 >
                   + 날짜 행 직접 추가
                 </button>
@@ -28536,7 +28557,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                                 }
                               ])
                             }
-                            className="px-2 py-1 rounded-lg bg-white border border-stone-200 text-[12.5px] font-extrabold text-stone-700"
+                            className="px-2 py-1 rounded-lg bg-white border border-stone-200 text-[12.5px] font-extrabold text-stone-700 whitespace-nowrap"
                           >
                             + 추가
                           </button>
@@ -28545,7 +28566,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                               type="button"
                               onClick={() => runReceiptOcrWithImagePart(lastReceiptImagePart)}
                               disabled={isReceiptScanning}
-                              className="px-2 py-1 rounded-lg bg-amber-100 border border-amber-300 text-[12.5px] font-extrabold text-amber-900"
+                              className="px-2 py-1 rounded-lg bg-amber-100 border border-amber-300 text-[12.5px] font-extrabold text-amber-900 whitespace-nowrap"
                             >
                               🔄 재스캔
                             </button>
@@ -28759,7 +28780,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                 <button
                   type="button"
                   onClick={handleSaveMeal}
-                  className="px-3 py-1.5 rounded-xl bg-stone-900 text-white text-[13.5px] font-extrabold"
+                  className="px-3 py-1.5 rounded-xl bg-stone-900 text-white text-[13.5px] font-extrabold whitespace-nowrap"
                 >
                   💾 저장
                 </button>
@@ -28851,7 +28872,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                   <button
                     type="button"
                     onClick={() => handleMoveMealByDays(editingMeal, -1)}
-                    className="px-2 py-1.5 rounded-xl bg-stone-100 hover:bg-stone-200 text-[11.5px] font-extrabold text-stone-700"
+                    className="px-2 py-1.5 rounded-xl bg-stone-100 hover:bg-stone-200 text-[11.5px] font-extrabold text-stone-700 whitespace-nowrap"
                     title="하루 전으로 이동"
                   >
                     ◀ -1일
@@ -28859,7 +28880,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                   <button
                     type="button"
                     onClick={() => handleMoveMealByDays(editingMeal, 1)}
-                    className="px-2 py-1.5 rounded-xl bg-stone-100 hover:bg-stone-200 text-[11.5px] font-extrabold text-stone-700"
+                    className="px-2 py-1.5 rounded-xl bg-stone-100 hover:bg-stone-200 text-[11.5px] font-extrabold text-stone-700 whitespace-nowrap"
                     title="다음 날로 이동"
                   >
                     +1일 ▶
@@ -28867,7 +28888,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                   <button
                     type="button"
                     onClick={() => handleCopyMealToDate(editingMeal, getTodayStr())}
-                    className="px-2 py-1.5 rounded-xl bg-[#EEF3EE] text-[#35503C] border border-[#C9D8CC] text-[11.5px] font-extrabold"
+                    className="px-2 py-1.5 rounded-xl bg-[#EEF3EE] text-[#35503C] border border-[#C9D8CC] text-[11.5px] font-extrabold whitespace-nowrap"
                     title="오늘 날짜로 복사"
                   >
                     📋 오늘복사
@@ -28886,21 +28907,21 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                     onClick={() =>
                       setMealForm({ ...mealForm, members: ["수혁", "아리나", "시목", "시율"] })
                     }
-                    className="px-2 py-0.5 rounded bg-stone-100 text-[11.5px] font-bold"
+                    className="px-2 py-0.5 rounded bg-stone-100 text-[11.5px] font-bold whitespace-nowrap"
                   >
                     온가족
                   </button>
                   <button
                     type="button"
                     onClick={() => setMealForm({ ...mealForm, members: ["수혁", "아리나"] })}
-                    className="px-2 py-0.5 rounded bg-stone-100 text-[11.5px] font-bold"
+                    className="px-2 py-0.5 rounded bg-stone-100 text-[11.5px] font-bold whitespace-nowrap"
                   >
                     어른
                   </button>
                   <button
                     type="button"
                     onClick={() => setMealForm({ ...mealForm, members: ["시목", "시율"] })}
-                    className="px-2 py-0.5 rounded bg-stone-100 text-[11.5px] font-bold"
+                    className="px-2 py-0.5 rounded bg-stone-100 text-[11.5px] font-bold whitespace-nowrap"
                   >
                     아이
                   </button>
@@ -28950,7 +28971,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                       }
                       showToast("⭐ 자주 먹는 조합에 저장했습니다!");
                     }}
-                    className="text-[12.5px] font-extrabold text-amber-700 hover:text-amber-800"
+                    className="text-[12.5px] font-extrabold text-amber-700 hover:text-amber-800 whitespace-nowrap"
                   >
                     ⭐ 조합 즐겨찾기 저장
                   </button>
@@ -28980,7 +29001,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                     appendMenuChipToForm(mealChipInput);
                     setMealChipInput("");
                   }}
-                  className="px-3 py-2 rounded-xl bg-stone-900 text-white text-[13.5px] font-extrabold shrink-0"
+                  className="px-3 py-2 rounded-xl bg-stone-900 text-white text-[13.5px] font-extrabold shrink-0 whitespace-nowrap"
                 >
                   + 추가
                 </button>
@@ -29790,7 +29811,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
               <button
                 type="button"
                 onClick={() => setIsHeroPhotoModalOpen(false)}
-                className="py-2.5 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-[13px] font-extrabold"
+                className="py-2.5 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-[13px] font-extrabold whitespace-nowrap"
               >
                 취소
               </button>
@@ -29817,7 +29838,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                   setIsHeroPhotoModalOpen(false);
                   showToast("📷 홈 가족사진이 저장되었습니다!");
                 }}
-                className="py-2.5 rounded-xl bg-[#35503C] hover:bg-[#2a4030] text-white text-[13px] font-extrabold"
+                className="py-2.5 rounded-xl bg-[#35503C] hover:bg-[#2a4030] text-white text-[13px] font-extrabold whitespace-nowrap"
               >
                 💾 저장하기
               </button>
@@ -29952,7 +29973,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                     setIsSettingsOpen(false);
                     setIsEditorUnlockModalOpen(true);
                   }}
-                  className="px-3 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-[13.5px] font-extrabold"
+                  className="px-3 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-[13.5px] font-extrabold whitespace-nowrap"
                 >
                   🔑 관리자 로그인
                 </button>
@@ -29979,7 +30000,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                       });
                       showToast("권한 및 비밀번호 설정을 기본값으로 복원했습니다.");
                     }}
-                    className="text-[11.5px] font-extrabold text-sky-700 underline"
+                    className="text-[11.5px] font-extrabold text-sky-700 underline whitespace-nowrap"
                   >
                     기본값 복원
                   </button>
@@ -30015,7 +30036,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                           await saveAccessConfigToCloud({ suhyeokCode: nextS, adminCode: nextS });
                           showToast(`👑 수혁 관리자 비밀번호가 [${nextS}]로 변경되었습니다!`);
                         }}
-                        className="px-2.5 py-1 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-[12.5px] font-extrabold shrink-0"
+                        className="px-2.5 py-1 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-[12.5px] font-extrabold shrink-0 whitespace-nowrap"
                       >
                         저장
                       </button>
@@ -30051,7 +30072,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                           await saveAccessConfigToCloud({ arinaCode: nextAr });
                           showToast(`👑 아리나 관리자 비밀번호가 [${nextAr}]로 변경되었습니다!`);
                         }}
-                        className="px-2.5 py-1 rounded-lg bg-pink-600 hover:bg-pink-700 text-white text-[12.5px] font-extrabold shrink-0"
+                        className="px-2.5 py-1 rounded-lg bg-pink-600 hover:bg-pink-700 text-white text-[12.5px] font-extrabold shrink-0 whitespace-nowrap"
                       >
                         저장
                       </button>
@@ -30092,7 +30113,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                           await saveAccessConfigToCloud({ helperCode: nextC });
                           showToast(`🌿 육아지원군 비밀번호가 [${nextC}]로 변경되었습니다!`);
                         }}
-                        className="px-2.5 py-1 rounded-lg bg-sky-700 hover:bg-sky-800 text-white text-[12.5px] font-extrabold shrink-0"
+                        className="px-2.5 py-1 rounded-lg bg-sky-700 hover:bg-sky-800 text-white text-[12.5px] font-extrabold shrink-0 whitespace-nowrap"
                       >
                         저장
                       </button>
@@ -30183,7 +30204,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                       const url = `${window.location.origin}/?invite=${suhyeokCode}`;
                       await copyTextSafe(url, "🔗 수혁 관리자 접속 링크 복사 완료!");
                     }}
-                    className="py-1.5 rounded-xl bg-white hover:bg-emerald-50 text-emerald-800 border border-emerald-200 text-[11px] font-extrabold"
+                    className="py-1.5 rounded-xl bg-white hover:bg-emerald-50 text-emerald-800 border border-emerald-200 text-[11px] font-extrabold whitespace-nowrap"
                   >
                     🔗 수혁 링크
                   </button>
@@ -30193,7 +30214,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                       const url = `${window.location.origin}/?invite=${arinaCode}`;
                       await copyTextSafe(url, "🔗 아리나 관리자 접속 링크 복사 완료!");
                     }}
-                    className="py-1.5 rounded-xl bg-white hover:bg-pink-50 text-pink-800 border border-pink-200 text-[11px] font-extrabold"
+                    className="py-1.5 rounded-xl bg-white hover:bg-pink-50 text-pink-800 border border-pink-200 text-[11px] font-extrabold whitespace-nowrap"
                   >
                     🔗 아리나 링크
                   </button>
@@ -30203,7 +30224,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                       const url = `${window.location.origin}/?invite=${helperCode}`;
                       await copyTextSafe(url, "🔗 육아지원군 링크 복사 완료!");
                     }}
-                    className="py-1.5 rounded-xl bg-white hover:bg-sky-100 text-sky-800 border border-sky-200 text-[11px] font-extrabold"
+                    className="py-1.5 rounded-xl bg-white hover:bg-sky-100 text-sky-800 border border-sky-200 text-[11px] font-extrabold whitespace-nowrap"
                   >
                     🔗 지원군 링크
                   </button>
@@ -30306,14 +30327,14 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                     handleSaveApiKey(tempKeyInput, tempOpenaiKeyInput, aiProvider);
                     setAiDiagStatus(`✅ 설정이 저장되었습니다! (엔진: ${aiProvider}, OpenAI: ${tempOpenaiKeyInput ? "입력됨" : "없음"}, Gemini: ${tempKeyInput ? "입력됨" : "없음"})`);
                   }}
-                  className="py-2 rounded-xl bg-stone-800 text-white text-[13.5px] font-extrabold"
+                  className="py-2 rounded-xl bg-stone-800 text-white text-[13.5px] font-extrabold whitespace-nowrap"
                 >
                   AI 설정 저장
                 </button>
                 <button
                   type="button"
                   onClick={handleRunAiDiagnostic}
-                  className="py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-[13.5px] font-extrabold"
+                  className="py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-[13.5px] font-extrabold whitespace-nowrap"
                 >
                   AI 연결 자가진단
                 </button>
@@ -30330,7 +30351,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                   <button
                     type="button"
                     onClick={() => setAiCallLogs([])}
-                    className="text-[11.5px] font-bold text-stone-400 hover:text-stone-700"
+                    className="text-[11.5px] font-bold text-stone-400 hover:text-stone-700 whitespace-nowrap"
                   >
                     지우기
                   </button>
@@ -30364,7 +30385,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                 <button
                   type="button"
                   onClick={runCoreLogicSelfTests}
-                  className="px-2.5 py-1 rounded-lg bg-stone-900 text-white text-[12.5px] font-extrabold shrink-0"
+                  className="px-2.5 py-1 rounded-lg bg-stone-900 text-white text-[12.5px] font-extrabold shrink-0 whitespace-nowrap"
                 >
                   테스트 실행
                 </button>
@@ -30400,7 +30421,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                         } catch (e) {}
                         showToast("삭제 로그가 비워졌습니다.");
                       }}
-                      className="text-[12.5px] font-bold text-stone-400 hover:text-stone-700"
+                      className="text-[12.5px] font-bold text-stone-400 hover:text-stone-700 whitespace-nowrap"
                     >
                       비우기
                     </button>
@@ -30497,14 +30518,14 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                 try { localStorage.setItem("kim_last_seen_activity_ms_v1", String(nowMs)); } catch (e) {}
                 setLiveActivityPopup(null);
               }}
-              className="px-2.5 py-1 rounded-lg bg-stone-100 text-stone-700 text-[11.5px] font-extrabold"
+              className="px-2.5 py-1 rounded-lg bg-stone-100 text-stone-700 text-[11.5px] font-extrabold whitespace-nowrap"
             >
               확인
             </button>
             <button
               type="button"
               onClick={() => handleNavigateFromActivity(liveActivityPopup)}
-              className="px-2.5 py-1 rounded-lg bg-[#5E7A65] text-white text-[11.5px] font-extrabold"
+              className="px-2.5 py-1 rounded-lg bg-[#5E7A65] text-white text-[11.5px] font-extrabold whitespace-nowrap"
             >
               바로 보기
             </button>
@@ -30517,7 +30538,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                 setLiveActivityPopup(null);
                 setIsActivityModalOpen(true);
               }}
-              className="px-2.5 py-1 rounded-lg bg-stone-800 text-white text-[11.5px] font-extrabold"
+              className="px-2.5 py-1 rounded-lg bg-stone-800 text-white text-[11.5px] font-extrabold whitespace-nowrap"
             >
               내역
             </button>
@@ -30728,7 +30749,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                 <button
                   type="button"
                   onClick={fetchSeoulJungGuWeather}
-                  className="px-2 py-1 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 text-[11.5px] font-extrabold"
+                  className="px-2 py-1 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 text-[11.5px] font-extrabold whitespace-nowrap"
                 >
                   ↻ 갱신
                 </button>
@@ -30970,7 +30991,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                 <button
                   type="button"
                   onClick={handleSaveActivityModal}
-                  className="px-3 py-1 rounded-xl bg-white/20 hover:bg-white/30 text-[13.5px] font-black"
+                  className="px-3 py-1 rounded-xl bg-white/20 hover:bg-white/30 text-[13.5px] font-black whitespace-nowrap"
                 >
                   저장
                 </button>
@@ -31359,9 +31380,9 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                 <X className="w-5 h-5 text-stone-400" />
               </button>
             </div>
-            <div className="flex items-center justify-between text-[11.5px] font-extrabold">
-              <span className="text-stone-500">원하는 항목만 체크해서 일기에 추가하세요</span>
-              <div className="flex items-center gap-1.5">
+            <div className="flex items-center justify-between gap-2 text-[11.5px] font-extrabold">
+              <span className="text-stone-500 whitespace-nowrap truncate">넣을 항목 체크</span>
+              <div className="flex items-center gap-1.5 shrink-0">
                 <button
                   type="button"
                   onClick={() =>
@@ -31370,7 +31391,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                       items: prev.items.map((it) => ({ ...it, selected: true }))
                     }))
                   }
-                  className="text-[#35503C] hover:underline"
+                  className="text-[#35503C] hover:underline whitespace-nowrap shrink-0"
                 >
                   전체선택
                 </button>
@@ -31383,7 +31404,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                       items: prev.items.map((it) => ({ ...it, selected: false }))
                     }))
                   }
-                  className="text-stone-500 hover:underline"
+                  className="text-stone-500 hover:underline whitespace-nowrap shrink-0"
                 >
                   전체해제
                 </button>
@@ -31598,7 +31619,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                         }
                       } catch (e) {}
                     }}
-                    className="px-3 py-1.5 rounded-xl bg-stone-900 text-white text-[13.5px] font-extrabold"
+                    className="px-3 py-1.5 rounded-xl bg-stone-900 text-white text-[13.5px] font-extrabold whitespace-nowrap"
                   >
                     📤 공유
                   </button>
@@ -32078,7 +32099,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                                 e.stopPropagation();
                                 handleNavigateFromActivity(act);
                               }}
-                              className="px-1.5 py-0.5 rounded bg-white border border-stone-200 text-[10.5px] font-extrabold text-sky-700 hover:bg-sky-50"
+                              className="px-1.5 py-0.5 rounded bg-white border border-stone-200 text-[10.5px] font-extrabold text-sky-700 hover:bg-sky-50 whitespace-nowrap"
                             >
                               이동 →
                             </button>
@@ -32145,7 +32166,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                               <button
                                 type="button"
                                 onClick={() => applyLoginCode(switchAdminPinInput, otherAdmin)}
-                                className="px-3 py-1.5 rounded-xl bg-stone-900 hover:bg-stone-800 text-white text-[12px] font-extrabold shrink-0"
+                                className="px-3 py-1.5 rounded-xl bg-stone-900 hover:bg-stone-800 text-white text-[12px] font-extrabold shrink-0 whitespace-nowrap"
                               >
                                 전환
                               </button>
@@ -32213,7 +32234,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                             try { localStorage.setItem("family_actor_name_v1", custom); } catch (e) {}
                             showToast(`수정자 이름이 [${custom}]로 설정되었습니다.`);
                           }}
-                          className="px-2.5 py-1 rounded-lg bg-stone-800 text-white text-[11.5px] font-extrabold shrink-0"
+                          className="px-2.5 py-1 rounded-lg bg-stone-800 text-white text-[11.5px] font-extrabold shrink-0 whitespace-nowrap"
                         >
                           적용
                         </button>
@@ -32437,7 +32458,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                   onClick={async () => {
                     await copyTextSafe(exportText, "📋 전체 재고 텍스트가 복사되었습니다!");
                   }}
-                  className="py-2.5 rounded-xl bg-stone-900 text-white text-[13.5px] font-extrabold"
+                  className="py-2.5 rounded-xl bg-stone-900 text-white text-[13.5px] font-extrabold whitespace-nowrap"
                 >
                   📋 복사하기
                 </button>
@@ -32455,7 +32476,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                     URL.revokeObjectURL(url);
                     showToast("📄 TXT 파일이 다운로드되었습니다!");
                   }}
-                  className="py-2.5 rounded-xl bg-amber-600 text-white text-[13.5px] font-extrabold"
+                  className="py-2.5 rounded-xl bg-amber-600 text-white text-[13.5px] font-extrabold whitespace-nowrap"
                 >
                   📄 TXT 저장
                 </button>
@@ -32482,7 +32503,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                     URL.revokeObjectURL(url);
                     showToast("공유 기능이 제한되어 TXT 파일로 저장했습니다.");
                   }}
-                  className="py-2.5 rounded-xl bg-emerald-600 text-white text-[13.5px] font-extrabold"
+                  className="py-2.5 rounded-xl bg-emerald-600 text-white text-[13.5px] font-extrabold whitespace-nowrap"
                 >
                   📤 공유하기
                 </button>
@@ -32508,7 +32529,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                 <button
                   type="button"
                   onClick={handleSaveRecipe}
-                  className="px-3 py-1.5 rounded-xl bg-stone-900 text-white text-[13.5px] font-extrabold"
+                  className="px-3 py-1.5 rounded-xl bg-stone-900 text-white text-[13.5px] font-extrabold whitespace-nowrap"
                 >
                   💾 저장
                 </button>
@@ -32563,7 +32584,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                   <button
                     type="button"
                     onClick={() => openCropModalWithUrl(recipeForm.photoDataUrl)}
-                    className="px-3 py-2 rounded-xl bg-rose-50 hover:bg-rose-100 border border-rose-200 text-[13.5px] font-extrabold text-rose-700 shrink-0"
+                    className="px-3 py-2 rounded-xl bg-rose-50 hover:bg-rose-100 border border-rose-200 text-[13.5px] font-extrabold text-rose-700 shrink-0 whitespace-nowrap"
                   >
                     ✂️ 사진 자르기
                   </button>
@@ -32612,7 +32633,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                     appendRecipeIngredientChip(recipeIngredientInput);
                     setRecipeIngredientInput("");
                   }}
-                  className="px-3 py-2 rounded-xl bg-stone-900 text-white text-[13.5px] font-extrabold shrink-0"
+                  className="px-3 py-2 rounded-xl bg-stone-900 text-white text-[13.5px] font-extrabold shrink-0 whitespace-nowrap"
                 >
                   + 추가
                 </button>
@@ -32843,7 +32864,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                   setCropAspect("free");
                   setCropRect({ x: 0, y: 0, w: 1, h: 1 });
                 }}
-                className="px-2.5 py-1 rounded-full text-[12.5px] font-bold bg-amber-50 text-amber-800 border border-amber-200 ml-auto"
+                className="px-2.5 py-1 rounded-full text-[12.5px] font-bold bg-amber-50 text-amber-800 border border-amber-200 ml-auto whitespace-nowrap"
               >
                 전체 선택
               </button>
@@ -32904,14 +32925,14 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                   setRecipeForm((prev) => ({ ...prev, photoDataUrl: safeUrl || cropModal.srcUrl }));
                   setCropModal(null);
                 }}
-                className="py-2.5 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-[13.5px] font-extrabold"
+                className="py-2.5 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-[13.5px] font-extrabold whitespace-nowrap"
               >
                 원본 그대로 사용
               </button>
               <button
                 type="button"
                 onClick={handleApplyCrop}
-                className="py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-[13.5px] font-extrabold"
+                className="py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-[13.5px] font-extrabold whitespace-nowrap"
               >
                 ✂️ 이 영역 잘라서 적용
               </button>
@@ -33034,7 +33055,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                   setQuickFridgeItem(null);
                   handleHalfEatFridgeItem(target);
                 }}
-                className="py-2.5 rounded-xl bg-[#EEF3EE] text-[#35503C] border border-[#C9D8CC] text-[13.5px] font-extrabold"
+                className="py-2.5 rounded-xl bg-[#EEF3EE] text-[#35503C] border border-[#C9D8CC] text-[13.5px] font-extrabold whitespace-nowrap"
               >
                 🌗 반만먹음
               </button>
@@ -33045,7 +33066,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                   setQuickFridgeItem(null);
                   handleConsumeFridgeItem(target, false);
                 }}
-                className="py-2.5 rounded-xl bg-emerald-600 text-white text-[13.5px] font-extrabold"
+                className="py-2.5 rounded-xl bg-emerald-600 text-white text-[13.5px] font-extrabold whitespace-nowrap"
               >
                 ✓ 다 먹음
               </button>
@@ -33056,7 +33077,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                   setQuickFridgeItem(null);
                   handleConsumeFridgeItem(target, true);
                 }}
-                className="py-2.5 rounded-xl bg-amber-100 text-amber-900 text-[13.5px] font-extrabold"
+                className="py-2.5 rounded-xl bg-amber-100 text-amber-900 text-[13.5px] font-extrabold whitespace-nowrap"
               >
                 + 장보기
               </button>
@@ -33067,7 +33088,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                   setQuickFridgeItem(null);
                   handleWasteFridgeItem(target);
                 }}
-                className="py-2.5 rounded-xl bg-rose-100 text-rose-800 text-[13.5px] font-extrabold"
+                className="py-2.5 rounded-xl bg-rose-100 text-rose-800 text-[13.5px] font-extrabold whitespace-nowrap"
               >
                 🗑️ 폐기
               </button>
@@ -33080,7 +33101,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                   setQuickFridgeItem(null);
                   handleFridgeToRecipeSearch(targetName);
                 }}
-                className="py-2 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-800 text-[12px] font-extrabold"
+                className="py-2 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-800 text-[12px] font-extrabold whitespace-nowrap"
               >
                 📖 레시피 찾기
               </button>
@@ -33092,7 +33113,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                     setQuickFridgeItem(null);
                     handleExpiringToAiChef([targetName]);
                   }}
-                  className="py-2 rounded-xl bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-900 text-[12px] font-extrabold"
+                  className="py-2 rounded-xl bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-900 text-[12px] font-extrabold whitespace-nowrap"
                 >
                   ✨ AI 요리추천
                 </button>
@@ -33193,7 +33214,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
               <button
                 type="button"
                 onClick={() => setIsPageModalOpen(false)}
-                className="py-2.5 rounded-xl bg-stone-100 text-stone-600 text-[13.5px] font-extrabold"
+                className="py-2.5 rounded-xl bg-stone-100 text-stone-600 text-[13.5px] font-extrabold whitespace-nowrap"
               >
                 취소
               </button>
@@ -33385,7 +33406,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                   <button
                     type="button"
                     onClick={() => setIsPagePasteModalOpen(false)}
-                    className="py-2.5 rounded-xl bg-stone-100 text-stone-600 text-[13.5px] font-extrabold"
+                    className="py-2.5 rounded-xl bg-stone-100 text-stone-600 text-[13.5px] font-extrabold whitespace-nowrap"
                   >
                     취소
                   </button>
@@ -33393,7 +33414,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                     type="button"
                     disabled={previewBlocks.length === 0}
                     onClick={() => handleApplyMarkdownPaste(activePg, pagePasteText, pagePasteMode, pagePasteColor)}
-                    className="py-2.5 rounded-xl bg-stone-900 hover:bg-stone-800 disabled:opacity-40 text-white text-[13.5px] font-extrabold"
+                    className="py-2.5 rounded-xl bg-stone-900 hover:bg-stone-800 disabled:opacity-40 text-white text-[13.5px] font-extrabold whitespace-nowrap"
                   >
                     ✨ 양식으로 반영 ({previewBlocks.length})
                   </button>
@@ -33596,7 +33617,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                       setActiveTableTaskModal(null);
                       setTaskModalDraft(null);
                     }}
-                    className="px-3 py-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-600 text-[12.5px] font-extrabold"
+                    className="px-3 py-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-600 text-[12.5px] font-extrabold whitespace-nowrap"
                   >
                     행 삭제
                   </button>
@@ -33610,7 +33631,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                       setActiveTableTaskModal(null);
                       setTaskModalDraft(null);
                     }}
-                    className="px-3.5 py-2 rounded-xl bg-stone-100 text-stone-600 text-[13px] font-extrabold"
+                    className="px-3.5 py-2 rounded-xl bg-stone-100 text-stone-600 text-[13px] font-extrabold whitespace-nowrap"
                   >
                     닫기
                   </button>
@@ -33618,7 +33639,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                     <button
                       type="button"
                       onClick={handleSaveTaskModal}
-                      className="px-4 py-2 rounded-xl bg-stone-900 hover:bg-stone-800 text-white text-[13px] font-extrabold"
+                      className="px-4 py-2 rounded-xl bg-stone-900 hover:bg-stone-800 text-white text-[13px] font-extrabold whitespace-nowrap"
                     >
                       저장
                     </button>
