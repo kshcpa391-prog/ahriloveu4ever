@@ -12538,6 +12538,10 @@ ${item.memo}` : `${item.title} 다녀옴!`,
     if (!window.confirm(msg)) return;
     const delSet = new Set(delIds);
     setFamilyPages((prev) => prev.filter((p) => !delSet.has(p.id)));
+    if (handoverAttachedPageId && delSet.has(handoverAttachedPageId)) {
+      setHandoverAttachedPageId("");
+      try { localStorage.removeItem("kim_handover_page_id_v1"); } catch (e) {}
+    }
     setRecentPageIds((prev) => {
       const next = prev.filter((id) => !delSet.has(id));
       try {
@@ -14905,6 +14909,19 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                           자동 복귀
                         </button>
                       )}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setRoutineViewMode("timetable");
+                          try { localStorage.setItem("kim_routine_view_mode_v1", "timetable"); } catch (e) {}
+                          setScheduleSubTab("routine");
+                          setActiveTab("schedule");
+                        }}
+                        className="px-2 py-0.5 rounded-lg bg-[#EEF3EE] hover:bg-[#DFE9E0] border border-[#C9D8CC] text-[#35503C] text-[11.5px] font-extrabold whitespace-nowrap"
+                        title="루틴 2열 시간표로 보기"
+                      >
+                        🕒 시간표
+                      </button>
                       <button
                         type="button"
                         onClick={() => {
@@ -20263,19 +20280,42 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                 <ShoppingCart className="w-4 h-4 text-emerald-600" />
                 <span>장보기 품목 등록</span>
               </h2>
-              {canViewTab("monthly") && (
+              <div className="flex items-center gap-1 shrink-0">
                 <button
                   type="button"
-                  onClick={() => {
-                    setMonthlySubTab("expense");
-                    setActiveTab("monthly");
+                  onClick={async () => {
+                    const rem = shoppingList
+                      .filter((s) => !s.checked)
+                      .sort((a, b) => Number(Boolean(b.urgent)) - Number(Boolean(a.urgent)));
+                    if (rem.length === 0) {
+                      showToast("🛒 남은 장보기 품목이 없습니다!");
+                      return;
+                    }
+                    const lines = [
+                      `🛒 장보기 목록 (${rem.length}건)`,
+                      ...rem.map((s) => `${s.urgent ? "🚨" : "☐"} ${s.name}${s.quantity ? ` (${s.quantity})` : ""}${s.memo ? ` - ${s.memo}` : ""}`)
+                    ];
+                    await copyTextSafe(lines.join("\n"), `📋 장보기 ${rem.length}건을 복사했습니다!`);
                   }}
-                  className="px-2 py-1 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-[11px] font-extrabold whitespace-nowrap shrink-0"
-                  title="이달 식비 가계부 보기"
+                  className="px-2 py-1 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-[11px] font-extrabold whitespace-nowrap"
+                  title="남은 장보기 목록 카톡 공유용 복사"
                 >
-                  💰 이달 {monthlyExpenseSummary.total.toLocaleString()}원
+                  📋
                 </button>
-              )}
+                {canViewTab("monthly") && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMonthlySubTab("expense");
+                      setActiveTab("monthly");
+                    }}
+                    className="px-2 py-1 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-[11px] font-extrabold whitespace-nowrap"
+                    title="이달 식비 가계부 보기"
+                  >
+                    💰 이달 {monthlyExpenseSummary.total.toLocaleString()}원
+                  </button>
+                )}
+              </div>
             </div>
 
 

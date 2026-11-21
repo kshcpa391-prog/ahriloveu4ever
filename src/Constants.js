@@ -1178,7 +1178,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v12.94";
+export const APP_CODE_VERSION = "v12.95";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1196,7 +1196,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-21 23:02";
+export const APP_BUILD_DATE = "2026-11-22 06:18";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1264,6 +1264,18 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v12.95",
+    version: "v12.95",
+    date: "2026-11-22",
+    title: "🛒 장보기 1탭 카톡 복사 · 🏠 홈 루틴→🕒 시간표 직행 연계 및 공유노트 삭제 정합성 보완",
+    category: "편의성 · 메뉴 연계 · 안정화",
+    changes: [
+      "🛒 장보기 1탭 복사(📋): 상단 헤더에서 미구매 장보기 목록을 급함(🚨) 우선으로 정렬해 카톡 공유용으로 바로 복사 가능",
+      "메뉴 연계(홈 → 루틴 시간표): 홈 [오늘 남은 루틴] 카드에 [🕒 시간표] 버튼을 추가해 2열 루틴 시간표 화면으로 1탭 직행 지원",
+      "데이터 정합성 보완: 공유노트 페이지 삭제 시 인수인계 첨부 상태(handoverAttachedPageId)에서도 자동 해제되도록 보완 및 AST·TDZ·배포 정합성 최종 검증 완료"
+    ]
+  },
   {
     id: "patch-v12.94",
     version: "v12.94",
