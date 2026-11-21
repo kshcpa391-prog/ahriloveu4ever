@@ -5557,6 +5557,9 @@ function MainApp() {
         (payload.babyMedicalNotes || []).forEach((bm) => {
           if (bm?.id) writePromises.push(setDoc(getDocRef("family_baby_notes_v7", bm.id), bm));
         });
+        (payload.bucketList || []).forEach((bk) => {
+          if (bk?.id) writePromises.push(setDoc(getDocRef("family_bucket_v1", bk.id), bk));
+        });
         (payload.familyPages || []).forEach((pg) => {
           if (pg?.id) writePromises.push(setDoc(getDocRef("family_pages_v1", pg.id), pg));
         });
@@ -13026,7 +13029,8 @@ ${item.memo}` : `${item.title} 다녀옴!`,
     activeTab: "home",
     babySubTab: "activity",
     selectedPageId: null,
-    bucketViewMode: "map"
+    bucketViewMode: "map",
+    houseSubTab: "storage"
   });
   const isPoppingHistoryRef = useRef(false);
   const historyArmedRef = useRef(false);
@@ -13045,6 +13049,9 @@ ${item.memo}` : `${item.title} 다녀옴!`,
     if (snap.activeTab === "bucket" && snap.bucketViewMode) {
       parts.push(`view=${encodeURIComponent(snap.bucketViewMode)}`);
     }
+    if (snap.activeTab === "house" && snap.houseSubTab) {
+      parts.push(`hsub=${encodeURIComponent(snap.houseSubTab)}`);
+    }
     if (modalFlag) parts.push("m=1");
     return `#${parts.join("&")}`;
   };
@@ -13053,6 +13060,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
     isMoreNavOpen ||
     isQuickFabOpen ||
     isBucketModalOpen ||
+    isHouseModalOpen ||
     isPrivateCalModalOpen ||
     isPrivateCalCsvModalOpen ||
     Boolean(calDayPopupDate) ||
@@ -13123,6 +13131,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
       setStockInItem(null);
       setQuickLogRecipe(null);
       setCookingConfirmModal(null);
+      setIsHouseModalOpen(false);
       setQuickFridgeItem(null);
       setLiveActivityPopup(null);
       setActivityEditModal(null);
@@ -13139,11 +13148,13 @@ ${item.memo}` : `${item.title} 다녀옴!`,
       if (prev.babySubTab) setBabySubTab(prev.babySubTab);
       setSelectedPageId(prev.selectedPageId || null);
       if (prev.bucketViewMode) setBucketViewMode(prev.bucketViewMode);
+      if (prev.houseSubTab) setHouseSubTab(prev.houseSubTab);
       lastNavSnapRef.current = {
         activeTab: prev.activeTab || "home",
         babySubTab: prev.babySubTab || "activity",
         selectedPageId: prev.selectedPageId || null,
-        bucketViewMode: prev.bucketViewMode || "map"
+        bucketViewMode: prev.bucketViewMode || "map",
+        houseSubTab: prev.houseSubTab || "storage"
       };
       return "nav_back";
     }
@@ -13243,12 +13254,13 @@ ${item.memo}` : `${item.title} 다녀옴!`,
     }
 
     const prev = lastNavSnapRef.current;
-    const nextSnap = { activeTab, babySubTab, selectedPageId, bucketViewMode };
+    const nextSnap = { activeTab, babySubTab, selectedPageId, bucketViewMode, houseSubTab };
     const changed =
       prev.activeTab !== activeTab ||
       (activeTab === "baby" && prev.babySubTab !== babySubTab) ||
       (activeTab === "pages" && prev.selectedPageId !== selectedPageId) ||
-      (activeTab === "bucket" && prev.bucketViewMode !== bucketViewMode);
+      (activeTab === "bucket" && prev.bucketViewMode !== bucketViewMode) ||
+      (activeTab === "house" && prev.houseSubTab !== houseSubTab);
 
     if (!changed) return;
 
@@ -13276,7 +13288,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
         window.scrollTo(0, 0);
       }
     }
-  }, [activeTab, babySubTab, selectedPageId, bucketViewMode]);
+  }, [activeTab, babySubTab, selectedPageId, bucketViewMode, houseSubTab]);
 
   // 모달/팝업이 열릴 때도 실제 History 엔트리 적재 (뒤로가기 누르면 모달만 깔끔하게 닫힘)
   useEffect(() => {
@@ -21805,6 +21817,24 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                   </button>
                 ))}
               </div>
+              {visibleHouseItems.length > 0 && (
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const hdr = houseSubTab === "storage" ? "🔎 우리집 수납지도" : houseSubTab === "warranty" ? "🛠️ 가전·육아템 보증·A/S" : "💊 우리집 상비약함";
+                    const rows = visibleHouseItems.map((it, i) => {
+                      if (houseSubTab === "storage") return `${i + 1}. [${it.room}] ${it.title}${it.detailLoc ? ` → ${it.detailLoc}` : ""}`;
+                      if (houseSubTab === "warranty") return `${i + 1}. ${it.title}${it.warrantyEnd ? ` (A/S ~${it.warrantyEnd})` : ""}${it.asPhone ? ` · ${it.asPhone}` : ""}`;
+                      return `${i + 1}. [${it.target || "공통"}] ${it.title}${it.expiryDate ? ` (~${it.expiryDate})` : ""}${it.dosage ? ` · ${it.dosage}` : ""}`;
+                    });
+                    await copyTextSafe([hdr, ...rows].join("\n"), `📋 ${hdr} ${visibleHouseItems.length}건을 복사했습니다!`);
+                  }}
+                  className="px-2 py-2 rounded-2xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-[12px] font-extrabold whitespace-nowrap shrink-0"
+                  title="현재 목록 복사"
+                >
+                  📋
+                </button>
+              )}
               {canEditTab("house") && (
                 <button
                   type="button"

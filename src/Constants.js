@@ -1178,7 +1178,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v12.79";
+export const APP_CODE_VERSION = "v12.80";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1196,7 +1196,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-21 20:10";
+export const APP_BUILD_DATE = "2026-11-21 20:15";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1264,6 +1264,18 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v12.80",
+    version: "v12.80",
+    date: "2026-11-21",
+    title: "JSON 복원 버킷리스트 클라우드 저장 누락 버그 수정 · 살림수첩 뒤로가기 히스토리 연동 및 1탭 목록 복사",
+    category: "버그 수정 · 편의성 · 안정화",
+    changes: [
+      "데이터 유실 버그 수정: 전체 JSON 복원(handleImportJson) 시 버킷리스트(payload.bucketList)가 로컬에만 반영되고 Firestore(family_bucket_v1)에는 저장되지 않던 누락을 수정해 새로고침 후에도 100% 유지",
+      "모바일 뒤로가기 연동: 살림수첩 등록 모달(isHouseModalOpen)과 서브탭 전환(수납·보증·상비약)을 안드로이드/브라우저 뒤로가기 히스토리(History API)에 완전 연동",
+      "살림수첩 편의성: 현재 보고 있는 수납지도·보증/A/S·상비약 목록을 카톡 공유용으로 한 번에 복사하는 [📋] 버튼 추가 및 AST·TDZ·배포 정합성 최종 전수 검증 완료"
+    ]
+  },
   {
     id: "patch-v12.79",
     version: "v12.79",
