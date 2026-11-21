@@ -3496,7 +3496,8 @@ function MainApp() {
     "레시피": "recipes",
     "노트": "pages",
     "버킷": "bucket",
-    "살림수첩": "house"
+    "살림수첩": "house",
+    "홈": "home"
   };
   const visibleRecentActivities = useMemo(() => {
     if (isAdminUnlocked) return recentActivities;
@@ -5460,6 +5461,7 @@ function MainApp() {
       if (Array.isArray(payload.wasteEvents)) setWasteEvents(payload.wasteEvents);
       if (payload.babyChecks && typeof payload.babyChecks === "object") setBabyChecks(payload.babyChecks);
       if (Array.isArray(payload.babyGrowthLogs)) setBabyGrowthLogs(payload.babyGrowthLogs);
+      if (Array.isArray(payload.babyActivities)) setBabyActivities(payload.babyActivities);
       if (Array.isArray(payload.babyMedicalNotes)) setBabyMedicalNotes(payload.babyMedicalNotes);
       if (isAdminUnlocked && Array.isArray(payload.babyDiaryEntries)) setBabyDiaryEntries(payload.babyDiaryEntries);
       if (isAdminUnlocked && Array.isArray(payload.privateSchedules)) {
@@ -12142,7 +12144,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
       category: "기타",
       urgent: med.expiryDate ? getDaysDiff(med.expiryDate) <= 7 : false,
       checked: false,
-      memo: `상비약 재구매 (${med.target || "공통"})`
+      memo: med.kind === "storage" ? `수납 보충 (${med.room || "집"})` : `상비약 재구매 (${med.target || "공통"})`
     };
     setShoppingList((prev) => [payload, ...prev]);
     if (user && db) {
@@ -12943,6 +12945,8 @@ ${item.memo}` : `${item.title} 다녀옴!`,
       !isMealCopyModalOpen &&
       !diaryExportPreviewUrl &&
       !diaryLightboxUrl &&
+      !diaryImportModal &&
+      !cropModal &&
       !isWeatherModalOpen &&
       !liveActivityPopup &&
       !activityEditModal &&
@@ -12983,6 +12987,8 @@ ${item.memo}` : `${item.title} 다녀옴!`,
         setIsMealCopyModalOpen(false);
         setDiaryExportPreviewUrl("");
         setDiaryLightboxUrl("");
+        setDiaryImportModal(null);
+        setCropModal(null);
         setIsWeatherModalOpen(false);
         setLiveActivityPopup(null);
         setActivityEditModal(null);
@@ -13019,7 +13025,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
     };
     window.addEventListener("keydown", onEsc);
     return () => window.removeEventListener("keydown", onEsc);
-  }, [isQuickFabOpen, isRoutineModalOpen, isActivityModalOpen, isEditorUnlockModalOpen, isMealCopyModalOpen, diaryExportPreviewUrl, diaryLightboxUrl, isWeatherModalOpen, liveActivityPopup, activityEditModal, zipImportPicker, magazineMonth, isSettingsOpen, isHeroPhotoModalOpen, isPageModalOpen, pageMenuTargetId, isPagePasteModalOpen, activeTableTaskModal, isDreamLinksModalOpen, isPatchModalOpen, isBucketModalOpen, isHouseModalOpen, isPrivateCalModalOpen, isPrivateCalCsvModalOpen, calDayPopupDate, isScheduleModalOpen, isMealModalOpen, isFridgeModalOpen, isNoticeModalOpen, isRecipeModalOpen, isDaycareModalOpen, isReceiptModalOpen, isInventoryExportOpen, stockInItem, quickLogRecipe, cookingConfirmModal, quickFridgeItem]);
+  }, [isQuickFabOpen, isRoutineModalOpen, isActivityModalOpen, isEditorUnlockModalOpen, isMealCopyModalOpen, diaryExportPreviewUrl, diaryLightboxUrl, diaryImportModal, cropModal, isWeatherModalOpen, liveActivityPopup, activityEditModal, zipImportPicker, magazineMonth, isSettingsOpen, isHeroPhotoModalOpen, isPageModalOpen, pageMenuTargetId, isPagePasteModalOpen, activeTableTaskModal, isDreamLinksModalOpen, isPatchModalOpen, isBucketModalOpen, isHouseModalOpen, isPrivateCalModalOpen, isPrivateCalCsvModalOpen, calDayPopupDate, isScheduleModalOpen, isMealModalOpen, isFridgeModalOpen, isNoticeModalOpen, isRecipeModalOpen, isDaycareModalOpen, isReceiptModalOpen, isInventoryExportOpen, stockInItem, quickLogRecipe, cookingConfirmModal, quickFridgeItem]);
 
   // ==========================================
   // 모바일·브라우저 뒤로가기 이전 화면 이동 (Chrome User-Gesture History API + URL 해시)
@@ -13094,7 +13100,9 @@ ${item.memo}` : `${item.title} 다녀옴!`,
     zipImportPicker ||
     magazineMonth ||
     diaryExportPreviewUrl ||
-    diaryLightboxUrl
+    diaryLightboxUrl ||
+    Boolean(diaryImportModal) ||
+    Boolean(cropModal)
   );
 
   backCloseHandlerRef.current = () => {
@@ -13139,6 +13147,8 @@ ${item.memo}` : `${item.title} 다녀옴!`,
       setMagazineMonth(null);
       setDiaryExportPreviewUrl("");
       setDiaryLightboxUrl("");
+      setDiaryImportModal(null);
+      setCropModal(null);
       return "modal_closed";
     }
     if (navHistoryRef.current.length > 0) {
@@ -16775,9 +16785,41 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                                 <span>· {exp.category}</span>
                               </div>
                             </div>
-                            <span className="font-extrabold text-stone-900 whitespace-nowrap shrink-0">
-                              {Number(exp.amount).toLocaleString()}원
-                            </span>
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              {canEditTab("house") && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setEditingHouseItem(null);
+                                    setHouseForm({
+                                      kind: "warranty",
+                                      title: exp.title || "",
+                                      room: "거실",
+                                      detailLoc: "",
+                                      brand: "",
+                                      purchaseDate: exp.date || getTodayStr(),
+                                      warrantyEnd: addMonthsToDateStr(exp.date || getTodayStr(), 12, 0),
+                                      asPhone: "",
+                                      price: String(exp.amount || ""),
+                                      target: "공통",
+                                      openedDate: "",
+                                      expiryDate: "",
+                                      dosage: "",
+                                      memo: exp.category ? `가계부 분류: ${exp.category}` : "",
+                                      photoUrl: ""
+                                    });
+                                    setIsHouseModalOpen(true);
+                                  }}
+                                  className="px-1.5 py-0.5 rounded-lg bg-stone-100 hover:bg-emerald-50 text-stone-500 hover:text-emerald-700 text-[10.5px] font-extrabold whitespace-nowrap"
+                                  title="살림수첩 보증·A/S에 등록"
+                                >
+                                  🛠️ 보증
+                                </button>
+                              )}
+                              <span className="font-extrabold text-stone-900 whitespace-nowrap">
+                                {Number(exp.amount).toLocaleString()}원
+                              </span>
+                            </div>
                           </div>
                         ))
                       )}
@@ -21553,7 +21595,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                 {unpinnedItems.length > 0 && (
                   <div className="bg-white rounded-2xl border border-stone-200 p-3 space-y-1.5">
                     <div className="text-[11.5px] font-extrabold text-stone-500">
-                      📌 위치 미지정 ({unpinnedItems.length}건) · 눌러서 검색 후 지도 핀 지정
+                      📌 위치 미지정 ({unpinnedItems.length}건) · 탭해 위치 지정
                     </div>
                     <div className="flex flex-wrap gap-1.5">
                       {unpinnedItems.map((it) => (
@@ -21575,11 +21617,29 @@ ${item.memo}` : `${item.title} 다녀옴!`,
             {/* 📋 목록 뷰 */}
             {bucketViewMode === "list" && (
               filtered.length === 0 ? (
-                renderStatusState({
-                  type: "empty",
-                  title: "표시할 버킷리스트가 없어요",
-                  description: "오른쪽 위 [+ 장소 추가]를 눌러 위치를 검색하고 확인한 뒤 추가해 보세요."
-                })
+                <div className="space-y-2 text-center">
+                  {renderStatusState({
+                    type: "empty",
+                    title: hasActiveFilter ? "조건에 맞는 버킷리스트가 없어요" : "표시할 버킷리스트가 없어요",
+                    description: hasActiveFilter
+                      ? "필터를 초기화하면 전체 목록을 다시 볼 수 있어요."
+                      : "우측 상단 [+ 장소 추가]로 가고 싶은 곳을 담아보세요."
+                  })}
+                  {hasActiveFilter && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setBucketStatusFilter("all");
+                        setBucketMemberFilter("전체");
+                        setBucketCatFilter("전체");
+                        setBucketWeatherOnly(false);
+                      }}
+                      className="px-3.5 py-1.5 rounded-full bg-stone-900 text-white text-[12px] font-extrabold whitespace-nowrap"
+                    >
+                      🔄 필터 초기화
+                    </button>
+                  )}
+                </div>
               ) : (
                 <div className="space-y-2">
                   {filtered.map((item) => {
@@ -22040,6 +22100,15 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                                   className="px-2 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-800 text-[11px] font-extrabold whitespace-nowrap"
                                 >
                                   📌 공지
+                                </button>
+                              )}
+                              {canEditTab("shopping") && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleMedicineToShopping(it)}
+                                  className="px-2 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-900 text-[11px] font-extrabold whitespace-nowrap"
+                                >
+                                  🛒 담기
                                 </button>
                               )}
                             </>
@@ -25653,6 +25722,36 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                                 title="다음 진료 일정 등록"
                               >
                                 🗓️ 일정
+                              </button>
+                            )}
+                            {canEditTab("house") && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEditingHouseItem(null);
+                                  setHouseForm({
+                                    kind: "medicine",
+                                    title: n.title || "",
+                                    room: "거실",
+                                    detailLoc: "",
+                                    brand: "",
+                                    purchaseDate: getTodayStr(),
+                                    warrantyEnd: "",
+                                    asPhone: "",
+                                    price: "",
+                                    target: activeChild.id === "시목" || activeChild.id === "시율" ? activeChild.id : "공통",
+                                    openedDate: n.date || getTodayStr(),
+                                    expiryDate: addMonthsToDateStr(n.date || getTodayStr(), 1, 0),
+                                    dosage: n.memo || "",
+                                    memo: n.temp ? `진료 시 체온 ${n.temp}°C` : "",
+                                    photoUrl: ""
+                                  });
+                                  setIsHouseModalOpen(true);
+                                }}
+                                className="px-2 py-1 rounded-lg bg-sky-50 hover:bg-sky-100 text-sky-800 text-[10.5px] font-extrabold whitespace-nowrap"
+                                title="처방약·상비약함에 등록"
+                              >
+                                💊 약등록
                               </button>
                             )}
                             <button

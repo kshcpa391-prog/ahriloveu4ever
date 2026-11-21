@@ -1178,7 +1178,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v12.80";
+export const APP_CODE_VERSION = "v12.81";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1196,7 +1196,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-21 20:15";
+export const APP_BUILD_DATE = "2026-11-21 20:35";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1264,6 +1264,18 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v12.81",
+    version: "v12.81",
+    date: "2026-11-21",
+    title: "진료→상비약 · 지출→보증 · 수납→장보기 연계 확장 및 복원/뒤로가기 사각지대 해소",
+    category: "메뉴 연계 · 버그 수정 · 편의성",
+    changes: [
+      "메뉴 간 연계 3종 확장: 🩺 소아과 진료 메모 → 💊 살림수첩 상비약함 즉시 등록, 🧾 월간 지출 원장 → 🛠️ 살림수첩 보증·A/S 등록, 🔎 수납지도 소모품 → 🛒 장보기 1탭 담기 추가",
+      "복원·뒤로가기·활동로그 사각지대 수정: JSON 복원 시 육아 활동로그(babyActivities) 즉시 상태 반영 보완, 육아일기 기록불러오기·사진자르기 모달의 ESC/안드로이드 뒤로가기 닫기 연동, 활동로그 [홈] 카테고리 탭 이동 매핑 추가",
+      "버킷리스트 UX 정리: 빈 필터 결과 화면에 [🔄 필터 초기화] 1탭 버튼 통일 적용 및 장문 안내 문구 축약"
+    ]
+  },
   {
     id: "patch-v12.80",
     version: "v12.80",
