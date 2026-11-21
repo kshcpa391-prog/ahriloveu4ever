@@ -14857,7 +14857,7 @@ ${validText}
                   <div className="min-w-0">
                     <div className="text-[13.5px] font-black text-stone-900">미로그인 상태 (일부 메뉴만 공개)</div>
                     <p className="text-[12.5px] text-stone-500 leading-snug">
-                      가족사진과 식단·레시피 일부만 열람 가능합니다. 전체 메뉴 열람·편집은 로그인해 주세요.
+                      일부 메뉴만 열람 중 · 전체 기능은 로그인 후 이용하세요.
                     </p>
                   </div>
                 </div>
@@ -17187,7 +17187,7 @@ ${validText}
                 <div className="bg-indigo-50/70 border border-indigo-200 rounded-xl p-2.5 space-y-2.5">
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-[11.5px] font-extrabold text-indigo-950">
-                      루틴 시간대 추가·수정·삭제 및 평일/주말 설정
+                      루틴 시간대 추가·수정·삭제 및 평일/주말·공휴일 설정
                     </span>
                     <button
                       type="button"
@@ -18156,6 +18156,7 @@ ${validText}
         <div className="p-4 space-y-3.5">
           <div className="grid grid-cols-2 gap-2">
             <button
+              type="button"
               onClick={() => setIsReceiptModalOpen(true)}
               className="py-2 px-2.5 rounded-2xl bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-900 text-[11.5px] font-extrabold flex items-center justify-between gap-1 whitespace-nowrap"
             >
@@ -18166,6 +18167,7 @@ ${validText}
               <ChevronRight className="w-3.5 h-3.5 text-emerald-700/70 shrink-0" />
             </button>
             <button
+              type="button"
               onClick={() => setIsInventoryExportOpen(true)}
               className="py-2 px-2.5 rounded-2xl bg-stone-100 hover:bg-stone-200/80 border border-stone-200 text-stone-800 text-[11.5px] font-extrabold flex items-center justify-between gap-1 whitespace-nowrap"
             >
@@ -19469,6 +19471,7 @@ ${validText}
         <div className="p-4 space-y-4">
           <div className="grid grid-cols-2 gap-1.5 bg-stone-200/80 p-1 rounded-2xl">
             <button
+              type="button"
               onClick={() => setAiSubMode("recipe")}
               className={`py-2 px-3 rounded-xl text-[13.5px] font-extrabold transition ${
                 aiSubMode === "recipe"
@@ -19479,6 +19482,7 @@ ${validText}
               🍳 냉장고 레시피 · 플레이팅
             </button>
             <button
+              type="button"
               onClick={() => setAiSubMode("plan3d")}
               className={`py-2 px-3 rounded-xl text-[13.5px] font-extrabold transition ${
                 aiSubMode === "plan3d"
@@ -20130,7 +20134,7 @@ ${validText}
                   <span>AI 플레이팅 코치 (사진 분석)</span>
                 </h2>
                 <p className="text-[12.5px] text-stone-500 mt-0.5">
-                  완성한 요리 사진을 올리면 색감·여백 점수와 그릇·가니쉬 팁을 알려드려요.
+                  요리 사진을 올리면 플레이팅 점수·팁을 알려드려요.
                 </p>
               </div>
               <span className="px-2 py-0.5 rounded-full text-[11.5px] font-extrabold bg-rose-50 text-rose-700 border border-rose-200 shrink-0">
@@ -21110,7 +21114,7 @@ ${validText}
                             <div className="space-y-1">
                               <div className="text-[14px] font-black text-stone-800">아직 만든 공유 페이지가 없어요</div>
                               <p className="text-[12px] font-semibold text-stone-500 leading-relaxed">
-                                출산가방, 여행준비물 체크리스트, 수면·이유식 가이드를 폴더처럼 깔끔하게 정리해 보세요.
+                                체크리스트·가이드를 폴더처럼 정리해 보세요.
                               </p>
                             </div>
                             <div className="flex items-center justify-center gap-2 pt-1 flex-wrap">
@@ -21647,8 +21651,8 @@ ${validText}
                             ) : (
                               <div className="pt-1 border-t border-stone-100 text-[11px] font-bold text-stone-400 text-center">
                                 {isPageMultiSelectMode
-                                  ? "여러 항목을 눌러 블록 선택한 뒤 크기·색상·들여쓰기를 한 번에 바꿔보세요"
-                                  : "수정할 항목을 누르거나 위 [+ 체크 · + 섹션 · + 메모]로 바로 추가하세요"}
+                                  ? "여러 항목 선택 후 서식을 한 번에 변경하세요"
+                                  : "항목 터치로 수정 · 상단 버튼으로 바로 추가"}
                               </div>
                             )}
                           </div>
@@ -21660,7 +21664,7 @@ ${validText}
                     <div className="space-y-2">
                       {blocks.length === 0 && childPages.length === 0 && (
                         <div className="py-6 text-center text-[12.5px] font-semibold text-stone-400 bg-stone-50/70 rounded-2xl border border-dashed border-stone-200">
-                          아래에서 체크리스트·섹션·메모·표를 추가하거나 여러 줄을 바로 붙여넣어 보세요.
+                          아래 버튼으로 항목을 추가하거나 여러 줄을 붙여넣으세요.
                         </div>
                       )}
                       {blocks.map((blk, bIdx) => {

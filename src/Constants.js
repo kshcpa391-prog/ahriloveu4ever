@@ -1177,7 +1177,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v12.63";
+export const APP_CODE_VERSION = "v12.64";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1195,7 +1195,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-21 08:48";
+export const APP_BUILD_DATE = "2026-11-21 09:40";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1262,6 +1262,18 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v12.64",
+    version: "v12.64",
+    date: "2026-11-21",
+    title: "전 메뉴 불필요·장황한 설명 간결화 및 루틴 시간대 용어 통일",
+    category: "UX 간결화 · 안정화",
+    changes: [
+      "게스트 배너·AI 플레이팅·공유노트 안내 문구 6곳을 핵심만 남도록 간결화해 시각적 피로도 최소화",
+      "루틴 시간대 설정의 주말 라벨을 공휴일 연동에 맞춰 주말·공휴일로 통일하고, 냉장고·AI·육아 탭 상단 버튼의 type='button' 속성 보강",
+      "전체 3만2천여 줄 AST·TDZ(선언 전 참조)·미선언 변수·12개 전체 탭 무결성 최종 검증 완료"
+    ]
+  },
   {
     id: "patch-v12.63",
     version: "v12.63",
