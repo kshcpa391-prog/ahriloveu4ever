@@ -2390,6 +2390,14 @@ function MainApp() {
   const [handoverCustomText, setHandoverCustomText] = useState("");
   const [isHandoverEditingPreview, setIsHandoverEditingPreview] = useState(false);
   const [handoverExcludedIds, setHandoverExcludedIds] = useState([]);
+  const [handoverTimetableMode, setHandoverTimetableMode] = useState(true);
+  const [routineViewMode, setRoutineViewMode] = useState(() => {
+    try {
+      return localStorage.getItem("kim_routine_view_mode_v1") === "timetable" ? "timetable" : "card";
+    } catch (e) {
+      return "card";
+    }
+  });
   const [handoverProfile, setHandoverProfile] = useState(() => {
     const emptyChild = { formulaGuide: "", sleepGuide: "", bathGuide: "", cautionGuide: "" };
     const empty = {
@@ -6189,6 +6197,12 @@ function MainApp() {
         return next;
       });
       setSchedules((prev) => prev.filter((s) => s.id !== item.id));
+      if (homeMiniDdayIds.includes(item.id) || homeMiniDdayIds.includes(`elapsed:${item.id}`)) {
+        const cleanedIds = homeMiniDdayIds.filter((id) => id !== item.id && id !== `elapsed:${item.id}`);
+        setHomeMiniDdayIds(cleanedIds);
+        try { localStorage.setItem("kim_home_mini_dday_ids_v1", JSON.stringify(cleanedIds)); } catch (e) {}
+        setDoc(getDocRef("family_meta_v4", "home_mini_ddays_v1"), { ids: cleanedIds, updatedAtMs: Date.now() }, { merge: true }).catch(() => {});
+      }
       setDeletedLogs((prev) => [entry, ...prev.filter((x) => x.logId !== entry.logId)].slice(0, 30));
       ok = true;
       showToast(`'${item.title || "일정"}' 삭제됨`, () => restoreDeletedLogEntry(entry));
@@ -18239,16 +18253,37 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                       showToast("🎉 오늘 남은 루틴을 모두 완료했습니다!");
                       return;
                     }
+                    const sortedRem = [...rem].sort((a, b) => String(a.scheduledTime || "99:99").localeCompare(String(b.scheduledTime || "99:99")));
                     const lines = [
-                      `🔄 오늘 남은 루틴 (${rem.length}건)`,
-                      ...rem.map((r, i) => `${i + 1}. [${r.timeSlot || "상시"}${r.scheduledTime ? ` ${r.scheduledTime}` : ""}] ${r.title}`)
+                      `🕒 오늘 남은 루틴 시간표 (${sortedRem.length}건)`,
+                      ...sortedRem.map((r, i) => {
+                        const br = i === 0 ? "┌" : i === sortedRem.length - 1 ? "└" : "├";
+                        const tLbl = r.scheduledTime ? formatRoutineTimeLabel(r.scheduledTime) : (r.timeSlot || "상시");
+                        return `${br} ${tLbl} │ ${r.title}`;
+                      })
                     ];
-                    await copyTextSafe(lines.join("\n"), `📋 남은 루틴 ${rem.length}건을 복사했습니다!`);
+                    await copyTextSafe(lines.join("\n"), `📋 남은 루틴 시간표 ${sortedRem.length}건을 복사했습니다!`);
                   }}
                   className="px-2 py-1.5 rounded-xl text-[11.5px] font-extrabold border bg-stone-50 hover:bg-stone-100 text-stone-700 border-stone-200 whitespace-nowrap"
-                  title="오늘 남은 루틴 복사"
+                  title="오늘 남은 루틴 시간표 복사"
                 >
                   📋
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const next = routineViewMode === "timetable" ? "card" : "timetable";
+                    setRoutineViewMode(next);
+                    try { localStorage.setItem("kim_routine_view_mode_v1", next); } catch (e) {}
+                  }}
+                  className={`px-2 py-1.5 rounded-xl text-[11.5px] font-extrabold border whitespace-nowrap ${
+                    routineViewMode === "timetable"
+                      ? "bg-[#5E7A65] text-white border-[#5E7A65]"
+                      : "bg-stone-50 text-stone-700 border-stone-200"
+                  }`}
+                  title="카드형 / 시간표형 보기 전환"
+                >
+                  {routineViewMode === "timetable" ? "🃏 카드" : "🕒 시간표"}
                 </button>
                 <button
                   type="button"
@@ -18618,7 +18653,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
             </div>
 
 
-            {(() => {
+            {routineViewMode !== "timetable" && (() => {
               const timedRoutines = familyRoutines
                 .filter((rt) => rt.scheduledTime && isRoutineDueTodayOrPast(rt, currentDayKey) && matchesRoutineTarget(rt, routineTargetFilter))
                 .sort((a, b) => String(a.scheduledTime || "").localeCompare(String(b.scheduledTime || "")));
@@ -18664,7 +18699,140 @@ ${item.memo}` : `${item.title} 다녀옴!`,
               <div className="text-center py-3 text-[13.5px] text-stone-400">
                 등록된 루틴이 없습니다.
               </div>
-            ) : (
+            ) : routineViewMode === "timetable" ? (() => {
+              const tableRows = [...familyRoutines]
+                .filter((rt) => (routineShowFuture || isRoutineDueTodayOrPast(rt, currentDayKey)) && (routineTimeFilter === "전체" || (rt.timeSlot || "상시") === routineTimeFilter) && matchesRoutineTarget(rt, routineTargetFilter))
+                .sort((a, b) => {
+                  const slotIdx = (r) => {
+                    const idx = activeRoutineTimeSlots.indexOf(r.timeSlot || "상시");
+                    return idx === -1 ? 99 : idx;
+                  };
+                  if (slotIdx(a) !== slotIdx(b)) return slotIdx(a) - slotIdx(b);
+                  const ta = a.scheduledTime || "99:99";
+                  const tb = b.scheduledTime || "99:99";
+                  if (ta !== tb) return ta.localeCompare(tb);
+                  return Number(isRoutineDoneNow(a)) - Number(isRoutineDoneNow(b));
+                });
+
+              if (tableRows.length === 0) {
+                return (
+                  <div className="text-center py-5 text-[12.5px] font-bold text-stone-400">
+                    선택한 조건에 해당하는 루틴이 없습니다.
+                  </div>
+                );
+              }
+
+              return (
+                <div className="rounded-2xl border border-stone-200 overflow-hidden bg-white">
+                  <div className="bg-[#EEF3EE] px-3 py-1.5 border-b border-stone-200 flex items-center justify-between gap-2">
+                    <div className="grid grid-cols-[78px_1fr] gap-2 flex-1 text-[11px] font-black text-[#35503C]">
+                      <span>시간 · 구분</span>
+                      <span>루틴 시간표 ({tableRows.filter((r) => isRoutineDoneNow(r)).length}/{tableRows.length})</span>
+                    </div>
+                    {accessRole !== "guest" && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const tStr = getTodayStr();
+                          if (!handoverDate || handoverDate < tStr) setHandoverDate(tStr);
+                          setHandoverTimetableMode(true);
+                          setHandoverModalTab("config");
+                          setIsHandoverModalOpen(true);
+                        }}
+                        className="px-2 py-0.5 rounded-full bg-white hover:bg-sky-50 border border-[#C9D8CC] text-[#35503C] text-[10.5px] font-extrabold whitespace-nowrap shrink-0"
+                        title="이 시간표로 카톡 육아 인수인계 열기"
+                      >
+                        🤝 인수인계
+                      </button>
+                    )}
+                  </div>
+                  <div className="divide-y divide-stone-100">
+                    {tableRows.map((rt, idx) => {
+                      const doneNow = isRoutineDoneNow(rt);
+                      const isDueNow = isRoutineDueTodayOrPast(rt, currentDayKey);
+                      const isOver = !doneNow && isDueNow && rt.scheduledTime && isRoutineTimeOverdue(rt.scheduledTime);
+                      const steps = parseRoutineSteps(rt.title);
+                      const timeText = rt.scheduledTime ? formatRoutineTimeLabel(rt.scheduledTime) : (rt.timeSlot || "상시");
+                      return (
+                        <div
+                          key={`tt-${rt.id}`}
+                          className={`grid grid-cols-[78px_1fr] items-center gap-2 px-3 py-2 transition ${
+                            doneNow
+                              ? "bg-stone-50/70 opacity-65"
+                              : isOver
+                              ? "bg-amber-50/60"
+                              : idx % 2 === 1
+                              ? "bg-[#FAF8F3]/60"
+                              : "bg-white"
+                          }`}
+                        >
+                          <div className="border-r border-stone-200/80 pr-2 flex flex-col justify-center">
+                            <span
+                              className={`text-[11.5px] font-black whitespace-nowrap ${
+                                isOver ? "text-amber-700" : doneNow ? "text-stone-400" : "text-[#35503C]"
+                              }`}
+                            >
+                              {isOver ? "🔔 " : ""}{timeText}
+                            </span>
+                            {rt.scheduledTime && (
+                              <span className="text-[9.5px] font-bold text-stone-400 whitespace-nowrap">
+                                {rt.timeSlot || "상시"}
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center justify-between gap-1.5 min-w-0">
+                            <button
+                              type="button"
+                              onClick={() => handleToggleRoutine(rt.id)}
+                              className="flex items-center gap-2 text-left flex-1 min-w-0"
+                            >
+                              <span
+                                className={`w-4 h-4 rounded-md border flex items-center justify-center shrink-0 text-[10px] font-black ${
+                                  doneNow
+                                    ? "bg-[#5E7A65] border-[#5E7A65] text-white"
+                                    : "bg-white border-stone-300 text-transparent"
+                                }`}
+                              >
+                                ✓
+                              </span>
+                              <span
+                                className={`text-[12.5px] font-extrabold truncate ${
+                                  doneNow ? "line-through text-stone-400" : "text-stone-900"
+                                }`}
+                              >
+                                {steps.length >= 2 ? `${steps[0]} 외 ${steps.length - 1}단계` : rt.title}
+                              </span>
+                            </button>
+                            <div className="flex items-center gap-1 shrink-0">
+                              {rt.target && rt.target !== "공통" && (
+                                <span className="px-1.5 py-0.5 rounded-md bg-sky-50 text-sky-800 text-[10px] font-extrabold whitespace-nowrap">
+                                  {rt.target}
+                                </span>
+                              )}
+                              {!isDueNow && (
+                                <span className="px-1.5 py-0.5 rounded-md bg-amber-100 text-amber-800 text-[9.5px] font-extrabold whitespace-nowrap">
+                                  예정
+                                </span>
+                              )}
+                              {canEditTab("schedule") && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleStartEditRoutine(rt)}
+                                  className="p-1 rounded-lg text-stone-400 hover:text-stone-700 hover:bg-stone-100"
+                                  title="루틴 수정"
+                                >
+                                  <Edit2 className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })() : (
               <div className="space-y-1.5">
                 {[...familyRoutines]
                   .filter((rt) => (routineShowFuture || isRoutineDueTodayOrPast(rt, currentDayKey)) && (routineTimeFilter === "전체" || (rt.timeSlot || "상시") === routineTimeFilter) && matchesRoutineTarget(rt, routineTargetFilter))
@@ -25679,8 +25847,40 @@ ${item.memo}` : `${item.title} 다녀옴!`,
             {babySubTab === "growth" && (
               <div className="space-y-3">
                 <div className="bg-white p-3.5 rounded-2xl border border-stone-200 shadow-sm space-y-2.5">
-                  <div className="text-[13.5px] font-black text-stone-900">
-                    📏 {activeChild.name} 성장 측정 기록하기
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="text-[13.5px] font-black text-stone-900 truncate">
+                      📏 {activeChild.name} 성장 측정 기록
+                    </div>
+                    {(() => {
+                      const cLogs = babyGrowthLogs
+                        .filter((g) => g.childId === activeChild.id)
+                        .sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")));
+                      if (cLogs.length === 0) return null;
+                      const latest = cLogs[0];
+                      return (
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            const todayMs = new Date(`${getTodayStr()}T00:00:00`).getTime();
+                            const birthMs = new Date(`${activeChild.birthDate}T00:00:00`).getTime();
+                            const days = Math.max(1, Math.floor((todayMs - birthMs) / 86400000) + 1);
+                            const parts = [
+                              latest.height ? `키 ${latest.height}cm` : "",
+                              latest.weight ? `몸무게 ${latest.weight}kg` : "",
+                              latest.head ? `머리둘레 ${latest.head}cm` : ""
+                            ].filter(Boolean);
+                            const txt = `📏 ${activeChild.name} 최근 성장 기록 (생후 ${days}일 · ${latest.date})
+• ${parts.join(" · ") || "측정값 없음"}${latest.memo ? `
+• 메모: ${latest.memo}` : ""}`;
+                            await copyTextSafe(txt, `📋 ${activeChild.name} 성장 요약을 복사했습니다!`);
+                          }}
+                          className="px-2 py-1 rounded-xl bg-[#EEF3EE] hover:bg-[#DFE9E0] border border-[#C9D8CC] text-[#35503C] text-[11px] font-extrabold whitespace-nowrap shrink-0"
+                          title="최근 성장 기록 카톡 공유용 복사"
+                        >
+                          📋 성장요약
+                        </button>
+                      );
+                    })()}
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     <input
@@ -25727,7 +25927,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                     onClick={handleAddGrowthLog}
                     className="w-full py-2.5 rounded-xl bg-stone-900 text-white text-[13.5px] font-extrabold"
                   >
-                    + 성장 기록 저장하기
+                    + 성장 기록 저장
                   </button>
                 </div>
 
@@ -28473,6 +28673,23 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                   </div>
                   {/* 조르테 스타일 하단 우측 빠른 액션 (+1일 미루기 · 가족→공지/개인 복사) */}
                   <div className="pt-3 mt-auto flex flex-wrap items-center justify-end gap-1.5">
+                    {activeDetail._isFamily && activeDetail.showDday && accessRole !== "guest" && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const wasPinned = homeMiniDdayIds.includes(activeDetail.id);
+                          toggleHomeMiniDdayId(activeDetail.id);
+                          showToast(wasPinned ? "📌 홈 상단 미니 D-Day에서 해제했습니다." : "📌 홈 상단 미니 D-Day에 고정했습니다!");
+                        }}
+                        className={`px-2.5 py-1.5 rounded-xl border text-[11.5px] font-extrabold whitespace-nowrap ${
+                          homeMiniDdayIds.includes(activeDetail.id)
+                            ? "bg-[#5E7A65] text-white border-[#5E7A65]"
+                            : "bg-stone-50 hover:bg-stone-100 text-stone-700 border-stone-200"
+                        }`}
+                      >
+                        {homeMiniDdayIds.includes(activeDetail.id) ? "📌 홈 고정중" : "📌 홈 고정"}
+                      </button>
+                    )}
                     {activeDetail._isFamily && canEditTab("notices") && (
                       <button
                         type="button"
@@ -34900,6 +35117,76 @@ ${item.memo}` : `${item.title} 다녀옴!`,
           .slice(0, 6);
         const selectedStorage = allKeyStorage.filter((it) => isItemIncluded(`st:${it.id}`));
 
+        // 시간표(타임테이블) 통합 정렬 엔트리 생성 (식단 + 선택 루틴 + 선택 일정)
+        const timetableEntries = (() => {
+          const rows = [];
+          const slotSortMap = {
+            "아침": "08:00",
+            "오전": "10:00",
+            "점심": "12:00",
+            "오후": "14:00",
+            "간식": "15:00",
+            "저녁": "18:00",
+            "자기전": "20:30",
+            "상시": "99:00"
+          };
+          if (handoverSections.mealFeed) {
+            const targetMeals = meals.filter((m) => {
+              if (m.date !== targetDate) return false;
+              if (handoverTarget === "전체") return true;
+              const mems = extractMembers(m);
+              return mems.includes(handoverTarget) || mems.includes("전체");
+            });
+            targetMeals.forEach((m) => {
+              const sk = slotSortMap[m.slot] || "12:30";
+              rows.push({
+                sortKey: sk,
+                timeLabel: m.slot || "식단",
+                text: `🍽️ ${m.menu}`
+              });
+            });
+          }
+          if (handoverSections.routines) {
+            selectedRoutines.forEach((r) => {
+              const hasTime = Boolean(r.scheduledTime && /^\d{1,2}:\d{2}/.test(String(r.scheduledTime)));
+              const normTime = hasTime ? String(r.scheduledTime).slice(0, 5).padStart(5, "0") : "";
+              const slotName = r.timeSlot || r.slot || "상시";
+              const sk = hasTime ? normTime : (slotSortMap[slotName] || "99:00");
+              const tLabel = hasTime ? normTime : slotName;
+              const who = r.target && r.target !== "공통" ? ` (${r.target})` : "";
+              rows.push({
+                sortKey: sk,
+                timeLabel: tLabel,
+                text: `🔄 ${r.title}${who}`
+              });
+            });
+            selectedSchedules.forEach((s) => {
+              const titleStr = String(s.title || "");
+              const hmMatch = titleStr.match(/(\d{1,2}):(\d{2})/);
+              const hrMatch = titleStr.match(/(오전|오후)?\s*(\d{1,2})시/);
+              let sk = "98:00";
+              let tLabel = "일정";
+              if (hmMatch) {
+                const hh = String(Math.min(23, Number(hmMatch[1]))).padStart(2, "0");
+                sk = `${hh}:${hmMatch[2]}`;
+                tLabel = sk;
+              } else if (hrMatch) {
+                let h = Number(hrMatch[2]);
+                if (hrMatch[1] === "오후" && h < 12) h += 12;
+                else if (!hrMatch[1] && h >= 1 && h <= 6) h += 12;
+                sk = `${String(Math.min(23, h)).padStart(2, "0")}:00`;
+                tLabel = sk;
+              }
+              rows.push({
+                sortKey: sk,
+                timeLabel: tLabel,
+                text: `🗓️ ${titleStr}`
+              });
+            });
+          }
+          return rows.sort((a, b) => a.sortKey.localeCompare(b.sortKey));
+        })();
+
         const buildKakaoHandoverText = () => {
           const isHelperMode = handoverPreset === "helper";
           const modeTag = isFutureTarget ? "사전 안내" : "실시간 교대";
@@ -34976,18 +35263,26 @@ ${item.memo}` : `${item.title} 다녀옴!`,
           }
 
           if (handoverSections.routines) {
-            out.push(`\n🔄 [${dayLabel}(${targetDate.slice(5)} ${targetDow}) ${isFutureTarget ? "예정 " : ""}루틴 · 할 일]`);
-            if (selectedRoutines.length > 0) {
-              out.push(
-                `▸ 루틴(${selectedRoutines.length}건): ${selectedRoutines
-                  .map((r) => (r.scheduledTime ? `⏰${formatRoutineTimeLabel(r.scheduledTime)} ${r.title}` : r.title))
-                  .join(" · ")}`
-              );
+            if (handoverTimetableMode && timetableEntries.length > 0) {
+              out.push(`\n🕒 [${dayLabel}(${targetDate.slice(5)} ${targetDow}) 시간표]`);
+              timetableEntries.forEach((row, idx) => {
+                const branch = idx === 0 ? "┌" : idx === timetableEntries.length - 1 ? "└" : "├";
+                out.push(`${branch} ${row.timeLabel} │ ${row.text}`);
+              });
             } else {
-              out.push(`▸ 선택된 루틴 없음`);
-            }
-            if (selectedSchedules.length > 0) {
-              out.push(`▸ 일정·할일(${selectedSchedules.length}건): ${selectedSchedules.map((s) => s.title).join(" · ")}`);
+              out.push(`\n🔄 [${dayLabel}(${targetDate.slice(5)} ${targetDow}) ${isFutureTarget ? "예정 " : ""}루틴 · 할 일]`);
+              if (selectedRoutines.length > 0) {
+                out.push(
+                  `▸ 루틴(${selectedRoutines.length}건): ${selectedRoutines
+                    .map((r) => (r.scheduledTime ? `⏰${formatRoutineTimeLabel(r.scheduledTime)} ${r.title}` : r.title))
+                    .join(" · ")}`
+                );
+              } else {
+                out.push(`▸ 선택된 루틴 없음`);
+              }
+              if (selectedSchedules.length > 0) {
+                out.push(`▸ 일정·할일(${selectedSchedules.length}건): ${selectedSchedules.map((s) => s.title).join(" · ")}`);
+              }
             }
           }
 
@@ -35081,16 +35376,27 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                 sectionsToDraw.push({ title: "💊 약 복용 · 최근 진료/체온", accent: "#B83B5E", bg: "#FDF3F5", rows });
               }
               if (handoverSections.routines) {
-                const rows = [];
-                if (selectedRoutines.length > 0) {
-                  rows.push(`루틴: ${selectedRoutines.map((r) => (r.scheduledTime ? `⏰${formatRoutineTimeLabel(r.scheduledTime)} ${r.title}` : r.title)).join(" · ")}`);
+                if (handoverTimetableMode && timetableEntries.length > 0) {
+                  sectionsToDraw.push({
+                    title: `🕒 ${dayLabel}(${targetDate.slice(5)} ${targetDow}) 시간표`,
+                    accent: "#9A6700",
+                    bg: "#FDF9EE",
+                    isTable: true,
+                    tableRows: timetableEntries.slice(0, 14),
+                    rows: []
+                  });
                 } else {
-                  rows.push("선택된 루틴 없음");
+                  const rows = [];
+                  if (selectedRoutines.length > 0) {
+                    rows.push(`루틴: ${selectedRoutines.map((r) => (r.scheduledTime ? `⏰${formatRoutineTimeLabel(r.scheduledTime)} ${r.title}` : r.title)).join(" · ")}`);
+                  } else {
+                    rows.push("선택된 루틴 없음");
+                  }
+                  if (selectedSchedules.length > 0) {
+                    rows.push(`일정·할일: ${selectedSchedules.map((s) => s.title).join(" · ")}`);
+                  }
+                  sectionsToDraw.push({ title: `🔄 ${dayLabel} ${isFutureTarget ? "예정 " : ""}루틴 · 할 일`, accent: "#9A6700", bg: "#FDF9EE", rows });
                 }
-                if (selectedSchedules.length > 0) {
-                  rows.push(`일정·할일: ${selectedSchedules.map((s) => s.title).join(" · ")}`);
-                }
-                sectionsToDraw.push({ title: `🔄 ${dayLabel} ${isFutureTarget ? "예정 " : ""}루틴 · 할 일`, accent: "#9A6700", bg: "#FDF9EE", rows });
               }
               if (handoverSections.careGuide && (handoverProfile.momMealGuide || handoverProfile.houseworkGuide || handoverProfile.emergencyContacts)) {
                 const rows = [];
@@ -35147,6 +35453,11 @@ ${item.memo}` : `${item.title} 다녀옴!`,
             const bodyFont = "600 22px -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif";
             let totalH = 165;
             const prepared = sectionsToDraw.map((sec) => {
+              if (sec.isTable && Array.isArray(sec.tableRows)) {
+                const boxH = 62 + sec.tableRows.length * 42 + 18;
+                totalH += boxH + 18;
+                return { ...sec, wrapped: [], boxH };
+              }
               const wrapped = sec.rows.flatMap((r) => wrapLines(r, innerW - 44, bodyFont));
               const boxH = 56 + wrapped.length * 32 + 22;
               totalH += boxH + 18;
@@ -35195,11 +35506,39 @@ ${item.memo}` : `${item.title} 다녀옴!`,
               ctx.font = "800 24px -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif";
               ctx.fillText(sec.title, pad + 22, y + 40);
 
-              ctx.fillStyle = "#292524";
-              ctx.font = bodyFont;
-              sec.wrapped.forEach((ln, idx) => {
-                ctx.fillText(ln, pad + 22, y + 76 + idx * 32);
-              });
+              if (sec.isTable && Array.isArray(sec.tableRows)) {
+                const colW = 136;
+                const tableX = pad + 20;
+                const tableW = innerW - 40;
+                let ry = y + 54;
+                sec.tableRows.forEach((tr, rIdx) => {
+                  ctx.fillStyle = rIdx % 2 === 0 ? "#FFFFFF" : "#FAF5E6";
+                  ctx.fillRect(tableX, ry, tableW, 40);
+                  ctx.strokeStyle = "#E7DEC8";
+                  ctx.lineWidth = 1.5;
+                  ctx.strokeRect(tableX, ry, tableW, 40);
+                  ctx.beginPath();
+                  ctx.moveTo(tableX + colW, ry);
+                  ctx.lineTo(tableX + colW, ry + 40);
+                  ctx.stroke();
+
+                  ctx.fillStyle = "#9A6700";
+                  ctx.font = "800 20px -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif";
+                  ctx.fillText(String(tr.timeLabel || ""), tableX + 14, ry + 27);
+
+                  ctx.fillStyle = "#292524";
+                  ctx.font = "700 20px -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif";
+                  const txt = String(tr.text || "").slice(0, 34);
+                  ctx.fillText(txt, tableX + colW + 16, ry + 27);
+                  ry += 40;
+                });
+              } else {
+                ctx.fillStyle = "#292524";
+                ctx.font = bodyFont;
+                sec.wrapped.forEach((ln, idx) => {
+                  ctx.fillText(ln, pad + 22, y + 76 + idx * 32);
+                });
+              }
               y += sec.boxH + 18;
             });
 
@@ -35668,6 +36007,21 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                           {isUsingCustomText ? "✏️ 직접 수정본 적용 중" : "💬 실시간 카톡 미리보기"}
                         </span>
                         <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setHandoverTimetableMode((v) => !v);
+                              setHandoverCustomText("");
+                            }}
+                            className={`px-2 py-0.5 rounded-lg text-[10px] font-extrabold whitespace-nowrap ${
+                              handoverTimetableMode
+                                ? "bg-amber-100 text-amber-950"
+                                : "bg-white/80 text-slate-700"
+                            }`}
+                            title="시간표형 / 목록형 전환"
+                          >
+                            {handoverTimetableMode ? "🕒 시간표형" : "📋 목록형"}
+                          </button>
                           {isUsingCustomText && (
                             <button
                               type="button"

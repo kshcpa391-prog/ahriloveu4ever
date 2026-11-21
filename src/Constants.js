@@ -1178,7 +1178,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v12.91";
+export const APP_CODE_VERSION = "v12.94";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1196,7 +1196,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-21 22:06";
+export const APP_BUILD_DATE = "2026-11-21 23:02";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1264,6 +1264,42 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v12.94",
+    version: "v12.94",
+    date: "2026-11-21",
+    title: "📌 일정 상세→홈 상단 미니 D-Day 1탭 고정 · 📏 성장요약 복사 및 삭제 정합성 보완",
+    category: "메뉴 연계 · 편의성 · 안정화",
+    changes: [
+      "메뉴 연계(일정 상세 → 홈 상단): 캘린더 일정 상세 팝업에서 D-Day 일정에 [📌 홈 고정 / 홈 고정중] 버튼을 추가해 홈으로 돌아가지 않고 바로 홈 상단 미니바에 고정·해제 가능",
+      "육아 성장기록 편의성: [👶 육아 > 📏 성장] 헤더에 최근 키·몸무게·머리둘레와 생후 일수를 카톡 공유용으로 복사하는 [📋 성장요약] 버튼 추가 및 라벨 슬림화",
+      "데이터 정합성 보완: 일정을 삭제할 때 홈 상단 미니 D-Day 목록(로컬·Firestore)에서도 해당 ID를 자동 정리하도록 보완 및 AST·TDZ·배포 정합성 최종 검증 완료"
+    ]
+  },
+  {
+    id: "patch-v12.93",
+    version: "v12.93",
+    date: "2026-11-21",
+    title: "🕒 반복 루틴 2열 시간표 보기(카드/시간표 전환) 추가 · 시간대 정렬 버그 수정 및 인수인계 연계",
+    category: "신규 기능 · 버그 수정 · 메뉴 연계",
+    changes: [
+      "🕒 루틴 2열 시간표 보기 신설: [📅 일정 > 루틴] 상단에 [🕒 시간표 / 🃏 카드] 전환 버튼을 추가해 시간·구분 칼럼과 루틴·완료체크·대상·수정 칼럼을 깔끔한 표 형태로 한눈에 조회 가능 (시간표 모드에서는 상단 중복 가로 칩 자동 숨김)",
+      "메뉴 연계 및 복사 고도화: 루틴 시간표 상단에서 [🤝 인수인계]로 바로 넘겨 카톡 시간표 전송이 가능하며, [📋] 복사 버튼도 ┌/├/└ 시간표 포맷으로 통일",
+      "실제 버그 수정: 인수인계 시간표 생성 시 시각 미지정 루틴이 r.slot 대신 r.timeSlot을 읽도록 수정해 아침·오후·자기전 시간대 정렬 정확도 확보 및 AST·TDZ·배포 정합성 최종 검증 완료"
+    ]
+  },
+  {
+    id: "patch-v12.92",
+    version: "v12.92",
+    date: "2026-11-21",
+    title: "🕒 카톡 인수인계 시간표형(타임테이블) 텍스트 & 2열 표형 PNG 이미지 카드 지원",
+    category: "시각화 · 기능 고도화",
+    changes: [
+      "🕒 시간표형(타임테이블) 모드 기본 탑재: 식단(아침·점심·간식·저녁), 선택된 루틴(예정시각·슬롯), 일정(제목 내 시간 자동 추출)을 시간순으로 통합 정렬해 카톡에서도 한눈에 들어오는 ┌/├/└ 시간표로 출력 ([🕒 시간표형 / 📋 목록형] 1탭 전환)",
+      "🖼️ 2열 표형 시각 시간표 PNG 카드: [🖼️ 카드저장] 시 시간표 섹션을 실제 테두리·교차 배경색이 들어간 2열 표(시간 칼럼 | 내용 칼럼)로 렌더링해 카톡 사진 전송에 최적화",
+      "AST·TDZ·JSX·미선언 변수·배포 정합성 최종 전수 검증 0건 통과"
+    ]
+  },
   {
     id: "patch-v12.91",
     version: "v12.91",
