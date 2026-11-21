@@ -2612,16 +2612,14 @@ function MainApp() {
     const base = new Date(dStr + "T00:00:00");
     if (Number.isNaN(base.getTime())) return true;
     if (rt.cycle === "weekly" && rt.weekDay !== undefined && rt.weekDay !== null) {
-      const curIso = base.getDay() === 0 ? 7 : base.getDay();
-      const tgtIso = Number(rt.weekDay) === 0 ? 7 : Number(rt.weekDay);
-      return tgtIso <= curIso;
+      return Number(rt.weekDay) === base.getDay();
     }
     if (rt.cycle === "monthly") {
       const y = base.getFullYear();
       const m = base.getMonth() + 1;
       const lastDay = new Date(y, m, 0).getDate();
       const tgtDay = Math.min(Math.max(1, Number(rt.monthDay) || 1), lastDay);
-      return tgtDay <= base.getDate();
+      return tgtDay === base.getDate();
     }
     if (rt.cycle === "monthly_weekday") {
       const targetStr = getNthWeekdayDateStr(
@@ -2630,7 +2628,7 @@ function MainApp() {
         Number(rt.nthWeek) || 1,
         Number(rt.weekDay ?? 6)
       );
-      return targetStr <= dStr;
+      return targetStr === dStr;
     }
     return true;
   };
@@ -8475,7 +8473,7 @@ ${validText}
         linesOut.push(`🗓️ 오늘 일정·할일: ${todaySch.map((s) => s.title).join(", ")}`);
       }
       const pendingRoutines = familyRoutines
-        .filter((r) => !isRoutineDoneNow(r))
+        .filter((r) => isRoutineDueTodayOrPast(r, today) && !isRoutineDoneNow(r))
         .sort((a, b) => String(a.scheduledTime || "99:99").localeCompare(String(b.scheduledTime || "99:99")));
       if (pendingRoutines.length > 0) {
         const previewRt = pendingRoutines

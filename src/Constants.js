@@ -1177,7 +1177,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v12.73";
+export const APP_CODE_VERSION = "v12.74";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1195,7 +1195,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-21 15:10";
+export const APP_BUILD_DATE = "2026-11-21 17:35";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1262,6 +1262,18 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v12.74",
+    version: "v12.74",
+    date: "2026-11-21",
+    title: "월요일·금요일 등 다른 요일·일자 루틴이 오늘 화면에 뜨던 오류 수정 및 오늘 브리핑 필터 정합화",
+    category: "버그 수정 · 정합화",
+    changes: [
+      "버그 수정: isRoutineDueTodayOrPast에서 요일 지정 주간 루틴(매주 월/금 등)과 일자·주차요일 지정 월간 루틴이 지난 요일/일자까지 '오늘 남은 루틴'에 계속 노출되던 조건(<=)을 해당 요일·일자 당일 일치(===)로 수정 (요일 미지정 주 1회 루틴은 기존대로 완료 전까지 유지, 다른 요일 루틴은 루틴 탭 [+ 예정]에서 언제든 관리 가능)",
+      "오늘 가족 브리핑 복사 정합화: 홈 [📋 브리핑]의 남은 루틴 집계에도 isRoutineDueTodayOrPast(r, today)를 적용해 오늘 해당되지 않는 다른 요일 루틴이 브리핑에 섞이지 않도록 수정",
+      "전체 AST·TDZ·JSX·미선언 변수·import/export 1:1 정합성 최종 재검증 완료"
+    ]
+  },
   {
     id: "patch-v12.73",
     version: "v12.73",
