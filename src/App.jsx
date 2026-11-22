@@ -559,27 +559,30 @@ const ScheduleFormModal = React.memo(({
 
         <div className="grid grid-cols-2 gap-2">
           <div>
-            <label className="text-[11.5px] font-bold text-stone-500">날짜 (기준일)</label>
+            <label className="text-[11.5px] font-bold text-stone-500 whitespace-nowrap">시작일</label>
             <input
               type="date"
               value={draft.date || ""}
-              onChange={(e) => setDraft((p) => ({ ...p, date: e.target.value }))}
-              className="w-full px-3 py-2 rounded-xl border border-stone-200 text-[13.5px] font-bold"
+              onChange={(e) => {
+                const nextStart = e.target.value;
+                setDraft((p) => ({
+                  ...p,
+                  date: nextStart,
+                  endDate: p.endDate && nextStart && p.endDate < nextStart ? "" : p.endDate
+                }));
+              }}
+              className="w-full px-2.5 py-2 rounded-xl border border-stone-200 text-[13px] font-bold"
             />
           </div>
           <div>
-            <label className="text-[11.5px] font-bold text-stone-500">분류</label>
-            <select
-              value={draft.category || "할일(To-Do)"}
-              onChange={(e) => setDraft((p) => ({ ...p, category: e.target.value }))}
-              className="w-full px-3 py-2 rounded-xl border border-stone-200 text-[13.5px] font-bold"
-            >
-              {SCHEDULE_CATEGORIES.map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
-              ))}
-            </select>
+            <label className="text-[11.5px] font-bold text-stone-500 whitespace-nowrap">종료일 (기간·선택)</label>
+            <input
+              type="date"
+              min={draft.date || undefined}
+              value={draft.endDate || ""}
+              onChange={(e) => setDraft((p) => ({ ...p, endDate: e.target.value }))}
+              className="w-full px-2.5 py-2 rounded-xl border border-stone-200 text-[13px] font-bold"
+            />
           </div>
         </div>
         <div className="grid grid-cols-4 gap-1.5">
@@ -601,7 +604,7 @@ const ScheduleFormModal = React.memo(({
               <button
                 key={opt.label}
                 type="button"
-                onClick={() => setDraft((p) => ({ ...p, date: tDate }))}
+                onClick={() => setDraft((p) => ({ ...p, date: tDate, endDate: p.endDate && p.endDate < tDate ? "" : p.endDate }))}
                 className={`py-1 rounded-xl text-[11px] font-extrabold border whitespace-nowrap transition ${
                   isSel
                     ? "bg-stone-900 text-white border-stone-900"
@@ -612,6 +615,50 @@ const ScheduleFormModal = React.memo(({
               </button>
             );
           })}
+        </div>
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-1 flex-wrap">
+            <span className="text-[10.5px] font-bold text-stone-400 whitespace-nowrap">기간:</span>
+            {[
+              { label: "하루", add: 0 },
+              { label: "2일간", add: 1 },
+              { label: "3일간", add: 2 },
+              { label: "5일간", add: 4 },
+              { label: "1주", add: 6 }
+            ].map((dur) => {
+              const baseD = draft.date || getTodayStr();
+              const targetEnd = dur.add === 0 ? "" : addMonthsToDateStr(baseD, 0, dur.add);
+              const isAct = (draft.endDate || "") === targetEnd;
+              return (
+                <button
+                  key={dur.label}
+                  type="button"
+                  onClick={() => setDraft((p) => ({ ...p, endDate: targetEnd }))}
+                  className={`px-2 py-0.5 rounded-lg text-[10.5px] font-extrabold border whitespace-nowrap transition ${
+                    isAct
+                      ? "bg-[#3F624D] text-white border-[#3F624D]"
+                      : "bg-stone-50 hover:bg-stone-100 text-stone-600 border-stone-200"
+                  }`}
+                >
+                  {dur.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+        <div>
+          <label className="text-[11.5px] font-bold text-stone-500">분류</label>
+          <select
+            value={draft.category || "할일(To-Do)"}
+            onChange={(e) => setDraft((p) => ({ ...p, category: e.target.value }))}
+            className="w-full px-3 py-2 rounded-xl border border-stone-200 text-[13.5px] font-bold"
+          >
+            {SCHEDULE_CATEGORIES.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </select>
         </div>
 
         <div>
@@ -6200,10 +6247,13 @@ function MainApp() {
     const safeMembers = toSafeArray(srcForm.members);
 
 
+    const startDate = srcForm.date || scheduleSelectedDate;
+    const cleanEndDate = srcForm.endDate && String(srcForm.endDate) > String(startDate) ? String(srcForm.endDate).slice(0, 10) : "";
     const payload = {
       id,
       title: String(srcForm.title || "").trim(),
-      date: srcForm.date || scheduleSelectedDate,
+      date: startDate,
+      ...(cleanEndDate ? { endDate: cleanEndDate } : { endDate: "" }),
       category: srcForm.category || "할일(To-Do)",
       members: safeMembers.length > 0 ? safeMembers : ["수혁", "아리나", "시목", "시율"],
       isAnnual: Boolean(srcForm.isAnnual),
@@ -6375,10 +6425,15 @@ function MainApp() {
       if (!memMatch || !catMatch) return false;
 
 
+      const sStart = String(s.date || "").slice(0, 10);
+      const sEnd = String(s.endDate || "").slice(0, 10);
       if (s.isAnnual) {
-        return String(s.date).slice(5, 10) === targetMmDd;
+        return sStart.slice(5, 10) === targetMmDd;
       }
-      return String(s.date).slice(0, 10) === targetDateStr;
+      if (sEnd && sEnd >= sStart) {
+        return targetDateStr >= sStart && targetDateStr <= sEnd;
+      }
+      return sStart === targetDateStr;
     });
   };
 
@@ -15594,6 +15649,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                               setScheduleForm({
                                 title: todo.title || "",
                                 date: todo.date || getTodayStr(),
+                                endDate: todo.endDate || "",
                                 category: todo.category || "할일(To-Do)",
                                 members: toSafeArray(todo.members).length > 0 ? toSafeArray(todo.members) : ["수혁", "아리나"],
                                 isAnnual: Boolean(todo.isAnnual),
@@ -18325,30 +18381,34 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                                 </div>
                               )}
                               {cell.combined.slice(0, holidayName ? 5 : 6).map((ev) => {
+                                const isRangeEv = Boolean(ev.endDate && ev.endDate > ev.date);
+                                const isRangeCont = isRangeEv && cell.dateStr > String(ev.date || "").slice(0, 10);
                                 if (ev._isFamily) {
                                   const famCls =
                                     ev.category === "기념일/생일"
                                       ? "border-l-[1.5px] border-pink-500 bg-pink-50/90 text-pink-900"
                                       : ev.done
-                                      ? "border-l-[1.5px] border-stone-300 bg-stone-100 text-stone-400 line-through"
+                                      ? "border-l-[1.5px] border-emerald-400/70 bg-stone-100/75 text-stone-500/80"
+                                      : isRangeEv
+                                      ? `${isRangeCont ? "border-l-0 bg-teal-50/90 text-teal-900" : "border-l-[2px] border-teal-600 bg-teal-50/95 text-teal-950"}`
                                       : "border-l-[1.5px] border-indigo-500 bg-indigo-50/85 text-indigo-900";
                                   return (
                                     <div
                                       key={`f-${ev.id}`}
                                       className={`text-[8px] leading-[1.22] tracking-[-0.04em] font-semibold pl-[2px] whitespace-nowrap overflow-hidden rounded-r-[2px] ${famCls}`}
                                     >
-                                      {ev.title}
+                                      {ev.done ? "✓" : isRangeCont ? "▸" : ""}{ev.title}
                                     </div>
                                   );
                                 }
                                 const cMeta = PRIVATE_CAL_COLORS.find((c) => c.id === ev.color) || PRIVATE_CAL_COLORS[0];
-                                const dispText = `${ev.time ? `${ev.time} ` : ""}${ev.title}`;
+                                const dispText = `${ev.done ? "✓" : isRangeCont ? "▸" : ""}${ev.time ? `${ev.time} ` : ""}${ev.title}`;
                                 return (
                                   <div
                                     key={`p-${ev.id}`}
                                     className={`text-[8px] leading-[1.22] tracking-[-0.04em] font-semibold whitespace-nowrap overflow-hidden rounded-[2px] ${cMeta.textCls} ${
-                                      ev.highlight && cMeta.bgCls ? `${cMeta.bgCls} px-[1px]` : ""
-                                    } ${ev.done ? "line-through opacity-45" : ""}`}
+                                      ev.highlight && cMeta.bgCls ? `${cMeta.bgCls} px-[1px]` : isRangeEv ? "bg-amber-50/75 px-[1px]" : ""
+                                    } ${ev.done ? "opacity-50" : ""}`}
                                   >
                                     {dispText}
                                   </div>
@@ -18487,6 +18547,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                                         setScheduleForm({
                                           title: ev.title,
                                           date: ev.date,
+                                          endDate: ev.endDate || "",
                                           category: ev.category,
                                           members: toSafeArray(ev.members),
                                           isAnnual: Boolean(ev.isAnnual),
@@ -18513,7 +18574,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
 
                                 <div
                                   className={`text-[14.5px] font-black break-keep ${
-                                    ev.done ? "line-through text-stone-400" : "text-stone-900"
+                                    ev.done ? "text-stone-400" : "text-stone-900"
                                   }`}
                                 >
                                   {ev.title}
@@ -19961,6 +20022,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                           setScheduleForm({
                             title: todo.title,
                             date: todo.date,
+                            endDate: todo.endDate || "",
                             category: todo.category,
                             members: toSafeArray(todo.members),
                             isAnnual: Boolean(todo.isAnnual),
@@ -30041,6 +30103,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                         setScheduleForm({
                           title: target.title,
                           date: target.date,
+                          endDate: target.endDate || "",
                           category: target.category,
                           members: toSafeArray(target.members),
                           isAnnual: Boolean(target.isAnnual),

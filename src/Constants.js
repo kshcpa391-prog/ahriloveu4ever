@@ -1178,7 +1178,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v13.26";
+export const APP_CODE_VERSION = "v13.27";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1196,7 +1196,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-22 20:33";
+export const APP_BUILD_DATE = "2026-11-22 21:30";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1264,6 +1264,18 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v13.27",
+    version: "v13.27",
+    date: "2026-11-22",
+    title: "🗓️ 달력 완료 일정 취소선 제거(흐림+✓ 시인성 개선) · 가족 일정 기간 범위(시작일~종료일) 연속 표시 추가",
+    category: "시인성 · 기능 추가 · 달력 고도화",
+    changes: [
+      "달력 완료 일정 가독성 개선: 좁은 달력 칸에서 글씨를 가리던 취소선(line-through)을 제거하고, 부드러운 흐림 처리와 체크 표시(✓)로 완료 여부와 글자 내용을 모두 선명하게 확인 가능",
+      "가족 일정 기간 범위(시작일~종료일) 지원: 가족 일정 추가·수정 모달에 종료일 입력 및 원탭 기간 프리셋(하루·2일간·3일간·5일간·1주)을 추가해 산후도우미·여행·연휴 일정을 달력 전 기간에 연속 표시(▸) 지원",
+      "기존 일정 수정 시 종료일 보존 및 Babel AST·임포트·배포 정합성 최종 검증 0건 통과"
+    ]
+  },
   {
     id: "patch-v13.26",
     version: "v13.26",
