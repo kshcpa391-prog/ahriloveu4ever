@@ -1178,7 +1178,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v13.31";
+export const APP_CODE_VERSION = "v13.33";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1196,7 +1196,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-22 22:40";
+export const APP_BUILD_DATE = "2026-11-22 22:55";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1264,6 +1264,30 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v13.33",
+    version: "v13.33",
+    date: "2026-11-22",
+    title: "🛡️ 일정→공지 다일정·D-Day 반영 · 주간일정 CSS/줄바꿈·모달 헤더 겹침 방지 · D-Day 다음기념일 달력 직행",
+    category: "버그 수정 · 메뉴 연계 · UI 안정화",
+    changes: [
+      "버그·정합성 수정: ① 주간 일정 요약 D-Day 배지의 오타 클래스(py-0.2→py-0.5) 및 whitespace-nowrap 누락 교정 ② 빠른 할 일 등록(handleQuickAddTodo)의 endDate 필드 보강 및 활동로그 제목 정합화 ③ 360px 좁은 화면 모달 헤더(카톡 인수인계·홈 D-Day 설정) 겹침 방지를 위한 min-w-0 truncate 보강",
+      "메뉴 연계·편의성 고도화: ① 일정/D-Day → 가족공지 공유(handleScheduleToNotice) 시 기간 범위(~종료일)·매년 반복·D-Day 문구 자동 포함 ② D-Day 상단 [다음 기념일] 요약 카드 클릭 시 해당 날짜 달력으로 바로 이동",
+      "최종 검증: esbuild 프로덕션 번들·Babel JSX AST·Node ESM 구문 검사 0건 통과"
+    ]
+  },
+  {
+    id: "patch-v13.32",
+    version: "v13.32",
+    date: "2026-11-22",
+    title: "🛠️ D-Day 헤더 겹침·필터 잘림·생후 중복 수정 · 홈 루틴 다른 날짜 오노출 해결(어제 1일 이월 정밀화 & 이월 토글)",
+    category: "버그 수정 · UI 교정 · 편의성",
+    changes: [
+      "⭐ D-Day 화면 UI 교정: 헤더 제목이 우측 버튼([📋][📌 홈][+ 추가])과 겹치던 레이아웃을 truncate + 슬림 버튼으로 완전 해소, 12개월 미만 아이 카드(시율)의 'D+N일' 중복 표기를 출생일 표기로 개선, 필터 4칩을 4열 균등 그리드로 조정해 모바일 우측 잘림 제거",
+      "홈 루틴 다른 날짜 노출 버그 수정: 주간·월간 루틴이 최대 6일 전까지 이월되며 다음주 미래 날짜(예: 11/23(월), 11/27(금))가 표시되던 문제를 수정 — 정확히 전날(어제) 1일 미완료 항목만 이월하고 날짜도 실제 미완료된 '어제 MM/DD(요일)'로 표기",
+      "홈 루틴 필터에 [어제 미완료 루틴 이월 표시 ON/OFF] 토글을 추가하고 esbuild 번들·Babel JSX AST·Acorn 최종 무결성 0건 통과"
+    ]
+  },
   {
     id: "patch-v13.31",
     version: "v13.31",
