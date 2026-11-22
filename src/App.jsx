@@ -12516,11 +12516,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
     }
   };
 
-  const toggleHomeMiniDdayId = async (schId) => {
-    if (!schId) return;
-    const nextIds = homeMiniDdayIds.includes(schId)
-      ? homeMiniDdayIds.filter((id) => id !== schId)
-      : [...homeMiniDdayIds, schId];
+  const persistHomeMiniDdayIds = async (nextIds) => {
     setHomeMiniDdayIds(nextIds);
     try { localStorage.setItem("kim_home_mini_dday_ids_v1", JSON.stringify(nextIds)); } catch (e) {}
     if (user && db) {
@@ -12534,6 +12530,23 @@ ${item.memo}` : `${item.title} 다녀옴!`,
         setSyncErrorMsg(e?.message || "홈 미니 D-Day 동기화 오류");
       }
     }
+  };
+
+  const toggleHomeMiniDdayId = async (schId) => {
+    if (!schId) return;
+    const nextIds = homeMiniDdayIds.includes(schId)
+      ? homeMiniDdayIds.filter((id) => id !== schId)
+      : [...homeMiniDdayIds, schId];
+    await persistHomeMiniDdayIds(nextIds);
+  };
+
+  const moveHomeMiniDdayId = async (schId, dir) => {
+    const idx = homeMiniDdayIds.indexOf(schId);
+    const target = idx + dir;
+    if (idx < 0 || target < 0 || target >= homeMiniDdayIds.length) return;
+    const copy = [...homeMiniDdayIds];
+    [copy[idx], copy[target]] = [copy[target], copy[idx]];
+    await persistHomeMiniDdayIds(copy);
   };
 
   const handleExpiringToAiChef = (itemNames) => {
@@ -14070,155 +14083,186 @@ ${item.memo}` : `${item.title} 다녀옴!`,
           const heroHiddenBlocks = Array.isArray(homeLayoutConfig?.[activeModeForHero]?.hiddenBlocks)
             ? homeLayoutConfig[activeModeForHero].hiddenBlocks
             : [];
-          if (heroHiddenBlocks.includes("hero_photo")) return null;
-          return (
-            <div
-              onClick={() => {
-                if (!requireEditorAccess("home")) return;
-                setHeroPhotoDraft({ ...heroPhotoConfig });
-                setIsHeroPhotoModalOpen(true);
-              }}
-              className="relative w-full aspect-[16/9] rounded-2xl overflow-hidden mb-1.5 border border-stone-200 shadow-sm bg-gradient-to-r from-amber-100 via-stone-100 to-rose-100 cursor-pointer group"
-              title="눌러서 가족사진 편집"
-            >
-              <img loading="lazy" decoding="async"
-                src={heroPhotoConfig.url || HERO_FAMILY_FALLBACK}
-                alt="수혁 아리 시목 시율 가족사진"
-                style={{ objectPosition: `50% ${heroPhotoConfig.posY ?? 35}%` }}
-                className="w-full h-full object-cover transition group-hover:scale-[1.01]"
-              />
-              <div className="absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-stone-950/75 via-stone-950/30 to-transparent pointer-events-none" />
-              <div className="absolute top-2 right-2 px-2 py-0.5 rounded-full bg-stone-950/60 backdrop-blur-sm text-white text-[10.5px] font-semibold flex items-center gap-1 whitespace-nowrap">
-                <Camera className="w-3 h-3" />
-                <span>편집</span>
-              </div>
-              <div className="absolute bottom-2 right-2.5">
-                <span className="text-[12px] font-bold text-white drop-shadow-sm">
-                  {heroPhotoConfig.caption || "수혁 · 아리 · 시목 · 시율 ♡"}
-                </span>
-              </div>
-            </div>
-          );
-        })()}
-        {activeTab === "home" && (() => {
+          const isPhotoHidden = heroHiddenBlocks.includes("hero_photo");
+
           const todayStr = getTodayStr();
           const todayMs = new Date(`${todayStr}T00:00:00`).getTime();
-          const selectedChildChips = CHILDREN_INFO
-            .filter((ch) => homeMiniDdayIds.includes(`child_elapsed:${ch.id}`))
-            .map((ch) => {
-              const birthMs = new Date(`${ch.birthDate}T00:00:00`).getTime();
-              const days = Math.max(1, Math.floor((todayMs - birthMs) / 86400000) + 1);
-              return { ch, days };
-            });
 
-          const selectedDdays = canViewTab("schedule")
-            ? schedules
-                .filter((s) => s.showDday && homeMiniDdayIds.includes(s.id))
-                .map((s) => ({ ...s, calc: calculateScheduleDday(s) }))
-                .sort((a, b) => {
-                  const ad = a.calc.daysUntil >= 0 ? a.calc.daysUntil : 9999 + Math.abs(a.calc.daysUntil);
-                  const bd = b.calc.daysUntil >= 0 ? b.calc.daysUntil : 9999 + Math.abs(b.calc.daysUntil);
-                  return ad - bd;
-                })
-            : [];
-
-          const selectedElapsedSchedules = canViewTab("schedule")
-            ? schedules
-                .filter((s) => homeMiniDdayIds.includes(`elapsed:${s.id}`))
-                .map((s) => {
-                  const calc = calculateScheduleDday(s);
-                  const rawDate = String(s.date || todayStr).slice(0, 10);
-                  const origMs = new Date(`${rawDate}T00:00:00`).getTime();
-                  const fallbackElapsed = Number.isFinite(origMs) ? Math.floor((todayMs - origMs) / 86400000) + 1 : null;
-                  const elapsedDays = calc.elapsedDays ?? (fallbackElapsed && fallbackElapsed > 0 ? fallbackElapsed : null);
-                  return { ...s, calc, elapsedDays };
-                })
-                .filter((s) => s.elapsedDays && s.elapsedDays > 0)
-            : [];
-
-          const totalShown = selectedChildChips.length + selectedDdays.length + selectedElapsedSchedules.length;
-          return (
-            <div className="flex items-center gap-1 overflow-x-auto no-scrollbar mb-1 px-0.5">
-              {selectedChildChips.map(({ ch, days }) => (
-                <button
-                  key={`child_elapsed:${ch.id}`}
-                  type="button"
-                  onClick={() => {
+          const orderedDdayItems = homeMiniDdayIds
+            .map((rawKey) => {
+              if (String(rawKey).startsWith("child_elapsed:")) {
+                const cid = String(rawKey).slice("child_elapsed:".length);
+                const ch = CHILDREN_INFO.find((c) => c.id === cid);
+                if (!ch) return null;
+                const birthMs = new Date(`${ch.birthDate}T00:00:00`).getTime();
+                const days = Math.max(1, Math.floor((todayMs - birthMs) / 86400000) + 1);
+                return {
+                  key: rawKey,
+                  label: `${ch.emoji || "👶"} ${ch.name}`,
+                  badge: `D+${days}`,
+                  cls: "border-sky-200 bg-sky-50/85 hover:bg-sky-100 text-sky-900",
+                  badgeCls: "text-sky-700",
+                  title: `${ch.name} (${ch.birthDate}생 · 생후 ${days}일)`,
+                  onClick: () => {
                     if (canViewTab("baby")) {
                       setSelectedChildId(ch.id);
                       setActiveTab("baby");
                     }
-                  }}
-                  className="px-2 py-0.5 rounded-full border border-sky-200 bg-sky-50/80 hover:bg-sky-100 text-sky-900 text-[10.5px] font-extrabold whitespace-nowrap shrink-0 flex items-center gap-1 transition"
-                  title={`${ch.name} (${ch.birthDate}생 · 생후 ${days}일)`}
-                >
-                  <span>{ch.emoji || "👶"} {ch.name}</span>
-                  <span className="text-sky-700 font-black">D+{days}</span>
-                </button>
-              ))}
-              {selectedElapsedSchedules.map((d) => (
-                <button
-                  key={`elapsed:${d.id}`}
-                  type="button"
-                  onClick={() => {
-                    const targetD = d.calc.nextDateStr || d.date || todayStr;
+                  }
+                };
+              }
+              if (!canViewTab("schedule")) return null;
+              if (String(rawKey).startsWith("elapsed:")) {
+                const sid = String(rawKey).slice("elapsed:".length);
+                const d = schedules.find((s) => s.id === sid);
+                if (!d) return null;
+                const calc = calculateScheduleDday(d);
+                const rawDate = String(d.date || todayStr).slice(0, 10);
+                const origMs = new Date(`${rawDate}T00:00:00`).getTime();
+                const fallbackElapsed = Number.isFinite(origMs) ? Math.floor((todayMs - origMs) / 86400000) + 1 : null;
+                const elapsedDays = calc.elapsedDays ?? (fallbackElapsed && fallbackElapsed > 0 ? fallbackElapsed : null);
+                if (!elapsedDays || elapsedDays <= 0) return null;
+                return {
+                  key: rawKey,
+                  label: d.title,
+                  badge: `D+${elapsedDays}`,
+                  cls: "border-rose-200 bg-rose-50/75 hover:bg-rose-100 text-rose-900",
+                  badgeCls: "text-rose-700",
+                  title: `${d.title} (${d.date}부터 ${elapsedDays}일째) · 일정 보기`,
+                  onClick: () => {
+                    const targetD = calc.nextDateStr || d.date || todayStr;
                     setScheduleMonth(String(targetD).slice(0, 7));
                     setScheduleSelectedDate(targetD);
                     setActiveTab("schedule");
                     setCalDayPopupDate(targetD);
                     setCalDayPopupItem({ ...d, _isFamily: true });
-                  }}
-                  className="px-2 py-0.5 rounded-full border border-rose-200 bg-rose-50/70 hover:bg-rose-100 text-rose-900 text-[10.5px] font-extrabold whitespace-nowrap shrink-0 flex items-center gap-1 transition"
-                  title={`${d.title} (${d.date}부터 ${d.elapsedDays}일째) · 일정 보기`}
-                >
-                  <span className="max-w-[96px] truncate">{d.title}</span>
-                  <span className="text-rose-700 font-black">D+{d.elapsedDays}</span>
-                </button>
-              ))}
-              {selectedDdays.map((d) => {
-                const badge = d.calc.daysUntil === 0 ? "D-Day" : d.calc.dDayText;
-                const isSoon = d.calc.daysUntil >= 0 && d.calc.daysUntil <= 7;
-                return (
+                  }
+                };
+              }
+              const d = schedules.find((s) => s.id === rawKey && s.showDday);
+              if (!d) return null;
+              const calc = calculateScheduleDday(d);
+              const badge = calc.daysUntil === 0 ? "D-Day" : calc.dDayText;
+              const isSoon = calc.daysUntil >= 0 && calc.daysUntil <= 7;
+              return {
+                key: rawKey,
+                label: d.title,
+                badge,
+                cls: isSoon
+                  ? "bg-amber-50 border-amber-200 text-amber-900 hover:bg-amber-100"
+                  : "bg-white border-stone-200 text-stone-700 hover:bg-stone-50",
+                badgeCls: isSoon ? "text-amber-700" : "text-[#35503C]",
+                title: `${d.title} (${calc.nextDateStr || d.date}) · 일정 보기`,
+                onClick: () => {
+                  const targetD = calc.nextDateStr || d.date || todayStr;
+                  setScheduleMonth(String(targetD).slice(0, 7));
+                  setScheduleSelectedDate(targetD);
+                  setActiveTab("schedule");
+                  setCalDayPopupDate(targetD);
+                  setCalDayPopupItem({ ...d, _isFamily: true });
+                }
+              };
+            })
+            .filter(Boolean);
+
+          if (isPhotoHidden) {
+            return (
+              <div className="flex items-center gap-1 overflow-x-auto no-scrollbar mb-1 px-0.5">
+                {accessRole !== "guest" && (
                   <button
-                    key={d.id}
                     type="button"
-                    onClick={() => {
-                      const targetD = d.calc.nextDateStr || d.date || todayStr;
-                      setScheduleMonth(String(targetD).slice(0, 7));
-                      setScheduleSelectedDate(targetD);
-                      setActiveTab("schedule");
-                      setCalDayPopupDate(targetD);
-                      setCalDayPopupItem({ ...d, _isFamily: true });
-                    }}
-                    className={`px-2 py-0.5 rounded-full border text-[10.5px] font-extrabold whitespace-nowrap shrink-0 flex items-center gap-1 transition ${
-                      isSoon
-                        ? "bg-amber-50 border-amber-200 text-amber-900 hover:bg-amber-100"
-                        : "bg-white border-stone-200 text-stone-700 hover:bg-stone-50"
-                    }`}
-                    title={`${d.title} (${d.calc.nextDateStr || d.date}) · 일정 보기`}
+                    onClick={() => setIsHomeDdayPickerOpen(true)}
+                    className="px-2 py-0.5 rounded-full border border-dashed border-stone-300 bg-stone-50/80 hover:bg-stone-100 text-stone-600 text-[10px] font-extrabold whitespace-nowrap shrink-0"
+                    title="홈 상단 D-Day · 경과일 및 순서 설정"
                   >
-                    <span className="max-w-[96px] truncate">{d.title}</span>
-                    <span className={isSoon ? "text-amber-700 font-black" : "text-[#35503C] font-black"}>
-                      {badge}
-                    </span>
+                    ⚙️ D-Day
                   </button>
-                );
-              })}
-              {accessRole !== "guest" && (
-                <button
-                  type="button"
-                  onClick={() => setIsHomeDdayPickerOpen(true)}
-                  className="px-2 py-0.5 rounded-full border border-dashed border-stone-300 bg-stone-50/80 hover:bg-stone-100 text-stone-500 text-[10px] font-extrabold whitespace-nowrap shrink-0"
-                  title="홈 상단에 표시할 D-Day · 경과일 선택"
-                >
-                  {totalShown === 0 ? "+ D-Day·경과일" : "⚙️"}
-                </button>
-              )}
+                )}
+                {orderedDdayItems.map((it) => (
+                  <button
+                    key={it.key}
+                    type="button"
+                    onClick={it.onClick}
+                    className={`px-2 py-0.5 rounded-full border text-[10.5px] font-extrabold whitespace-nowrap shrink-0 flex items-center gap-1 transition ${it.cls}`}
+                    title={it.title}
+                  >
+                    <span className="max-w-[96px] truncate">{it.label}</span>
+                    <span className={`font-black ${it.badgeCls}`}>{it.badge}</span>
+                  </button>
+                ))}
+              </div>
+            );
+          }
+
+          return (
+            <div className="flex items-start gap-2 mb-1.5">
+              {/* 좌측: 축소된 16:9 가족사진 (미리보기 비율 100% 유지) */}
+              <div
+                onClick={() => {
+                  if (!requireEditorAccess("home")) return;
+                  setHeroPhotoDraft({ ...heroPhotoConfig });
+                  setIsHeroPhotoModalOpen(true);
+                }}
+                className="relative flex-1 min-w-0 aspect-[16/9] rounded-2xl overflow-hidden border border-stone-200 shadow-sm bg-gradient-to-r from-amber-100 via-stone-100 to-rose-100 cursor-pointer group"
+                title="눌러서 가족사진 편집"
+              >
+                <img loading="lazy" decoding="async"
+                  src={heroPhotoConfig.url || HERO_FAMILY_FALLBACK}
+                  alt="수혁 아리 시목 시율 가족사진"
+                  style={{ objectPosition: `50% ${heroPhotoConfig.posY ?? 35}%` }}
+                  className="w-full h-full object-cover transition group-hover:scale-[1.01]"
+                />
+                <div className="absolute inset-x-0 bottom-0 h-9 bg-gradient-to-t from-stone-950/75 via-stone-950/30 to-transparent pointer-events-none" />
+                <div className="absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded-full bg-stone-950/60 backdrop-blur-sm text-white text-[9.5px] font-semibold flex items-center gap-0.5 whitespace-nowrap">
+                  <Camera className="w-2.5 h-2.5" />
+                  <span>편집</span>
+                </div>
+                <div className="absolute bottom-1 right-2">
+                  <span className="text-[10px] font-bold text-white drop-shadow-sm whitespace-nowrap">
+                    {heroPhotoConfig.caption || "수혁 · 아리 · 시목 · 시율 ♡"}
+                  </span>
+                </div>
+              </div>
+
+              {/* 우측: 세로 D-Day 스택 (맨 위 설정 버튼 → 선택 항목 순서대로) */}
+              <div className="w-[118px] sm:w-[134px] shrink-0 flex flex-col gap-1">
+                {accessRole !== "guest" && (
+                  <button
+                    type="button"
+                    onClick={() => setIsHomeDdayPickerOpen(true)}
+                    className="w-full px-2 py-1 rounded-xl border border-dashed border-stone-300 bg-stone-50/90 hover:bg-stone-100 text-stone-600 text-[10px] font-extrabold whitespace-nowrap flex items-center justify-center gap-1 transition"
+                    title="홈 상단 D-Day · 경과일 및 순서 설정"
+                  >
+                    <span>⚙️ D-Day 설정</span>
+                  </button>
+                )}
+                {orderedDdayItems.length === 0 ? (
+                  <div className="px-2 py-2 rounded-xl border border-stone-200/80 bg-stone-50/60 text-center text-[10px] font-semibold text-stone-400 leading-snug">
+                    표시할 D-Day를 선택해 보세요
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-1 max-h-[124px] sm:max-h-[144px] overflow-y-auto no-scrollbar">
+                    {orderedDdayItems.map((it) => (
+                      <button
+                        key={it.key}
+                        type="button"
+                        onClick={it.onClick}
+                        className={`w-full px-2 py-1 rounded-xl border text-[10.5px] font-extrabold flex items-center justify-between gap-1 transition ${it.cls}`}
+                        title={it.title}
+                      >
+                        <span className="truncate min-w-0">{it.label}</span>
+                        <span className={`font-black whitespace-nowrap shrink-0 ${it.badgeCls}`}>{it.badge}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           );
         })()}
 
 
+        {activeTab !== "home" && (
         <div className="flex items-center justify-between gap-1">
           <h1 className="text-[13.5px] font-bold tracking-tight text-stone-900 whitespace-nowrap">
             {{
@@ -14266,6 +14310,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
             </div>
           )}
         </div>
+        )}
 
 
         {activeTab === "home" && (() => {
@@ -37493,16 +37538,119 @@ ${item.memo}` : `${item.title} 다녀옴!`,
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex items-center justify-between gap-2 pb-2 border-b border-stone-200 shrink-0">
-                <h3 className="text-[15px] font-black text-stone-900">📌 홈 상단 D-Day · 경과일 선택</h3>
-                <button
-                  type="button"
-                  onClick={() => setIsHomeDdayPickerOpen(false)}
-                  className="p-1.5 rounded-full hover:bg-stone-200/70 text-stone-500"
-                >
-                  <X className="w-4 h-4" />
-                </button>
+                <h3 className="text-[14.5px] font-black text-stone-900 whitespace-nowrap">📌 홈 D-Day · 순서 설정</h3>
+                <div className="flex items-center gap-1 shrink-0">
+                  {homeMiniDdayIds.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const lines = homeMiniDdayIds
+                          .map((rawKey) => {
+                            if (String(rawKey).startsWith("child_elapsed:")) {
+                              const ch = CHILDREN_INFO.find((c) => c.id === String(rawKey).slice("child_elapsed:".length));
+                              if (!ch) return "";
+                              const days = Math.max(1, Math.floor((todayMs - new Date(`${ch.birthDate}T00:00:00`).getTime()) / 86400000) + 1);
+                              return `• ${ch.emoji || "👶"} ${ch.name}: 생후 D+${days}일`;
+                            }
+                            if (String(rawKey).startsWith("elapsed:")) {
+                              const d = candidateSchedules.find((s) => s.id === String(rawKey).slice("elapsed:".length));
+                              return d && d.elapsedDays ? `• ${d.title}: D+${d.elapsedDays}` : "";
+                            }
+                            const d = candidateSchedules.find((s) => s.id === rawKey);
+                            return d ? `• ${d.title}: ${d.calc.daysUntil === 0 ? "D-Day" : d.calc.dDayText}` : "";
+                          })
+                          .filter(Boolean);
+                        if (lines.length === 0) return showToast("복사할 D-Day가 없습니다.");
+                        copyTextSafe(`📌 우리 가족 D-Day\n${lines.join("\n")}`, "📋 D-Day 요약을 복사했습니다!");
+                      }}
+                      className="px-2 py-1 rounded-lg bg-stone-200/70 hover:bg-stone-200 text-stone-700 text-[11px] font-extrabold whitespace-nowrap"
+                      title="선택된 D-Day 요약 복사"
+                    >
+                      📋 복사
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setIsHomeDdayPickerOpen(false)}
+                    className="p-1.5 rounded-full hover:bg-stone-200/70 text-stone-500"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
               <div className="overflow-y-auto space-y-3 flex-1">
+                {/* 0. 현재 표시 순서 편집 (▲▼ 이동 · 제거) */}
+                {homeMiniDdayIds.length > 0 && (
+                  <div className="space-y-1 bg-white border border-stone-200 rounded-2xl p-2.5">
+                    <div className="text-[11px] font-black text-stone-500 px-0.5">
+                      0. 홈 우측 표시 순서 ({homeMiniDdayIds.length}개 · ▲▼로 위치 변경)
+                    </div>
+                    <div className="space-y-1">
+                      {homeMiniDdayIds.map((rawKey, idx) => {
+                        let label = "";
+                        let badge = "";
+                        if (String(rawKey).startsWith("child_elapsed:")) {
+                          const ch = CHILDREN_INFO.find((c) => c.id === String(rawKey).slice("child_elapsed:".length));
+                          if (!ch) return null;
+                          const days = Math.max(1, Math.floor((todayMs - new Date(`${ch.birthDate}T00:00:00`).getTime()) / 86400000) + 1);
+                          label = `${ch.emoji || "👶"} ${ch.name}`;
+                          badge = `D+${days}`;
+                        } else if (String(rawKey).startsWith("elapsed:")) {
+                          const d = candidateSchedules.find((s) => s.id === String(rawKey).slice("elapsed:".length));
+                          if (!d) return null;
+                          label = d.title;
+                          badge = `D+${d.elapsedDays}`;
+                        } else {
+                          const d = candidateSchedules.find((s) => s.id === rawKey);
+                          if (!d) return null;
+                          label = d.title;
+                          badge = d.calc.daysUntil === 0 ? "D-Day" : d.calc.dDayText;
+                        }
+                        return (
+                          <div
+                            key={`ord-${rawKey}`}
+                            className="flex items-center justify-between gap-1.5 px-2 py-1 rounded-xl bg-stone-50 border border-stone-200/80"
+                          >
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              <span className="text-[10.5px] font-black text-stone-400 w-3.5 text-center shrink-0">{idx + 1}</span>
+                              <span className="text-[11.5px] font-extrabold text-stone-800 truncate">{label}</span>
+                              <span className="text-[10.5px] font-black text-[#35503C] whitespace-nowrap shrink-0">{badge}</span>
+                            </div>
+                            <div className="flex items-center gap-0.5 shrink-0">
+                              <button
+                                type="button"
+                                disabled={idx === 0}
+                                onClick={() => moveHomeMiniDdayId(rawKey, -1)}
+                                className="px-1.5 py-0.5 rounded bg-white border border-stone-200 text-[10px] font-black disabled:opacity-30"
+                                title="위로 이동"
+                              >
+                                ▲
+                              </button>
+                              <button
+                                type="button"
+                                disabled={idx === homeMiniDdayIds.length - 1}
+                                onClick={() => moveHomeMiniDdayId(rawKey, 1)}
+                                className="px-1.5 py-0.5 rounded bg-white border border-stone-200 text-[10px] font-black disabled:opacity-30"
+                                title="아래로 이동"
+                              >
+                                ▼
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => toggleHomeMiniDdayId(rawKey)}
+                                className="px-1.5 py-0.5 rounded bg-rose-50 hover:bg-rose-100 text-rose-600 text-[10px] font-black"
+                                title="홈에서 제거"
+                              >
+                                ✕
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
                 {/* 1. 아이 생후 경과일 */}
                 <div className="space-y-1.5">
                   <div className="text-[11px] font-black text-stone-500 px-0.5">👶 아이 생후 경과일</div>

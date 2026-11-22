@@ -1178,7 +1178,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v13.20";
+export const APP_CODE_VERSION = "v13.21";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1196,7 +1196,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-22 19:32";
+export const APP_BUILD_DATE = "2026-11-22 19:40";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1264,6 +1264,18 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v13.21",
+    version: "v13.21",
+    date: "2026-11-22",
+    title: "🖼️ 홈 가족사진 좌측 컴팩트(16:9) + 우측 세로 D-Day·설정 스택 & 순서(▲▼) 자유 편집",
+    category: "UI 개편 · 편의성 · 시각 최적화",
+    changes: [
+      "홈 상단 좌우 통합 레이아웃: 좌측에는 미리보기 비율(16:9)을 그대로 유지한 축소 가족사진을, 우측에는 맨 위 [⚙️ D-Day 설정] 버튼 아래 시목·시율·선택 D-Day가 세로로 1개씩 쌓이도록 개편 (가족사진 숨김 시 D-Day 가로 바 자동 전환)",
+      "D-Day 순서 및 항목 자유 변경: [📌 홈 D-Day · 순서 설정] 모달 상단에 [0. 홈 우측 표시 순서] 편집기를 신설해 ▲/▼ 1탭으로 시목·시율·기념일 위치를 원하는 대로 재배치하고 클라우드에 실시간 동기화 ([📋 복사] 요약 복사 추가)",
+      "시각적 피로도 최소화: 홈 화면에서 중복 공간을 차지하던 '우리 가족 홈 ♡' 타이틀 행을 제거해 첫 화면 노출 밀도를 높이고 Babel AST·임포트·배포 정합성 최종 검증 0건 통과"
+    ]
+  },
   {
     id: "patch-v13.20",
     version: "v13.20",
