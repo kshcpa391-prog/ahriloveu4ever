@@ -1488,6 +1488,7 @@ function MainApp() {
   const [user, setUser] = useState(null);
   const [activeTab, setActiveTab] = useState("home");
   const [scheduleSubTab, setScheduleSubTab] = useState("calendar");
+  const [ddayFilter, setDdayFilter] = useState("all");
   const [fridgeConflictData, setFridgeConflictData] = useState(null);
   const [isQuickFabOpen, setIsQuickFabOpen] = useState(false);
   useEffect(() => {
@@ -2795,9 +2796,105 @@ function MainApp() {
 
   const getRoutineResetKey = (rt, dayStr = currentDayKey) => {
     if (!rt) return dayStr;
-    if (rt.cycle === "weekdays" ? "평일(공휴일 제외)" : rt.cycle === "weekend_holiday" ? "주말·공휴일" : rt.cycle === "weekly") return getIsoWeekKey(dayStr);
+    if (rt.cycle === "weekly") return getIsoWeekKey(dayStr);
     if (rt.cycle === "monthly" || rt.cycle === "monthly_weekday") return String(dayStr).slice(0, 7);
     return dayStr;
+  };
+
+  const getRoutineCarryOverInfo = (rt, dayStr = currentDayKey) => {
+    if (!rt) return null;
+    const dStr = String(dayStr || "").slice(0, 10);
+    if (!dStr) return null;
+    const resetKey = rt.cycle === "interval" ? dStr : getRoutineResetKey(rt, dStr);
+    if (rt.skippedKey === resetKey || rt.skippedKey === dStr) return null;
+    if (rt.cycle === "interval") return null;
+    if (rt.lastDoneKey === resetKey) return null;
+    if (rt.startDate && String(rt.startDate).slice(0, 10) > dStr) return null;
+    const base = new Date(dStr + "T00:00:00");
+    if (Number.isNaN(base.getTime())) return null;
+
+    if (rt.cycle === "weekly" && rt.weekDay !== undefined && rt.weekDay !== null) {
+      const targetDow = Number(rt.weekDay);
+      const curDow = base.getDay();
+      // ISO week (Mon=1 .. Sun=7)
+      const curIso = curDow === 0 ? 7 : curDow;
+      const targetIso = targetDow === 0 ? 7 : targetDow;
+      if (targetIso < curIso) {
+        const scheduledDate = getOffsetDateStr(dStr, targetIso - curIso);
+        if (!rt.startDate || String(rt.startDate).slice(0, 10) <= scheduledDate) {
+          return {
+            isCarryOver: true,
+            label: `이월(${WEEKDAY_KO[targetDow]}요일)`,
+            missedDays: curIso - targetIso
+          };
+        }
+      }
+      return null;
+    }
+
+    if (rt.cycle === "monthly") {
+      const y = base.getFullYear();
+      const m = base.getMonth() + 1;
+      const lastDay = new Date(y, m, 0).getDate();
+      const tgtDay = Math.min(Math.max(1, Number(rt.monthDay) || 1), lastDay);
+      if (tgtDay < base.getDate()) {
+        const scheduledDate = `${y}-${String(m).padStart(2, "0")}-${String(tgtDay).padStart(2, "0")}`;
+        if (!rt.startDate || String(rt.startDate).slice(0, 10) <= scheduledDate) {
+          return {
+            isCarryOver: true,
+            label: `이월(${tgtDay}일)`,
+            missedDays: base.getDate() - tgtDay
+          };
+        }
+      }
+      return null;
+    }
+
+    if (rt.cycle === "monthly_weekday") {
+      const targetStr = getNthWeekdayDateStr(
+        base.getFullYear(),
+        base.getMonth() + 1,
+        Number(rt.nthWeek) || 1,
+        Number(rt.weekDay ?? 6)
+      );
+      if (targetStr < dStr && (!rt.startDate || String(rt.startDate).slice(0, 10) <= targetStr)) {
+        const missedDays = Math.max(1, Math.round((base - new Date(targetStr + "T00:00:00")) / 86400000));
+        return {
+          isCarryOver: true,
+          label: `이월(${Number(targetStr.slice(8, 10))}일)`,
+          missedDays
+        };
+      }
+      return null;
+    }
+
+    // 매일 / 평일 / 주말·공휴일: 어제 도래했는데 미완료였다면 다음 날로 이월 표시
+    const yesterdayStr = getOffsetDateStr(dStr, -1);
+    const yIsOff = isHolidayOrWeekend(yesterdayStr);
+    const yAllowedSlots = getSlotLabelsForDayType(yIsOff);
+    const wasDueYesterday = (() => {
+      if (rt.startDate && String(rt.startDate).slice(0, 10) > yesterdayStr) return false;
+      if (!yAllowedSlots.includes(rt.timeSlot || "상시")) return false;
+      if (!rt.cycle || rt.cycle === "daily") return true;
+      if (rt.cycle === "weekdays") return !yIsOff;
+      if (rt.cycle === "weekend_holiday") return yIsOff;
+      return false;
+    })();
+    if (wasDueYesterday && rt.lastDoneKey !== yesterdayStr && rt.skippedKey !== yesterdayStr) {
+      const todayIsOff = isHolidayOrWeekend(dStr);
+      const todayAllowedSlots = getSlotLabelsForDayType(todayIsOff);
+      const isNormallyDueToday =
+        todayAllowedSlots.includes(rt.timeSlot || "상시") &&
+        (!rt.cycle ||
+          rt.cycle === "daily" ||
+          (rt.cycle === "weekdays" && !todayIsOff) ||
+          (rt.cycle === "weekend_holiday" && todayIsOff));
+      if (!isNormallyDueToday) {
+        return { isCarryOver: true, label: "어제 미완료 이월", missedDays: 1 };
+      }
+      return { isCarryOver: false, wasMissedYesterday: true, label: "어제 미완료", missedDays: 1 };
+    }
+    return null;
   };
 
 
@@ -2836,6 +2933,10 @@ function MainApp() {
     if (!rt) return false;
     const dStr = String(dayStr || "").slice(0, 10);
     if (rt.startDate && String(rt.startDate).slice(0, 10) > dStr) return false;
+    const resetKey = rt.cycle === "interval" ? dStr : getRoutineResetKey(rt, dStr);
+    if (rt.skippedKey === resetKey || rt.skippedKey === dStr) return false;
+    const carryInfo = getRoutineCarryOverInfo(rt, dStr);
+    if (carryInfo?.isCarryOver) return true;
     const allowedSlots = getSlotLabelsForDayType(isHolidayOrWeekend(dStr));
     if (!allowedSlots.includes(rt.timeSlot || "상시")) return false;
     if (!rt.cycle || rt.cycle === "daily") return true;
@@ -2957,6 +3058,25 @@ function MainApp() {
     setFamilyRoutines(nextList);
     recordActivity("루틴", wasDone ? "해제" : "완료", targetTitle);
     showToast(wasDone ? `↩️ '${targetTitle}' 완료를 취소했습니다.` : `✅ '${targetTitle}' 루틴 완료!`);
+    const updatedItem = nextList.find((r) => r.id === rtId);
+    syncRoutinesToCloud(nextList, updatedItem ? { type: "upsert", item: updatedItem } : null);
+  };
+
+
+  const handleSkipRoutineCarryOver = (rtId) => {
+    if (!requireEditorAccess("schedule")) return;
+    const todayKey = getTodayStr();
+    if (todayKey !== currentDayKey) setCurrentDayKey(todayKey);
+    let targetTitle = "";
+    const nextList = familyRoutines.map((r) => {
+      if (r.id !== rtId) return r;
+      targetTitle = r.title || "루틴";
+      const targetKey = r.cycle === "interval" ? todayKey : getRoutineResetKey(r, todayKey);
+      return { ...r, skippedKey: targetKey };
+    });
+    setFamilyRoutines(nextList);
+    recordActivity("루틴", "건너뛰기", targetTitle);
+    showToast(`⏭️ '${targetTitle}' 이월 항목을 이번 주기에서 건너뛰었습니다.`);
     const updatedItem = nextList.find((r) => r.id === rtId);
     syncRoutinesToCloud(nextList, updatedItem ? { type: "upsert", item: updatedItem } : null);
   };
@@ -14922,7 +15042,10 @@ ${item.memo}` : `${item.title} 다녀옴!`,
         const dueRoutines = (homeRoutineDayOffset === 0
           ? familyRoutines.filter((r) => isRoutineDueTodayOrPast(r, currentDayKey))
           : familyRoutines.filter((r) => isRoutineDueOnExactDay(r, homeRoutineDayStr))
-        ).filter((r) => homeAllowedSlotSet.has(r.timeSlot || "상시"));
+        ).filter((r) => {
+          if (homeRoutineDayOffset === 0 && getRoutineCarryOverInfo(r, currentDayKey)?.isCarryOver) return true;
+          return homeAllowedSlotSet.has(r.timeSlot || "상시");
+        });
         const activeRoutines = homeRoutineDayOffset === 0
           ? dueRoutines.filter((r) => !isRoutineDoneNow(r))
           : dueRoutines;
@@ -15111,6 +15234,13 @@ ${item.memo}` : `${item.title} 다녀옴!`,
         };
 
 
+        const curSlotIdx = homeAllowedSlots.indexOf(curSlot);
+        const isPastHomeTimeSlot = (slotLabel) => {
+          if (homeRoutineDayOffset !== 0) return false;
+          if (!slotLabel || slotLabel === "상시") return false;
+          const idx = homeAllowedSlots.indexOf(slotLabel);
+          return idx >= 0 && curSlotIdx >= 0 && idx < curSlotIdx;
+        };
         const effHomeSlotFilter =
           homeRoutineSlotFilter === "auto" || homeRoutineSlotFilter === "전체" || homeAllowedSlotSet.has(homeRoutineSlotFilter)
             ? homeRoutineSlotFilter
@@ -15120,16 +15250,27 @@ ${item.memo}` : `${item.title} 다녀옴!`,
             ? activeRoutines
             : effHomeSlotFilter === "auto"
             ? activeRoutines.filter((r) => {
+                if (homeRoutineDayOffset !== 0) return true;
                 const s = r.timeSlot || "상시";
-                return homeRoutineDayOffset === 0 ? (s === curSlot || s === "상시") : true;
+                if (s === curSlot || s === "상시") return true;
+                if (isPastHomeTimeSlot(s)) return true;
+                if (getRoutineCarryOverInfo(r, currentDayKey)?.isCarryOver) return true;
+                return false;
               })
             : activeRoutines.filter((r) => (r.timeSlot || "상시") === effHomeSlotFilter);
         const visibleRoutineList = slotFilteredRoutines
           .filter((r) => matchesRoutineTarget(r, homeRoutineTargetFilter))
           .sort((a, b) => {
-            const aCur = (a.timeSlot || "상시") === curSlot ? 0 : 1;
-            const bCur = (b.timeSlot || "상시") === curSlot ? 0 : 1;
-            if (aCur !== bCur) return aCur - bCur;
+            const rank = (r) => {
+              if (homeRoutineDayOffset === 0 && getRoutineCarryOverInfo(r, currentDayKey)?.isCarryOver) return 0;
+              const s = r.timeSlot || "상시";
+              if (isPastHomeTimeSlot(s)) return 1;
+              if (s === curSlot) return 2;
+              return 3;
+            };
+            const ra = rank(a);
+            const rb = rank(b);
+            if (ra !== rb) return ra - rb;
             const ta = a.scheduledTime || "99:99";
             const tb = b.scheduledTime || "99:99";
             return ta.localeCompare(tb);
@@ -15200,7 +15341,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                           setScheduleForm({
                             title: "",
                             date: getTodayStr(),
-                            category: "병원/행사",
+                            category: "육아/병원",
                             members: ["수혁", "아리나", "시목", "시율"],
                             isAnnual: false,
                             showDday: false,
@@ -15431,8 +15572,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                           {[
                             { id: "전체", label: "전체" },
                             { id: "공통", label: "공통가사" },
-                            { id: "시목", label: "시목" },
-                            { id: "시율", label: "시율" }
+                            ...FAMILY_MEMBERS.map((m) => ({ id: m.id, label: m.name }))
                           ].map((tgt) => (
                             <button
                               key={tgt.id}
@@ -15513,6 +15653,8 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                           return new Set();
                         })();
                         const isOverdue = homeRoutineDayOffset === 0 && rt.scheduledTime ? isRoutineTimeOverdue(rt.scheduledTime) : false;
+                        const carryInfo = homeRoutineDayOffset === 0 ? getRoutineCarryOverInfo(rt, currentDayKey) : null;
+                        const isPastSlot = !carryInfo?.isCarryOver && isPastHomeTimeSlot(rt.timeSlot || "상시");
                         const metaParts = [
                           rt.timeSlot || "상시",
                           rt.scheduledTime ? formatRoutineTimeLabel(rt.scheduledTime) : "",
@@ -15594,8 +15736,34 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                                     {Array.isArray(rt.attachments) && rt.attachments.length > 0 && (
                                       <span className="text-stone-600 font-semibold whitespace-nowrap">· 첨부 {rt.attachments.length}건</span>
                                     )}
+                                    {carryInfo?.isCarryOver && (
+                                      <span className="px-1.5 py-0.5 rounded bg-rose-50 text-rose-700 border border-rose-200 text-[10.5px] font-extrabold whitespace-nowrap">
+                                        📌 {carryInfo.label}
+                                      </span>
+                                    )}
+                                    {!carryInfo?.isCarryOver && carryInfo?.wasMissedYesterday && (
+                                      <span className="text-rose-700 font-bold whitespace-nowrap">· 어제 미완료</span>
+                                    )}
+                                    {isPastSlot && (
+                                      <span className="px-1.5 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200 text-[10.5px] font-extrabold whitespace-nowrap">
+                                        지난 시간대
+                                      </span>
+                                    )}
                                     {isOverdue && (
                                       <span className="text-amber-800 font-bold whitespace-nowrap">· 시간 지남</span>
+                                    )}
+                                    {carryInfo?.isCarryOver && canEditTab("schedule") && (
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleSkipRoutineCarryOver(rt.id);
+                                        }}
+                                        className="px-1.5 py-0.5 rounded bg-stone-100 hover:bg-stone-200 text-stone-600 text-[10.5px] font-bold whitespace-nowrap"
+                                        title="이번 주기 이월 건너뛰기"
+                                      >
+                                        건너뛰기
+                                      </button>
                                     )}
                                   </div>
                                 </div>
@@ -17960,19 +18128,19 @@ ${item.memo}` : `${item.title} 다녀옴!`,
         <div className="px-3 pt-2.5 pb-4 space-y-2.5">
 
 
-          <div className="grid grid-cols-3 gap-1 bg-stone-100 p-1 rounded-2xl">
+          <div className="grid grid-cols-4 gap-1 bg-stone-100 p-1 rounded-2xl">
             <button
               type="button"
               onClick={() => setScheduleSubTab("calendar")}
-              className={`py-2 px-1.5 rounded-xl text-[12px] font-black flex items-center justify-center gap-1 whitespace-nowrap transition ${
+              className={`py-2 px-1 rounded-xl text-[11.5px] font-black flex items-center justify-center gap-1 whitespace-nowrap transition ${
                 scheduleSubTab === "calendar"
                   ? "bg-white text-stone-900 shadow-sm"
                   : "text-stone-500 hover:text-stone-800"
               }`}
             >
-              <span className="whitespace-nowrap">📅 달력·일정</span>
+              <span className="whitespace-nowrap">📅 달력</span>
               {imminentSchedulesWithin3Days.length > 0 && (
-                <span className="px-1.5 py-0.5 rounded-full bg-rose-600 text-white text-[10.5px] font-black leading-none whitespace-nowrap shrink-0">
+                <span className="px-1.5 py-0.5 rounded-full bg-rose-600 text-white text-[10px] font-black leading-none whitespace-nowrap shrink-0">
                   {imminentSchedulesWithin3Days.length}
                 </span>
               )}
@@ -17980,7 +18148,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
             <button
               type="button"
               onClick={() => setScheduleSubTab("todo")}
-              className={`py-2 px-1.5 rounded-xl text-[12px] font-black flex items-center justify-center gap-1 whitespace-nowrap transition ${
+              className={`py-2 px-1 rounded-xl text-[11.5px] font-black flex items-center justify-center gap-1 whitespace-nowrap transition ${
                 scheduleSubTab === "todo"
                   ? "bg-white text-stone-900 shadow-sm"
                   : "text-stone-500 hover:text-stone-800"
@@ -17988,7 +18156,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
             >
               <span className="whitespace-nowrap">✅ 할 일</span>
               {globalTodoBadgeStats.activeCount > 0 && (
-                <span className="px-1.5 py-0.5 rounded-full bg-amber-500 text-white text-[10.5px] font-black leading-none whitespace-nowrap shrink-0">
+                <span className="px-1.5 py-0.5 rounded-full bg-amber-500 text-white text-[10px] font-black leading-none whitespace-nowrap shrink-0">
                   {globalTodoBadgeStats.activeCount}
                 </span>
               )}
@@ -17996,16 +18164,32 @@ ${item.memo}` : `${item.title} 다녀옴!`,
             <button
               type="button"
               onClick={() => setScheduleSubTab("routine")}
-              className={`py-2 px-1.5 rounded-xl text-[12px] font-black flex items-center justify-center gap-1 whitespace-nowrap transition ${
+              className={`py-2 px-1 rounded-xl text-[11.5px] font-black flex items-center justify-center gap-1 whitespace-nowrap transition ${
                 scheduleSubTab === "routine"
                   ? "bg-white text-stone-900 shadow-sm"
                   : "text-stone-500 hover:text-stone-800"
               }`}
             >
-              <span className="whitespace-nowrap">🔄 반복 루틴</span>
+              <span className="whitespace-nowrap">🔄 루틴</span>
               {familyRoutines.filter((r) => isRoutineDueTodayOrPast(r, currentDayKey) && !isRoutineDoneNow(r)).length > 0 && (
-                <span className="px-1.5 py-0.5 rounded-full bg-indigo-600 text-white text-[10.5px] font-black leading-none whitespace-nowrap shrink-0">
+                <span className="px-1.5 py-0.5 rounded-full bg-indigo-600 text-white text-[10px] font-black leading-none whitespace-nowrap shrink-0">
                   {familyRoutines.filter((r) => isRoutineDueTodayOrPast(r, currentDayKey) && !isRoutineDoneNow(r)).length}
+                </span>
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={() => setScheduleSubTab("dday")}
+              className={`py-2 px-1 rounded-xl text-[11.5px] font-black flex items-center justify-center gap-1 whitespace-nowrap transition ${
+                scheduleSubTab === "dday"
+                  ? "bg-white text-stone-900 shadow-sm"
+                  : "text-stone-500 hover:text-stone-800"
+              }`}
+            >
+              <span className="whitespace-nowrap">⭐ D-Day</span>
+              {dDayCards.length > 0 && (
+                <span className="px-1.5 py-0.5 rounded-full bg-[#3F624D] text-white text-[10px] font-black leading-none whitespace-nowrap shrink-0">
+                  {dDayCards.length}
                 </span>
               )}
             </button>
@@ -19563,9 +19747,14 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                                     : rt.title}
                                 </div>
                                 <div className="flex items-center gap-0.5 shrink-0 pt-0.5">
-                                  {rt.target && rt.target !== "공통" && (
+                                  {!doneNow && getRoutineCarryOverInfo(rt, currentDayKey)?.isCarryOver && (
+                                    <span className="px-1 py-0.5 rounded bg-rose-100 text-rose-700 text-[9px] font-extrabold leading-none whitespace-nowrap">
+                                      이월
+                                    </span>
+                                  )}
+                                  {(rt.assignee || rt.target) && (rt.assignee || rt.target) !== "공통" && (
                                     <span className="px-1 py-0.5 rounded bg-sky-50 text-sky-800 text-[9px] font-extrabold leading-none whitespace-nowrap">
-                                      {rt.target}
+                                      {rt.assignee || rt.target}
                                     </span>
                                   )}
                                   {!isDueNow && (
@@ -19753,13 +19942,48 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                                     </span>
                                   );
                                 }
+                                if (rt.cycle === "weekdays") {
+                                  return (
+                                    <span className="px-1.5 py-0.5 rounded text-[10.5px] font-black bg-sky-100 text-sky-800 whitespace-nowrap">
+                                      평일(공휴일 제외)
+                                    </span>
+                                  );
+                                }
+                                if (rt.cycle === "weekend_holiday") {
+                                  return (
+                                    <span className="px-1.5 py-0.5 rounded text-[10.5px] font-black bg-rose-100 text-rose-800 whitespace-nowrap">
+                                      주말·공휴일
+                                    </span>
+                                  );
+                                }
                                 return (
                                   <span className="px-1.5 py-0.5 rounded text-[10.5px] font-black bg-sky-100 text-sky-800 whitespace-nowrap">
                                     매일 자정 리셋
                                   </span>
                                 );
                               })()}
-                              <span className={`px-1.5 py-0.5 rounded text-[10.5px] font-black ${getRoutineAssigneeBadgeCls(rt.assignee)}`}>
+                              {(() => {
+                                const cInfo = !doneNow ? getRoutineCarryOverInfo(rt, currentDayKey) : null;
+                                if (!cInfo) return null;
+                                return (
+                                  <>
+                                    <span className="px-1.5 py-0.5 rounded text-[10.5px] font-black bg-rose-100 text-rose-800 border border-rose-200 whitespace-nowrap">
+                                      📌 {cInfo.label}
+                                    </span>
+                                    {cInfo.isCarryOver && canEditTab("schedule") && (
+                                      <button
+                                        type="button"
+                                        onClick={() => handleSkipRoutineCarryOver(rt.id)}
+                                        className="px-1.5 py-0.5 rounded text-[10.5px] font-extrabold bg-stone-200/80 hover:bg-stone-300 text-stone-700 whitespace-nowrap"
+                                        title="이번 주기 이월 건너뛰기"
+                                      >
+                                        건너뛰기
+                                      </button>
+                                    )}
+                                  </>
+                                );
+                              })()}
+                              <span className={`px-1.5 py-0.5 rounded text-[10.5px] font-black whitespace-nowrap ${getRoutineAssigneeBadgeCls(rt.assignee)}`}>
                                 {rt.assignee || "공통"}
                               </span>
                               {Array.isArray(rt.attachments) && rt.attachments.map((att) => {
@@ -20191,86 +20415,303 @@ ${item.memo}` : `${item.title} 다녀옴!`,
           )}
 
 
-          {/* [5순위 최하단 배치] 우리 가족 D-Day & 기념일 카운트다운 보드 */}
-          {scheduleSubTab === "calendar" && (
-          <div className="bg-gradient-to-br from-stone-900 via-stone-800 to-stone-900 text-white p-4 rounded-2xl shadow-md space-y-2.5">
-            <div className="flex items-center justify-between">
-              <div className="text-[13.5px] font-black text-amber-300 flex items-center gap-1.5">
-                <Star className="w-3.5 h-3.5 fill-amber-300 text-amber-300" />
-                <span>우리 가족 D-Day & 기념일 카운트다운 (오늘: {getTodayStr()})</span>
-              </div>
-            </div>
-
-
-            <div className="space-y-2">
-              {dDayCards.map((item) => (
-                <div
-                  key={item.id}
-                  onClick={() => {
-                    const targetMonth = item.isAnnual
-                      ? `${scheduleMonth.slice(0, 4)}-${String(item.date).slice(5, 7)}`
-                      : String(item.date).slice(0, 7);
-                    const targetDay = item.isAnnual
-                      ? `${scheduleMonth.slice(0, 4)}-${String(item.date).slice(5, 10)}`
-                      : String(item.date).slice(0, 10);
-                    setScheduleMonth(targetMonth);
-                    setScheduleSelectedDate(targetDay);
-                    window.scrollTo({ top: 0, behavior: "smooth" });
-                  }}
-                  className="bg-white/10 hover:bg-white/15 border border-white/15 rounded-xl px-3 py-2.5 cursor-pointer transition flex items-center justify-between gap-2"
-                >
-                  <div className="min-w-0 flex-1">
-                    <div className="text-[13.5px] font-extrabold text-white break-keep leading-snug">
-                      {item.title}
-                    </div>
-                    <div className="text-[12.5px] font-semibold text-stone-300 mt-0.5 flex flex-wrap items-center gap-2">
-                      <span>
-                        📅 {item.isAnnual ? `매년 ${String(item.date).slice(5).replace("-", "월 ")}일` : item.date}
-                      </span>
-                      {item.calc.elapsedDays !== null && (
-                        <span className="text-amber-300 font-extrabold">
-                          • {item.id.includes("bday") ? "생후" : "함께한 지"} D+{item.calc.elapsedDays.toLocaleString()}일째
+          {/* 별도 서브메뉴: 우리 가족 D-Day & 기념일 카운트다운 */}
+          {scheduleSubTab === "dday" && (() => {
+            const filteredDdays = dDayCards.filter((item) => {
+              if (ddayFilter === "upcoming") return item.calc.daysUntil >= 0;
+              if (ddayFilter === "annual") return Boolean(item.isAnnual);
+              if (ddayFilter === "elapsed") return item.calc.elapsedDays !== null;
+              return true;
+            });
+            const nextUpcoming = dDayCards.find((item) => item.calc.daysUntil >= 0) || null;
+            return (
+              <div className="space-y-2.5">
+                {/* 헤더 카드 */}
+                <div className="bg-white rounded-2xl border border-stone-200 shadow-sm p-3.5 space-y-2.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="text-[14px] font-black text-stone-900 flex items-center gap-1.5 whitespace-nowrap">
+                        <Star className="w-4 h-4 fill-amber-400 text-amber-500 shrink-0" />
+                        <span>우리 가족 D-Day &amp; 기념일</span>
+                        <span className="px-1.5 py-0.5 rounded-full bg-[#EEF3EE] text-[#35503C] text-[11px] font-black whitespace-nowrap">
+                          {filteredDdays.length}건
                         </span>
+                      </div>
+                      <div className="text-[11.5px] font-semibold text-stone-500 mt-0.5">
+                        오늘 기준: {getTodayStr()} ({getDayName(getTodayStr())})
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      {filteredDdays.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            const lines = [
+                              `⭐ 우리 가족 D-Day & 기념일 (${getTodayStr()})`,
+                              ...filteredDdays.map((it) => {
+                                const dtStr = it.isAnnual ? `매년 ${String(it.date).slice(5).replace("-", "/")}일` : it.date;
+                                const elStr = it.calc.elapsedDays !== null ? ` · D+${it.calc.elapsedDays.toLocaleString()}일` : "";
+                                return `• [${it.calc.dDayText}] ${it.title} (${dtStr}${elStr})`;
+                              })
+                            ];
+                            await copyTextSafe(lines.join("\n"), `📋 D-Day ${filteredDdays.length}건을 복사했습니다!`);
+                          }}
+                          className="h-7 px-2 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 text-[11px] font-extrabold whitespace-nowrap"
+                          title="D-Day 목록 복사"
+                        >
+                          📋
+                        </button>
+                      )}
+                      {accessRole !== "guest" && (
+                        <button
+                          type="button"
+                          onClick={() => setIsHomeDdayPickerOpen(true)}
+                          className="h-7 px-2 rounded-lg bg-[#EEF3EE] hover:bg-[#DFE9E0] text-[#35503C] text-[11px] font-extrabold whitespace-nowrap"
+                          title="홈 상단 미니 D-Day 순서·표시 설정"
+                        >
+                          📌 홈 설정
+                        </button>
+                      )}
+                      {canEditTab("schedule") && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditingSchedule(null);
+                            setScheduleForm({
+                              title: "",
+                              date: getTodayStr(),
+                              category: "기념일/생일",
+                              members: ["수혁", "아리나", "시목", "시율"],
+                              isAnnual: false,
+                              showDday: true,
+                              hasOriginYear: true,
+                              memo: "",
+                              attachments: []
+                            });
+                            setIsScheduleModalOpen(true);
+                          }}
+                          className="h-7 px-2.5 rounded-lg bg-[#3F624D] hover:bg-[#324E3D] text-white text-[11px] font-extrabold whitespace-nowrap"
+                        >
+                          + 추가
+                        </button>
                       )}
                     </div>
                   </div>
 
+                  {/* 다가오는 D-Day 하이라이트 + 아이 생후 경과일 바로가기 */}
+                  <div className="grid grid-cols-3 gap-1.5">
+                    <div className="bg-[#FAF8F3] border border-stone-200/80 rounded-xl px-2.5 py-2 min-w-0">
+                      <div className="text-[10px] font-bold text-stone-500 whitespace-nowrap">다음 기념일</div>
+                      {nextUpcoming ? (
+                        <>
+                          <div className="text-[12px] font-black text-stone-900 truncate mt-0.5">{nextUpcoming.title}</div>
+                          <div className="text-[11px] font-black text-amber-700 whitespace-nowrap">{nextUpcoming.calc.dDayText}</div>
+                        </>
+                      ) : (
+                        <div className="text-[11px] font-bold text-stone-400 mt-1">없음</div>
+                      )}
+                    </div>
+                    {CHILDREN_INFO.map((ch) => {
+                      const st = getChildAgeStats(ch.birthDate);
+                      return (
+                        <button
+                          key={ch.id}
+                          type="button"
+                          onClick={() => {
+                            setSelectedChildId(ch.id);
+                            setActiveTab("baby");
+                          }}
+                          className="bg-[#FAF8F3] hover:bg-[#EEF3EE] border border-stone-200/80 rounded-xl px-2.5 py-2 text-left min-w-0 transition"
+                          title={`${ch.name} 육아수첩으로 이동`}
+                        >
+                          <div className="text-[10px] font-bold text-stone-500 whitespace-nowrap">{ch.emoji} {ch.name} 생후</div>
+                          <div className="text-[12.5px] font-black text-[#35503C] whitespace-nowrap mt-0.5">D+{st.days.toLocaleString()}일</div>
+                          <div className="text-[10px] font-bold text-stone-500 whitespace-nowrap">{formatBabyAgeLabel(ch.birthDate)}</div>
+                        </button>
+                      );
+                    })}
+                  </div>
 
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    {accessRole !== "guest" && (
+                  {/* 필터 칩 */}
+                  <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+                    {[
+                      { id: "all", label: `전체 (${dDayCards.length})` },
+                      { id: "upcoming", label: "다가오는 D-Day" },
+                      { id: "annual", label: "매년 반복" },
+                      { id: "elapsed", label: "경과일(D+)" }
+                    ].map((f) => (
                       <button
+                        key={f.id}
                         type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          const wasPinned = homeMiniDdayIds.includes(item.id);
-                          toggleHomeMiniDdayId(item.id);
-                          showToast(wasPinned ? "📌 홈 상단 미니 D-Day에서 해제했습니다." : "📌 홈 상단 미니 D-Day에 고정했습니다!");
-                        }}
-                        className={`px-2 py-1 rounded-xl text-[11px] font-extrabold border whitespace-nowrap transition ${
-                          homeMiniDdayIds.includes(item.id)
-                            ? "bg-[#5E7A65] text-white border-[#7E9E86]"
-                            : "bg-white/10 hover:bg-white/20 text-stone-200 border-white/20"
+                        onClick={() => setDdayFilter(f.id)}
+                        className={`h-7 px-2.5 rounded-xl text-[11px] font-extrabold border whitespace-nowrap shrink-0 transition ${
+                          ddayFilter === f.id
+                            ? "bg-[#3F624D] text-white border-[#3F624D]"
+                            : "bg-stone-50 text-stone-600 border-stone-200 hover:bg-stone-100"
                         }`}
-                        title={homeMiniDdayIds.includes(item.id) ? "홈 상단 고정 해제" : "홈 상단 미니바에 고정"}
                       >
-                        {homeMiniDdayIds.includes(item.id) ? "📌 고정중" : "📌 홈"}
+                        {f.label}
                       </button>
-                    )}
-                    <span
-                      className={`px-2.5 py-1 rounded-xl text-[12.5px] font-black whitespace-nowrap ${
-                        item.calc.daysUntil <= 3 && item.calc.daysUntil >= 0
-                          ? "bg-rose-500 text-white animate-pulse"
-                          : "bg-amber-400 text-stone-900"
-                      }`}
-                    >
-                      {item.calc.dDayText}
-                    </span>
+                    ))}
                   </div>
                 </div>
-              ))}
-            </div>
-          </div>
-          )}
+
+                {/* D-Day 리스트 */}
+                {filteredDdays.length === 0 ? (
+                  <div className="bg-white rounded-2xl border border-stone-200 p-6 text-center space-y-2">
+                    <div className="text-[13px] font-bold text-stone-500">
+                      {ddayFilter === "all" ? "등록된 D-Day · 기념일이 없습니다." : "선택한 조건의 D-Day가 없습니다."}
+                    </div>
+                    {ddayFilter !== "all" ? (
+                      <button
+                        type="button"
+                        onClick={() => setDdayFilter("all")}
+                        className="h-7 px-3 rounded-lg bg-[#EEF3EE] text-[#35503C] text-[11.5px] font-extrabold whitespace-nowrap"
+                      >
+                        🔄 필터 초기화
+                      </button>
+                    ) : canEditTab("schedule") && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingSchedule(null);
+                          setScheduleForm({
+                            title: "",
+                            date: getTodayStr(),
+                            category: "기념일/생일",
+                            members: ["수혁", "아리나", "시목", "시율"],
+                            isAnnual: false,
+                            showDday: true,
+                            hasOriginYear: true,
+                            memo: "",
+                            attachments: []
+                          });
+                          setIsScheduleModalOpen(true);
+                        }}
+                        className="h-8 px-3 rounded-xl bg-[#3F624D] text-white text-[12px] font-extrabold whitespace-nowrap"
+                      >
+                        + 첫 D-Day 등록
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {filteredDdays.map((item) => {
+                      const isPinnedHome = homeMiniDdayIds.includes(item.id);
+                      const isSoon = item.calc.daysUntil >= 0 && item.calc.daysUntil <= 7;
+                      const isTodayDday = item.calc.daysUntil === 0;
+                      const jumpToCalendar = () => {
+                        const targetDay = item.calc.nextDateStr || String(item.date).slice(0, 10);
+                        setScheduleMonth(String(targetDay).slice(0, 7));
+                        setScheduleSelectedDate(targetDay);
+                        setScheduleSubTab("calendar");
+                        window.scrollTo({ top: 0, behavior: "smooth" });
+                      };
+                      return (
+                        <div
+                          key={item.id}
+                          className={`bg-white rounded-2xl border p-3 shadow-sm flex items-center justify-between gap-2.5 transition ${
+                            isTodayDday
+                              ? "border-rose-300 bg-rose-50/30"
+                              : isSoon
+                              ? "border-amber-300 bg-amber-50/20"
+                              : "border-stone-200 hover:border-stone-300"
+                          }`}
+                        >
+                          <button
+                            type="button"
+                            onClick={jumpToCalendar}
+                            className="min-w-0 flex-1 text-left"
+                            title="달력에서 해당 날짜 보기"
+                          >
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              <span className="text-[13.5px] font-black text-stone-900 truncate">
+                                {item.title}
+                              </span>
+                              {item.isAnnual && (
+                                <span className="px-1.5 py-0.5 rounded bg-stone-100 text-stone-600 text-[10px] font-extrabold whitespace-nowrap shrink-0">
+                                  매년
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-[11.5px] font-semibold text-stone-600 mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                              <span className="whitespace-nowrap">
+                                📅 {item.isAnnual ? `매년 ${String(item.date).slice(5).replace("-", "월 ")}일` : item.date}
+                              </span>
+                              {item.calc.elapsedDays !== null && (
+                                <span className="text-[#35503C] font-extrabold whitespace-nowrap">
+                                  · {item.id.includes("bday") ? "생후" : "함께한 지"} D+{item.calc.elapsedDays.toLocaleString()}일
+                                </span>
+                              )}
+                            </div>
+                            {item.memo && (
+                              <div className="text-[11px] text-stone-500 mt-0.5 truncate">{item.memo}</div>
+                            )}
+                          </button>
+
+                          <div className="flex items-center gap-1 shrink-0">
+                            {accessRole !== "guest" && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  toggleHomeMiniDdayId(item.id);
+                                  showToast(isPinnedHome ? "📌 홈 상단 미니 D-Day에서 해제했습니다." : "📌 홈 상단 미니 D-Day에 고정했습니다!");
+                                }}
+                                className={`h-7 px-2 rounded-lg text-[10.5px] font-extrabold border whitespace-nowrap transition ${
+                                  isPinnedHome
+                                    ? "bg-[#5E7A65] text-white border-[#5E7A65]"
+                                    : "bg-stone-50 hover:bg-stone-100 text-stone-600 border-stone-200"
+                                }`}
+                                title={isPinnedHome ? "홈 상단 고정 해제" : "홈 상단 미니바에 고정"}
+                              >
+                                {isPinnedHome ? "📌 고정중" : "📌 홈"}
+                              </button>
+                            )}
+                            {canEditTab("schedule") && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEditingSchedule(item);
+                                  setScheduleForm({
+                                    title: item.title || "",
+                                    date: item.date || getTodayStr(),
+                                    endDate: item.endDate || "",
+                                    category: item.category || "기념일/생일",
+                                    members: Array.isArray(item.members) ? item.members : ["수혁", "아리나", "시목", "시율"],
+                                    isAnnual: Boolean(item.isAnnual),
+                                    showDday: Boolean(item.showDday),
+                                    hasOriginYear: Boolean(item.hasOriginYear),
+                                    memo: item.memo || "",
+                                    attachments: Array.isArray(item.attachments) ? item.attachments : []
+                                  });
+                                  setIsScheduleModalOpen(true);
+                                }}
+                                className="h-7 w-7 rounded-lg bg-stone-50 hover:bg-stone-100 border border-stone-200 text-stone-600 flex items-center justify-center shrink-0"
+                                title="기념일 수정"
+                              >
+                                <Edit2 className="w-3 h-3" />
+                              </button>
+                            )}
+                            <span
+                              className={`px-2 py-1 rounded-xl text-[12px] font-black whitespace-nowrap ${
+                                isTodayDday
+                                  ? "bg-rose-600 text-white"
+                                  : isSoon
+                                  ? "bg-amber-100 text-amber-900 border border-amber-300"
+                                  : "bg-[#EEF3EE] text-[#35503C] border border-[#C9D8CC]"
+                              }`}
+                            >
+                              {item.calc.dDayText}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
         </div>
       ))}
 
@@ -29011,7 +29452,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                       setScheduleForm({
                         title: "",
                         date: scheduleSelectedDate || getTodayStr(),
-                        category: "병원/행사",
+                        category: "육아/병원",
                         members: (scheduleMemberFilter === "전체" || scheduleMemberFilter === "공통") ? ["수혁", "아리나", "시목", "시율"] : [scheduleMemberFilter],
                         isAnnual: false,
                         showDday: false,
@@ -36614,9 +37055,10 @@ ${item.memo}` : `${item.title} 다녀옴!`,
               ? isRoutineDueTodayOrPast(r, today) && !isRoutineDoneNow(r)
               : isRoutineDueOnExactDay(r, targetDate);
             if (!matchDay) return false;
-            const rt = r.target || "공통";
+            const rt = r.assignee || r.target || "공통";
             if (rt === "시목") return Boolean(handoverTargets["시목"]);
             if (rt === "시율") return Boolean(handoverTargets["시율"]);
+            if (rt === "시목·시율") return Boolean(handoverTargets["시목"] || handoverTargets["시율"]);
             return includeMomHouse;
           })
           .sort((a, b) => String(a.scheduledTime || "99:99").localeCompare(String(b.scheduledTime || "99:99")));
@@ -36678,7 +37120,8 @@ ${item.memo}` : `${item.title} 다녀옴!`,
               const slotName = r.timeSlot || r.slot || "상시";
               const sk = hasTime ? normTime : (slotSortMap[slotName] || "99:00");
               const tLabel = hasTime ? normTime : slotName;
-              const who = r.target && r.target !== "공통" ? ` (${r.target})` : "";
+              const whoVal = r.assignee || r.target;
+              const who = whoVal && whoVal !== "공통" ? ` (${whoVal})` : "";
               rows.push({
                 sortKey: sk,
                 timeLabel: tLabel,
@@ -38099,28 +38542,41 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                 </div>
               </div>
               <div className="flex items-center justify-between gap-2 pt-1 border-t border-stone-200 shrink-0">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setEditingSchedule(null);
-                    setScheduleForm({
-                      title: "",
-                      date: getTodayStr(),
-                      category: "기념일/생일",
-                      members: ["수혁", "아리나", "시목", "시율"],
-                      isAnnual: false,
-                      showDday: true,
-                      hasOriginYear: true,
-                      memo: "",
-                      attachments: []
-                    });
-                    setIsHomeDdayPickerOpen(false);
-                    setIsScheduleModalOpen(true);
-                  }}
-                  className="px-3 py-2 rounded-xl bg-white border border-stone-200 text-stone-700 text-[12px] font-extrabold whitespace-nowrap"
-                >
-                  + 새 일정 추가
-                </button>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsHomeDdayPickerOpen(false);
+                      setScheduleSubTab("dday");
+                      setActiveTab("schedule");
+                    }}
+                    className="px-2.5 py-2 rounded-xl bg-[#EEF3EE] hover:bg-[#DFE9E0] text-[#35503C] text-[11.5px] font-extrabold whitespace-nowrap"
+                  >
+                    ⭐ D-Day 탭
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingSchedule(null);
+                      setScheduleForm({
+                        title: "",
+                        date: getTodayStr(),
+                        category: "기념일/생일",
+                        members: ["수혁", "아리나", "시목", "시율"],
+                        isAnnual: false,
+                        showDday: true,
+                        hasOriginYear: true,
+                        memo: "",
+                        attachments: []
+                      });
+                      setIsHomeDdayPickerOpen(false);
+                      setIsScheduleModalOpen(true);
+                    }}
+                    className="px-2.5 py-2 rounded-xl bg-white border border-stone-200 text-stone-700 text-[11.5px] font-extrabold whitespace-nowrap"
+                  >
+                    + 추가
+                  </button>
+                </div>
                 <div className="flex items-center gap-1.5">
                   {homeMiniDdayIds.length > 0 && (
                     <button

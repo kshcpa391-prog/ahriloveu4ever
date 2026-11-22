@@ -1178,7 +1178,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v13.28";
+export const APP_CODE_VERSION = "v13.29";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1196,7 +1196,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-22 21:55";
+export const APP_BUILD_DATE = "2026-11-22 22:30";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1264,6 +1264,18 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v13.29",
+    version: "v13.29",
+    date: "2026-11-22",
+    title: "🔄 미완료 루틴 이월·지난 시간대 홈 유지 & 리셋 버그 수정 · ⭐ D-Day 별도 서브메뉴 분리 · 담당자/카테고리 오류 일괄 수정",
+    category: "버그 수정 · 신규 기능 · UI 통일 · 메뉴 연계",
+    changes: [
+      "미완료 루틴 처리 고도화: 홈 화면 [자동] 필터에서 지나간 시간대의 미완료 루틴도 [지난 시간대] 배지와 함께 계속 표시하고, 전날·이전 요일/일자에 미완료된 루틴은 [📌 이월] 배지로 자동 이월(1탭 [건너뛰기] 지원, 클라우드 skippedKey 동기화)",
+      "핵심 버그 3종 수정: ① getRoutineResetKey에서 평일/주말·공휴일 루틴이 주간 단위로 리셋되던 삼항연산자 오류를 일간 리셋으로 수정 ② 루틴 시간표 및 육아 인수인계에서 r.target 오참조로 담당자(시목/시율 등) 배지·필터가 누락되던 오류를 r.assignee 기준으로 수정 ③ 홈/빠른등록 일정 추가 시 잘못된 카테고리('병원/행사'→'육아/병원') 교정",
+      "⭐ 우리 가족 D-Day & 기념일 별도 서브메뉴 분리: 달력 하단의 어두운 보드를 일정 4열 서브탭([📅 달력 · ✅ 할 일 · 🔄 루틴 · ⭐ D-Day])으로 독립시키고 전 탭 공통 화이트·세이지그린 톤으로 통일 (1탭 카톡 복사·필터·홈 D-Day 설정·아이 육아수첩·달력 직행 양방향 연계)"
+    ]
+  },
   {
     id: "patch-v13.28",
     version: "v13.28",
