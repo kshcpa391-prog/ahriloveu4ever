@@ -235,6 +235,7 @@ export const DEFAULT_HOME_MENU_ORDER = [
   "notices",
   "pages",
   "bucket",
+  "handover",
   "house",
   "ai"
 ];
@@ -255,7 +256,7 @@ export const DEFAULT_HOME_LAYOUT = {
     hiddenMenus: [],
     blockSizes: {},
     menuSizes: {},
-    menuOrder: ["daily", "fridge", "shopping", "ai", "routine_tab", "monthly_cal", "monthly_exp", "baby", "recipes", "notices", "pages", "bucket", "house"]
+    menuOrder: ["daily", "fridge", "shopping", "ai", "routine_tab", "monthly_cal", "monthly_exp", "baby", "recipes", "notices", "pages", "bucket", "handover", "house"]
   },
   night: {
     blocks: ["action_feed", "menu_grid"],
@@ -263,7 +264,7 @@ export const DEFAULT_HOME_LAYOUT = {
     hiddenMenus: [],
     blockSizes: {},
     menuSizes: {},
-    menuOrder: ["daily", "monthly_exp", "routine_tab", "fridge", "shopping", "monthly_cal", "baby", "recipes", "notices", "pages", "bucket", "house", "ai"]
+    menuOrder: ["daily", "monthly_exp", "routine_tab", "fridge", "shopping", "monthly_cal", "baby", "recipes", "notices", "pages", "bucket", "handover", "house", "ai"]
   }
 };
 
@@ -974,6 +975,7 @@ export const FRIDGE_CATEGORIES = ["채소/과일", "육류/수산", "유제품/�
 export const SCHEDULE_CATEGORIES = ["기념일/생일", "할일(To-Do)", "육아/병원", "가족행사/경조사"];
 export const RECIPE_CATEGORIES = ["메인반찬", "국·찌개", "한그릇·면·밥", "유아식·이유식", "간식·디저트", "샐러드·가벼운식", "기타"];
 export const NOTICE_CATEGORIES = ["육아/아이들", "일정/행사", "집안일", "일반"];
+export const BUCKET_CATEGORIES = ["나들이/여행", "키즈카페/체험", "맛집", "우리집 목표"];
 export const FRIDGE_SHELF_ZONES = [
   "냉장 1단(상단)",
   "냉장 2단(중단)",
@@ -1179,7 +1181,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v13.35";
+export const APP_CODE_VERSION = "v13.38";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1197,7 +1199,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-22 23:15";
+export const APP_BUILD_DATE = "2026-11-23 08:30";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1265,6 +1267,42 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v13.38",
+    version: "v13.38",
+    date: "2026-11-23",
+    title: "🛡️ 카테고리 모달 뒤로가기/스크롤잠금 누락 수정 · 잔여 CSS 오타(py-0.2) 0건 완결 · 📌 공지 분류 필터 & 설정 통합 관리 연계",
+    category: "버그 수정 · 편의성 · 메뉴 연계",
+    changes: [
+      "버그·CSS 정합성 수정: ① anyOverlayModalOpen에 통합 카테고리 관리 모달(categoryManageKind)을 추가해 안드로이드 뒤로가기 닫기 및 모달 배경 스크롤 잠금이 정상 작동하도록 수정 ② 월간 식단·반복 루틴에 남아 있던 오타 클래스 py-0.2 3곳을 py-0.5로 교정해 앱 전체 오타 클래스 0건 달성",
+      "가족공지 카테고리 필터 신설: 공지 탭에 건수 포함 멀티줄 분류 필터 칩(전체·사용자 커스텀 분류)을 추가하고 이름 수정·삭제 시 필터 자동 동기화 및 필터 초기화 연동",
+      "메뉴 연계 및 최종 검증: ⚙️ 설정 모달에 [⚙️ 앱 세부 분류 통합 관리(재료·레시피·공지·버킷)] 1탭 바로가기를 추가하고 esbuild 번들·Babel JSX AST·Node ESM 구문 검증 0건 통과"
+    ]
+  },
+  {
+    id: "patch-v13.37",
+    version: "v13.37",
+    date: "2026-11-23",
+    title: "🌟 버킷리스트 카테고리 자유 관리 통합(4종 분류 관리) · 인수인계 PNG 카드 아이별 추가가이드 반영 · 카테고리 모달 ESC/뒤로가기 연동",
+    category: "버그 수정 · 자유도 확장 · 안정화",
+    changes: [
+      "통합 세부 카테고리 자유 관리 4종 확장: 기존 재료·레시피·공지에 [🌟 버킷리스트] 분류까지 통합해 추가·이름 수정(기존 항목 자동 일괄 갱신)·삭제·순서 이동·기본복원 및 클라우드/JSON 백업 동기화 지원",
+      "인수인계 PNG 카드 정합성 버그 수정: 카톡 텍스트에는 포함되던 아이별(시목·시율) 추가 고정가이드 항목과 공통 추가가이드·출입안내 단독 기재 케이스가 PNG 이미지 카드에도 100% 동일하게 렌더링되도록 보완",
+      "모달 닫기 일관화 및 최종 검증: 통합 카테고리 관리 모달을 ESC 키 및 안드로이드 뒤로가기 닫기에 연동하고 esbuild 번들·Babel JSX AST·Node ESM 구문 검사 0건 통과"
+    ]
+  },
+  {
+    id: "patch-v13.36",
+    version: "v13.36",
+    date: "2026-11-23",
+    title: "🤝 홈 [가족 기록·소통] 인수인계 카드 추가 · 고정가이드 항목 자유 추가/수정/삭제 · 카톡 미리보기 1탭 원본 수정 & 미기재 바로추가",
+    category: "신규 기능 · 자유도 고도화 · 메뉴 연계",
+    changes: [
+      "홈 [🗂️ 가족 기록 · 소통] 그룹에 [🤝 육아 인수인계] 바로가기 카드 추가 (공유노트·가족공지·버킷리스트·인수인계 2×2 균형 배치 및 기존 레이아웃 자동 편입)",
+      "인수인계 고정가이드 자유도 고도화: 시율·시목·집/산모별로 원하는 고정가이드 항목을 자유롭게 [+ 항목 추가]·제목/내용 수정·삭제 가능 (클라우드 family_meta_v4/handover_profile_v1 실시간 동기화 및 카톡 복사·PNG 카드·JSON 백업 자동 반영)",
+      "카톡 미리보기 인터랙티브 링크화: 시간표 내 루틴·식단·일정 및 고정가이드·공지·상비약·수납 항목을 누르면 해당 원본 수정 창으로 1탭 직행(수정 후 인수인계로 복귀), 미기재 항목도 프리뷰 하단 바로추가 링크로 즉시 입력 가능하며 실제 카톡 복사·카드저장 시에는 공란/미기재 항목이 자동 제외되어 깔끔하게 출력"
+    ]
+  },
   {
     id: "patch-v13.35",
     version: "v13.35",

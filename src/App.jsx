@@ -111,6 +111,7 @@ import {
   SCHEDULE_CATEGORIES,
   RECIPE_CATEGORIES,
   NOTICE_CATEGORIES,
+  BUCKET_CATEGORIES,
   FRIDGE_SHELF_ZONES,
   getFridgeCategoryIcon,
   resolveItemShelfZone,
@@ -2447,20 +2448,24 @@ function MainApp() {
         return {
           fridge: Array.isArray(saved.fridge) && saved.fridge.length > 0 ? saved.fridge.map((s) => String(s || "").trim()).filter(Boolean) : [...FRIDGE_CATEGORIES],
           recipe: Array.isArray(saved.recipe) && saved.recipe.length > 0 ? saved.recipe.map((s) => String(s || "").trim()).filter(Boolean) : [...RECIPE_CATEGORIES],
-          notice: Array.isArray(saved.notice) && saved.notice.length > 0 ? saved.notice.map((s) => String(s || "").trim()).filter(Boolean) : [...NOTICE_CATEGORIES]
+          notice: Array.isArray(saved.notice) && saved.notice.length > 0 ? saved.notice.map((s) => String(s || "").trim()).filter(Boolean) : [...NOTICE_CATEGORIES],
+          bucket: Array.isArray(saved.bucket) && saved.bucket.length > 0 ? saved.bucket.map((s) => String(s || "").trim()).filter(Boolean) : [...BUCKET_CATEGORIES]
         };
       }
     } catch (e) {}
     return {
       fridge: [...FRIDGE_CATEGORIES],
       recipe: [...RECIPE_CATEGORIES],
-      notice: [...NOTICE_CATEGORIES]
+      notice: [...NOTICE_CATEGORIES],
+      bucket: [...BUCKET_CATEGORIES]
     };
   });
   const fridgeCategories = customCategories.fridge;
   const recipeCategories = customCategories.recipe;
   const noticeCategories = customCategories.notice;
-  const [categoryManageKind, setCategoryManageKind] = useState(""); // "" | "fridge" | "recipe" | "notice"
+  const bucketCategories = customCategories.bucket;
+  const [categoryManageKind, setCategoryManageKind] = useState(""); // "" | "fridge" | "recipe" | "notice" | "bucket"
+  const [noticeCatFilter, setNoticeCatFilter] = useState("전체");
   const [newCategoryInput, setNewCategoryInput] = useState("");
   const [editingCategoryOrig, setEditingCategoryOrig] = useState("");
   const [editingCategoryDraft, setEditingCategoryDraft] = useState("");
@@ -2504,6 +2509,7 @@ function MainApp() {
   });
   const [handoverGuideSubTab, setHandoverGuideSubTab] = useState("시율");
   const [handoverCustomText, setHandoverCustomText] = useState("");
+  const [newGuideItemTitle, setNewGuideItemTitle] = useState("");
   const [isHandoverEditingPreview, setIsHandoverEditingPreview] = useState(false);
   const [handoverExcludedIds, setHandoverExcludedIds] = useState([]);
   const [handoverTimetableMode, setHandoverTimetableMode] = useState(true);
@@ -5245,7 +5251,8 @@ function MainApp() {
             const nextCats = {
               fridge: Array.isArray(d.fridge) && d.fridge.length > 0 ? d.fridge.map((s) => String(s || "").trim()).filter(Boolean) : [...FRIDGE_CATEGORIES],
               recipe: Array.isArray(d.recipe) && d.recipe.length > 0 ? d.recipe.map((s) => String(s || "").trim()).filter(Boolean) : [...RECIPE_CATEGORIES],
-              notice: Array.isArray(d.notice) && d.notice.length > 0 ? d.notice.map((s) => String(s || "").trim()).filter(Boolean) : [...NOTICE_CATEGORIES]
+              notice: Array.isArray(d.notice) && d.notice.length > 0 ? d.notice.map((s) => String(s || "").trim()).filter(Boolean) : [...NOTICE_CATEGORIES],
+              bucket: Array.isArray(d.bucket) && d.bucket.length > 0 ? d.bucket.map((s) => String(s || "").trim()).filter(Boolean) : [...BUCKET_CATEGORIES]
             };
             setCustomCategories(nextCats);
             try { localStorage.setItem("kim_custom_categories_v1", JSON.stringify(nextCats)); } catch (e) {}
@@ -5984,7 +5991,8 @@ function MainApp() {
         const nextCats = {
           fridge: Array.isArray(payload.customCategories.fridge) && payload.customCategories.fridge.length > 0 ? payload.customCategories.fridge.map((s) => String(s || "").trim()).filter(Boolean) : [...FRIDGE_CATEGORIES],
           recipe: Array.isArray(payload.customCategories.recipe) && payload.customCategories.recipe.length > 0 ? payload.customCategories.recipe.map((s) => String(s || "").trim()).filter(Boolean) : [...RECIPE_CATEGORIES],
-          notice: Array.isArray(payload.customCategories.notice) && payload.customCategories.notice.length > 0 ? payload.customCategories.notice.map((s) => String(s || "").trim()).filter(Boolean) : [...NOTICE_CATEGORIES]
+          notice: Array.isArray(payload.customCategories.notice) && payload.customCategories.notice.length > 0 ? payload.customCategories.notice.map((s) => String(s || "").trim()).filter(Boolean) : [...NOTICE_CATEGORIES],
+          bucket: Array.isArray(payload.customCategories.bucket) && payload.customCategories.bucket.length > 0 ? payload.customCategories.bucket.map((s) => String(s || "").trim()).filter(Boolean) : [...BUCKET_CATEGORIES]
         };
         setCustomCategories(nextCats);
         try { localStorage.setItem("kim_custom_categories_v1", JSON.stringify(nextCats)); } catch (e) {}
@@ -6175,6 +6183,7 @@ function MainApp() {
                 fridge: Array.isArray(payload.customCategories.fridge) && payload.customCategories.fridge.length > 0 ? payload.customCategories.fridge : [...FRIDGE_CATEGORIES],
                 recipe: Array.isArray(payload.customCategories.recipe) && payload.customCategories.recipe.length > 0 ? payload.customCategories.recipe : [...RECIPE_CATEGORIES],
                 notice: Array.isArray(payload.customCategories.notice) && payload.customCategories.notice.length > 0 ? payload.customCategories.notice : [...NOTICE_CATEGORIES],
+                bucket: Array.isArray(payload.customCategories.bucket) && payload.customCategories.bucket.length > 0 ? payload.customCategories.bucket : [...BUCKET_CATEGORIES],
                 updatedAtMs: Date.now()
               },
               { merge: true }
@@ -12703,7 +12712,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
   };
 
   const handleAddCustomCategory = async (kind, rawName) => {
-    const tabKey = kind === "fridge" ? "fridge" : kind === "recipe" ? "recipes" : "notices";
+    const tabKey = kind === "fridge" ? "fridge" : kind === "recipe" ? "recipes" : kind === "bucket" ? "bucket" : "notices";
     if (!requireEditorAccess(tabKey)) return;
     const name = String(rawName || "").trim();
     if (!name) return;
@@ -12718,7 +12727,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
   };
 
   const handleRenameCustomCategory = async (kind, oldName, rawNext) => {
-    const tabKey = kind === "fridge" ? "fridge" : kind === "recipe" ? "recipes" : "notices";
+    const tabKey = kind === "fridge" ? "fridge" : kind === "recipe" ? "recipes" : kind === "bucket" ? "bucket" : "notices";
     if (!requireEditorAccess(tabKey)) return;
     const nextName = String(rawNext || "").trim();
     if (!nextName || nextName === oldName) {
@@ -12773,6 +12782,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
         } catch (e) {}
       }
     } else if (kind === "notice") {
+      if (noticeCatFilter === oldName) setNoticeCatFilter(nextName);
       const affected = notices.filter((n) => n.category === oldName);
       if (affected.length > 0 && user && db) {
         try {
@@ -12783,12 +12793,24 @@ ${item.memo}` : `${item.title} 다녀옴!`,
           await batch.commit();
         } catch (e) {}
       }
+    } else if (kind === "bucket") {
+      if (bucketCatFilter === oldName) setBucketCatFilter(nextName);
+      const affected = bucketList.filter((b) => b.category === oldName);
+      if (affected.length > 0 && user && db) {
+        try {
+          const batch = writeBatch(db);
+          affected.forEach((b) => {
+            batch.set(getDocRef("family_bucket_v1", b.id), { ...b, category: nextName }, { merge: true });
+          });
+          await batch.commit();
+        } catch (e) {}
+      }
     }
     showToast(`✏️ '${oldName}' → '${nextName}' 분류로 변경했습니다.`);
   };
 
   const handleDeleteCustomCategory = async (kind, targetName) => {
-    const tabKey = kind === "fridge" ? "fridge" : kind === "recipe" ? "recipes" : "notices";
+    const tabKey = kind === "fridge" ? "fridge" : kind === "recipe" ? "recipes" : kind === "bucket" ? "bucket" : "notices";
     if (!requireEditorAccess(tabKey)) return;
     const curList = customCategories[kind] || [];
     if (curList.length <= 1) {
@@ -12799,6 +12821,8 @@ ${item.memo}` : `${item.title} 다녀옴!`,
     const nextCats = { ...customCategories, [kind]: nextList };
     if (kind === "fridge" && fridgeCatFilter === targetName) setFridgeCatFilter("전체");
     if (kind === "recipe" && recipeCatFilter === targetName) setRecipeCatFilter("전체");
+    if (kind === "bucket" && bucketCatFilter === targetName) setBucketCatFilter("전체");
+    if (kind === "notice" && noticeCatFilter === targetName) setNoticeCatFilter("전체");
     await saveCustomCategoriesToCloud(nextCats, `🗑️ '${targetName}' 분류를 삭제했습니다.`);
   };
 
@@ -12813,9 +12837,9 @@ ${item.memo}` : `${item.title} 다녀옴!`,
   };
 
   const handleResetCustomCategories = async (kind) => {
-    const tabKey = kind === "fridge" ? "fridge" : kind === "recipe" ? "recipes" : "notices";
+    const tabKey = kind === "fridge" ? "fridge" : kind === "recipe" ? "recipes" : kind === "bucket" ? "bucket" : "notices";
     if (!requireEditorAccess(tabKey)) return;
-    const defList = kind === "fridge" ? [...FRIDGE_CATEGORIES] : kind === "recipe" ? [...RECIPE_CATEGORIES] : [...NOTICE_CATEGORIES];
+    const defList = kind === "fridge" ? [...FRIDGE_CATEGORIES] : kind === "recipe" ? [...RECIPE_CATEGORIES] : kind === "bucket" ? [...BUCKET_CATEGORIES] : [...NOTICE_CATEGORIES];
     await saveCustomCategoriesToCloud({ ...customCategories, [kind]: defList }, "↺ 기본 분류로 복원했습니다.");
   };
 
@@ -13965,6 +13989,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
         setIsHandoverModalOpen(false);
         setReturnToHandoverPending(false);
         setIsHomeDdayPickerOpen(false);
+        setCategoryManageKind("");
         setIsPrivateCalModalOpen(false);
         setIsPrivateCalCsvModalOpen(false);
         setCalDayPopupDate(null);
@@ -14038,6 +14063,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
     isHouseModalOpen ||
     isHandoverModalOpen ||
     isHomeDdayPickerOpen ||
+    Boolean(categoryManageKind) ||
     isPrivateCalModalOpen ||
     isPrivateCalCsvModalOpen ||
     Boolean(calDayPopupDate) ||
@@ -14118,6 +14144,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
       setIsHouseModalOpen(false);
       setIsHandoverModalOpen(false);
       setIsHomeDdayPickerOpen(false);
+      setCategoryManageKind("");
       setQuickFridgeItem(null);
       setLiveActivityPopup(null);
       setActivityEditModal(null);
@@ -15427,6 +15454,19 @@ ${item.memo}` : `${item.title} 다녀옴!`,
               setActiveTab("pages");
             }
           },
+          handover: {
+            title: "🤝 육아 인수인계",
+            actionLabel: "열기 >",
+            actionColor: "text-stone-500",
+            borderHover: "hover:border-stone-400",
+            sub: <span className="text-stone-500">카톡 시간표 · 고정가이드</span>,
+            onClick: () => {
+              const tStr = getTodayStr();
+              if (!handoverDate || handoverDate < tStr) setHandoverDate(tStr);
+              setHandoverModalTab("config");
+              setIsHandoverModalOpen(true);
+            }
+          },
           bucket: {
             title: "🌟 버킷리스트",
             actionLabel: "열기 >",
@@ -16298,13 +16338,15 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                   ? "schedule"
                   : id === "monthly_cal" || id === "monthly_exp"
                   ? "monthly"
+                  : id === "handover"
+                  ? "baby"
                   : id;
               return canViewTab(targetTab);
             });
             const HOME_MENU_GROUPS = [
               { id: "meal", label: "🍽️ 식단 · 살림", ids: ["daily", "fridge", "shopping", "house", "monthly_cal", "monthly_exp", "recipes", "ai"] },
               { id: "family", label: "👶 육아 · 일정", ids: ["baby", "routine_tab"] },
-              { id: "notes", label: "🗂️ 가족 기록 · 소통", ids: ["pages", "notices", "bucket"] }
+              { id: "notes", label: "🗂️ 가족 기록 · 소통", ids: ["pages", "notices", "bucket", "handover"] }
             ];
             const assigned = new Set(HOME_MENU_GROUPS.flatMap((g) => g.ids));
             const extraIds = visibleMenuIds.filter((id) => !assigned.has(id));
@@ -17982,7 +18024,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                                 </span>
                                 <div className="flex items-center gap-1">
                                   {isTodayRow && (
-                                    <span className="px-1.5 py-0.2 rounded bg-[#5E7A65] text-white text-[9.5px] font-extrabold whitespace-nowrap">
+                                    <span className="px-1.5 py-0.5 rounded bg-[#5E7A65] text-white text-[9.5px] font-extrabold whitespace-nowrap">
                                       오늘
                                     </span>
                                   )}
@@ -17994,7 +18036,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                                       setSelectedMember("전체");
                                       setActiveTab("daily");
                                     }}
-                                    className="px-1 py-0.2 rounded bg-stone-100 hover:bg-stone-200 text-stone-600 text-[9.5px] font-extrabold whitespace-nowrap"
+                                    className="px-1 py-0.5 rounded bg-stone-100 hover:bg-stone-200 text-stone-600 text-[9.5px] font-extrabold whitespace-nowrap"
                                     title="식단 탭에서 보기"
                                   >
                                     🍽️
@@ -19360,7 +19402,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                             {dayGroup.date.slice(5).replace("-", "월 ")}일 ({dayGroup.dayName})
                           </span>
                           {isToday && (
-                            <span className="px-1.5 py-0.2 rounded bg-amber-400 text-stone-900 text-[10.5px] font-black whitespace-nowrap">
+                            <span className="px-1.5 py-0.5 rounded bg-amber-400 text-stone-900 text-[10.5px] font-black whitespace-nowrap">
                               오늘
                             </span>
                           )}
@@ -22496,10 +22538,41 @@ ${item.memo}` : `${item.title} 다녀옴!`,
             </div>
           )}
 
+          {/* 공지 카테고리별 필터 칩 (건수 포함) */}
+          <div className="bg-white rounded-xl border border-stone-200/80 p-2">
+            <div className="flex flex-wrap gap-1">
+              {["전체", ...noticeCategories].map((cat) => {
+                const baseList = notices.filter((n) => !noticeHideDone || !n.done);
+                const cnt = cat === "전체" ? baseList.length : baseList.filter((n) => (n.category || "일반") === cat).length;
+                const active = noticeCatFilter === cat;
+                return (
+                  <button
+                    key={cat}
+                    type="button"
+                    onClick={() => setNoticeCatFilter(cat)}
+                    className={`px-2 py-1 rounded-lg text-[11px] font-bold whitespace-nowrap border transition flex items-center gap-1 ${
+                      active
+                        ? "bg-[#3F624D] text-white border-[#3F624D]"
+                        : cnt === 0
+                        ? "bg-stone-50/70 text-stone-400 border-stone-200/70"
+                        : "bg-stone-50 text-stone-700 border-stone-200 hover:bg-stone-100"
+                    }`}
+                  >
+                    <span>{cat}</span>
+                    <span className={`text-[10px] font-black ${active ? "text-emerald-100" : cnt === 0 ? "text-stone-300" : "text-stone-400"}`}>
+                      {cnt}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
           <div className="space-y-2.5">
             {(() => {
               const filteredNotices = [...notices]
                 .filter((n) => !noticeHideDone || !n.done)
+                .filter((n) => noticeCatFilter === "전체" || (n.category || "일반") === noticeCatFilter)
                 .filter((n) => {
                   const nq = noticeSearchQuery.trim().toLowerCase();
                   if (!nq) return true;
@@ -22520,10 +22593,10 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                     <div className="text-[13px] font-bold text-stone-400">
                       {notices.length === 0 ? "등록된 가족 공지가 없습니다." : "조건에 맞는 공지가 없습니다."}
                     </div>
-                    {(noticeSearchQuery || noticeHideDone) && (
+                    {(noticeSearchQuery || noticeHideDone || noticeCatFilter !== "전체") && (
                       <button
                         type="button"
-                        onClick={() => { setNoticeSearchQuery(""); setNoticeHideDone(false); }}
+                        onClick={() => { setNoticeSearchQuery(""); setNoticeHideDone(false); setNoticeCatFilter("전체"); }}
                         className="px-3 py-1 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-[11.5px] font-extrabold whitespace-nowrap"
                       >
                         🔄 필터 초기화
@@ -23736,10 +23809,20 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                   aria-label="분류 필터"
                   className="px-2 py-1 rounded-xl border border-stone-200 bg-stone-50 text-[11.5px] font-bold text-stone-700"
                 >
-                  {["전체", "나들이/여행", "키즈카페/체험", "맛집", "우리집 목표"].map((cat) => (
+                  {["전체", ...bucketCategories].map((cat) => (
                     <option key={cat} value={cat}>{cat === "전체" ? "🏷️ 분류 전체" : cat}</option>
                   ))}
                 </select>
+                {canEditTab("bucket") && (
+                  <button
+                    type="button"
+                    onClick={() => openCategoryManager("bucket")}
+                    className="px-2 py-1 rounded-xl border border-stone-200 bg-white hover:bg-stone-100 text-stone-600 text-[11px] font-extrabold whitespace-nowrap shrink-0"
+                    title="버킷리스트 분류 추가·수정·삭제"
+                  >
+                    ⚙️
+                  </button>
+                )}
                 {weatherInfo && (
                   <button
                     type="button"
@@ -31362,7 +31445,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                   onChange={(e) => setBucketForm((p) => ({ ...p, category: e.target.value }))}
                   className="px-2.5 py-2 rounded-xl border border-stone-200 text-[12px] font-bold bg-white"
                 >
-                  {["나들이/여행", "키즈카페/체험", "맛집", "우리집 목표"].map((c) => (
+                  {bucketCategories.map((c) => (
                     <option key={c} value={c}>{c}</option>
                   ))}
                 </select>
@@ -33496,7 +33579,8 @@ ${item.memo}` : `${item.title} 다녀옴!`,
         const kindMeta = {
           fridge: { title: "❄️ 재료 카테고리", placeholder: "새 재료 분류 (예: 간식/과자, 냉동식품)" },
           recipe: { title: "📖 레시피 카테고리", placeholder: "새 레시피 분류 (예: 에어프라이어, 캠핑요리)" },
-          notice: { title: "📌 공지 카테고리", placeholder: "새 공지 분류 (예: 어린이집, 건강/병원)" }
+          notice: { title: "📌 공지 카테고리", placeholder: "새 공지 분류 (예: 어린이집, 건강/병원)" },
+          bucket: { title: "🌟 버킷 카테고리", placeholder: "새 버킷 분류 (예: 캠핑, 해외여행, 전시회)" }
         }[categoryManageKind] || { title: "⚙️ 분류 관리", placeholder: "새 분류 입력" };
         return (
           <div
@@ -33531,24 +33615,25 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                 </div>
               </div>
 
-              {/* 3종 카테고리 빠른 전환 탭 */}
-              <div className="grid grid-cols-3 gap-1 bg-stone-100 p-1 rounded-xl">
+              {/* 4종 카테고리 빠른 전환 탭 */}
+              <div className="grid grid-cols-4 gap-1 bg-stone-100 p-1 rounded-xl">
                 {[
                   { id: "fridge", label: "❄️ 재료" },
                   { id: "recipe", label: "📖 레시피" },
-                  { id: "notice", label: "📌 공지" }
+                  { id: "notice", label: "📌 공지" },
+                  { id: "bucket", label: "🌟 버킷" }
                 ].map((t) => (
                   <button
                     key={t.id}
                     type="button"
                     onClick={() => openCategoryManager(t.id)}
-                    className={`py-1.5 rounded-lg text-[11.5px] font-extrabold whitespace-nowrap transition ${
+                    className={`py-1.5 px-1 rounded-lg text-[11px] font-extrabold whitespace-nowrap transition ${
                       categoryManageKind === t.id
                         ? "bg-white text-stone-900 shadow-sm"
                         : "text-stone-500 hover:text-stone-800"
                     }`}
                   >
-                    {t.label} ({(customCategories[t.id] || []).length})
+                    {t.label} {(customCategories[t.id] || []).length}
                   </button>
                 ))}
               </div>
@@ -33996,6 +34081,20 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                 📦 식단 {meals.length} · 냉장고 {fridge.length} · 일정 {schedules.length} · 버킷 {bucketList.length} · 노트 {familyPages.length} · 살림 {houseItems.length}
               </div>
             </div>
+
+            {accessRole !== "guest" && (
+              <button
+                type="button"
+                onClick={() => {
+                  setIsSettingsOpen(false);
+                  openCategoryManager("fridge");
+                }}
+                className="w-full py-2 px-3 rounded-xl bg-[#EEF3EE] hover:bg-[#DFE9E0] border border-[#C9D8CC] text-[#35503C] text-[12px] font-extrabold flex items-center justify-between gap-2 whitespace-nowrap"
+              >
+                <span>⚙️ 세부 카테고리 통합 관리 (재료·레시피·공지·버킷)</span>
+                <ChevronRight className="w-4 h-4 shrink-0" />
+              </button>
+            )}
 
 
             <button
@@ -37539,6 +37638,10 @@ ${item.memo}` : `${item.title} 다녀옴!`,
               ];
 
         const getChildGuideObj = (cid) => (handoverProfile.childGuides && handoverProfile.childGuides[cid]) || {};
+        const getCustomGuideItems = (scopeKey) => {
+          const map = handoverProfile.customItems && typeof handoverProfile.customItems === "object" ? handoverProfile.customItems : {};
+          return Array.isArray(map[scopeKey]) ? map[scopeKey] : [];
+        };
         const countMissingCommon = COMMON_GUIDE_FIELDS.filter((f) => !f.optional && !String(handoverProfile[f.key] || "").trim()).length;
         const countMissingChild = (cid) => {
           const obj = getChildGuideObj(cid);
@@ -37700,7 +37803,9 @@ ${item.memo}` : `${item.title} 다녀옴!`,
               rows.push({
                 sortKey: sk,
                 timeLabel: m.slot || "식단",
-                text: `🍽️ ${m.menu}`
+                text: `🍽️ ${m.menu}`,
+                kind: "meal",
+                raw: m
               });
             });
           }
@@ -37716,7 +37821,9 @@ ${item.memo}` : `${item.title} 다녀옴!`,
               rows.push({
                 sortKey: sk,
                 timeLabel: tLabel,
-                text: `🔄 ${r.title}${who}`
+                text: `🔄 ${r.title}${who}`,
+                kind: "routine",
+                raw: r
               });
             });
             selectedSchedules.forEach((s) => {
@@ -37739,7 +37846,9 @@ ${item.memo}` : `${item.title} 다녀옴!`,
               rows.push({
                 sortKey: sk,
                 timeLabel: tLabel,
-                text: `🗓️ ${titleStr}`
+                text: `🗓️ ${titleStr}`,
+                kind: "schedule",
+                raw: s
               });
             });
           }
@@ -37806,6 +37915,11 @@ ${item.memo}` : `${item.title} 다녀옴!`,
               if (d.guide.sleepGuide) sub.push(`  • 수면 방식: ${d.guide.sleepGuide}`);
               if (d.guide.bathGuide) sub.push(`  • 목욕·케어: ${d.guide.bathGuide}`);
               if (d.guide.cautionGuide) sub.push(`  • ⚠️ 주의사항: ${d.guide.cautionGuide}`);
+              getCustomGuideItems(d.ch.id).forEach((ci) => {
+                if (String(ci?.label || "").trim() && String(ci?.value || "").trim()) {
+                  sub.push(`  • ${String(ci.label).trim()}: ${String(ci.value).trim()}`);
+                }
+              });
               if (sub.length > 0) {
                 sleepLines.push(`▸ ${d.ch.name}`, ...sub);
               }
@@ -37816,27 +37930,26 @@ ${item.memo}` : `${item.title} 다녀옴!`,
           }
 
           if (handoverSections.meds) {
-            out.push(`\n💊 [약 복용 · 최근 진료/체온]`);
-            let hasAnyMed = false;
+            const medLines = [];
             childDataList.forEach((d) => {
               if (d.recentMeds.length > 0) {
-                hasAnyMed = true;
-                out.push(
+                medLines.push(
                   `▸ ${d.ch.name} 진료·체온: ${d.recentMeds
                     .map((m) => `${m.date.slice(5)} ${m.title}${m.temp ? `(${m.temp}°C)` : ""}${m.memo ? ` - ${m.memo}` : ""}`)
                     .join(" / ")}`
                 );
               }
               if (d.selectedChildMeds.length > 0) {
-                hasAnyMed = true;
-                out.push(
+                medLines.push(
                   `▸ ${d.ch.name} 상비약: ${d.selectedChildMeds
                     .map((m) => `${m.title}${m.dosage ? `(${m.dosage})` : ""}`)
                     .join(", ")}`
                 );
               }
             });
-            if (!hasAnyMed) out.push(`▸ 선택된 약·최근 진료 특이사항 없음`);
+            if (medLines.length > 0) {
+              out.push(`\n💊 [약 복용 · 최근 진료/체온]`, ...medLines);
+            }
           }
 
           if (handoverSections.routines) {
@@ -37846,7 +37959,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                 const branch = idx === 0 ? "┌" : idx === timetableEntries.length - 1 ? "└" : "├";
                 out.push(`${branch} ${row.timeLabel} │ ${row.text}`);
               });
-            } else {
+            } else if (selectedRoutines.length > 0 || selectedSchedules.length > 0) {
               out.push(`\n🔄 [${dayLabel}(${targetDate.slice(5)} ${targetDow}) ${isFutureTarget ? "예정 " : ""}루틴 · 할 일]`);
               if (selectedRoutines.length > 0) {
                 out.push(
@@ -37854,8 +37967,6 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                     .map((r) => (r.scheduledTime ? `⏰${formatRoutineTimeLabel(r.scheduledTime)} ${r.title}` : r.title))
                     .join(" · ")}`
                 );
-              } else {
-                out.push(`▸ 선택된 루틴 없음`);
               }
               if (selectedSchedules.length > 0) {
                 out.push(`▸ 일정·할일(${selectedSchedules.length}건): ${selectedSchedules.map((s) => s.title).join(" · ")}`);
@@ -37863,7 +37974,8 @@ ${item.memo}` : `${item.title} 다녀옴!`,
             }
           }
 
-          if (includeMomHouse && (handoverProfile.momMealGuide || handoverProfile.houseworkGuide || handoverProfile.emergencyContacts || (handoverSections.includeDoorCode && handoverProfile.doorCode))) {
+          const filledCommonCustom = getCustomGuideItems("공통").filter((ci) => String(ci?.label || "").trim() && String(ci?.value || "").trim());
+          if (includeMomHouse && (handoverProfile.momMealGuide || handoverProfile.houseworkGuide || handoverProfile.emergencyContacts || (handoverSections.includeDoorCode && handoverProfile.doorCode) || filledCommonCustom.length > 0)) {
             out.push(`\n🏠 [산모 식사 · 가사 · 비상연락]`);
             if (handoverProfile.momMealGuide) out.push(`▸ 🍱 산모 식사: ${handoverProfile.momMealGuide}`);
             if (handoverProfile.houseworkGuide) out.push(`▸ 🧺 세탁·가사: ${handoverProfile.houseworkGuide}`);
@@ -37871,6 +37983,9 @@ ${item.memo}` : `${item.title} 다녀옴!`,
             if (handoverSections.includeDoorCode && handoverProfile.doorCode) {
               out.push(`▸ 🔑 출입안내: ${handoverProfile.doorCode}`);
             }
+            filledCommonCustom.forEach((ci) => {
+              out.push(`▸ ${String(ci.label).trim()}: ${String(ci.value).trim()}`);
+            });
           }
 
           if (handoverSections.notices && (selectedNotices.length > 0 || selectedStorage.length > 0)) {
@@ -37945,6 +38060,11 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                   if (d.guide.sleepGuide) sub.push(`  수면방식: ${d.guide.sleepGuide}`);
                   if (d.guide.bathGuide) sub.push(`  목욕·케어: ${d.guide.bathGuide}`);
                   if (d.guide.cautionGuide) sub.push(`  ⚠️ 주의: ${d.guide.cautionGuide}`);
+                  getCustomGuideItems(d.ch.id).forEach((ci) => {
+                    if (String(ci?.label || "").trim() && String(ci?.value || "").trim()) {
+                      sub.push(`  ${String(ci.label).trim()}: ${String(ci.value).trim()}`);
+                    }
+                  });
                   if (sub.length > 0) rows.push(`▸ ${d.ch.name}`, ...sub);
                 });
                 if (rows.length > 0) sectionsToDraw.push({ title: "😴 수면 방식 · 목욕 · 주의사항", accent: "#3B5998", bg: "#F2F5FB", rows });
@@ -37985,12 +38105,17 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                   sectionsToDraw.push({ title: `🔄 ${dayLabel} ${isFutureTarget ? "예정 " : ""}루틴 · 할 일`, accent: "#9A6700", bg: "#FDF9EE", rows });
                 }
               }
-              if (includeMomHouse && (handoverProfile.momMealGuide || handoverProfile.houseworkGuide || handoverProfile.emergencyContacts)) {
+              if (includeMomHouse && (handoverProfile.momMealGuide || handoverProfile.houseworkGuide || handoverProfile.emergencyContacts || (handoverSections.includeDoorCode && handoverProfile.doorCode) || getCustomGuideItems("공통").some((ci) => String(ci?.label || "").trim() && String(ci?.value || "").trim()))) {
                 const rows = [];
                 if (handoverProfile.momMealGuide) rows.push(`산모 식사: ${handoverProfile.momMealGuide}`);
                 if (handoverProfile.houseworkGuide) rows.push(`세탁·가사: ${handoverProfile.houseworkGuide}`);
                 if (handoverProfile.emergencyContacts) rows.push(`비상연락: ${handoverProfile.emergencyContacts}`);
                 if (handoverSections.includeDoorCode && handoverProfile.doorCode) rows.push(`출입안내: ${handoverProfile.doorCode}`);
+              getCustomGuideItems("공통").forEach((ci) => {
+                if (String(ci?.label || "").trim() && String(ci?.value || "").trim()) {
+                  rows.push(`${String(ci.label).trim()}: ${String(ci.value).trim()}`);
+                }
+              });
                 sectionsToDraw.push({ title: "🏠 산모 식사 · 가사 · 비상연락", accent: "#0F766E", bg: "#F0FDFA", rows });
               }
               if (handoverSections.notices && (selectedNotices.length > 0 || selectedStorage.length > 0)) {
@@ -38656,18 +38781,247 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                           onChange={(e) => setHandoverCustomText(e.target.value)}
                           className="w-full bg-[#FEE500] rounded-2xl rounded-tr-sm p-2.5 text-[11.5px] leading-relaxed font-semibold text-stone-900 shadow-sm focus:outline-none resize-y"
                         />
-                      ) : (
+                      ) : isUsingCustomText ? (
                         <div
-                          onClick={() => {
-                            if (!handoverCustomText) setHandoverCustomText(autoGeneratedText);
-                            setIsHandoverEditingPreview(true);
-                          }}
-                          title="말풍선을 누르면 바로 문구를 수정할 수 있어요"
-                          className="bg-[#FEE500] rounded-2xl rounded-tr-sm p-2.5 text-[11.5px] leading-relaxed font-semibold text-stone-900 whitespace-pre-wrap shadow-sm cursor-text max-h-56 overflow-y-auto"
+                          onClick={() => setIsHandoverEditingPreview(true)}
+                          title="직접 수정된 문구를 다시 편집하려면 누르세요"
+                          className="bg-[#FEE500] rounded-2xl rounded-tr-sm p-2.5 text-[11.5px] leading-relaxed font-semibold text-stone-900 whitespace-pre-wrap shadow-sm cursor-text max-h-60 overflow-y-auto"
                         >
                           {finalKakaoText}
                         </div>
-                      )}
+                      ) : (() => {
+                        const openMealForEdit = (m) => {
+                          if (!m) return;
+                          jumpFromHandover(() => {
+                            setEditingMeal(m);
+                            setMealForm({
+                              date: m.date,
+                              slot: m.slot,
+                              menu: m.menu || "",
+                              members: extractMembers(m),
+                              ingredients: toSafeArray(m.ingredients),
+                              note: m.note || "",
+                              sourceType: m.sourceType || "집밥/온가족식",
+                              cost: m.cost || "",
+                              mealStatus: m.mealStatus || "recorded"
+                            });
+                            setIsMealModalOpen(true);
+                          });
+                        };
+                        const openScheduleForEdit = (s) => {
+                          if (!s) return;
+                          jumpFromHandover(() => {
+                            setEditingSchedule(s);
+                            setScheduleForm({
+                              title: s.title || "",
+                              date: s.date || targetDate,
+                              endDate: s.endDate || "",
+                              category: s.category || "육아/병원",
+                              members: extractMembers(s),
+                              isAnnual: Boolean(s.isAnnual),
+                              showDday: Boolean(s.showDday),
+                              hasOriginYear: Boolean(s.hasOriginYear),
+                              memo: s.memo || "",
+                              attachments: Array.isArray(s.attachments) ? s.attachments : []
+                            });
+                            setIsScheduleModalOpen(true);
+                          });
+                        };
+                        const openGuideAt = (subTabKey) => {
+                          setHandoverGuideSubTab(subTabKey);
+                          setHandoverModalTab("guide");
+                        };
+
+                        // 미기재 항목 목록 (프리뷰 전용 바로추가 링크 — 실제 카톡 복사·카드저장에는 미포함!)
+                        const missingLinks = [];
+                        if (handoverSections.mealFeed) {
+                          const anyMeal = childDataList.some((d) => d.mealSummaryList.length > 0) || sharedFamilyMeals.length > 0;
+                          if (!anyMeal) {
+                            missingLinks.push({
+                              id: "miss-meal",
+                              label: `+ ${dayLabel} 식단 추가`,
+                              onClick: () => jumpFromHandover(() => {
+                                setEditingMeal(null);
+                                setMealForm({
+                                  date: targetDate,
+                                  slot: "점심",
+                                  menu: "",
+                                  members: targetChildren.length > 0 ? targetChildren.map((c) => c.id) : ["수혁", "아리나"],
+                                  ingredients: [],
+                                  note: "",
+                                  sourceType: "집밥/온가족식",
+                                  cost: "",
+                                  mealStatus: isFutureTarget ? "planned" : "recorded"
+                                });
+                                setIsMealModalOpen(true);
+                              })
+                            });
+                          }
+                        }
+                        if (handoverSections.routines && selectedRoutines.length === 0) {
+                          missingLinks.push({
+                            id: "miss-rt",
+                            label: "+ 루틴 추가",
+                            onClick: () => jumpFromHandover(() => openNewRoutineModal())
+                          });
+                        }
+                        if (handoverSections.meds) {
+                          const anyMed = childDataList.some((d) => d.recentMeds.length > 0 || d.selectedChildMeds.length > 0);
+                          if (!anyMed) {
+                            missingLinks.push({
+                              id: "miss-med",
+                              label: "+ 진료·상비약 기록",
+                              onClick: () => jumpFromHandover(() => { setHouseSubTab("medicine"); setActiveTab("house"); })
+                            });
+                          }
+                        }
+                        targetChildren.forEach((ch) => {
+                          const gObj = getChildGuideObj(ch.id);
+                          getChildGuideFields(ch.id).forEach((f) => {
+                            if (f.key !== "bathGuide" && !String(gObj[f.key] || "").trim()) {
+                              missingLinks.push({
+                                id: `miss-${ch.id}-${f.key}`,
+                                label: `+ ${ch.name} ${f.label.replace(/^[^\s]+\s+/, "").split("·")[0]}`,
+                                onClick: () => openGuideAt(ch.id)
+                              });
+                            }
+                          });
+                        });
+                        if (includeMomHouse) {
+                          COMMON_GUIDE_FIELDS.forEach((f) => {
+                            if (!f.optional && !String(handoverProfile[f.key] || "").trim()) {
+                              missingLinks.push({
+                                id: `miss-common-${f.key}`,
+                                label: `+ ${f.label.replace(/^[^\s]+\s+/, "").split("·")[0]}`,
+                                onClick: () => openGuideAt("공통")
+                              });
+                            }
+                          });
+                        }
+                        if (handoverSections.notices && selectedNotices.length === 0) {
+                          missingLinks.push({
+                            id: "miss-notice",
+                            label: "+ 고정 공지 작성",
+                            onClick: () => jumpFromHandover(() => {
+                              setEditingNotice(null);
+                              setNoticeForm({ title: "", content: "", category: noticeCategories[0] || "육아/아이들", author: actorName || "수혁", pinned: true });
+                              setIsNoticeModalOpen(true);
+                            })
+                          });
+                        }
+
+                        // 각 줄을 원본 편집 액션과 매칭
+                        const previewLines = autoGeneratedText.split("\n");
+                        const findLineAction = (line) => {
+                          const trimmed = line.trim();
+                          if (!trimmed) return null;
+                          // 시간표 행 클릭 -> 루틴/식단/일정 원본 바로 수정
+                          if (handoverTimetableMode && /^[┌├└]\s+/.test(trimmed)) {
+                            const matchedRow = timetableEntries.find((row) => trimmed.includes(`${row.timeLabel} │ ${row.text}`));
+                            if (matchedRow) {
+                              if (matchedRow.kind === "routine") return { hint: "루틴 수정", onClick: () => jumpFromHandover(() => handleStartEditRoutine(matchedRow.raw)) };
+                              if (matchedRow.kind === "meal") return { hint: "식단 수정", onClick: () => openMealForEdit(matchedRow.raw) };
+                              if (matchedRow.kind === "schedule") return { hint: "일정 수정", onClick: () => openScheduleForEdit(matchedRow.raw) };
+                            }
+                          }
+                          if (trimmed.startsWith("▸ 공지:")) {
+                            const nTitle = trimmed.replace("▸ 공지:", "").trim();
+                            const nObj = selectedNotices.find((n) => n.title === nTitle);
+                            if (nObj) {
+                              return {
+                                hint: "공지 수정",
+                                onClick: () => jumpFromHandover(() => {
+                                  setEditingNotice(nObj);
+                                  setNoticeForm({ title: nObj.title, content: nObj.content || "", category: nObj.category || noticeCategories[0] || "육아/아이들", author: nObj.author || actorName || "수혁", pinned: Boolean(nObj.pinned) });
+                                  setIsNoticeModalOpen(true);
+                                })
+                              };
+                            }
+                          }
+                          if (trimmed.startsWith("▸ 물건 위치:")) {
+                            return { hint: "수납 수정", onClick: () => jumpFromHandover(() => { setHouseSubTab("storage"); setActiveTab("house"); }) };
+                          }
+                          if (trimmed.startsWith("▸ 🍱") || trimmed.startsWith("▸ 🧺") || trimmed.startsWith("▸ 📞") || trimmed.startsWith("▸ 🔑")) {
+                            return { hint: "고정가이드", onClick: () => openGuideAt("공통") };
+                          }
+                          if (trimmed.includes("가이드:") || trimmed.includes("수면 방식:") || trimmed.includes("목욕·케어:") || trimmed.includes("주의사항:")) {
+                            const targetCid = targetChildren.length === 1 ? targetChildren[0].id : (handoverTargets["시율"] ? "시율" : "시목");
+                            return { hint: "고정가이드", onClick: () => openGuideAt(targetCid) };
+                          }
+                          if (trimmed.startsWith("▸ 🏠 산모·가족 식단:") || trimmed.includes("예정 식사:") || trimmed.includes("오늘 식사:")) {
+                            return { hint: "식단 보기", onClick: () => jumpFromHandover(() => { setSelectedDate(targetDate); setActiveTab("daily"); }) };
+                          }
+                          if (trimmed.startsWith("▸ 루틴(")) {
+                            return { hint: "루틴 관리", onClick: () => jumpFromHandover(() => { setScheduleSubTab("routine"); setActiveTab("schedule"); }) };
+                          }
+                          if (trimmed.startsWith("▸ 일정·할일(")) {
+                            return { hint: "일정 보기", onClick: () => jumpFromHandover(() => { setScheduleSelectedDate(targetDate); setScheduleSubTab("calendar"); setActiveTab("schedule"); }) };
+                          }
+                          if (trimmed.includes("진료·체온:")) {
+                            return { hint: "진료 기록", onClick: () => jumpFromHandover(() => { setBabySubTab("medical"); setActiveTab("baby"); }) };
+                          }
+                          if (trimmed.includes("상비약:")) {
+                            return { hint: "상비약함", onClick: () => jumpFromHandover(() => { setHouseSubTab("medicine"); setActiveTab("house"); }) };
+                          }
+                          if (trimmed.startsWith("🗂️ [공유노트")) {
+                            return { hint: "노트 열기", onClick: () => jumpFromHandover(() => { if (attachedPage) setSelectedPageId(attachedPage.id); setActiveTab("pages"); }) };
+                          }
+                          return null;
+                        };
+
+                        return (
+                          <div className="bg-[#FEE500] rounded-2xl rounded-tr-sm p-2.5 text-[11.5px] leading-relaxed font-semibold text-stone-900 shadow-sm max-h-64 overflow-y-auto space-y-0.5">
+                            {previewLines.map((line, lIdx) => {
+                              if (!line.trim()) return <div key={`ln-${lIdx}`} className="h-1.5" />;
+                              const act = findLineAction(line);
+                              if (act) {
+                                return (
+                                  <button
+                                    key={`ln-${lIdx}`}
+                                    type="button"
+                                    onClick={act.onClick}
+                                    className="w-full text-left hover:bg-black/10 active:bg-black/15 rounded-md px-1 -mx-1 py-0.5 transition flex items-start justify-between gap-1.5 group"
+                                    title={`눌러서 ${act.hint}`}
+                                  >
+                                    <span className="break-keep flex-1 underline decoration-stone-900/25 underline-offset-2 group-hover:decoration-stone-900">
+                                      {line}
+                                    </span>
+                                    <span className="text-[9.5px] font-black text-stone-700/75 group-hover:text-stone-950 whitespace-nowrap shrink-0 mt-0.5">
+                                      ✏️
+                                    </span>
+                                  </button>
+                                );
+                              }
+                              return (
+                                <div key={`ln-${lIdx}`} className="break-keep">
+                                  {line}
+                                </div>
+                              );
+                            })}
+
+                            {/* 프리뷰 전용: 미기재 항목 바로 추가 링크 (복사·PNG 저장 시 자동 제외) */}
+                            {missingLinks.length > 0 && (
+                              <div className="mt-2 pt-2 border-t border-dashed border-stone-900/20 space-y-1">
+                                <div className="text-[10px] font-black text-stone-700/80">
+                                  ➕ 미기재 항목 바로 추가 (복사 시 자동 제외)
+                                </div>
+                                <div className="flex flex-wrap gap-1">
+                                  {missingLinks.slice(0, 8).map((ml) => (
+                                    <button
+                                      key={ml.id}
+                                      type="button"
+                                      onClick={ml.onClick}
+                                      className="px-2 py-0.5 rounded-lg bg-white/80 hover:bg-white border border-stone-900/15 text-stone-800 text-[10px] font-extrabold whitespace-nowrap transition"
+                                    >
+                                      {ml.label}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
                     </div>
 
                     {/* 원천 데이터(원본) 1탭 빠른 편집 바 */}
@@ -38813,6 +39167,122 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                         );
                       })
                     )}
+
+                    {/* 사용자 자유 추가 고정가이드 항목 (추가·수정·삭제) */}
+                    {(() => {
+                      const curCustomList = getCustomGuideItems(handoverGuideSubTab);
+                      const addCustomGuideItem = () => {
+                        const lbl = newGuideItemTitle.trim();
+                        if (!lbl) return;
+                        const nextItem = { id: `cg-${Date.now()}`, label: lbl, value: "" };
+                        setHandoverProfile((p) => {
+                          const prevMap = p.customItems && typeof p.customItems === "object" ? p.customItems : {};
+                          const prevArr = Array.isArray(prevMap[handoverGuideSubTab]) ? prevMap[handoverGuideSubTab] : [];
+                          return {
+                            ...p,
+                            customItems: {
+                              ...prevMap,
+                              [handoverGuideSubTab]: [...prevArr, nextItem]
+                            }
+                          };
+                        });
+                        setNewGuideItemTitle("");
+                      };
+                      return (
+                        <div className="pt-2 border-t border-stone-200 space-y-2">
+                          <div className="text-[11px] font-black text-stone-600 flex items-center justify-between">
+                            <span>✨ 추가 고정가이드 항목 ({curCustomList.length}건)</span>
+                          </div>
+                          {curCustomList.map((ci) => (
+                            <div key={ci.id} className="bg-stone-50 border border-stone-200 rounded-xl p-2 space-y-1.5">
+                              <div className="flex items-center gap-1.5">
+                                <input
+                                  type="text"
+                                  value={ci.label || ""}
+                                  onChange={(e) => {
+                                    const val = e.target.value;
+                                    setHandoverProfile((p) => {
+                                      const prevMap = p.customItems && typeof p.customItems === "object" ? p.customItems : {};
+                                      const prevArr = Array.isArray(prevMap[handoverGuideSubTab]) ? prevMap[handoverGuideSubTab] : [];
+                                      return {
+                                        ...p,
+                                        customItems: {
+                                          ...prevMap,
+                                          [handoverGuideSubTab]: prevArr.map((x) => (x.id === ci.id ? { ...x, label: val } : x))
+                                        }
+                                      };
+                                    });
+                                  }}
+                                  placeholder="항목 제목 (예: 🧸 애착장난감)"
+                                  className="flex-1 min-w-0 h-7 px-2 rounded-lg bg-white border border-stone-200 text-[11.5px] font-extrabold text-stone-800"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setHandoverProfile((p) => {
+                                      const prevMap = p.customItems && typeof p.customItems === "object" ? p.customItems : {};
+                                      const prevArr = Array.isArray(prevMap[handoverGuideSubTab]) ? prevMap[handoverGuideSubTab] : [];
+                                      return {
+                                        ...p,
+                                        customItems: {
+                                          ...prevMap,
+                                          [handoverGuideSubTab]: prevArr.filter((x) => x.id !== ci.id)
+                                        }
+                                      };
+                                    });
+                                  }}
+                                  className="h-7 px-2 rounded-lg bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 text-[10.5px] font-extrabold whitespace-nowrap shrink-0"
+                                >
+                                  삭제
+                                </button>
+                              </div>
+                              <textarea
+                                rows={2}
+                                value={ci.value || ""}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  setHandoverProfile((p) => {
+                                    const prevMap = p.customItems && typeof p.customItems === "object" ? p.customItems : {};
+                                    const prevArr = Array.isArray(prevMap[handoverGuideSubTab]) ? prevMap[handoverGuideSubTab] : [];
+                                    return {
+                                      ...p,
+                                      customItems: {
+                                        ...prevMap,
+                                        [handoverGuideSubTab]: prevArr.map((x) => (x.id === ci.id ? { ...x, value: val } : x))
+                                      }
+                                    };
+                                  });
+                                }}
+                                placeholder="내용을 입력해 주세요 (비워두면 카톡 복사 시 자동 제외)"
+                                className="w-full px-2.5 py-1.5 rounded-lg bg-white border border-stone-200 text-[12px] font-semibold text-stone-800 resize-none"
+                              />
+                            </div>
+                          ))}
+                          <div className="flex items-center gap-1.5">
+                            <input
+                              type="text"
+                              value={newGuideItemTitle}
+                              onChange={(e) => setNewGuideItemTitle(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  e.preventDefault();
+                                  addCustomGuideItem();
+                                }
+                              }}
+                              placeholder="새 고정가이드 항목명 (예: 🧸 애착인형, 🎵 자장가)"
+                              className="flex-1 min-w-0 h-8 px-2.5 rounded-xl bg-white border border-stone-200 text-[12px] font-bold"
+                            />
+                            <button
+                              type="button"
+                              onClick={addCustomGuideItem}
+                              className="h-8 px-2.5 rounded-xl bg-[#3F624D] hover:bg-[#324E3D] text-white text-[11.5px] font-extrabold whitespace-nowrap shrink-0"
+                            >
+                              + 항목 추가
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })()}
 
                     <div className="flex items-center justify-between gap-2 pt-1 flex-wrap">
                       <div className="flex items-center gap-1 flex-wrap">
