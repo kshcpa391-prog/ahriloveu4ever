@@ -5542,6 +5542,7 @@ function MainApp() {
         familyPages,
         handoverProfile,
         homeMiniDdayIds,
+        babyDreamLinks,
         homeLayoutConfig,
         homeTimeRanges,
         routineTimeRanges,
@@ -5712,6 +5713,10 @@ function MainApp() {
           setHomeMiniDdayIds(payload.homeMiniDdayIds);
           try { localStorage.setItem("kim_home_mini_dday_ids_v1", JSON.stringify(payload.homeMiniDdayIds)); } catch (e) {}
         }
+        if (Array.isArray(payload.babyDreamLinks) && payload.babyDreamLinks.length > 0) {
+          setBabyDreamLinks(payload.babyDreamLinks);
+          try { localStorage.setItem("kim_baby_dream_links_v1", JSON.stringify(payload.babyDreamLinks)); } catch (e) {}
+        }
       if (Array.isArray(payload.recipes)) setRecipes(payload.recipes);
       if (payload.mealFavorites && typeof payload.mealFavorites === "object") {
         const rCombos = toSafeArray(payload.mealFavorites.combos);
@@ -5870,6 +5875,15 @@ function MainApp() {
             setDoc(
               getDocRef("family_meta_v4", "home_mini_ddays_v1"),
               { ids: payload.homeMiniDdayIds, updatedAtMs: Date.now() },
+              { merge: true }
+            )
+          );
+        }
+        if (Array.isArray(payload.babyDreamLinks) && payload.babyDreamLinks.length > 0) {
+          writePromises.push(
+            setDoc(
+              getDocRef("family_meta_v4", "baby_dream_links"),
+              { items: payload.babyDreamLinks, updatedAtMs: Date.now() },
               { merge: true }
             )
           );
@@ -14999,7 +15013,11 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                           onClick={async () => {
                             const lines = [
                               `🗓️ 3일 내 일정 (${imminentSchedulesWithin3Days.length}건)`,
-                              ...imminentSchedulesWithin3Days.map((ev) => `• [${ev.calc.daysUntil <= 0 ? "오늘" : ev.calc.dDayText}] ${ev.time ? `${ev.time} ` : ""}${ev.title}`)
+                              ...imminentSchedulesWithin3Days.map((ev) => {
+                                const dt = ev.calc?.nextDateStr || ev.date || "";
+                                const dtLbl = dt ? ` · ${String(dt).slice(5).replace("-", "/")}(${getDayName(dt)})` : "";
+                                return `• [${ev.calc.daysUntil <= 0 ? "오늘" : ev.calc.dDayText}${dtLbl}] ${ev.time ? `${ev.time} ` : ""}${ev.title}`;
+                              })
                             ];
                             await copyTextSafe(lines.join("\n"), `📋 3일 내 일정 ${imminentSchedulesWithin3Days.length}건을 복사했습니다!`);
                           }}
@@ -15075,17 +15093,24 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                               {ev.time ? `${ev.time} ` : ""}
                               {ev.title}
                             </span>
-                            <span
-                              className={`px-2 py-0.5 rounded-lg text-[11px] font-bold shrink-0 whitespace-nowrap ${
-                                isTodayEv
-                                  ? "bg-rose-50 text-rose-700 border border-rose-200"
-                                  : isTomorrowEv
-                                  ? "bg-amber-50 text-amber-800 border border-amber-200"
-                                  : "bg-stone-100 text-stone-700"
-                              }`}
-                            >
-                              {isTodayEv ? "오늘 · D-Day" : ev.calc.dDayText}
-                            </span>
+                            {(() => {
+                              const evDt = ev.calc?.nextDateStr || ev.date || "";
+                              const evDateShort = evDt ? `${String(evDt).slice(5).replace("-", "/")}(${getDayName(evDt)})` : "";
+                              return (
+                                <span
+                                  className={`px-1.5 py-0.5 rounded-lg text-[10px] font-bold shrink-0 whitespace-nowrap inline-flex items-center gap-1 ${
+                                    isTodayEv
+                                      ? "bg-rose-50 text-rose-700 border border-rose-200"
+                                      : isTomorrowEv
+                                      ? "bg-amber-50 text-amber-800 border border-amber-200"
+                                      : "bg-stone-100/90 text-stone-700 border border-stone-200/70"
+                                  }`}
+                                >
+                                  <span>{isTodayEv ? "오늘" : ev.calc.dDayText}</span>
+                                  {evDateShort && <span className="text-[9.5px] font-medium opacity-80">{evDateShort}</span>}
+                                </span>
+                              );
+                            })()}
                           </button>
                         );
                       })}
@@ -15121,6 +15146,22 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                       </div>
                     </div>
                     <div className="flex items-center gap-1 shrink-0">
+                      {visibleRoutineList.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            const lines = [
+                              `🔄 ${dayFilterLabel} 남은 루틴 (${visibleRoutineList.length}건)`,
+                              ...visibleRoutineList.map((r) => `• [${r.timeSlot || "상시"}${r.scheduledTime ? ` ${formatRoutineTimeLabel(r.scheduledTime)}` : ""}] ${r.title}${r.assignee && r.assignee !== "공통" ? ` (${r.assignee})` : ""}`)
+                            ];
+                            await copyTextSafe(lines.join("\n"), `📋 루틴 ${visibleRoutineList.length}건을 복사했습니다!`);
+                          }}
+                          className="h-7 px-2 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 text-[11px] font-semibold whitespace-nowrap"
+                          title="현재 표시 중인 루틴 복사"
+                        >
+                          복사
+                        </button>
+                      )}
                       <button
                         type="button"
                         onClick={() => {
@@ -15467,7 +15508,12 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                               .sort((a, b) => String(a.date || "9999-99-99").localeCompare(String(b.date || "9999-99-99")));
                             const lines = [
                               `✅ 남은 할 일 (${allOpenTodos.length}건)`,
-                              ...allOpenTodos.map((t) => `• ${t.date ? `[${String(t.date).slice(5)}] ` : ""}${t.title}`)
+                              ...allOpenTodos.map((t) => {
+                                if (!t.date) return `• ${t.title}`;
+                                const df = getDaysDiff(t.date);
+                                const dTxt = df < 0 ? `${Math.abs(df)}일 지남` : df === 0 ? "오늘" : `D-${df}`;
+                                return `• [${dTxt} · ${String(t.date).slice(5).replace("-", "/")}(${getDayName(t.date)})] ${t.title}`;
+                              })
                             ];
                             await copyTextSafe(lines.join("\n"), `📋 남은 할 일 ${allOpenTodos.length}건을 복사했습니다!`);
                           }}
@@ -15578,19 +15624,29 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                                 )}
                               </div>
                             </div>
-                            {todo.date && (
-                              <span
-                                className={`px-2 py-0.5 rounded-lg text-[11px] font-semibold whitespace-nowrap shrink-0 ${
-                                  isOverdue
-                                    ? "bg-rose-50 text-rose-700 border border-rose-200"
-                                    : isDueToday
-                                    ? "bg-amber-50 text-amber-800 border border-amber-200"
-                                    : "text-stone-600"
-                                }`}
-                              >
-                                {isOverdue ? `지연 · ${String(todo.date).slice(5)}` : isDueToday ? "오늘" : String(todo.date).slice(5)}
-                              </span>
-                            )}
+                            {todo.date && (() => {
+                              const todoDiff = getDaysDiff(todo.date);
+                              const dateWithDay = `${String(todo.date).slice(5).replace("-", "/")}(${getDayName(todo.date)})`;
+                              const isSoon = todoDiff > 0 && todoDiff <= 3;
+                              return (
+                                <span
+                                  className={`px-1.5 py-0.5 rounded-lg text-[10px] font-bold whitespace-nowrap shrink-0 inline-flex items-center gap-1 ${
+                                    isOverdue
+                                      ? "bg-rose-50 text-rose-700 border border-rose-200"
+                                      : isDueToday
+                                      ? "bg-amber-50 text-amber-800 border border-amber-200"
+                                      : isSoon
+                                      ? "bg-amber-50/70 text-amber-800 border border-amber-200/80"
+                                      : "bg-stone-100/80 text-stone-600 border border-stone-200/70"
+                                  }`}
+                                >
+                                  <span>
+                                    {todoDiff < 0 ? `${Math.abs(todoDiff)}일 지남` : todoDiff === 0 ? "오늘" : `D-${todoDiff}`}
+                                  </span>
+                                  <span className="text-[9.5px] font-medium opacity-80">{dateWithDay}</span>
+                                </span>
+                              );
+                            })()}
                           </div>
                         );
                       })}
@@ -19846,7 +19902,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                         </div>
                         <div className="flex items-center gap-1.5 text-[11px] text-stone-500 mt-0.5 whitespace-nowrap overflow-hidden">
                           <span className="shrink-0">
-                            📅 {todo.date}({getDayName(todo.date)})
+                            📅 {todo.date}({getDayName(todo.date)}){!todo.done && todo.date ? (() => { const d = getDaysDiff(todo.date); return d < 0 ? ` · ${Math.abs(d)}일 지남` : d === 0 ? " · 오늘" : ` · D-${d}`; })() : ""}
                           </span>
                           <span className="shrink-0">· {todo.category}</span>
                           {Array.isArray(todo.attachments) && todo.attachments.length > 0 && (

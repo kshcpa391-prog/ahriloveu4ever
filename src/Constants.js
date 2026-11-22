@@ -1178,7 +1178,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v13.21";
+export const APP_CODE_VERSION = "v13.23";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1196,7 +1196,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-22 19:40";
+export const APP_BUILD_DATE = "2026-11-22 19:52";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1264,6 +1264,29 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v13.23",
+    version: "v13.23",
+    date: "2026-11-22",
+    title: "🛡️ 아기꿈나라 링크 JSON 백업·복원 누락 수정 · 홈 3일 내 일정 요일 표기 통일 · 홈 루틴 1탭 복사",
+    category: "버그 수정 · 시인성 · 편의성",
+    changes: [
+      "데이터 유실 방지: JSON 전체 백업·복원(로컬 및 Firestore family_meta_v4/baby_dream_links)에서 누락돼 있던 [🌙 아기꿈나라 링크] 데이터를 완전 포함하도록 보강",
+      "홈 행동 피드 시인성 통일: [3일 내 일정] 배지에도 [남은 할 일]과 동일한 스타일로 날짜·요일(예: D-1 11/23(월), 오늘 11/22(일))을 작게 함께 표시하고, 일정·할 일 복사 문구에도 D-Day·요일 자동 반영",
+      "홈 [오늘 남은 루틴] 헤더에도 1탭 [복사] 버튼을 추가해 홈 행동 피드 3대 카드(일정·루틴·할 일) 모두 1탭 카톡 복사 지원 및 Babel AST·배포 정합성 최종 검증 0건 통과"
+    ]
+  },
+  {
+    id: "patch-v13.22",
+    version: "v13.22",
+    date: "2026-11-22",
+    title: "✅ 홈 남은 할 일·To-Do 남은 일수(D-N)/경과일(N일 지남) 및 요일 컴팩트 표기 추가",
+    category: "시인성 · 편의성",
+    changes: [
+      "홈 [남은 할 일] 우측 배지에 남은 일수(D-N)·경과일(N일 지남)·오늘 표기와 함께 날짜·요일(예: 13일 지남 11/09(월), D-2 11/24(화))을 작고 깔끔하게 표시",
+      "일정 → [할 일(To-Do)] 탭 날짜에도 미완료 항목의 남은 일수·경과일을 함께 표시해 홈과 일관된 시인성 제공"
+    ]
+  },
   {
     id: "patch-v13.21",
     version: "v13.21",
