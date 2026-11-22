@@ -110,6 +110,7 @@ import {
   FRIDGE_CATEGORIES,
   SCHEDULE_CATEGORIES,
   RECIPE_CATEGORIES,
+  NOTICE_CATEGORIES,
   FRIDGE_SHELF_ZONES,
   getFridgeCategoryIcon,
   resolveItemShelfZone,
@@ -859,6 +860,7 @@ const ScheduleFormModal = React.memo(({
 const NoticeFormModal = React.memo(({
   initialForm,
   isEditing,
+  noticeCategories = NOTICE_CATEGORIES,
   onClose,
   onSubmitForm
 }) => {
@@ -917,10 +919,9 @@ const NoticeFormModal = React.memo(({
             onChange={(e) => setDraft((p) => ({ ...p, category: e.target.value }))}
             className="px-3 py-2 rounded-xl border border-stone-200 text-[13.5px] font-bold"
           >
-            <option value="육아/아이들">👶 육아/아이들</option>
-            <option value="일정/행사">📅 일정/행사</option>
-            <option value="집안일">🧹 집안일</option>
-            <option value="일반">💬 일반 공지</option>
+            {(Array.isArray(noticeCategories) && noticeCategories.length > 0 ? noticeCategories : NOTICE_CATEGORIES).map((c) => (
+              <option key={c} value={c}>{c}</option>
+            ))}
           </select>
           <select
             value={draft.author || "김수혁"}
@@ -2437,6 +2438,32 @@ function MainApp() {
   const [newHouseRoomInput, setNewHouseRoomInput] = useState("");
   const [editingHouseRoomOrig, setEditingHouseRoomOrig] = useState("");
   const [editingHouseRoomDraft, setEditingHouseRoomDraft] = useState("");
+
+  // 사용자 자유 관리 카테고리 (재료 · 레시피 · 가족공지)
+  const [customCategories, setCustomCategories] = useState(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem("kim_custom_categories_v1") || "null");
+      if (saved && typeof saved === "object") {
+        return {
+          fridge: Array.isArray(saved.fridge) && saved.fridge.length > 0 ? saved.fridge.map((s) => String(s || "").trim()).filter(Boolean) : [...FRIDGE_CATEGORIES],
+          recipe: Array.isArray(saved.recipe) && saved.recipe.length > 0 ? saved.recipe.map((s) => String(s || "").trim()).filter(Boolean) : [...RECIPE_CATEGORIES],
+          notice: Array.isArray(saved.notice) && saved.notice.length > 0 ? saved.notice.map((s) => String(s || "").trim()).filter(Boolean) : [...NOTICE_CATEGORIES]
+        };
+      }
+    } catch (e) {}
+    return {
+      fridge: [...FRIDGE_CATEGORIES],
+      recipe: [...RECIPE_CATEGORIES],
+      notice: [...NOTICE_CATEGORIES]
+    };
+  });
+  const fridgeCategories = customCategories.fridge;
+  const recipeCategories = customCategories.recipe;
+  const noticeCategories = customCategories.notice;
+  const [categoryManageKind, setCategoryManageKind] = useState(""); // "" | "fridge" | "recipe" | "notice"
+  const [newCategoryInput, setNewCategoryInput] = useState("");
+  const [editingCategoryOrig, setEditingCategoryOrig] = useState("");
+  const [editingCategoryDraft, setEditingCategoryDraft] = useState("");
 
   const [houseItems, setHouseItems] = useState([]);
   const [houseSubTab, setHouseSubTab] = useState("storage"); // storage | warranty | medicine
@@ -5211,6 +5238,26 @@ function MainApp() {
 
     unsubscribers.push(
       onSnapshot(
+        getDocRef("family_meta_v4", "custom_categories_v1"),
+        (snap) => {
+          if (snap.exists()) {
+            const d = snap.data() || {};
+            const nextCats = {
+              fridge: Array.isArray(d.fridge) && d.fridge.length > 0 ? d.fridge.map((s) => String(s || "").trim()).filter(Boolean) : [...FRIDGE_CATEGORIES],
+              recipe: Array.isArray(d.recipe) && d.recipe.length > 0 ? d.recipe.map((s) => String(s || "").trim()).filter(Boolean) : [...RECIPE_CATEGORIES],
+              notice: Array.isArray(d.notice) && d.notice.length > 0 ? d.notice.map((s) => String(s || "").trim()).filter(Boolean) : [...NOTICE_CATEGORIES]
+            };
+            setCustomCategories(nextCats);
+            try { localStorage.setItem("kim_custom_categories_v1", JSON.stringify(nextCats)); } catch (e) {}
+          }
+        },
+        () => {}
+      )
+    );
+
+
+    unsubscribers.push(
+      onSnapshot(
         getDocRef("family_meta_v4", "house_rooms_v1"),
         (snap) => {
           if (!snap.exists()) return;
@@ -5758,6 +5805,7 @@ function MainApp() {
         homeMiniDdayIds,
         babyDreamLinks,
         houseStorageRooms,
+        customCategories,
         homeLayoutConfig,
         homeTimeRanges,
         routineTimeRanges,
@@ -5932,6 +5980,15 @@ function MainApp() {
           setBabyDreamLinks(payload.babyDreamLinks);
           try { localStorage.setItem("kim_baby_dream_links_v1", JSON.stringify(payload.babyDreamLinks)); } catch (e) {}
         }
+      if (payload.customCategories && typeof payload.customCategories === "object") {
+        const nextCats = {
+          fridge: Array.isArray(payload.customCategories.fridge) && payload.customCategories.fridge.length > 0 ? payload.customCategories.fridge.map((s) => String(s || "").trim()).filter(Boolean) : [...FRIDGE_CATEGORIES],
+          recipe: Array.isArray(payload.customCategories.recipe) && payload.customCategories.recipe.length > 0 ? payload.customCategories.recipe.map((s) => String(s || "").trim()).filter(Boolean) : [...RECIPE_CATEGORIES],
+          notice: Array.isArray(payload.customCategories.notice) && payload.customCategories.notice.length > 0 ? payload.customCategories.notice.map((s) => String(s || "").trim()).filter(Boolean) : [...NOTICE_CATEGORIES]
+        };
+        setCustomCategories(nextCats);
+        try { localStorage.setItem("kim_custom_categories_v1", JSON.stringify(nextCats)); } catch (e) {}
+      }
         if (Array.isArray(payload.houseStorageRooms) && payload.houseStorageRooms.length > 0) {
           const cleanRooms = payload.houseStorageRooms.map((s) => String(s || "").trim()).filter(Boolean);
           if (cleanRooms.length > 0) {
@@ -6106,6 +6163,20 @@ function MainApp() {
             setDoc(
               getDocRef("family_meta_v4", "baby_dream_links"),
               { items: payload.babyDreamLinks, updatedAtMs: Date.now() },
+              { merge: true }
+            )
+          );
+        }
+        if (payload.customCategories && typeof payload.customCategories === "object") {
+          writePromises.push(
+            setDoc(
+              getDocRef("family_meta_v4", "custom_categories_v1"),
+              {
+                fridge: Array.isArray(payload.customCategories.fridge) && payload.customCategories.fridge.length > 0 ? payload.customCategories.fridge : [...FRIDGE_CATEGORIES],
+                recipe: Array.isArray(payload.customCategories.recipe) && payload.customCategories.recipe.length > 0 ? payload.customCategories.recipe : [...RECIPE_CATEGORIES],
+                notice: Array.isArray(payload.customCategories.notice) && payload.customCategories.notice.length > 0 ? payload.customCategories.notice : [...NOTICE_CATEGORIES],
+                updatedAtMs: Date.now()
+              },
               { merge: true }
             )
           );
@@ -8247,7 +8318,7 @@ ${validText}
         })
         .map((it) => {
           const loc = STORAGE_LOCATIONS.includes(it.location) ? it.location : String(it.location || "").includes("냉동") ? "메인 냉동실" : "냉장실";
-          const cat = FRIDGE_CATEGORIES.includes(it.category) ? it.category : "기타";
+          const cat = fridgeCategories.includes(it.category) ? it.category : "기타";
           return {
             name: String(it.name || "").trim(),
             location: loc,
@@ -10566,7 +10637,7 @@ ${validText}
               .map((x) => ({
                 name: String(x.name).trim(),
                 quantity: String(x.quantity || "1개").trim(),
-                category: FRIDGE_CATEGORIES.includes(x.category) ? x.category : "기타"
+                category: fridgeCategories.includes(x.category) ? x.category : "기타"
               }));
           }
         } catch (aiErr) {}
@@ -12597,13 +12668,155 @@ ${item.memo}` : `${item.title} 다녀옴!`,
           : "",
         ev.memo || ""
       ].filter(Boolean).join("\n"),
-      category: ev.category === "육아/병원" ? "육아/아이들" : "가족공지",
+      category: ev.category === "육아/병원" ? (noticeCategories[0] || "육아/아이들") : (noticeCategories.includes("일정/행사") ? "일정/행사" : (noticeCategories[0] || "일정/행사")),
       author: actorName || "수혁",
       pinned: true
     });
     setCalDayPopupDate(null);
     setCalDayPopupItem(null);
     setIsNoticeModalOpen(true);
+  };
+
+
+
+  // === ⚙️ 통합 세부 카테고리 자유 관리 (재료 · 레시피 · 가족공지) ===
+  const openCategoryManager = (kind = "fridge") => {
+    setCategoryManageKind(kind);
+    setNewCategoryInput("");
+    setEditingCategoryOrig("");
+    setEditingCategoryDraft("");
+  };
+
+  const saveCustomCategoriesToCloud = async (nextCats, toastMsg = "") => {
+    setCustomCategories(nextCats);
+    try { localStorage.setItem("kim_custom_categories_v1", JSON.stringify(nextCats)); } catch (e) {}
+    if (user && db) {
+      try {
+        await setDoc(
+          getDocRef("family_meta_v4", "custom_categories_v1"),
+          { ...nextCats, updatedAtMs: Date.now() },
+          { merge: true }
+        );
+      } catch (e) {}
+    }
+    if (toastMsg) showToast(toastMsg);
+  };
+
+  const handleAddCustomCategory = async (kind, rawName) => {
+    const tabKey = kind === "fridge" ? "fridge" : kind === "recipe" ? "recipes" : "notices";
+    if (!requireEditorAccess(tabKey)) return;
+    const name = String(rawName || "").trim();
+    if (!name) return;
+    const curList = customCategories[kind] || [];
+    if (curList.includes(name)) {
+      showToast(`'${name}' 분류가 이미 있습니다.`);
+      return;
+    }
+    const nextCats = { ...customCategories, [kind]: [...curList, name] };
+    setNewCategoryInput("");
+    await saveCustomCategoriesToCloud(nextCats, `✅ '${name}' 분류를 추가했습니다.`);
+  };
+
+  const handleRenameCustomCategory = async (kind, oldName, rawNext) => {
+    const tabKey = kind === "fridge" ? "fridge" : kind === "recipe" ? "recipes" : "notices";
+    if (!requireEditorAccess(tabKey)) return;
+    const nextName = String(rawNext || "").trim();
+    if (!nextName || nextName === oldName) {
+      setEditingCategoryOrig("");
+      setEditingCategoryDraft("");
+      return;
+    }
+    const curList = customCategories[kind] || [];
+    if (curList.includes(nextName)) {
+      showToast(`'${nextName}' 분류가 이미 있습니다.`);
+      return;
+    }
+    const nextList = curList.map((c) => (c === oldName ? nextName : c));
+    const nextCats = { ...customCategories, [kind]: nextList };
+    setEditingCategoryOrig("");
+    setEditingCategoryDraft("");
+    await saveCustomCategoriesToCloud(nextCats);
+
+    // 기존 항목 일괄 갱신
+    if (kind === "fridge") {
+      if (fridgeCatFilter === oldName) setFridgeCatFilter(nextName);
+      const affectedFridge = fridge.filter((it) => it.category === oldName);
+      const affectedShop = shoppingList.filter((it) => it.category === oldName);
+      if (affectedFridge.length > 0 && user && db) {
+        try {
+          const batch = writeBatch(db);
+          affectedFridge.forEach((it) => {
+            batch.set(getDocRef("family_fridge_v4", it.id), { ...it, category: nextName }, { merge: true });
+          });
+          await batch.commit();
+        } catch (e) {}
+      }
+      if (affectedShop.length > 0 && user && db) {
+        try {
+          const batch = writeBatch(db);
+          affectedShop.forEach((it) => {
+            batch.set(getDocRef("family_shopping_v4", it.id), { ...it, category: nextName }, { merge: true });
+          });
+          await batch.commit();
+        } catch (e) {}
+      }
+    } else if (kind === "recipe") {
+      if (recipeCatFilter === oldName) setRecipeCatFilter(nextName);
+      const affected = recipes.filter((r) => r.category === oldName);
+      if (affected.length > 0 && user && db) {
+        try {
+          const batch = writeBatch(db);
+          affected.forEach((r) => {
+            batch.set(getDocRef("family_recipes_v8", r.id), { ...r, category: nextName }, { merge: true });
+          });
+          await batch.commit();
+        } catch (e) {}
+      }
+    } else if (kind === "notice") {
+      const affected = notices.filter((n) => n.category === oldName);
+      if (affected.length > 0 && user && db) {
+        try {
+          const batch = writeBatch(db);
+          affected.forEach((n) => {
+            batch.set(getDocRef("family_notices_v4", n.id), { ...n, category: nextName }, { merge: true });
+          });
+          await batch.commit();
+        } catch (e) {}
+      }
+    }
+    showToast(`✏️ '${oldName}' → '${nextName}' 분류로 변경했습니다.`);
+  };
+
+  const handleDeleteCustomCategory = async (kind, targetName) => {
+    const tabKey = kind === "fridge" ? "fridge" : kind === "recipe" ? "recipes" : "notices";
+    if (!requireEditorAccess(tabKey)) return;
+    const curList = customCategories[kind] || [];
+    if (curList.length <= 1) {
+      showToast("최소 1개 이상의 분류는 유지해야 합니다.");
+      return;
+    }
+    const nextList = curList.filter((c) => c !== targetName);
+    const nextCats = { ...customCategories, [kind]: nextList };
+    if (kind === "fridge" && fridgeCatFilter === targetName) setFridgeCatFilter("전체");
+    if (kind === "recipe" && recipeCatFilter === targetName) setRecipeCatFilter("전체");
+    await saveCustomCategoriesToCloud(nextCats, `🗑️ '${targetName}' 분류를 삭제했습니다.`);
+  };
+
+  const handleMoveCustomCategory = async (kind, idx, delta) => {
+    const curList = [...(customCategories[kind] || [])];
+    const targetIdx = idx + delta;
+    if (targetIdx < 0 || targetIdx >= curList.length) return;
+    const tmp = curList[idx];
+    curList[idx] = curList[targetIdx];
+    curList[targetIdx] = tmp;
+    await saveCustomCategoriesToCloud({ ...customCategories, [kind]: curList });
+  };
+
+  const handleResetCustomCategories = async (kind) => {
+    const tabKey = kind === "fridge" ? "fridge" : kind === "recipe" ? "recipes" : "notices";
+    if (!requireEditorAccess(tabKey)) return;
+    const defList = kind === "fridge" ? [...FRIDGE_CATEGORIES] : kind === "recipe" ? [...RECIPE_CATEGORIES] : [...NOTICE_CATEGORIES];
+    await saveCustomCategoriesToCloud({ ...customCategories, [kind]: defList }, "↺ 기본 분류로 복원했습니다.");
   };
 
 
@@ -20140,16 +20353,37 @@ ${item.memo}` : `${item.title} 다녀옴!`,
               [신규 요청사항 1 완벽 반영] To-Do List 전체를 체크리스트처럼 표시하는 화면
           ========================================== */}
           {scheduleSubTab === "todo" && (
-          <div id="schedule-todo-section" className="bg-white p-4 rounded-2xl border border-stone-200 shadow-sm space-y-3">
-            <div className="space-y-2">
-              <div className="flex items-center justify-between gap-2">
+          <div id="schedule-todo-section" className="bg-white p-3 rounded-2xl border border-stone-200 shadow-sm space-y-2.5">
+            {/* 헤더: 제목·진행률·핵심 액션 1줄 정리 (중복 추가 버튼 제거) */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between gap-2 min-w-0">
                 <div className="flex items-center gap-1.5 min-w-0">
-                  <ListTodo className="w-4 h-4 text-emerald-600 shrink-0" />
-                  <h3 className="text-[13.5px] font-black text-stone-900 whitespace-nowrap truncate">
-                    ✅ To-Do ({todoStats.activeCount} 남음 · 완료 {todoStats.doneCount})
+                  <ListTodo className="w-4 h-4 text-[#3F624D] shrink-0" />
+                  <h3 className="text-[13.5px] font-black text-stone-900 truncate">
+                    할 일
                   </h3>
+                  <span className="px-1.5 py-0.5 rounded-full bg-[#EEF3EE] text-[#35503C] text-[10.5px] font-black whitespace-nowrap shrink-0">
+                    남음 {todoStats.activeCount}
+                  </span>
+                  {todoStats.total > 0 && (
+                    <span className="text-[11px] font-extrabold text-stone-500 whitespace-nowrap shrink-0">
+                      · {Math.round((todoStats.doneCount / todoStats.total) * 100)}%
+                    </span>
+                  )}
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setTodoIncludeOtherCats((v) => !v)}
+                    className={`h-7 px-2 rounded-lg text-[10.5px] font-extrabold border transition whitespace-nowrap ${
+                      todoIncludeOtherCats
+                        ? "bg-amber-100 text-amber-900 border-amber-300"
+                        : "bg-stone-50 text-stone-600 border-stone-200 hover:bg-stone-100"
+                    }`}
+                    title="육아/병원·가족행사 일정 함께 보기"
+                  >
+                    {todoIncludeOtherCats ? "🏥 포함 ON" : "🏥 병원·행사"}
+                  </button>
                   <button
                     type="button"
                     onClick={async () => {
@@ -20170,20 +20404,89 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                       ];
                       await copyTextSafe(lines.join("\n"), `📋 남은 할 일 ${activeList.length}건을 복사했습니다!`);
                     }}
-                    className="px-2 py-1 rounded-xl bg-stone-50 hover:bg-stone-100 border border-stone-200 text-stone-700 text-[11px] font-extrabold whitespace-nowrap"
+                    className="h-7 px-2 rounded-lg bg-stone-50 hover:bg-stone-100 border border-stone-200 text-stone-700 text-[11px] font-extrabold whitespace-nowrap"
                     title="남은 할 일 목록 카톡 공유용 복사"
                   >
                     📋
                   </button>
-                  {canEditTab("schedule") && (
+                </div>
+              </div>
+
+              {todoStats.total > 0 && (
+                <div className="w-full h-1.5 bg-stone-100 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-[#3F624D] transition-all"
+                    style={{ width: `${Math.round((todoStats.doneCount / todoStats.total) * 100)}%` }}
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* 단일 할 일 추가 바 (+ 추가 버튼 1개로 일원화) */}
+            {canEditTab("schedule") && (
+              <div className="bg-[#FAF8F3] p-2 rounded-xl border border-stone-200/90 space-y-1.5">
+                <div className="flex items-center gap-1.5">
+                  <input
+                    type="text"
+                    placeholder="할 일 입력 후 엔터 (예: 예방접종 예약)"
+                    value={quickTodoTitle}
+                    onChange={(e) => setQuickTodoTitle(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") handleQuickAddTodo();
+                    }}
+                    className="flex-1 min-w-0 h-8 px-2.5 rounded-lg border border-stone-200 text-[12.5px] font-bold bg-white"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleQuickAddTodo}
+                    className="h-8 px-3 rounded-lg bg-[#3F624D] hover:bg-[#324E3D] text-white text-[12px] font-extrabold whitespace-nowrap shrink-0"
+                  >
+                    + 추가
+                  </button>
+                </div>
+                <div className="flex items-center justify-between gap-1">
+                  <input
+                    type="date"
+                    value={quickTodoDate}
+                    onChange={(e) => setQuickTodoDate(e.target.value)}
+                    className="h-7 px-2 rounded-lg border border-stone-200 text-[11px] font-bold bg-white min-w-0 flex-1"
+                  />
+                  <div className="flex items-center gap-1 shrink-0">
+                    {[
+                      { label: "오늘", offset: 0 },
+                      { label: "내일", offset: 1 },
+                      {
+                        label: "주말",
+                        offset: (() => {
+                          const d = new Date().getDay();
+                          return d === 6 ? 0 : d === 0 ? 0 : 6 - d;
+                        })()
+                      }
+                    ].map((dOpt) => {
+                      const targetDate = addMonthsToDateStr(getTodayStr(), 0, dOpt.offset);
+                      return (
+                        <button
+                          key={dOpt.label}
+                          type="button"
+                          onClick={() => setQuickTodoDate(targetDate)}
+                          className={`h-7 px-2 rounded-lg text-[10.5px] font-extrabold border whitespace-nowrap ${
+                            quickTodoDate === targetDate
+                              ? "bg-[#3F624D] text-white border-[#3F624D]"
+                              : "bg-white text-stone-600 border-stone-200"
+                          }`}
+                        >
+                          {dOpt.label}
+                        </button>
+                      );
+                    })}
                     <button
                       type="button"
                       onClick={() => {
                         setEditingSchedule(null);
                         setScheduleForm({
-                          title: "",
-                          date: getTodayStr(),
-                            endDate: "",
+                          title: quickTodoTitle.trim(),
+                          date: quickTodoDate || getTodayStr(),
+                          endDate: "",
                           category: "할일(To-Do)",
                           members: ["수혁", "아리나"],
                           isAnnual: false,
@@ -20194,86 +20497,48 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                         });
                         setIsScheduleModalOpen(true);
                       }}
-                      className="px-2.5 py-1 rounded-xl bg-stone-900 text-white text-[11.5px] font-extrabold whitespace-nowrap flex items-center gap-0.5"
+                      className="h-7 px-2 rounded-lg text-[10.5px] font-extrabold border bg-white hover:bg-stone-100 text-stone-600 border-stone-200 whitespace-nowrap"
+                      title="메모·첨부파일 포함 상세 등록"
                     >
-                      <Plus className="w-3 h-3" /> 추가
+                      상세
                     </button>
-                  )}
+                  </div>
                 </div>
               </div>
+            )}
 
-
-              <div className="flex items-center justify-between gap-2 flex-wrap">
-                <div className="flex gap-1 bg-stone-100 p-0.5 rounded-lg shrink-0">
-                  {[
-                    { id: "all", label: "전체" },
-                    { id: "active", label: "진행중" },
-                    { id: "completed", label: "완료됨" }
-                  ].map((tab) => (
-                    <button
-                      type="button"
-                      key={tab.id}
-                      onClick={() => setTodoStatusFilter(tab.id)}
-                      className={`px-2.5 py-1 rounded-md text-[11.5px] font-extrabold whitespace-nowrap transition ${
-                        todoStatusFilter === tab.id
-                          ? "bg-stone-900 text-white"
-                          : "text-stone-500 hover:text-stone-800"
-                      }`}
-                    >
-                      {tab.label}
-                    </button>
-                  ))}
-                </div>
-                {todoStats.doneCount > 0 && (
+            {/* 상태 탭 + 완료 비우기 + 검색 */}
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex gap-0.5 bg-stone-100 p-0.5 rounded-lg shrink-0">
+                {[
+                  { id: "all", label: `전체 ${todoStats.total}` },
+                  { id: "active", label: `남음 ${todoStats.activeCount}` },
+                  { id: "completed", label: `완료 ${todoStats.doneCount}` }
+                ].map((tab) => (
                   <button
                     type="button"
-                    onClick={handleClearCompletedTodos}
-                    className="px-2.5 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 border border-rose-200 text-[11.5px] font-extrabold text-rose-700 whitespace-nowrap"
+                    key={tab.id}
+                    onClick={() => setTodoStatusFilter(tab.id)}
+                    className={`px-2 py-1 rounded-md text-[11px] font-extrabold whitespace-nowrap transition ${
+                      todoStatusFilter === tab.id
+                        ? "bg-white text-stone-900 shadow-sm"
+                        : "text-stone-500 hover:text-stone-800"
+                    }`}
                   >
-                    🧹 완료됨 비우기
+                    {tab.label}
                   </button>
-                )}
+                ))}
               </div>
+              {todoStats.doneCount > 0 && (
+                <button
+                  type="button"
+                  onClick={handleClearCompletedTodos}
+                  className="h-7 px-2 rounded-lg bg-rose-50 hover:bg-rose-100 border border-rose-200 text-[10.5px] font-extrabold text-rose-700 whitespace-nowrap shrink-0"
+                >
+                  🧹 완료 비우기
+                </button>
+              )}
             </div>
-
-
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-[11.5px] font-semibold text-stone-500 whitespace-nowrap truncate">
-                {todoIncludeOtherCats ? "표시: 할일 + 병원·행사" : "표시: 할일만"}
-              </span>
-              <button
-                type="button"
-                onClick={() => setTodoIncludeOtherCats((v) => !v)}
-                className={`px-2.5 py-1 rounded-lg text-[11.5px] font-extrabold border transition whitespace-nowrap shrink-0 ${
-                  todoIncludeOtherCats
-                    ? "bg-amber-100 text-amber-900 border-amber-300"
-                    : "bg-stone-100 text-stone-600 border-stone-200 hover:bg-stone-200"
-                }`}
-              >
-                {todoIncludeOtherCats ? "🏥 병원·행사 ON" : "🏥 병원·행사 포함"}
-              </button>
-            </div>
-
-
-            {/* 진행률 바 */}
-            {todoStats.total > 0 && (() => {
-              const pct = Math.round((todoStats.doneCount / todoStats.total) * 100);
-              return (
-                <div className="space-y-1">
-                  <div className="flex items-center justify-between text-[11.5px] font-extrabold text-stone-500">
-                    <span>진행률 {todoStats.doneCount}/{todoStats.total}건</span>
-                    <span className="text-emerald-700">{pct}%</span>
-                  </div>
-                  <div className="w-full h-2 bg-stone-100 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-emerald-500 transition-all"
-                      style={{ width: `${pct}%` }}
-                    />
-                  </div>
-                </div>
-              );
-            })()}
-
 
             {todoStats.total > 0 && (
               <div className="relative">
@@ -20283,81 +20548,20 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                   onChange={(e) => setTodoSearchQuery(e.target.value)}
                   onKeyDown={(e) => { if (e.key === "Escape") setTodoSearchQuery(""); }}
                   enterKeyHint="search"
-                  placeholder="🔍 할 일 제목·메모 검색..."
-                  className="w-full px-3 py-1.5 pr-7 rounded-xl border border-stone-200 bg-stone-50 text-[12.5px] font-semibold text-stone-800"
+                  placeholder="🔍 할 일 검색..."
+                  className="w-full h-8 px-3 pr-7 rounded-xl border border-stone-200 bg-stone-50 text-[12px] font-semibold text-stone-800"
                 />
                 {todoSearchQuery && (
                   <button
                     type="button"
                     onClick={() => setTodoSearchQuery("")}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-700 text-[11.5px] font-black"
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-700 text-[11px] font-black"
                   >
                     ✕
                   </button>
                 )}
               </div>
             )}
-
-
-            {/* 체크리스트 인라인 빠른 할 일 추가 바 */}
-            <div className="bg-stone-50 p-2 rounded-xl border border-stone-200 space-y-1.5">
-              <div className="flex items-center gap-1.5">
-                <input
-                  type="text"
-                  placeholder="할 일 입력 (예: 시목이 상담, 예방접종)"
-                  value={quickTodoTitle}
-                  onChange={(e) => setQuickTodoTitle(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") handleQuickAddTodo();
-                  }}
-                  className="flex-1 min-w-0 px-2.5 py-1.5 rounded-lg border border-stone-200 text-[13px] font-bold bg-white"
-                />
-                <button
-                  type="button"
-                  onClick={handleQuickAddTodo}
-                  className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[12.5px] font-extrabold whitespace-nowrap shrink-0"
-                >
-                  + 추가
-                </button>
-              </div>
-              <div className="flex items-center justify-between gap-1">
-                <input
-                  type="date"
-                  value={quickTodoDate}
-                  onChange={(e) => setQuickTodoDate(e.target.value)}
-                  className="px-2 py-1 rounded-lg border border-stone-200 text-[11.5px] font-bold bg-white min-w-0 flex-1"
-                />
-                <div className="flex items-center gap-1 shrink-0">
-                  {[
-                    { label: "오늘", offset: 0 },
-                    { label: "내일", offset: 1 },
-                    {
-                      label: "주말",
-                      offset: (() => {
-                        const d = new Date().getDay();
-                        return d === 6 ? 0 : d === 0 ? 0 : 6 - d;
-                      })()
-                    }
-                  ].map((dOpt) => {
-                    const targetDate = addMonthsToDateStr(getTodayStr(), 0, dOpt.offset);
-                    return (
-                      <button
-                        key={dOpt.label}
-                        type="button"
-                        onClick={() => setQuickTodoDate(targetDate)}
-                        className={`px-2 py-1 rounded-lg text-[11px] font-extrabold border whitespace-nowrap ${
-                          quickTodoDate === targetDate
-                            ? "bg-stone-900 text-white border-stone-900"
-                            : "bg-white text-stone-600 border-stone-200"
-                        }`}
-                      >
-                        {dOpt.label}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
 
 
             {/* 전체 체크리스트 목록 */}
@@ -20389,35 +20593,34 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                 );
               }
               return (
-                <div className="space-y-1.5 max-h-80 overflow-y-auto pr-0.5">
+                <div className="space-y-1.5">
                   {visibleTodoItems.map((todo) => (
                   <div
                     key={todo.id}
-                    className={`p-2.5 rounded-xl border transition flex items-center justify-between gap-2 ${
+                    className={`px-2.5 py-2 rounded-xl border transition flex items-center justify-between gap-2 ${
                       todo.done
-                        ? "bg-stone-100 border-stone-200 opacity-70"
+                        ? "bg-stone-50 border-stone-200 opacity-70"
                         : "bg-white border-stone-200 shadow-sm"
                     }`}
                   >
                     <div
                       onClick={() => handleToggleScheduleDone(todo)}
-                      className="flex items-center gap-2.5 cursor-pointer flex-1 min-w-0"
+                      className="flex items-center gap-2 cursor-pointer flex-1 min-w-0"
                     >
                       <div
-                        className={`w-5 h-5 rounded-lg border flex items-center justify-center shrink-0 transition ${
+                        className={`w-4.5 h-4.5 w-[18px] h-[18px] rounded-md border flex items-center justify-center shrink-0 transition ${
                           todo.done
-                            ? "bg-emerald-600 border-emerald-600 text-white"
-                            : "border-stone-300 bg-white hover:border-emerald-500"
+                            ? "bg-[#3F624D] border-[#3F624D] text-white"
+                            : "border-stone-300 bg-white hover:border-[#3F624D]"
                         }`}
                       >
-                        {todo.done && <Check className="w-3.5 h-3.5" />}
+                        {todo.done && <Check className="w-3 h-3" />}
                       </div>
 
-
                       <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-1.5 flex-wrap">
+                        <div className="flex items-center gap-1.5 min-w-0">
                           <span
-                            className={`text-[13.5px] font-extrabold break-keep ${
+                            className={`text-[13px] font-extrabold truncate ${
                               todo.done ? "line-through text-stone-400" : "text-stone-900"
                             }`}
                           >
@@ -20425,23 +20628,29 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                           </span>
                           {!todo.done && (
                             <span
-                              className={`px-1.5 py-0.2 rounded text-[10.5px] font-black ${
-                                todo.calc.daysUntil <= 3 && todo.calc.daysUntil >= 0
-                                  ? "bg-rose-500 text-white"
-                                  : "bg-amber-100 text-amber-900"
+                              className={`px-1.5 py-0.5 rounded text-[10px] font-black whitespace-nowrap shrink-0 ${
+                                todo.calc.daysUntil <= 0
+                                  ? "bg-rose-100 text-rose-700"
+                                  : todo.calc.daysUntil <= 3
+                                  ? "bg-amber-100 text-amber-900"
+                                  : "bg-stone-100 text-stone-700"
                               }`}
                             >
                               {todo.calc.dDayText}
                             </span>
                           )}
                         </div>
-                        <div className="flex items-center gap-1.5 text-[11px] text-stone-500 mt-0.5 whitespace-nowrap overflow-hidden">
+                        <div className="flex items-center gap-1 text-[11px] text-stone-500 mt-0.5 whitespace-nowrap overflow-hidden">
                           <span className="shrink-0">
-                            📅 {todo.date}({getDayName(todo.date)}){!todo.done && todo.date ? (() => { const d = getDaysDiff(todo.date); return d < 0 ? ` · ${Math.abs(d)}일 지남` : d === 0 ? " · 오늘" : ` · D-${d}`; })() : ""}
+                            {String(todo.date || "").slice(5)}({getDayName(todo.date)}){!todo.done && todo.date ? (() => { const d = getDaysDiff(todo.date); return d < 0 ? ` · ${Math.abs(d)}일 지남` : d === 0 ? " · 오늘" : ""; })() : ""}
                           </span>
-                          <span className="shrink-0">· {todo.category}</span>
+                          {todo.category && todo.category !== "할일(To-Do)" && (
+                            <span className="px-1 py-0.5 rounded bg-amber-50 text-amber-800 text-[9.5px] font-bold whitespace-nowrap shrink-0">
+                              {todo.category}
+                            </span>
+                          )}
                           {Array.isArray(todo.attachments) && todo.attachments.length > 0 && (
-                            <span className="px-1 py-0.2 rounded bg-sky-100 text-sky-800 text-[10px] font-black shrink-0">
+                            <span className="px-1 py-0.5 rounded bg-sky-100 text-sky-800 text-[9.5px] font-black whitespace-nowrap shrink-0">
                               📎{todo.attachments.length}
                             </span>
                           )}
@@ -20847,34 +21056,36 @@ ${item.memo}` : `${item.title} 다녀옴!`,
           탭 5: 스마트 냉장고
       ========================================== */}
       {activeTab === "fridge" && (!canViewTab("fridge") ? renderLockedTabScreen("❄️ 냉장고") : (
-        <div className="p-4 space-y-3.5">
-          <div className="grid grid-cols-2 gap-2">
+        <div className="p-3 space-y-2.5">
+          <div className="grid grid-cols-2 gap-1.5">
             <button
               type="button"
               onClick={() => setIsReceiptModalOpen(true)}
-              className="py-2 px-2.5 rounded-2xl bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-900 text-[11.5px] font-extrabold flex items-center justify-between gap-1 whitespace-nowrap"
+              className="py-1.5 px-2.5 rounded-xl bg-[#EEF3EE] hover:bg-[#DFE9E0] border border-[#C9D8CC] text-[#35503C] text-[11.5px] font-extrabold flex items-center justify-between gap-1 whitespace-nowrap"
             >
               <span className="flex items-center gap-1 truncate">
-                <Receipt className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
+                <Receipt className="w-3.5 h-3.5 text-[#3F624D] shrink-0" />
                 <span>영수증 AI 스캔</span>
               </span>
-              <ChevronRight className="w-3.5 h-3.5 text-emerald-700/70 shrink-0" />
+              <ChevronRight className="w-3.5 h-3.5 text-[#3F624D]/70 shrink-0" />
             </button>
             <button
               type="button"
               onClick={() => setIsInventoryExportOpen(true)}
-              className="py-2 px-2.5 rounded-2xl bg-stone-100 hover:bg-stone-200/80 border border-stone-200 text-stone-800 text-[11.5px] font-extrabold flex items-center justify-between gap-1 whitespace-nowrap"
+              className="py-1.5 px-2.5 rounded-xl bg-stone-100 hover:bg-stone-200/80 border border-stone-200 text-stone-800 text-[11.5px] font-extrabold flex items-center justify-between gap-1 whitespace-nowrap"
             >
               <span className="truncate">📤 식단·재고 출력</span>
               <ChevronRight className="w-3.5 h-3.5 text-stone-400 shrink-0" />
             </button>
           </div>
+
+          {/* 임박·경과 재료 컴팩트 배너 */}
           {expiringItems.length > 0 && (
-            <div className="bg-orange-50 border border-orange-200 rounded-2xl p-3">
-              <div className="flex items-center justify-between gap-2 mb-1.5">
-                <div className="flex items-center gap-1.5 text-[13.5px] font-black text-orange-900">
-                  <AlertCircle className="w-4 h-4 text-orange-600" />
-                  <span>임박·경과 재료 ({expiringItems.length}건)</span>
+            <div className="bg-orange-50/80 border border-orange-200/90 rounded-2xl p-2.5 space-y-1.5">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-1 text-[12px] font-black text-orange-900 whitespace-nowrap">
+                  <AlertCircle className="w-3.5 h-3.5 text-orange-600 shrink-0" />
+                  <span>임박·경과 ({expiringItems.length})</span>
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
                   <button
@@ -20886,7 +21097,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                       ];
                       await copyTextSafe(lines.join("\n"), `📋 임박 재료 ${expiringItems.length}건을 복사했습니다!`);
                     }}
-                    className="px-2 py-0.5 rounded-lg bg-white hover:bg-orange-100 text-orange-800 border border-orange-200 text-[11px] font-extrabold whitespace-nowrap"
+                    className="h-6 px-1.5 rounded-lg bg-white hover:bg-orange-100 text-orange-800 border border-orange-200 text-[10.5px] font-extrabold whitespace-nowrap"
                     title="임박·경과 재료 목록 복사"
                   >
                     📋
@@ -20895,29 +21106,29 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                     <button
                       type="button"
                       onClick={() => handleExpiringToAiChef(expiringItems.slice(0, 4).map((i) => i.name))}
-                      className="px-2 py-0.5 rounded-lg bg-orange-600 hover:bg-orange-700 text-white text-[11px] font-extrabold whitespace-nowrap"
+                      className="h-6 px-2 rounded-lg bg-orange-600 hover:bg-orange-700 text-white text-[10.5px] font-extrabold whitespace-nowrap"
                     >
                       ✨ AI 추천
                     </button>
                   )}
                 </div>
               </div>
-              <div className="flex flex-wrap gap-1.5">
+              <div className="flex flex-wrap gap-1">
                 {expiringItems.map((item) => (
                   <button
                     key={item.id}
                     type="button"
                     onClick={() => setQuickFridgeItem(item)}
-                    className="px-2.5 py-1 rounded-full text-[12px] font-extrabold bg-white hover:bg-orange-100 text-orange-800 border border-orange-200 active:scale-95 transition whitespace-nowrap"
+                    className="px-2 py-0.5 rounded-lg text-[10.5px] font-bold bg-white hover:bg-orange-100 text-orange-900 border border-orange-200/90 active:scale-95 transition whitespace-nowrap"
                   >
-                    {item.name} ({item.diff < 0 ? `${Math.abs(item.diff)}일 지남` : `D-${item.diff}`})
+                    {item.name} <span className={item.diff <= 0 ? "text-rose-600 font-black" : "text-orange-700 font-extrabold"}>({item.diff < 0 ? `${Math.abs(item.diff)}일 지남` : item.diff === 0 ? "오늘" : `D-${item.diff}`})</span>
                   </button>
                 ))}
               </div>
             </div>
           )}
 
-
+          {/* 보관 구역 슬림 3칸 카드 (글자 크기·높이 경량화) */}
           {fridge.length > 0 && (
             <div className="grid grid-cols-3 gap-1.5">
               {[
@@ -20933,19 +21144,19 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                     key={zone.key}
                     type="button"
                     onClick={() => setFridgeLocFilter(isSel ? "전체" : zone.key)}
-                    className={`p-2 rounded-2xl border text-left transition ${
-                      isSel ? "bg-stone-900 text-white border-stone-900 shadow-sm" : "bg-white text-stone-800 border-stone-200 hover:bg-stone-50"
+                    className={`px-2 py-1.5 rounded-xl border text-left transition ${
+                      isSel ? "bg-[#3F624D] text-white border-[#3F624D] shadow-sm" : "bg-white text-stone-800 border-stone-200 hover:bg-stone-50"
                     }`}
                   >
-                    <div className="flex items-center justify-between gap-1 text-[11.5px] font-extrabold">
+                    <div className="flex items-center justify-between gap-1 text-[10.5px] font-bold">
                       <span className="whitespace-nowrap shrink-0">{zone.icon} {zone.key.replace("·팬트리", "")}</span>
                       {zExp > 0 && (
-                        <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-black whitespace-nowrap shrink-0 ${isSel ? "bg-amber-400 text-stone-900" : "bg-orange-100 text-orange-800"}`}>
+                        <span className={`px-1 py-0.5 rounded-full text-[9.5px] font-black leading-none whitespace-nowrap shrink-0 ${isSel ? "bg-amber-300 text-stone-900" : "bg-orange-100 text-orange-800"}`}>
                           임박 {zExp}
                         </span>
                       )}
                     </div>
-                    <div className={`text-[15.5px] font-black mt-0.5 ${isSel ? "text-white" : "text-stone-900"}`}>
+                    <div className={`text-[13px] font-black mt-0.5 whitespace-nowrap ${isSel ? "text-white" : "text-stone-900"}`}>
                       {zItems.length}개
                     </div>
                   </button>
@@ -20954,16 +21165,16 @@ ${item.memo}` : `${item.title} 다녀옴!`,
             </div>
           )}
 
-
-          <div className="flex items-center justify-between gap-2">
+          {/* 전체·뷰전환·복사·추가 1줄 통합 컨트롤 */}
+          <div className="flex items-center justify-between gap-1.5">
             {fridgeViewMode === "visual" ? (
-              <div className="flex gap-1 bg-stone-200 p-1 rounded-xl overflow-x-auto">
+              <div className="flex gap-1 bg-stone-200 p-0.5 rounded-xl overflow-x-auto flex-1 min-w-0">
                 {["전체", ...STORAGE_LOCATIONS].map((loc) => (
                   <button
                     type="button"
                     key={loc}
                     onClick={() => setFridgeLocFilter(loc)}
-                    className={`px-2 py-1 rounded-lg text-[11px] font-extrabold whitespace-nowrap transition ${
+                    className={`px-2 py-1 rounded-lg text-[10.5px] font-extrabold whitespace-nowrap transition ${
                       fridgeLocFilter === loc
                         ? "bg-white text-stone-900 shadow-sm"
                         : "text-stone-600"
@@ -20974,113 +21185,149 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                 ))}
               </div>
             ) : (
-              <button
-                type="button"
-                onClick={() => setFridgeLocFilter("전체")}
-                className={`px-2.5 py-1.5 rounded-xl border text-[11.5px] font-extrabold whitespace-nowrap transition ${
-                  fridgeLocFilter === "전체"
-                    ? "bg-stone-900 text-white border-stone-900"
-                    : "bg-white text-stone-700 border-stone-200 hover:bg-stone-50"
-                }`}
-              >
-                전체 ({fridge.length})
-              </button>
+              <div className="flex items-center gap-1 bg-stone-100 p-0.5 rounded-xl flex-1 min-w-0">
+                <button
+                  type="button"
+                  onClick={() => setFridgeLocFilter("전체")}
+                  className={`px-2 py-1 rounded-lg text-[11px] font-extrabold whitespace-nowrap transition ${
+                    fridgeLocFilter === "전체"
+                      ? "bg-[#3F624D] text-white"
+                      : "text-stone-600 hover:bg-white"
+                  }`}
+                >
+                  전체 {fridge.length}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setFridgeViewMode("list"); setBulkMoveMode(false); setSelectedBulkFridgeIds([]); }}
+                  className="flex-1 py-1 rounded-lg text-[11px] font-extrabold whitespace-nowrap bg-white text-stone-900 shadow-sm"
+                >
+                  📋 리스트
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFridgeViewMode("visual")}
+                  className="flex-1 py-1 rounded-lg text-[11px] font-extrabold whitespace-nowrap text-stone-500 hover:text-stone-800"
+                >
+                  🗂️ 칸별
+                </button>
+              </div>
             )}
-            <button
-              type="button"
-              onClick={openAddFridgeModal}
-              className="px-2.5 py-1.5 rounded-xl bg-stone-900 text-white text-[11.5px] font-extrabold flex items-center gap-1 shrink-0 whitespace-nowrap"
-            >
-              <Plus className="w-3.5 h-3.5" /> 재료 추가
-            </button>
-          </div>
-
-
-          <div className="flex items-center justify-between gap-2 bg-stone-100 p-1 rounded-xl">
-            <button
-              type="button"
-              onClick={() => { setFridgeViewMode("list"); setBulkMoveMode(false); setSelectedBulkFridgeIds([]); }}
-              className={`flex-1 py-1.5 rounded-lg text-[12px] font-extrabold whitespace-nowrap transition ${
-                fridgeViewMode === "list" ? "bg-white text-stone-900 shadow-sm" : "text-stone-500"
-              }`}
-            >
-              📋 리스트 뷰
-            </button>
-            <button
-              type="button"
-              onClick={() => setFridgeViewMode("visual")}
-              className={`flex-1 py-1.5 rounded-lg text-[12px] font-extrabold whitespace-nowrap transition ${
-                fridgeViewMode === "visual" ? "bg-white text-stone-900 shadow-sm" : "text-stone-500"
-              }`}
-            >
-              🗂️ 칸별 뷰
-            </button>
-            <button
-              type="button"
-              onClick={async () => {
-                const q = debouncedFridgeSearch.trim().toLowerCase();
-                const list = fridge.filter(
-                  (i) =>
-                    matchesFridgeLocFilter(i.location, fridgeLocFilter) &&
-                    (fridgeCatFilter === "전체" || i.category === fridgeCatFilter) &&
-                    (!q || String(i.name || "").toLowerCase().includes(q))
-                );
-                if (list.length === 0) {
-                  showToast("❄️ 복사할 냉장고 재료가 없습니다.");
-                  return;
-                }
-                const lines = [
-                  `❄️ 냉장고 재고 (${list.length}건)`,
-                  ...list.map((it) => {
-                    const diff = getDaysDiff(it.expiryDate);
-                    const dTxt = it.expiryDate ? (diff < 0 ? "만료" : diff === 0 ? "오늘" : `D-${diff}`) : "";
-                    return `• [${it.location || "냉장"}] ${it.name} (${it.quantity || 1}${it.unit || "개"}${dTxt ? ` · ${dTxt}` : ""})`;
-                  })
-                ];
-                await copyTextSafe(lines.join("\n"), `📋 냉장고 재고 ${list.length}건을 복사했습니다!`);
-              }}
-              className="px-2.5 py-1.5 rounded-lg bg-white hover:bg-stone-50 text-stone-700 text-[11.5px] font-extrabold whitespace-nowrap shrink-0 shadow-sm"
-              title="현재 냉장고 재고 목록 복사"
-            >
-              📋
-            </button>
-          </div>
-
-
-          <div className="flex gap-1.5 overflow-x-auto pb-1">
-            {["전체", ...FRIDGE_CATEGORIES].map((cat) => (
+            <div className="flex items-center gap-1 shrink-0">
+              {fridgeViewMode === "visual" && (
+                <button
+                  type="button"
+                  onClick={() => { setFridgeViewMode("list"); setBulkMoveMode(false); setSelectedBulkFridgeIds([]); }}
+                  className="h-8 px-2 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-[11px] font-extrabold whitespace-nowrap"
+                >
+                  📋 리스트
+                </button>
+              )}
               <button
                 type="button"
-                key={cat}
-                onClick={() => setFridgeCatFilter(cat)}
-                className={`px-2.5 py-1 rounded-full text-[12px] font-bold shrink-0 whitespace-nowrap border ${
-                  fridgeCatFilter === cat
-                    ? "bg-emerald-600 text-white border-emerald-600"
-                    : "bg-white text-stone-600 border-stone-200"
-                }`}
+                onClick={async () => {
+                  const q = debouncedFridgeSearch.trim().toLowerCase();
+                  const list = fridge.filter(
+                    (i) =>
+                      matchesFridgeLocFilter(i.location, fridgeLocFilter) &&
+                      (fridgeCatFilter === "전체" || i.category === fridgeCatFilter) &&
+                      (!visualExpiringOnly || getDaysDiff(i.expiryDate) <= 3) &&
+                      (!q || String(i.name || "").toLowerCase().includes(q))
+                  );
+                  if (list.length === 0) {
+                    showToast("❄️ 복사할 냉장고 재료가 없습니다.");
+                    return;
+                  }
+                  const lines = [
+                    `❄️ 냉장고 재고 (${list.length}건)`,
+                    ...list.map((it) => {
+                      const diff = getDaysDiff(it.expiryDate);
+                      const dTxt = it.expiryDate ? (diff < 0 ? "만료" : diff === 0 ? "오늘" : `D-${diff}`) : "";
+                      return `• [${it.location || "냉장"}] ${it.name} (${it.quantity || 1}${it.unit || "개"}${dTxt ? ` · ${dTxt}` : ""})`;
+                    })
+                  ];
+                  await copyTextSafe(lines.join("\n"), `📋 냉장고 재고 ${list.length}건을 복사했습니다!`);
+                }}
+                className="h-8 px-2 rounded-xl bg-white hover:bg-stone-50 border border-stone-200 text-stone-700 text-[11px] font-extrabold whitespace-nowrap"
+                title="현재 필터 기준 냉장고 재고 복사"
               >
-                {cat === "전체" ? "전체" : `${getFridgeCategoryIcon(cat)} ${cat}`}
+                📋
               </button>
-            ))}
+              <button
+                type="button"
+                onClick={openAddFridgeModal}
+                className="h-8 px-2.5 rounded-xl bg-[#3F624D] hover:bg-[#324E3D] text-white text-[11px] font-extrabold flex items-center gap-0.5 whitespace-nowrap"
+              >
+                <Plus className="w-3.5 h-3.5" /> 추가
+              </button>
+            </div>
           </div>
 
+          {/* 재료 분류별 필터: 가로 스크롤 잘림 없이 한눈에 전체 표시 (건수 포함) */}
+          <div className="bg-white rounded-xl border border-stone-200/80 p-2">
+            <div className="flex flex-wrap gap-1">
+              {(() => {
+                const locScoped = fridge.filter((i) => matchesFridgeLocFilter(i.location, fridgeLocFilter));
+                const shortCatLabel = (c) =>
+                  c === "유아식/이유식 재료" ? "유아식" : c;
+                return (
+                  <>
+                    {["전체", ...fridgeCategories].map((cat) => {
+                      const cnt = cat === "전체" ? locScoped.length : locScoped.filter((i) => i.category === cat).length;
+                      const active = fridgeCatFilter === cat;
+                      return (
+                        <button
+                          type="button"
+                          key={cat}
+                          onClick={() => setFridgeCatFilter(cat)}
+                          className={`px-2 py-1 rounded-lg text-[11px] font-bold whitespace-nowrap border transition flex items-center gap-1 ${
+                            active
+                              ? "bg-[#3F624D] text-white border-[#3F624D]"
+                              : cnt === 0
+                              ? "bg-stone-50/70 text-stone-400 border-stone-200/70"
+                              : "bg-stone-50 text-stone-700 border-stone-200 hover:bg-stone-100"
+                          }`}
+                        >
+                          <span>{cat === "전체" ? "전체" : `${getFridgeCategoryIcon(cat)} ${shortCatLabel(cat)}`}</span>
+                          <span className={`text-[10px] font-black ${active ? "text-emerald-100" : cnt === 0 ? "text-stone-300" : "text-stone-400"}`}>
+                            {cnt}
+                          </span>
+                        </button>
+                      );
+                    })}
+                    {canEditTab("fridge") && (
+                      <button
+                        type="button"
+                        onClick={() => openCategoryManager("fridge")}
+                        className="px-2 py-1 rounded-lg text-[11px] font-extrabold whitespace-nowrap border border-dashed border-stone-300 bg-white hover:bg-stone-100 text-stone-600 transition"
+                        title="재료 카테고리 추가·수정·삭제"
+                      >
+                        ⚙️ 분류
+                      </button>
+                    )}
+                  </>
+                );
+              })()}
+            </div>
+          </div>
 
+          {/* 검색 + 임박만 + 정렬 */}
           <div className="flex items-center gap-1.5">
-            <div className="relative flex-1">
+            <div className="relative flex-1 min-w-0">
               <input
                 type="text"
                 value={fridgeSearch}
                 onChange={(e) => setFridgeSearch(e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Escape") setFridgeSearch(""); }}
                 enterKeyHint="search"
-                placeholder="🔍 재료 검색 (양파, 우유 등)"
-                className="w-full px-3 py-2 pr-8 rounded-xl border border-stone-200 bg-white text-[13.5px] font-semibold text-stone-800 placeholder:text-stone-400"
+                placeholder="🔍 재료 검색..."
+                className="w-full h-8 px-2.5 pr-7 rounded-xl border border-stone-200 bg-white text-[12px] font-semibold text-stone-800 placeholder:text-stone-400"
               />
               {fridgeSearch && (
                 <button
                   type="button"
                   onClick={() => setFridgeSearch("")}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-700 text-[13.5px] font-black"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-700 text-[12px] font-black"
                 >
                   ✕
                 </button>
@@ -21091,7 +21338,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                 <button
                   type="button"
                   onClick={() => setVisualExpiringOnly((v) => !v)}
-                  className={`px-2 py-2 rounded-xl border text-[11px] font-extrabold whitespace-nowrap ${
+                  className={`h-8 px-2 rounded-xl border text-[11px] font-extrabold whitespace-nowrap ${
                     visualExpiringOnly
                       ? "bg-orange-600 text-white border-orange-600"
                       : "bg-white text-orange-700 border-orange-200"
@@ -21102,7 +21349,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                 <select
                   value={fridgeSort}
                   onChange={(e) => setFridgeSort(e.target.value)}
-                  className="px-2 py-2 rounded-xl border border-stone-200 bg-white text-[11.5px] font-extrabold text-stone-700 shrink-0"
+                  className="h-8 px-1.5 rounded-xl border border-stone-200 bg-white text-[11px] font-extrabold text-stone-700 shrink-0"
                 >
                   <option value="expiry">임박순</option>
                   <option value="recent">최신순</option>
@@ -21829,7 +22076,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                 onChange={(e) => setShoppingForm({ ...shoppingForm, category: e.target.value })}
                 className="px-2.5 py-2 rounded-xl border border-stone-200 text-[13.5px] font-bold bg-stone-50"
               >
-                {FRIDGE_CATEGORIES.map((c) => (
+                {fridgeCategories.map((c) => (
                   <option key={c} value={c}>
                     {c}
                   </option>
@@ -22194,14 +22441,25 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                 </button>
               )}
             </div>
-            <button
-              type="button"
-              onClick={() => {
-                setEditingNotice(null);
-                setNoticeForm({
-                  title: "",
-                  content: "",
-                  category: "육아/아이들",
+            <div className="flex items-center gap-1 shrink-0">
+              {canEditTab("notices") && (
+                <button
+                  type="button"
+                  onClick={() => openCategoryManager("notice")}
+                  className="px-2 py-1.5 rounded-xl bg-white hover:bg-stone-100 border border-stone-200 text-stone-700 text-[11.5px] font-extrabold whitespace-nowrap"
+                  title="공지 카테고리 추가·수정·삭제"
+                >
+                  ⚙️ 분류
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  setEditingNotice(null);
+                  setNoticeForm({
+                    title: "",
+                    content: "",
+                    category: noticeCategories[0] || "육아/아이들",
                   author: actorName || "수혁",
                   pinned: true
                 });
@@ -22209,8 +22467,9 @@ ${item.memo}` : `${item.title} 다녀옴!`,
               }}
               className="px-3 py-1.5 rounded-xl bg-stone-900 text-white text-[12.5px] font-extrabold flex items-center gap-1 whitespace-nowrap shrink-0"
             >
-              <Plus className="w-3.5 h-3.5" /> 작성
-            </button>
+                <Plus className="w-3.5 h-3.5" /> 작성
+              </button>
+            </div>
           </div>
 
 
@@ -26105,21 +26364,42 @@ ${item.memo}` : `${item.title} 다녀옴!`,
             </div>
 
 
-            <div className="flex gap-1.5 overflow-x-auto pb-0.5">
-              {["전체", ...RECIPE_CATEGORIES].map((cat) => (
-                <button
-                  type="button"
-                  key={cat}
-                  onClick={() => setRecipeCatFilter(cat)}
-                  className={`px-2.5 py-1 rounded-full text-[12px] font-bold shrink-0 whitespace-nowrap border ${
-                    recipeCatFilter === cat
-                      ? "bg-rose-600 text-white border-rose-600"
-                      : "bg-white text-stone-600 border-stone-200"
-                  }`}
-                >
-                  {cat}
-                </button>
-              ))}
+            <div className="bg-white rounded-xl border border-stone-200/80 p-2">
+              <div className="flex flex-wrap gap-1">
+                {["전체", ...recipeCategories].map((cat) => {
+                  const cnt = cat === "전체" ? recipes.length : recipes.filter((r) => (r.category || "기타") === cat).length;
+                  const active = recipeCatFilter === cat;
+                  return (
+                    <button
+                      type="button"
+                      key={cat}
+                      onClick={() => setRecipeCatFilter(cat)}
+                      className={`px-2 py-1 rounded-lg text-[11px] font-bold whitespace-nowrap border transition flex items-center gap-1 ${
+                        active
+                          ? "bg-[#3F624D] text-white border-[#3F624D]"
+                          : cnt === 0
+                          ? "bg-stone-50/70 text-stone-400 border-stone-200/70"
+                          : "bg-stone-50 text-stone-700 border-stone-200 hover:bg-stone-100"
+                      }`}
+                    >
+                      <span>{cat}</span>
+                      <span className={`text-[10px] font-black ${active ? "text-emerald-100" : cnt === 0 ? "text-stone-300" : "text-stone-400"}`}>
+                        {cnt}
+                      </span>
+                    </button>
+                  );
+                })}
+                {canEditTab("recipes") && (
+                  <button
+                    type="button"
+                    onClick={() => openCategoryManager("recipe")}
+                    className="px-2 py-1 rounded-lg text-[11px] font-extrabold whitespace-nowrap border border-dashed border-stone-300 bg-white hover:bg-stone-100 text-stone-600 transition"
+                    title="레시피 카테고리 추가·수정·삭제"
+                  >
+                    ⚙️ 분류
+                  </button>
+                )}
+              </div>
             </div>
 
 
@@ -32948,7 +33228,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                 onChange={(e) => setFridgeForm({ ...fridgeForm, category: e.target.value })}
                 className="px-3 py-2 rounded-xl border border-stone-200 text-[13.5px] font-bold"
               >
-                {FRIDGE_CATEGORIES.map((cat) => (
+                {fridgeCategories.map((cat) => (
                   <option key={cat} value={cat}>
                     {cat}
                   </option>
@@ -33210,10 +33490,191 @@ ${item.memo}` : `${item.title} 다녀옴!`,
       )}
 
 
+      {/* ⚙️ 통합 세부 카테고리 자유 관리 모달 (재료 · 레시피 · 가족공지) */}
+      {categoryManageKind && (() => {
+        const curList = customCategories[categoryManageKind] || [];
+        const kindMeta = {
+          fridge: { title: "❄️ 재료 카테고리", placeholder: "새 재료 분류 (예: 간식/과자, 냉동식품)" },
+          recipe: { title: "📖 레시피 카테고리", placeholder: "새 레시피 분류 (예: 에어프라이어, 캠핑요리)" },
+          notice: { title: "📌 공지 카테고리", placeholder: "새 공지 분류 (예: 어린이집, 건강/병원)" }
+        }[categoryManageKind] || { title: "⚙️ 분류 관리", placeholder: "새 분류 입력" };
+        return (
+          <div
+            className="fixed inset-0 bg-black/50 z-[65] flex items-center justify-center p-4"
+            onClick={() => setCategoryManageKind("")}
+          >
+            <div
+              className="bg-white rounded-3xl max-w-sm w-full p-4 space-y-3 shadow-2xl max-h-[82vh] flex flex-col"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <h3 className="text-[14.5px] font-black text-stone-900 truncate min-w-0">
+                  ⚙️ {kindMeta.title} 관리
+                </h3>
+                <div className="flex items-center gap-1 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => handleResetCustomCategories(categoryManageKind)}
+                    className="h-7 px-2 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-600 text-[11px] font-extrabold whitespace-nowrap"
+                    title="기본 분류로 복원"
+                  >
+                    ↺ 기본복원
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCategoryManageKind("")}
+                    className="h-7 w-7 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-600 flex items-center justify-center"
+                    aria-label="닫기"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+
+              {/* 3종 카테고리 빠른 전환 탭 */}
+              <div className="grid grid-cols-3 gap-1 bg-stone-100 p-1 rounded-xl">
+                {[
+                  { id: "fridge", label: "❄️ 재료" },
+                  { id: "recipe", label: "📖 레시피" },
+                  { id: "notice", label: "📌 공지" }
+                ].map((t) => (
+                  <button
+                    key={t.id}
+                    type="button"
+                    onClick={() => openCategoryManager(t.id)}
+                    className={`py-1.5 rounded-lg text-[11.5px] font-extrabold whitespace-nowrap transition ${
+                      categoryManageKind === t.id
+                        ? "bg-white text-stone-900 shadow-sm"
+                        : "text-stone-500 hover:text-stone-800"
+                    }`}
+                  >
+                    {t.label} ({(customCategories[t.id] || []).length})
+                  </button>
+                ))}
+              </div>
+
+              {/* 새 분류 추가 입력 */}
+              <div className="flex items-center gap-1.5">
+                <input
+                  type="text"
+                  value={newCategoryInput}
+                  onChange={(e) => setNewCategoryInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") handleAddCustomCategory(categoryManageKind, newCategoryInput);
+                  }}
+                  placeholder={kindMeta.placeholder}
+                  className="flex-1 min-w-0 h-9 px-3 rounded-xl border border-stone-200 text-[12.5px] font-bold bg-stone-50"
+                />
+                <button
+                  type="button"
+                  onClick={() => handleAddCustomCategory(categoryManageKind, newCategoryInput)}
+                  className="h-9 px-3 rounded-xl bg-[#3F624D] hover:bg-[#324E3D] text-white text-[12px] font-extrabold whitespace-nowrap shrink-0"
+                >
+                  + 추가
+                </button>
+              </div>
+
+              {/* 현재 분류 목록 (순서 이동 · 이름 수정 · 삭제) */}
+              <div className="flex-1 overflow-y-auto space-y-1.5 pr-0.5">
+                {curList.map((cat, idx) => {
+                  const isEd = editingCategoryOrig === cat;
+                  return (
+                    <div
+                      key={cat}
+                      className="px-2.5 py-2 rounded-xl border border-stone-200 bg-stone-50/70 flex items-center justify-between gap-1.5"
+                    >
+                      {isEd ? (
+                        <div className="flex items-center gap-1 flex-1 min-w-0">
+                          <input
+                            type="text"
+                            value={editingCategoryDraft}
+                            onChange={(e) => setEditingCategoryDraft(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") handleRenameCustomCategory(categoryManageKind, cat, editingCategoryDraft);
+                              if (e.key === "Escape") { setEditingCategoryOrig(""); setEditingCategoryDraft(""); }
+                            }}
+                            className="flex-1 min-w-0 h-7 px-2 rounded-lg border border-[#3F624D] bg-white text-[12px] font-bold"
+                            autoFocus
+                          />
+                          <button
+                            type="button"
+                            onClick={() => handleRenameCustomCategory(categoryManageKind, cat, editingCategoryDraft)}
+                            className="h-7 px-2 rounded-lg bg-[#3F624D] text-white text-[11px] font-extrabold whitespace-nowrap shrink-0"
+                          >
+                            저장
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => { setEditingCategoryOrig(""); setEditingCategoryDraft(""); }}
+                            className="h-7 px-1.5 rounded-lg bg-stone-200 text-stone-700 text-[11px] font-bold whitespace-nowrap shrink-0"
+                          >
+                            취소
+                          </button>
+                        </div>
+                      ) : (
+                        <>
+                          <span className="text-[12.5px] font-extrabold text-stone-800 truncate flex-1 min-w-0">
+                            {categoryManageKind === "fridge" ? `${getFridgeCategoryIcon(cat)} ` : ""}{cat}
+                          </span>
+                          <div className="flex items-center gap-0.5 shrink-0">
+                            <button
+                              type="button"
+                              disabled={idx === 0}
+                              onClick={() => handleMoveCustomCategory(categoryManageKind, idx, -1)}
+                              className="h-6 w-6 rounded-md bg-white hover:bg-stone-100 disabled:opacity-30 border border-stone-200 text-[10px] font-black text-stone-600 flex items-center justify-center"
+                              title="위로 이동"
+                            >
+                              ▲
+                            </button>
+                            <button
+                              type="button"
+                              disabled={idx === curList.length - 1}
+                              onClick={() => handleMoveCustomCategory(categoryManageKind, idx, 1)}
+                              className="h-6 w-6 rounded-md bg-white hover:bg-stone-100 disabled:opacity-30 border border-stone-200 text-[10px] font-black text-stone-600 flex items-center justify-center"
+                              title="아래로 이동"
+                            >
+                              ▼
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditingCategoryOrig(cat);
+                                setEditingCategoryDraft(cat);
+                              }}
+                              className="h-6 px-1.5 rounded-md bg-white hover:bg-stone-100 border border-stone-200 text-[10.5px] font-bold text-stone-700 whitespace-nowrap"
+                              title="이름 수정"
+                            >
+                              수정
+                            </button>
+                            <button
+                              type="button"
+                              disabled={curList.length <= 1}
+                              onClick={() => handleDeleteCustomCategory(categoryManageKind, cat)}
+                              className="h-6 px-1.5 rounded-md bg-rose-50 hover:bg-rose-100 disabled:opacity-30 border border-rose-200 text-[10.5px] font-bold text-rose-700 whitespace-nowrap"
+                              title="삭제"
+                            >
+                              삭제
+                            </button>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="text-[10.5px] font-semibold text-stone-500 text-center">
+                이름 수정 시 기존 항목의 분류도 자동 변경됩니다.
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       {isNoticeModalOpen && (
         <NoticeFormModal
           initialForm={noticeForm}
           isEditing={Boolean(editingNotice)}
+          noticeCategories={noticeCategories}
           onClose={() => setIsNoticeModalOpen(false)}
           onSubmitForm={(draft) => handleSaveNotice(draft)}
         />
@@ -36218,7 +36679,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                 onChange={(e) => setRecipeForm({ ...recipeForm, category: e.target.value })}
                 className="px-2 py-2 rounded-xl border border-stone-200 text-[13.5px] font-bold bg-stone-50"
               >
-                {RECIPE_CATEGORIES.map((c) => (
+                {recipeCategories.map((c) => (
                   <option key={c} value={c}>{c}</option>
                 ))}
               </select>

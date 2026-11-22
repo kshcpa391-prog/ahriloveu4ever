@@ -973,6 +973,7 @@ export const matchesFridgeLocFilter = (itemLoc, filterLoc) => {
 export const FRIDGE_CATEGORIES = ["채소/과일", "육류/수산", "유제품/계란", "유아식/이유식 재료", "반찬/김치", "밀키트", "양념/소스", "음료", "기타"];
 export const SCHEDULE_CATEGORIES = ["기념일/생일", "할일(To-Do)", "육아/병원", "가족행사/경조사"];
 export const RECIPE_CATEGORIES = ["메인반찬", "국·찌개", "한그릇·면·밥", "유아식·이유식", "간식·디저트", "샐러드·가벼운식", "기타"];
+export const NOTICE_CATEGORIES = ["육아/아이들", "일정/행사", "집안일", "일반"];
 export const FRIDGE_SHELF_ZONES = [
   "냉장 1단(상단)",
   "냉장 2단(중단)",
@@ -1178,7 +1179,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v13.33";
+export const APP_CODE_VERSION = "v13.35";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1196,7 +1197,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-22 22:55";
+export const APP_BUILD_DATE = "2026-11-22 23:15";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1264,6 +1265,30 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v13.35",
+    version: "v13.35",
+    date: "2026-11-22",
+    title: "⚙️ 재료·레시피·가족공지 카테고리 자유 관리(추가·수정·삭제·순서이동·클라우드 동기화) & 레시피 분류 한눈에 보기",
+    category: "신규 기능 · 자유도 고도화 · 버그 수정",
+    changes: [
+      "통합 카테고리 자유 관리(⚙️ 분류) 신설: 냉장고 재료·레시피북·가족공지 세부 카테고리를 자유롭게 추가·이름 수정·삭제·순서 이동(▲▼)·기본복원 가능 (이름 변경 시 기존 냉장고·장보기·레시피·공지 항목의 카테고리명도 자동 일괄 갱신, Firestore family_meta_v4/custom_categories_v1 실시간 동기화 및 JSON 백업/복원 포함)",
+      "레시피북 분류 시인성 개선: 가로 스크롤에 잘리던 레시피 카테고리 바를 냉장고와 동일한 건수 포함 멀티줄 그리드로 개편해 모든 분류를 한눈에 확인·선택 가능",
+      "버그 수정 및 최종 검증: 일정→가족공지 공유(handleScheduleToNotice) 시 존재하지 않던 카테고리명('가족공지'→'일정/행사')으로 들어가던 오류 수정 및 esbuild 번들·Babel JSX AST·Node ESM 구문 검증 0건 통과"
+    ]
+  },
+  {
+    id: "patch-v13.34",
+    version: "v13.34",
+    date: "2026-11-22",
+    title: "✅ 할 일(To-Do) 중복 추가버튼 제거·UI 슬림화 · ❄️ 냉장고 분류 필터 한눈에 보기 & 임박/보관구역 시인성 개편",
+    category: "UI 리디자인 · 시각 최적화 · 버그 수정",
+    changes: [
+      "할 일(To-Do) 화면 전면 정돈: 상단과 입력창에 중복되던 [+ 추가] 버튼을 단일 인라인 [+ 추가](+ 상세 모달 연결)로 일원화하고, 불필요한 '표시: 할일만' 행과 중복 '· 할일(To-Do)' 문구를 제거했으며 세이지그린(#3F624D) 톤과 1줄 제목·D-Day 배치로 압축 (오타 CSS py-0.2 2곳 동시 수정)",
+      "냉장고 시인성·분류 필터 대폭 개선: 임박·경과 재료 배너와 냉장실/냉동실/실온 3칸 카드의 과도한 글자 크기와 여백을 컴팩트하게 축소('D-0'→'오늘' 교정), 전체/리스트·칸별/복사/추가 바를 1줄로 통합하고, 가로 스크롤에 가려지던 재료 분류별 필터를 건수 포함 멀티줄 그리드로 전환해 모든 분류를 한눈에 확인 가능",
+      "버그 수정 및 최종 검증: 냉장고 재고 복사(📋) 시 [⏰ 임박만] 필터가 누락되던 오류 수정 및 esbuild 번들·Babel JSX AST·Node ESM 구문 검증 0건 통과"
+    ]
+  },
   {
     id: "patch-v13.33",
     version: "v13.33",
