@@ -1178,7 +1178,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v13.17";
+export const APP_CODE_VERSION = "v13.20";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1196,7 +1196,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-22 18:55";
+export const APP_BUILD_DATE = "2026-11-22 19:32";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1264,6 +1264,42 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v13.20",
+    version: "v13.20",
+    date: "2026-11-22",
+    title: "🛡️ 모바일 입력창 가로 넘침(5곳) 일괄 해소 · 냉장고 퀵시트→기한알림 연계 · 살림수첩 보증/상비약 복사 및 보안 보강",
+    category: "안정성 · 메뉴 연계 · 편의성",
+    changes: [
+      "모바일 가로 넘침·줄바꿈 5곳 일괄 수정: AI 3일 식단 날짜·루틴 수행시각·수유 메모·인수인계·노션 표 제목 입력창에 min-w-0을 보강해 좁은 화면에서 우측 버튼 밀림·꺾임 차단",
+      "메뉴 연계·편의성 확장: 냉장고 퀵 액션 시트 하단을 2×2 균형 그리드로 정돈하고 [🗓️ 기한 알림] 일정 등록 연계를 추가했으며, 살림수첩 보증·A/S 및 상비약 개별 카드에 1탭 [📋 복사] 버튼 신설",
+      "표기·성능·보안 마무리: 오늘 브리핑 상비약·A/S 당일 만료 표기를 'D-0'→'오늘 만료'로 개선, 인쇄 새 창 noopener/noreferrer 보안 옵션 및 잔여 이미지 3곳 지연 로딩(loading='lazy') 보강 완료"
+    ]
+  },
+  {
+    id: "patch-v13.19",
+    version: "v13.19",
+    date: "2026-11-22",
+    title: "📸 홈 가족사진 미리보기 비율 100% 일치(16:9) · 가족사진/브리핑 숨김 토글 · 퀵시트 버그 수정",
+    category: "UI 개선 · 버그 수정 · 메뉴 연계",
+    changes: [
+      "홈 가족사진 잘림 해결: 홈 화면 가족사진 배너와 [홈 가족사진 편집] 미리보기 양쪽 모두 동일한 aspect-[16/9] 비율로 통일해 미리보기 그대로 시목·시율 얼굴까지 잘리지 않고 동일하게 표시",
+      "홈 구성 편집 숨김 확장: [🖼️ 가족사진] 표시/숨김 토글을 2×2 격자(가족사진·브리핑·날씨 배너·시율 케어)로 추가하고, [📋 브리핑] 숨김 시 시간대 브리핑 카드와 상단 브리핑 복사 버튼이 함께 숨겨지도록 정리",
+      "메뉴 연계·버그 수정: 홈 오후 브리핑 임박 재료 칩 탭 시 홈을 벗어나지 않고 즉시 [냉장고 퀵 액션 시트]가 열리도록 고도화하고, 퀵시트 소비기한 미입력 시 D-999로 뜨던 오류('⏳ 기한 미확인') 및 소수점 수량 반올림 보완"
+    ]
+  },
+  {
+    id: "patch-v13.18",
+    version: "v13.18",
+    date: "2026-11-22",
+    title: "🔗 전 메뉴 4대 원탭 연계 확장 (노션표→할일/장보기 · 레시피/버킷→공지 · 폐기→냉장고) · 표/배지 슬림화 및 검색 키보드 통일",
+    category: "메뉴 연계 · 시각 최적화 · 편의성",
+    changes: [
+      "메뉴 간 4대 신규 연계: ① 공유노트 노션 표(Task) 상세 모달에서 1탭 [📋 복사 · ✅ 할 일 등록 · 🛒 장보기 담기] ② 레시피북 → [📌 가족공지 메뉴 제안] ③ 버킷리스트 카드 → [📌 가족공지 공유] ④ 월간·식비 폐기손실 행 → [❄️ 냉장고 임박 재료] 바로 점검 직행",
+      "줄바꿈·표·문구 슬림화: 공유노트 마크다운 표 셀 패딩·글씨(12.5px) 압축, 레시피 보유 배지('재료 100% 보유')·노션 표 Priority 칩·월간 식비 예상/권장 금액에 whitespace-nowrap 적용 및 아기꿈나라 모달 부제 축약",
+      "전역 검색 키보드 100% 통일: 누락돼 있던 육아일기·패치노트 검색창에 enterKeyHint='search' 보강 및 Babel AST·임포트·TDZ·배포 정합성 최종 검증 0건 통과"
+    ]
+  },
   {
     id: "patch-v13.17",
     version: "v13.17",

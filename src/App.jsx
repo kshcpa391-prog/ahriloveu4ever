@@ -8906,7 +8906,10 @@ ${validText}
         linesOut.push(
           `🏠 상비약·A/S 만료임박(${dueHouse.length}건): ${dueHouse
             .slice(0, 4)
-            .map((it) => `${it.title}(${getDaysDiff(it.kind === "warranty" ? it.warrantyEnd : it.expiryDate) < 0 ? "만료" : `D-${getDaysDiff(it.kind === "warranty" ? it.warrantyEnd : it.expiryDate)}`})`)
+            .map((it) => {
+              const df = getDaysDiff(it.kind === "warranty" ? it.warrantyEnd : it.expiryDate);
+              return `${it.title}(${df < 0 ? "만료" : df === 0 ? "오늘 만료" : `D-${df}`})`;
+            })
             .join(", ")}`
         );
       }
@@ -14061,34 +14064,42 @@ ${item.memo}` : `${item.title} 다녀옴!`,
           </div>
         </div>
 
-        {activeTab === "home" && (
-          <div
-            onClick={() => {
-              if (!requireEditorAccess("home")) return;
-              setHeroPhotoDraft({ ...heroPhotoConfig });
-              setIsHeroPhotoModalOpen(true);
-            }}
-            className="relative h-24 sm:h-28 rounded-xl overflow-hidden mb-1.5 border border-stone-200 shadow-sm bg-gradient-to-r from-amber-100 via-stone-100 to-rose-100 cursor-pointer group"
-            title="눌러서 가족사진 편집"
-          >
-            <img loading="lazy" decoding="async"
-              src={heroPhotoConfig.url || HERO_FAMILY_FALLBACK}
-              alt="수혁 아리 시목 시율 가족사진"
-              style={{ objectPosition: `50% ${heroPhotoConfig.posY ?? 35}%` }}
-              className="w-full h-full object-cover transition group-hover:scale-[1.01]"
-            />
-            <div className="absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-stone-950/80 via-stone-950/35 to-transparent pointer-events-none" />
-            <div className="absolute top-1.5 right-1.5 px-2 py-0.5 rounded-full bg-stone-950/60 backdrop-blur-sm text-white text-[10.5px] font-semibold flex items-center gap-1">
-              <Camera className="w-3 h-3" />
-              <span>편집</span>
+        {activeTab === "home" && (() => {
+          const activeModeForHero =
+            homeTimeModeOverride === "auto" ? getAutoHomeTimeMode(homeTimeRanges, Math.floor(liveMinuteTick / 60)) : homeTimeModeOverride;
+          const heroHiddenBlocks = Array.isArray(homeLayoutConfig?.[activeModeForHero]?.hiddenBlocks)
+            ? homeLayoutConfig[activeModeForHero].hiddenBlocks
+            : [];
+          if (heroHiddenBlocks.includes("hero_photo")) return null;
+          return (
+            <div
+              onClick={() => {
+                if (!requireEditorAccess("home")) return;
+                setHeroPhotoDraft({ ...heroPhotoConfig });
+                setIsHeroPhotoModalOpen(true);
+              }}
+              className="relative w-full aspect-[16/9] rounded-2xl overflow-hidden mb-1.5 border border-stone-200 shadow-sm bg-gradient-to-r from-amber-100 via-stone-100 to-rose-100 cursor-pointer group"
+              title="눌러서 가족사진 편집"
+            >
+              <img loading="lazy" decoding="async"
+                src={heroPhotoConfig.url || HERO_FAMILY_FALLBACK}
+                alt="수혁 아리 시목 시율 가족사진"
+                style={{ objectPosition: `50% ${heroPhotoConfig.posY ?? 35}%` }}
+                className="w-full h-full object-cover transition group-hover:scale-[1.01]"
+              />
+              <div className="absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-stone-950/75 via-stone-950/30 to-transparent pointer-events-none" />
+              <div className="absolute top-2 right-2 px-2 py-0.5 rounded-full bg-stone-950/60 backdrop-blur-sm text-white text-[10.5px] font-semibold flex items-center gap-1 whitespace-nowrap">
+                <Camera className="w-3 h-3" />
+                <span>편집</span>
+              </div>
+              <div className="absolute bottom-2 right-2.5">
+                <span className="text-[12px] font-bold text-white drop-shadow-sm">
+                  {heroPhotoConfig.caption || "수혁 · 아리 · 시목 · 시율 ♡"}
+                </span>
+              </div>
             </div>
-            <div className="absolute bottom-1.5 right-2.5">
-              <span className="text-[12px] font-bold text-white drop-shadow-sm">
-                {heroPhotoConfig.caption || "수혁 · 아리 · 시목 · 시율 ♡"}
-              </span>
-            </div>
-          </div>
-        )}
+          );
+        })()}
         {activeTab === "home" && (() => {
           const todayStr = getTodayStr();
           const todayMs = new Date(`${todayStr}T00:00:00`).getTime();
@@ -15643,7 +15654,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                 ))}
               </div>
               <div className="flex items-center gap-1 shrink-0">
-              {accessRole !== "guest" && (
+              {accessRole !== "guest" && !hiddenBlocks.includes("briefing") && (
                 <button
                   type="button"
                   onClick={handleCopyTodayBriefing}
@@ -15892,11 +15903,12 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                       </div>
                     );
                   })}
-                  <div className="grid grid-cols-3 gap-1 pt-1">
+                  <div className="grid grid-cols-2 gap-1.5 pt-1">
                     {[
+                      { id: "hero_photo", label: "🖼️ 가족사진" },
                       { id: "briefing", label: "📋 브리핑" },
-                      { id: "weather", label: "🌤️ 날씨" },
-                      { id: "siyul_care", label: "👶 시율케어" }
+                      { id: "weather", label: "🌤️ 날씨 배너" },
+                      { id: "siyul_care", label: "👶 시율 케어" }
                     ].map((extra) => {
                       const isExHidden = hiddenBlocks.includes(extra.id);
                       return (
@@ -16158,13 +16170,9 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                           <button
                             key={it.id}
                             type="button"
-                            onClick={() => {
-                              setFridgeSearch(it.name || "");
-                              setFridgeViewMode("list");
-                              setActiveTab("fridge");
-                            }}
+                            onClick={() => setQuickFridgeItem(it)}
                             className="h-5 px-1.5 rounded-md bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-[10px] font-semibold whitespace-nowrap shrink-0"
-                            title="냉장고에서 바로 확인"
+                            title="눌러서 수량·소비기한·식단·장보기 바로 처리"
                           >
                             {it.name}({it.diff < 0 ? "만료" : `D-${it.diff}`})
                           </button>
@@ -17353,14 +17361,24 @@ ${item.memo}` : `${item.title} 다녀옴!`,
 
 
                 {monthlyExpenseSummary.wasteCount > 0 && (
-                  <div className="mt-2.5 pt-2 border-t border-stone-700 flex items-center justify-between text-[12.5px]">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!canViewTab("fridge")) return;
+                      setFridgeViewMode("list");
+                      setVisualExpiringOnly(true);
+                      setActiveTab("fridge");
+                    }}
+                    className="w-full mt-2.5 pt-2 border-t border-stone-700 flex items-center justify-between gap-2 text-[12px] hover:opacity-90 text-left transition"
+                    title="냉장고 임박 재료 바로 점검하기"
+                  >
                     <span className="text-rose-300 font-bold">
-                      🗑️ 이번 달 폐기손실 ({monthlyExpenseSummary.wasteCount}건 · 폐기율 {monthlyExpenseSummary.wasteRate}%)
+                      🗑️ 이번 달 폐기손실 ({monthlyExpenseSummary.wasteCount}건 · {monthlyExpenseSummary.wasteRate}%)
                     </span>
-                    <span className="font-black text-rose-300">
-                      {monthlyExpenseSummary.wasteTotal.toLocaleString()}원
+                    <span className="font-black text-rose-300 whitespace-nowrap shrink-0">
+                      {monthlyExpenseSummary.wasteTotal.toLocaleString()}원 · 임박 &gt;
                     </span>
-                  </div>
+                  </button>
                 )}
 
 
@@ -17394,14 +17412,14 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                         <div className="bg-stone-800/80 rounded-xl p-2.5 flex items-center justify-between gap-2 text-[11.5px]">
                           <div>
                             <div className="text-stone-400 font-bold">📈 월말 예상 식비 (일평균 {dailyAvg.toLocaleString()}원)</div>
-                            <div className={`text-[13.5px] font-black mt-0.5 ${monthlyBudget > 0 && projectedTotal > monthlyBudget ? "text-rose-300" : "text-emerald-300"}`}>
+                            <div className={`text-[13px] font-black mt-0.5 whitespace-nowrap ${monthlyBudget > 0 && projectedTotal > monthlyBudget ? "text-rose-300" : "text-emerald-300"}`}>
                               약 {projectedTotal.toLocaleString()}원 예상
                             </div>
                           </div>
                           {dailyAllow !== null && (
-                            <div className="text-right">
-                              <div className="text-stone-400 font-bold">남은 {remainDays}일 하루 권장</div>
-                              <div className={`text-[13.5px] font-black mt-0.5 ${dailyAllow < 0 ? "text-rose-300" : "text-amber-300"}`}>
+                            <div className="text-right shrink-0">
+                              <div className="text-stone-400 font-bold whitespace-nowrap">남은 {remainDays}일 권장</div>
+                              <div className={`text-[13px] font-black mt-0.5 whitespace-nowrap ${dailyAllow < 0 ? "text-rose-300" : "text-amber-300"}`}>
                                 {dailyAllow < 0 ? `예산 초과` : `${dailyAllow.toLocaleString()}원/일`}
                               </div>
                             </div>
@@ -21659,7 +21677,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                       type="date"
                       value={planAddDateInput}
                       onChange={(e) => setPlanAddDateInput(e.target.value)}
-                      className="flex-1 px-3 py-1.5 rounded-xl border border-stone-200 text-[13.5px] font-bold bg-white"
+                      className="flex-1 min-w-0 px-3 py-1.5 rounded-xl border border-stone-200 text-[13.5px] font-bold bg-white"
                     />
                     <button
                       type="button"
@@ -22898,6 +22916,31 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                               🗂️
                             </button>
                           ) : null}
+                          {canEditTab("notices") && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (!requireEditorAccess("notices")) return;
+                                setEditingNotice(null);
+                                setNoticeForm({
+                                  title: `🌟 [가볼 곳] ${item.title}`,
+                                  content: [
+                                    item.category ? `분류: ${item.category}${item.weather ? ` · ${item.weather}` : ""}` : "",
+                                    item.address ? `📍 위치: ${item.address}` : "",
+                                    item.memo ? `📝 메모: ${item.memo}` : ""
+                                  ].filter(Boolean).join("\n"),
+                                  category: "가족공지",
+                                  author: actorName || "수혁",
+                                  pinned: false
+                                });
+                                setIsNoticeModalOpen(true);
+                              }}
+                              className="p-1.5 rounded-lg hover:bg-amber-50 text-amber-700 text-[13px] leading-none"
+                              title="가족공지로 공유"
+                            >
+                              📌
+                            </button>
+                          )}
                           <button
                             type="button"
                             onClick={() => {
@@ -23292,6 +23335,24 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                           )}
                           {houseSubTab === "warranty" && (
                             <>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  copyTextSafe(
+                                    [
+                                      `🛠️ [${it.brand || "가전·육아템"}] ${it.title}`,
+                                      it.purchaseDate ? `구매일: ${it.purchaseDate}` : "",
+                                      it.warrantyEnd ? `무상 A/S: ~${it.warrantyEnd}` : "",
+                                      it.asPhone ? `A/S 연락처: ${it.asPhone}` : "",
+                                      it.memo ? `메모: ${it.memo}` : ""
+                                    ].filter(Boolean).join("\n"),
+                                    "📋 보증·A/S 정보를 복사했습니다!"
+                                  )
+                                }
+                                className="px-2 py-1 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 text-[11px] font-extrabold whitespace-nowrap"
+                              >
+                                📋 복사
+                              </button>
                               {it.asPhone && (
                                 <a
                                   href={`tel:${String(it.asPhone).replace(/[^0-9+*#-]/g, "")}`}
@@ -23327,6 +23388,24 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                           )}
                           {houseSubTab === "medicine" && (
                             <>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  copyTextSafe(
+                                    [
+                                      `💊 [${it.target || "공통"}] ${it.title}`,
+                                      it.dosage ? `복용량: ${it.dosage}` : "",
+                                      it.openedDate ? `개봉일: ${it.openedDate}` : "",
+                                      it.expiryDate ? `유통기한: ${it.expiryDate}` : "",
+                                      it.memo ? `메모: ${it.memo}` : ""
+                                    ].filter(Boolean).join("\n"),
+                                    "📋 상비약 정보를 복사했습니다!"
+                                  )
+                                }
+                                className="px-2 py-1 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 text-[11px] font-extrabold whitespace-nowrap"
+                              >
+                                📋 복사
+                              </button>
                               {canEditTab("baby") && (
                                 <button
                                   type="button"
@@ -24389,12 +24468,12 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                                         {headers.map((h, hIdx) => (
                                           <th
                                             key={hIdx}
-                                            className={`py-2.5 px-3 text-[13.5px] font-bold text-stone-900 border-r last:border-r-0 border-stone-200 whitespace-nowrap ${
+                                            className={`py-2 px-2.5 text-[12.5px] font-bold text-stone-900 border-r last:border-r-0 border-stone-200 whitespace-nowrap ${
                                               hIdx === 0 && headers.length >= 3 && String(h).length <= 4
-                                                ? "w-[58px] text-center"
+                                                ? "w-[54px] text-center"
                                                 : hIdx === headers.length - 1
-                                                ? "min-w-[210px]"
-                                                : "min-w-[130px]"
+                                                ? "min-w-[190px]"
+                                                : "min-w-[120px]"
                                             }`}
                                           >
                                             {renderInlineMarkdownText(h)}
@@ -24412,7 +24491,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                                           return (
                                             <td
                                               key={cIdx}
-                                              className={`py-2.5 px-3 text-[13.5px] text-stone-800 leading-relaxed break-keep border-r last:border-r-0 border-stone-200 ${
+                                              className={`py-2 px-2.5 text-[12.5px] text-stone-800 leading-snug break-keep border-r last:border-r-0 border-stone-200 ${
                                                 isCompactFirst ? "text-center font-medium text-stone-700 whitespace-nowrap" : ""
                                               }`}
                                             >
@@ -25261,6 +25340,31 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                       >
                         ⏱️
                       </button>
+                      {canEditTab("notices") && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (!requireEditorAccess("notices")) return;
+                            setEditingNotice(null);
+                            setNoticeForm({
+                              title: `🍽️ [메뉴 제안] ${r.title}`,
+                              content: [
+                                `⏱️ ${r.cookTime || "20분"} · ${r.difficulty || "쉬움"}`,
+                                r.ingredientsText ? `🧂 재료: ${r.ingredientsText}` : "",
+                                r.memo ? `📝 메모: ${r.memo}` : ""
+                              ].filter(Boolean).join("\n"),
+                              category: "가족공지",
+                              author: actorName || "수혁",
+                              pinned: false
+                            });
+                            setIsNoticeModalOpen(true);
+                          }}
+                          className="p-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-700 text-[11px] font-bold"
+                          title="가족공지로 메뉴 제안"
+                        >
+                          📌
+                        </button>
+                      )}
                       <button
                         type="button"
                         onClick={() => copyTextSafe(`🍽️ [${r.category || "레시피"}] ${r.title}\n⏱️ ${r.cookTime || "20분"} · ${r.difficulty || "쉬움"}${r.ingredientsText ? `\n🧂 재료: ${r.ingredientsText}` : ""}${r.memo ? `\n📝 메모: ${r.memo}` : ""}`, "📋 레시피를 복사했습니다!")}
@@ -25463,10 +25567,10 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                         return n && !matchFridgeItemExactFirst(n, fridge);
                       }).length;
                       return (
-                        <div className={`text-[11.5px] font-extrabold px-2.5 py-1 rounded-lg inline-block ${
+                        <div className={`text-[11px] font-extrabold px-2 py-1 rounded-lg inline-block whitespace-nowrap ${
                           missingCnt === 0 ? "bg-emerald-50 text-emerald-800" : "bg-amber-50 text-amber-900"
                         }`}>
-                          {missingCnt === 0 ? "✅ 냉장고 재료 100% 보유 (바로 조리 가능)" : `⚠️ 냉장고 부족 재료 ${missingCnt}개`}
+                          {missingCnt === 0 ? "✅ 재료 100% 보유" : `⚠️ 부족 재료 ${missingCnt}개`}
                         </div>
                       );
                     })()}
@@ -27813,6 +27917,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                           value={diarySearchQuery}
                           onChange={(e) => setDiarySearchQuery(e.target.value)}
                           onKeyDown={(e) => { if (e.key === "Escape") setDiarySearchQuery(""); }}
+                          enterKeyHint="search"
                           placeholder="🔍 육아일기 검색 (날짜, 제목, 내용...)"
                           className="w-full px-3 py-2 pr-8 rounded-xl border border-stone-200 bg-white text-[13.5px] font-semibold text-stone-800"
                         />
@@ -28778,7 +28883,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
             <div className="px-4 py-3.5 bg-indigo-950 text-white flex items-center justify-between gap-2 shrink-0">
               <div className="min-w-0">
                 <div className="text-[15.5px] font-black">🌙 아기꿈나라 링크 관리</div>
-                <div className="text-[11px] text-indigo-200 font-semibold">유튜브 앱 바로 실행 · 부부 기기 실시간 동기화</div>
+                <div className="text-[11px] text-indigo-200 font-semibold">유튜브 바로 실행 · 실시간 동기화</div>
               </div>
               <div className="flex items-center gap-1.5 shrink-0">
                 {canEditTab("baby") && (
@@ -30181,6 +30286,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                   value={patchSearchQuery}
                   onChange={(e) => setPatchSearchQuery(e.target.value)}
                   onKeyDown={(e) => { if (e.key === "Escape") setPatchSearchQuery(""); }}
+                  enterKeyHint="search"
                   placeholder="🔍 패치노트 버전·키워드 검색..."
                   className="w-full px-3 py-1.5 pr-8 rounded-xl border border-stone-200 bg-stone-50 text-[12px] font-bold text-stone-800"
                 />
@@ -30432,7 +30538,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                   type="time"
                   value={newRoutineScheduledTime}
                   onChange={(e) => setNewRoutineScheduledTime(e.target.value)}
-                  className="flex-1 px-3 py-2 rounded-xl border border-stone-200 bg-stone-50 text-[13.5px] font-extrabold text-stone-800 focus:outline-none focus:ring-2 focus:ring-stone-400"
+                  className="flex-1 min-w-0 px-3 py-2 rounded-xl border border-stone-200 bg-stone-50 text-[13.5px] font-extrabold text-stone-800 focus:outline-none focus:ring-2 focus:ring-stone-400"
                 />
                 {newRoutineScheduledTime && (
                   <span className="px-2.5 py-1.5 rounded-xl bg-sky-100 text-sky-800 text-[12.5px] font-black whitespace-nowrap shrink-0">
@@ -32287,16 +32393,16 @@ ${item.memo}` : `${item.title} 다녀옴!`,
             </div>
 
 
-            <div className="relative h-36 rounded-2xl overflow-hidden border border-stone-200 bg-stone-100">
+            <div className="relative w-full aspect-[16/9] rounded-2xl overflow-hidden border border-stone-200 bg-stone-100">
               <img loading="lazy" decoding="async"
                 src={heroPhotoDraft.url || HERO_FAMILY_FALLBACK}
                 alt="미리보기"
                 style={{ objectPosition: `50% ${heroPhotoDraft.posY ?? 35}%` }}
                 className="w-full h-full object-cover"
               />
-              <div className="absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-stone-950/65 to-transparent pointer-events-none" />
-              <div className="absolute bottom-1.5 right-2.5">
-                <span className="text-[12px] font-black text-white/95 drop-shadow">
+              <div className="absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-stone-950/75 via-stone-950/30 to-transparent pointer-events-none" />
+              <div className="absolute bottom-2 right-2.5">
+                <span className="text-[12px] font-bold text-white drop-shadow-sm">
                   {heroPhotoDraft.caption || "수혁 · 아리 · 시목 · 시율 ♡"}
                 </span>
               </div>
@@ -33437,7 +33543,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
             <X className="w-5 h-5" />
           </button>
           <img
-            src={diaryLightboxUrl}
+            loading="lazy" decoding="async" src={diaryLightboxUrl}
             alt="원본 사진 확대 보기"
             onClick={(e) => e.stopPropagation()}
             className="max-w-full max-h-[88vh] rounded-2xl object-contain shadow-2xl"
@@ -33870,7 +33976,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                     value={activityEditModal.memo || ""}
                     placeholder="메모 입력 (예: 트림 함, 유산균)"
                     onChange={(e) => setActivityEditModal((p) => ({ ...p, memo: e.target.value }))}
-                    className="flex-1 px-3 py-2 rounded-xl border border-stone-200 text-[13.5px] font-bold"
+                    className="flex-1 min-w-0 px-3 py-2 rounded-xl border border-stone-200 text-[13.5px] font-bold"
                   />
                   <input
                     ref={activityPhotoInputRef}
@@ -34451,7 +34557,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                   type="button"
                   onClick={() => {
                     const html = buildMagazineHtml();
-                    const w = window.open("", "_blank");
+                    const w = window.open("", "_blank", "noopener,noreferrer");
                     if (w) {
                       w.document.open();
                       w.document.write(html);
@@ -35538,7 +35644,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
             </button>
           </div>
           <img
-            src={zoomedRecipePhoto.url}
+            loading="lazy" decoding="async" src={zoomedRecipePhoto.url}
             alt={zoomedRecipePhoto.title}
             className="max-w-full max-h-[78vh] rounded-2xl object-contain shadow-2xl"
             onClick={(e) => e.stopPropagation()}
@@ -35562,11 +35668,20 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                   <span className="text-[17.5px] font-black text-stone-900">{quickFridgeItem.name}</span>
                 </div>
                 <div className="text-[12.5px] font-bold text-stone-500 mt-0.5">
-                  {resolveItemShelfZone(quickFridgeItem)} · 소비기한 {quickFridgeItem.expiryDate} (
-                  {getDaysDiff(quickFridgeItem.expiryDate) < 0
-                    ? `${Math.abs(getDaysDiff(quickFridgeItem.expiryDate))}일 지남`
-                    : `D-${getDaysDiff(quickFridgeItem.expiryDate)}`}
-                  )
+                  {resolveItemShelfZone(quickFridgeItem)} ·{" "}
+                  {quickFridgeItem.expiryDate ? (
+                    <>
+                      소비기한 {quickFridgeItem.expiryDate} (
+                      {getDaysDiff(quickFridgeItem.expiryDate) < 0
+                        ? `${Math.abs(getDaysDiff(quickFridgeItem.expiryDate))}일 지남`
+                        : getDaysDiff(quickFridgeItem.expiryDate) === 0
+                        ? "오늘 만료"
+                        : `D-${getDaysDiff(quickFridgeItem.expiryDate)}`}
+                      )
+                    </>
+                  ) : (
+                    "⏳ 기한 미확인"
+                  )}
                 </div>
               </div>
               <button
@@ -35587,7 +35702,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                   onClick={() => {
                     handleAdjustQuantity(quickFridgeItem, -1);
                     setQuickFridgeItem((prev) =>
-                      prev ? { ...prev, quantity: Math.max(0, Number(prev.quantity || 0) - 1) } : null
+                      prev ? { ...prev, quantity: Math.round(Math.max(0, Number(prev.quantity || 0) - 1) * 10) / 10 } : null
                     );
                   }}
                   className="w-8 h-8 rounded-xl bg-white border border-stone-200 font-black text-stone-800 shadow-sm"
@@ -35602,7 +35717,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                   onClick={() => {
                     handleAdjustQuantity(quickFridgeItem, 1);
                     setQuickFridgeItem((prev) =>
-                      prev ? { ...prev, quantity: Number(prev.quantity || 0) + 1 } : null
+                      prev ? { ...prev, quantity: Math.round((Number(prev.quantity || 0) + 1) * 10) / 10 } : null
                     );
                   }}
                   className="w-8 h-8 rounded-xl bg-white border border-stone-200 font-black text-stone-800 shadow-sm"
@@ -35704,7 +35819,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                 🗑️ 폐기
               </button>
             </div>
-            <div className="grid grid-cols-3 gap-1.5 pt-1 border-t border-stone-100">
+            <div className="grid grid-cols-2 gap-1.5 pt-1 border-t border-stone-100">
               <button
                 type="button"
                 onClick={() => {
@@ -35712,9 +35827,9 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                   setQuickFridgeItem(null);
                   handleFridgeToRecipeSearch(targetName);
                 }}
-                className="py-2 px-1 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-800 text-[11.5px] font-extrabold whitespace-nowrap"
+                className="py-2 px-2 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-800 text-[11.5px] font-extrabold whitespace-nowrap"
               >
-                📖 레시피
+                📖 레시피 검색
               </button>
               {canViewTab("ai") && (
                 <button
@@ -35724,7 +35839,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                     setQuickFridgeItem(null);
                     handleExpiringToAiChef([targetName]);
                   }}
-                  className="py-2 px-1 rounded-xl bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-900 text-[11.5px] font-extrabold whitespace-nowrap"
+                  className="py-2 px-2 rounded-xl bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-900 text-[11.5px] font-extrabold whitespace-nowrap"
                 >
                   ✨ AI추천
                 </button>
@@ -35747,9 +35862,34 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                     });
                     setIsMealModalOpen(true);
                   }}
-                  className="py-2 px-1 rounded-xl bg-[#EEF3EE] hover:bg-[#DFE9E0] border border-[#C9D8CC] text-[#35503C] text-[11.5px] font-extrabold whitespace-nowrap"
+                  className="py-2 px-2 rounded-xl bg-[#EEF3EE] hover:bg-[#DFE9E0] border border-[#C9D8CC] text-[#35503C] text-[11.5px] font-extrabold whitespace-nowrap"
                 >
                   🍽️ 식단등록
+                </button>
+              )}
+              {canEditTab("schedule") && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const targetItem = quickFridgeItem;
+                    setQuickFridgeItem(null);
+                    setEditingSchedule(null);
+                    setScheduleForm({
+                      title: `❄️ ${targetItem?.name || "재료"} 소진·소비기한 확인`,
+                      date: targetItem?.expiryDate || getTodayStr(),
+                      category: "할일(To-Do)",
+                      members: ["수혁", "아리나"],
+                      isAnnual: false,
+                      showDday: Boolean(targetItem?.expiryDate),
+                      hasOriginYear: false,
+                      memo: `${resolveItemShelfZone(targetItem)} · 수량 ${Number(targetItem?.quantity) || 0}${targetItem?.unit || "개"}`,
+                      attachments: []
+                    });
+                    setIsScheduleModalOpen(true);
+                  }}
+                  className="py-2 px-2 rounded-xl bg-sky-50 hover:bg-sky-100 border border-sky-200 text-sky-900 text-[11.5px] font-extrabold whitespace-nowrap"
+                >
+                  🗓️ 기한 알림
                 </button>
               )}
             </div>
@@ -37761,7 +37901,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
               {houseForm.photoUrl && (
                 <div className="flex items-center gap-1.5">
                   <img
-                    src={houseForm.photoUrl}
+                    loading="lazy" decoding="async" src={houseForm.photoUrl}
                     alt="미리보기"
                     className="w-9 h-9 rounded-lg object-cover border border-stone-200"
                   />
@@ -38041,7 +38181,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                   readOnly={!canEdit}
                   onChange={(e) => setTaskModalDraft((p) => ({ ...p, taskName: e.target.value }))}
                   placeholder="Task 이름"
-                  className="flex-1 text-[18px] font-black text-stone-900 bg-transparent border-b border-transparent focus:border-stone-300 focus:outline-none pb-0.5"
+                  className="flex-1 min-w-0 text-[18px] font-black text-stone-900 bg-transparent border-b border-transparent focus:border-stone-300 focus:outline-none pb-0.5"
                 />
                 <button
                   type="button"
@@ -38065,7 +38205,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                         type="button"
                         disabled={!canEdit}
                         onClick={() => setTaskModalDraft((p) => ({ ...p, priority: pri.id }))}
-                        className={`px-2.5 py-1 rounded-lg text-[11.5px] font-extrabold border transition ${
+                        className={`px-2.5 py-1 rounded-lg text-[11.5px] font-extrabold border whitespace-nowrap transition ${
                           taskModalDraft.priority === pri.id
                             ? (pri.id ? `${pri.badge} border-stone-900` : "bg-stone-900 text-white border-stone-900")
                             : "bg-white text-stone-500 border-stone-200"
@@ -38184,6 +38324,96 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                       </div>
                     ))}
                   </div>
+                )}
+              </div>
+
+              {/* 메뉴 연계 · 1탭 복사 바 */}
+              <div className="flex items-center gap-1.5 flex-wrap pt-1 border-t border-stone-100">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const descLines = cols
+                      .map((c) => {
+                        const v = String(taskModalDraft.cells?.[c.id] || "").trim();
+                        return v ? `${c.name}: ${v}` : "";
+                      })
+                      .filter(Boolean);
+                    const txt = [
+                      `🗂️ [${activePg.title || "공유노트"}] ${taskModalDraft.taskName || "(제목 없음)"}${taskModalDraft.priority ? ` (${taskModalDraft.priority})` : ""}`,
+                      ...descLines,
+                      taskModalDraft.memo ? `📝 ${taskModalDraft.memo}` : ""
+                    ].filter(Boolean).join("\n");
+                    copyTextSafe(txt, "📋 표 항목을 복사했습니다!");
+                  }}
+                  className="px-2.5 py-1.5 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-[11.5px] font-extrabold whitespace-nowrap"
+                >
+                  📋 복사
+                </button>
+                {canEditTab("schedule") && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!requireEditorAccess("schedule")) return;
+                      const descMemo = [
+                        ...cols.map((c) => (taskModalDraft.cells?.[c.id] ? `${c.name}: ${taskModalDraft.cells[c.id]}` : "")).filter(Boolean),
+                        taskModalDraft.memo || ""
+                      ].filter(Boolean).join("\n");
+                      setEditingSchedule(null);
+                      setScheduleForm({
+                        title: taskModalDraft.taskName || "",
+                        date: getTodayStr(),
+                        category: "할일(To-Do)",
+                        members: ["수혁", "아리나"],
+                        isAnnual: false,
+                        showDday: false,
+                        hasOriginYear: false,
+                        memo: descMemo,
+                        attachments: []
+                      });
+                      setActiveTableTaskModal(null);
+                      setTaskModalDraft(null);
+                      setIsScheduleModalOpen(true);
+                    }}
+                    className="px-2.5 py-1.5 rounded-xl bg-[#EEF3EE] hover:bg-[#DFE9E0] text-[#35503C] text-[11.5px] font-extrabold whitespace-nowrap"
+                  >
+                    ✅ 할 일 등록
+                  </button>
+                )}
+                {canEditTab("shopping") && (
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (!requireEditorAccess("shopping")) return;
+                      const itemName = String(taskModalDraft.taskName || "").trim();
+                      if (!itemName) return showToast("항목 이름을 먼저 입력해 주세요.");
+                      if (shoppingList.some((s) => !s.checked && String(s.name || "").trim().toLowerCase() === itemName.toLowerCase())) {
+                        return showToast(`🛒 '${itemName}'은(는) 이미 장보기에 있습니다.`);
+                      }
+                      const sid = `sh-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+                      const payload = {
+                        id: sid,
+                        name: itemName,
+                        quantity: "1개",
+                        category: "기타",
+                        urgent: taskModalDraft.priority === "High",
+                        checked: false,
+                        memo: String(taskModalDraft.memo || taskModalDraft.cells?.desc || "").trim()
+                      };
+                      setShoppingList((prev) => [payload, ...prev]);
+                      if (user && db) {
+                        try {
+                          await setDoc(getDocRef("family_shopping_v4", sid), payload);
+                        } catch (e) {
+                          setSyncErrorMsg(e?.message || "장보기 추가 동기화 오류");
+                        }
+                      }
+                      recordActivity("장보기", "등록", payload.name);
+                      showToast(`🛒 '${payload.name}' 장보기에 담았습니다!`);
+                    }}
+                    className="px-2.5 py-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 text-[11.5px] font-extrabold whitespace-nowrap"
+                  >
+                    🛒 장보기 담기
+                  </button>
                 )}
               </div>
 
