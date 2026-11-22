@@ -2366,7 +2366,7 @@ function MainApp() {
       return [];
     }
   });
-  const [handoverTarget, setHandoverTarget] = useState("전체");
+  const [handoverTargets, setHandoverTargets] = useState({ "시목": true, "시율": true, "산모가사": true });
   const [handoverDate, setHandoverDate] = useState(() => getTodayStr());
   const [handoverAttachedPageId, setHandoverAttachedPageId] = useState(() => {
     try {
@@ -2382,7 +2382,6 @@ function MainApp() {
     sleep: true,
     meds: true,
     routines: true,
-    careGuide: true,
     notices: true,
     includeDoorCode: false
   });
@@ -14735,10 +14734,26 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                 {/* 1) 3일 내 일정 */}
                 <div className={`${padCls} space-y-1.5`}>
                   <div className="flex items-center justify-between gap-1">
-                    <span className="text-[13.5px] font-black text-stone-900">
+                    <span className="text-[13.5px] font-black text-stone-900 whitespace-nowrap">
                       🗓️ 3일 내 일정 ({imminentSchedulesWithin3Days.length}건)
                     </span>
                     <div className="flex items-center gap-1.5 shrink-0">
+                      {imminentSchedulesWithin3Days.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            const lines = [
+                              `🗓️ 3일 내 일정 (${imminentSchedulesWithin3Days.length}건)`,
+                              ...imminentSchedulesWithin3Days.map((ev) => `• [${ev.calc.daysUntil <= 0 ? "오늘" : ev.calc.dDayText}] ${ev.time ? `${ev.time} ` : ""}${ev.title}`)
+                            ];
+                            await copyTextSafe(lines.join("\n"), `📋 3일 내 일정 ${imminentSchedulesWithin3Days.length}건을 복사했습니다!`);
+                          }}
+                          className="px-1.5 py-0.5 rounded bg-stone-100 hover:bg-stone-200 text-stone-700 text-[11px] font-extrabold whitespace-nowrap"
+                          title="3일 내 일정 카톡 공유용 복사"
+                        >
+                          📋
+                        </button>
+                      )}
                       <button
                         type="button"
                         onClick={() => {
@@ -14778,7 +14793,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                     </div>
                   ) : (
                     <div className="space-y-1">
-                      {imminentSchedulesWithin3Days.slice(0, previewLimit).map((ev) => {
+                      {imminentSchedulesWithin3Days.map((ev) => {
                         const isTodayEv = ev.calc.daysUntil <= 0;
                         const isTomorrowEv = ev.calc.daysUntil === 1;
                         return (
@@ -14807,7 +14822,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                               {ev.title}
                             </span>
                             <span
-                              className={`px-1.5 py-0.5 rounded text-[11.5px] font-black shrink-0 ${
+                              className={`px-1.5 py-0.5 rounded text-[11px] font-black shrink-0 whitespace-nowrap ${
                                 isTodayEv
                                   ? "bg-rose-600 text-white"
                                   : isTomorrowEv
@@ -14872,8 +14887,8 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                         {homeHolidayName ? `🇰🇷 ${homeHolidayName}` : isHomeDayWeekend ? "주말·공휴일" : "평일"}
                       </span>
                     </div>
-                    <div className="flex items-center gap-1 shrink-0">
-                      <div className="flex items-center bg-stone-100 rounded-lg p-0.5 border border-stone-200">
+                    <div className="flex items-center gap-1 overflow-x-auto no-scrollbar max-w-full shrink-0">
+                      <div className="flex items-center bg-stone-100 rounded-lg p-0.5 border border-stone-200 shrink-0">
                         {[
                           { off: -1, lbl: "어제" },
                           { off: 0, lbl: "오늘" },
@@ -14904,7 +14919,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                               localStorage.setItem("kim_home_routine_target_v1", "전체");
                             } catch (e) {}
                           }}
-                          className="px-2 py-0.5 rounded-lg bg-stone-100 border border-stone-200 text-stone-700 text-[11.5px] font-extrabold whitespace-nowrap"
+                          className="px-1.5 py-0.5 rounded-lg bg-stone-100 border border-stone-200 text-stone-700 text-[10.5px] font-extrabold whitespace-nowrap"
                         >
                           자동 복귀
                         </button>
@@ -14917,7 +14932,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                           setScheduleSubTab("routine");
                           setActiveTab("schedule");
                         }}
-                        className="px-2 py-0.5 rounded-lg bg-[#EEF3EE] hover:bg-[#DFE9E0] border border-[#C9D8CC] text-[#35503C] text-[11.5px] font-extrabold whitespace-nowrap"
+                        className="px-1.5 py-0.5 rounded-lg bg-[#EEF3EE] hover:bg-[#DFE9E0] border border-[#C9D8CC] text-[#35503C] text-[10.5px] font-extrabold whitespace-nowrap"
                         title="루틴 2열 시간표로 보기"
                       >
                         🕒 시간표
@@ -15262,7 +15277,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
             });
             const gridPad = blockSizes.menu_grid === "compact" ? "gap-1.5" : blockSizes.menu_grid === "large" ? "gap-2.5" : "gap-2";
             const HOME_MENU_GROUPS = [
-              { id: "meal", label: "🍽️ 식단 · 살림", ids: ["daily", "fridge", "shopping", "monthly_cal", "monthly_exp", "recipes", "ai"] },
+              { id: "meal", label: "🍽️ 식단 · 살림", ids: ["daily", "fridge", "shopping", "house", "monthly_cal", "monthly_exp", "recipes", "ai"] },
               { id: "family", label: "👶 육아 · 일정", ids: ["baby", "routine_tab"] },
               { id: "notes", label: "🗂️ 가족 기록 · 소통", ids: ["pages", "notices", "bucket"] }
             ];
@@ -15302,7 +15317,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                             <div className="flex items-center justify-between gap-1">
                               <span className="text-[13.5px] font-black text-stone-900 truncate">{item.title}</span>
                               {cleanAction ? (
-                                <span className={`text-[10.5px] font-extrabold shrink-0 ${item.actionColor}`}>{cleanAction}</span>
+                                <span className={`text-[10.5px] font-extrabold shrink-0 whitespace-nowrap ${item.actionColor}`}>{cleanAction}</span>
                               ) : (
                                 <ChevronRight className="w-3.5 h-3.5 text-stone-300 shrink-0" />
                               )}
@@ -15895,11 +15910,11 @@ ${item.memo}` : `${item.title} 다녀옴!`,
             }}
           >
             <div className="space-y-2">
-              <div className="flex items-center justify-between gap-1.5">
-                <h2 className="text-[15px] font-black text-stone-900 truncate">
-                  🍽️ 식단 ({weekDates[0].slice(5)} ~ {weekDates[6].slice(5)})
+              <div className="flex items-center justify-between gap-1.5 flex-wrap">
+                <h2 className="text-[14.5px] font-black text-stone-900 whitespace-nowrap">
+                  🍽️ 식단 ({weekDates[0].slice(5)}~{weekDates[6].slice(5)})
                 </h2>
-                <div className="flex items-center gap-1 shrink-0">
+                <div className="flex items-center gap-1 flex-wrap">
                   <button
                     type="button"
                     onClick={() => {
@@ -15921,8 +15936,22 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                     className="px-2 py-0.5 rounded-full bg-[#EEF3EE] text-[#35503C] border border-[#C9D8CC] text-[11px] font-extrabold whitespace-nowrap"
                     title="이번 주 식단표 복사"
                   >
-                    📋 복사
+                    📋
                   </button>
+                  {accessRole !== "guest" && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setHandoverDate(selectedDate || getTodayStr());
+                        setHandoverModalTab("config");
+                        setIsHandoverModalOpen(true);
+                      }}
+                      className="px-2 py-0.5 rounded-full bg-sky-50 hover:bg-sky-100 text-sky-800 border border-sky-200 text-[11px] font-extrabold whitespace-nowrap"
+                      title="선택한 날짜 식단으로 카톡 육아 인수인계 열기"
+                    >
+                      🤝 인수인계
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => setHideEmptyMealSlots((v) => !v)}
@@ -16001,27 +16030,40 @@ ${item.memo}` : `${item.title} 다녀옴!`,
             </div>
 
 
-            <div className="grid grid-cols-2 gap-1.5">
+            <div className={`grid ${canViewTab("ai") ? "grid-cols-3" : "grid-cols-2"} gap-1.5`}>
               <button
                 type="button"
                 onClick={() => {
                   setScanTargetMonth(selectedDate.slice(0, 7));
                   setIsDaycareModalOpen(true);
                 }}
-                className="py-2 px-2.5 rounded-xl bg-stone-50 hover:bg-stone-100 border border-stone-200 text-stone-800 text-[12.5px] font-extrabold flex items-center justify-center gap-1.5"
+                className="py-2 px-1.5 rounded-xl bg-stone-50 hover:bg-stone-100 border border-stone-200 text-stone-800 text-[11.5px] font-extrabold flex items-center justify-center gap-1 whitespace-nowrap"
               >
                 <Camera className="w-3.5 h-3.5 text-stone-700 shrink-0" />
-                <span className="whitespace-nowrap">식단표 AI 스캔</span>
+                <span>AI 스캔</span>
               </button>
+              {canViewTab("ai") && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAiSubMode("plan3d");
+                    setActiveTab("ai");
+                  }}
+                  className="py-2 px-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-900 text-[11.5px] font-extrabold flex items-center justify-center gap-1 whitespace-nowrap"
+                  title="AI 3일 식단 자동 추천으로 이동"
+                >
+                  <span>✨ AI 3일식단</span>
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => {
                   setExportScope("all");
                   setIsInventoryExportOpen(true);
                 }}
-                className="py-2 px-2.5 rounded-xl bg-stone-50 hover:bg-stone-100 border border-stone-200 text-stone-800 text-[12.5px] font-extrabold flex items-center justify-center gap-1.5"
+                className="py-2 px-1.5 rounded-xl bg-stone-50 hover:bg-stone-100 border border-stone-200 text-stone-800 text-[11.5px] font-extrabold flex items-center justify-center gap-1 whitespace-nowrap"
               >
-                <span className="whitespace-nowrap">📤 식단·재고 내보내기</span>
+                <span>📤 식단출력</span>
               </button>
             </div>
 
@@ -17245,7 +17287,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
             <button
               type="button"
               onClick={() => setScheduleSubTab("calendar")}
-              className={`py-2 px-2 rounded-xl text-[12.5px] font-black flex items-center justify-center gap-1 transition ${
+              className={`py-2 px-1.5 rounded-xl text-[12px] font-black flex items-center justify-center gap-1 whitespace-nowrap transition ${
                 scheduleSubTab === "calendar"
                   ? "bg-white text-stone-900 shadow-sm"
                   : "text-stone-500 hover:text-stone-800"
@@ -17261,7 +17303,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
             <button
               type="button"
               onClick={() => setScheduleSubTab("todo")}
-              className={`py-2 px-2 rounded-xl text-[12.5px] font-black flex items-center justify-center gap-1 transition ${
+              className={`py-2 px-1.5 rounded-xl text-[12px] font-black flex items-center justify-center gap-1 whitespace-nowrap transition ${
                 scheduleSubTab === "todo"
                   ? "bg-white text-stone-900 shadow-sm"
                   : "text-stone-500 hover:text-stone-800"
@@ -17277,7 +17319,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
             <button
               type="button"
               onClick={() => setScheduleSubTab("routine")}
-              className={`py-2 px-2 rounded-xl text-[12.5px] font-black flex items-center justify-center gap-1 transition ${
+              className={`py-2 px-1.5 rounded-xl text-[12px] font-black flex items-center justify-center gap-1 whitespace-nowrap transition ${
                 scheduleSubTab === "routine"
                   ? "bg-white text-stone-900 shadow-sm"
                   : "text-stone-500 hover:text-stone-800"
@@ -17493,6 +17535,27 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                           aria-label="일정 검색"
                         >
                           <Search className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            const mList = schedules
+                              .filter((s) => String(s.date || "").startsWith(scheduleMonth) && !s.done)
+                              .sort((a, b) => String(a.date || "").localeCompare(String(b.date || "")));
+                            if (mList.length === 0) {
+                              showToast(`📅 ${Number(scheduleMonth.slice(5))}월 예정된 가족 일정이 없습니다.`);
+                              return;
+                            }
+                            const lines = [
+                              `📅 ${Number(scheduleMonth.slice(5))}월 가족 일정 (${mList.length}건)`,
+                              ...mList.map((s) => `• ${String(s.date || "").slice(5)} ${s.title}`)
+                            ];
+                            await copyTextSafe(lines.join("\n"), `📋 ${Number(scheduleMonth.slice(5))}월 일정 ${mList.length}건을 복사했습니다!`);
+                          }}
+                          className="p-1.5 rounded-xl border border-stone-200 bg-stone-50 hover:bg-stone-100 text-stone-600 text-[11px] font-extrabold leading-none whitespace-nowrap"
+                          title="이달 가족 일정 복사"
+                        >
+                          📋
                         </button>
                         {isAdminUnlocked && (
                           <button
@@ -18233,7 +18296,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
           {/* 🔄 자정/주간 자동 리셋 데일리·위클리 육아/집안일 루틴 */}
           {scheduleSubTab === "routine" && (
           <div id="routine-board-section" className="bg-white p-4 rounded-2xl border border-stone-200 shadow-sm space-y-3">
-            <div className="flex items-center justify-between gap-2">
+            <div className="flex items-start justify-between gap-2 flex-wrap">
               <div className="min-w-0">
                 <h3 className="text-[13.5px] font-black text-stone-900 flex items-center gap-1.5 whitespace-nowrap">
                   <span>🔄 반복 루틴</span>
@@ -18316,9 +18379,9 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                 <button
                   type="button"
                   onClick={openNewRoutineModal}
-                  className="px-2.5 py-1.5 rounded-xl bg-stone-900 text-white text-[12.5px] font-extrabold whitespace-nowrap flex items-center gap-1"
+                  className="px-2.5 py-1.5 rounded-xl bg-stone-900 text-white text-[11.5px] font-extrabold whitespace-nowrap flex items-center gap-0.5"
                 >
-                  <Plus className="w-3.5 h-3.5" /> 루틴 추가
+                  <Plus className="w-3.5 h-3.5" /> 추가
                 </button>
               </div>
             </div>
@@ -19094,6 +19157,56 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                     ✅ To-Do ({todoStats.activeCount} 남음 · 완료 {todoStats.doneCount})
                   </h3>
                 </div>
+                <div className="flex items-center gap-1 shrink-0">
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const activeList = schedules
+                        .filter((s) => s.category === "할일(To-Do)" && !s.done)
+                        .sort((a, b) => String(a.date || "9999-99-99").localeCompare(String(b.date || "9999-99-99")));
+                      if (activeList.length === 0) {
+                        showToast("🎉 남은 할 일이 없습니다!");
+                        return;
+                      }
+                      const todayK = getTodayStr();
+                      const lines = [
+                        `✅ 남은 할 일 (${activeList.length}건)`,
+                        ...activeList.map((t) => {
+                          const dTag = t.date ? (t.date <= todayK ? `[오늘·지남 ${t.date.slice(5)}]` : `[${t.date.slice(5)}]`) : "";
+                          return `☐ ${dTag ? `${dTag} ` : ""}${t.title}`;
+                        })
+                      ];
+                      await copyTextSafe(lines.join("\n"), `📋 남은 할 일 ${activeList.length}건을 복사했습니다!`);
+                    }}
+                    className="px-2 py-1 rounded-xl bg-stone-50 hover:bg-stone-100 border border-stone-200 text-stone-700 text-[11px] font-extrabold whitespace-nowrap"
+                    title="남은 할 일 목록 카톡 공유용 복사"
+                  >
+                    📋
+                  </button>
+                  {canEditTab("schedule") && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditingSchedule(null);
+                        setScheduleForm({
+                          title: "",
+                          date: getTodayStr(),
+                          category: "할일(To-Do)",
+                          members: ["수혁", "아리나"],
+                          isAnnual: false,
+                          showDday: false,
+                          hasOriginYear: false,
+                          memo: "",
+                          attachments: []
+                        });
+                        setIsScheduleModalOpen(true);
+                      }}
+                      className="px-2.5 py-1 rounded-xl bg-stone-900 text-white text-[11.5px] font-extrabold whitespace-nowrap flex items-center gap-0.5"
+                    >
+                      <Plus className="w-3 h-3" /> 추가
+                    </button>
+                  )}
+                </div>
               </div>
 
 
@@ -19451,15 +19564,36 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                   </div>
 
 
-                  <span
-                    className={`px-2.5 py-1 rounded-xl text-[13.5px] font-black shrink-0 ${
-                      item.calc.daysUntil <= 3 && item.calc.daysUntil >= 0
-                        ? "bg-rose-500 text-white animate-pulse"
-                        : "bg-amber-400 text-stone-900"
-                    }`}
-                  >
-                    {item.calc.dDayText}
-                  </span>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    {accessRole !== "guest" && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const wasPinned = homeMiniDdayIds.includes(item.id);
+                          toggleHomeMiniDdayId(item.id);
+                          showToast(wasPinned ? "📌 홈 상단 미니 D-Day에서 해제했습니다." : "📌 홈 상단 미니 D-Day에 고정했습니다!");
+                        }}
+                        className={`px-2 py-1 rounded-xl text-[11px] font-extrabold border whitespace-nowrap transition ${
+                          homeMiniDdayIds.includes(item.id)
+                            ? "bg-[#5E7A65] text-white border-[#7E9E86]"
+                            : "bg-white/10 hover:bg-white/20 text-stone-200 border-white/20"
+                        }`}
+                        title={homeMiniDdayIds.includes(item.id) ? "홈 상단 고정 해제" : "홈 상단 미니바에 고정"}
+                      >
+                        {homeMiniDdayIds.includes(item.id) ? "📌 고정중" : "📌 홈"}
+                      </button>
+                    )}
+                    <span
+                      className={`px-2.5 py-1 rounded-xl text-[12.5px] font-black whitespace-nowrap ${
+                        item.calc.daysUntil <= 3 && item.calc.daysUntil >= 0
+                          ? "bg-rose-500 text-white animate-pulse"
+                          : "bg-amber-400 text-stone-900"
+                      }`}
+                    >
+                      {item.calc.dDayText}
+                    </span>
+                  </div>
                 </div>
               ))}
             </div>
@@ -19491,7 +19625,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
               onClick={() => setIsInventoryExportOpen(true)}
               className="py-2 px-2.5 rounded-2xl bg-stone-100 hover:bg-stone-200/80 border border-stone-200 text-stone-800 text-[11.5px] font-extrabold flex items-center justify-between gap-1 whitespace-nowrap"
             >
-              <span className="truncate">📤 식단·재고 내보내기</span>
+              <span className="truncate">📤 식단·재고 출력</span>
               <ChevronRight className="w-3.5 h-3.5 text-stone-400 shrink-0" />
             </button>
           </div>
@@ -19502,15 +19636,31 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                   <AlertCircle className="w-4 h-4 text-orange-600" />
                   <span>임박·경과 재료 ({expiringItems.length}건)</span>
                 </div>
-                {canViewTab("ai") && (
+                <div className="flex items-center gap-1 shrink-0">
                   <button
                     type="button"
-                    onClick={() => handleExpiringToAiChef(expiringItems.slice(0, 4).map((i) => i.name))}
-                    className="px-2 py-0.5 rounded-lg bg-orange-600 hover:bg-orange-700 text-white text-[11px] font-extrabold whitespace-nowrap shrink-0"
+                    onClick={async () => {
+                      const lines = [
+                        `❄️ 냉장고 임박·경과 재료 (${expiringItems.length}건)`,
+                        ...expiringItems.map((it) => `• ${it.name} (${it.diff < 0 ? `${Math.abs(it.diff)}일 지남` : it.diff === 0 ? "오늘 만료" : `D-${it.diff}`}${it.location ? ` · ${it.location}` : ""})`)
+                      ];
+                      await copyTextSafe(lines.join("\n"), `📋 임박 재료 ${expiringItems.length}건을 복사했습니다!`);
+                    }}
+                    className="px-2 py-0.5 rounded-lg bg-white hover:bg-orange-100 text-orange-800 border border-orange-200 text-[11px] font-extrabold whitespace-nowrap"
+                    title="임박·경과 재료 목록 복사"
                   >
-                    ✨ AI 추천
+                    📋
                   </button>
-                )}
+                  {canViewTab("ai") && (
+                    <button
+                      type="button"
+                      onClick={() => handleExpiringToAiChef(expiringItems.slice(0, 4).map((i) => i.name))}
+                      className="px-2 py-0.5 rounded-lg bg-orange-600 hover:bg-orange-700 text-white text-[11px] font-extrabold whitespace-nowrap"
+                    >
+                      ✨ AI 추천
+                    </button>
+                  )}
+                </div>
               </div>
               <div className="flex flex-wrap gap-1.5">
                 {expiringItems.map((item) => (
@@ -19518,7 +19668,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                     key={item.id}
                     type="button"
                     onClick={() => setQuickFridgeItem(item)}
-                    className="px-2.5 py-1 rounded-full text-[12.5px] font-extrabold bg-white hover:bg-orange-100 text-orange-800 border border-orange-200 active:scale-95 transition"
+                    className="px-2.5 py-1 rounded-full text-[12px] font-extrabold bg-white hover:bg-orange-100 text-orange-800 border border-orange-200 active:scale-95 transition whitespace-nowrap"
                   >
                     {item.name} ({item.diff < 0 ? `${Math.abs(item.diff)}일 지남` : `D-${item.diff}`})
                   </button>
@@ -19623,7 +19773,36 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                 fridgeViewMode === "visual" ? "bg-white text-stone-900 shadow-sm" : "text-stone-500"
               }`}
             >
-              🗂️ 냉장고 칸별 뷰
+              🗂️ 칸별 뷰
+            </button>
+            <button
+              type="button"
+              onClick={async () => {
+                const q = debouncedFridgeSearch.trim().toLowerCase();
+                const list = fridge.filter(
+                  (i) =>
+                    matchesFridgeLocFilter(i.location, fridgeLocFilter) &&
+                    (fridgeCatFilter === "전체" || i.category === fridgeCatFilter) &&
+                    (!q || String(i.name || "").toLowerCase().includes(q))
+                );
+                if (list.length === 0) {
+                  showToast("❄️ 복사할 냉장고 재료가 없습니다.");
+                  return;
+                }
+                const lines = [
+                  `❄️ 냉장고 재고 (${list.length}건)`,
+                  ...list.map((it) => {
+                    const diff = getDaysDiff(it.expiryDate);
+                    const dTxt = it.expiryDate ? (diff < 0 ? "만료" : diff === 0 ? "오늘" : `D-${diff}`) : "";
+                    return `• [${it.location || "냉장"}] ${it.name} (${it.quantity || 1}${it.unit || "개"}${dTxt ? ` · ${dTxt}` : ""})`;
+                  })
+                ];
+                await copyTextSafe(lines.join("\n"), `📋 냉장고 재고 ${list.length}건을 복사했습니다!`);
+              }}
+              className="px-2.5 py-1.5 rounded-lg bg-white hover:bg-stone-50 text-stone-700 text-[11.5px] font-extrabold whitespace-nowrap shrink-0 shadow-sm"
+              title="현재 냉장고 재고 목록 복사"
+            >
+              📋
             </button>
           </div>
 
@@ -19634,7 +19813,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                 type="button"
                 key={cat}
                 onClick={() => setFridgeCatFilter(cat)}
-                className={`px-2.5 py-1 rounded-full text-[12.5px] font-bold shrink-0 border ${
+                className={`px-2.5 py-1 rounded-full text-[12px] font-bold shrink-0 whitespace-nowrap border ${
                   fridgeCatFilter === cat
                     ? "bg-emerald-600 text-white border-emerald-600"
                     : "bg-white text-stone-600 border-stone-200"
@@ -19702,9 +19881,9 @@ ${item.memo}` : `${item.title} 다녀옴!`,
               <button
                 type="button"
                 onClick={handleRestoreAllDeleted}
-                className="px-3 py-1.5 rounded-xl bg-amber-100 text-amber-900 text-[13.5px] font-extrabold"
+                className="px-3 py-1.5 rounded-xl bg-amber-100 text-amber-900 text-[12.5px] font-extrabold whitespace-nowrap"
               >
-                숨겨진 기존 냉장고 재료 다시 불러오기
+                숨겨진 재료 다시 불러오기
               </button>
             </div>
           ) : fridgeViewMode === "visual" ? (() => {
@@ -20757,6 +20936,22 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                   📋 복사
                 </button>
               )}
+              {accessRole !== "guest" && notices.some((n) => !n.done && n.pinned) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const tStr = getTodayStr();
+                    if (!handoverDate || handoverDate < tStr) setHandoverDate(tStr);
+                    setHandoverSections((p) => ({ ...p, notices: true }));
+                    setHandoverModalTab("config");
+                    setIsHandoverModalOpen(true);
+                  }}
+                  className="px-2 py-0.5 rounded-full bg-sky-50 hover:bg-sky-100 text-sky-800 border border-sky-200 text-[11px] font-extrabold whitespace-nowrap"
+                  title="고정 공지를 포함해 카톡 육아 인수인계 열기"
+                >
+                  🤝 인수인계
+                </button>
+              )}
             </div>
             <button
               type="button"
@@ -21037,13 +21232,13 @@ ${item.memo}` : `${item.title} 다녀옴!`,
             <button
               type="button"
               onClick={() => setAiSubMode("recipe")}
-              className={`py-2 px-3 rounded-xl text-[13.5px] font-extrabold transition ${
+              className={`whitespace-nowrap py-2 px-2.5 rounded-xl text-[13px] font-extrabold transition ${
                 aiSubMode === "recipe"
                   ? "bg-stone-900 text-white shadow-sm"
                   : "text-stone-600 hover:text-stone-900"
               }`}
             >
-              🍳 냉장고 레시피 · 플레이팅
+              🍳 냉장고 레시피
             </button>
             <button
               type="button"
@@ -21227,7 +21422,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                         type="button"
                         onClick={handleGenerateMissingPlanSlots}
                         disabled={isPlanLoading}
-                        className="px-3 py-1.5 rounded-lg bg-rose-600 text-white text-[12.5px] font-extrabold"
+                        className="px-3 py-1.5 rounded-lg bg-rose-600 text-white text-[12.5px] font-extrabold whitespace-nowrap"
                       >
                         🔄 누락된 {planSnapshotMeta.missingPairs.length}끼만 추가 생성
                       </button>
@@ -21424,9 +21619,9 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                                             usedIngredients: it.usedIngredients
                                           })
                                         }
-                                        className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[12.5px] font-extrabold"
+                                        className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11.5px] font-extrabold whitespace-nowrap"
                                       >
-                                        🍳 이 식단 조리완료(재고 차감)
+                                        🍳 조리완료(재고 -1)
                                       </button>
                                     </div>
                                   )}
@@ -21517,7 +21712,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                   <span>AI 냉장고 맞춤 셰프</span>
                 </h2>
               </div>
-              <span className="px-2 py-0.5 rounded-full text-[11.5px] font-extrabold bg-emerald-50 text-emerald-700 border border-emerald-200 shrink-0">
+              <span className="px-2 py-0.5 rounded-full text-[11.5px] font-extrabold bg-emerald-50 text-emerald-700 border border-emerald-200 shrink-0 whitespace-nowrap">
                 ⚡ Gemini 직통 활성
               </span>
             </div>
@@ -21695,7 +21890,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                     <button
                       type="button"
                       onClick={() => handleCompleteRecipeCooking(rec)}
-                      className="py-2 px-2 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 text-[12.5px] font-extrabold"
+                      className="py-2 px-2 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 text-[12px] font-extrabold whitespace-nowrap"
                     >
                       🍳 요리완료 (재고 -1)
                     </button>
@@ -21710,7 +21905,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                         setQuickLogDate(selectedDate);
                         setQuickLogSlot("저녁");
                       }}
-                      className="col-span-2 py-2.5 rounded-xl bg-stone-900 text-white text-[13px] font-extrabold flex items-center justify-center gap-1"
+                      className="col-span-2 py-2.5 rounded-xl bg-stone-900 text-white text-[13px] font-extrabold flex items-center justify-center gap-1 whitespace-nowrap"
                     >
                       <span>🍽️ 식단표에 등록</span>
                       <ArrowRight className="w-3.5 h-3.5" />
@@ -21747,7 +21942,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                   <span>AI 플레이팅 코치</span>
                 </h2>
               </div>
-              <span className="px-2 py-0.5 rounded-full text-[11.5px] font-extrabold bg-rose-50 text-rose-700 border border-rose-200 shrink-0">
+              <span className="px-2 py-0.5 rounded-full text-[11.5px] font-extrabold bg-rose-50 text-rose-700 border border-rose-200 shrink-0 whitespace-nowrap">
                 📸 Vision
               </span>
             </div>
@@ -21972,6 +22167,23 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                       </button>
                     ))}
                   </div>
+                  {bucketList.some((b) => !b.done) && (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        const rem = bucketList.filter((b) => !b.done);
+                        const lines = [
+                          `🌟 가족 버킷리스트 (${rem.length}곳)`,
+                          ...rem.map((b, i) => `${i + 1}. ${b.title}${b.placeName && b.placeName !== b.title ? ` (${b.placeName})` : ""}${b.memo ? ` - ${b.memo}` : ""}`)
+                        ];
+                        await copyTextSafe(lines.join("\n"), `📋 버킷리스트 ${rem.length}곳을 복사했습니다!`);
+                      }}
+                      className="px-2 py-1 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-[11px] font-extrabold whitespace-nowrap shrink-0"
+                      title="미방문 버킷리스트 카톡 공유용 복사"
+                    >
+                      📋
+                    </button>
+                  )}
                   <span className="text-[12px] font-extrabold text-stone-500 whitespace-nowrap truncate">
                     갈 곳 <b className="text-amber-600">{plannedCount}</b> · 다녀옴 <b className="text-[#35503C]">{doneCount}</b>
                   </span>
@@ -22397,7 +22609,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                           }
                           showToast(`🧹 다녀온 항목 ${doneIds.length}건을 정리했습니다.`);
                         }}
-                        className="px-2.5 py-1 rounded-xl text-[11px] font-bold text-stone-400 hover:text-rose-600 hover:bg-rose-50"
+                        className="px-2.5 py-1 rounded-xl text-[11px] font-bold text-stone-400 hover:text-rose-600 hover:bg-rose-50 whitespace-nowrap"
                       >
                         🧹 다녀옴 일괄 정리 ({doneCount}건)
                       </button>
@@ -22498,6 +22710,26 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                   title="현재 목록 복사"
                 >
                   📋
+                </button>
+              )}
+              {accessRole !== "guest" && (houseSubTab === "storage" || houseSubTab === "medicine") && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const tStr = getTodayStr();
+                    if (!handoverDate || handoverDate < tStr) setHandoverDate(tStr);
+                    if (houseSubTab === "medicine") {
+                      setHandoverSections((p) => ({ ...p, meds: true }));
+                    } else {
+                      setHandoverSections((p) => ({ ...p, notices: true }));
+                    }
+                    setHandoverModalTab("config");
+                    setIsHandoverModalOpen(true);
+                  }}
+                  className="px-2 py-2 rounded-2xl bg-sky-50 hover:bg-sky-100 border border-sky-200 text-sky-800 text-[12px] font-extrabold whitespace-nowrap shrink-0"
+                  title="수납위치·상비약 정보를 포함해 카톡 인수인계 열기"
+                >
+                  🤝
                 </button>
               )}
               {canEditTab("house") && (
@@ -23143,7 +23375,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                         <button
                           type="button"
                           onClick={() => setPagesRecentOpen((v) => !v)}
-                          className="flex items-center gap-1 text-[12.5px] font-extrabold text-stone-500 hover:text-stone-800 px-0.5"
+                          className="flex items-center gap-1 text-[12.5px] font-extrabold text-stone-500 hover:text-stone-800 px-0.5 whitespace-nowrap"
                         >
                           <span>최근 항목</span>
                           {pagesRecentOpen ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
@@ -23190,7 +23422,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                         <button
                           type="button"
                           onClick={() => setPagesSharedOpen((v) => !v)}
-                          className="flex items-center gap-1 text-[12.5px] font-extrabold text-stone-500 hover:text-stone-800"
+                          className="flex items-center gap-1 text-[12.5px] font-extrabold text-stone-500 hover:text-stone-800 whitespace-nowrap"
                         >
                           <span>공유된 페이지</span>
                           {pagesSharedOpen ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
@@ -24221,7 +24453,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
 
                                             {/* 비고 및 우측 사용자 추가 열 */}
                                             {cols.map((col) => (
-                                              <td key={col.id} className="py-1.5 px-2.5 border-r border-stone-100 align-middle">
+                                              <td key={col.id} className="py-1.5 px-2.5 border-r border-stone-100 align-middle whitespace-nowrap">
                                                 <input
                                                   type="text"
                                                   defaultValue={row.values?.[col.id] || ""}
@@ -24576,7 +24808,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                   type="button"
                   key={cat}
                   onClick={() => setRecipeCatFilter(cat)}
-                  className={`px-2.5 py-1 rounded-full text-[12.5px] font-bold shrink-0 border ${
+                  className={`px-2.5 py-1 rounded-full text-[12px] font-bold shrink-0 whitespace-nowrap border ${
                     recipeCatFilter === cat
                       ? "bg-rose-600 text-white border-rose-600"
                       : "bg-white text-stone-600 border-stone-200"
@@ -24592,20 +24824,20 @@ ${item.memo}` : `${item.title} 다녀옴!`,
               <button
                 type="button"
                 onClick={() => setRecipeViewMode("cards")}
-                className={`flex-1 py-1.5 rounded-lg text-[13.5px] font-extrabold transition ${
+                className={`flex-1 py-1.5 rounded-lg text-[12.5px] font-extrabold whitespace-nowrap transition ${
                   recipeViewMode === "cards" ? "bg-white text-stone-900 shadow-sm" : "text-stone-500"
                 }`}
               >
-                🖼️ 상세 카드 보기
+                🖼️ 상세 카드
               </button>
               <button
                 type="button"
                 onClick={() => setRecipeViewMode("summary")}
-                className={`flex-1 py-1.5 rounded-lg text-[13.5px] font-extrabold transition ${
+                className={`flex-1 py-1.5 rounded-lg text-[12.5px] font-extrabold whitespace-nowrap transition ${
                   recipeViewMode === "summary" ? "bg-white text-stone-900 shadow-sm" : "text-stone-500"
                 }`}
               >
-                📋 전체 요약 리스트
+                📋 요약 리스트
               </button>
             </div>
           </div>
@@ -24805,7 +25037,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
 
 
                         <div className="flex items-center gap-1.5 flex-wrap">
-                          <span className="px-2 py-0.5 rounded-md bg-stone-100 text-stone-700 text-[11.5px] font-bold">
+                          <span className="px-2 py-0.5 rounded-md bg-stone-100 text-stone-700 text-[11.5px] font-bold whitespace-nowrap">
                             ⏱️ {r.cookTime || "20분"}
                           </span>
                           <span className="px-2 py-0.5 rounded-md bg-amber-50 text-amber-800 text-[11.5px] font-bold whitespace-nowrap">
@@ -24951,9 +25183,12 @@ ${item.memo}` : `${item.title} 다녀옴!`,
               {CHILDREN_INFO.map((ch) => {
                 const st = getChildAgeStats(ch.birthDate);
                 const isSel = selectedChildId === ch.id;
+                const homeKey = `child_elapsed:${ch.id}`;
+                const isPinnedHome = homeMiniDdayIds.includes(homeKey);
                 return (
-                  <button
-                    type="button"
+                  <div
+                    role="button"
+                    tabIndex={0}
                     key={ch.id}
                     onClick={() => {
                       setSelectedChildId(ch.id);
@@ -24961,27 +25196,55 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                         setDiaryForm((p) => ({ ...p, childIds: [ch.id] }));
                       }
                     }}
-                    className={`p-3 rounded-2xl border text-left transition ${
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        setSelectedChildId(ch.id);
+                      }
+                    }}
+                    className={`p-3 rounded-2xl border text-left transition cursor-pointer ${
                       isSel
                         ? "bg-stone-900 text-white border-stone-900 shadow-md"
                         : "bg-white text-stone-800 border-stone-200 hover:bg-stone-50"
                     }`}
                   >
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between gap-1">
                       <MemberAvatar id={ch.id} size="lg" />
                       <span
-                        className={`whitespace-nowrap text-[11.5px] font-extrabold px-2 py-0.5 rounded-full ${
+                        className={`whitespace-nowrap text-[11px] font-extrabold px-2 py-0.5 rounded-full ${
                           isSel ? "bg-amber-400 text-stone-900" : "bg-stone-100 text-stone-600"
                         }`}
                       >
                         {ch.badge} · D+{st.days.toLocaleString()}일
                       </span>
                     </div>
-                    <div className="text-[15.5px] font-black mt-1">{ch.name}</div>
+                    <div className="flex items-center justify-between gap-1 mt-1">
+                      <span className="text-[15.5px] font-black">{ch.name}</span>
+                      {accessRole !== "guest" && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleHomeMiniDdayId(homeKey);
+                            showToast(isPinnedHome ? `📌 홈 상단에서 ${ch.name} 생후일을 해제했습니다.` : `📌 홈 상단에 ${ch.name} 생후 D+${st.days}일을 고정했습니다!`);
+                          }}
+                          className={`px-1.5 py-0.5 rounded-full text-[9.5px] font-extrabold border whitespace-nowrap ${
+                            isPinnedHome
+                              ? "bg-[#5E7A65] text-white border-[#7E9E86]"
+                              : isSel
+                              ? "bg-white/10 text-stone-300 border-white/20 hover:bg-white/20"
+                              : "bg-stone-50 text-stone-500 border-stone-200 hover:bg-stone-100"
+                          }`}
+                          title={isPinnedHome ? "홈 상단 고정 해제" : "홈 상단에 생후일 고정"}
+                        >
+                          {isPinnedHome ? "📌 홈고정" : "📌 홈"}
+                        </button>
+                      )}
+                    </div>
                     <div className={`text-[10.5px] mt-0.5 whitespace-nowrap ${isSel ? "text-stone-300" : "text-stone-500"}`}>
                       {ch.birthDate}생 · 현재 {st.months}개월
                     </div>
-                  </button>
+                  </div>
                 );
               })}
             </div>
@@ -25367,7 +25630,8 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                             onClick={() => {
                               const tStr = getTodayStr();
                               if (!handoverDate || handoverDate < tStr) setHandoverDate(tStr);
-                              setHandoverTarget(activeChild?.id || "전체");
+                              const cid = activeChild?.id;
+                              setHandoverTargets(cid === "시목" ? { "시목": true, "시율": false, "산모가사": false } : cid === "시율" ? { "시목": false, "시율": true, "산모가사": true } : { "시목": true, "시율": true, "산모가사": true });
                               setHandoverModalTab("config");
                               setIsHandoverModalOpen(true);
                             }}
@@ -25600,7 +25864,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                     onClick={() =>
                       currentMilestoneRef.current?.scrollIntoView({ behavior: "smooth", block: "center" })
                     }
-                    className="px-2.5 py-1 rounded-xl bg-amber-100 hover:bg-amber-200 text-amber-900 text-[12.5px] font-extrabold border border-amber-300"
+                    className="px-2.5 py-1 rounded-xl bg-amber-100 hover:bg-amber-200 text-amber-900 text-[12px] font-extrabold border border-amber-300 whitespace-nowrap"
                   >
                     📍 {activeChild.id} 현재 시기({ageStats.months}개월)로 이동
                   </button>
@@ -26270,7 +26534,8 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                           onClick={() => {
                             const tStr = getTodayStr();
                             if (!handoverDate || handoverDate < tStr) setHandoverDate(tStr);
-                            setHandoverTarget(activeChild?.id || "전체");
+                            const cid = activeChild?.id;
+                            setHandoverTargets(cid === "시목" ? { "시목": true, "시율": false, "산모가사": false } : cid === "시율" ? { "시목": false, "시율": true, "산모가사": true } : { "시목": true, "시율": true, "산모가사": true });
                             setHandoverModalTab("config");
                             setIsHandoverModalOpen(true);
                           }}
@@ -26374,7 +26639,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                               <span className="text-[12.5px] font-bold text-stone-500">{n.date}</span>
                               {n.temp && (
                                 <span
-                                  className={`px-2 py-0.5 rounded-full text-[11.5px] font-black ${
+                                  className={`px-2 py-0.5 rounded-full text-[11.5px] font-black whitespace-nowrap ${
                                     isFever
                                       ? "bg-rose-600 text-white"
                                       : "bg-emerald-100 text-emerald-800"
@@ -26442,6 +26707,19 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                                 💊 약등록
                               </button>
                             )}
+                            <button
+                              type="button"
+                              onClick={() =>
+                                copyTextSafe(
+                                  `🩺 ${activeChild.name} 진료·체온 (${n.date})${n.temp ? ` · 🌡️ ${n.temp}°C` : ""}\n• ${n.title}${n.memo ? `\n• 메모: ${n.memo}` : ""}`,
+                                  "📋 진료·체온 메모를 복사했습니다!"
+                                )
+                              }
+                              className="p-1.5 text-stone-400 hover:text-stone-700 text-[11.5px] leading-none whitespace-nowrap"
+                              title="진료·체온 메모 복사"
+                            >
+                              📋
+                            </button>
                             <button
                               type="button"
                               onClick={() => handleDeleteMedicalNote(n.id)}
@@ -28212,7 +28490,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                           } else if (m.id === "handover") {
                             const tStr = getTodayStr();
                             if (!handoverDate || handoverDate < tStr) setHandoverDate(tStr);
-                            setHandoverTarget("전체");
+                            setHandoverTargets({ "시목": true, "시율": true, "산모가사": true });
                             setHandoverModalTab("config");
                             setIsHandoverModalOpen(true);
                             setIsMoreNavOpen(false);
@@ -34809,7 +35087,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                 🗑️ 폐기
               </button>
             </div>
-            <div className="grid grid-cols-2 gap-1.5 pt-1 border-t border-stone-100">
+            <div className="grid grid-cols-3 gap-1.5 pt-1 border-t border-stone-100">
               <button
                 type="button"
                 onClick={() => {
@@ -34817,9 +35095,9 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                   setQuickFridgeItem(null);
                   handleFridgeToRecipeSearch(targetName);
                 }}
-                className="py-2 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-800 text-[12px] font-extrabold whitespace-nowrap"
+                className="py-2 px-1 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-800 text-[11.5px] font-extrabold whitespace-nowrap"
               >
-                📖 레시피 찾기
+                📖 레시피
               </button>
               {canViewTab("ai") && (
                 <button
@@ -34829,9 +35107,32 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                     setQuickFridgeItem(null);
                     handleExpiringToAiChef([targetName]);
                   }}
-                  className="py-2 rounded-xl bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-900 text-[12px] font-extrabold whitespace-nowrap"
+                  className="py-2 px-1 rounded-xl bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-900 text-[11.5px] font-extrabold whitespace-nowrap"
                 >
-                  ✨ AI 요리추천
+                  ✨ AI추천
+                </button>
+              )}
+              {canEditTab("daily") && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const targetName = quickFridgeItem?.name || "";
+                    setQuickFridgeItem(null);
+                    setEditingMeal(null);
+                    setMealForm({
+                      date: getTodayStr(),
+                      slot: "저녁",
+                      menu: targetName,
+                      members: ["수혁", "아리나"],
+                      ingredients: targetName,
+                      mealStatus: "planned",
+                      memo: ""
+                    });
+                    setIsMealModalOpen(true);
+                  }}
+                  className="py-2 px-1 rounded-xl bg-[#EEF3EE] hover:bg-[#DFE9E0] border border-[#C9D8CC] text-[#35503C] text-[11.5px] font-extrabold whitespace-nowrap"
+                >
+                  🍽️ 식단등록
                 </button>
               )}
             </div>
@@ -34988,9 +35289,14 @@ ${item.memo}` : `${item.title} 다녀옴!`,
           : `${targetDate.slice(5)}(${targetDow})`;
         const nowMs = activityTimerTick || Date.now();
         const nowTimeLabel = formatTime12Ko(nowMs);
-        const targetChildren = handoverTarget === "전체"
-          ? CHILDREN_INFO
-          : CHILDREN_INFO.filter((c) => c.id === handoverTarget);
+        const targetChildren = CHILDREN_INFO.filter((c) => Boolean(handoverTargets[c.id]));
+        const includeMomHouse = Boolean(handoverTargets["산모가사"]);
+        const selectedTargetLabels = [
+          ...(handoverTargets["시목"] ? ["시목"] : []),
+          ...(handoverTargets["시율"] ? ["시율"] : []),
+          ...(includeMomHouse ? ["산모·가사"] : [])
+        ];
+        const targetSummaryText = selectedTargetLabels.length > 0 ? selectedTargetLabels.join("·") : "미선택";
 
         const recentCutoffStr = addMonthsToDateStr(today, 0, -2);
         const extractMembers = (obj) => (Array.isArray(obj?.members) ? obj.members : obj?.member ? [obj.member] : []);
@@ -35046,10 +35352,9 @@ ${item.memo}` : `${item.title} 다녀옴!`,
           return ["formulaGuide", "sleepGuide", "cautionGuide"].filter((k) => !String(obj[k] || "").trim()).length;
         };
         const totalMissingGuideCount =
-          countMissingCommon +
-          (handoverTarget === "전체"
-            ? countMissingChild("시목") + countMissingChild("시율")
-            : countMissingChild(handoverTarget));
+          (includeMomHouse ? countMissingCommon : 0) +
+          (handoverTargets["시목"] ? countMissingChild("시목") : 0) +
+          (handoverTargets["시율"] ? countMissingChild("시율") : 0);
 
         const childDataList = targetChildren.map((ch) => {
           const sum = computeActivitySummaryForChild(ch.id);
@@ -35083,7 +35388,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
             .filter((m) => {
               if (m.date !== targetDate) return false;
               const mems = extractMembers(m);
-              return mems.includes(ch.id) || mems.includes("전체");
+              return mems.includes(ch.id);
             })
             .map((m) => `${m.slot}: ${m.menu}`);
           const solidActs = sum.list
@@ -35113,6 +35418,8 @@ ${item.memo}` : `${item.title} 다녀옴!`,
           return {
             ch,
             guide: getChildGuideObj(ch.id),
+            hasFeedLogs: feeds.length > 0,
+            hasSleepLogs: recentSleeps.length > 0,
             avgIntervalLabel,
             avgFeedMl,
             nextFeedEst,
@@ -35127,25 +35434,40 @@ ${item.memo}` : `${item.title} 다녀옴!`,
           };
         });
 
-        // 전체 후보 루틴/일정/공지/수납 + 개별 선택 필터링
+        // 산모·가족 공통 식단 (시목/시율 전용이 아닌 식단, 산모·가사 선택 시 1회만 출력)
+        const sharedFamilyMeals = includeMomHouse
+          ? meals
+              .filter((m) => {
+                if (m.date !== targetDate) return false;
+                const mems = extractMembers(m);
+                const onlyKids = mems.length > 0 && mems.every((x) => x === "시목" || x === "시율");
+                return !onlyKids;
+              })
+              .map((m) => `${m.slot}: ${m.menu}`)
+          : [];
+
+        // 전체 후보 루틴/일정/공지/수납 + 개별 선택 필터링 (시목 / 시율 / 산모·가사[시목·시율 외 공통])
         const allTargetRoutines = familyRoutines
           .filter((r) => {
             const matchDay = isTodayTarget
               ? isRoutineDueTodayOrPast(r, today) && !isRoutineDoneNow(r)
               : isRoutineDueOnExactDay(r, targetDate);
             if (!matchDay) return false;
-            if (handoverTarget === "전체") return true;
             const rt = r.target || "공통";
-            return rt === handoverTarget || rt === "공통";
+            if (rt === "시목") return Boolean(handoverTargets["시목"]);
+            if (rt === "시율") return Boolean(handoverTargets["시율"]);
+            return includeMomHouse;
           })
           .sort((a, b) => String(a.scheduledTime || "99:99").localeCompare(String(b.scheduledTime || "99:99")));
         const selectedRoutines = allTargetRoutines.filter((r) => isItemIncluded(`rt:${r.id}`));
 
         const allTargetSchedules = schedules.filter((s) => {
           if (s.date !== targetDate || s.done) return false;
-          if (handoverTarget === "전체") return true;
           const mems = extractMembers(s);
-          return mems.includes(handoverTarget) || mems.length === 0 || mems.includes("전체");
+          if (mems.includes("시목") && handoverTargets["시목"]) return true;
+          if (mems.includes("시율") && handoverTargets["시율"]) return true;
+          const hasNonChild = mems.length === 0 || mems.some((x) => x !== "시목" && x !== "시율");
+          return hasNonChild && includeMomHouse;
         });
         const selectedSchedules = allTargetSchedules.filter((s) => isItemIncluded(`sch:${s.id}`));
 
@@ -35173,9 +35495,11 @@ ${item.memo}` : `${item.title} 다녀옴!`,
           if (handoverSections.mealFeed) {
             const targetMeals = meals.filter((m) => {
               if (m.date !== targetDate) return false;
-              if (handoverTarget === "전체") return true;
               const mems = extractMembers(m);
-              return mems.includes(handoverTarget) || mems.includes("전체");
+              if (mems.includes("시목") && handoverTargets["시목"]) return true;
+              if (mems.includes("시율") && handoverTargets["시율"]) return true;
+              const hasNonChild = mems.length === 0 || mems.some((x) => x !== "시목" && x !== "시율");
+              return hasNonChild && includeMomHouse;
             });
             targetMeals.forEach((m) => {
               const sk = slotSortMap[m.slot] || "12:30";
@@ -35236,46 +35560,64 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                   ? `안녕하세요 이모님! ${dayLabel}(${targetDate} ${targetDow}) 사전 인수인계 미리 전달드립니다 🙏`
                   : `안녕하세요 이모님! ${dayLabel}(${targetDate} ${targetDow})도 잘 부탁드립니다 🙏`,
                 `🤝 [산후관리·육아 인수인계 · ${modeTag}]`,
-                `대상: ${handoverTarget === "전체" ? "시목·시율" : handoverTarget} | 작성: ${today.slice(5)} ${nowTimeLabel}`,
+                `대상: ${targetSummaryText} | 작성: ${today.slice(5)} ${nowTimeLabel}`,
                 `━━━━━━━━━━━━━━━━━━`
               ]
             : [
                 `🤝 [육아 인수인계서 · ${dayLabel}(${targetDate} ${targetDow}) ${modeTag}]`,
-                `대상: ${handoverTarget === "전체" ? "시목·시율" : handoverTarget} | 작성: ${today.slice(5)} ${nowTimeLabel}`,
+                `대상: ${targetSummaryText} | 작성: ${today.slice(5)} ${nowTimeLabel}`,
                 `━━━━━━━━━━━━━━━━━━`
               ];
 
           if (handoverSections.mealFeed) {
-            out.push(`\n🍼 [식사·수유 패턴 & ${dayLabel} ${isFutureTarget ? "예정 " : ""}식단]`);
+            const mealLines = [];
             childDataList.forEach((d) => {
-              out.push(`▸ ${d.ch.name}`);
-              if (d.guide.formulaGuide) out.push(`  • 식사·분유 가이드: ${d.guide.formulaGuide}`);
-              if (isFutureTarget) {
-                out.push(
-                  `  • 평소 수유 패턴: 평균 ${d.avgIntervalLabel} 간격${d.avgFeedMl > 0 ? ` · 1회 약 ${d.avgFeedMl}ml` : ""}`
-                );
-              } else {
-                out.push(`  • 수유 간격: 평균 ${d.avgIntervalLabel}${d.nextFeedEst ? ` (다음 예상 ${d.nextFeedEst})` : ""}`);
-                out.push(`  • 마지막 수유: ${d.lastFeedText}`);
+              const sub = [];
+              if (d.guide.formulaGuide) sub.push(`  • ${d.ch.id === "시목" ? "식사·간식 가이드" : "분유·수유 가이드"}: ${d.guide.formulaGuide}`);
+              if (d.hasFeedLogs || d.ch.id === "시율") {
+                if (isFutureTarget) {
+                  sub.push(`  • 평소 수유 패턴: 평균 ${d.avgIntervalLabel} 간격${d.avgFeedMl > 0 ? ` · 1회 약 ${d.avgFeedMl}ml` : ""}`);
+                } else {
+                  sub.push(`  • 수유 간격: 평균 ${d.avgIntervalLabel}${d.nextFeedEst ? ` (다음 예상 ${d.nextFeedEst})` : ""}`);
+                  sub.push(`  • 마지막 수유: ${d.lastFeedText}`);
+                }
               }
               if (d.mealSummaryList.length > 0) {
-                out.push(`  • ${dayLabel} ${isFutureTarget ? "예정 " : ""}식사: ${d.mealSummaryList.join(" / ")}`);
+                sub.push(`  • ${dayLabel} ${isFutureTarget ? "예정 " : ""}식사: ${d.mealSummaryList.join(" / ")}`);
+              }
+              if (sub.length > 0) {
+                mealLines.push(`▸ ${d.ch.name}`, ...sub);
               }
             });
+            if (sharedFamilyMeals.length > 0) {
+              mealLines.push(`▸ 🏠 산모·가족 식단: ${sharedFamilyMeals.join(" / ")}`);
+            }
+            if (mealLines.length > 0) {
+              out.push(`\n🍼 [식사·수유 & ${dayLabel} ${isFutureTarget ? "예정 " : ""}식단]`, ...mealLines);
+            }
           }
 
-          if (handoverSections.sleep) {
-            out.push(`\n😴 [수면 패턴 · 수면 방식 · 주의사항]`);
+          if (handoverSections.sleep && childDataList.length > 0) {
+            const sleepLines = [];
             childDataList.forEach((d) => {
-              const sleepBits = [];
-              if (d.avgSleepTxt) sleepBits.push(`평균 ${d.avgSleepTxt}`);
-              if (!isFutureTarget) sleepBits.push(`최근 ${d.lastSleepText}`);
-              out.push(`▸ ${d.ch.name}${sleepBits.length > 0 ? `: ${sleepBits.join(" · ")}` : ""}`);
-              if (d.recentSleepMemos.length > 0) out.push(`  • 수면 참고 메모: ${d.recentSleepMemos.join(" / ")}`);
-              if (d.guide.sleepGuide) out.push(`  • 수면 방식: ${d.guide.sleepGuide}`);
-              if (d.guide.bathGuide) out.push(`  • 목욕·케어: ${d.guide.bathGuide}`);
-              if (d.guide.cautionGuide) out.push(`  • ⚠️ 주의사항: ${d.guide.cautionGuide}`);
+              const sub = [];
+              if (d.hasSleepLogs) {
+                const bits = [];
+                if (d.avgSleepTxt) bits.push(`평균 ${d.avgSleepTxt}`);
+                if (!isFutureTarget) bits.push(`최근 ${d.lastSleepText}`);
+                if (bits.length > 0) sub.push(`  • 수면 기록: ${bits.join(" · ")}`);
+              }
+              if (d.recentSleepMemos.length > 0) sub.push(`  • 수면 메모: ${d.recentSleepMemos.join(" / ")}`);
+              if (d.guide.sleepGuide) sub.push(`  • 수면 방식: ${d.guide.sleepGuide}`);
+              if (d.guide.bathGuide) sub.push(`  • 목욕·케어: ${d.guide.bathGuide}`);
+              if (d.guide.cautionGuide) sub.push(`  • ⚠️ 주의사항: ${d.guide.cautionGuide}`);
+              if (sub.length > 0) {
+                sleepLines.push(`▸ ${d.ch.name}`, ...sub);
+              }
             });
+            if (sleepLines.length > 0) {
+              out.push(`\n😴 [수면 방식 · 목욕 · 주의사항]`, ...sleepLines);
+            }
           }
 
           if (handoverSections.meds) {
@@ -35326,7 +35668,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
             }
           }
 
-          if (handoverSections.careGuide && (handoverProfile.momMealGuide || handoverProfile.houseworkGuide || handoverProfile.emergencyContacts || (handoverSections.includeDoorCode && handoverProfile.doorCode))) {
+          if (includeMomHouse && (handoverProfile.momMealGuide || handoverProfile.houseworkGuide || handoverProfile.emergencyContacts || (handoverSections.includeDoorCode && handoverProfile.doorCode))) {
             out.push(`\n🏠 [산모 식사 · 가사 · 비상연락]`);
             if (handoverProfile.momMealGuide) out.push(`▸ 🍱 산모 식사: ${handoverProfile.momMealGuide}`);
             if (handoverProfile.houseworkGuide) out.push(`▸ 🧺 세탁·가사: ${handoverProfile.houseworkGuide}`);
@@ -35380,25 +35722,35 @@ ${item.memo}` : `${item.title} 다녀옴!`,
               if (handoverSections.mealFeed) {
                 const rows = [];
                 childDataList.forEach((d) => {
-                  rows.push(
-                    isFutureTarget
-                      ? `${d.ch.name} · 평소 평균 ${d.avgIntervalLabel} 간격${d.avgFeedMl > 0 ? ` (1회 약 ${d.avgFeedMl}ml)` : ""}`
-                      : `${d.ch.name} · 평균 ${d.avgIntervalLabel}${d.nextFeedEst ? ` → 다음 예상 ${d.nextFeedEst}` : ""}`
-                  );
-                  if (d.guide.formulaGuide) rows.push(`  가이드: ${d.guide.formulaGuide}`);
-                  if (!isFutureTarget) rows.push(`  마지막 수유: ${d.lastFeedText}`);
-                  if (d.mealSummaryList.length > 0) rows.push(`  ${dayLabel} 식사: ${d.mealSummaryList.join(" / ")}`);
+                  const sub = [];
+                  if (d.guide.formulaGuide) sub.push(`  가이드: ${d.guide.formulaGuide}`);
+                  if (d.hasFeedLogs || d.ch.id === "시율") {
+                    sub.push(
+                      isFutureTarget
+                        ? `  수유 패턴: 평균 ${d.avgIntervalLabel} 간격${d.avgFeedMl > 0 ? ` (1회 약 ${d.avgFeedMl}ml)` : ""}`
+                        : `  수유: 평균 ${d.avgIntervalLabel}${d.nextFeedEst ? ` → 다음 ${d.nextFeedEst}` : ""} / 최근 ${d.lastFeedText}`
+                    );
+                  }
+                  if (d.mealSummaryList.length > 0) sub.push(`  ${dayLabel} 식사: ${d.mealSummaryList.join(" / ")}`);
+                  if (sub.length > 0) {
+                    rows.push(`▸ ${d.ch.name}`, ...sub);
+                  }
                 });
-                sectionsToDraw.push({ title: `🍼 식사·수유 패턴 & ${dayLabel} 식단`, accent: "#2F6F4E", bg: "#F2F8F4", rows });
+                if (sharedFamilyMeals.length > 0) rows.push(`▸ 산모·가족 식단: ${sharedFamilyMeals.join(" / ")}`);
+                if (rows.length > 0) sectionsToDraw.push({ title: `🍼 식사·수유 & ${dayLabel} 식단`, accent: "#2F6F4E", bg: "#F2F8F4", rows });
               }
-              if (handoverSections.sleep) {
+              if (handoverSections.sleep && childDataList.length > 0) {
                 const rows = [];
                 childDataList.forEach((d) => {
-                  const sb = `${d.avgSleepTxt ? `평균 ${d.avgSleepTxt}` : ""}${!isFutureTarget ? `${d.avgSleepTxt ? " · " : ""}최근 ${d.lastSleepText}` : ""}`;
-                  if (sb) rows.push(`${d.ch.name}: ${sb}`);
-                  if (d.guide.sleepGuide) rows.push(`  수면방식: ${d.guide.sleepGuide}`);
-                  if (d.guide.bathGuide) rows.push(`  목욕·케어: ${d.guide.bathGuide}`);
-                  if (d.guide.cautionGuide) rows.push(`  ⚠️ 주의: ${d.guide.cautionGuide}`);
+                  const sub = [];
+                  if (d.hasSleepLogs) {
+                    const sb = `${d.avgSleepTxt ? `평균 ${d.avgSleepTxt}` : ""}${!isFutureTarget ? `${d.avgSleepTxt ? " · " : ""}최근 ${d.lastSleepText}` : ""}`;
+                    if (sb) sub.push(`  수면: ${sb}`);
+                  }
+                  if (d.guide.sleepGuide) sub.push(`  수면방식: ${d.guide.sleepGuide}`);
+                  if (d.guide.bathGuide) sub.push(`  목욕·케어: ${d.guide.bathGuide}`);
+                  if (d.guide.cautionGuide) sub.push(`  ⚠️ 주의: ${d.guide.cautionGuide}`);
+                  if (sub.length > 0) rows.push(`▸ ${d.ch.name}`, ...sub);
                 });
                 if (rows.length > 0) sectionsToDraw.push({ title: "😴 수면 방식 · 목욕 · 주의사항", accent: "#3B5998", bg: "#F2F5FB", rows });
               }
@@ -35438,7 +35790,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                   sectionsToDraw.push({ title: `🔄 ${dayLabel} ${isFutureTarget ? "예정 " : ""}루틴 · 할 일`, accent: "#9A6700", bg: "#FDF9EE", rows });
                 }
               }
-              if (handoverSections.careGuide && (handoverProfile.momMealGuide || handoverProfile.houseworkGuide || handoverProfile.emergencyContacts)) {
+              if (includeMomHouse && (handoverProfile.momMealGuide || handoverProfile.houseworkGuide || handoverProfile.emergencyContacts)) {
                 const rows = [];
                 if (handoverProfile.momMealGuide) rows.push(`산모 식사: ${handoverProfile.momMealGuide}`);
                 if (handoverProfile.houseworkGuide) rows.push(`세탁·가사: ${handoverProfile.houseworkGuide}`);
@@ -35523,7 +35875,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
             ctx.fillStyle = "#E6F0E8";
             ctx.font = "600 20px -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif";
             ctx.fillText(
-              `대상: ${handoverTarget === "전체" ? "시목 · 시율" : handoverTarget}  |  ${isFutureTarget ? "사전 안내" : "실시간 교대"}  |  작성: ${nowTimeLabel}`,
+              `대상: ${targetSummaryText}  |  ${isFutureTarget ? "사전 안내" : "실시간 교대"}  |  작성: ${nowTimeLabel}`,
               pad,
               102
             );
@@ -35589,7 +35941,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
             const url = canvas.toDataURL("image/png");
             const a = document.createElement("a");
             a.href = url;
-            a.download = `육아인수인계_${targetDate}_${handoverTarget}.png`;
+            a.download = `육아인수인계_${targetDate}_${targetSummaryText}.png`;
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
@@ -35678,17 +36030,17 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                               setHandoverCustomText("");
                               setIsHandoverEditingPreview(false);
                               if (pr.id === "helper") {
+                                setHandoverTargets({ "시목": false, "시율": true, "산모가사": true });
                                 setHandoverSections((p) => ({
                                   ...p,
                                   mealFeed: true,
                                   sleep: true,
                                   meds: true,
                                   routines: true,
-                                  careGuide: true,
                                   notices: true
                                 }));
                               } else {
-                                setHandoverSections((p) => ({ ...p, careGuide: false }));
+                                setHandoverTargets({ "시목": true, "시율": true, "산모가사": false });
                               }
                             }}
                             className={`py-1.5 px-2 rounded-xl border text-[11.5px] font-black whitespace-nowrap transition ${
@@ -35735,25 +36087,33 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                           }}
                           className="px-2 py-0.5 rounded-lg border border-stone-200 bg-stone-50 text-[11px] font-extrabold text-stone-700"
                         />
-                        <div className="ml-auto flex items-center gap-1">
-                          {["전체", ...CHILDREN_INFO.map((c) => c.id)].map((tg) => (
+                      </div>
+                      <div className="flex items-center gap-1 flex-wrap pt-1 border-t border-stone-100">
+                        <span className="text-[10.5px] font-black text-stone-400 whitespace-nowrap mr-0.5">공유 대상:</span>
+                        {[
+                          { id: "시목", label: "👦 시목" },
+                          { id: "시율", label: "👶 시율" },
+                          { id: "산모가사", label: "🏠 산모·가사(공통)" }
+                        ].map((tg) => {
+                          const on = Boolean(handoverTargets[tg.id]);
+                          return (
                             <button
-                              key={tg}
+                              key={tg.id}
                               type="button"
                               onClick={() => {
-                                setHandoverTarget(tg);
+                                setHandoverTargets((p) => ({ ...p, [tg.id]: !p[tg.id] }));
                                 setHandoverCustomText("");
                               }}
-                              className={`px-2 py-1 rounded-full text-[10.5px] font-extrabold border whitespace-nowrap ${
-                                handoverTarget === tg
+                              className={`px-2.5 py-1 rounded-full text-[11px] font-extrabold border whitespace-nowrap transition ${
+                                on
                                   ? "bg-[#5E7A65] text-white border-[#5E7A65]"
-                                  : "bg-stone-50 text-stone-600 border-stone-200"
+                                  : "bg-stone-50 text-stone-400 border-stone-200 line-through"
                               }`}
                             >
-                              {tg}
+                              {on ? "✓ " : ""}{tg.label}
                             </button>
-                          ))}
-                        </div>
+                          );
+                        })}
                       </div>
                     </div>
 
@@ -35799,7 +36159,6 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                           { key: "sleep", label: "😴 수면·주의" },
                           { key: "meds", label: "💊 약·진료" },
                           { key: "routines", label: `🔄 ${dayLabel} 루틴·할일` },
-                          { key: "careGuide", label: "🏠 산모·가사·연락" },
                           { key: "notices", label: "📌 공지·수납" },
                           { key: "includeDoorCode", label: "🔑 출입비번" }
                         ].map((sec) => {
@@ -36130,14 +36489,14 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                         <>
                           <button
                             type="button"
-                            onClick={() => jumpFromHandover(() => { if (handoverTarget !== "전체") setSelectedChildId(handoverTarget); setBabySubTab("activity"); setActiveTab("baby"); })}
+                            onClick={() => jumpFromHandover(() => { if (targetChildren.length === 1) setSelectedChildId(targetChildren[0].id); setBabySubTab("activity"); setActiveTab("baby"); })}
                             className="px-2 py-0.5 rounded-full bg-white border border-stone-200 text-stone-700 text-[10.5px] font-extrabold whitespace-nowrap"
                           >
                             🍼 수유·수면
                           </button>
                           <button
                             type="button"
-                            onClick={() => jumpFromHandover(() => { if (handoverTarget !== "전체") setSelectedChildId(handoverTarget); setBabySubTab("medical"); setActiveTab("baby"); })}
+                            onClick={() => jumpFromHandover(() => { if (targetChildren.length === 1) setSelectedChildId(targetChildren[0].id); setBabySubTab("medical"); setActiveTab("baby"); })}
                             className="px-2 py-0.5 rounded-full bg-white border border-stone-200 text-stone-700 text-[10.5px] font-extrabold whitespace-nowrap"
                           >
                             🩺 진료·체온
@@ -36896,7 +37255,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                   onClick={() => {
                     setHandoverAttachedPageId(targetPg.id);
                     try { localStorage.setItem("kim_handover_page_id_v1", targetPg.id); } catch (err) {}
-                    setHandoverTarget("전체");
+                    setHandoverTargets({ "시목": true, "시율": true, "산모가사": true });
                     setHandoverModalTab("config");
                     setPageMenuTargetId(null);
                     setIsHandoverModalOpen(true);
