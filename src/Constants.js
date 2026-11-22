@@ -1178,7 +1178,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v13.09";
+export const APP_CODE_VERSION = "v13.10";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1196,7 +1196,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-22 10:07";
+export const APP_BUILD_DATE = "2026-11-22 10:15";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1264,6 +1264,18 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v13.10",
+    version: "v13.10",
+    date: "2026-11-22",
+    title: "🏠 홈 화면 모바일 시인성·사용성 전면 리디자인 (위계 17/15/13px · 루틴 완료 접기 · 필터 통합 · 44px 터치)",
+    category: "UI/UX 리디자인 · 시인성 · 접근성",
+    changes: [
+      "위계·여백·색상 체계 통일: 섹션 제목(17px)·항목(15px)·보조정보(13px) 기준과 명암비(4.5:1+), 단일 초록 포인트(#3F624D), 좌우 16px·카드 16px·섹션 간 20px 여백을 홈 전체에 적용",
+      "🔄 지금 루틴 대폭 정돈: 3줄 필터를 요약 바+[필터 ▾] 패널로 통합하고, 다단계 루틴은 미완료 항목만 단순 목록으로 바로 표시하며 완료 항목은 [완료 N개 보기]로 기본 접기(펼침 시 순서 유지·취소 가능), 컬러 배지를 한 줄 보조 텍스트로 통일",
+      "상단 운영정보 정리·하단 메뉴 통일·겹침 해소: 버전/권한을 ⓘ 정보 버튼으로 정리하고, 하단 2열 메뉴 카드의 여백·글자 크기·줄바꿈(잘림 방지)을 통일했으며 44px 터치 영역과 하단 여백(pb-32)을 확보"
+    ]
+  },
   {
     id: "patch-v13.09",
     version: "v13.09",
