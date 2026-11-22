@@ -27593,7 +27593,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
         return (
           <div
             style={{ bottom: "calc(4.75rem + env(safe-area-inset-bottom))" }}
-            className="fixed left-1/2 -translate-x-1/2 z-40 w-[calc(100%-2rem)] max-w-sm bg-stone-900/95 backdrop-blur text-white rounded-2xl px-3 py-2.5 shadow-2xl border border-stone-700 space-y-2"
+            className="fixed left-1/2 -translate-x-1/2 z-[48] w-[calc(100%-2rem)] max-w-sm bg-stone-900/95 backdrop-blur text-white rounded-2xl px-3 py-2.5 shadow-2xl border border-stone-700 space-y-2"
           >
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-1.5 min-w-0">
@@ -27757,8 +27757,8 @@ ${item.memo}` : `${item.title} 다녀옴!`,
             {kitchenTimer.mode === "stopwatch" && (
               <div className="pt-1.5 border-t border-stone-800 space-y-1.5">
                 <div className="grid grid-cols-2 gap-1.5">
-                  <div className="bg-stone-800/90 rounded-xl px-2 py-1 flex items-center justify-between gap-1">
-                    <span className="text-[10.5px] font-bold text-stone-400 whitespace-nowrap">시작</span>
+                  <div className="bg-stone-800/90 rounded-xl px-2.5 py-1.5 flex flex-col gap-0.5 min-w-0">
+                    <span className="text-[10px] font-bold text-stone-400 leading-none">시작 시간</span>
                     <input
                       type="time"
                       value={kitchenTimer.cookStartTimeStr || ""}
@@ -27773,11 +27773,11 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                           };
                         });
                       }}
-                      className="bg-transparent text-white font-mono text-[11px] font-extrabold focus:outline-none w-20 text-right"
+                      className="bg-transparent text-white font-mono text-[12px] font-extrabold focus:outline-none w-full min-w-0"
                     />
                   </div>
-                  <div className="bg-stone-800/90 rounded-xl px-2 py-1 flex items-center justify-between gap-1">
-                    <span className="text-[10.5px] font-bold text-stone-400 whitespace-nowrap">완료</span>
+                  <div className="bg-stone-800/90 rounded-xl px-2.5 py-1.5 flex flex-col gap-0.5 min-w-0">
+                    <span className="text-[10px] font-bold text-stone-400 leading-none">완료 시간</span>
                     <input
                       type="time"
                       value={kitchenTimer.cookEndTimeStr || ""}
@@ -27794,7 +27794,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                           };
                         });
                       }}
-                      className="bg-transparent text-amber-300 font-mono text-[11px] font-extrabold focus:outline-none w-20 text-right"
+                      className="bg-transparent text-amber-300 font-mono text-[12px] font-extrabold focus:outline-none w-full min-w-0"
                     />
                   </div>
                 </div>
@@ -27819,7 +27819,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                     }}
                     className="flex-1 py-1 px-2 rounded-lg bg-emerald-600/90 hover:bg-emerald-500 text-white text-[11px] font-extrabold whitespace-nowrap"
                   >
-                    🏁 지금 완료 찍기 (자동 계산)
+                    🏁 완료 찍기
                   </button>
                   {displaySec > 0 && (
                     <>
@@ -27847,7 +27847,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                           }}
                           className="px-2 py-1 rounded-lg bg-amber-500/90 hover:bg-amber-400 text-stone-950 text-[11px] font-black whitespace-nowrap"
                         >
-                          📖 레시피 기록
+                          📖 레시피
                         </button>
                       )}
                     </>

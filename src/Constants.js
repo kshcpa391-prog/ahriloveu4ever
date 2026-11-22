@@ -1178,7 +1178,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v13.08";
+export const APP_CODE_VERSION = "v13.09";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1196,7 +1196,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-22 09:47";
+export const APP_BUILD_DATE = "2026-11-22 10:07";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1264,6 +1264,17 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v13.09",
+    version: "v13.09",
+    date: "2026-11-22",
+    title: "⏱️ 요리 스톱워치 시작/완료 시간 잘림 수정 및 플로팅 버튼 겹침 해소",
+    category: "버그 수정 · 시각 최적화",
+    changes: [
+      "⏱️ 요리 스톱워치 시간 잘림 수정: 고정 너비(w-20)로 인해 '오전 10:0'처럼 분 단위가 잘리던 시작/완료 시간 입력칸을 상하 배치(w-full)로 변경해 전체 시각이 선명하게 표시되도록 개선",
+      "겹침 해소: 스톱워치 팝업이 우측 하단(+) 퀵 버튼에 가리지 않도록 레이어 순서(z-[48])를 올리고 하단 버튼 라벨(🏁 완료 찍기 · 📖 레시피)을 슬림화"
+    ]
+  },
   {
     id: "patch-v13.08",
     version: "v13.08",
