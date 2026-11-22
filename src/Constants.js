@@ -1178,7 +1178,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v13.07";
+export const APP_CODE_VERSION = "v13.08";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1196,7 +1196,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-22 09:41";
+export const APP_BUILD_DATE = "2026-11-22 09:47";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1264,6 +1264,17 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v13.08",
+    version: "v13.08",
+    date: "2026-11-22",
+    title: "🏠 홈 화면 헤더 아래 전체 글씨 크기·카드 여백 슬림화로 시각적 피로도 완화",
+    category: "시각 최적화",
+    changes: [
+      "🏠 홈 화면 본문 타이포그래피 일괄 조정: 헤더 아래의 3일 내 일정·오늘 남은 루틴·할 일·메뉴 그리드 카드 제목(13.5px→12px), 본문(12.5px→11px), 부제(12px→10.5px), 칩/배지(11.5px→10px)를 균형 있게 축소해 가독성 향상",
+      "홈 메뉴 카드 내부 여백을 슬림화(p-2.5→p-2)해 한 화면에 더 정돈되어 보이도록 정리 및 AST·TDZ·배포 정합성 검증 완료"
+    ]
+  },
   {
     id: "patch-v13.07",
     version: "v13.07",

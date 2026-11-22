@@ -14716,7 +14716,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
         const previewLimit = actionFeedSize === "compact" ? 2 : actionFeedSize === "large" ? 5 : 3;
         const blockPadClass = (bId) => {
           const sz = blockSizes[bId] || "normal";
-          return sz === "compact" ? "p-2" : sz === "large" ? "p-3.5" : "p-2.5";
+          return sz === "compact" ? "p-2" : sz === "large" ? "p-3.5" : "p-2";
         };
         const previewTodos = schedules
           .filter((s) => s.category === "할일(To-Do)" && !s.done)
@@ -14734,7 +14734,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                 {/* 1) 3일 내 일정 */}
                 <div className={`${padCls} space-y-1.5`}>
                   <div className="flex items-center justify-between gap-1">
-                    <span className="text-[13.5px] font-black text-stone-900 whitespace-nowrap">
+                    <span className="text-[12px] font-black text-stone-900 whitespace-nowrap">
                       🗓️ 3일 내 일정 ({imminentSchedulesWithin3Days.length}건)
                     </span>
                     <div className="flex items-center gap-1.5 shrink-0">
@@ -14748,7 +14748,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                             ];
                             await copyTextSafe(lines.join("\n"), `📋 3일 내 일정 ${imminentSchedulesWithin3Days.length}건을 복사했습니다!`);
                           }}
-                          className="px-1.5 py-0.5 rounded bg-stone-100 hover:bg-stone-200 text-stone-700 text-[11px] font-extrabold whitespace-nowrap"
+                          className="px-1.5 py-0.5 rounded bg-stone-100 hover:bg-stone-200 text-stone-700 text-[10px] font-extrabold whitespace-nowrap"
                           title="3일 내 일정 카톡 공유용 복사"
                         >
                           📋
@@ -14771,7 +14771,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                           });
                           setIsScheduleModalOpen(true);
                         }}
-                        className="px-1.5 py-0.5 rounded bg-stone-100 hover:bg-stone-200 text-stone-700 text-[11.5px] font-extrabold whitespace-nowrap"
+                        className="px-1.5 py-0.5 rounded bg-stone-100 hover:bg-stone-200 text-stone-700 text-[10px] font-extrabold whitespace-nowrap"
                       >
                         + 추가
                       </button>
@@ -14781,14 +14781,14 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                           setScheduleSubTab("calendar");
                           setActiveTab("schedule");
                         }}
-                        className="text-[11.5px] font-extrabold text-stone-500 whitespace-nowrap"
+                        className="text-[10px] font-extrabold text-stone-500 whitespace-nowrap"
                       >
                         전체 &gt;
                       </button>
                     </div>
                   </div>
                   {imminentSchedulesWithin3Days.length === 0 ? (
-                    <div className="text-[12.5px] font-bold text-stone-400">
+                    <div className="text-[11px] font-bold text-stone-400">
                       3일 이내 예정된 일정이 없습니다.
                     </div>
                   ) : (
@@ -14816,13 +14816,13 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                               isTodayEv ? "bg-rose-50/70 border-rose-200" : "bg-stone-50/70 border-stone-200"
                             }`}
                           >
-                            <span className="text-[12.5px] font-extrabold text-stone-800 truncate">
+                            <span className="text-[11px] font-extrabold text-stone-800 truncate">
                               {ev._isPrivate ? "🔒 " : ""}
                               {ev.time ? `${ev.time} ` : ""}
                               {ev.title}
                             </span>
                             <span
-                              className={`px-1.5 py-0.5 rounded text-[11px] font-black shrink-0 whitespace-nowrap ${
+                              className={`px-1.5 py-0.5 rounded text-[10px] font-black shrink-0 whitespace-nowrap ${
                                 isTodayEv
                                   ? "bg-rose-600 text-white"
                                   : isTomorrowEv
@@ -14858,7 +14858,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                             style={{ width: `${pctRt}%` }}
                           />
                         </div>
-                        <span className="text-[11.5px] font-black text-emerald-700 whitespace-nowrap shrink-0">
+                        <span className="text-[10px] font-black text-emerald-700 whitespace-nowrap shrink-0">
                           달성 {doneRt}/{totalRt} ({pctRt}%)
                         </span>
                       </div>
@@ -14866,7 +14866,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                   })()}
                   <div className="flex items-center justify-between gap-1.5 flex-wrap">
                     <div className="flex items-center gap-1.5 min-w-0">
-                      <span className="text-[13.5px] font-black text-stone-900 truncate">
+                      <span className="text-[12px] font-black text-stone-900 truncate">
                         🔄 {homeRoutineDayOffset === -1
                           ? "어제 루틴"
                           : homeRoutineDayOffset === 1
@@ -14898,7 +14898,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                             key={dOpt.off}
                             type="button"
                             onClick={() => setHomeRoutineDayOffset(dOpt.off)}
-                            className={`px-1.5 py-0.5 rounded-md text-[10.5px] font-extrabold whitespace-nowrap transition ${
+                            className={`px-1.5 py-0.5 rounded-md text-[9.5px] font-extrabold whitespace-nowrap transition ${
                               homeRoutineDayOffset === dOpt.off
                                 ? "bg-white text-stone-900 shadow-sm"
                                 : "text-stone-500 hover:text-stone-800"
@@ -14919,7 +14919,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                               localStorage.setItem("kim_home_routine_target_v1", "전체");
                             } catch (e) {}
                           }}
-                          className="px-1.5 py-0.5 rounded-lg bg-stone-100 border border-stone-200 text-stone-700 text-[10.5px] font-extrabold whitespace-nowrap"
+                          className="px-1.5 py-0.5 rounded-lg bg-stone-100 border border-stone-200 text-stone-700 text-[9.5px] font-extrabold whitespace-nowrap"
                         >
                           자동 복귀
                         </button>
@@ -14932,7 +14932,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                           setScheduleSubTab("routine");
                           setActiveTab("schedule");
                         }}
-                        className="px-1.5 py-0.5 rounded-lg bg-[#EEF3EE] hover:bg-[#DFE9E0] border border-[#C9D8CC] text-[#35503C] text-[10.5px] font-extrabold whitespace-nowrap"
+                        className="px-1.5 py-0.5 rounded-lg bg-[#EEF3EE] hover:bg-[#DFE9E0] border border-[#C9D8CC] text-[#35503C] text-[9.5px] font-extrabold whitespace-nowrap"
                         title="루틴 2열 시간표로 보기"
                       >
                         🕒 시간표
@@ -14943,7 +14943,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                           setScheduleSubTab("routine");
                           setActiveTab("schedule");
                         }}
-                        className="px-2 py-0.5 rounded-lg bg-stone-900 text-white text-[11.5px] font-extrabold whitespace-nowrap"
+                        className="px-2 py-0.5 rounded-lg bg-stone-900 text-white text-[10px] font-extrabold whitespace-nowrap"
                       >
                         관리
                       </button>
@@ -14965,7 +14965,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                           setHomeRoutineTargetFilter(tgt.id);
                           try { localStorage.setItem("kim_home_routine_target_v1", tgt.id); } catch (e) {}
                         }}
-                        className={`px-2 py-0.5 rounded-full text-[11.5px] font-extrabold whitespace-nowrap border transition shrink-0 ${
+                        className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold whitespace-nowrap border transition shrink-0 ${
                           homeRoutineTargetFilter === tgt.id
                             ? "bg-stone-900 text-white border-stone-900"
                             : "bg-white text-stone-600 border-stone-200"
@@ -14990,7 +14990,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                           setHomeRoutineSlotFilter(opt.id);
                           try { localStorage.setItem("kim_home_routine_slot_v1", opt.id); } catch (e) {}
                         }}
-                        className={`px-2 py-0.5 rounded-full text-[11.5px] font-extrabold whitespace-nowrap border transition shrink-0 ${
+                        className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold whitespace-nowrap border transition shrink-0 ${
                           homeRoutineSlotFilter === opt.id
                             ? "bg-stone-900 text-white border-stone-900"
                             : "bg-stone-50 text-stone-600 border-stone-200"
@@ -15003,7 +15003,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
 
 
                   {activeRoutines.length === 0 ? (
-                    <div className="text-[12.5px] font-bold text-emerald-700 bg-stone-50 rounded-xl px-2.5 py-1.5">
+                    <div className="text-[11px] font-bold text-emerald-700 bg-stone-50 rounded-xl px-2.5 py-1.5">
                       {homeRoutineDayOffset === -1
                         ? "어제 예정된 루틴이 없습니다."
                         : homeRoutineDayOffset === 1
@@ -15011,7 +15011,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                         : "🎉 오늘 예정된 모든 루틴을 완료했습니다!"}
                     </div>
                   ) : visibleRoutineList.length === 0 ? (
-                    <div className="text-[12.5px] font-bold text-stone-500 bg-stone-50 rounded-xl px-2.5 py-1.5">
+                    <div className="text-[11px] font-bold text-stone-500 bg-stone-50 rounded-xl px-2.5 py-1.5">
                       {homeRoutineDayOffset === -1
                         ? "어제 해당 조건의 루틴이 없습니다."
                         : homeRoutineDayOffset === 1
@@ -15071,14 +15071,14 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                                         key={sIdx}
                                         type="button"
                                         onClick={() => { if (homeRoutineDayOffset === 0) handleToggleRoutineSubStep(rt.id, sIdx, steps.length); }}
-                                        className={`w-full flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-[12.5px] font-extrabold border text-left transition active:scale-[0.99] ${
+                                        className={`w-full flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-[11px] font-extrabold border text-left transition active:scale-[0.99] ${
                                           sDone
                                             ? "bg-emerald-50 border-emerald-300 text-emerald-800"
                                             : "bg-white border-stone-200 text-stone-800 hover:bg-stone-100"
                                         }`}
                                       >
                                         <span
-                                          className={`inline-flex items-center justify-center w-4 h-4 rounded-full border text-[10.5px] font-black shrink-0 ${
+                                          className={`inline-flex items-center justify-center w-4 h-4 rounded-full border text-[9.5px] font-black shrink-0 ${
                                             sDone
                                               ? "bg-emerald-600 border-emerald-600 text-white"
                                               : "border-stone-400 text-stone-700 bg-white"
@@ -15097,20 +15097,20 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                                 <button
                                   type="button"
                                   onClick={() => { if (homeRoutineDayOffset === 0) handleToggleRoutine(rt.id); }}
-                                  className="text-left text-[13.5px] font-extrabold text-stone-900 whitespace-normal break-words leading-snug w-full"
+                                  className="text-left text-[12px] font-extrabold text-stone-900 whitespace-normal break-words leading-snug w-full"
                                 >
                                   {rt.title}
                                 </button>
                               )}
                               <div className="flex flex-wrap items-center gap-1 mt-1">
-                                <span className="px-1.5 py-0.5 rounded bg-stone-200/70 text-stone-700 text-[10.5px] font-black">
+                                <span className="px-1.5 py-0.5 rounded bg-stone-200/70 text-stone-700 text-[9.5px] font-black">
                                   {rt.timeSlot || "상시"}
                                 </span>
                                 {rt.scheduledTime && (() => {
                                   const overdue = homeRoutineDayOffset === 0 ? isRoutineTimeOverdue(rt.scheduledTime) : false;
                                   return (
                                     <span
-                                      className={`px-1.5 py-0.5 rounded text-[10.5px] font-black ${
+                                      className={`px-1.5 py-0.5 rounded text-[9.5px] font-black ${
                                         overdue
                                           ? "bg-amber-100 text-amber-900 border border-amber-300"
                                           : "bg-sky-100 text-sky-800"
@@ -15120,16 +15120,16 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                                     </span>
                                   );
                                 })()}
-                                <span className={`px-1.5 py-0.5 rounded text-[10.5px] font-black ${getRoutineAssigneeBadgeCls(rt.assignee)}`}>
+                                <span className={`px-1.5 py-0.5 rounded text-[9.5px] font-black ${getRoutineAssigneeBadgeCls(rt.assignee)}`}>
                                   {rt.assignee || "공통"}
                                 </span>
                                 {steps.length >= 2 && (
-                                  <span className="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 text-[10.5px] font-black whitespace-nowrap">
+                                  <span className="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 text-[9.5px] font-black whitespace-nowrap">
                                     진행 {stepDoneSet.size}/{steps.length}
                                   </span>
                                 )}
                                 {nextInfo && (
-                                  <span className={`px-1.5 py-0.5 rounded text-[10.5px] font-bold whitespace-nowrap ${
+                                  <span className={`px-1.5 py-0.5 rounded text-[9.5px] font-bold whitespace-nowrap ${
                                     nextInfo.diff === 0 ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-900"
                                   }`}>
                                     {homeRoutineDayOffset === 0 && nextInfo.diff === 0 ? `오늘 ${nextInfo.dateLabel}` : nextInfo.dateLabel}
@@ -15148,7 +15148,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                 {/* 3) 남은 할 일 */}
                 <div className={`${padCls} space-y-1.5`}>
                   <div className="flex items-center justify-between gap-1">
-                    <span className="text-[13.5px] font-black text-stone-900">
+                    <span className="text-[12px] font-black text-stone-900">
                       ✅ 남은 할 일 ({globalTodoBadgeStats.activeCount}건)
                     </span>
                     <div className="flex items-center gap-1.5 shrink-0">
@@ -15169,7 +15169,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                           });
                           setIsScheduleModalOpen(true);
                         }}
-                        className="px-1.5 py-0.5 rounded bg-stone-100 hover:bg-stone-200 text-stone-700 text-[11.5px] font-extrabold whitespace-nowrap"
+                        className="px-1.5 py-0.5 rounded bg-stone-100 hover:bg-stone-200 text-stone-700 text-[10px] font-extrabold whitespace-nowrap"
                       >
                         + 추가
                       </button>
@@ -15179,14 +15179,14 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                           setScheduleSubTab("todo");
                           setActiveTab("schedule");
                         }}
-                        className="text-[11.5px] font-extrabold text-stone-500 whitespace-nowrap"
+                        className="text-[10px] font-extrabold text-stone-500 whitespace-nowrap"
                       >
                         전체 &gt;
                       </button>
                     </div>
                   </div>
                   {previewTodos.length === 0 ? (
-                    <div className="text-[12.5px] font-bold text-stone-400">
+                    <div className="text-[11px] font-bold text-stone-400">
                       남은 할 일이 없습니다.
                     </div>
                   ) : (
@@ -15239,9 +15239,9 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                                 isOverdue ? "border-rose-400" : "border-stone-400"
                               }`}
                             />
-                            <span className="text-[12.5px] font-extrabold text-stone-800 truncate flex-1">{todo.title}</span>
+                            <span className="text-[11px] font-extrabold text-stone-800 truncate flex-1">{todo.title}</span>
                             {hasMemo && (
-                              <span title="메모 있음" className="text-[11px] shrink-0">📝</span>
+                              <span title="메모 있음" className="text-[10px] shrink-0">📝</span>
                             )}
                             {attCount > 0 && (
                               <span title={`첨부파일 ${attCount}개`} className="px-1 py-0.2 rounded bg-sky-100 text-sky-800 text-[10px] font-black shrink-0 whitespace-nowrap">
@@ -15249,7 +15249,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                               </span>
                             )}
                             {todo.date && (
-                              <span className={`text-[11.5px] font-bold shrink-0 ${isOverdue ? "text-rose-600 font-black" : "text-stone-500"}`}>
+                              <span className={`text-[10px] font-bold shrink-0 ${isOverdue ? "text-rose-600 font-black" : "text-stone-500"}`}>
                                 {todo.date.slice(5)}
                               </span>
                             )}
@@ -15295,7 +15295,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
               <div key="menu_grid" className="space-y-3">
                 {groupedSections.map((group) => (
                   <div key={group.id} className="space-y-1.5">
-                    <div className="text-[11px] font-extrabold text-stone-400 px-1 tracking-tight">{group.label}</div>
+                    <div className="text-[10px] font-extrabold text-stone-400 px-1 tracking-tight">{group.label}</div>
                     <div className={`grid grid-cols-2 ${gridPad}`}>
                       {group.items.map((id) => {
                         const item = MENU_DEFS[id];
@@ -15305,7 +15305,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                             ? "col-span-2 p-3.5"
                             : mSize === "full"
                             ? "col-span-2 p-2.5"
-                            : "p-2.5";
+                            : "p-2";
                         const cleanAction = item.actionLabel === "열기 >" ? "" : item.actionLabel.replace(" >", "");
                         return (
                           <button
@@ -15315,14 +15315,14 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                             className={`bg-white border border-stone-200/90 ${item.borderHover} rounded-2xl ${sizeCls} text-left shadow-sm space-y-0.5 transition active:scale-[0.99]`}
                           >
                             <div className="flex items-center justify-between gap-1">
-                              <span className="text-[13.5px] font-black text-stone-900 truncate">{item.title}</span>
+                              <span className="text-[12px] font-black text-stone-900 truncate">{item.title}</span>
                               {cleanAction ? (
-                                <span className={`text-[10.5px] font-extrabold shrink-0 whitespace-nowrap ${item.actionColor}`}>{cleanAction}</span>
+                                <span className={`text-[9.5px] font-extrabold shrink-0 whitespace-nowrap ${item.actionColor}`}>{cleanAction}</span>
                               ) : (
                                 <ChevronRight className="w-3.5 h-3.5 text-stone-300 shrink-0" />
                               )}
                             </div>
-                            <div className="text-[12px] font-bold text-stone-500 truncate">{item.sub}</div>
+                            <div className="text-[10.5px] font-bold text-stone-500 truncate">{item.sub}</div>
                           </button>
                         );
                       })}
@@ -15351,7 +15351,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                     key={m.id}
                     type="button"
                     onClick={() => setHomeTimeModeOverride(m.id)}
-                    className={`px-2 py-0.5 rounded-full text-[10.5px] font-extrabold border whitespace-nowrap transition shrink-0 ${
+                    className={`px-2 py-0.5 rounded-full text-[9.5px] font-extrabold border whitespace-nowrap transition shrink-0 ${
                       homeTimeModeOverride === m.id
                         ? "bg-stone-900 text-white border-stone-900"
                         : "bg-white text-stone-600 border-stone-200"
@@ -15366,7 +15366,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                 <button
                   type="button"
                   onClick={handleCopyTodayBriefing}
-                  className="px-2 py-0.5 rounded-full text-[10.5px] font-extrabold border bg-[#EEF3EE] text-[#35503C] border-[#C9D8CC] whitespace-nowrap shrink-0"
+                  className="px-2 py-0.5 rounded-full text-[9.5px] font-extrabold border bg-[#EEF3EE] text-[#35503C] border-[#C9D8CC] whitespace-nowrap shrink-0"
                   title="오늘 날씨·식단·일정·장보기 브리핑 복사"
                 >
                   📋 브리핑
