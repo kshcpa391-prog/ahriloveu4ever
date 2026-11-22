@@ -1178,7 +1178,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v13.11";
+export const APP_CODE_VERSION = "v13.12";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1196,7 +1196,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-22 10:26";
+export const APP_BUILD_DATE = "2026-11-22 15:10";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1264,6 +1264,18 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v13.12",
+    version: "v13.12",
+    date: "2026-11-22",
+    title: "🔔 수정 알림 전 메뉴 서브탭·항목 바로가기 고도화 (육아 성장기록·루틴·할일·식단·레시피·노트)",
+    category: "버그 수정 · 메뉴 연계 · UI 정리",
+    changes: [
+      "육아 성장기록 알림 클릭 시 해당 아이(시목·시율) 자동 선택 및 성장기록(growth) 탭으로 즉시 이동하도록 수정 (생활기록·진료/접종·발달기록·육아일기 전 서브탭 지원)",
+      "루틴·할일·일정(날짜)·식단(날짜)·레시피(검색 연동)·냉장고(품목 검색)·살림수첩(상비약/보증/수납)·공유노트(해당 페이지 열기)까지 전 메뉴 알림 딥링크 구현",
+      "수정 알림 모달 중복 카테고리 맵 제거 및 누락 필터(노트·버킷·살림수첩) 통합, 카테고리별 건수 표시, 불필요한 초 단위 시각 제거 및 목적지 라벨 버튼(성장기록 → 등)으로 간결화"
+    ]
+  },
   {
     id: "patch-v13.11",
     version: "v13.11",

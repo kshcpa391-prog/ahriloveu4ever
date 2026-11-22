@@ -3686,6 +3686,28 @@ function MainApp() {
   };
 
 
+  const getActivityDestinationLabel = (act) => {
+    if (!act) return "이동";
+    const actionStr = String(act.action || "");
+    const detailStr = String(act.detail || "");
+    if (act.category === "육아") {
+      if (act.targetSubTab === "growth" || actionStr.includes("성장")) return "성장기록";
+      if (act.targetSubTab === "diary" || actionStr.includes("일기")) return "육아일기";
+      if (act.targetSubTab === "activity" || /생활기록|수유|기저귀|수면|이유식|케어/.test(actionStr)) return "생활기록";
+      if (act.targetSubTab === "medical" || /진료|병원|접종|체온|투약/.test(actionStr)) return "진료·접종";
+      if (act.targetSubTab === "milestones" || /발달|마일스톤/.test(actionStr)) return "발달기록";
+      return "육아수첩";
+    }
+    if (act.category === "살림수첩") {
+      if (detailStr.includes("[상비약]")) return "상비약";
+      if (detailStr.includes("[보증]") || detailStr.includes("[가전]")) return "보증·가전";
+      if (detailStr.includes("[수납]")) return "수납";
+      return "살림수첩";
+    }
+    if (act.category === "노트") return "공유노트";
+    return act.category || "이동";
+  };
+
   const handleNavigateFromActivity = (act) => {
     if (!act) return;
     const targetT = ACTIVITY_CAT_TAB_MAP[act.category];
@@ -3696,19 +3718,102 @@ function MainApp() {
     setIsActivityModalOpen(false);
     setLiveActivityPopup(null);
     setActiveTab(targetT);
-    if (act.category === "육아" && (act.targetSubTab === "diary" || String(act.action || "").includes("일기"))) {
-      setBabySubTab("diary");
-      setDiaryChildFilter("all");
-      setDiarySearchQuery("");
-      if (act.targetChildId && ["시목", "시율"].includes(act.targetChildId)) {
-        setSelectedChildId(act.targetChildId);
+
+    const actionStr = String(act.action || "");
+    const detailStr = String(act.detail || "");
+    const dateMatches = detailStr.match(/\d{4}-\d{2}-\d{2}/g) || [];
+    const targetDateStr = dateMatches.length > 0 ? dateMatches[dateMatches.length - 1] : "";
+
+    if (act.category === "육아") {
+      const resolvedChild =
+        act.targetChildId && ["시목", "시율"].includes(act.targetChildId)
+          ? act.targetChildId
+          : detailStr.includes("시율")
+          ? "시율"
+          : detailStr.includes("시목")
+          ? "시목"
+          : "";
+      if (resolvedChild) {
+        setSelectedChildId(resolvedChild);
       }
-      if (act.targetId) {
-        setHighlightedDiaryId(act.targetId);
-        setTimeout(() => {
-          document.getElementById(`diary-entry-${act.targetId}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
-        }, 220);
-        setTimeout(() => setHighlightedDiaryId(""), 3500);
+
+      if (act.targetSubTab === "growth" || actionStr.includes("성장")) {
+        setBabySubTab("growth");
+        setTimeout(() => window.scrollTo({ top: 0, behavior: "smooth" }), 120);
+      } else if (act.targetSubTab === "diary" || actionStr.includes("일기")) {
+        setBabySubTab("diary");
+        setDiaryChildFilter("all");
+        setDiarySearchQuery("");
+        if (act.targetId) {
+          setHighlightedDiaryId(act.targetId);
+          setTimeout(() => {
+            document.getElementById(`diary-entry-${act.targetId}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+          }, 220);
+          setTimeout(() => setHighlightedDiaryId(""), 3500);
+        }
+      } else if (act.targetSubTab === "activity" || /생활기록|수유|기저귀|수면|이유식|케어/.test(actionStr)) {
+        setBabySubTab("activity");
+        setTimeout(() => window.scrollTo({ top: 0, behavior: "smooth" }), 120);
+      } else if (act.targetSubTab === "medical" || /진료|병원|접종|체온|투약/.test(actionStr)) {
+        setBabySubTab("medical");
+        setTimeout(() => window.scrollTo({ top: 0, behavior: "smooth" }), 120);
+      } else if (act.targetSubTab === "milestones" || /발달|마일스톤/.test(actionStr)) {
+        setBabySubTab("milestones");
+        setTimeout(() => window.scrollTo({ top: 0, behavior: "smooth" }), 120);
+      }
+      return;
+    }
+
+    if (act.category === "루틴") {
+      setScheduleSubTab("routine");
+      setTimeout(() => window.scrollTo({ top: 0, behavior: "smooth" }), 120);
+      return;
+    }
+    if (act.category === "할일") {
+      setScheduleSubTab("todo");
+      setTimeout(() => window.scrollTo({ top: 0, behavior: "smooth" }), 120);
+      return;
+    }
+    if (act.category === "일정") {
+      setScheduleSubTab("calendar");
+      if (targetDateStr) {
+        setScheduleMonth(targetDateStr.slice(0, 7));
+        setScheduleSelectedDate(targetDateStr);
+      }
+      return;
+    }
+    if (act.category === "식단" && targetDateStr) {
+      setSelectedDate(targetDateStr);
+      setTimeout(() => {
+        document.getElementById(`weekly-day-${targetDateStr}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+      }, 180);
+      return;
+    }
+    if (act.category === "레시피" && detailStr && actionStr !== "삭제") {
+      const matchedRecipe = recipes.find((r) => String(r.title || "").trim() === detailStr.trim());
+      if (matchedRecipe) {
+        setRecipeSearch(matchedRecipe.title);
+      }
+      return;
+    }
+    if (act.category === "냉장고" && detailStr && !detailStr.includes("냉장고 이동")) {
+      const candidateName = detailStr.split("→")[0].split("(")[0].trim();
+      if (candidateName && fridge.some((f) => String(f.name || "").includes(candidateName))) {
+        setFridgeSearch(candidateName);
+      }
+      return;
+    }
+    if (act.category === "살림수첩") {
+      if (detailStr.includes("[상비약]")) setHouseSubTab("medicine");
+      else if (detailStr.includes("[보증]") || detailStr.includes("[가전]")) setHouseSubTab("warranty");
+      else if (detailStr.includes("[수납]")) setHouseSubTab("storage");
+      return;
+    }
+    if (act.category === "노트" && detailStr && actionStr !== "삭제") {
+      const titleCandidate = detailStr.split(" (")[0].trim();
+      const matchedPage = familyPages.find((p) => String(p.title || "").trim() === titleCandidate);
+      if (matchedPage) {
+        setSelectedPageId(matchedPage.id);
       }
     }
   };
@@ -5985,7 +6090,7 @@ function MainApp() {
         await setDoc(getDocRef("family_baby_growth_v7", id), payload);
       }
       setBabyGrowthLogs((prev) => [payload, ...prev.filter((x) => x.id !== id)]);
-      recordActivity("육아", "성장기록", `${selectedChildId} · ${targetDate}`);
+      recordActivity("육아", "성장기록", `${selectedChildId} · ${targetDate}`, { targetSubTab: "growth", targetChildId: selectedChildId });
       showToast(`${selectedChildId} 성장 기록이 저장되었습니다!`);
     } catch (e) {
       showToast("⚠️ 성장 기록 서버 저장 실패: 네트워크를 확인해 주세요.");
@@ -32524,7 +32629,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
               </span>
               <div className="min-w-0">
                 <div className="text-[12.5px] font-black text-stone-900 truncate">
-                  [{liveActivityPopup.actor}] {liveActivityPopup.category} {liveActivityPopup.action}
+                  [{liveActivityPopup.actor === "아리나" ? "아리" : liveActivityPopup.actor}] {liveActivityPopup.category} {liveActivityPopup.action}
                 </div>
                 {liveActivityPopup.detail && (
                   <div className="text-[12.5px] text-stone-700 truncate">{liveActivityPopup.detail}</div>
@@ -32555,9 +32660,9 @@ ${item.memo}` : `${item.title} 다녀옴!`,
             <button
               type="button"
               onClick={() => handleNavigateFromActivity(liveActivityPopup)}
-              className="px-2.5 py-1 rounded-lg bg-[#5E7A65] text-white text-[11.5px] font-extrabold whitespace-nowrap"
+              className="px-2.5 py-1 rounded-lg bg-[#3F624D] hover:bg-[#324F3E] text-white text-[11.5px] font-semibold whitespace-nowrap"
             >
-              바로 보기
+              {getActivityDestinationLabel(liveActivityPopup)} 보기
             </button>
             <button
               type="button"
@@ -33552,7 +33657,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                       }
                     }
                     setBabyGrowthLogs((prev) => [gPayload, ...prev]);
-                    recordActivity("육아", "성장기록", `${gChild} · ${gDate}`);
+                    recordActivity("육아", "성장기록", `${gChild} · ${gDate}`, { targetSubTab: "growth", targetChildId: gChild });
                     const gLine = `📏 성장(${gDate}): ${[
                       h ? `키 ${h}cm` : "",
                       w ? `몸무게 ${w}kg` : "",
@@ -33944,18 +34049,30 @@ ${item.memo}` : `${item.title} 다녀옴!`,
           </div>
         );
       })()}
-      {isActivityModalOpen && (
+      {isActivityModalOpen && (() => {
+        const allCats = ["전체", ...Object.keys(ACTIVITY_CAT_TAB_MAP).filter((c) => c === "식단" || c === "냉장고" || c === "일정" || c === "할일" || c === "루틴" || c === "육아" || c === "장보기" || c === "공지" || c === "레시피" || visibleRecentActivities.some((a) => a.category === c))];
+        const catCounts = visibleRecentActivities.reduce((acc, a) => {
+          acc[a.category] = (acc[a.category] || 0) + 1;
+          return acc;
+        }, {});
+        const filteredActivities = visibleRecentActivities.filter(
+          (a) =>
+            (activityFilter === "전체" || a.category === activityFilter) &&
+            (activityActorFilter === "전체" || (a.actor === "아리나" ? "아리" : a.actor) === activityActorFilter)
+        );
+        const actors = Array.from(new Set(visibleRecentActivities.map((a) => (a.actor === "아리나" ? "아리" : a.actor)).filter(Boolean)));
+        return (
         <div
           className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
           onClick={() => setIsActivityModalOpen(false)}
         >
           <div
-            className="bg-white rounded-3xl max-w-md w-full p-5 space-y-3 max-h-[85vh] flex flex-col shadow-xl"
+            className="bg-white rounded-3xl max-w-md w-full p-4 space-y-2.5 max-h-[85vh] flex flex-col shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between gap-2 shrink-0">
-              <h3 className="text-[15px] font-black text-stone-900 flex items-center gap-1.5 whitespace-nowrap shrink-0">
-                <Bell className="w-4 h-4 text-sky-600 shrink-0" />
+              <h3 className="text-[14.5px] font-bold text-stone-900 flex items-center gap-1.5 whitespace-nowrap shrink-0">
+                <Bell className="w-4 h-4 text-[#3F624D] shrink-0" />
                 수정 알림 ({visibleRecentActivities.length})
               </h3>
               <div className="flex items-center gap-1 shrink-0">
@@ -33970,13 +34087,13 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                     }
                     showToast(nextVal ? "🔔 새 수정 알림 팝업이 켜졌습니다." : "🔕 새 수정 알림 팝업이 꺼졌습니다.");
                   }}
-                  className={`px-2 py-1 rounded-lg text-[11px] font-extrabold border whitespace-nowrap shrink-0 ${
+                  className={`h-7 px-2 rounded-lg text-[11px] font-semibold border whitespace-nowrap shrink-0 ${
                     activityPopupEnabled
                       ? "bg-[#EEF3EE] text-[#35503C] border-[#C9D8CC]"
-                      : "bg-stone-100 text-stone-500 border-stone-200"
+                      : "bg-stone-100 text-stone-600 border-stone-200"
                   }`}
                 >
-                  {activityPopupEnabled ? "🔔 팝업ON" : "🔕 팝업OFF"}
+                  {activityPopupEnabled ? "🔔 팝업 ON" : "🔕 팝업 OFF"}
                 </button>
                 {isAdminUnlocked && recentActivities.length > 0 && (
                   <button
@@ -33989,160 +34106,153 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                       }
                       showToast("최근 수정 알림 내역을 비웠습니다.");
                     }}
-                    className="px-2 py-1 rounded-lg bg-stone-100 hover:bg-rose-50 text-stone-600 hover:text-rose-700 text-[11px] font-bold whitespace-nowrap shrink-0"
+                    className="h-7 px-2 rounded-lg bg-stone-100 hover:bg-rose-50 text-stone-600 hover:text-rose-700 text-[11px] font-semibold whitespace-nowrap shrink-0"
                   >
                     비우기
                   </button>
                 )}
-                <button type="button" onClick={() => setIsActivityModalOpen(false)} className="p-0.5 shrink-0">
-                  <X className="w-5 h-5 text-stone-400" />
+                <button type="button" onClick={() => setIsActivityModalOpen(false)} className="w-7 h-7 rounded-full hover:bg-stone-100 flex items-center justify-center shrink-0" aria-label="알림 닫기">
+                  <X className="w-4 h-4 text-stone-500" />
                 </button>
               </div>
             </div>
 
-
-            <div className="flex items-center gap-1 overflow-x-auto py-0.5 shrink-0">
-              {["전체", "식단", "냉장고", "일정", "할일", "루틴", "육아", "장보기", "공지", "레시피"].map((cat) => (
-                <button
-                  key={cat}
-                  type="button"
-                  onClick={() => setActivityFilter(cat)}
-                  className={`px-2.5 py-1 rounded-full text-[11.5px] font-extrabold border whitespace-nowrap shrink-0 ${
-                    activityFilter === cat
-                      ? "bg-stone-900 text-white border-stone-900"
-                      : "bg-stone-50 text-stone-600 border-stone-200"
-                  }`}
-                >
-                  {cat}
-                </button>
-              ))}
+            <div className="flex items-center gap-1 overflow-x-auto no-scrollbar py-0.5 shrink-0">
+              {allCats.map((cat) => {
+                const cnt = cat === "전체" ? visibleRecentActivities.length : (catCounts[cat] || 0);
+                return (
+                  <button
+                    key={cat}
+                    type="button"
+                    onClick={() => setActivityFilter(cat)}
+                    className={`h-7 px-2.5 rounded-full text-[11px] font-semibold border whitespace-nowrap shrink-0 transition ${
+                      activityFilter === cat
+                        ? "bg-[#3F624D] text-white border-[#3F624D]"
+                        : "bg-stone-50 text-stone-600 border-stone-200 hover:bg-stone-100"
+                    }`}
+                  >
+                    {cat}{cnt > 0 && cat !== "전체" ? ` ${cnt}` : ""}
+                  </button>
+                );
+              })}
             </div>
 
-
-            {(() => {
-              const actors = Array.from(new Set(visibleRecentActivities.map((a) => (a.actor === "아리나" ? "아리" : a.actor)).filter(Boolean)));
-              if (actors.length <= 1) return null;
-              return (
-                <div className="flex items-center gap-1 overflow-x-auto py-0.5 shrink-0">
-                  <span className="text-[11.5px] font-extrabold text-stone-400 shrink-0 mr-0.5 whitespace-nowrap">수정자:</span>
-                  {["전체", ...actors].map((ac) => (
-                    <button
-                      key={ac}
-                      type="button"
-                      onClick={() => setActivityActorFilter(ac)}
-                      className={`px-2 py-0.5 rounded-full text-[11.5px] font-extrabold border whitespace-nowrap shrink-0 ${
-                        activityActorFilter === ac
-                          ? "bg-sky-700 text-white border-sky-700"
-                          : "bg-white text-stone-600 border-stone-200"
-                      }`}
-                    >
-                      {ac}
-                    </button>
-                  ))}
-                </div>
-              );
-            })()}
-
+            {actors.length > 1 && (
+              <div className="flex items-center gap-1 overflow-x-auto no-scrollbar shrink-0">
+                <span className="text-[11px] font-semibold text-stone-500 shrink-0 mr-0.5 whitespace-nowrap">수정자</span>
+                {["전체", ...actors].map((ac) => (
+                  <button
+                    key={ac}
+                    type="button"
+                    onClick={() => setActivityActorFilter(ac)}
+                    className={`h-6 px-2 rounded-full text-[11px] font-semibold border whitespace-nowrap shrink-0 transition ${
+                      activityActorFilter === ac
+                        ? "bg-stone-800 text-white border-stone-800"
+                        : "bg-white text-stone-600 border-stone-200 hover:bg-stone-50"
+                    }`}
+                  >
+                    {ac}
+                  </button>
+                ))}
+              </div>
+            )}
 
             <div className="flex-1 overflow-y-auto space-y-1.5 pr-0.5">
-              {visibleRecentActivities.filter(
-                (a) =>
-                  (activityFilter === "전체" || a.category === activityFilter) &&
-                  (activityActorFilter === "전체" || (a.actor === "아리나" ? "아리" : a.actor) === activityActorFilter)
-              ).length === 0 ? (
-                <div className="py-10 text-center text-[13.5px] font-bold text-stone-400">
-                  기록된 수정 내역이 없습니다.
+              {filteredActivities.length === 0 ? (
+                <div className="py-10 text-center space-y-2">
+                  <div className="text-[12.5px] font-medium text-stone-500">
+                    조건에 맞는 수정 내역이 없습니다.
+                  </div>
+                  {(activityFilter !== "전체" || activityActorFilter !== "전체") && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActivityFilter("전체");
+                        setActivityActorFilter("전체");
+                      }}
+                      className="h-7 px-3 rounded-lg bg-[#EEF3EE] text-[#35503C] text-[11.5px] font-semibold whitespace-nowrap"
+                    >
+                      전체 보기
+                    </button>
+                  )}
                 </div>
               ) : (
-                visibleRecentActivities
-                  .filter(
-                    (a) =>
-                      (activityFilter === "전체" || a.category === activityFilter) &&
-                      (activityActorFilter === "전체" || (a.actor === "아리나" ? "아리" : a.actor) === activityActorFilter)
-                  )
-                  .map((act) => (
+                filteredActivities.map((act) => {
+                  const targetT = ACTIVITY_CAT_TAB_MAP[act.category];
+                  const canJump = Boolean(targetT && canViewTab(targetT));
+                  const destLabel = getActivityDestinationLabel(act);
+                  const shortTime = act.atMs
+                    ? new Date(act.atMs).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit", hour12: false })
+                    : "";
+                  return (
                     <div
                       key={act.id}
-                      onClick={() => handleNavigateFromActivity(act)}
-                      className="p-2.5 rounded-2xl bg-stone-50 hover:bg-stone-100 border border-stone-200 flex items-start justify-between gap-2 cursor-pointer transition"
+                      onClick={() => canJump && handleNavigateFromActivity(act)}
+                      className={`p-2.5 rounded-xl bg-stone-50 border border-stone-200/90 space-y-1 transition ${
+                        canJump ? "hover:bg-stone-100/90 cursor-pointer" : ""
+                      }`}
                     >
-                      <div className="min-w-0 space-y-0.5">
-                        <div className="flex items-center gap-1.5 flex-wrap">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-1.5 min-w-0">
                           <span
-                            className={`px-1.5 py-0.5 rounded-md text-[11.5px] font-black whitespace-nowrap ${
+                            className={`px-1.5 py-0.5 rounded text-[10.5px] font-bold whitespace-nowrap shrink-0 ${
                               act.role === "admin"
-                                ? "bg-emerald-100 text-emerald-800"
-                                : "bg-sky-100 text-sky-800"
+                                ? "bg-[#EEF3EE] text-[#35503C]"
+                                : "bg-sky-50 text-sky-800"
                             }`}
                           >
                             {act.actor === "아리나" ? "아리" : act.actor}
                           </span>
-                          <span className="text-[12.5px] font-black text-stone-800">
+                          <span className="text-[12.5px] font-bold text-stone-900 truncate">
                             {act.category} {act.action}
                           </span>
                         </div>
-                        {act.detail && (
-                          <div className="text-[12.5px] text-stone-700 font-semibold break-keep">{act.detail}</div>
-                        )}
-                        {(act.beforeText || act.afterText) && (
-                          <div className="mt-1 space-y-0.5 text-[11.5px] rounded-xl bg-white border border-stone-200 p-1.5">
-                            {act.beforeText && (
-                              <div className="text-rose-700 bg-rose-50/70 px-1.5 py-0.5 rounded break-keep">
-                                <span className="font-black mr-1">변경 전:</span>{act.beforeText}
-                              </div>
-                            )}
-                            {act.afterText && (
-                              <div className="text-emerald-800 bg-emerald-50/70 px-1.5 py-0.5 rounded break-keep">
-                                <span className="font-black mr-1">변경 후:</span>{act.afterText}
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                      <div className="flex flex-col items-end gap-1 shrink-0">
-                        <span className="text-[11.5px] font-bold text-stone-500 whitespace-nowrap">
-                          {formatActivityTime(act.atMs)}
+                        <span className="text-[11px] font-medium text-stone-500 whitespace-nowrap shrink-0">
+                          {formatActivityTime(act.atMs)}{shortTime && !formatActivityTime(act.atMs).includes(shortTime) ? ` · ${shortTime}` : ""}
                         </span>
-                        {act.atMs && (
-                          <span className="text-[10.5px] text-stone-400 whitespace-nowrap">
-                            {new Date(act.atMs).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false })}
-                          </span>
-                        )}
-                        {(() => {
-                          const catTabMap = {
-                            "식단": "daily",
-                            "냉장고": "fridge",
-                            "일정": "schedule",
-                            "할일": "schedule",
-                            "루틴": "schedule",
-                            "육아": "baby",
-                            "장보기": "shopping",
-                            "공지": "notices",
-                            "레시피": "recipes"
-                          };
-                          const targetT = catTabMap[act.category];
-                          if (!targetT || !canViewTab(targetT)) return null;
-                          return (
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleNavigateFromActivity(act);
-                              }}
-                              className="px-1.5 py-0.5 rounded bg-white border border-stone-200 text-[10.5px] font-extrabold text-sky-700 hover:bg-sky-50 whitespace-nowrap"
-                            >
-                              이동 →
-                            </button>
-                          );
-                        })()}
                       </div>
+
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="text-[12px] text-stone-700 font-medium break-keep min-w-0 flex-1">
+                          {act.detail || "세부 내용 없음"}
+                        </div>
+                        {canJump && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleNavigateFromActivity(act);
+                            }}
+                            className="h-6 px-2 rounded-md bg-white border border-stone-200 hover:border-[#3F624D]/50 text-[10.5px] font-semibold text-[#35503C] hover:bg-[#EEF3EE] whitespace-nowrap shrink-0 transition"
+                          >
+                            {destLabel} →
+                          </button>
+                        )}
+                      </div>
+
+                      {(act.beforeText || act.afterText) && (
+                        <div className="pt-0.5 space-y-0.5 text-[11px] rounded-lg bg-white border border-stone-200 p-1.5">
+                          {act.beforeText && (
+                            <div className="text-rose-700 bg-rose-50/70 px-1.5 py-0.5 rounded break-keep">
+                              <span className="font-bold mr-1">전:</span>{act.beforeText}
+                            </div>
+                          )}
+                          {act.afterText && (
+                            <div className="text-[#35503C] bg-[#EEF3EE]/70 px-1.5 py-0.5 rounded break-keep">
+                              <span className="font-bold mr-1">후:</span>{act.afterText}
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
-                  ))
+                  );
+                })
               )}
             </div>
           </div>
         </div>
-      )}
+        );
+      })()}
 
 
       {isEditorUnlockModalOpen && (
