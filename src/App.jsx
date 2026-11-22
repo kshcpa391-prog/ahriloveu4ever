@@ -497,7 +497,7 @@ const PrivateCalFormModal = React.memo(({
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 py-2.5 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-[13px] font-extrabold"
+              className="flex-1 py-2.5 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-[13px] font-extrabold whitespace-nowrap"
             >
               취소
             </button>
@@ -906,14 +906,14 @@ const NoticeFormModal = React.memo(({
           <button
             type="button"
             onClick={onClose}
-            className="flex-1 py-2.5 rounded-xl bg-stone-100 text-stone-600 text-[13.5px] font-extrabold"
+            className="flex-1 py-2.5 rounded-xl bg-stone-100 text-stone-600 text-[13.5px] font-extrabold whitespace-nowrap"
           >
             취소
           </button>
           <button
             type="button"
             onClick={() => onSubmitForm(draft)}
-            className="flex-1 py-2.5 rounded-xl bg-stone-900 text-white text-[13.5px] font-extrabold"
+            className="flex-1 py-2.5 rounded-xl bg-stone-900 text-white text-[13.5px] font-extrabold whitespace-nowrap"
           >
             {isEditing ? "수정 저장" : "등록하기"}
           </button>
@@ -1635,11 +1635,13 @@ function MainApp() {
   });
   const homeDragRef = useRef(null);
   const homeDragOverRef = useRef("");
+  const homeLayoutLocalWriteAtRef = useRef(0);
   const [homeDragOverKey, setHomeDragOverKey] = useState("");
 
 
   const syncHomeSettingsToCloud = async (nextLayout, nextRanges, nextRoutineRanges = null, nextSlotDefs = null) => {
     if (!user || !db || !isEditorUnlocked) return;
+    homeLayoutLocalWriteAtRef.current = Date.now();
     try {
       await setDoc(
         getDocRef("family_meta_v4", "home_layout"),
@@ -1677,9 +1679,16 @@ function MainApp() {
         : [];
       const savedBlocks = mappedBlocks.filter((b, i) => def.blocks.includes(b) && mappedBlocks.indexOf(b) === i);
       const savedMenus = Array.isArray(cur.menuOrder) ? cur.menuOrder.filter((m) => DEFAULT_HOME_MENU_ORDER.includes(m)) : [];
+      const rawHiddenBlocks = Array.isArray(cur.hiddenBlocks) ? cur.hiddenBlocks : [];
+      const migratedHiddenBlocks = Array.from(
+        new Set([
+          ...rawHiddenBlocks.filter((b) => b !== "routine" && b !== "schedule_todo"),
+          ...(rawHiddenBlocks.includes("routine") && rawHiddenBlocks.includes("schedule_todo") ? ["action_feed"] : [])
+        ])
+      );
       normalized[mode] = {
         blocks: [...savedBlocks, ...def.blocks.filter((b) => !savedBlocks.includes(b))],
-        hiddenBlocks: Array.isArray(cur.hiddenBlocks) ? cur.hiddenBlocks : [],
+        hiddenBlocks: migratedHiddenBlocks,
         menuOrder: [...savedMenus, ...DEFAULT_HOME_MENU_ORDER.filter((m) => !savedMenus.includes(m))],
         hiddenMenus: Array.isArray(cur.hiddenMenus) ? cur.hiddenMenus : [],
         blockSizes:
@@ -4857,9 +4866,12 @@ function MainApp() {
           if (!snap.exists()) return;
           const d = snap.data();
           if (d?.layout) {
-            const norm = normalizeHomeLayout(d.layout);
-            setHomeLayoutConfig(norm);
-            try { localStorage.setItem("kim_home_layout_v1", JSON.stringify(norm)); } catch (e) {}
+            const isRecentLocalWrite = Date.now() - homeLayoutLocalWriteAtRef.current < 1500;
+            if (!isRecentLocalWrite || snap.metadata?.hasPendingWrites) {
+              const norm = normalizeHomeLayout(d.layout);
+              setHomeLayoutConfig(norm);
+              try { localStorage.setItem("kim_home_layout_v1", JSON.stringify(norm)); } catch (e) {}
+            }
           }
           if (d?.timeRanges && typeof d.timeRanges.morningStart === "number") {
             setHomeTimeRanges(d.timeRanges);
@@ -14256,7 +14268,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
             {!hdrHidden.includes("weather") && (
             <div
               onClick={() => weatherInfo && setIsWeatherModalOpen(true)}
-              className={`mt-1.5 flex items-center justify-between gap-1.5 border rounded-xl px-2.5 py-1.5 cursor-pointer transition ${
+              className={`mt-1 flex items-center justify-between gap-1.5 border rounded-xl px-2.5 py-1 cursor-pointer transition ${
                 weatherInfo?.dust?.label && weatherInfo.dust.label.includes("나쁨")
                   ? "bg-rose-50 hover:bg-rose-100/70 border-rose-200 text-rose-900"
                   : weatherInfo?.hasUpcomingRain
@@ -14268,36 +14280,34 @@ ${item.memo}` : `${item.title} 다녀옴!`,
               <div className="min-w-0 flex-1 space-y-0.5">
                 {weatherInfo ? (
                   <>
-                    <div className="text-[12.5px] font-bold text-stone-900 leading-snug break-keep">
+                    <div className="text-[11.5px] font-bold text-stone-900 leading-tight break-keep">
                       {weatherInfo.emoji} {weatherInfo.temp}°C{" "}
-                      <span className="text-[11px] font-medium text-stone-600">({weatherInfo.min}°/{weatherInfo.max}°)</span> ·{" "}
-                      <span className={`text-[11.5px] font-semibold ${weatherInfo.hasUpcomingRain ? "text-amber-800" : "text-stone-700"}`}>
+                      <span className="text-[10.5px] font-medium text-stone-600">({weatherInfo.min}°/{weatherInfo.max}°)</span> ·{" "}
+                      <span className={`text-[10.5px] font-semibold ${weatherInfo.hasUpcomingRain ? "text-amber-800" : "text-stone-700"}`}>
                         {weatherInfo.rainBarText || "☔ 0%"}
                       </span>
-                      {isWeatherLoading && <span className="ml-1 text-[10.5px] text-stone-500">갱신 중</span>}
+                      {isWeatherLoading && <span className="ml-1 text-[10px] text-stone-500">갱신 중</span>}
                     </div>
-                    <div className="text-[11px] font-medium text-stone-600 leading-snug">
+                    <div className="text-[10.5px] font-medium text-stone-600 leading-tight">
                       미세 {weatherInfo.pm10}({weatherInfo.dust?.label || "-"}) · 초미세 {weatherInfo.pm25}
                       {weatherError && <span className="ml-1 text-rose-700 font-semibold">· 재시도 필요</span>}
                     </div>
                   </>
                 ) : weatherError ? (
-                  <span className="text-[11.5px] font-semibold text-rose-700">⚠️ 날씨 불러오기 실패 · 우측 버튼으로 재시도</span>
+                  <span className="text-[11px] font-semibold text-rose-700">⚠️ 날씨 불러오기 실패 · 우측 버튼으로 재시도</span>
                 ) : (
-                  <span className="text-[11.5px] font-medium text-stone-700">
-                    {isWeatherLoading ? "서울 중구 날씨 불러오는 중..." : "서울 중구 날씨 불러오는 중..."}
-                  </span>
+                  <span className="text-[11px] font-medium text-stone-700">서울 중구 날씨 불러오는 중...</span>
                 )}
               </div>
               <div className="flex items-center gap-1 shrink-0">
-                <span className="text-[11px] font-semibold text-stone-600 whitespace-nowrap">상세</span>
+                <span className="text-[10.5px] font-semibold text-stone-600 whitespace-nowrap">상세</span>
                 <button
                   type="button"
                   onClick={(e) => {
                     e.stopPropagation();
                     fetchSeoulJungGuWeather();
                   }}
-                  className="w-8 h-8 rounded-lg bg-white border border-stone-200 text-[12.5px] font-bold text-stone-700 hover:bg-stone-100 flex items-center justify-center shrink-0"
+                  className="w-7 h-7 rounded-lg bg-white border border-stone-200 text-[11.5px] font-bold text-stone-700 hover:bg-stone-100 flex items-center justify-center shrink-0"
                   aria-label="날씨 새로고침"
                 >
                   ↻
@@ -14310,17 +14320,22 @@ ${item.memo}` : `${item.title} 다녀옴!`,
             {accessRole !== "guest" && pinnedNotices.length > 0 && canViewTab("notices") && (
               <div
                 onClick={() => setActiveTab("notices")}
-                className="mt-2 bg-white hover:bg-stone-50 border border-stone-200 rounded-xl px-3 py-2 cursor-pointer flex items-start justify-between gap-2 transition"
+                className="mt-1.5 bg-white hover:bg-stone-50 border border-stone-200 rounded-xl px-2.5 py-1.5 cursor-pointer flex items-center justify-between gap-2 transition"
               >
-                <div className="flex items-start gap-1.5 min-w-0">
-                  <Pin className="w-3.5 h-3.5 text-stone-500 shrink-0 mt-0.5" />
-                  <div className="text-[13.5px] leading-snug break-keep">
-                    <span className="font-extrabold text-stone-900 mr-1">[가족공지]</span>
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <Pin className="w-3 h-3 text-stone-500 shrink-0" />
+                  <div className="text-[11.5px] leading-tight truncate">
+                    <span className="font-extrabold text-stone-900 mr-1">[공지]</span>
                     <span className="font-semibold text-stone-700">{pinnedNotices[0].title}</span>
                   </div>
+                  {pinnedNotices.length > 1 && (
+                    <span className="px-1.5 py-0.5 rounded-full bg-stone-100 text-stone-600 text-[10px] font-bold whitespace-nowrap shrink-0">
+                      +{pinnedNotices.length - 1}
+                    </span>
+                  )}
                 </div>
-                <span className="text-[11.5px] font-bold text-stone-500 shrink-0 mt-0.5">
-                  전체보기 &gt;
+                <span className="text-[10.5px] font-bold text-stone-500 shrink-0 whitespace-nowrap">
+                  전체 &gt;
                 </span>
               </div>
             )}
@@ -14596,16 +14611,39 @@ ${item.memo}` : `${item.title} 다녀옴!`,
 
 
         const saveHomeLayout = (updater) => {
-          setHomeLayoutConfig((prev) => {
-            const base = prev?.[activeHomeTimeMode] || DEFAULT_HOME_LAYOUT[activeHomeTimeMode];
-            const nextMode = updater(base);
-            const nextAll = { ...prev, [activeHomeTimeMode]: nextMode };
-            try {
-              localStorage.setItem("kim_home_layout_v1", JSON.stringify(nextAll));
-            } catch (e) {}
-            syncHomeSettingsToCloud(nextAll, null);
-            return nextAll;
+          const prevAll = homeLayoutConfig || DEFAULT_HOME_LAYOUT;
+          const base = prevAll?.[activeHomeTimeMode] || DEFAULT_HOME_LAYOUT[activeHomeTimeMode];
+          const nextMode = updater(base);
+          const nextAll = normalizeHomeLayout({ ...prevAll, [activeHomeTimeMode]: nextMode });
+          homeLayoutLocalWriteAtRef.current = Date.now();
+          setHomeLayoutConfig(nextAll);
+          try {
+            localStorage.setItem("kim_home_layout_v1", JSON.stringify(nextAll));
+          } catch (e) {}
+          syncHomeSettingsToCloud(nextAll, null);
+        };
+
+        const applyCurrentHomeLayoutToAllModes = () => {
+          const curCopy = {
+            blocks: [...blockOrder],
+            hiddenBlocks: [...hiddenBlocks],
+            menuOrder: [...menuOrder],
+            hiddenMenus: [...hiddenMenus],
+            blockSizes: { ...blockSizes },
+            menuSizes: { ...menuSizes }
+          };
+          const nextAll = normalizeHomeLayout({
+            morning: { ...curCopy },
+            afternoon: { ...curCopy },
+            night: { ...curCopy }
           });
+          homeLayoutLocalWriteAtRef.current = Date.now();
+          setHomeLayoutConfig(nextAll);
+          try {
+            localStorage.setItem("kim_home_layout_v1", JSON.stringify(nextAll));
+          } catch (e) {}
+          syncHomeSettingsToCloud(nextAll, null);
+          showToast("현재 홈 구성을 오전·오후·밤 전체에 적용했습니다!");
         };
 
 
@@ -14619,7 +14657,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
 
 
         const BLOCK_LABELS = {
-          action_feed: "⚡ 오늘의 행동 피드 (일정·루틴·할일)",
+          action_feed: "⚡ 오늘의 행동 피드",
           menu_grid: "🧭 핵심 메뉴 바로가기"
         };
 
@@ -15364,6 +15402,25 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                       <span className="text-[12px] font-bold text-[#3F624D]">{globalTodoBadgeStats.activeCount}건</span>
                     </h2>
                     <div className="flex items-center gap-1 shrink-0">
+                      {previewTodos.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            const allOpenTodos = schedules
+                              .filter((s) => s.category === "할일(To-Do)" && !s.done)
+                              .sort((a, b) => String(a.date || "9999-99-99").localeCompare(String(b.date || "9999-99-99")));
+                            const lines = [
+                              `✅ 남은 할 일 (${allOpenTodos.length}건)`,
+                              ...allOpenTodos.map((t) => `• ${t.date ? `[${String(t.date).slice(5)}] ` : ""}${t.title}`)
+                            ];
+                            await copyTextSafe(lines.join("\n"), `📋 남은 할 일 ${allOpenTodos.length}건을 복사했습니다!`);
+                          }}
+                          className="h-7 px-2 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 text-[11px] font-semibold whitespace-nowrap"
+                          title="남은 할 일 전체 복사"
+                        >
+                          복사
+                        </button>
+                      )}
                       <button
                         type="button"
                         onClick={() => {
@@ -15514,33 +15571,39 @@ ${item.memo}` : `${item.title} 다녀옴!`,
               ...(extraIds.length > 0 ? [{ id: "etc", label: "기타", items: extraIds }] : [])
             ].filter((g) => g.items.length > 0);
 
+            const menuGridSize = blockSizes.menu_grid || "normal";
+            const gridPadCls = menuGridSize === "compact" ? "p-2 min-h-[48px]" : menuGridSize === "large" ? "p-3 min-h-[68px]" : "p-2.5 min-h-[56px]";
+            const gridTitleCls = menuGridSize === "compact" ? "text-[11.5px]" : menuGridSize === "large" ? "text-[13px]" : "text-[12px]";
+            const gridSubCls = menuGridSize === "compact" ? "text-[10px]" : menuGridSize === "large" ? "text-[11.5px]" : "text-[10.5px]";
+
             return (
-              <div key="menu_grid" className="space-y-3.5 pt-0.5">
+              <div key="menu_grid" className={menuGridSize === "compact" ? "space-y-2.5 pt-0.5" : "space-y-3 pt-0.5"}>
                 {groupedSections.map((group) => (
-                  <div key={group.id} className="space-y-1.5">
-                    <h3 className="text-[11.5px] font-bold text-stone-600 px-0.5">{group.label}</h3>
-                    <div className="grid grid-cols-2 gap-2">
+                  <div key={group.id} className="space-y-1">
+                    <h3 className="text-[11px] font-bold text-stone-600 px-0.5">{group.label}</h3>
+                    <div className={menuGridSize === "compact" ? "grid grid-cols-2 gap-1.5" : "grid grid-cols-2 gap-2"}>
                       {group.items.map((id) => {
                         const item = MENU_DEFS[id];
                         const mSize = menuSizes[id] || "half";
                         const spanCls = mSize === "tall" || mSize === "full" ? "col-span-2" : "";
+                        const tallCls = mSize === "tall" ? "min-h-[76px] p-3" : gridPadCls;
                         const cleanAction = item.actionLabel === "열기 >" ? "" : item.actionLabel.replace(" >", "");
                         return (
                           <button
                             key={id}
                             type="button"
                             onClick={item.onClick}
-                            className={`bg-white border border-stone-200/90 hover:border-[#3F624D]/50 rounded-xl p-2.5 min-h-[58px] ${spanCls} text-left shadow-sm flex flex-col justify-between gap-1 transition active:scale-[0.99]`}
+                            className={`bg-white border border-stone-200/90 hover:border-[#3F624D]/50 rounded-xl ${tallCls} ${spanCls} text-left shadow-sm flex flex-col justify-between gap-1 transition active:scale-[0.99]`}
                           >
                             <div className="flex items-center justify-between gap-1">
-                              <span className="text-[12.5px] font-semibold text-stone-900 leading-snug break-keep">{item.title}</span>
+                              <span className={`${gridTitleCls} font-semibold text-stone-900 leading-snug break-keep`}>{item.title}</span>
                               {cleanAction ? (
-                                <span className={`text-[10.5px] font-semibold shrink-0 whitespace-nowrap ${item.actionColor}`}>{cleanAction}</span>
+                                <span className={`text-[10px] font-semibold shrink-0 whitespace-nowrap ${item.actionColor}`}>{cleanAction}</span>
                               ) : (
                                 <ChevronRight className="w-3.5 h-3.5 text-stone-400 shrink-0" />
                               )}
                             </div>
-                            <div className="text-[11px] font-medium text-stone-600 leading-snug break-keep">{item.sub}</div>
+                            <div className={`${gridSubCls} font-medium text-stone-600 leading-snug break-keep`}>{item.sub}</div>
                           </button>
                         );
                       })}
@@ -15555,9 +15618,9 @@ ${item.memo}` : `${item.title} 다녀옴!`,
 
 
         return (
-          <div className={`px-3 pt-2 pb-28 space-y-3 rounded-b-3xl ${modeMeta.bgClass}`}>
+          <div className={`px-3 pt-1.5 pb-28 space-y-2.5 rounded-b-3xl ${modeMeta.bgClass}`}>
             {/* 시간대 적응형 모드 전환 & 오늘 브리핑 복사 */}
-            <div className="flex items-center justify-between gap-1.5">
+            <div className="flex items-center justify-between gap-1">
               <div className="flex items-center gap-1 overflow-x-auto no-scrollbar">
                 {[
                   { id: "auto", label: `자동(${modeMeta.label})` },
@@ -15569,7 +15632,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                     key={m.id}
                     type="button"
                     onClick={() => setHomeTimeModeOverride(m.id)}
-                    className={`h-7 px-2.5 rounded-full text-[11px] font-semibold border whitespace-nowrap transition shrink-0 ${
+                    className={`h-6 px-2 rounded-full text-[10.5px] font-semibold border whitespace-nowrap transition shrink-0 ${
                       homeTimeModeOverride === m.id
                         ? "bg-[#3F624D] text-white border-[#3F624D]"
                         : "bg-white text-stone-700 border-stone-200 hover:bg-stone-50"
@@ -15584,46 +15647,45 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                 <button
                   type="button"
                   onClick={handleCopyTodayBriefing}
-                  className="h-7 px-2.5 rounded-full text-[11px] font-semibold border bg-[#EEF3EE] text-[#35503C] border-[#C9D8CC] hover:bg-[#DFE9E0] whitespace-nowrap shrink-0"
+                  className="h-6 px-2 rounded-full text-[10.5px] font-semibold border bg-[#EEF3EE] text-[#35503C] border-[#C9D8CC] hover:bg-[#DFE9E0] whitespace-nowrap shrink-0"
                   title="오늘 날씨·식단·일정·장보기 브리핑 복사"
                 >
-                  브리핑 복사
+                  📋 브리핑
                 </button>
               )}
-
-
               </div>
             </div>
 
 
             {isHomeEditMode && (
               <div
-                className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+                className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-3"
                 onClick={() => setIsHomeEditMode(false)}
               >
                 <div
-                  className="bg-white border border-stone-300 rounded-3xl max-w-md w-full p-4 shadow-2xl max-h-[88vh] flex flex-col gap-3"
+                  className="bg-white border border-stone-300 rounded-3xl max-w-md w-full p-3.5 shadow-2xl max-h-[88vh] flex flex-col gap-2.5"
                   onClick={(e) => e.stopPropagation()}
                 >
-                  <div className="flex items-center justify-between gap-2 pb-2 border-b border-stone-100 shrink-0">
-                    <span className="text-[14.5px] font-black text-stone-900">
-                      🛠️ {modeMeta.label} 홈 화면 구성 편집
+                  <div className="flex items-center justify-between gap-1.5 pb-2 border-b border-stone-100 shrink-0">
+                    <span className="text-[13px] font-black text-stone-900 whitespace-nowrap">
+                      🛠️ {modeMeta.label} 홈 구성 편집
                     </span>
-                    <div className="flex items-center gap-1.5 shrink-0">
+                    <div className="flex items-center gap-1 shrink-0">
                       <button
                         type="button"
                         onClick={() => {
                           saveHomeLayout(() => ({ ...DEFAULT_HOME_LAYOUT[activeHomeTimeMode] }));
                           showToast(`${modeMeta.label} 기본 구성으로 초기화했습니다.`);
                         }}
-                        className="px-2 py-1 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-600 text-[11px] font-extrabold whitespace-nowrap"
+                        className="px-2 py-1 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-600 text-[10.5px] font-extrabold whitespace-nowrap"
                       >
-                        기본값 초기화
+                        초기화
                       </button>
                       <button
                         type="button"
                         onClick={() => setIsHomeEditMode(false)}
                         className="p-1 rounded-full hover:bg-stone-100 text-stone-500"
+                        aria-label="홈 구성 편집 닫기"
                       >
                         <X className="w-4 h-4" />
                       </button>
@@ -15633,8 +15695,8 @@ ${item.memo}` : `${item.title} 다녀옴!`,
 
 
                 <div className="bg-stone-50 border border-stone-200 rounded-xl p-2.5 space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[11.5px] font-extrabold text-stone-600">0) 시간대 기준 시각 설정</span>
+                  <div className="flex items-center justify-between gap-1">
+                    <span className="text-[11px] font-extrabold text-stone-600 whitespace-nowrap">0) 시간대 기준 시각 설정</span>
                     <button
                       type="button"
                       onClick={() => {
@@ -15645,7 +15707,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                         syncHomeSettingsToCloud(null, DEFAULT_HOME_TIME_RANGES);
                         showToast("시간대 기준 시각을 기본값(05/11/20시)으로 되돌렸습니다.");
                       }}
-                      className="text-[11.5px] font-extrabold text-stone-500 underline whitespace-nowrap"
+                      className="text-[11px] font-extrabold text-stone-500 underline whitespace-nowrap"
                     >
                       시각 초기화
                     </button>
@@ -15657,21 +15719,19 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                       { key: "nightStart", label: "🌙 밤 시작" }
                     ].map((f) => (
                       <label key={f.key} className="block">
-                        <span className="text-[11.5px] font-bold text-stone-500 block mb-0.5">{f.label}</span>
+                        <span className="text-[11px] font-bold text-stone-500 block mb-0.5 whitespace-nowrap">{f.label}</span>
                         <select
                           value={homeTimeRanges[f.key]}
                           onChange={(e) => {
                             const val = Number(e.target.value);
-                            setHomeTimeRanges((prev) => {
-                              const next = { ...prev, [f.key]: val };
-                              try {
-                                localStorage.setItem("kim_home_time_ranges_v1", JSON.stringify(next));
-                              } catch (err) {}
-                              syncHomeSettingsToCloud(null, next);
-                              return next;
-                            });
+                            const next = { ...homeTimeRanges, [f.key]: val };
+                            setHomeTimeRanges(next);
+                            try {
+                              localStorage.setItem("kim_home_time_ranges_v1", JSON.stringify(next));
+                            } catch (err) {}
+                            syncHomeSettingsToCloud(null, next);
                           }}
-                          className="w-full px-2 py-1 rounded-lg border border-stone-200 bg-white text-[12.5px] font-black text-stone-800"
+                          className="w-full px-1.5 py-1 rounded-lg border border-stone-200 bg-white text-[12px] font-black text-stone-800"
                         >
                           {Array.from({ length: 24 }, (_, hr) => (
                             <option key={hr} value={hr}>
@@ -15682,13 +15742,13 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                       </label>
                     ))}
                   </div>
-                  <div className="text-[11.5px] font-semibold text-stone-500">
+                  <div className="text-[10.5px] font-semibold text-stone-500">
                     현재 적용: 오전 {String(homeTimeRanges.morningStart).padStart(2, "0")}시 · 오후 {String(homeTimeRanges.afternoonStart).padStart(2, "0")}시 · 밤 {String(homeTimeRanges.nightStart).padStart(2, "0")}시~익일 {String(homeTimeRanges.morningStart).padStart(2, "0")}시
                   </div>
                   {(homeTimeRanges.morningStart === homeTimeRanges.afternoonStart ||
                     homeTimeRanges.afternoonStart === homeTimeRanges.nightStart ||
                     homeTimeRanges.nightStart === homeTimeRanges.morningStart) && (
-                    <div className="text-[11.5px] font-extrabold text-rose-600">
+                    <div className="text-[11px] font-extrabold text-rose-600">
                       ⚠️ 오전·오후·밤 시작 시각은 서로 다르게 설정해 주세요.
                     </div>
                   )}
@@ -15696,7 +15756,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
 
 
                 <div className="space-y-1">
-                  <div className="text-[11.5px] font-extrabold text-stone-500 whitespace-nowrap">1) 주요 영역 순서(⋮⋮ 드래그 / ▲▼) · 크기 · 표시</div>
+                  <div className="text-[11px] font-extrabold text-stone-500 whitespace-nowrap">1) 주요 영역 순서(⋮⋮ 드래그 / ▲▼) · 크기 · 표시</div>
                   {blockOrder.map((bId, idx) => {
                     const isHidden = hiddenBlocks.includes(bId);
                     const bSize = blockSizes[bId] || "normal";
@@ -15707,8 +15767,6 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                       <div
                         key={bId}
                         data-home-block-id={bId}
-                        draggable
-                        onDragStart={() => { homeDragRef.current = { type: "block", id: bId }; }}
                         onDragOver={(e) => {
                           e.preventDefault();
                           if (homeDragRef.current?.type === "block") setHomeDragOverKey(`block:${bId}`);
@@ -15720,15 +15778,17 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                           homeDragRef.current = null;
                           setHomeDragOverKey("");
                           if (src?.type === "block" && src.id !== bId) {
-                            saveHomeLayout((cur) => ({ ...cur, blocks: reorderById(blockOrder, src.id, bId) }));
+                            saveHomeLayout((cur) => ({ ...cur, blocks: reorderById(cur.blocks || blockOrder, src.id, bId) }));
                           }
                         }}
-                        className={`flex items-center justify-between gap-1.5 rounded-xl px-2.5 py-1.5 border transition ${
+                        className={`flex items-center justify-between gap-1 rounded-xl px-2 py-1.5 border transition ${
                           isOver ? "bg-amber-50 border-amber-400 ring-2 ring-amber-200" : "bg-stone-50 border-stone-200"
                         }`}
                       >
-                        <div className="flex items-center gap-1.5 min-w-0">
+                        <div className="flex items-center gap-1 min-w-0">
                           <span
+                            draggable
+                            onDragStart={() => { homeDragRef.current = { type: "block", id: bId }; }}
                             style={{ touchAction: "none" }}
                             onTouchStart={() => {
                               homeDragRef.current = { type: "block", id: bId };
@@ -15753,7 +15813,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                               homeDragOverRef.current = "";
                               setHomeDragOverKey("");
                               if (src?.type === "block" && targetId && src.id !== targetId) {
-                                saveHomeLayout((cur) => ({ ...cur, blocks: reorderById(blockOrder, src.id, targetId) }));
+                                saveHomeLayout((cur) => ({ ...cur, blocks: reorderById(cur.blocks || blockOrder, src.id, targetId) }));
                               }
                             }}
                             onTouchCancel={() => {
@@ -15761,25 +15821,26 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                               homeDragOverRef.current = "";
                               setHomeDragOverKey("");
                             }}
-                            className="px-1 py-0.5 text-stone-400 hover:text-stone-700 cursor-grab select-none text-[13.5px] font-black shrink-0"
+                            className="px-0.5 py-0.5 text-stone-400 hover:text-stone-700 cursor-grab select-none text-[12.5px] font-black shrink-0"
                             title="끌어서 순서 변경"
                           >
                             ⋮⋮
                           </span>
-                          <span className={`text-[12.5px] font-extrabold truncate ${isHidden ? "text-stone-400 line-through" : "text-stone-800"}`}>
+                          <span className={`text-[11.5px] font-extrabold whitespace-nowrap ${isHidden ? "text-stone-400 line-through" : "text-stone-800"}`}>
                             {BLOCK_LABELS[bId]}
                           </span>
                         </div>
-                        <div className="flex items-center gap-1 shrink-0">
+                        <div className="flex items-center gap-0.5 shrink-0">
                           <button
                             type="button"
-                            onClick={() =>
+                            onClick={(e) => {
+                              e.stopPropagation();
                               saveHomeLayout((cur) => ({
                                 ...cur,
                                 blockSizes: { ...(cur.blockSizes || {}), [bId]: nextBlockSize }
-                              }))
-                            }
-                            className="px-1.5 py-0.5 rounded bg-sky-50 border border-sky-200 text-sky-800 text-[11.5px] font-extrabold"
+                              }));
+                            }}
+                            className="px-1.5 py-0.5 rounded bg-sky-50 border border-sky-200 text-sky-800 text-[10.5px] font-extrabold whitespace-nowrap"
                             title="영역 크기 전환"
                           >
                             {bSizeLabel}
@@ -15787,30 +15848,41 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                           <button
                             type="button"
                             disabled={idx === 0}
-                            onClick={() => saveHomeLayout((cur) => ({ ...cur, blocks: moveArrayItem(blockOrder, idx, -1) }))}
-                            className="px-1.5 py-0.5 rounded bg-white border border-stone-200 text-[11.5px] font-black disabled:opacity-30"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              saveHomeLayout((cur) => ({ ...cur, blocks: moveArrayItem(cur.blocks || blockOrder, idx, -1) }));
+                            }}
+                            className="px-1 py-0.5 rounded bg-white border border-stone-200 text-[10.5px] font-black disabled:opacity-30"
                           >
                             ▲
                           </button>
                           <button
                             type="button"
                             disabled={idx === blockOrder.length - 1}
-                            onClick={() => saveHomeLayout((cur) => ({ ...cur, blocks: moveArrayItem(blockOrder, idx, 1) }))}
-                            className="px-1.5 py-0.5 rounded bg-white border border-stone-200 text-[11.5px] font-black disabled:opacity-30"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              saveHomeLayout((cur) => ({ ...cur, blocks: moveArrayItem(cur.blocks || blockOrder, idx, 1) }));
+                            }}
+                            className="px-1 py-0.5 rounded bg-white border border-stone-200 text-[10.5px] font-black disabled:opacity-30"
                           >
                             ▼
                           </button>
                           <button
                             type="button"
-                            onClick={() =>
-                              saveHomeLayout((cur) => ({
-                                ...cur,
-                                hiddenBlocks: isHidden
-                                  ? hiddenBlocks.filter((x) => x !== bId)
-                                  : [...hiddenBlocks, bId]
-                              }))
-                            }
-                            className={`px-2 py-0.5 rounded text-[11.5px] font-extrabold ${
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              saveHomeLayout((cur) => {
+                                const prevHidden = Array.isArray(cur.hiddenBlocks) ? cur.hiddenBlocks : [];
+                                const currentlyHidden = prevHidden.includes(bId);
+                                return {
+                                  ...cur,
+                                  hiddenBlocks: currentlyHidden
+                                    ? prevHidden.filter((x) => x !== bId)
+                                    : Array.from(new Set([...prevHidden, bId]))
+                                };
+                              });
+                            }}
+                            className={`px-1.5 py-0.5 rounded text-[10.5px] font-extrabold whitespace-nowrap ${
                               isHidden ? "bg-stone-200 text-stone-600" : "bg-emerald-100 text-emerald-800"
                             }`}
                           >
@@ -15820,32 +15892,38 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                       </div>
                     );
                   })}
-                  <div className="grid grid-cols-2 gap-1.5 pt-1">
+                  <div className="grid grid-cols-3 gap-1 pt-1">
                     {[
-                      { id: "weather", label: "🌤️ 날씨 배너" },
-                      { id: "siyul_care", label: "👶 시율 케어현황" }
+                      { id: "briefing", label: "📋 브리핑" },
+                      { id: "weather", label: "🌤️ 날씨" },
+                      { id: "siyul_care", label: "👶 시율케어" }
                     ].map((extra) => {
                       const isExHidden = hiddenBlocks.includes(extra.id);
                       return (
                         <button
                           key={extra.id}
                           type="button"
-                          onClick={() =>
-                            saveHomeLayout((cur) => ({
-                              ...cur,
-                              hiddenBlocks: isExHidden
-                                ? (cur.hiddenBlocks || []).filter((x) => x !== extra.id)
-                                : [...(cur.hiddenBlocks || []), extra.id]
-                            }))
-                          }
-                          className={`px-2.5 py-1.5 rounded-xl border text-[12.5px] font-extrabold flex items-center justify-between gap-1 ${
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            saveHomeLayout((cur) => {
+                              const prevHidden = Array.isArray(cur.hiddenBlocks) ? cur.hiddenBlocks : [];
+                              const currentlyHidden = prevHidden.includes(extra.id);
+                              return {
+                                ...cur,
+                                hiddenBlocks: currentlyHidden
+                                  ? prevHidden.filter((x) => x !== extra.id)
+                                  : Array.from(new Set([...prevHidden, extra.id]))
+                              };
+                            });
+                          }}
+                          className={`px-2 py-1.5 rounded-xl border text-[11px] font-extrabold flex items-center justify-between gap-1 whitespace-nowrap ${
                             isExHidden
                               ? "bg-stone-100 border-stone-200 text-stone-400"
                               : "bg-[#EEF3EE] border-[#C9D8CC] text-[#35503C]"
                           }`}
                         >
-                          <span className="truncate">{extra.label}</span>
-                          <span className="shrink-0 text-[11.5px]">{isExHidden ? "숨김" : "표시"}</span>
+                          <span>{extra.label}</span>
+                          <span className="shrink-0 text-[10px]">{isExHidden ? "숨김" : "표시"}</span>
                         </button>
                       );
                     })}
@@ -15854,7 +15932,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
 
 
                 <div className="space-y-1">
-                  <div className="text-[11.5px] font-extrabold text-stone-500 whitespace-nowrap">2) 바로가기 카드 순서(⋮⋮ 드래그 / ▲▼) · 크기 · 표시</div>
+                  <div className="text-[11px] font-extrabold text-stone-500 whitespace-nowrap">2) 바로가기 카드 순서(⋮⋮ 드래그 / ▲▼) · 크기 · 표시</div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-1">
                     {menuOrder.map((mId, idx) => {
                       const def = MENU_DEFS[mId];
@@ -15868,8 +15946,6 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                         <div
                           key={mId}
                           data-home-menu-id={mId}
-                          draggable
-                          onDragStart={() => { homeDragRef.current = { type: "menu", id: mId }; }}
                           onDragOver={(e) => {
                             e.preventDefault();
                             if (homeDragRef.current?.type === "menu") setHomeDragOverKey(`menu:${mId}`);
@@ -15881,7 +15957,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                             homeDragRef.current = null;
                             setHomeDragOverKey("");
                             if (src?.type === "menu" && src.id !== mId) {
-                              saveHomeLayout((cur) => ({ ...cur, menuOrder: reorderById(menuOrder, src.id, mId) }));
+                              saveHomeLayout((cur) => ({ ...cur, menuOrder: reorderById(cur.menuOrder || menuOrder, src.id, mId) }));
                             }
                           }}
                           className={`flex items-center justify-between gap-1 rounded-xl px-2 py-1 border transition ${
@@ -15890,6 +15966,8 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                         >
                           <div className="flex items-center gap-1 min-w-0">
                             <span
+                              draggable
+                              onDragStart={() => { homeDragRef.current = { type: "menu", id: mId }; }}
                               style={{ touchAction: "none" }}
                               onTouchStart={() => {
                                 homeDragRef.current = { type: "menu", id: mId };
@@ -15914,7 +15992,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                                 homeDragOverRef.current = "";
                                 setHomeDragOverKey("");
                                 if (src?.type === "menu" && targetId && src.id !== targetId) {
-                                  saveHomeLayout((cur) => ({ ...cur, menuOrder: reorderById(menuOrder, src.id, targetId) }));
+                                  saveHomeLayout((cur) => ({ ...cur, menuOrder: reorderById(cur.menuOrder || menuOrder, src.id, targetId) }));
                                 }
                               }}
                               onTouchCancel={() => {
@@ -15922,25 +16000,26 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                                 homeDragOverRef.current = "";
                                 setHomeDragOverKey("");
                               }}
-                              className="px-0.5 text-stone-400 hover:text-stone-700 cursor-grab select-none text-[12.5px] font-black shrink-0"
+                              className="px-0.5 text-stone-400 hover:text-stone-700 cursor-grab select-none text-[12px] font-black shrink-0"
                               title="끌어서 순서 변경"
                             >
                               ⋮⋮
                             </span>
-                            <span className={`text-[12.5px] font-extrabold truncate ${isHidden ? "text-stone-400 line-through" : "text-stone-800"}`}>
+                            <span className={`text-[11.5px] font-extrabold whitespace-nowrap ${isHidden ? "text-stone-400 line-through" : "text-stone-800"}`}>
                               {def.title}
                             </span>
                           </div>
                           <div className="flex items-center gap-0.5 shrink-0">
                             <button
                               type="button"
-                              onClick={() =>
+                              onClick={(e) => {
+                                e.stopPropagation();
                                 saveHomeLayout((cur) => ({
                                   ...cur,
                                   menuSizes: { ...(cur.menuSizes || {}), [mId]: nextMenuSize }
-                                }))
-                              }
-                              className="px-1.5 py-0.5 rounded bg-sky-50 border border-sky-200 text-sky-800 text-[10.5px] font-extrabold"
+                                }));
+                              }}
+                              className="px-1.5 py-0.5 rounded bg-sky-50 border border-sky-200 text-sky-800 text-[10.5px] font-extrabold whitespace-nowrap"
                               title="카드 크기 전환 (반폭/전체폭/크게)"
                             >
                               {mSizeLabel}
@@ -15948,7 +16027,10 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                             <button
                               type="button"
                               disabled={idx === 0}
-                              onClick={() => saveHomeLayout((cur) => ({ ...cur, menuOrder: moveArrayItem(menuOrder, idx, -1) }))}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                saveHomeLayout((cur) => ({ ...cur, menuOrder: moveArrayItem(cur.menuOrder || menuOrder, idx, -1) }));
+                              }}
                               className="px-1 py-0.5 rounded bg-white border border-stone-200 text-[10.5px] font-black disabled:opacity-30"
                             >
                               ▲
@@ -15956,22 +16038,30 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                             <button
                               type="button"
                               disabled={idx === menuOrder.length - 1}
-                              onClick={() => saveHomeLayout((cur) => ({ ...cur, menuOrder: moveArrayItem(menuOrder, idx, 1) }))}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                saveHomeLayout((cur) => ({ ...cur, menuOrder: moveArrayItem(cur.menuOrder || menuOrder, idx, 1) }));
+                              }}
                               className="px-1 py-0.5 rounded bg-white border border-stone-200 text-[10.5px] font-black disabled:opacity-30"
                             >
                               ▼
                             </button>
                             <button
                               type="button"
-                              onClick={() =>
-                                saveHomeLayout((cur) => ({
-                                  ...cur,
-                                  hiddenMenus: isHidden
-                                    ? hiddenMenus.filter((x) => x !== mId)
-                                    : [...hiddenMenus, mId]
-                                }))
-                              }
-                              className={`px-1.5 py-0.5 rounded text-[10.5px] font-extrabold ${
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                saveHomeLayout((cur) => {
+                                  const prevHidden = Array.isArray(cur.hiddenMenus) ? cur.hiddenMenus : [];
+                                  const currentlyHidden = prevHidden.includes(mId);
+                                  return {
+                                    ...cur,
+                                    hiddenMenus: currentlyHidden
+                                      ? prevHidden.filter((x) => x !== mId)
+                                      : Array.from(new Set([...prevHidden, mId]))
+                                  };
+                                });
+                              }}
+                              className={`px-1.5 py-0.5 rounded text-[10.5px] font-extrabold whitespace-nowrap ${
                                 isHidden ? "bg-stone-200 text-stone-600" : "bg-emerald-100 text-emerald-800"
                               }`}
                             >
@@ -15984,78 +16074,120 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                   </div>
                 </div>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => setIsHomeEditMode(false)}
-                    className="w-full py-2.5 rounded-2xl bg-[#5E7A65] hover:bg-[#4E6855] text-white text-[13.5px] font-black shrink-0"
-                  >
-                    ✅ 편집 완료
-                  </button>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <button
+                      type="button"
+                      onClick={applyCurrentHomeLayoutToAllModes}
+                      className="px-2.5 py-2.5 rounded-2xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-[11.5px] font-extrabold whitespace-nowrap shrink-0"
+                      title="현재 구성을 오전·오후·밤 모든 시간대에 똑같이 적용"
+                    >
+                      🌐 전 시간대 적용
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setIsHomeEditMode(false)}
+                      className="flex-1 py-2.5 rounded-2xl bg-[#5E7A65] hover:bg-[#4E6855] text-white text-[13px] font-black whitespace-nowrap"
+                    >
+                      ✅ 편집 완료
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
 
 
-            {/* 시간대별 전용 히어로 브리핑 카드 */}
-            {activeHomeTimeMode === "morning" && (() => {
+            {/* 시간대별 초슬림 브리핑 카드 */}
+            {!hiddenBlocks.includes("briefing") && activeHomeTimeMode === "morning" && (() => {
               const morningMeals = todayMealsList.filter((m) => m.slot === "아침" || m.slot === "점심" || m.slot === "오전간식");
               const morningRoutineLeft = activeRoutines.filter((r) => (r.timeSlot || "상시") === "아침" || (r.timeSlot || "상시") === "상시").length;
               return (
-                <div className="bg-white border border-stone-200/90 rounded-2xl p-3 space-y-1.5 shadow-sm">
+                <div className="bg-white border border-stone-200/90 rounded-xl px-2.5 py-1.5 space-y-1 shadow-sm">
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-[13px] font-bold text-stone-900 leading-snug">🌅 좋은 아침 · 등원/오전 브리핑</span>
-                    <span className="text-[11px] font-medium text-stone-600 whitespace-nowrap shrink-0">{modeMeta.rangeLabel}</span>
+                    <span className="text-[11px] font-bold text-stone-900 whitespace-nowrap">🌅 오전 브리핑</span>
+                    <span className="text-[10px] font-medium text-stone-500 whitespace-nowrap shrink-0">{modeMeta.rangeLabel}</span>
                   </div>
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-[12px] font-medium text-stone-700 leading-snug break-keep flex-1">
-                      {morningMeals[0] ? `${morningMeals[0].slot}: ${morningMeals[0].menu}` : "오늘 아침·점심 식단을 기록해 보세요"}
+                  <div className="flex items-center justify-between gap-1.5">
+                    <span className="text-[10.5px] font-medium text-stone-700 leading-tight truncate flex-1">
+                      {morningMeals[0] ? `${morningMeals[0].slot}: ${morningMeals[0].menu}` : "아침·점심 식단 미기록"}
                     </span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSelectedDate(todayKey);
-                        setActiveTab("daily");
-                        setTimeout(() => {
-                          document.getElementById(`weekly-day-${todayKey}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
-                        }, 160);
-                      }}
-                      className="h-7 px-2.5 rounded-lg bg-[#3F624D] hover:bg-[#324F3E] text-white text-[11px] font-semibold shrink-0 whitespace-nowrap"
-                    >
-                      식단 ({morningRoutineLeft > 0 ? `루틴 ${morningRoutineLeft}` : "확인"})
-                    </button>
+                    <div className="flex items-center gap-1 shrink-0">
+                      {morningRoutineLeft > 0 && canViewTab("schedule") && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setScheduleSubTab("routine");
+                            setActiveTab("schedule");
+                          }}
+                          className="h-6 px-1.5 rounded-md bg-stone-100 hover:bg-stone-200 text-stone-700 text-[10px] font-semibold whitespace-nowrap"
+                        >
+                          루틴 {morningRoutineLeft}
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedDate(todayKey);
+                          setActiveTab("daily");
+                          setTimeout(() => {
+                            document.getElementById(`weekly-day-${todayKey}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+                          }, 160);
+                        }}
+                        className="h-6 px-2 rounded-md bg-[#3F624D] hover:bg-[#324F3E] text-white text-[10px] font-semibold whitespace-nowrap"
+                      >
+                        식단
+                      </button>
+                    </div>
                   </div>
                 </div>
               );
             })()}
 
 
-            {activeHomeTimeMode === "afternoon" && (() => {
+            {!hiddenBlocks.includes("briefing") && activeHomeTimeMode === "afternoon" && (() => {
               const dinnerMeal = todayMealsList.find((m) => m.slot === "저녁");
               return (
-                <div className="bg-white border border-stone-200/90 rounded-2xl p-3 space-y-1.5 shadow-sm">
+                <div className="bg-white border border-stone-200/90 rounded-xl px-2.5 py-1.5 space-y-1 shadow-sm">
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-[13px] font-bold text-stone-900 leading-snug">🌆 오후 · 저녁 준비 &amp; 냉장고 파먹기</span>
-                    <span className="text-[11px] font-medium text-stone-600 whitespace-nowrap shrink-0">{modeMeta.rangeLabel}</span>
+                    <span className="text-[11px] font-bold text-stone-900 whitespace-nowrap">🌆 오후 브리핑</span>
+                    <span className="text-[10px] font-medium text-stone-500 whitespace-nowrap shrink-0">{modeMeta.rangeLabel}</span>
                   </div>
-                  <div className="flex flex-wrap items-center gap-1">
-                    {expiringItems.length > 0 ? (
-                      expiringItems.slice(0, 3).map((it) => (
-                        <button
-                          key={it.id}
-                          type="button"
-                          onClick={() => setActiveTab("fridge")}
-                          className="h-7 px-2 rounded-lg bg-rose-50 text-rose-700 border border-rose-200 text-[11px] font-semibold whitespace-nowrap shrink-0"
-                        >
-                          {it.name} ({it.diff < 0 ? "만료" : `D-${it.diff}`})
-                        </button>
-                      ))
-                    ) : (
-                      <span className="text-[12px] font-medium text-stone-600">임박한 냉장고 재료가 없습니다</span>
-                    )}
+                  <div className="flex items-center justify-between gap-1.5">
+                    <div className="flex items-center gap-1 overflow-x-auto no-scrollbar min-w-0 flex-1">
+                      {expiringItems.length > 0 ? (
+                        expiringItems.slice(0, 3).map((it) => (
+                          <button
+                            key={it.id}
+                            type="button"
+                            onClick={() => {
+                              setFridgeSearch(it.name || "");
+                              setFridgeViewMode("list");
+                              setActiveTab("fridge");
+                            }}
+                            className="h-5 px-1.5 rounded-md bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-[10px] font-semibold whitespace-nowrap shrink-0"
+                            title="냉장고에서 바로 확인"
+                          >
+                            {it.name}({it.diff < 0 ? "만료" : `D-${it.diff}`})
+                          </button>
+                        ))
+                      ) : (
+                        <span className="text-[10.5px] font-medium text-stone-500 whitespace-nowrap">임박 재료 없음</span>
+                      )}
+                    </div>
                     <button
                       type="button"
-                      onClick={() => setActiveTab(dinnerMeal ? "daily" : "ai")}
-                      className="ml-auto h-7 px-2.5 rounded-lg bg-[#3F624D] hover:bg-[#324F3E] text-white text-[11px] font-semibold whitespace-nowrap"
+                      onClick={() => {
+                        if (dinnerMeal) {
+                          setSelectedDate(todayKey);
+                          setActiveTab("daily");
+                          setTimeout(() => {
+                            document.getElementById(`weekly-day-${todayKey}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+                          }, 160);
+                        } else {
+                          setActiveTab("ai");
+                        }
+                      }}
+                      className="h-6 px-2 rounded-md bg-[#3F624D] hover:bg-[#324F3E] text-white text-[10px] font-semibold whitespace-nowrap shrink-0 max-w-[140px] truncate"
+                      title={dinnerMeal ? `오늘 저녁: ${dinnerMeal.menu}` : "AI 저녁 메뉴 추천"}
                     >
                       {dinnerMeal ? `저녁: ${dinnerMeal.menu}` : "AI 저녁 추천"}
                     </button>
@@ -29939,7 +30071,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                 <button
                   type="button"
                   onClick={() => setIsBucketModalOpen(false)}
-                  className="flex-1 py-2.5 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-[13px] font-extrabold"
+                  className="flex-1 py-2.5 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-[13px] font-extrabold whitespace-nowrap"
                 >
                   취소
                 </button>
@@ -30459,14 +30591,14 @@ ${item.memo}` : `${item.title} 다녀옴!`,
               <button
                 type="button"
                 onClick={handleCancelEditRoutine}
-                className="flex-1 py-2.5 rounded-xl bg-stone-100 text-stone-600 text-[13.5px] font-extrabold"
+                className="flex-1 py-2.5 rounded-xl bg-stone-100 text-stone-600 text-[13.5px] font-extrabold whitespace-nowrap"
               >
                 취소
               </button>
               <button
                 type="button"
                 onClick={() => handleAddRoutine()}
-                className="flex-1 py-2.5 rounded-xl bg-stone-900 text-white text-[13.5px] font-extrabold"
+                className="flex-1 py-2.5 rounded-xl bg-stone-900 text-white text-[13.5px] font-extrabold whitespace-nowrap"
               >
                 {editingRoutineId ? "수정 저장" : "저장하기"}
               </button>
@@ -31629,14 +31761,14 @@ ${item.memo}` : `${item.title} 다녀옴!`,
               <button
                 type="button"
                 onClick={() => setIsMealModalOpen(false)}
-                className="flex-1 py-2.5 rounded-xl bg-stone-100 text-stone-600 text-[13.5px] font-extrabold"
+                className="flex-1 py-2.5 rounded-xl bg-stone-100 text-stone-600 text-[13.5px] font-extrabold whitespace-nowrap"
               >
                 취소
               </button>
               <button
                 type="button"
                 onClick={handleSaveMeal}
-                className="flex-1 py-2.5 rounded-xl bg-stone-900 text-white text-[13.5px] font-extrabold"
+                className="flex-1 py-2.5 rounded-xl bg-stone-900 text-white text-[13.5px] font-extrabold whitespace-nowrap"
               >
                 저장하기
               </button>
@@ -31889,14 +32021,14 @@ ${item.memo}` : `${item.title} 다녀옴!`,
               <button
                 type="button"
                 onClick={() => { setFridgeConflictData(null); setIsFridgeModalOpen(false); }}
-                className="flex-1 py-2.5 rounded-xl bg-stone-100 text-stone-600 text-[13.5px] font-extrabold"
+                className="flex-1 py-2.5 rounded-xl bg-stone-100 text-stone-600 text-[13.5px] font-extrabold whitespace-nowrap"
               >
                 취소
               </button>
               <button
                 type="button"
                 onClick={() => handleSaveFridge()}
-                className="flex-1 py-2.5 rounded-xl bg-stone-900 text-white text-[13.5px] font-extrabold"
+                className="flex-1 py-2.5 rounded-xl bg-stone-900 text-white text-[13.5px] font-extrabold whitespace-nowrap"
               >
                 저장하기
               </button>
@@ -31980,14 +32112,14 @@ ${item.memo}` : `${item.title} 다녀옴!`,
               <button
                 type="button"
                 onClick={() => setStockInItem(null)}
-                className="flex-1 py-2.5 rounded-xl bg-stone-100 text-stone-600 text-[13.5px] font-extrabold"
+                className="flex-1 py-2.5 rounded-xl bg-stone-100 text-stone-600 text-[13.5px] font-extrabold whitespace-nowrap"
               >
                 취소
               </button>
               <button
                 type="button"
                 onClick={handleConfirmStockIn}
-                className="flex-1 py-2.5 rounded-xl bg-emerald-600 text-white text-[13.5px] font-extrabold"
+                className="flex-1 py-2.5 rounded-xl bg-emerald-600 text-white text-[13.5px] font-extrabold whitespace-nowrap"
               >
                 냉장고 입고 완료
               </button>
@@ -32045,7 +32177,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
               <button
                 type="button"
                 onClick={handleConfirmQuickLog}
-                className="flex-1 py-2.5 rounded-xl bg-stone-900 text-white font-extrabold text-[13.5px]"
+                className="flex-1 py-2.5 rounded-xl bg-stone-900 text-white font-extrabold text-[13.5px] whitespace-nowrap"
               >
                 식단표에 추가하기
               </button>
@@ -32117,7 +32249,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
               <button
                 type="button"
                 onClick={() => setCookingConfirmModal(null)}
-                className="flex-1 py-2.5 rounded-xl bg-stone-100 text-stone-600 text-[13.5px] font-extrabold"
+                className="flex-1 py-2.5 rounded-xl bg-stone-100 text-stone-600 text-[13.5px] font-extrabold whitespace-nowrap"
               >
                 취소
               </button>

@@ -1178,7 +1178,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v13.16";
+export const APP_CODE_VERSION = "v13.17";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1196,7 +1196,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-22 17:55";
+export const APP_BUILD_DATE = "2026-11-22 18:55";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1264,6 +1264,18 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v13.17",
+    version: "v13.17",
+    date: "2026-11-22",
+    title: "🏠 홈 브리핑 초슬림화 · 홈 구성 편집 잘림/숨김 오류 수정 · 전 시간대 일괄 적용 및 메뉴 연계 강화",
+    category: "버그 수정 · 시각 최적화 · 메뉴 연계",
+    changes: [
+      "홈 브리핑 대폭 슬림화: 오전·오후 브리핑 카드와 시간대 전환 바·날씨·고정 공지 바의 여백과 글씨 크기(10~11.5px)를 압축하고, 임박 재료를 1줄 가로 스크롤로 정리해 세로 점유 최소화 (브리핑 카드 표시/숨김 토글 추가)",
+      "홈 구성 편집 모달 잘림 & '오늘의 행동 피드' 숨김 오류 완전 수정: 제목 줄바꿈과 '오늘의 행동 피... / 핵심 메뉴 바로...' 잘림을 전면 해소하고, 오래된 상태 참조·스냅샷 덮어쓰기 경합·모바일 드래그 터치 간섭을 근본 수정해 숨김/표시가 즉시 반영되도록 개선",
+      "고도화·메뉴 연계: 홈 편집에 [🌐 전 시간대 적용] 버튼 및 핵심 메뉴 영역/카드 크기(작게·보통·크게) 실동작 반영, 오후 브리핑 임박 재료 탭→냉장고 해당 품목 바로 검색, 오전 브리핑 루틴→반복 루틴 직행, 홈 남은 할 일 1탭 복사 및 공지 +N 건수 표시 추가"
+    ]
+  },
   {
     id: "patch-v13.16",
     version: "v13.16",
