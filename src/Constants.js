@@ -1178,7 +1178,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v13.24";
+export const APP_CODE_VERSION = "v13.26";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1196,7 +1196,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-22 20:25";
+export const APP_BUILD_DATE = "2026-11-22 20:33";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1264,6 +1264,30 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v13.26",
+    version: "v13.26",
+    date: "2026-11-22",
+    title: "✏️ 홈 루틴 본문 탭 즉시 편집(체크박스와 분리) · 루틴 수정 모달 삭제/공지 공유 추가",
+    category: "편의성 · 메뉴 연계 · 권한 정밀화",
+    changes: [
+      "홈 [오늘 남은 루틴] 편집 진입: 좌측 체크박스를 누르면 완료 처리되고, 체크박스 오른쪽 제목·보조정보 본문을 누르면 즉시 해당 루틴 편집 모달이 열리도록 분리 (첨부파일 보유 시 '첨부 N건' 표시)",
+      "루틴 수정 모달 고도화·연계: 편집 모달 내에서 바로 [🗑️ 삭제] 및 [📌 공지 공유]를 실행할 수 있도록 추가해 홈에서 탭 이동 없이 수정·삭제·공유 원스톱 처리 가능",
+      "권한 정밀화·검증: handleStartEditRoutine 권한 검사를 schedule 탭 기준으로 정밀화하고 Babel AST·임포트·배포 정합성 최종 검증 0건 통과"
+    ]
+  },
+  {
+    id: "patch-v13.25",
+    version: "v13.25",
+    date: "2026-11-22",
+    title: "🌱 육아 발달 가이드 1탭 복사·가족공지 공유 연계 · 홈 필터바/헤더 버튼 가독성 마무리",
+    category: "메뉴 연계 · 가독성 · 시각 최적화",
+    changes: [
+      "육아수첩 [🌱 발달] 카드 고도화·연계: 각 월령 카드 상단에 1탭 [📋 복사] 및 [📌 가족공지 공유] 버튼을 추가해 현재 시기 핵심 팁·소아과 상담 신호를 가족과 바로 공유 가능",
+      "홈 화면 가독성 마무리: 홈 루틴 필터 요약 바(12px)와 액션 피드 헤더 버튼('전체 보기'→'전체', 11.5px 굵게)을 v13.24 타이포그래피 체계에 맞춰 통일해 360px 모바일 폭에서도 여유 공간 확보",
+      "Babel AST 전체 파싱·임포트/익스포트 1:1 일치·배포 정합성 최종 검증 0건 통과"
+    ]
+  },
   {
     id: "patch-v13.24",
     version: "v13.24",

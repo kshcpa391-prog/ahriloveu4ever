@@ -2950,7 +2950,7 @@ function MainApp() {
 
 
   const handleStartEditRoutine = (rt) => {
-    if (!requireEditorAccess() || !rt) return;
+    if (!requireEditorAccess("schedule") || !rt) return;
     setEditingRoutineId(rt.id);
     routineTitleLiveRef.current = rt.title || "";
     setNewRoutineTitle(rt.title || "");
@@ -15054,9 +15054,9 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                           setScheduleSubTab("calendar");
                           setActiveTab("schedule");
                         }}
-                        className="h-7 px-2 rounded-lg text-stone-600 hover:bg-stone-100 text-[11px] font-semibold whitespace-nowrap"
+                        className="h-7 px-2 rounded-lg text-stone-700 hover:bg-stone-100 text-[11.5px] font-bold whitespace-nowrap"
                       >
-                        전체 보기
+                        전체
                       </button>
                     </div>
                   </div>
@@ -15199,10 +15199,10 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                   )}
 
                   {/* 간결한 필터 요약 바 + 상세 선택 패널 토글 */}
-                  <div className="flex items-center justify-between gap-2 bg-stone-50 border border-stone-200/80 rounded-xl px-3 py-1">
-                    <div className="text-[11px] font-medium text-stone-700 truncate">
+                  <div className="flex items-center justify-between gap-2 bg-stone-50 border border-stone-200/80 rounded-xl px-2.5 py-1">
+                    <div className="text-[12px] font-semibold text-stone-700 truncate min-w-0">
                       {dayFilterLabel} · {targetFilterLabel} ·{" "}
-                      <span className={effHomeSlotFilter === "auto" ? "text-[#3F624D] font-semibold" : "text-stone-900 font-semibold"}>
+                      <span className={effHomeSlotFilter === "auto" ? "text-[#2F523E] font-bold" : "text-stone-900 font-bold"}>
                         {slotFilterLabel}
                       </span>
                     </div>
@@ -15219,7 +15219,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                               localStorage.setItem("kim_home_routine_target_v1", "전체");
                             } catch (e) {}
                           }}
-                          className="h-7 px-2 rounded-lg text-[11px] font-semibold text-[#3F624D] hover:bg-[#EEF3EE] whitespace-nowrap"
+                          className="h-7 px-2 rounded-lg text-[11.5px] font-bold text-[#2F523E] hover:bg-[#EEF3EE] whitespace-nowrap"
                         >
                           기본값
                         </button>
@@ -15227,9 +15227,9 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                       <button
                         type="button"
                         onClick={() => setIsHomeRoutineFilterOpen((v) => !v)}
-                        className="h-7 px-2 rounded-lg bg-white border border-stone-200 text-[11px] font-semibold text-stone-800 hover:bg-stone-100 whitespace-nowrap"
+                        className="h-7 px-2 rounded-lg bg-white border border-stone-200 text-[11.5px] font-bold text-stone-800 hover:bg-stone-100 whitespace-nowrap"
                       >
-                        {isHomeRoutineFilterOpen ? "필터 닫기 ▴" : "필터 ▾"}
+                        {isHomeRoutineFilterOpen ? "닫기 ▴" : "필터 ▾"}
                       </button>
                     </div>
                   </div>
@@ -15393,28 +15393,45 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                               )}
 
                               <div className="min-w-0 flex-1 space-y-1">
-                                <div className="flex items-baseline justify-between gap-2 min-w-0">
-                                  <span className="text-[13.5px] font-bold text-stone-900 leading-snug truncate flex-1 min-w-0">
-                                    {steps.length >= 2 ? steps[0] : rt.title}
+                                <div
+                                  role="button"
+                                  tabIndex={0}
+                                  onClick={() => handleStartEditRoutine(rt)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter" || e.key === " ") {
+                                      e.preventDefault();
+                                      handleStartEditRoutine(rt);
+                                    }
+                                  }}
+                                  className="cursor-pointer hover:bg-stone-50 rounded-xl px-1.5 -mx-1.5 py-0.5 space-y-0.5 transition"
+                                  title="눌러서 루틴 편집"
+                                >
+                                  <div className="flex items-baseline justify-between gap-2 min-w-0">
+                                    <span className="text-[13.5px] font-bold text-stone-900 leading-snug truncate flex-1 min-w-0">
+                                      {steps.length >= 2 ? steps[0] : rt.title}
+                                      {steps.length >= 2 && (
+                                        <span className="ml-1.5 text-[12px] font-semibold text-stone-600">
+                                          외 {steps.length - 1}단계
+                                        </span>
+                                      )}
+                                    </span>
                                     {steps.length >= 2 && (
-                                      <span className="ml-1.5 text-[12px] font-semibold text-stone-600">
-                                        외 {steps.length - 1}단계
+                                      <span className="text-[11.5px] font-extrabold text-[#2F523E] whitespace-nowrap shrink-0">
+                                        진행 {stepDoneSet.size}/{steps.length}
                                       </span>
                                     )}
-                                  </span>
-                                  {steps.length >= 2 && (
-                                    <span className="text-[11.5px] font-extrabold text-[#2F523E] whitespace-nowrap shrink-0">
-                                      진행 {stepDoneSet.size}/{steps.length}
-                                    </span>
-                                  )}
-                                </div>
+                                  </div>
 
-                                {/* 한 줄 보조 텍스트 (불필요한 컬러 배지 제거, 지연만 주의 강조) */}
-                                <div className="text-[12px] font-medium text-stone-700 leading-snug flex items-center gap-1.5 flex-wrap">
-                                  <span>{metaParts.join(" · ")}</span>
-                                  {isOverdue && (
-                                    <span className="text-amber-800 font-bold whitespace-nowrap">· 시간 지남</span>
-                                  )}
+                                  {/* 한 줄 보조 텍스트 (불필요한 컬러 배지 제거, 지연만 주의 강조) */}
+                                  <div className="text-[12px] font-medium text-stone-700 leading-snug flex items-center gap-1.5 flex-wrap">
+                                    <span>{metaParts.join(" · ")}</span>
+                                    {Array.isArray(rt.attachments) && rt.attachments.length > 0 && (
+                                      <span className="text-stone-600 font-semibold whitespace-nowrap">· 첨부 {rt.attachments.length}건</span>
+                                    )}
+                                    {isOverdue && (
+                                      <span className="text-amber-800 font-bold whitespace-nowrap">· 시간 지남</span>
+                                    )}
+                                  </div>
                                 </div>
 
                                 {/* 다단계 루틴: 미완료 단계는 단순 목록으로 즉시 표시, 완료 단계는 '완료 N개 보기'로 기본 접기 */}
@@ -15550,9 +15567,9 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                           setScheduleSubTab("todo");
                           setActiveTab("schedule");
                         }}
-                        className="h-7 px-2 rounded-lg text-stone-600 hover:bg-stone-100 text-[11px] font-semibold whitespace-nowrap"
+                        className="h-7 px-2 rounded-lg text-stone-700 hover:bg-stone-100 text-[11.5px] font-bold whitespace-nowrap"
                       >
-                        전체 보기
+                        전체
                       </button>
                     </div>
                   </div>
@@ -26426,13 +26443,59 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                           : "bg-white border-stone-200"
                       }`}
                     >
-                      <div className="flex items-center justify-between">
-                        <span className="text-[13.5px] font-black text-stone-900">{ms.label}</span>
-                        {isCurrent && (
-                          <span className="px-2 py-0.5 rounded-full bg-amber-500 text-white text-[11.5px] font-black whitespace-nowrap">
-                            ⭐ 지금 {activeChild.id} 시기
-                          </span>
-                        )}
+                      <div className="flex items-center justify-between gap-2 min-w-0">
+                        <span className="text-[14px] font-black text-stone-900 truncate min-w-0">{ms.label}</span>
+                        <div className="flex items-center gap-1 shrink-0">
+                          {isCurrent && (
+                            <span className="px-2 py-0.5 rounded-full bg-amber-500 text-white text-[11px] font-black whitespace-nowrap">
+                              ⭐ 지금 {activeChild.id}
+                            </span>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() =>
+                              copyTextSafe(
+                                [
+                                  `🌱 [${activeChild.name} · ${ms.label}]`,
+                                  `• 신체/운동: ${ms.motor}`,
+                                  `• 언어/사회: ${ms.language}`,
+                                  `• 수유·수면: ${ms.feedingSleep}`,
+                                  `💡 핵심 팁: ${ms.tip}`,
+                                  ms.redFlags ? `⚠️ 소아과 상담 신호: ${ms.redFlags}` : ""
+                                ].filter(Boolean).join("\n"),
+                                `📋 ${ms.label} 발달 가이드를 복사했습니다!`
+                              )
+                            }
+                            className="px-1.5 py-0.5 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 text-[11px] font-extrabold whitespace-nowrap"
+                            title="발달 가이드 복사"
+                          >
+                            📋
+                          </button>
+                          {canEditTab("notices") && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (!requireEditorAccess("notices")) return;
+                                setEditingNotice(null);
+                                setNoticeForm({
+                                  title: `🌱 [${activeChild.name}] ${ms.label} 핵심 포인트`,
+                                  content: [
+                                    `💡 핵심 팁: ${ms.tip}`,
+                                    ms.redFlags ? `⚠️ 주의 신호: ${ms.redFlags}` : ""
+                                  ].filter(Boolean).join("\n"),
+                                  category: "육아/아이들",
+                                  author: actorName || "수혁",
+                                  pinned: false
+                                });
+                                setIsNoticeModalOpen(true);
+                              }}
+                              className="px-1.5 py-0.5 rounded-lg bg-amber-100/80 hover:bg-amber-200/80 text-amber-900 text-[11px] font-extrabold whitespace-nowrap"
+                              title="가족공지로 공유"
+                            >
+                              📌
+                            </button>
+                          )}
+                        </div>
                       </div>
                       <div className="space-y-1 text-[13.5px] text-stone-700 leading-snug">
                         <div>
@@ -30793,6 +30856,48 @@ ${item.memo}` : `${item.title} 다녀옴!`,
               )}
             </div>
 
+
+            {editingRoutineId && (
+              <div className="flex items-center justify-between gap-2 pt-1 border-t border-stone-100">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!window.confirm("이 반복 루틴을 삭제할까요?")) return;
+                    const targetId = editingRoutineId;
+                    handleCancelEditRoutine();
+                    handleDeleteRoutine(targetId);
+                  }}
+                  className="px-3 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 text-[12px] font-extrabold whitespace-nowrap"
+                >
+                  🗑️ 삭제
+                </button>
+                {canEditTab("notices") && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!requireEditorAccess("notices")) return;
+                      const rtTitle = String(routineTitleLiveRef.current || newRoutineTitle || "").trim();
+                      handleCancelEditRoutine();
+                      setEditingNotice(null);
+                      setNoticeForm({
+                        title: `🔄 [루틴 공유] ${rtTitle}`,
+                        content: [
+                          `시간대: ${newRoutineTimeSlot}${newRoutineScheduledTime ? ` (${formatRoutineTimeLabel(newRoutineScheduledTime)})` : ""}`,
+                          `대상: ${newRoutineAssignee}`
+                        ].join("\n"),
+                        category: "가족공지",
+                        author: actorName || "수혁",
+                        pinned: false
+                      });
+                      setIsNoticeModalOpen(true);
+                    }}
+                    className="px-3 py-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 text-[12px] font-extrabold whitespace-nowrap"
+                  >
+                    📌 공지 공유
+                  </button>
+                )}
+              </div>
+            )}
 
             <div className="flex gap-2 pt-2">
               <button
