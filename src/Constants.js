@@ -1178,7 +1178,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v13.14";
+export const APP_CODE_VERSION = "v13.16";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1196,7 +1196,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-22 17:38";
+export const APP_BUILD_DATE = "2026-11-22 17:55";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1264,6 +1264,29 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v13.16",
+    version: "v13.16",
+    date: "2026-11-22",
+    title: "🛡️ 전수 점검: 뒤로가기/ESC 패널 완전 연동 · 일정 서브탭 히스토리 · 진료요약 복사 · 안전성 보강",
+    category: "안정성 · 편의성 · 전역 점검",
+    changes: [
+      "더보기 드로어·홈 편집·빠른 장보기·백분위 선택·홈 루틴 필터·시간대 편집 패널을 전역 ESC 및 안드로이드 뒤로가기 닫기에 완전 연동",
+      "일정·할일·반복 루틴 서브탭(scheduleSubTab) 이동을 뒤로가기 히스토리에 통합하여 서브탭 간 자연스러운 뒤로가기 지원",
+      "육아 진료·체온 탭에 최근 5건 원탭 [📋 요약] 복사 추가, 성장기록 아이 전환 시 편집 상태 자동 초기화, 냉장고 품목 버튼 누락 type='button' 보완"
+    ]
+  },
+  {
+    id: "patch-v13.15",
+    version: "v13.15",
+    date: "2026-11-22",
+    title: "🩺 육아 성장분석 비만도(BMI) 표준 성장 곡선·백분위 비교 추가",
+    category: "기능 추가 · 육아 성장분석",
+    changes: [
+      "WHO·질병관리청 2017 영유아 성장도표(0~35개월 남아·여아) 기반 비만도(BMI = 체중÷키²) 표준 곡선 및 백분위(3~97%) 비교 그래프 추가",
+      "또래 한국 남아/여아 비교 카드, 성장 기록 이력 배지, 성장요약 카톡 복사에도 BMI 수치와 백분위를 자동 반영"
+    ]
+  },
   {
     id: "patch-v13.14",
     version: "v13.14",
@@ -5256,6 +5279,14 @@ export const KOREA_GROWTH_STD_2017 = {
       [12, 7.8, 9.6, 11.8], [15, 8.4, 10.3, 12.7], [18, 8.9, 10.9, 13.5], [21, 9.3, 11.5, 14.3],
       [24, 9.8, 12.2, 15.1], [27, 10.2, 12.7, 15.9], [30, 10.7, 13.3, 16.6], [33, 11.1, 13.8, 17.3],
       [35, 11.3, 14.2, 17.8]
+    ],
+    bmi: [
+      [0, 11.3, 13.4, 16.1], [1, 12.6, 14.9, 17.6], [2, 13.8, 16.3, 19.2], [3, 14.4, 16.9, 19.8],
+      [4, 14.7, 17.2, 20.1], [5, 14.8, 17.3, 20.3], [6, 14.8, 17.3, 20.3], [7, 14.8, 17.3, 20.3],
+      [8, 14.8, 17.3, 20.2], [9, 14.7, 17.2, 20.1], [10, 14.6, 17.0, 20.0], [11, 14.5, 16.9, 19.8],
+      [12, 14.4, 16.8, 19.6], [15, 14.1, 16.4, 19.2], [18, 13.9, 16.1, 18.8], [21, 13.7, 15.9, 18.5],
+      [24, 13.6, 15.7, 18.4], [27, 13.6, 15.7, 18.4], [30, 13.5, 15.7, 18.3], [33, 13.5, 15.6, 18.3],
+      [35, 13.5, 15.6, 18.2]
     ]
   },
   여아: {
@@ -5274,6 +5305,14 @@ export const KOREA_GROWTH_STD_2017 = {
       [12, 7.1, 8.9, 11.3], [15, 7.7, 9.6, 12.2], [18, 8.2, 10.2, 13.0], [21, 8.7, 10.9, 13.8],
       [24, 9.2, 11.5, 14.6], [27, 9.6, 12.1, 15.4], [30, 10.1, 12.7, 16.2], [33, 10.5, 13.3, 17.0],
       [35, 10.8, 13.7, 17.6]
+    ],
+    bmi: [
+      [0, 11.2, 13.3, 15.9], [1, 12.2, 14.6, 17.3], [2, 13.2, 15.8, 18.8], [3, 13.8, 16.4, 19.5],
+      [4, 14.1, 16.7, 19.9], [5, 14.2, 16.8, 20.1], [6, 14.3, 16.9, 20.1], [7, 14.3, 16.9, 20.1],
+      [8, 14.2, 16.8, 20.0], [9, 14.1, 16.7, 19.9], [10, 14.0, 16.6, 19.7], [11, 13.9, 16.5, 19.6],
+      [12, 13.8, 16.4, 19.4], [15, 13.6, 16.0, 19.0], [18, 13.4, 15.7, 18.6], [21, 13.3, 15.5, 18.4],
+      [24, 13.3, 15.4, 18.3], [27, 13.3, 15.4, 18.3], [30, 13.3, 15.4, 18.3], [33, 13.3, 15.4, 18.3],
+      [35, 13.3, 15.4, 18.3]
     ]
   }
 };
@@ -5353,11 +5392,18 @@ export const evaluateKoreanGrowthPercentile = (child, measureDateStr, heightVal,
   const measMs = new Date((measureDateStr || getTodayStr()) + "T00:00:00").getTime();
   const diffDays = Math.max(0, (measMs - birthMs) / (1000 * 60 * 60 * 24));
   const monthsFloat = Math.min(35, diffDays / 30.4375);
+  const hNum = Number(heightVal);
+  const wNum = Number(weightVal);
+  const bmiVal =
+    Number.isFinite(hNum) && hNum > 20 && Number.isFinite(wNum) && wNum > 0
+      ? Number((wNum / ((hNum / 100) * (hNum / 100))).toFixed(2))
+      : null;
   return {
     gender,
     monthsFloat,
     height: evaluateGrowthMetric(std.height, monthsFloat, heightVal),
-    weight: evaluateGrowthMetric(std.weight, monthsFloat, weightVal)
+    weight: evaluateGrowthMetric(std.weight, monthsFloat, weightVal),
+    bmi: std.bmi && bmiVal ? evaluateGrowthMetric(std.bmi, monthsFloat, bmiVal) : null
   };
 };
 

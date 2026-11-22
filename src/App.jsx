@@ -2206,6 +2206,10 @@ function MainApp() {
   const [growthChartPercentiles, setGrowthChartPercentiles] = useState([3, 50, 97]);
   const [isGrowthPctPickerOpen, setIsGrowthPctPickerOpen] = useState(false);
   const [selectedGrowthPointId, setSelectedGrowthPointId] = useState(null);
+  useEffect(() => {
+    setEditingGrowthId(null);
+    setSelectedGrowthPointId(null);
+  }, [selectedChildId]);
   const [growthForm, setGrowthForm] = useState({
     date: getTodayStr(),
     height: "",
@@ -13301,6 +13305,12 @@ ${item.memo}` : `${item.title} 다녀옴!`,
 
   useEffect(() => {
     if (
+      !isMoreNavOpen &&
+      !isHomeEditMode &&
+      !isQuickShoppingOpen &&
+      !isGrowthPctPickerOpen &&
+      !isHomeRoutineFilterOpen &&
+      !isRoutineRangeEditOpen &&
       !isQuickFabOpen &&
       !isRoutineModalOpen &&
       !isActivityModalOpen &&
@@ -13345,6 +13355,12 @@ ${item.memo}` : `${item.title} 다녀옴!`,
     ) return;
     const onEsc = (e) => {
       if (e.key === "Escape") {
+        setIsMoreNavOpen(false);
+        setIsHomeEditMode(false);
+        setIsQuickShoppingOpen(false);
+        setIsGrowthPctPickerOpen(false);
+        setIsHomeRoutineFilterOpen(false);
+        setIsRoutineRangeEditOpen(false);
         setIsQuickFabOpen(false);
         setIsRoutineModalOpen(false);
         setIsActivityModalOpen(false);
@@ -13393,7 +13409,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
     };
     window.addEventListener("keydown", onEsc);
     return () => window.removeEventListener("keydown", onEsc);
-  }, [isQuickFabOpen, isRoutineModalOpen, isActivityModalOpen, isEditorUnlockModalOpen, isMealCopyModalOpen, diaryExportPreviewUrl, diaryLightboxUrl, diaryImportModal, cropModal, isWeatherModalOpen, liveActivityPopup, activityEditModal, zipImportPicker, magazineMonth, isSettingsOpen, isHeroPhotoModalOpen, isPageModalOpen, pageMenuTargetId, isPagePasteModalOpen, activeTableTaskModal, isDreamLinksModalOpen, isPatchModalOpen, isBucketModalOpen, isHouseModalOpen, isHandoverModalOpen, isHomeDdayPickerOpen, isPrivateCalModalOpen, isPrivateCalCsvModalOpen, calDayPopupDate, isScheduleModalOpen, isMealModalOpen, isFridgeModalOpen, isNoticeModalOpen, isRecipeModalOpen, isDaycareModalOpen, isReceiptModalOpen, isInventoryExportOpen, stockInItem, quickLogRecipe, cookingConfirmModal, quickFridgeItem]);
+  }, [isMoreNavOpen, isHomeEditMode, isQuickShoppingOpen, isGrowthPctPickerOpen, isHomeRoutineFilterOpen, isRoutineRangeEditOpen, isQuickFabOpen, isRoutineModalOpen, isActivityModalOpen, isEditorUnlockModalOpen, isMealCopyModalOpen, diaryExportPreviewUrl, diaryLightboxUrl, diaryImportModal, cropModal, isWeatherModalOpen, liveActivityPopup, activityEditModal, zipImportPicker, magazineMonth, isSettingsOpen, isHeroPhotoModalOpen, isPageModalOpen, pageMenuTargetId, isPagePasteModalOpen, activeTableTaskModal, isDreamLinksModalOpen, isPatchModalOpen, isBucketModalOpen, isHouseModalOpen, isHandoverModalOpen, isHomeDdayPickerOpen, isPrivateCalModalOpen, isPrivateCalCsvModalOpen, calDayPopupDate, isScheduleModalOpen, isMealModalOpen, isFridgeModalOpen, isNoticeModalOpen, isRecipeModalOpen, isDaycareModalOpen, isReceiptModalOpen, isInventoryExportOpen, stockInItem, quickLogRecipe, cookingConfirmModal, quickFridgeItem]);
 
   // ==========================================
   // 모바일·브라우저 뒤로가기 이전 화면 이동 (Chrome User-Gesture History API + URL 해시)
@@ -13402,6 +13418,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
   const lastNavSnapRef = useRef({
     activeTab: "home",
     babySubTab: "activity",
+    scheduleSubTab: "calendar",
     selectedPageId: null,
     bucketViewMode: "map",
     houseSubTab: "storage"
@@ -13423,6 +13440,9 @@ ${item.memo}` : `${item.title} 다녀옴!`,
     if (snap.activeTab === "bucket" && snap.bucketViewMode) {
       parts.push(`view=${encodeURIComponent(snap.bucketViewMode)}`);
     }
+    if (snap.activeTab === "schedule" && snap.scheduleSubTab) {
+      parts.push(`ssub=${encodeURIComponent(snap.scheduleSubTab)}`);
+    }
     if (snap.activeTab === "house" && snap.houseSubTab) {
       parts.push(`hsub=${encodeURIComponent(snap.houseSubTab)}`);
     }
@@ -13432,6 +13452,11 @@ ${item.memo}` : `${item.title} 다녀옴!`,
 
   const anyOverlayModalOpen = Boolean(
     isMoreNavOpen ||
+    isHomeEditMode ||
+    isQuickShoppingOpen ||
+    isGrowthPctPickerOpen ||
+    isHomeRoutineFilterOpen ||
+    isRoutineRangeEditOpen ||
     isQuickFabOpen ||
     isBucketModalOpen ||
     isHouseModalOpen ||
@@ -13478,6 +13503,11 @@ ${item.memo}` : `${item.title} 다녀옴!`,
   backCloseHandlerRef.current = () => {
     if (anyOverlayModalOpen) {
       setIsMoreNavOpen(false);
+      setIsHomeEditMode(false);
+      setIsQuickShoppingOpen(false);
+      setIsGrowthPctPickerOpen(false);
+      setIsHomeRoutineFilterOpen(false);
+      setIsRoutineRangeEditOpen(false);
       setIsQuickFabOpen(false);
       setIsBucketModalOpen(false);
       setIsPrivateCalModalOpen(false);
@@ -13533,12 +13563,14 @@ ${item.memo}` : `${item.title} 다녀옴!`,
       isPoppingHistoryRef.current = true;
       setActiveTab(prev.activeTab || "home");
       if (prev.babySubTab) setBabySubTab(prev.babySubTab);
+      if (prev.scheduleSubTab) setScheduleSubTab(prev.scheduleSubTab);
       setSelectedPageId(prev.selectedPageId || null);
       if (prev.bucketViewMode) setBucketViewMode(prev.bucketViewMode);
       if (prev.houseSubTab) setHouseSubTab(prev.houseSubTab);
       lastNavSnapRef.current = {
         activeTab: prev.activeTab || "home",
         babySubTab: prev.babySubTab || "activity",
+        scheduleSubTab: prev.scheduleSubTab || "calendar",
         selectedPageId: prev.selectedPageId || null,
         bucketViewMode: prev.bucketViewMode || "map",
         houseSubTab: prev.houseSubTab || "storage"
@@ -13641,10 +13673,11 @@ ${item.memo}` : `${item.title} 다녀옴!`,
     }
 
     const prev = lastNavSnapRef.current;
-    const nextSnap = { activeTab, babySubTab, selectedPageId, bucketViewMode, houseSubTab };
+    const nextSnap = { activeTab, babySubTab, scheduleSubTab, selectedPageId, bucketViewMode, houseSubTab };
     const changed =
       prev.activeTab !== activeTab ||
       (activeTab === "baby" && prev.babySubTab !== babySubTab) ||
+      (activeTab === "schedule" && prev.scheduleSubTab !== scheduleSubTab) ||
       (activeTab === "pages" && prev.selectedPageId !== selectedPageId) ||
       (activeTab === "bucket" && prev.bucketViewMode !== bucketViewMode) ||
       (activeTab === "house" && prev.houseSubTab !== houseSubTab);
@@ -13675,7 +13708,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
         window.scrollTo(0, 0);
       }
     }
-  }, [activeTab, babySubTab, selectedPageId, bucketViewMode, houseSubTab]);
+  }, [activeTab, babySubTab, scheduleSubTab, selectedPageId, bucketViewMode, houseSubTab]);
 
   // 모달/팝업이 열릴 때도 실제 History 엔트리 적재 (뒤로가기 누르면 모달만 깔끔하게 닫힘)
   useEffect(() => {
@@ -20137,6 +20170,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                         return (
                           <button
                             key={it.id}
+                            type="button"
                             draggable={typeof window !== "undefined" && !("ontouchstart" in window)}
                             onDragStart={(e) => {
                               e.dataTransfer?.setData("text/plain", it.id);
@@ -26355,6 +26389,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                             const parts = [
                               latest.height ? `키 ${latest.height}cm${cmpLatest?.height ? ` (${cmpLatest.height.label})` : ""}` : "",
                               latest.weight ? `몸무게 ${latest.weight}kg${cmpLatest?.weight ? ` (${cmpLatest.weight.label})` : ""}` : "",
+                              cmpLatest?.bmi ? `비만도(BMI) ${cmpLatest.bmi.val.toFixed(1)} (${cmpLatest.bmi.label})` : "",
                               latest.head ? `머리둘레 ${latest.head}cm` : ""
                             ].filter(Boolean);
                             const txt = `📏 ${activeChild.name} 최근 성장 기록 (생후 ${days}일 · ${latest.date})\n• ${parts.join(" · ") || "측정값 없음"}${latest.memo ? `\n• 메모: ${latest.memo}` : ""}`;
@@ -26446,6 +26481,8 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                               ? "bg-amber-100 text-amber-900"
                               : tone === "emerald"
                               ? "bg-emerald-100 text-emerald-800"
+                              : tone === "amber"
+                              ? "bg-amber-100 text-amber-800"
                               : "bg-indigo-100 text-indigo-800"
                           }`}>
                             {m.label}
@@ -26453,7 +26490,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                         </div>
                         <div className="relative h-2 rounded-full bg-stone-200 overflow-visible">
                           <div
-                            className={`h-full rounded-full ${tone === "emerald" ? "bg-emerald-500" : "bg-indigo-500"}`}
+                            className={`h-full rounded-full ${tone === "emerald" ? "bg-emerald-500" : tone === "amber" ? "bg-amber-500" : "bg-indigo-500"}`}
                             style={{ width: `${barPct}%` }}
                           />
                           <div
@@ -26485,6 +26522,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                       <div className="space-y-1.5">
                         {renderMetricGauge("height", "키", "📏", "cm", cmp.height, "emerald")}
                         {renderMetricGauge("weight", "몸무게", "⚖️", "kg", cmp.weight, "indigo")}
+                        {renderMetricGauge("bmi", "비만도(BMI)", "🩺", "", cmp.bmi, "amber")}
                       </div>
                     </div>
                   );
@@ -26496,9 +26534,11 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                   const stdObj = KOREA_GROWTH_STD_2017[gender];
                   if (!stdObj) return null;
                   const isWeight = growthChartMetric === "weight";
-                  const stdTable = isWeight ? stdObj.weight : stdObj.height;
-                  const unit = isWeight ? "kg" : "cm";
-                  const lineColor = isWeight ? "#4f46e5" : "#059669";
+                  const isBmi = growthChartMetric === "bmi";
+                  const stdTable = isWeight ? stdObj.weight : isBmi ? stdObj.bmi : stdObj.height;
+                  if (!stdTable) return null;
+                  const unit = isWeight ? "kg" : isBmi ? "" : "cm";
+                  const lineColor = isWeight ? "#4f46e5" : isBmi ? "#d97706" : "#059669";
                   const birthMs = new Date(`${activeChild.birthDate}T00:00:00`).getTime();
                   const todayMs = new Date(`${getTodayStr()}T00:00:00`).getTime();
                   const todayAgeDays = Math.max(1, Math.floor((todayMs - birthMs) / 86400000));
@@ -26506,14 +26546,23 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                   const childPoints = [...childGrowth]
                     .reverse()
                     .map((g) => {
-                      const val = Number(isWeight ? g.weight : g.height);
+                      let val = 0;
+                      if (isBmi) {
+                        const hNum = Number(g.height);
+                        const wNum = Number(g.weight);
+                        if (Number.isFinite(hNum) && hNum > 20 && Number.isFinite(wNum) && wNum > 0) {
+                          val = Number((wNum / ((hNum / 100) * (hNum / 100))).toFixed(2));
+                        }
+                      } else {
+                        val = Number(isWeight ? g.weight : g.height);
+                      }
                       if (!Number.isFinite(val) || val <= 0) return null;
                       const mMs = new Date(`${g.date || getTodayStr()}T00:00:00`).getTime();
                       const ageDays = Math.max(0, Math.min(1065, Math.round((mMs - birthMs) / 86400000)));
                       const monthsFloat = ageDays / 30.4375;
                       const p50 = getGrowthPercentileValue(stdTable, monthsFloat, 50);
                       const cmpRow = evaluateKoreanGrowthPercentile(activeChild, g.date, g.height, g.weight);
-                      const metricEval = isWeight ? cmpRow?.weight : cmpRow?.height;
+                      const metricEval = isWeight ? cmpRow?.weight : isBmi ? cmpRow?.bmi : cmpRow?.height;
                       return {
                         id: g.id,
                         date: g.date,
@@ -26564,9 +26613,11 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                   ];
                   const rawYMin = Math.min(...allYVals);
                   const rawYMax = Math.max(...allYVals);
-                  const ySpan = Math.max(isWeight ? 1.2 : 6, rawYMax - rawYMin);
+                  const ySpan = Math.max(isWeight ? 1.2 : isBmi ? 3 : 6, rawYMax - rawYMin);
                   const yStep = isWeight
                     ? ySpan <= 2.4 ? 0.3 : ySpan <= 5 ? 0.5 : ySpan <= 10 ? 1.5 : 3
+                    : isBmi
+                    ? ySpan <= 5 ? 1 : ySpan <= 10 ? 2 : 3
                     : ySpan <= 15 ? 3 : ySpan <= 30 ? 5 : 10;
                   const yMin = growthChartZoom === "full" && isWeight
                     ? 0
@@ -26610,7 +26661,8 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                         <div className="flex items-center gap-1 bg-stone-100 p-0.5 rounded-xl shrink-0">
                           {[
                             { id: "weight", label: "몸무게" },
-                            { id: "height", label: "키" }
+                            { id: "height", label: "키" },
+                            { id: "bmi", label: "비만도" }
                           ].map((tab) => (
                             <button
                               key={tab.id}
@@ -26709,7 +26761,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                         {/* 좌측 Y축 눈금 & 수평 눈금 */}
                         {yTicks.map((v, i) => {
                           const y = toY(v);
-                          const lbl = isWeight ? `${Number.isInteger(v) ? v : v.toFixed(1)}kg` : `${Math.round(v)}cm`;
+                          const lbl = isWeight ? `${Number.isInteger(v) ? v : v.toFixed(1)}kg` : isBmi ? `${Number.isInteger(v) ? v : v.toFixed(1)}` : `${Math.round(v)}cm`;
                           return (
                             <g key={`gy-${i}`}>
                               <line x1={padL} y1={y} x2={W - padR} y2={y} stroke="#e7e5e4" strokeWidth="0.8" />
@@ -26811,7 +26863,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                         </div>
                       ) : (
                         <div className="text-[11.5px] text-stone-500 bg-stone-50 rounded-xl px-2.5 py-2">
-                          {activeChild.name} {isWeight ? "몸무게" : "키"} 기록을 추가하면 표준 성장 곡선 위에 추세선이 표시됩니다.
+                          {activeChild.name} {isWeight ? "몸무게" : isBmi ? "키와 몸무게" : "키"} 기록을 함께 입력하면 표준 성장 곡선 위에 추세선이 표시됩니다.
                         </div>
                       )}
                     </div>
@@ -26848,6 +26900,11 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                               {rowCmp?.weight && (
                                 <span className="px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 text-[10px] font-extrabold whitespace-nowrap">
                                   체중 P{rowCmp.weight.pct}
+                                </span>
+                              )}
+                              {rowCmp?.bmi && (
+                                <span className="px-1.5 py-0.5 rounded bg-amber-50 text-amber-800 text-[10px] font-extrabold whitespace-nowrap">
+                                  BMI {rowCmp.bmi.val.toFixed(1)} · P{rowCmp.bmi.pct}
                                 </span>
                               )}
                             </div>
@@ -26934,6 +26991,23 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                       🩺 {activeChild.name} 소아과 진료 · 체온 메모
                     </div>
                     <div className="flex items-center gap-1 shrink-0">
+                      {childNotes.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            const recent5 = childNotes.slice(0, 5);
+                            const lines = [
+                              `🩺 ${activeChild.name} 최근 진료·체온 기록 (${recent5.length}건)`,
+                              ...recent5.map((n) => `• ${n.date}${n.temp ? ` (${n.temp}°C)` : ""} ${n.title || "진료"}${n.memo ? ` - ${n.memo}` : ""}`)
+                            ];
+                            await copyTextSafe(lines.join("\n"), `📋 ${activeChild.name} 최근 진료·체온 요약을 복사했습니다!`);
+                          }}
+                          className="px-2 py-1 rounded-xl bg-[#EEF3EE] hover:bg-[#DFE9E0] border border-[#C9D8CC] text-[#35503C] text-[11px] font-extrabold whitespace-nowrap"
+                          title="최근 5건 진료·체온 기록 병원/카톡 공유용 복사"
+                        >
+                          📋 요약
+                        </button>
+                      )}
                       {accessRole !== "guest" && (
                         <button
                           type="button"
@@ -27040,8 +27114,8 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                             isFever ? "bg-rose-50 border-rose-200" : "bg-white border-stone-200"
                           }`}
                         >
-                          <div>
-                            <div className="flex items-center gap-1.5">
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-1.5 flex-wrap">
                               <span className="text-[12.5px] font-bold text-stone-500">{n.date}</span>
                               {n.temp && (
                                 <span
