@@ -1178,7 +1178,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v13.27";
+export const APP_CODE_VERSION = "v13.28";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1196,7 +1196,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-22 21:30";
+export const APP_BUILD_DATE = "2026-11-22 21:55";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1264,6 +1264,18 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v13.28",
+    version: "v13.28",
+    date: "2026-11-22",
+    title: "📍 살림수첩 수납 장소 추가·수정·삭제(클라우드 동기화) · 가족 다일정 미루기 보완 · 일별 식단 1탭 복사",
+    category: "신규 기능 · 버그 수정 · 편의성",
+    changes: [
+      "살림수첩 수납 장소 자유 관리: [🏠 살림 기록 추가/수정] 모달에 [⚙️ 장소 관리]를 신설해 수납 장소를 자유롭게 추가·이름 수정·삭제·기본복원 가능 (이름 변경 시 기존 수납 항목의 장소명도 자동 일괄 갱신, 클라우드 family_meta_v4/house_rooms_v1 실시간 동기화 및 JSON 백업/복원 포함)",
+      "가족 다일정 미루기 버그 수정: 기간 범위(시작일~종료일)가 설정된 가족 일정을 [+1일 미루기]할 때 종료일(endDate)도 함께 1일 이동하도록 보완",
+      "일별 식단 1탭 복사(📋): 일일 식단 카드 헤더에 해당 날짜 식단만 카톡 공유용으로 바로 복사하는 버튼 추가 및 Babel AST·배포 정합성 최종 검증 0건 통과"
+    ]
+  },
   {
     id: "patch-v13.27",
     version: "v13.27",

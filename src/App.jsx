@@ -2417,6 +2417,18 @@ function MainApp() {
   const [bucketMemberFilter, setBucketMemberFilter] = useState("전체");
   const [bucketStatusFilter, setBucketStatusFilter] = useState("all");
   const [selectedBucketMapItem, setSelectedBucketMapItem] = useState(null);
+  const [houseStorageRooms, setHouseStorageRooms] = useState(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem("kim_house_storage_rooms_v1") || "null");
+      if (Array.isArray(saved) && saved.length > 0) return saved.map((s) => String(s || "").trim()).filter(Boolean);
+    } catch (e) {}
+    return [...HOUSE_STORAGE_ROOMS];
+  });
+  const [isHouseRoomManageOpen, setIsHouseRoomManageOpen] = useState(false);
+  const [newHouseRoomInput, setNewHouseRoomInput] = useState("");
+  const [editingHouseRoomOrig, setEditingHouseRoomOrig] = useState("");
+  const [editingHouseRoomDraft, setEditingHouseRoomDraft] = useState("");
+
   const [houseItems, setHouseItems] = useState([]);
   const [houseSubTab, setHouseSubTab] = useState("storage"); // storage | warranty | medicine
   const [houseSearch, setHouseSearch] = useState("");
@@ -5062,6 +5074,24 @@ function MainApp() {
 
     unsubscribers.push(
       onSnapshot(
+        getDocRef("family_meta_v4", "house_rooms_v1"),
+        (snap) => {
+          if (!snap.exists()) return;
+          const rooms = snap.data()?.rooms;
+          if (Array.isArray(rooms) && rooms.length > 0) {
+            const clean = rooms.map((s) => String(s || "").trim()).filter(Boolean);
+            if (clean.length > 0) {
+              setHouseStorageRooms(clean);
+              try { localStorage.setItem("kim_house_storage_rooms_v1", JSON.stringify(clean)); } catch (e) {}
+            }
+          }
+        },
+        () => {}
+      )
+    );
+
+    unsubscribers.push(
+      onSnapshot(
         getDocRef("family_meta_v4", "baby_dream_links"),
         (snap) => {
           if (snap.exists()) {
@@ -5590,6 +5620,7 @@ function MainApp() {
         handoverProfile,
         homeMiniDdayIds,
         babyDreamLinks,
+        houseStorageRooms,
         homeLayoutConfig,
         homeTimeRanges,
         routineTimeRanges,
@@ -5764,6 +5795,13 @@ function MainApp() {
           setBabyDreamLinks(payload.babyDreamLinks);
           try { localStorage.setItem("kim_baby_dream_links_v1", JSON.stringify(payload.babyDreamLinks)); } catch (e) {}
         }
+        if (Array.isArray(payload.houseStorageRooms) && payload.houseStorageRooms.length > 0) {
+          const cleanRooms = payload.houseStorageRooms.map((s) => String(s || "").trim()).filter(Boolean);
+          if (cleanRooms.length > 0) {
+            setHouseStorageRooms(cleanRooms);
+            try { localStorage.setItem("kim_house_storage_rooms_v1", JSON.stringify(cleanRooms)); } catch (e) {}
+          }
+        }
       if (Array.isArray(payload.recipes)) setRecipes(payload.recipes);
       if (payload.mealFavorites && typeof payload.mealFavorites === "object") {
         const rCombos = toSafeArray(payload.mealFavorites.combos);
@@ -5931,6 +5969,15 @@ function MainApp() {
             setDoc(
               getDocRef("family_meta_v4", "baby_dream_links"),
               { items: payload.babyDreamLinks, updatedAtMs: Date.now() },
+              { merge: true }
+            )
+          );
+        }
+        if (Array.isArray(payload.houseStorageRooms) && payload.houseStorageRooms.length > 0) {
+          writePromises.push(
+            setDoc(
+              getDocRef("family_meta_v4", "house_rooms_v1"),
+              { rooms: payload.houseStorageRooms, updatedAtMs: Date.now() },
               { merge: true }
             )
           );
@@ -11590,7 +11637,7 @@ ${validText}
     if (ev._isFamily) {
       if (!requireEditorAccess("schedule")) return;
       const { _isFamily, ...cleanEv } = ev;
-      const updated = { ...cleanEv, date: nextDate };
+      const updated = { ...cleanEv, date: nextDate, ...(nextEndDate ? { endDate: nextEndDate } : {}) };
       setSchedules((prev) => prev.map((s) => (s.id === ev.id ? updated : s)));
       if (user && db) {
         await setDoc(getDocRef("family_schedules_v4", ev.id), updated, { merge: true }).catch(() => {});
@@ -13065,6 +13112,70 @@ ${item.memo}` : `${item.title} 다녀옴!`,
     if (!s) return "";
     if (/^https?:\/\//i.test(s)) return s;
     return `https://${s}`;
+  };
+
+  const saveHouseStorageRoomsToCloud = async (nextRooms, toastMsg = "") => {
+    const clean = Array.from(new Set((Array.isArray(nextRooms) ? nextRooms : []).map((s) => String(s || "").trim()).filter(Boolean)));
+    if (clean.length === 0) return;
+    setHouseStorageRooms(clean);
+    try { localStorage.setItem("kim_house_storage_rooms_v1", JSON.stringify(clean)); } catch (e) {}
+    if (user && db) {
+      try {
+        await setDoc(getDocRef("family_meta_v4", "house_rooms_v1"), {
+          rooms: clean,
+          updatedAtMs: Date.now()
+        }, { merge: true });
+      } catch (e) {
+        setSyncErrorMsg(e?.message || "수납 장소 저장 오류");
+      }
+    }
+    if (toastMsg) showToast(toastMsg);
+  };
+
+  const handleRenameHouseStorageRoom = async (oldName, rawNewName) => {
+    if (!requireEditorAccess("house")) return;
+    const nextName = String(rawNewName || "").trim();
+    if (!nextName || nextName === oldName) {
+      setEditingHouseRoomOrig("");
+      setEditingHouseRoomDraft("");
+      return;
+    }
+    if (houseStorageRooms.includes(nextName)) {
+      return showToast(`'${nextName}' 장소가 이미 있습니다.`);
+    }
+    const nextRooms = houseStorageRooms.map((r) => (r === oldName ? nextName : r));
+    await saveHouseStorageRoomsToCloud(nextRooms, `📍 '${oldName}' → '${nextName}' 변경했습니다.`);
+    if (houseForm.room === oldName) setHouseForm((p) => ({ ...p, room: nextName }));
+    if (houseFilter === oldName) setHouseFilter(nextName);
+    // Sync existing storage items using the renamed room
+    const affected = houseItems.filter((it) => it.kind === "storage" && it.room === oldName);
+    if (affected.length > 0) {
+      setHouseItems((prev) => prev.map((it) => (it.kind === "storage" && it.room === oldName ? { ...it, room: nextName } : it)));
+      if (user && db) {
+        try {
+          await Promise.all(
+            affected.map((it) =>
+              setDoc(getDocRef("family_house_items_v1", it.id), { ...it, room: nextName, updatedAtMs: Date.now() }, { merge: true })
+            )
+          );
+        } catch (e) {
+          setSyncErrorMsg(e?.message || "수납 장소 일괄 변경 동기화 오류");
+        }
+      }
+    }
+    setEditingHouseRoomOrig("");
+    setEditingHouseRoomDraft("");
+  };
+
+  const handleDeleteHouseStorageRoom = async (targetRoom) => {
+    if (!requireEditorAccess("house")) return;
+    if (houseStorageRooms.length <= 1) {
+      return showToast("최소 1개의 장소는 남겨두어야 합니다.");
+    }
+    const nextRooms = houseStorageRooms.filter((r) => r !== targetRoom);
+    await saveHouseStorageRoomsToCloud(nextRooms, `🗑️ '${targetRoom}' 장소를 삭제했습니다.`);
+    if (houseForm.room === targetRoom) setHouseForm((p) => ({ ...p, room: nextRooms[0] || "기타" }));
+    if (houseFilter === targetRoom) setHouseFilter("전체");
   };
 
   const saveBabyDreamLinksToCloud = async (nextList, toastMsg = "") => {
@@ -16710,6 +16821,29 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                           <span className="px-1.5 py-0.5 rounded bg-emerald-600 text-white text-[10.5px] font-black whitespace-nowrap shrink-0">오늘</span>
                         )}
                       </span>
+                      <div className="flex items-center gap-1 shrink-0">
+                        {dayMeals.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const slotLines = MEAL_SLOTS
+                                .map((s) => {
+                                  const items = dayMeals.filter((m) => m.slot === s.id);
+                                  if (items.length === 0) return "";
+                                  return `${s.icon} ${s.shortLabel}: ${items.map((it) => it.menu).join(" / ")}`;
+                                })
+                                .filter(Boolean);
+                              copyTextSafe(
+                                `🍽️ ${d.slice(5)}(${getDayName(d)}) 식단\n${slotLines.join("\n")}`,
+                                `📋 ${d.slice(5)}(${getDayName(d)}) 식단을 복사했습니다!`
+                              );
+                            }}
+                            className="px-2 py-1 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 text-[11px] font-extrabold whitespace-nowrap"
+                            title="이 날짜 식단 복사"
+                          >
+                            📋
+                          </button>
+                        )}
                       <button
                         type="button"
                         onClick={() => {
@@ -16734,6 +16868,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                       >
                         + 식단 추가
                       </button>
+                      </div>
                     </div>
                     <div className="space-y-1.5">
                       {hideEmptyMealSlots && dayMeals.length === 0 && (
@@ -23337,7 +23472,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
 
               <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5">
                 {(houseSubTab === "storage"
-                  ? ["전체", ...HOUSE_STORAGE_ROOMS]
+                  ? ["전체", ...houseStorageRooms]
                   : houseSubTab === "warranty"
                   ? ["전체", "임박·만료"]
                   : ["전체", "임박·만료", ...HOUSE_MEDICINE_TARGETS]
@@ -38076,22 +38211,151 @@ ${item.memo}` : `${item.title} 다녀옴!`,
 
             {houseForm.kind === "storage" && (
               <>
-                <div className="flex flex-wrap gap-1.5">
-                  {HOUSE_STORAGE_ROOMS.map((rm) => (
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {houseStorageRooms.map((rm) => (
                     <button
                       key={rm}
                       type="button"
                       onClick={() => setHouseForm((p) => ({ ...p, room: rm }))}
-                      className={`px-2.5 py-1 rounded-full text-[11.5px] font-extrabold border whitespace-nowrap ${
+                      className={`px-2.5 py-1 rounded-full text-[11.5px] font-extrabold border whitespace-nowrap transition ${
                         houseForm.room === rm
                           ? "bg-stone-900 text-white border-stone-900"
-                          : "bg-stone-50 text-stone-600 border-stone-200"
+                          : "bg-stone-50 hover:bg-stone-100 text-stone-700 border-stone-200"
                       }`}
                     >
                       {rm}
                     </button>
                   ))}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsHouseRoomManageOpen((v) => !v);
+                      setEditingHouseRoomOrig("");
+                      setEditingHouseRoomDraft("");
+                    }}
+                    className={`px-2.5 py-1 rounded-full text-[11px] font-extrabold border border-dashed whitespace-nowrap transition ${
+                      isHouseRoomManageOpen
+                        ? "bg-[#EEF3EE] border-[#3F624D] text-[#2F523E]"
+                        : "bg-white hover:bg-stone-50 border-stone-300 text-stone-600"
+                    }`}
+                    title="장소 추가·수정·삭제"
+                  >
+                    {isHouseRoomManageOpen ? "⚙️ 닫기" : "⚙️ 장소 관리"}
+                  </button>
                 </div>
+
+                {isHouseRoomManageOpen && (
+                  <div className="bg-stone-50 border border-stone-200 rounded-2xl p-2.5 space-y-2">
+                    <div className="flex items-center justify-between gap-1">
+                      <span className="text-[11px] font-extrabold text-stone-600 whitespace-nowrap">📍 수납 장소 추가 · 수정 · 삭제</span>
+                      <button
+                        type="button"
+                        onClick={() => saveHouseStorageRoomsToCloud([...HOUSE_STORAGE_ROOMS], "📍 기본 장소 목록으로 복원했습니다.")}
+                        className="text-[10.5px] font-extrabold text-stone-500 underline whitespace-nowrap"
+                      >
+                        기본복원
+                      </button>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <input
+                        type="text"
+                        value={newHouseRoomInput}
+                        onChange={(e) => setNewHouseRoomInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            const v = newHouseRoomInput.trim();
+                            if (!v) return;
+                            if (houseStorageRooms.includes(v)) return showToast(`'${v}' 장소가 이미 있습니다.`);
+                            saveHouseStorageRoomsToCloud([...houseStorageRooms, v], `📍 '${v}' 장소를 추가했습니다.`);
+                            setHouseForm((p) => ({ ...p, room: v }));
+                            setNewHouseRoomInput("");
+                          }
+                        }}
+                        placeholder="새 장소 (예: 드레스룸, 팬트리)"
+                        className="flex-1 min-w-0 px-2.5 py-1.5 rounded-xl border border-stone-200 bg-white text-[12px] font-bold"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const v = newHouseRoomInput.trim();
+                          if (!v) return;
+                          if (houseStorageRooms.includes(v)) return showToast(`'${v}' 장소가 이미 있습니다.`);
+                          saveHouseStorageRoomsToCloud([...houseStorageRooms, v], `📍 '${v}' 장소를 추가했습니다.`);
+                          setHouseForm((p) => ({ ...p, room: v }));
+                          setNewHouseRoomInput("");
+                        }}
+                        className="px-2.5 py-1.5 rounded-xl bg-stone-900 text-white text-[11.5px] font-extrabold whitespace-nowrap shrink-0"
+                      >
+                        + 추가
+                      </button>
+                    </div>
+                    <div className="space-y-1 max-h-36 overflow-y-auto pr-0.5">
+                      {houseStorageRooms.map((rm) => (
+                        <div key={`mgr-${rm}`} className="flex items-center justify-between gap-1.5 bg-white border border-stone-200/80 rounded-xl px-2 py-1">
+                          {editingHouseRoomOrig === rm ? (
+                            <>
+                              <input
+                                type="text"
+                                autoFocus
+                                value={editingHouseRoomDraft}
+                                onChange={(e) => setEditingHouseRoomDraft(e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") {
+                                    e.preventDefault();
+                                    handleRenameHouseStorageRoom(rm, editingHouseRoomDraft);
+                                  } else if (e.key === "Escape") {
+                                    setEditingHouseRoomOrig("");
+                                  }
+                                }}
+                                className="flex-1 min-w-0 px-2 py-0.5 rounded-lg border border-stone-300 text-[12px] font-bold"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => handleRenameHouseStorageRoom(rm, editingHouseRoomDraft)}
+                                className="px-2 py-0.5 rounded-lg bg-[#3F624D] text-white text-[10.5px] font-extrabold whitespace-nowrap shrink-0"
+                              >
+                                저장
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setEditingHouseRoomOrig("")}
+                                className="px-1.5 py-0.5 rounded-lg bg-stone-100 text-stone-600 text-[10.5px] font-bold whitespace-nowrap shrink-0"
+                              >
+                                취소
+                              </button>
+                            </>
+                          ) : (
+                            <>
+                              <span className="text-[12px] font-extrabold text-stone-800 truncate min-w-0">{rm}</span>
+                              <div className="flex items-center gap-1 shrink-0">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setEditingHouseRoomOrig(rm);
+                                    setEditingHouseRoomDraft(rm);
+                                  }}
+                                  className="px-1.5 py-0.5 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 text-[10.5px] font-extrabold whitespace-nowrap"
+                                >
+                                  수정
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={houseStorageRooms.length <= 1}
+                                  onClick={() => handleDeleteHouseStorageRoom(rm)}
+                                  className="px-1.5 py-0.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 text-[10.5px] font-extrabold whitespace-nowrap disabled:opacity-30"
+                                >
+                                  삭제
+                                </button>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 <input
                   type="text"
                   placeholder="세부 위치 (예: 안방 장롱 상단 2번 박스)"
