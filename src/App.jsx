@@ -134,6 +134,8 @@ import {
   INITIAL_PATCH_NOTES,
   INITIAL_SCHEDULES,
   CHILDREN_INFO,
+  KOREA_GROWTH_STD_2017,
+  getGrowthPercentileValue,
   evaluateKoreanGrowthPercentile,
   getChildAgeStats,
   addMonthsToDateStr,
@@ -2198,6 +2200,12 @@ function MainApp() {
     const t = setInterval(() => setActivityTimerTick(Date.now()), 1000);
     return () => clearInterval(t);
   }, [babyActivities]);
+  const [editingGrowthId, setEditingGrowthId] = useState(null);
+  const [growthChartMetric, setGrowthChartMetric] = useState("weight");
+  const [growthChartZoom, setGrowthChartZoom] = useState("zoom");
+  const [growthChartPercentiles, setGrowthChartPercentiles] = useState([3, 50, 97]);
+  const [isGrowthPctPickerOpen, setIsGrowthPctPickerOpen] = useState(false);
+  const [selectedGrowthPointId, setSelectedGrowthPointId] = useState(null);
   const [growthForm, setGrowthForm] = useState({
     date: getTodayStr(),
     height: "",
@@ -6073,7 +6081,8 @@ function MainApp() {
     const lockKey = "add-baby-growth-log";
     if (inFlightOpsRef.current.has(lockKey)) return;
     inFlightOpsRef.current.add(lockKey);
-    const id = `gr-${selectedChildId}-${Date.now()}`;
+    const isEdit = Boolean(editingGrowthId);
+    const id = editingGrowthId || `gr-${selectedChildId}-${Date.now()}`;
     const targetDate = growthForm.date || getTodayStr();
     const payload = {
       id,
@@ -6085,13 +6094,14 @@ function MainApp() {
       memo: growthForm.memo || ""
     };
     setGrowthForm({ date: getTodayStr(), height: "", weight: "", head: "", memo: "" });
+    setEditingGrowthId(null);
     try {
       if (user && db) {
         await setDoc(getDocRef("family_baby_growth_v7", id), payload);
       }
       setBabyGrowthLogs((prev) => [payload, ...prev.filter((x) => x.id !== id)]);
-      recordActivity("육아", "성장기록", `${selectedChildId} · ${targetDate}`, { targetSubTab: "growth", targetChildId: selectedChildId });
-      showToast(`${selectedChildId} 성장 기록이 저장되었습니다!`);
+      recordActivity("육아", isEdit ? "성장기록 수정" : "성장기록", `${selectedChildId} · ${targetDate}`, { targetSubTab: "growth", targetChildId: selectedChildId });
+      showToast(isEdit ? `${selectedChildId} 성장 기록이 수정되었습니다!` : `${selectedChildId} 성장 기록이 저장되었습니다!`);
     } catch (e) {
       showToast("⚠️ 성장 기록 서버 저장 실패: 네트워크를 확인해 주세요.");
     } finally {
@@ -6210,7 +6220,7 @@ function MainApp() {
     if (!quickTodoTitle.trim()) return;
     const id = `sch-${Date.now()}`;
     const targetMembers =
-      scheduleMemberFilter === "전체"
+      (scheduleMemberFilter === "전체" || scheduleMemberFilter === "공통")
         ? ["수혁", "아리나", "시목", "시율"]
         : [scheduleMemberFilter];
 
@@ -6320,11 +6330,17 @@ function MainApp() {
   };
 
 
+  const matchesScheduleMemberFilter = (members, memberFilter = "전체") => {
+    if (!memberFilter || memberFilter === "전체") return true;
+    const arr = toSafeArray(members);
+    if (memberFilter === "공통") return arr.length === 0 || arr.length >= 4 || arr.includes("공통");
+    return arr.includes(memberFilter);
+  };
+
   const getSchedulesForDate = (targetDateStr, memberFilter = "전체", catFilter = "전체") => {
     const targetMmDd = String(targetDateStr).slice(5, 10);
     return schedules.filter((s) => {
-      const memMatch =
-        memberFilter === "전체" || toSafeArray(s.members).includes(memberFilter);
+      const memMatch = matchesScheduleMemberFilter(s.members, memberFilter);
       const catMatch = catFilter === "전체" || s.category === catFilter;
       if (!memMatch || !catMatch) return false;
 
@@ -6355,9 +6371,7 @@ function MainApp() {
       .filter((s) => {
         if (s.category === "기념일/생일" || s.isAnnual) return false;
         if (!todoIncludeOtherCats && s.category !== "할일(To-Do)") return false;
-        const memMatch =
-          scheduleMemberFilter === "전체" ||
-          toSafeArray(s.members).includes(scheduleMemberFilter);
+        const memMatch = matchesScheduleMemberFilter(s.members, scheduleMemberFilter);
         if (!memMatch) return false;
         if (todoStatusFilter === "active") return !s.done;
         if (todoStatusFilter === "completed") return Boolean(s.done);
@@ -6382,8 +6396,7 @@ function MainApp() {
         s.category !== "기념일/생일" &&
         !s.isAnnual &&
         (todoIncludeOtherCats || s.category === "할일(To-Do)") &&
-        (scheduleMemberFilter === "전체" ||
-          toSafeArray(s.members).includes(scheduleMemberFilter))
+        matchesScheduleMemberFilter(s.members, scheduleMemberFilter)
     );
     const total = nonAnniv.length;
     const doneCount = nonAnniv.filter((s) => s.done).length;
@@ -6408,8 +6421,7 @@ function MainApp() {
       .filter(
         (s) =>
           s.showDday &&
-          (scheduleMemberFilter === "전체" ||
-            toSafeArray(s.members).includes(scheduleMemberFilter))
+          matchesScheduleMemberFilter(s.members, scheduleMemberFilter)
       )
       .map((s) => ({
         ...s,
@@ -14987,6 +14999,8 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                         onClick={() => {
                           setRoutineViewMode("timetable");
                           try { localStorage.setItem("kim_routine_view_mode_v1", "timetable"); } catch (e) {}
+                          setScheduleMemberFilter(homeRoutineTargetFilter);
+                          setRoutineTargetFilter(homeRoutineTargetFilter);
                           setScheduleSubTab("routine");
                           setActiveTab("schedule");
                         }}
@@ -14997,6 +15011,8 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                       <button
                         type="button"
                         onClick={() => {
+                          setScheduleMemberFilter(homeRoutineTargetFilter);
+                          setRoutineTargetFilter(homeRoutineTargetFilter);
                           setScheduleSubTab("routine");
                           setActiveTab("schedule");
                         }}
@@ -15080,7 +15096,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                         <div className="flex flex-wrap gap-1.5">
                           {[
                             { id: "전체", label: "전체" },
-                            { id: "공통", label: "공통" },
+                            { id: "공통", label: "공통가사" },
                             { id: "시목", label: "시목" },
                             { id: "시율", label: "시율" }
                           ].map((tgt) => (
@@ -17505,40 +17521,34 @@ ${item.memo}` : `${item.title} 다녀옴!`,
 
 
           {!(scheduleSubTab === "calendar" && isAdminUnlocked && scheduleCalScope === "private") && (
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 sm:grid sm:grid-cols-5 sm:gap-1">
-            <button
-              type="button"
-              onClick={() => {
-                setScheduleMemberFilter("전체");
-                setRoutineTargetFilter("전체");
-              }}
-              className={`px-2.5 py-1.5 rounded-xl text-[12px] font-extrabold border transition flex items-center justify-center gap-1 whitespace-nowrap shrink-0 ${
-                scheduleMemberFilter === "전체"
-                  ? "bg-stone-900 text-white border-stone-900"
-                  : "bg-white text-stone-600 border-stone-200"
-              }`}
-            >
-              <span>👨‍👩‍👧‍👦</span>
-              <span>전체</span>
-            </button>
-            {FAMILY_MEMBERS.map((m) => (
-              <button
-                type="button"
-                key={m.id}
-                onClick={() => {
-                  setScheduleMemberFilter(m.id);
-                  setRoutineTargetFilter(m.id);
-                }}
-                className={`px-2.5 py-1.5 rounded-xl text-[12px] font-extrabold border transition flex items-center justify-center gap-1 whitespace-nowrap shrink-0 ${
-                  scheduleMemberFilter === m.id
-                    ? "bg-stone-900 text-white border-stone-900"
-                    : "bg-white text-stone-600 border-stone-200"
-                }`}
-              >
-                <MemberAvatar member={m} size="sm" />
-                <span>{m.name}</span>
-              </button>
-            ))}
+          <div className="grid grid-cols-6 gap-1">
+            {[
+              { id: "전체", label: "전체" },
+              { id: "공통", label: "공통가사" },
+              ...FAMILY_MEMBERS.map((m) => ({ id: m.id, label: m.name }))
+            ].map((opt) => {
+              const isSelected =
+                scheduleSubTab === "routine"
+                  ? routineTargetFilter === opt.id
+                  : scheduleMemberFilter === opt.id;
+              return (
+                <button
+                  type="button"
+                  key={opt.id}
+                  onClick={() => {
+                    setScheduleMemberFilter(opt.id);
+                    setRoutineTargetFilter(opt.id);
+                  }}
+                  className={`h-8 px-1 rounded-xl text-[11px] font-bold border transition flex items-center justify-center whitespace-nowrap ${
+                    isSelected
+                      ? "bg-[#3F624D] text-white border-[#3F624D]"
+                      : "bg-white text-stone-700 border-stone-200 hover:bg-stone-50"
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              );
+            })}
           </div>
           )}
 
@@ -17752,7 +17762,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                                 date: scheduleSelectedDate,
                                 category: "할일(To-Do)",
                                 members:
-                                  scheduleMemberFilter === "전체"
+                                  (scheduleMemberFilter === "전체" || scheduleMemberFilter === "공통")
                                     ? ["수혁", "아리나", "시목", "시율"]
                                     : [scheduleMemberFilter],
                                 isAnnual: false,
@@ -18842,31 +18852,6 @@ ${item.memo}` : `${item.title} 다녀옴!`,
             })()}
 
 
-            <div className="flex gap-1 overflow-x-auto">
-              {[
-                { id: "전체", label: "전체" },
-                { id: "공통", label: "👨‍👩‍👧‍👦 공통" },
-                { id: "시목", label: "👦 시목" },
-                { id: "시율", label: "👶 시율" },
-                { id: "수혁", label: "👨 수혁" },
-                { id: "아리나", label: "👩 아리" }
-              ].map((tgt) => (
-                <button
-                  key={tgt.id}
-                  type="button"
-                  onClick={() => setRoutineTargetFilter(tgt.id)}
-                  className={`px-2 py-0.5 rounded-full text-[11.5px] font-extrabold border shrink-0 ${
-                    routineTargetFilter === tgt.id
-                      ? "bg-stone-900 text-white border-stone-900"
-                      : "bg-stone-50 text-stone-600 border-stone-200"
-                  }`}
-                >
-                  {tgt.label}
-                </button>
-              ))}
-            </div>
-
-
             <div className="flex gap-1 overflow-x-auto pb-0.5">
               {["전체", ...activeRoutineTimeSlots].map((ts) => (
                 <button
@@ -18965,8 +18950,23 @@ ${item.memo}` : `${item.title} 다녀옴!`,
 
               if (tableRows.length === 0) {
                 return (
-                  <div className="text-center py-5 text-[12.5px] font-bold text-stone-400">
-                    선택한 조건에 해당하는 루틴이 없습니다.
+                  <div className="text-center py-5 space-y-2">
+                    <div className="text-[12.5px] font-semibold text-stone-500">
+                      선택한 조건에 해당하는 루틴이 없습니다.
+                    </div>
+                    {(routineTargetFilter !== "전체" || routineTimeFilter !== "전체") && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setScheduleMemberFilter("전체");
+                          setRoutineTargetFilter("전체");
+                          setRoutineTimeFilter("전체");
+                        }}
+                        className="h-7 px-3 rounded-lg bg-[#EEF3EE] text-[#35503C] text-[11.5px] font-semibold whitespace-nowrap"
+                      >
+                        필터 초기화
+                      </button>
+                    )}
                   </div>
                 );
               }
@@ -18974,9 +18974,11 @@ ${item.memo}` : `${item.title} 다녀옴!`,
               return (
                 <div className="rounded-2xl border border-stone-200 overflow-hidden bg-white">
                   <div className="bg-[#EEF3EE] px-2.5 py-1.5 border-b border-stone-200 flex items-center justify-between gap-2">
-                    <div className="grid grid-cols-[54px_1fr] gap-2 flex-1 text-[10.5px] font-black text-[#35503C]">
-                      <span>시간</span>
-                      <span>루틴 시간표 ({tableRows.filter((r) => isRoutineDoneNow(r)).length}/{tableRows.length}) · 글 탭해 상세/편집</span>
+                    <div className="grid grid-cols-[48px_1fr] gap-2 flex-1 min-w-0 text-[11px] font-bold text-[#35503C] items-center">
+                      <span className="whitespace-nowrap">시간</span>
+                      <span className="whitespace-nowrap truncate" title="항목 글을 누르면 상세·편집할 수 있습니다">
+                        루틴 시간표 ({tableRows.filter((r) => isRoutineDoneNow(r)).length}/{tableRows.length})
+                      </span>
                     </div>
                     {accessRole !== "guest" && (
                       <button
@@ -26322,48 +26324,56 @@ ${item.memo}` : `${item.title} 다녀옴!`,
             {/* 서브탭 3: 성장 기록 (키·몸무게·머리둘레) */}
             {babySubTab === "growth" && (
               <div className="space-y-3">
+                {/* 1) 성장 측정 입력/수정 카드 */}
                 <div className="bg-white p-3.5 rounded-2xl border border-stone-200 shadow-sm space-y-2.5">
                   <div className="flex items-center justify-between gap-2">
                     <div className="text-[13.5px] font-black text-stone-900 truncate">
-                      📏 {activeChild.name} 성장 측정 기록
+                      📏 {activeChild.name} {editingGrowthId ? "성장 기록 수정" : "성장 측정 기록"}
                     </div>
-                    {(() => {
-                      const cLogs = babyGrowthLogs
-                        .filter((g) => g.childId === activeChild.id)
-                        .sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")));
-                      if (cLogs.length === 0) return null;
-                      const latest = cLogs[0];
-                      return (
+                    <div className="flex items-center gap-1 shrink-0">
+                      {editingGrowthId && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditingGrowthId(null);
+                            setGrowthForm({ date: getTodayStr(), height: "", weight: "", head: "", memo: "" });
+                          }}
+                          className="px-2 py-1 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-[11px] font-bold whitespace-nowrap"
+                        >
+                          취소
+                        </button>
+                      )}
+                      {childGrowth.length > 0 && (
                         <button
                           type="button"
                           onClick={async () => {
+                            const latest = childGrowth[0];
                             const todayMs = new Date(`${getTodayStr()}T00:00:00`).getTime();
                             const birthMs = new Date(`${activeChild.birthDate}T00:00:00`).getTime();
                             const days = Math.max(1, Math.floor((todayMs - birthMs) / 86400000) + 1);
+                            const cmpLatest = evaluateKoreanGrowthPercentile(activeChild, latest.date, latest.height, latest.weight);
                             const parts = [
-                              latest.height ? `키 ${latest.height}cm` : "",
-                              latest.weight ? `몸무게 ${latest.weight}kg` : "",
+                              latest.height ? `키 ${latest.height}cm${cmpLatest?.height ? ` (${cmpLatest.height.label})` : ""}` : "",
+                              latest.weight ? `몸무게 ${latest.weight}kg${cmpLatest?.weight ? ` (${cmpLatest.weight.label})` : ""}` : "",
                               latest.head ? `머리둘레 ${latest.head}cm` : ""
                             ].filter(Boolean);
-                            const txt = `📏 ${activeChild.name} 최근 성장 기록 (생후 ${days}일 · ${latest.date})
-• ${parts.join(" · ") || "측정값 없음"}${latest.memo ? `
-• 메모: ${latest.memo}` : ""}`;
-                            await copyTextSafe(txt, `📋 ${activeChild.name} 성장 요약을 복사했습니다!`);
+                            const txt = `📏 ${activeChild.name} 최근 성장 기록 (생후 ${days}일 · ${latest.date})\n• ${parts.join(" · ") || "측정값 없음"}${latest.memo ? `\n• 메모: ${latest.memo}` : ""}`;
+                            await copyTextSafe(txt, `📋 ${activeChild.name} 성장 요약(백분위 포함)을 복사했습니다!`);
                           }}
                           className="px-2 py-1 rounded-xl bg-[#EEF3EE] hover:bg-[#DFE9E0] border border-[#C9D8CC] text-[#35503C] text-[11px] font-extrabold whitespace-nowrap shrink-0"
-                          title="최근 성장 기록 카톡 공유용 복사"
+                          title="최근 성장 기록·백분위 카톡 공유용 복사"
                         >
                           📋 성장요약
                         </button>
-                      );
-                    })()}
+                      )}
+                    </div>
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     <input
                       type="date"
                       value={growthForm.date}
                       onChange={(e) => setGrowthForm({ ...growthForm, date: e.target.value })}
-                      className="px-2.5 py-2 rounded-xl border border-stone-200 text-[13.5px] font-bold"
+                      className="px-2.5 py-2 rounded-xl border border-stone-200 text-[13px] font-bold"
                     />
                     <input
                       id="baby-growth-height-input"
@@ -26372,7 +26382,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                       placeholder="키 (cm)"
                       value={growthForm.height}
                       onChange={(e) => setGrowthForm({ ...growthForm, height: e.target.value })}
-                      className="px-2.5 py-2 rounded-xl border border-stone-200 text-[13.5px] font-bold"
+                      className="px-2.5 py-2 rounded-xl border border-stone-200 text-[13px] font-bold"
                     />
                     <input
                       type="number" inputMode="decimal"
@@ -26380,7 +26390,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                       placeholder="몸무게 (kg)"
                       value={growthForm.weight}
                       onChange={(e) => setGrowthForm({ ...growthForm, weight: e.target.value })}
-                      className="px-2.5 py-2 rounded-xl border border-stone-200 text-[13.5px] font-bold"
+                      className="px-2.5 py-2 rounded-xl border border-stone-200 text-[13px] font-bold"
                     />
                     <input
                       type="number" inputMode="decimal"
@@ -26388,7 +26398,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                       placeholder="머리둘레 (cm, 선택)"
                       value={growthForm.head}
                       onChange={(e) => setGrowthForm({ ...growthForm, head: e.target.value })}
-                      className="px-2.5 py-2 rounded-xl border border-stone-200 text-[13.5px] font-bold"
+                      className="px-2.5 py-2 rounded-xl border border-stone-200 text-[13px] font-bold"
                     />
                   </div>
                   <input
@@ -26396,28 +26406,37 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                     placeholder="메모 (예: 1차 영유아검진 측정치)"
                     value={growthForm.memo}
                     onChange={(e) => setGrowthForm({ ...growthForm, memo: e.target.value })}
-                    className="w-full px-3 py-2 rounded-xl border border-stone-200 text-[13.5px]"
+                    className="w-full px-3 py-2 rounded-xl border border-stone-200 text-[13px]"
                   />
                   <button
                     type="button"
                     onClick={handleAddGrowthLog}
-                    className="w-full py-2.5 rounded-xl bg-stone-900 text-white text-[13.5px] font-extrabold"
+                    className="w-full py-2 rounded-xl bg-[#3F624D] hover:bg-[#324F3E] text-white text-[13px] font-bold transition"
                   >
-                    + 성장 기록 저장
+                    {editingGrowthId ? "성장 기록 수정 저장" : "+ 성장 기록 저장"}
                   </button>
                 </div>
 
-
+                {/* 2) 또래 한국 남아/여아 최신 백분위 비교 (탭하면 아래 곡선 지표 자동 전환) */}
                 {childGrowth.length > 0 && (() => {
                   const latest = childGrowth[0];
                   const cmp = evaluateKoreanGrowthPercentile(activeChild, latest.date, latest.height, latest.weight);
                   if (!cmp || (!cmp.height && !cmp.weight)) return null;
-                  const renderMetricGauge = (title, emoji, unit, m, tone) => {
+                  const renderMetricGauge = (metricKey, title, emoji, unit, m, tone) => {
                     if (!m) return null;
                     const barPct = Math.max(2, Math.min(98, m.pct));
                     const diffSign = m.diffP50 >= 0 ? "+" : "";
+                    const isSelectedMetric = growthChartMetric === metricKey;
                     return (
-                      <div className="bg-[#FAF8F3] rounded-xl p-2.5 border border-stone-200/80 space-y-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setGrowthChartMetric(metricKey)}
+                        className={`w-full text-left rounded-xl p-2.5 border space-y-1.5 transition ${
+                          isSelectedMetric
+                            ? "bg-[#FAF8F3] border-[#3F624D]/60 ring-1 ring-[#3F624D]/20"
+                            : "bg-[#FAF8F3]/70 border-stone-200/80 hover:border-stone-300"
+                        }`}
+                      >
                         <div className="flex items-center justify-between gap-1">
                           <span className="text-[12px] font-black text-stone-800 whitespace-nowrap">
                             {emoji} {title} <span className="text-[13.5px] text-stone-950">{m.val}{unit}</span>
@@ -26444,170 +26463,364 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                         </div>
                         <div className="flex items-center justify-between text-[10.5px] font-bold text-stone-500 gap-1">
                           <span className="whitespace-nowrap">
-                            또래 평균(P50) {m.p50.toFixed(1)}{unit} ({diffSign}{m.diffP50.toFixed(1)}{unit})
+                            표준(50%) {m.p50.toFixed(1)}{unit} ({diffSign}{m.diffP50.toFixed(2)}{unit})
                           </span>
                           <span className="whitespace-nowrap text-stone-400">
-                            정상 {m.p3.toFixed(1)}~{m.p97.toFixed(1)}{unit}
+                            3~97%: {m.p3.toFixed(1)}~{m.p97.toFixed(1)}{unit}
                           </span>
                         </div>
-                      </div>
+                      </button>
                     );
                   };
                   return (
-                    <div className="bg-white p-3.5 rounded-2xl border border-stone-200 shadow-sm space-y-2.5">
+                    <div className="bg-white p-3.5 rounded-2xl border border-stone-200 shadow-sm space-y-2">
                       <div className="flex items-center justify-between gap-1">
-                        <span className="text-[13.5px] font-black text-stone-900">
+                        <span className="text-[13.5px] font-black text-stone-900 whitespace-nowrap">
                           📊 또래 한국 {cmp.gender} 비교 ({cmp.monthsFloat.toFixed(1)}개월)
                         </span>
-                        <span className="text-[10.5px] font-bold text-stone-400 whitespace-nowrap">
-                          {latest.date} 측정 기준
+                        <span className="text-[10.5px] font-bold text-stone-500 whitespace-nowrap">
+                          {latest.date}
                         </span>
                       </div>
-                      <div className="space-y-2">
-                        {renderMetricGauge("키", "📏", "cm", cmp.height, "emerald")}
-                        {renderMetricGauge("몸무게", "⚖️", "kg", cmp.weight, "indigo")}
-                      </div>
-                      <div className="text-[10px] font-semibold text-stone-400 leading-snug">
-                        출처: 질병관리청(KDCA) · 대한소아청소년과학회 「2017 소아청소년 성장도표」 (0~35개월 WHO 기준)
+                      <div className="space-y-1.5">
+                        {renderMetricGauge("height", "키", "📏", "cm", cmp.height, "emerald")}
+                        {renderMetricGauge("weight", "몸무게", "⚖️", "kg", cmp.weight, "indigo")}
                       </div>
                     </div>
                   );
                 })()}
 
+                {/* 3) 표준 성장 곡선 vs 우리 아이 추세선 비교 그래프 (키 · 몸무게 각각) */}
+                {(() => {
+                  const gender = activeChild.gender || (activeChild.id === "시율" ? "여아" : "남아");
+                  const stdObj = KOREA_GROWTH_STD_2017[gender];
+                  if (!stdObj) return null;
+                  const isWeight = growthChartMetric === "weight";
+                  const stdTable = isWeight ? stdObj.weight : stdObj.height;
+                  const unit = isWeight ? "kg" : "cm";
+                  const lineColor = isWeight ? "#4f46e5" : "#059669";
+                  const birthMs = new Date(`${activeChild.birthDate}T00:00:00`).getTime();
+                  const todayMs = new Date(`${getTodayStr()}T00:00:00`).getTime();
+                  const todayAgeDays = Math.max(1, Math.floor((todayMs - birthMs) / 86400000));
 
-                {childGrowth.length >= 2 && (() => {
-                  const sorted = [...childGrowth].reverse().slice(-8);
-                  const weights = sorted.map((g) => Number(g.weight || 0)).filter((v) => v > 0);
-                  const heights = sorted.map((g) => Number(g.height || 0)).filter((v) => v > 0);
-                  const minW = weights.length ? Math.max(0, Math.floor((Math.min(...weights) - 0.5) * 2) / 2) : 0;
-                  const maxW = weights.length ? Math.ceil((Math.max(...weights) + 0.5) * 2) / 2 : 10;
-                  const minH = heights.length ? Math.max(0, Math.floor(Math.min(...heights) - 2)) : 40;
-                  const maxH = heights.length ? Math.ceil(Math.max(...heights) + 2) : 100;
-                  const W = 330;
-                  const H = 165;
-                  const padL = 36;
-                  const padR = 36;
-                  const padT = 18;
-                  const padB = 28;
+                  const childPoints = [...childGrowth]
+                    .reverse()
+                    .map((g) => {
+                      const val = Number(isWeight ? g.weight : g.height);
+                      if (!Number.isFinite(val) || val <= 0) return null;
+                      const mMs = new Date(`${g.date || getTodayStr()}T00:00:00`).getTime();
+                      const ageDays = Math.max(0, Math.min(1065, Math.round((mMs - birthMs) / 86400000)));
+                      const monthsFloat = ageDays / 30.4375;
+                      const p50 = getGrowthPercentileValue(stdTable, monthsFloat, 50);
+                      const cmpRow = evaluateKoreanGrowthPercentile(activeChild, g.date, g.height, g.weight);
+                      const metricEval = isWeight ? cmpRow?.weight : cmpRow?.height;
+                      return {
+                        id: g.id,
+                        date: g.date,
+                        ageDays,
+                        monthsFloat,
+                        val,
+                        p50,
+                        diffP50: val - p50,
+                        pctLabel: metricEval?.label || ""
+                      };
+                    })
+                    .filter(Boolean)
+                    .sort((a, b) => a.ageDays - b.ageDays);
+
+                  // X range (days): full = 0~1065d (35mo), zoom = focused around child's age/points
+                  const allDays = [...childPoints.map((p) => p.ageDays), todayAgeDays];
+                  const minChildDay = Math.min(...allDays);
+                  const maxChildDay = Math.max(...allDays);
+                  let xMin = 0;
+                  let xMax = 1065;
+                  if (growthChartZoom === "zoom") {
+                    if (maxChildDay <= 100) {
+                      xMin = 0;
+                      xMax = Math.max(80, Math.ceil((maxChildDay + 35) / 20) * 20);
+                    } else {
+                      xMin = Math.max(0, Math.floor((minChildDay - 45) / 30) * 30);
+                      xMax = Math.min(1065, Math.ceil((maxChildDay + 60) / 30) * 30);
+                      if (xMax - xMin < 90) xMax = Math.min(1065, xMin + 90);
+                    }
+                  }
+
+                  const activePcts = (growthChartPercentiles.length > 0 ? growthChartPercentiles : [50]).slice().sort((a, b) => a - b);
+                  const sampleCount = 36;
+                  const curveSets = activePcts.map((pct) => {
+                    const pts = [];
+                    for (let i = 0; i <= sampleCount; i++) {
+                      const d = xMin + ((xMax - xMin) * i) / sampleCount;
+                      const m = d / 30.4375;
+                      pts.push({ d, v: getGrowthPercentileValue(stdTable, m, pct) });
+                    }
+                    return { pct, pts };
+                  });
+
+                  // Compute clean Y range from visible curves & child points
+                  const allYVals = [
+                    ...curveSets.flatMap((c) => c.pts.map((p) => p.v)),
+                    ...childPoints.filter((p) => p.ageDays >= xMin && p.ageDays <= xMax).map((p) => p.val)
+                  ];
+                  const rawYMin = Math.min(...allYVals);
+                  const rawYMax = Math.max(...allYVals);
+                  const ySpan = Math.max(isWeight ? 1.2 : 6, rawYMax - rawYMin);
+                  const yStep = isWeight
+                    ? ySpan <= 2.4 ? 0.3 : ySpan <= 5 ? 0.5 : ySpan <= 10 ? 1.5 : 3
+                    : ySpan <= 15 ? 3 : ySpan <= 30 ? 5 : 10;
+                  const yMin = growthChartZoom === "full" && isWeight
+                    ? 0
+                    : Math.max(0, Math.floor((rawYMin - yStep * 0.4) / yStep) * yStep);
+                  const yMax = Math.ceil((rawYMax + yStep * 0.4) / yStep) * yStep;
+
+                  const yTicks = [];
+                  for (let v = yMin; v <= yMax + 0.001; v += yStep) {
+                    yTicks.push(Number(v.toFixed(2)));
+                  }
+                  const xTickCount = 5;
+                  const xTicks = [];
+                  for (let i = 0; i <= xTickCount; i++) {
+                    xTicks.push(Math.round(xMin + ((xMax - xMin) * i) / xTickCount));
+                  }
+
+                  const W = 340;
+                  const H = 225;
+                  const padL = 42;
+                  const padR = 26;
+                  const padT = 22;
+                  const padB = 20;
                   const plotW = W - padL - padR;
                   const plotH = H - padT - padB;
-                  const getX = (i) => (sorted.length === 1 ? padL + plotW / 2 : padL + (i / (sorted.length - 1)) * plotW);
-                  const getY = (val, minV, maxV) => padT + plotH - ((val - minV) / Math.max(0.1, maxV - minV)) * plotH;
+                  const toX = (d) => padL + ((d - xMin) / Math.max(1, xMax - xMin)) * plotW;
+                  const toY = (v) => padT + plotH - ((v - yMin) / Math.max(0.1, yMax - yMin)) * plotH;
 
+                  const activePoint =
+                    childPoints.find((p) => p.id === selectedGrowthPointId) ||
+                    childPoints[childPoints.length - 1] ||
+                    null;
 
-                  const heightCoords = sorted
-                    .map((item, i) => {
-                      const val = Number(item.height || 0);
-                      return val > 0 ? { x: getX(i), y: getY(val, minH, maxH), val, date: item.date } : null;
-                    })
-                    .filter(Boolean);
-                  const weightCoords = sorted
-                    .map((item, i) => {
-                      const val = Number(item.weight || 0);
-                      return val > 0 ? { x: getX(i), y: getY(val, minW, maxW), val, date: item.date } : null;
-                    })
-                    .filter(Boolean);
-
-
-                  const yRatios = [0, 0.5, 1];
-                  const showTickIdx = (i) =>
-                    sorted.length <= 4 || i === 0 || i === sorted.length - 1 || i === Math.floor((sorted.length - 1) / 2);
-
+                  const ALL_PCT_OPTIONS = [3, 5, 10, 25, 50, 75, 90, 95, 97];
 
                   return (
-                    <div className="bg-white p-3.5 rounded-2xl border border-stone-200 shadow-sm space-y-2">
-                      <div className="flex items-center justify-between text-[13px] font-black text-stone-900 gap-1">
-                        <span className="truncate">📈 {activeChild.id} 성장 추이 ({sorted.length}회)</span>
-                        <div className="flex items-center gap-2 text-[11px] shrink-0">
-                          <span className="text-emerald-600 font-extrabold">● 키(cm)</span>
-                          <span className="text-indigo-600 font-extrabold">● 몸무게(kg)</span>
+                    <div className="bg-white p-3.5 rounded-2xl border border-stone-200 shadow-sm space-y-2.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="text-[13.5px] font-black text-stone-900 whitespace-nowrap">
+                          📈 표준 성장 곡선 비교
+                        </div>
+                        <div className="flex items-center gap-1 bg-stone-100 p-0.5 rounded-xl shrink-0">
+                          {[
+                            { id: "weight", label: "몸무게" },
+                            { id: "height", label: "키" }
+                          ].map((tab) => (
+                            <button
+                              key={tab.id}
+                              type="button"
+                              onClick={() => setGrowthChartMetric(tab.id)}
+                              className={`h-7 px-2.5 rounded-lg text-[11.5px] font-bold whitespace-nowrap transition ${
+                                growthChartMetric === tab.id
+                                  ? "bg-[#3F624D] text-white shadow-sm"
+                                  : "text-stone-600 hover:text-stone-900"
+                              }`}
+                            >
+                              {tab.label}
+                            </button>
+                          ))}
                         </div>
                       </div>
-                      <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-44 bg-stone-50/70 rounded-xl border border-stone-100">
-                        {/* Y축 단위 라벨 */}
-                        <text x={padL - 4} y={11} textAnchor="end" fontSize="8.5" fontWeight="800" fill="#059669">키(cm)</text>
-                        <text x={W - padR + 4} y={11} textAnchor="start" fontSize="8.5" fontWeight="800" fill="#4f46e5">체중(kg)</text>
 
+                      <div className="flex items-center justify-between gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => setIsGrowthPctPickerOpen((v) => !v)}
+                          className={`h-7 px-2.5 rounded-lg border text-[11.5px] font-semibold whitespace-nowrap shrink-0 transition ${
+                            isGrowthPctPickerOpen
+                              ? "bg-[#EEF3EE] border-[#3F624D] text-[#35503C]"
+                              : "bg-stone-50 border-stone-200 text-stone-700 hover:bg-stone-100"
+                          }`}
+                        >
+                          백분위 ({activePcts.join("·")}%) ▾
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setGrowthChartZoom((z) => (z === "zoom" ? "full" : "zoom"))}
+                          className="h-7 px-2.5 rounded-lg bg-sky-50 hover:bg-sky-100 border border-sky-200 text-sky-800 text-[11.5px] font-bold whitespace-nowrap shrink-0 transition"
+                        >
+                          {growthChartZoom === "zoom" ? "전체보기 (0~35개월)" : "확대보기 (내 아이 구간)"}
+                        </button>
+                      </div>
 
-                        {/* 가로 눈금선 & 좌/우 Y축 눈금 */}
-                        {yRatios.map((r) => {
-                          const y = padT + plotH * (1 - r);
-                          const hTick = (minH + (maxH - minH) * r).toFixed(1);
-                          const wTick = (minW + (maxW - minW) * r).toFixed(1);
+                      {isGrowthPctPickerOpen && (
+                        <div className="bg-stone-50 border border-stone-200 rounded-xl p-2.5 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[11.5px] font-bold text-stone-700">표시할 표준 백분위 선택</span>
+                            <button
+                              type="button"
+                              onClick={() => setGrowthChartPercentiles([3, 50, 97])}
+                              className="text-[11px] font-semibold text-[#3F624D] hover:underline whitespace-nowrap"
+                            >
+                              기본값 (3·50·97%)
+                            </button>
+                          </div>
+                          <div className="grid grid-cols-3 gap-1.5">
+                            {ALL_PCT_OPTIONS.map((pct) => {
+                              const checked = growthChartPercentiles.includes(pct);
+                              const colorCls = pct === 50 ? "text-cyan-700" : pct === 3 || pct === 97 ? "text-rose-600" : "text-stone-700";
+                              return (
+                                <button
+                                  key={pct}
+                                  type="button"
+                                  onClick={() => {
+                                    setGrowthChartPercentiles((prev) => {
+                                      if (prev.includes(pct)) {
+                                        return prev.length > 1 ? prev.filter((x) => x !== pct) : prev;
+                                      }
+                                      return [...prev, pct].sort((a, b) => a - b);
+                                    });
+                                  }}
+                                  className={`h-7 px-2 rounded-lg border text-[11.5px] font-bold flex items-center justify-center gap-1 whitespace-nowrap transition ${
+                                    checked
+                                      ? "bg-white border-[#3F624D] shadow-xs"
+                                      : "bg-stone-100/60 border-stone-200 opacity-60"
+                                  } ${colorCls}`}
+                                >
+                                  <span>{checked ? "☑" : "☐"}</span>
+                                  <span>{pct}%</span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+
+                      <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-56 bg-white rounded-xl border border-stone-200/80">
+                        {/* 상단 X축 (생후 일수) & 수직 눈금 */}
+                        {xTicks.map((d, i) => {
+                          const x = toX(d);
                           return (
-                            <g key={`yg-${r}`}>
-                              <line x1={padL} y1={y} x2={W - padR} y2={y} stroke="#e7e5e4" strokeWidth="1" strokeDasharray={r === 0 ? undefined : "3 3"} />
-                              <line x1={padL - 3} y1={y} x2={padL} y2={y} stroke="#a8a29e" strokeWidth="1" />
-                              <line x1={W - padR} y1={y} x2={W - padR + 3} y2={y} stroke="#a8a29e" strokeWidth="1" />
-                              <text x={padL - 5} y={y + 3} textAnchor="end" fontSize="8.5" fontWeight="700" fill="#059669">{hTick}</text>
-                              <text x={W - padR + 5} y={y + 3} textAnchor="start" fontSize="8.5" fontWeight="700" fill="#4f46e5">{wTick}</text>
+                            <g key={`gx-${i}`}>
+                              <line x1={x} y1={padT} x2={x} y2={padT + plotH} stroke="#f1f5f9" strokeWidth="1" />
+                              <text x={x} y={13} textAnchor="middle" fontSize="9" fontWeight="600" fill="#78716c">
+                                {d.toLocaleString()}일
+                              </text>
                             </g>
                           );
                         })}
 
-
-                        {/* 좌·우 Y축 및 하단 X축 실선 */}
-                        <line x1={padL} y1={padT} x2={padL} y2={padT + plotH} stroke="#d6d3d1" strokeWidth="1.2" />
-                        <line x1={W - padR} y1={padT} x2={W - padR} y2={padT + plotH} stroke="#d6d3d1" strokeWidth="1.2" />
-                        <line x1={padL} y1={padT + plotH} x2={W - padR} y2={padT + plotH} stroke="#a8a29e" strokeWidth="1.2" />
-
-
-                        {/* X축 눈금 & 날짜(MM/DD) */}
-                        {sorted.map((item, i) => {
-                          const x = getX(i);
-                          const mmdd = String(item.date || "").slice(5).replace("-", "/");
+                        {/* 좌측 Y축 눈금 & 수평 눈금 */}
+                        {yTicks.map((v, i) => {
+                          const y = toY(v);
+                          const lbl = isWeight ? `${Number.isInteger(v) ? v : v.toFixed(1)}kg` : `${Math.round(v)}cm`;
                           return (
-                            <g key={`xt-${item.id || i}`}>
-                              <line x1={x} y1={padT + plotH} x2={x} y2={padT + plotH + 3.5} stroke="#78716c" strokeWidth="1" />
-                              {showTickIdx(i) && (
-                                <text x={x} y={padT + plotH + 13} textAnchor="middle" fontSize="8.5" fontWeight="700" fill="#78716c">
-                                  {mmdd}
-                                </text>
-                              )}
+                            <g key={`gy-${i}`}>
+                              <line x1={padL} y1={y} x2={W - padR} y2={y} stroke="#e7e5e4" strokeWidth="0.8" />
+                              <text x={padL - 5} y={y + 3} textAnchor="end" fontSize="8.5" fontWeight="600" fill="#57534e">
+                                {lbl}
+                              </text>
                             </g>
                           );
                         })}
-                        <text x={W / 2} y={H - 3} textAnchor="middle" fontSize="8" fontWeight="700" fill="#a8a29e">측정일 (월/일)</text>
 
+                        {/* 축 테두리 */}
+                        <line x1={padL} y1={padT} x2={padL} y2={padT + plotH} stroke="#cbd5e1" strokeWidth="1.2" />
+                        <line x1={padL} y1={padT + plotH} x2={W - padR} y2={padT + plotH} stroke="#cbd5e1" strokeWidth="1.2" />
 
-                        {/* 키 추이 선 & 포인트 */}
-                        {heightCoords.length >= 2 && (
+                        {/* 표준 백분위 곡선들 */}
+                        {curveSets.map(({ pct, pts }) => {
+                          const isMed = pct === 50;
+                          const isEdge = pct === 3 || pct === 97;
+                          const strokeColor = isMed ? "#0891b2" : isEdge ? "#e11d48" : "#94a3b8";
+                          const strokeW = isMed ? 2.2 : isEdge ? 1.2 : 0.9;
+                          const dash = isMed ? "3 2.5" : isEdge ? "3 2.5" : "2 2";
+                          const lastPt = pts[pts.length - 1];
+                          const clampedLastY = Math.max(padT + 8, Math.min(padT + plotH - 4, toY(lastPt.v)));
+                          return (
+                            <g key={`std-${pct}`}>
+                              <polyline
+                                fill="none"
+                                stroke={strokeColor}
+                                strokeWidth={strokeW}
+                                strokeDasharray={dash}
+                                points={pts.map((p) => `${toX(p.d).toFixed(1)},${toY(p.v).toFixed(1)}`).join(" ")}
+                              />
+                              <text x={W - padR + 3} y={clampedLastY + 3} fontSize="8" fontWeight="700" fill={strokeColor}>
+                                {pct}%
+                              </text>
+                            </g>
+                          );
+                        })}
+
+                        {/* 우리 아이 실제 추세선 */}
+                        {childPoints.length >= 2 && (
                           <polyline
                             fill="none"
-                            stroke="#059669"
-                            strokeWidth="2.2"
+                            stroke={lineColor}
+                            strokeWidth="2.5"
                             strokeLinecap="round"
                             strokeLinejoin="round"
-                            points={heightCoords.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ")}
+                            points={childPoints.map((p) => `${toX(p.ageDays).toFixed(1)},${toY(p.val).toFixed(1)}`).join(" ")}
                           />
                         )}
-                        {heightCoords.map((p, idx) => (
-                          <circle key={`hc-${idx}`} cx={p.x} cy={p.y} r="3" fill="#059669" stroke="#ffffff" strokeWidth="1.2" />
-                        ))}
 
-
-                        {/* 몸무게 추이 선 & 포인트 */}
-                        {weightCoords.length >= 2 && (
-                          <polyline
-                            fill="none"
-                            stroke="#4f46e5"
-                            strokeWidth="2.2"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            points={weightCoords.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ")}
-                          />
-                        )}
-                        {weightCoords.map((p, idx) => (
-                          <circle key={`wc-${idx}`} cx={p.x} cy={p.y} r="3" fill="#4f46e5" stroke="#ffffff" strokeWidth="1.2" />
-                        ))}
+                        {/* 우리 아이 데이터 포인트 (탭하여 수치 비교) */}
+                        {childPoints.map((p) => {
+                          const cx = toX(p.ageDays);
+                          const cy = toY(p.val);
+                          const isSel = activePoint && activePoint.id === p.id;
+                          return (
+                            <g
+                              key={`pt-${p.id}`}
+                              onClick={() => setSelectedGrowthPointId(p.id)}
+                              style={{ cursor: "pointer" }}
+                            >
+                              <circle cx={cx} cy={cy} r="11" fill="transparent" />
+                              <circle
+                                cx={cx}
+                                cy={cy}
+                                r={isSel ? 5 : 3.8}
+                                fill="#ffffff"
+                                stroke={lineColor}
+                                strokeWidth={isSel ? 2.8 : 2.2}
+                              />
+                            </g>
+                          );
+                        })}
                       </svg>
+
+                      {/* 범례 + 선택된 측정점 표준 대비 요약 */}
+                      <div className="flex items-center justify-between gap-2 text-[10.5px] font-semibold text-stone-500 flex-wrap">
+                        <div className="flex items-center gap-2.5 flex-wrap">
+                          <span style={{ color: lineColor }} className="font-bold">━ {activeChild.name} 실측</span>
+                          <span className="text-cyan-700">╌ 표준(50%)</span>
+                          <span className="text-rose-600">╌ 3%·97%</span>
+                        </div>
+                        <span className="text-stone-400">KDCA 2017 ({gender})</span>
+                      </div>
+
+                      {activePoint ? (
+                        <div className="bg-stone-50 border border-stone-200/80 rounded-xl px-2.5 py-2 flex items-center justify-between gap-2 text-[11.5px]">
+                          <div className="min-w-0 font-semibold text-stone-800 truncate">
+                            {activePoint.date} (생후 {activePoint.ageDays}일) ·{" "}
+                            <span style={{ color: lineColor }} className="font-black">
+                              {activePoint.val}{unit}
+                            </span>
+                          </div>
+                          <div className="text-stone-600 font-bold whitespace-nowrap shrink-0">
+                            표준 대비 {activePoint.diffP50 >= 0 ? "+" : ""}{activePoint.diffP50.toFixed(2)}{unit}
+                            {activePoint.pctLabel ? ` (${activePoint.pctLabel})` : ""}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="text-[11.5px] text-stone-500 bg-stone-50 rounded-xl px-2.5 py-2">
+                          {activeChild.name} {isWeight ? "몸무게" : "키"} 기록을 추가하면 표준 성장 곡선 위에 추세선이 표시됩니다.
+                        </div>
+                      )}
                     </div>
                   );
                 })()}
 
-
+                {/* 4) 성장 기록 이력 목록 */}
                 {childGrowth.length === 0 ? (
-                  <div className="text-[13.5px] text-stone-400 py-6 text-center bg-white rounded-2xl border border-dashed border-stone-200">
+                  <div className="text-[13px] text-stone-400 py-6 text-center bg-white rounded-2xl border border-dashed border-stone-200">
                     아직 기록된 {activeChild.id} 성장 데이터가 없습니다.
                   </div>
                 ) : (
@@ -26615,7 +26828,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                     {childGrowth.map((g, idx) => {
                       const prev = childGrowth[idx + 1];
                       const wDiff =
-                        prev && g.weight && prev.weight ? (g.weight - prev.weight).toFixed(1) : null;
+                        prev && g.weight && prev.weight ? (g.weight - prev.weight).toFixed(2) : null;
                       const hDiff =
                         prev && g.height && prev.height ? (g.height - prev.height).toFixed(1) : null;
                       const rowCmp = evaluateKoreanGrowthPercentile(activeChild, g.date, g.height, g.weight);
@@ -26624,8 +26837,8 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                           key={g.id}
                           className="bg-white p-3 rounded-2xl border border-stone-200 flex items-center justify-between gap-2"
                         >
-                          <div>
-                            <div className="text-[12.5px] font-bold text-stone-500 flex items-center gap-1.5 flex-wrap">
+                          <div className="min-w-0 flex-1">
+                            <div className="text-[12px] font-bold text-stone-500 flex items-center gap-1.5 flex-wrap">
                               <span>{g.date}</span>
                               {rowCmp?.height && (
                                 <span className="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 text-[10px] font-extrabold whitespace-nowrap">
@@ -26638,12 +26851,12 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                                 </span>
                               )}
                             </div>
-                            <div className="text-[13.5px] font-black text-stone-900 mt-0.5 flex flex-wrap gap-2">
+                            <div className="text-[13px] font-black text-stone-900 mt-0.5 flex flex-wrap gap-2">
                               {g.height && (
                                 <span>
                                   📏 {g.height}cm{" "}
                                   {hDiff && (
-                                    <span className="text-emerald-600 text-[11.5px]">
+                                    <span className="text-emerald-600 text-[11px]">
                                       ({Number(hDiff) >= 0 ? `+${hDiff}` : hDiff})
                                     </span>
                                   )}
@@ -26653,31 +26866,52 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                                 <span>
                                   ⚖️ {g.weight}kg{" "}
                                   {wDiff && (
-                                    <span className="text-emerald-600 text-[11.5px]">
+                                    <span className="text-indigo-600 text-[11px]">
                                       ({Number(wDiff) >= 0 ? `+${wDiff}` : wDiff})
                                     </span>
                                   )}
                                 </span>
                               )}
-                              {g.head && <span>🧢 머리 {g.head}cm</span>}
+                              {g.head && <span>🧢 {g.head}cm</span>}
                             </div>
-                            {g.memo && <div className="text-[12.5px] text-stone-500 mt-0.5">💬 {g.memo}</div>}
+                            {g.memo && <div className="text-[12px] text-stone-500 mt-0.5 break-keep">{g.memo}</div>}
                           </div>
-                          <div className="flex items-center gap-0.5 shrink-0">
+                          <div className="flex items-center gap-1 shrink-0">
                             {isAdminUnlocked && (
-                              <button
-                                type="button"
-                                onClick={() => handleGrowthToDiary(g, activeChild, rowCmp)}
-                                className="px-2 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-900 text-[10.5px] font-extrabold whitespace-nowrap"
-                                title="성장 수치로 육아일기 쓰기"
-                              >
-                                📖 일기
-                              </button>
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setEditingGrowthId(g.id);
+                                    setGrowthForm({
+                                      date: g.date || getTodayStr(),
+                                      height: g.height != null ? String(g.height) : "",
+                                      weight: g.weight != null ? String(g.weight) : "",
+                                      head: g.head != null ? String(g.head) : "",
+                                      memo: g.memo || ""
+                                    });
+                                    window.scrollTo({ top: 0, behavior: "smooth" });
+                                  }}
+                                  className="px-2 py-1 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 text-[10.5px] font-bold whitespace-nowrap"
+                                  title="성장 기록 수정"
+                                >
+                                  수정
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleGrowthToDiary(g, activeChild, rowCmp)}
+                                  className="px-2 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-900 text-[10.5px] font-extrabold whitespace-nowrap"
+                                  title="성장 수치로 육아일기 쓰기"
+                                >
+                                  📖 일기
+                                </button>
+                              </>
                             )}
                             <button
                               type="button"
                               onClick={() => handleDeleteGrowthLog(g.id)}
                               className="p-1.5 text-stone-400 hover:text-red-500"
+                              aria-label="성장 기록 삭제"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>
@@ -28106,7 +28340,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                         title: "",
                         date: scheduleSelectedDate || getTodayStr(),
                         category: "병원/행사",
-                        members: scheduleMemberFilter === "전체" ? ["수혁", "아리나", "시목", "시율"] : [scheduleMemberFilter],
+                        members: (scheduleMemberFilter === "전체" || scheduleMemberFilter === "공통") ? ["수혁", "아리나", "시목", "시율"] : [scheduleMemberFilter],
                         isAnnual: false,
                         showDday: false,
                         hasOriginYear: false,
@@ -28136,7 +28370,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                         title: "",
                         date: getTodayStr(),
                         category: "할일(To-Do)",
-                        members: scheduleMemberFilter === "전체" ? ["수혁", "아리나", "시목", "시율"] : [scheduleMemberFilter],
+                        members: (scheduleMemberFilter === "전체" || scheduleMemberFilter === "공통") ? ["수혁", "아리나", "시목", "시율"] : [scheduleMemberFilter],
                         isAnnual: false,
                         showDday: false,
                         hasOriginYear: false,

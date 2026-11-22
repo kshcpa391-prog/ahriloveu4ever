@@ -1178,7 +1178,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v13.12";
+export const APP_CODE_VERSION = "v13.14";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1196,7 +1196,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-22 15:10";
+export const APP_BUILD_DATE = "2026-11-22 17:38";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1264,6 +1264,30 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v13.14",
+    version: "v13.14",
+    date: "2026-11-22",
+    title: "📈 육아 성장분석 표준 성장 곡선 비교 그래프 (키·몸무게 각각 · 백분위 선택 · 확대/전체보기 · 기록 수정)",
+    category: "기능 고도화 · 육아 성장분석",
+    changes: [
+      "질병관리청 2017 성장도표 기반 [표준 성장 곡선 비교] 그래프 추가: 몸무게/키 전용 탭, 백분위(3~97%) 다중 선택, 확대보기(내 아이 구간)/전체보기(0~35개월) 전환 지원",
+      "그래프 측정점 탭 시 해당 날짜의 생후 일수·실측치·표준(50%) 대비 차이·백분위 즉시 표시 및 위쪽 또래 비교 카드 클릭 시 아래 그래프 지표 자동 전환 연계",
+      "성장 이력 카드에 [수정] 버튼 추가(기존 기록 불러와 덮어쓰기) 및 [성장요약] 카톡 복사 시 백분위 정보 자동 포함"
+    ]
+  },
+  {
+    id: "patch-v13.13",
+    version: "v13.13",
+    date: "2026-11-22",
+    title: "🗓️ 일정·루틴 상단 필터 단일화 (공통가사 추가 · 이모지 제거 · 무스크롤 6열) 및 시간표 줄바꿈 정리",
+    category: "UI/UX 정리 · 필터 통합 · 메뉴 연계",
+    changes: [
+      "일정·할일·루틴 상단 가족 필터에 [공통가사]를 추가하고 이모지·프로필을 제거한 6열 균등 배치로 변경하여 가로 스크롤 없이 한눈에 선택 가능하도록 개선",
+      "반복 루틴 카드 내부에 중복되던 대상 필터 줄을 제거하고 상단 필터와 완전 통합, 홈 화면 [지금 루틴]에서 시간표/관리 이동 시 선택된 가족 필터가 자동 연동되도록 구현",
+      "루틴 시간표 상단 헤더의 2줄 줄바꿈을 한 줄로 정리하고, 조건 결과가 비었을 때 1탭 [필터 초기화] 버튼 추가"
+    ]
+  },
   {
     id: "patch-v13.12",
     version: "v13.12",
@@ -5281,6 +5305,28 @@ export const interpolateGrowthRef = (table, monthsFloat) => {
   return { p3: last[1], p50: last[2], p97: last[3] };
 };
 
+
+export const GROWTH_PERCENTILE_Z = {
+  3: -1.8808,
+  5: -1.6449,
+  10: -1.2816,
+  25: -0.6745,
+  50: 0,
+  75: 0.6745,
+  90: 1.2816,
+  95: 1.6449,
+  97: 1.8808
+};
+
+export const getGrowthPercentileValue = (table, monthsFloat, pct = 50) => {
+  const ref = interpolateGrowthRef(table, monthsFloat);
+  if (pct === 50) return ref.p50;
+  if (pct === 3) return ref.p3;
+  if (pct === 97) return ref.p97;
+  const z = GROWTH_PERCENTILE_Z[pct] ?? 0;
+  const sd = z >= 0 ? (ref.p97 - ref.p50) / 1.8808 : (ref.p50 - ref.p3) / 1.8808;
+  return Math.max(0, ref.p50 + z * sd);
+};
 
 export const evaluateGrowthMetric = (table, monthsFloat, val) => {
   const num = Number(val);
