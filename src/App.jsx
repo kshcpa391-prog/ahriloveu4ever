@@ -14239,29 +14239,29 @@ ${item.memo}` : `${item.title} 다녀옴!`,
               </div>
 
               {/* 우측: 세로 D-Day 스택 (맨 위 설정 버튼 → 선택 항목 순서대로) */}
-              <div className="w-[118px] sm:w-[134px] shrink-0 flex flex-col gap-1">
+              <div className="w-[122px] sm:w-[138px] shrink-0 flex flex-col gap-1">
                 {accessRole !== "guest" && (
                   <button
                     type="button"
                     onClick={() => setIsHomeDdayPickerOpen(true)}
-                    className="w-full px-2 py-1 rounded-xl border border-dashed border-stone-300 bg-stone-50/90 hover:bg-stone-100 text-stone-600 text-[10px] font-extrabold whitespace-nowrap flex items-center justify-center gap-1 transition"
+                    className="w-full px-2 py-1 rounded-xl border border-dashed border-stone-300 bg-stone-50/95 hover:bg-stone-100 text-stone-700 text-[11px] font-extrabold whitespace-nowrap flex items-center justify-center gap-1 transition"
                     title="홈 상단 D-Day · 경과일 및 순서 설정"
                   >
                     <span>⚙️ D-Day 설정</span>
                   </button>
                 )}
                 {orderedDdayItems.length === 0 ? (
-                  <div className="px-2 py-2 rounded-xl border border-stone-200/80 bg-stone-50/60 text-center text-[10px] font-semibold text-stone-400 leading-snug">
-                    표시할 D-Day를 선택해 보세요
+                  <div className="px-2 py-2 rounded-xl border border-stone-200/80 bg-stone-50/60 text-center text-[11px] font-semibold text-stone-500 leading-snug">
+                    D-Day 선택
                   </div>
                 ) : (
-                  <div className="flex flex-col gap-1 max-h-[124px] sm:max-h-[144px] overflow-y-auto no-scrollbar">
+                  <div className="flex flex-col gap-1 max-h-[132px] sm:max-h-[152px] overflow-y-auto no-scrollbar">
                     {orderedDdayItems.map((it) => (
                       <button
                         key={it.key}
                         type="button"
                         onClick={it.onClick}
-                        className={`w-full px-2 py-1 rounded-xl border text-[10.5px] font-extrabold flex items-center justify-between gap-1 transition ${it.cls}`}
+                        className={`w-full px-2 py-1 rounded-xl border text-[11.5px] font-extrabold flex items-center justify-between gap-1 transition ${it.cls}`}
                         title={it.title}
                       >
                         <span className="truncate min-w-0">{it.label}</span>
@@ -14350,17 +14350,17 @@ ${item.memo}` : `${item.title} 다녀옴!`,
               <div className="min-w-0 flex-1 space-y-0.5">
                 {weatherInfo ? (
                   <>
-                    <div className="text-[11.5px] font-bold text-stone-900 leading-tight break-keep">
+                    <div className="text-[13px] font-extrabold text-stone-900 leading-tight truncate">
                       {weatherInfo.emoji} {weatherInfo.temp}°C{" "}
-                      <span className="text-[10.5px] font-medium text-stone-600">({weatherInfo.min}°/{weatherInfo.max}°)</span> ·{" "}
-                      <span className={`text-[10.5px] font-semibold ${weatherInfo.hasUpcomingRain ? "text-amber-800" : "text-stone-700"}`}>
+                      <span className="text-[12px] font-semibold text-stone-700">({weatherInfo.min}°/{weatherInfo.max}°)</span> ·{" "}
+                      <span className={`text-[12px] font-bold ${weatherInfo.hasUpcomingRain ? "text-amber-800" : "text-stone-800"}`}>
                         {weatherInfo.rainBarText || "☔ 0%"}
                       </span>
-                      {isWeatherLoading && <span className="ml-1 text-[10px] text-stone-500">갱신 중</span>}
+                      {isWeatherLoading && <span className="ml-1 text-[11px] text-stone-600">갱신 중</span>}
                     </div>
-                    <div className="text-[10.5px] font-medium text-stone-600 leading-tight">
+                    <div className="text-[12px] font-semibold text-stone-700 leading-tight truncate">
                       미세 {weatherInfo.pm10}({weatherInfo.dust?.label || "-"}) · 초미세 {weatherInfo.pm25}
-                      {weatherError && <span className="ml-1 text-rose-700 font-semibold">· 재시도 필요</span>}
+                      {weatherError && <span className="ml-1 text-rose-700 font-bold">· 재시도 필요</span>}
                     </div>
                   </>
                 ) : weatherError ? (
@@ -14370,7 +14370,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                 )}
               </div>
               <div className="flex items-center gap-1 shrink-0">
-                <span className="text-[10.5px] font-semibold text-stone-600 whitespace-nowrap">상세</span>
+                <span className="text-[11.5px] font-bold text-stone-700 whitespace-nowrap">상세</span>
                 <button
                   type="button"
                   onClick={(e) => {
@@ -14394,17 +14394,17 @@ ${item.memo}` : `${item.title} 다녀옴!`,
               >
                 <div className="flex items-center gap-1.5 min-w-0">
                   <Pin className="w-3 h-3 text-stone-500 shrink-0" />
-                  <div className="text-[11.5px] leading-tight truncate">
+                  <div className="text-[13px] leading-tight truncate">
                     <span className="font-extrabold text-stone-900 mr-1">[공지]</span>
-                    <span className="font-semibold text-stone-700">{pinnedNotices[0].title}</span>
+                    <span className="font-bold text-stone-800">{pinnedNotices[0].title}</span>
                   </div>
                   {pinnedNotices.length > 1 && (
-                    <span className="px-1.5 py-0.5 rounded-full bg-stone-100 text-stone-600 text-[10px] font-bold whitespace-nowrap shrink-0">
+                    <span className="px-1.5 py-0.5 rounded-full bg-stone-100 text-stone-700 text-[11px] font-bold whitespace-nowrap shrink-0">
                       +{pinnedNotices.length - 1}
                     </span>
                   )}
                 </div>
-                <span className="text-[10.5px] font-bold text-stone-500 shrink-0 whitespace-nowrap">
+                <span className="text-[11.5px] font-bold text-stone-700 shrink-0 whitespace-nowrap">
                   전체 &gt;
                 </span>
               </div>
@@ -15000,11 +15000,11 @@ ${item.memo}` : `${item.title} 다녀옴!`,
             return (
               <div key="action_feed" className="space-y-3">
                 {/* 1) 3일 내 일정 */}
-                <section className="bg-white border border-stone-200/90 rounded-2xl shadow-sm p-3 space-y-2">
+                <section className="bg-white border border-stone-200/90 rounded-2xl shadow-sm px-3 py-2.5 space-y-1.5">
                   <div className="flex items-center justify-between gap-2">
-                    <h2 className="text-[12px] font-bold text-stone-900 whitespace-nowrap">
+                    <h2 className="text-[14px] font-extrabold text-stone-900 whitespace-nowrap">
                       3일 내 일정{" "}
-                      <span className="text-[12px] font-bold text-[#3F624D]">{imminentSchedulesWithin3Days.length}건</span>
+                      <span className="text-[14px] font-extrabold text-[#2F523E]">{imminentSchedulesWithin3Days.length}건</span>
                     </h2>
                     <div className="flex items-center gap-1 shrink-0">
                       {imminentSchedulesWithin3Days.length > 0 && (
@@ -15086,9 +15086,9 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                               setCalDayPopupDate(targetDate);
                               setCalDayPopupItem({ ...ev, _isFamily: !ev._isPrivate });
                             }}
-                            className="w-full min-h-[36px] py-1.5 px-1 hover:bg-stone-50 rounded-xl flex items-center justify-between gap-3 text-left transition"
+                            className="w-full min-h-[36px] py-1.5 px-1 hover:bg-stone-50 rounded-xl flex items-center justify-between gap-2 min-w-0 text-left transition"
                           >
-                            <span className="text-[11px] font-semibold text-stone-900 leading-snug break-keep flex-1">
+                            <span className="text-[13.5px] font-bold text-stone-900 leading-snug truncate flex-1 min-w-0">
                               {ev._isPrivate ? "🔒 " : ""}
                               {ev.time ? `${ev.time} ` : ""}
                               {ev.title}
@@ -15098,16 +15098,16 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                               const evDateShort = evDt ? `${String(evDt).slice(5).replace("-", "/")}(${getDayName(evDt)})` : "";
                               return (
                                 <span
-                                  className={`px-1.5 py-0.5 rounded-lg text-[10px] font-bold shrink-0 whitespace-nowrap inline-flex items-center gap-1 ${
+                                  className={`px-2 py-0.5 rounded-lg text-[11px] font-bold shrink-0 whitespace-nowrap inline-flex items-center gap-1 ${
                                     isTodayEv
                                       ? "bg-rose-50 text-rose-700 border border-rose-200"
                                       : isTomorrowEv
-                                      ? "bg-amber-50 text-amber-800 border border-amber-200"
-                                      : "bg-stone-100/90 text-stone-700 border border-stone-200/70"
+                                      ? "bg-amber-50 text-amber-900 border border-amber-200"
+                                      : "bg-stone-100 text-stone-800 border border-stone-200/80"
                                   }`}
                                 >
                                   <span>{isTodayEv ? "오늘" : ev.calc.dDayText}</span>
-                                  {evDateShort && <span className="text-[9.5px] font-medium opacity-80">{evDateShort}</span>}
+                                  {evDateShort && <span className="text-[10.5px] font-semibold opacity-90">{evDateShort}</span>}
                                 </span>
                               );
                             })()}
@@ -15119,11 +15119,11 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                 </section>
 
                 {/* 2) 지금 루틴 — 최우선 집중 개선 영역 */}
-                <section className="bg-white border border-stone-200/90 rounded-2xl shadow-sm p-3 space-y-2.5">
+                <section className="bg-white border border-stone-200/90 rounded-2xl shadow-sm px-3 py-2.5 space-y-2">
                   <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0 space-y-1">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <h2 className="text-[12px] font-bold text-stone-900 leading-tight whitespace-nowrap">
+                    <div className="min-w-0 space-y-0.5">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <h2 className="text-[14px] font-extrabold text-stone-900 leading-tight whitespace-nowrap">
                           {homeRoutineDayOffset === -1
                             ? "어제 루틴"
                             : homeRoutineDayOffset === 1
@@ -15134,11 +15134,11 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                             ? "오늘 남은 루틴"
                             : `${effHomeSlotFilter} 루틴`}
                         </h2>
-                        <span className="text-[12px] font-bold text-[#3F624D] whitespace-nowrap">
+                        <span className="text-[14px] font-extrabold text-[#2F523E] whitespace-nowrap">
                           {visibleRoutineList.length}건
                         </span>
                       </div>
-                      <div className="text-[11px] font-medium text-stone-600 flex items-center gap-1.5 flex-wrap">
+                      <div className="text-[12px] font-semibold text-stone-700 flex items-center gap-1.5 flex-wrap">
                         <span>{homeHolidayName ? homeHolidayName : isHomeDayWeekend ? "주말·공휴일" : "평일"}</span>
                         {totalRtProgress > 0 && homeRoutineDayOffset !== 1 && (
                           <span>· 달성 {doneRtProgress}/{totalRtProgress} ({progressPct}%)</span>
@@ -15393,27 +15393,27 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                               )}
 
                               <div className="min-w-0 flex-1 space-y-1">
-                                <div className="flex items-baseline justify-between gap-2">
-                                  <span className="text-[11px] font-semibold text-stone-900 leading-snug break-keep">
+                                <div className="flex items-baseline justify-between gap-2 min-w-0">
+                                  <span className="text-[13.5px] font-bold text-stone-900 leading-snug truncate flex-1 min-w-0">
                                     {steps.length >= 2 ? steps[0] : rt.title}
                                     {steps.length >= 2 && (
-                                      <span className="ml-1.5 text-[11px] font-medium text-stone-600">
+                                      <span className="ml-1.5 text-[12px] font-semibold text-stone-600">
                                         외 {steps.length - 1}단계
                                       </span>
                                     )}
                                   </span>
                                   {steps.length >= 2 && (
-                                    <span className="text-[11px] font-bold text-[#3F624D] whitespace-nowrap shrink-0">
+                                    <span className="text-[11.5px] font-extrabold text-[#2F523E] whitespace-nowrap shrink-0">
                                       진행 {stepDoneSet.size}/{steps.length}
                                     </span>
                                   )}
                                 </div>
 
                                 {/* 한 줄 보조 텍스트 (불필요한 컬러 배지 제거, 지연만 주의 강조) */}
-                                <div className="text-[11px] font-medium text-stone-600 leading-snug flex items-center gap-1.5 flex-wrap">
+                                <div className="text-[12px] font-medium text-stone-700 leading-snug flex items-center gap-1.5 flex-wrap">
                                   <span>{metaParts.join(" · ")}</span>
                                   {isOverdue && (
-                                    <span className="text-amber-800 font-semibold whitespace-nowrap">· 시간 지남</span>
+                                    <span className="text-amber-800 font-bold whitespace-nowrap">· 시간 지남</span>
                                   )}
                                 </div>
 
@@ -15433,7 +15433,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                                         <span className="w-4 h-4 rounded border-[1.75px] border-stone-400 bg-white flex items-center justify-center text-[11px] font-semibold text-stone-700 shrink-0">
                                           {sIdx + 1}
                                         </span>
-                                        <span className="text-[12px] font-medium text-stone-900 leading-snug break-keep flex-1">
+                                        <span className="text-[13px] font-semibold text-stone-900 leading-snug break-keep flex-1">
                                           {steps[sIdx]}
                                         </span>
                                       </button>
@@ -15492,11 +15492,11 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                 </section>
 
                 {/* 3) 남은 할 일 */}
-                <section className="bg-white border border-stone-200/90 rounded-2xl shadow-sm p-3 space-y-2">
+                <section className="bg-white border border-stone-200/90 rounded-2xl shadow-sm px-3 py-2.5 space-y-1.5">
                   <div className="flex items-center justify-between gap-2">
-                    <h2 className="text-[12px] font-bold text-stone-900 whitespace-nowrap">
+                    <h2 className="text-[14px] font-extrabold text-stone-900 whitespace-nowrap">
                       남은 할 일{" "}
-                      <span className="text-[12px] font-bold text-[#3F624D]">{globalTodoBadgeStats.activeCount}건</span>
+                      <span className="text-[14px] font-extrabold text-[#2F523E]">{globalTodoBadgeStats.activeCount}건</span>
                     </h2>
                     <div className="flex items-center gap-1 shrink-0">
                       {previewTodos.length > 0 && (
@@ -15614,11 +15614,11 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                                 />
                               </button>
                               <div className="min-w-0 flex-1">
-                                <div className="text-[11px] font-semibold text-stone-900 leading-snug break-keep">
+                                <div className="text-[13.5px] font-bold text-stone-900 leading-snug truncate">
                                   {todo.title}
                                 </div>
                                 {(hasMemo || attCount > 0) && (
-                                  <div className="text-[11px] font-medium text-stone-600">
+                                  <div className="text-[12px] font-medium text-stone-700 truncate">
                                     {[hasMemo ? "메모 있음" : "", attCount > 0 ? `첨부 ${attCount}건` : ""].filter(Boolean).join(" · ")}
                                   </div>
                                 )}
@@ -15630,20 +15630,20 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                               const isSoon = todoDiff > 0 && todoDiff <= 3;
                               return (
                                 <span
-                                  className={`px-1.5 py-0.5 rounded-lg text-[10px] font-bold whitespace-nowrap shrink-0 inline-flex items-center gap-1 ${
+                                  className={`px-2 py-0.5 rounded-lg text-[11px] font-bold whitespace-nowrap shrink-0 inline-flex items-center gap-1 ${
                                     isOverdue
                                       ? "bg-rose-50 text-rose-700 border border-rose-200"
                                       : isDueToday
-                                      ? "bg-amber-50 text-amber-800 border border-amber-200"
+                                      ? "bg-amber-50 text-amber-900 border border-amber-200"
                                       : isSoon
-                                      ? "bg-amber-50/70 text-amber-800 border border-amber-200/80"
-                                      : "bg-stone-100/80 text-stone-600 border border-stone-200/70"
+                                      ? "bg-amber-50/85 text-amber-900 border border-amber-200"
+                                      : "bg-stone-100 text-stone-700 border border-stone-200/80"
                                   }`}
                                 >
                                   <span>
                                     {todoDiff < 0 ? `${Math.abs(todoDiff)}일 지남` : todoDiff === 0 ? "오늘" : `D-${todoDiff}`}
                                   </span>
-                                  <span className="text-[9.5px] font-medium opacity-80">{dateWithDay}</span>
+                                  <span className="text-[10.5px] font-semibold opacity-90">{dateWithDay}</span>
                                 </span>
                               );
                             })()}
@@ -15684,38 +15684,38 @@ ${item.memo}` : `${item.title} 다녀옴!`,
             ].filter((g) => g.items.length > 0);
 
             const menuGridSize = blockSizes.menu_grid || "normal";
-            const gridPadCls = menuGridSize === "compact" ? "p-2 min-h-[48px]" : menuGridSize === "large" ? "p-3 min-h-[68px]" : "p-2.5 min-h-[56px]";
-            const gridTitleCls = menuGridSize === "compact" ? "text-[11.5px]" : menuGridSize === "large" ? "text-[13px]" : "text-[12px]";
-            const gridSubCls = menuGridSize === "compact" ? "text-[10px]" : menuGridSize === "large" ? "text-[11.5px]" : "text-[10.5px]";
+            const gridPadCls = menuGridSize === "compact" ? "px-2 py-1.5 min-h-[50px]" : menuGridSize === "large" ? "px-3 py-2.5 min-h-[68px]" : "px-2.5 py-2 min-h-[58px]";
+            const gridTitleCls = menuGridSize === "compact" ? "text-[12.5px]" : menuGridSize === "large" ? "text-[14.5px]" : "text-[13.5px]";
+            const gridSubCls = menuGridSize === "compact" ? "text-[11px]" : menuGridSize === "large" ? "text-[12.5px]" : "text-[12px]";
 
             return (
               <div key="menu_grid" className={menuGridSize === "compact" ? "space-y-2.5 pt-0.5" : "space-y-3 pt-0.5"}>
                 {groupedSections.map((group) => (
-                  <div key={group.id} className="space-y-1">
-                    <h3 className="text-[11px] font-bold text-stone-600 px-0.5">{group.label}</h3>
+                  <div key={group.id} className="space-y-1.5">
+                    <h3 className="text-[12.5px] font-extrabold text-stone-700 px-0.5 whitespace-nowrap">{group.label}</h3>
                     <div className={menuGridSize === "compact" ? "grid grid-cols-2 gap-1.5" : "grid grid-cols-2 gap-2"}>
                       {group.items.map((id) => {
                         const item = MENU_DEFS[id];
                         const mSize = menuSizes[id] || "half";
                         const spanCls = mSize === "tall" || mSize === "full" ? "col-span-2" : "";
-                        const tallCls = mSize === "tall" ? "min-h-[76px] p-3" : gridPadCls;
+                        const tallCls = mSize === "tall" ? "min-h-[76px] px-3 py-2.5" : gridPadCls;
                         const cleanAction = item.actionLabel === "열기 >" ? "" : item.actionLabel.replace(" >", "");
                         return (
                           <button
                             key={id}
                             type="button"
                             onClick={item.onClick}
-                            className={`bg-white border border-stone-200/90 hover:border-[#3F624D]/50 rounded-xl ${tallCls} ${spanCls} text-left shadow-sm flex flex-col justify-between gap-1 transition active:scale-[0.99]`}
+                            className={`bg-white border border-stone-200/90 hover:border-[#3F624D]/50 rounded-xl ${tallCls} ${spanCls} text-left shadow-sm flex flex-col justify-between gap-1 min-w-0 transition active:scale-[0.99]`}
                           >
-                            <div className="flex items-center justify-between gap-1">
-                              <span className={`${gridTitleCls} font-semibold text-stone-900 leading-snug break-keep`}>{item.title}</span>
+                            <div className="flex items-center justify-between gap-1 min-w-0">
+                              <span className={`${gridTitleCls} font-bold text-stone-900 leading-tight truncate min-w-0`}>{item.title}</span>
                               {cleanAction ? (
-                                <span className={`text-[10px] font-semibold shrink-0 whitespace-nowrap ${item.actionColor}`}>{cleanAction}</span>
+                                <span className={`text-[11px] font-bold shrink-0 whitespace-nowrap ${item.actionColor}`}>{cleanAction}</span>
                               ) : (
-                                <ChevronRight className="w-3.5 h-3.5 text-stone-400 shrink-0" />
+                                <ChevronRight className="w-3.5 h-3.5 text-stone-500 shrink-0" />
                               )}
                             </div>
-                            <div className={`${gridSubCls} font-medium text-stone-600 leading-snug break-keep`}>{item.sub}</div>
+                            <div className={`${gridSubCls} font-medium text-stone-700 leading-snug line-clamp-2 break-keep`}>{item.sub}</div>
                           </button>
                         );
                       })}
@@ -15744,7 +15744,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                     key={m.id}
                     type="button"
                     onClick={() => setHomeTimeModeOverride(m.id)}
-                    className={`h-6 px-2 rounded-full text-[10.5px] font-semibold border whitespace-nowrap transition shrink-0 ${
+                    className={`h-7 px-2.5 rounded-full text-[11.5px] font-bold border whitespace-nowrap transition shrink-0 ${
                       homeTimeModeOverride === m.id
                         ? "bg-[#3F624D] text-white border-[#3F624D]"
                         : "bg-white text-stone-700 border-stone-200 hover:bg-stone-50"
@@ -15759,7 +15759,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                 <button
                   type="button"
                   onClick={handleCopyTodayBriefing}
-                  className="h-6 px-2 rounded-full text-[10.5px] font-semibold border bg-[#EEF3EE] text-[#35503C] border-[#C9D8CC] hover:bg-[#DFE9E0] whitespace-nowrap shrink-0"
+                  className="h-7 px-2.5 rounded-full text-[11.5px] font-bold border bg-[#EEF3EE] text-[#2F523E] border-[#C9D8CC] hover:bg-[#DFE9E0] whitespace-nowrap shrink-0"
                   title="오늘 날씨·식단·일정·장보기 브리핑 복사"
                 >
                   📋 브리핑
@@ -16214,13 +16214,13 @@ ${item.memo}` : `${item.title} 다녀옴!`,
               const morningMeals = todayMealsList.filter((m) => m.slot === "아침" || m.slot === "점심" || m.slot === "오전간식");
               const morningRoutineLeft = activeRoutines.filter((r) => (r.timeSlot || "상시") === "아침" || (r.timeSlot || "상시") === "상시").length;
               return (
-                <div className="bg-white border border-stone-200/90 rounded-xl px-2.5 py-1.5 space-y-1 shadow-sm">
+                <div className="bg-white border border-stone-200/90 rounded-xl px-2.5 py-2 space-y-1 shadow-sm">
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-[11px] font-bold text-stone-900 whitespace-nowrap">🌅 오전 브리핑</span>
-                    <span className="text-[10px] font-medium text-stone-500 whitespace-nowrap shrink-0">{modeMeta.rangeLabel}</span>
+                    <span className="text-[13px] font-extrabold text-stone-900 whitespace-nowrap">🌅 오전 브리핑</span>
+                    <span className="text-[11px] font-semibold text-stone-600 whitespace-nowrap shrink-0">{modeMeta.rangeLabel}</span>
                   </div>
-                  <div className="flex items-center justify-between gap-1.5">
-                    <span className="text-[10.5px] font-medium text-stone-700 leading-tight truncate flex-1">
+                  <div className="flex items-center justify-between gap-1.5 min-w-0">
+                    <span className="text-[12px] font-medium text-stone-700 leading-tight truncate flex-1 min-w-0">
                       {morningMeals[0] ? `${morningMeals[0].slot}: ${morningMeals[0].menu}` : "아침·점심 식단 미기록"}
                     </span>
                     <div className="flex items-center gap-1 shrink-0">
@@ -16231,7 +16231,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                             setScheduleSubTab("routine");
                             setActiveTab("schedule");
                           }}
-                          className="h-6 px-1.5 rounded-md bg-stone-100 hover:bg-stone-200 text-stone-700 text-[10px] font-semibold whitespace-nowrap"
+                          className="h-6 px-2 rounded-md bg-stone-100 hover:bg-stone-200 text-stone-800 text-[11px] font-bold whitespace-nowrap"
                         >
                           루틴 {morningRoutineLeft}
                         </button>
@@ -16245,7 +16245,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                             document.getElementById(`weekly-day-${todayKey}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
                           }, 160);
                         }}
-                        className="h-6 px-2 rounded-md bg-[#3F624D] hover:bg-[#324F3E] text-white text-[10px] font-semibold whitespace-nowrap"
+                        className="h-6 px-2.5 rounded-md bg-[#3F624D] hover:bg-[#324F3E] text-white text-[11px] font-bold whitespace-nowrap"
                       >
                         식단
                       </button>
@@ -16259,12 +16259,12 @@ ${item.memo}` : `${item.title} 다녀옴!`,
             {!hiddenBlocks.includes("briefing") && activeHomeTimeMode === "afternoon" && (() => {
               const dinnerMeal = todayMealsList.find((m) => m.slot === "저녁");
               return (
-                <div className="bg-white border border-stone-200/90 rounded-xl px-2.5 py-1.5 space-y-1 shadow-sm">
+                <div className="bg-white border border-stone-200/90 rounded-xl px-2.5 py-2 space-y-1 shadow-sm">
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-[11px] font-bold text-stone-900 whitespace-nowrap">🌆 오후 브리핑</span>
-                    <span className="text-[10px] font-medium text-stone-500 whitespace-nowrap shrink-0">{modeMeta.rangeLabel}</span>
+                    <span className="text-[13px] font-extrabold text-stone-900 whitespace-nowrap">🌆 오후 브리핑</span>
+                    <span className="text-[11px] font-semibold text-stone-600 whitespace-nowrap shrink-0">{modeMeta.rangeLabel}</span>
                   </div>
-                  <div className="flex items-center justify-between gap-1.5">
+                  <div className="flex items-center justify-between gap-1.5 min-w-0">
                     <div className="flex items-center gap-1 overflow-x-auto no-scrollbar min-w-0 flex-1">
                       {expiringItems.length > 0 ? (
                         expiringItems.slice(0, 3).map((it) => (
@@ -16272,14 +16272,14 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                             key={it.id}
                             type="button"
                             onClick={() => setQuickFridgeItem(it)}
-                            className="h-5 px-1.5 rounded-md bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-[10px] font-semibold whitespace-nowrap shrink-0"
+                            className="h-6 px-2 rounded-md bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-[11px] font-bold whitespace-nowrap shrink-0"
                             title="눌러서 수량·소비기한·식단·장보기 바로 처리"
                           >
                             {it.name}({it.diff < 0 ? "만료" : `D-${it.diff}`})
                           </button>
                         ))
                       ) : (
-                        <span className="text-[10.5px] font-medium text-stone-500 whitespace-nowrap">임박 재료 없음</span>
+                        <span className="text-[12px] font-medium text-stone-600 whitespace-nowrap">임박 재료 없음</span>
                       )}
                     </div>
                     <button
@@ -16295,7 +16295,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                           setActiveTab("ai");
                         }
                       }}
-                      className="h-6 px-2 rounded-md bg-[#3F624D] hover:bg-[#324F3E] text-white text-[10px] font-semibold whitespace-nowrap shrink-0 max-w-[140px] truncate"
+                      className="h-6 px-2.5 rounded-md bg-[#3F624D] hover:bg-[#324F3E] text-white text-[11px] font-bold whitespace-nowrap shrink-0 max-w-[144px] truncate"
                       title={dinnerMeal ? `오늘 저녁: ${dinnerMeal.menu}` : "AI 저녁 메뉴 추천"}
                     >
                       {dinnerMeal ? `저녁: ${dinnerMeal.menu}` : "AI 저녁 추천"}
@@ -29377,7 +29377,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                 }
               }}
               className={`flex flex-col items-center justify-center py-1.5 rounded-xl transition ${
-                active ? "text-[#35503C] font-black bg-[#EEF3EE]" : "text-stone-400 font-semibold"
+                active ? "text-[#2F523E] font-black bg-[#EEF3EE]" : "text-stone-600 font-semibold"
               }`}
             >
               <div className="relative">
@@ -29392,7 +29392,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                   </span>
                 )}
               </div>
-              <span className="text-[10.5px] mt-0.5 whitespace-nowrap">
+              <span className="text-[11.5px] mt-0.5 whitespace-nowrap">
                 {!canViewTab(item.id) ? "🔒" : ""}{item.label}
               </span>
             </button>
@@ -29404,8 +29404,8 @@ ${item.memo}` : `${item.title} 다녀옴!`,
           onClick={() => setIsMoreNavOpen((v) => !v)}
           className={`flex flex-col items-center justify-center py-1.5 rounded-xl transition ${
             ["monthly", "shopping", "notices", "ai", "recipes", "bucket", "pages", "house"].includes(activeTab) || isMoreNavOpen
-              ? "text-[#35503C] font-black bg-[#EEF3EE]"
-              : "text-stone-400 font-semibold"
+              ? "text-[#2F523E] font-black bg-[#EEF3EE]"
+              : "text-stone-600 font-semibold"
           }`}
         >
           <LayoutGrid
@@ -29415,7 +29415,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                 : ""
             }`}
           />
-          <span className="text-[10.5px] mt-0.5 whitespace-nowrap">더보기</span>
+          <span className="text-[11.5px] mt-0.5 whitespace-nowrap">더보기</span>
         </button>
       </nav>
 

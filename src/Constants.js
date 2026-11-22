@@ -1178,7 +1178,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v13.23";
+export const APP_CODE_VERSION = "v13.24";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1196,7 +1196,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-22 19:52";
+export const APP_BUILD_DATE = "2026-11-22 20:25";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1264,6 +1264,18 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v13.24",
+    version: "v13.24",
+    date: "2026-11-22",
+    title: "👓 홈 화면 가독성 전면 개선 (제목 14px·항목 13.5px·보조 12px·명도 대비 강화 · 카드 크기·1줄 레이아웃 유지)",
+    category: "가독성 · UI 최적화",
+    changes: [
+      "카드 크기·배치·정보 밀도는 유지하면서 텍스트 크기와 명도 대비를 정밀 상향: 섹션 제목(14px), 일정·루틴·할 일·메뉴명(13.5px), 보조 설명·날씨(12px·stone-700), 날짜·D-Day 배지(11px), 하단 네비게이션(11.5px·stone-600) 적용",
+      "불필요한 줄바꿈 차단: 모든 제목·항목 행에 flex-1 min-w-0 truncate와 우측 배지 shrink-0 whitespace-nowrap을 정밀 적용해 360px~412px 모바일 폭에서도 카드가 세로로 길어지거나 배지가 밀리지 않도록 안정화",
+      "패딩·간격 재배분(px-3 py-2.5 / line-clamp-2)으로 한 화면 노출 정보량을 기존과 동일 수준으로 유지 및 Babel AST·배포 정합성 최종 검증 0건 통과"
+    ]
+  },
   {
     id: "patch-v13.23",
     version: "v13.23",
