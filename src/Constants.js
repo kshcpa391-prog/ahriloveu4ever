@@ -1178,7 +1178,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v13.06";
+export const APP_CODE_VERSION = "v13.07";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1196,7 +1196,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-22 09:35";
+export const APP_BUILD_DATE = "2026-11-22 09:41";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1264,6 +1264,18 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v13.07",
+    version: "v13.07",
+    date: "2026-11-22",
+    title: "🕒 루틴 시간표 글씨 대폭 슬림화(다단계 전체 내용 표시) · 체크박스/상세편집 클릭 분리",
+    category: "시각 최적화 · 편의성",
+    changes: [
+      "🕒 루틴 시간표 전체 내용 표시: 좌측 시간 칼럼(54px)과 폰트 크기(10px/10.5px)·행 여백을 대폭 줄이고 '외 N단계' 생략 및 말줄임(...)을 제거해 모든 단계(1.항목 · 2.항목…)가 한눈에 보이도록 개선",
+      "클릭 동작 분리: 완료 처리는 좌측 체크박스(✓)를 눌렀을 때만 실행되고, 글씨 영역을 누르면 바로 루틴 상세·편집 모달이 열리도록 분리(우측 중복 연필 아이콘 제거로 본문 공간 확보)",
+      "AST·TDZ·JSX·미선언 변수·배포 정합성 최종 전수 검증 0건 통과"
+    ]
+  },
   {
     id: "patch-v13.06",
     version: "v13.06",

@@ -18804,10 +18804,10 @@ ${item.memo}` : `${item.title} 다녀옴!`,
 
               return (
                 <div className="rounded-2xl border border-stone-200 overflow-hidden bg-white">
-                  <div className="bg-[#EEF3EE] px-3 py-1.5 border-b border-stone-200 flex items-center justify-between gap-2">
-                    <div className="grid grid-cols-[78px_1fr] gap-2 flex-1 text-[11px] font-black text-[#35503C]">
-                      <span>시간 · 구분</span>
-                      <span>루틴 시간표 ({tableRows.filter((r) => isRoutineDoneNow(r)).length}/{tableRows.length})</span>
+                  <div className="bg-[#EEF3EE] px-2.5 py-1.5 border-b border-stone-200 flex items-center justify-between gap-2">
+                    <div className="grid grid-cols-[54px_1fr] gap-2 flex-1 text-[10.5px] font-black text-[#35503C]">
+                      <span>시간</span>
+                      <span>루틴 시간표 ({tableRows.filter((r) => isRoutineDoneNow(r)).length}/{tableRows.length}) · 글 탭해 상세/편집</span>
                     </div>
                     {accessRole !== "guest" && (
                       <button
@@ -18819,7 +18819,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                           setHandoverModalTab("config");
                           setIsHandoverModalOpen(true);
                         }}
-                        className="px-2 py-0.5 rounded-full bg-white hover:bg-sky-50 border border-[#C9D8CC] text-[#35503C] text-[10.5px] font-extrabold whitespace-nowrap shrink-0"
+                        className="px-2 py-0.5 rounded-full bg-white hover:bg-sky-50 border border-[#C9D8CC] text-[#35503C] text-[10px] font-extrabold whitespace-nowrap shrink-0"
                         title="이 시간표로 카톡 육아 인수인계 열기"
                       >
                         🤝 인수인계
@@ -18832,13 +18832,15 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                       const isDueNow = isRoutineDueTodayOrPast(rt, currentDayKey);
                       const isOver = !doneNow && isDueNow && rt.scheduledTime && isRoutineTimeOverdue(rt.scheduledTime);
                       const steps = parseRoutineSteps(rt.title);
-                      const timeText = rt.scheduledTime ? formatRoutineTimeLabel(rt.scheduledTime) : (rt.timeSlot || "상시");
+                      const shortClock = rt.scheduledTime
+                        ? String(rt.scheduledTime).slice(0, 5)
+                        : (rt.timeSlot || "상시");
                       return (
                         <div
                           key={`tt-${rt.id}`}
-                          className={`grid grid-cols-[78px_1fr] items-center gap-2 px-3 py-2 transition ${
+                          className={`grid grid-cols-[54px_1fr] items-start gap-2 px-2 py-1.5 transition ${
                             doneNow
-                              ? "bg-stone-50/70 opacity-65"
+                              ? "bg-stone-50/70 opacity-60"
                               : isOver
                               ? "bg-amber-50/60"
                               : idx % 2 === 1
@@ -18846,65 +18848,66 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                               : "bg-white"
                           }`}
                         >
-                          <div className="border-r border-stone-200/80 pr-2 flex flex-col justify-center">
+                          <div className="border-r border-stone-200/80 pr-1.5 pt-0.5 flex flex-col justify-center">
                             <span
-                              className={`text-[11.5px] font-black whitespace-nowrap ${
+                              className={`text-[10px] font-black leading-tight whitespace-nowrap ${
                                 isOver ? "text-amber-700" : doneNow ? "text-stone-400" : "text-[#35503C]"
                               }`}
                             >
-                              {isOver ? "🔔 " : ""}{timeText}
+                              {isOver ? "🔔" : ""}{shortClock}
                             </span>
                             {rt.scheduledTime && (
-                              <span className="text-[9.5px] font-bold text-stone-400 whitespace-nowrap">
+                              <span className="text-[8.5px] font-bold text-stone-400 leading-tight whitespace-nowrap">
                                 {rt.timeSlot || "상시"}
                               </span>
                             )}
                           </div>
-                          <div className="flex items-center justify-between gap-1.5 min-w-0">
+                          <div className="flex items-start gap-1.5 min-w-0">
                             <button
                               type="button"
                               onClick={() => handleToggleRoutine(rt.id)}
-                              className="flex items-center gap-2 text-left flex-1 min-w-0"
+                              className={`mt-0.5 w-4 h-4 rounded border flex items-center justify-center shrink-0 text-[9.5px] font-black transition active:scale-90 ${
+                                doneNow
+                                  ? "bg-[#5E7A65] border-[#5E7A65] text-white"
+                                  : "bg-white border-stone-300 text-transparent hover:border-[#5E7A65]"
+                              }`}
+                              title="완료 체크"
+                              aria-label="루틴 완료 체크"
                             >
-                              <span
-                                className={`w-4 h-4 rounded-md border flex items-center justify-center shrink-0 text-[10px] font-black ${
-                                  doneNow
-                                    ? "bg-[#5E7A65] border-[#5E7A65] text-white"
-                                    : "bg-white border-stone-300 text-transparent"
-                                }`}
-                              >
-                                ✓
-                              </span>
-                              <span
-                                className={`text-[12.5px] font-extrabold truncate ${
-                                  doneNow ? "line-through text-stone-400" : "text-stone-900"
-                                }`}
-                              >
-                                {steps.length >= 2 ? `${steps[0]} 외 ${steps.length - 1}단계` : rt.title}
-                              </span>
+                              ✓
                             </button>
-                            <div className="flex items-center gap-1 shrink-0">
-                              {rt.target && rt.target !== "공통" && (
-                                <span className="px-1.5 py-0.5 rounded-md bg-sky-50 text-sky-800 text-[10px] font-extrabold whitespace-nowrap">
-                                  {rt.target}
-                                </span>
-                              )}
-                              {!isDueNow && (
-                                <span className="px-1.5 py-0.5 rounded-md bg-amber-100 text-amber-800 text-[9.5px] font-extrabold whitespace-nowrap">
-                                  예정
-                                </span>
-                              )}
-                              {canEditTab("schedule") && (
-                                <button
-                                  type="button"
-                                  onClick={() => handleStartEditRoutine(rt)}
-                                  className="p-1 rounded-lg text-stone-400 hover:text-stone-700 hover:bg-stone-100"
-                                  title="루틴 수정"
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (canEditTab("schedule")) handleStartEditRoutine(rt);
+                              }}
+                              className="flex-1 min-w-0 text-left hover:bg-stone-100/70 rounded-lg px-1 py-0.5 -mx-1 -my-0.5 transition"
+                              title="눌러서 상세 내역 보기 · 편집"
+                            >
+                              <div className="flex items-start justify-between gap-1">
+                                <div
+                                  className={`text-[10.5px] leading-[1.35] font-bold break-keep ${
+                                    doneNow ? "line-through text-stone-400" : "text-stone-900"
+                                  }`}
                                 >
-                                  <Edit2 className="w-3.5 h-3.5" />
-                                </button>
-                              )}
-                            </div>
+                                  {steps.length >= 2
+                                    ? steps.map((st, sIdx) => `${sIdx + 1}.${st}`).join(" · ")
+                                    : rt.title}
+                                </div>
+                                <div className="flex items-center gap-0.5 shrink-0 pt-0.5">
+                                  {rt.target && rt.target !== "공통" && (
+                                    <span className="px-1 py-0.5 rounded bg-sky-50 text-sky-800 text-[9px] font-extrabold leading-none whitespace-nowrap">
+                                      {rt.target}
+                                    </span>
+                                  )}
+                                  {!isDueNow && (
+                                    <span className="px-1 py-0.5 rounded bg-amber-100 text-amber-800 text-[9px] font-extrabold leading-none whitespace-nowrap">
+                                      예정
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </button>
                           </div>
                         </div>
                       );
