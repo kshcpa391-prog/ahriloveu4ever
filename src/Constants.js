@@ -1178,7 +1178,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v13.29";
+export const APP_CODE_VERSION = "v13.31";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1196,7 +1196,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-22 22:30";
+export const APP_BUILD_DATE = "2026-11-22 22:40";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1264,6 +1264,30 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v13.31",
+    version: "v13.31",
+    date: "2026-11-22",
+    title: "🛡️ 다일정(endDate)·매년기념일 3곳 누락 수정(홈 3일내 일정·브리핑·인수인계) · 홈 D-Day 탭전환 보완 · 잔여 배지 13곳 줄바꿈 완결",
+    category: "버그 수정 · 편의성 · 시각 최적화",
+    changes: [
+      "다일정·매년 반복 기념일 누락 버그 3종 수정: ① 홈 [3일 내 일정]에서 진행 중인 가족 다일정(endDate)이 누락되던 오류 수정 및 자정 갱신(currentDayKey) 보강 ② 홈 [📋 오늘 브리핑]과 [🤝 육아 인수인계]가 단일 날짜(s.date === today)만 비교해 다일정·매년 반복 기념일을 놓치던 문제를 getSchedulesForDate 기준으로 통합 수정",
+      "내비게이션·편의성 보강: 홈 상단 미니 D-Day 칩 클릭 시 달력 서브탭(calendar)으로 정확히 전환되도록 보완, 반복 루틴 헤더에 [📌 이월 N] 요약 배지 표시, 홈 브리핑·루틴 복사 시 [이월]/[지난시간대] 태그 자동 포함",
+      "줄바꿈 전수 완결: 홈·월간식단·주간일정·버킷·공유노트·레시피·수유타이머·육아일기·설정·매거진 등 잔여 소형 배지 13곳에 whitespace-nowrap 일괄 적용 및 최종 배포 무결성 0건 통과"
+    ]
+  },
+  {
+    id: "patch-v13.30",
+    version: "v13.30",
+    date: "2026-11-22",
+    title: "🛡️ 루틴 이월·건너뛰기 정밀 버그 4종 수정 & 1탭 복원 · D-Day→가족공지 공유 연계 · 배지 15곳 줄바꿈 교정",
+    category: "버그 수정 · 편의성 · 메뉴 연계 · 시각 최적화",
+    changes: [
+      "전수 버그 수정 4종: ① 신규 루틴 생성 시 startDate를 오늘로 자동 기록해 당일 생성 직후 '어제 미완료'가 오표시되던 문제 해결 ② 루틴 수정·클라우드 병합(syncRoutinesToCloud) 시 startDate·skippedKey가 유실되지 않도록 보존하고 완료 토글 시 skippedKey 자동 초기화 ③ 일정 추가 모달 초기화(setScheduleForm) 11곳의 누락된 endDate 필드 일괄 보강",
+      "편의성·메뉴 연계 확장: ① 실수로 이월 건너뛰기한 루틴을 반복 루틴 탭 [+ 예정]에서 1탭 [↩️ 복원] 가능 ② ⭐ D-Day 카드마다 [공지] 1탭 버튼을 추가해 다가오는 가족 기념일을 가족공지로 즉시 공유 연계",
+      "줄바꿈 교정 및 최종 검증: 홈 타이머·월간식단 끼니·주간일정·루틴·버킷·공유노트·레시피·설정 등 잔여 소형 배지 15곳에 whitespace-nowrap 일괄 적용 및 구문·태그·임포트 정합성 0건 통과"
+    ]
+  },
   {
     id: "patch-v13.29",
     version: "v13.29",

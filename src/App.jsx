@@ -2771,8 +2771,12 @@ function MainApp() {
                   ...item,
                   lastDoneKey: srv.lastDoneKey,
                   stepDoneKey: srv.stepDoneKey || item.stepDoneKey || "",
-                  stepDoneIndices: Array.isArray(srv.stepDoneIndices) ? srv.stepDoneIndices : (item.stepDoneIndices || [])
+                  stepDoneIndices: Array.isArray(srv.stepDoneIndices) ? srv.stepDoneIndices : (item.stepDoneIndices || []),
+                  ...(srv.skippedKey ? { skippedKey: srv.skippedKey } : {})
                 };
+              }
+              if (!item.skippedKey && srv.skippedKey === resetK) {
+                return { ...item, skippedKey: srv.skippedKey };
               }
               return item;
             });
@@ -3044,6 +3048,7 @@ function MainApp() {
         return {
           ...r,
           lastDoneKey: wasDone ? "" : todayKey,
+          skippedKey: "",
           ...(steps.length >= 2 ? { stepDoneKey: todayKey, stepDoneIndices: wasDone ? [] : steps.map((_, idx) => idx) } : {})
         };
       }
@@ -3052,6 +3057,7 @@ function MainApp() {
       return {
         ...r,
         lastDoneKey: wasDone ? "" : targetKey,
+        skippedKey: "",
         ...(steps.length >= 2 ? { stepDoneKey: targetKey, stepDoneIndices: wasDone ? [] : steps.map((_, idx) => idx) } : {})
       };
     });
@@ -3077,6 +3083,22 @@ function MainApp() {
     setFamilyRoutines(nextList);
     recordActivity("루틴", "건너뛰기", targetTitle);
     showToast(`⏭️ '${targetTitle}' 이월 항목을 이번 주기에서 건너뛰었습니다.`);
+    const updatedItem = nextList.find((r) => r.id === rtId);
+    syncRoutinesToCloud(nextList, updatedItem ? { type: "upsert", item: updatedItem } : null);
+  };
+
+
+  const handleRestoreSkippedRoutine = (rtId) => {
+    if (!requireEditorAccess("schedule")) return;
+    let targetTitle = "";
+    const nextList = familyRoutines.map((r) => {
+      if (r.id !== rtId) return r;
+      targetTitle = r.title || "루틴";
+      return { ...r, skippedKey: "" };
+    });
+    setFamilyRoutines(nextList);
+    recordActivity("루틴", "복원", targetTitle);
+    showToast(`↩️ '${targetTitle}' 건너뛴 루틴을 다시 표시했습니다.`);
     const updatedItem = nextList.find((r) => r.id === rtId);
     syncRoutinesToCloud(nextList, updatedItem ? { type: "upsert", item: updatedItem } : null);
   };
@@ -3116,6 +3138,7 @@ function MainApp() {
         ...r,
         stepDoneKey: targetKey,
         stepDoneIndices: nextIndices,
+        skippedKey: "",
         lastDoneKey: completedAll ? targetKey : r.lastDoneKey === targetKey ? "" : r.lastDoneKey
       };
     });
@@ -3225,6 +3248,8 @@ function MainApp() {
           ...(cycleVal === "weekly" && wdVal !== null ? { weekDay: wdVal } : {}),
           assignee: newRoutineAssignee || "공통",
           lastDoneKey: r.lastDoneKey || "",
+          ...(r.startDate ? { startDate: r.startDate } : {}),
+          ...(r.skippedKey ? { skippedKey: r.skippedKey } : {}),
           ...(r.title === title && r.stepDoneKey ? { stepDoneKey: r.stepDoneKey, stepDoneIndices: r.stepDoneIndices || [] } : {})
         };
       });
@@ -3257,6 +3282,7 @@ function MainApp() {
       ...(cycleVal === "monthly_weekday" ? { nthWeek: nthVal, weekDay: wdVal } : {}),
       ...(cycleVal === "weekly" && wdVal !== null ? { weekDay: wdVal } : {}),
       assignee: newRoutineAssignee || "공통",
+      startDate: getTodayStr(),
       ...(newRoutineAttachments.length > 0 ? { attachments: newRoutineAttachments } : {}),
       lastDoneKey: ""
     };
@@ -6140,14 +6166,23 @@ function MainApp() {
 
 
   const imminentSchedulesWithin3Days = useMemo(() => {
-    const todayStr = getTodayStr();
+    const todayStr = currentDayKey || getTodayStr();
     const famList = schedules
       .filter((s) => !s.done)
-      .map((s) => ({
-        ...s,
-        _isPrivate: false,
-        calc: calculateScheduleDday(s)
-      }))
+      .map((s) => {
+        if (!s.isAnnual && s.endDate && s.date && s.date <= todayStr && todayStr <= s.endDate) {
+          return {
+            ...s,
+            _isPrivate: false,
+            calc: { daysUntil: 0, dDayText: "진행중", elapsedDays: null, nextDateStr: todayStr }
+          };
+        }
+        return {
+          ...s,
+          _isPrivate: false,
+          calc: calculateScheduleDday(s)
+        };
+      })
       .filter((s) => s.calc.daysUntil >= 0 && s.calc.daysUntil <= 3);
 
     const privList = isAdminUnlocked
@@ -6171,7 +6206,7 @@ function MainApp() {
       : [];
 
     return [...famList, ...privList].sort((a, b) => a.calc.daysUntil - b.calc.daysUntil);
-  }, [schedules, privateSchedules, isAdminUnlocked, currentAdminOwner]);
+  }, [schedules, privateSchedules, isAdminUnlocked, currentAdminOwner, currentDayKey]);
 
   // 1,800+건 개인일정 O(1) 날짜 인덱싱 (달력 렌더링·스와이프 초고속화)
   const myPrivateScheduleIndex = useMemo(() => {
@@ -9110,7 +9145,7 @@ ${validText}
       }
     }
     if (canViewTab("schedule")) {
-      const todaySch = schedules.filter((s) => s.date === today && !s.done);
+      const todaySch = getSchedulesForDate(today).filter((s) => !s.done);
       if (todaySch.length > 0) {
         linesOut.push(`🗓️ 오늘 일정·할일: ${todaySch.map((s) => s.title).join(", ")}`);
       }
@@ -9120,7 +9155,10 @@ ${validText}
       if (pendingRoutines.length > 0) {
         const previewRt = pendingRoutines
           .slice(0, 5)
-          .map((r) => (r.scheduledTime ? `⏰${formatRoutineTimeLabel(r.scheduledTime)} ${r.title}` : r.title));
+          .map((r) => {
+            const cTag = getRoutineCarryOverInfo(r, today)?.isCarryOver ? "[이월] " : "";
+            return `${cTag}${r.scheduledTime ? `⏰${formatRoutineTimeLabel(r.scheduledTime)} ` : ""}${r.title}`;
+          });
         linesOut.push(`🔄 남은 루틴(${pendingRoutines.length}건): ${previewRt.join(", ")}`);
       }
     }
@@ -14433,6 +14471,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                     const targetD = calc.nextDateStr || d.date || todayStr;
                     setScheduleMonth(String(targetD).slice(0, 7));
                     setScheduleSelectedDate(targetD);
+                    setScheduleSubTab("calendar");
                     setActiveTab("schedule");
                     setCalDayPopupDate(targetD);
                     setCalDayPopupItem({ ...d, _isFamily: true });
@@ -14457,6 +14496,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                   const targetD = calc.nextDateStr || d.date || todayStr;
                   setScheduleMonth(String(targetD).slice(0, 7));
                   setScheduleSelectedDate(targetD);
+                  setScheduleSubTab("calendar");
                   setActiveTab("schedule");
                   setCalDayPopupDate(targetD);
                   setCalDayPopupItem({ ...d, _isFamily: true });
@@ -14726,7 +14766,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                     if (!running) return null;
                     const sec = Math.max(0, Math.floor((nowMs - (Number(running.startMs) || nowMs)) / 1000));
                     return (
-                      <span className="px-1.5 py-0.5 rounded-md bg-emerald-600 text-white font-mono text-[10.5px] animate-pulse">
+                      <span className="px-1.5 py-0.5 rounded-md bg-emerald-600 text-white font-mono text-[10.5px] animate-pulse whitespace-nowrap">
                         ⏱️ {running.type === "수면" ? (running.subType || "수면") : running.type} {String(Math.floor(sec / 60)).padStart(2, "0")}:{String(sec % 60).padStart(2, "0")}
                       </span>
                     );
@@ -15341,6 +15381,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                           setScheduleForm({
                             title: "",
                             date: getTodayStr(),
+                            endDate: "",
                             category: "육아/병원",
                             members: ["수혁", "아리나", "시목", "시율"],
                             isAnnual: false,
@@ -15459,7 +15500,11 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                           onClick={async () => {
                             const lines = [
                               `🔄 ${dayFilterLabel} 남은 루틴 (${visibleRoutineList.length}건)`,
-                              ...visibleRoutineList.map((r) => `• [${r.timeSlot || "상시"}${r.scheduledTime ? ` ${formatRoutineTimeLabel(r.scheduledTime)}` : ""}] ${r.title}${r.assignee && r.assignee !== "공통" ? ` (${r.assignee})` : ""}`)
+                              ...visibleRoutineList.map((r) => {
+                                const cInfo = homeRoutineDayOffset === 0 ? getRoutineCarryOverInfo(r, currentDayKey) : null;
+                                const tag = cInfo?.isCarryOver ? `📌${cInfo.label} ` : isPastHomeTimeSlot(r.timeSlot || "상시") ? "⏰지난시간대 " : "";
+                                return `• ${tag}[${r.timeSlot || "상시"}${r.scheduledTime ? ` ${formatRoutineTimeLabel(r.scheduledTime)}` : ""}] ${r.title}${r.assignee && r.assignee !== "공통" ? ` (${r.assignee})` : ""}`;
+                              })
                             ];
                             await copyTextSafe(lines.join("\n"), `📋 루틴 ${visibleRoutineList.length}건을 복사했습니다!`);
                           }}
@@ -15881,6 +15926,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                           setScheduleForm({
                             title: "",
                             date: getTodayStr(),
+                            endDate: "",
                             category: "할일(To-Do)",
                             members: ["수혁", "아리나", "시목", "시율"],
                             isAnnual: false,
@@ -17583,7 +17629,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                             key={m.id}
                             className="p-2.5 rounded-xl bg-stone-50 border border-stone-200/80 text-[13px] leading-snug break-keep flex items-start gap-2"
                           >
-                            <span className={`px-1.5 py-0.5 rounded-md text-[11px] font-extrabold shrink-0 ${getSlotChipStyle(m.slot, false)}`}>
+                            <span className={`px-1.5 py-0.5 rounded-md text-[11px] font-extrabold shrink-0 ${getSlotChipStyle(m.slot, false)} whitespace-nowrap`}>
                               {m.slot}
                             </span>
                             <span className="font-bold text-stone-800">{cleanMenuLabel(m.menu)}</span>
@@ -18760,6 +18806,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                           setScheduleForm({
                             title: "",
                             date: scheduleSelectedDate,
+                            endDate: "",
                             category: "할일(To-Do)",
                             members: ["수혁", "아리나"],
                             isAnnual: false,
@@ -18816,7 +18863,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                               >
                                 <div className="flex items-start justify-between gap-2">
                                   <div className="flex flex-wrap items-center gap-1">
-                                    <span className="px-2 py-0.5 rounded-md text-[11px] font-extrabold bg-white border border-stone-200 text-stone-700">
+                                    <span className="px-2 py-0.5 rounded-md text-[11px] font-extrabold bg-white border border-stone-200 text-stone-700 whitespace-nowrap">
                                       {ev.category}
                                     </span>
                                     {ev.isAnnual && (
@@ -18824,7 +18871,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                                         🔄 매년 반복
                                       </span>
                                     )}
-                                    <span className="px-2 py-0.5 rounded-md text-[11px] font-extrabold bg-amber-100 text-amber-900">
+                                    <span className="px-2 py-0.5 rounded-md text-[11px] font-extrabold bg-amber-100 text-amber-900 whitespace-nowrap">
                                       {dInfo.dDayText}
                                     </span>
                                     {dInfo.elapsedDays !== null && (
@@ -19163,6 +19210,14 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                   <span className="px-2 py-0.5 rounded-full bg-stone-100 text-stone-800 text-[11px] font-black shrink-0 whitespace-nowrap">
                     남은 {familyRoutines.filter((r) => isRoutineDueTodayOrPast(r, currentDayKey) && !isRoutineDoneNow(r)).length}건
                   </span>
+                  {(() => {
+                    const carryCnt = familyRoutines.filter((r) => !isRoutineDoneNow(r) && getRoutineCarryOverInfo(r, currentDayKey)?.isCarryOver).length;
+                    return carryCnt > 0 ? (
+                      <span className="px-2 py-0.5 rounded-full bg-rose-100 text-rose-800 text-[11px] font-black whitespace-nowrap shrink-0">
+                        📌 이월 {carryCnt}
+                      </span>
+                    ) : null;
+                  })()}
                 </h3>
                 <p className="text-[11px] text-stone-500 font-semibold mt-0.5 whitespace-nowrap truncate">
                   {isHolidayOrWeekend(currentDayKey) ? (krHolidays[currentDayKey] ? `공휴일(${krHolidays[currentDayKey]})` : "주말") : "평일"} · <span className="text-stone-900 font-extrabold">{getCurrentRoutineTimeSlot(routineTimeRanges, liveMinuteTick, routineSlotDefs, isHolidayOrWeekend(currentDayKey))}</span> · 자동 리셋
@@ -19880,14 +19935,14 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                                   진행 {doneNow ? parseRoutineSteps(rt.title).length : getRoutineSubStepDoneSet(rt).size}/{parseRoutineSteps(rt.title).length}
                                 </span>
                               )}
-                              <span className="px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-800 text-[10.5px] font-black">
+                              <span className="px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-800 text-[10.5px] font-black whitespace-nowrap">
                                 {rt.timeSlot || "상시"}
                               </span>
                               {rt.scheduledTime && (() => {
                                 const overdue = !doneNow && isRoutineTimeOverdue(rt.scheduledTime);
                                 return (
                                   <span
-                                    className={`px-1.5 py-0.5 rounded text-[10.5px] font-black ${
+                                    className={`px-1.5 py-0.5 rounded text-[10.5px] font-black whitespace-nowrap ${
                                       doneNow
                                         ? "bg-stone-200 text-stone-600"
                                         : overdue
@@ -19963,6 +20018,26 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                                 );
                               })()}
                               {(() => {
+                                const rKey = rt.cycle === "interval" ? currentDayKey : getRoutineResetKey(rt, currentDayKey);
+                                const isSkippedNow = !doneNow && (rt.skippedKey === rKey || rt.skippedKey === currentDayKey);
+                                if (isSkippedNow) {
+                                  return (
+                                    <>
+                                      <span className="px-1.5 py-0.5 rounded text-[10.5px] font-black bg-stone-200 text-stone-700 whitespace-nowrap">
+                                        ⏭️ 이번 주기 건너뜀
+                                      </span>
+                                      {canEditTab("schedule") && (
+                                        <button
+                                          type="button"
+                                          onClick={() => handleRestoreSkippedRoutine(rt.id)}
+                                          className="px-1.5 py-0.5 rounded text-[10.5px] font-extrabold bg-[#EEF3EE] hover:bg-[#DFE9E0] text-[#35503C] whitespace-nowrap"
+                                        >
+                                          ↩️ 복원
+                                        </button>
+                                      )}
+                                    </>
+                                  );
+                                }
                                 const cInfo = !doneNow ? getRoutineCarryOverInfo(rt, currentDayKey) : null;
                                 if (!cInfo) return null;
                                 return (
@@ -20086,6 +20161,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                         setScheduleForm({
                           title: "",
                           date: getTodayStr(),
+                            endDate: "",
                           category: "할일(To-Do)",
                           members: ["수혁", "아리나"],
                           isAnnual: false,
@@ -20480,6 +20556,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                             setScheduleForm({
                               title: "",
                               date: getTodayStr(),
+                            endDate: "",
                               category: "기념일/생일",
                               members: ["수혁", "아리나", "시목", "시율"],
                               isAnnual: false,
@@ -20578,6 +20655,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                           setScheduleForm({
                             title: "",
                             date: getTodayStr(),
+                            endDate: "",
                             category: "기념일/생일",
                             members: ["수혁", "아리나", "시목", "시율"],
                             isAnnual: false,
@@ -20665,6 +20743,16 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                                 title={isPinnedHome ? "홈 상단 고정 해제" : "홈 상단 미니바에 고정"}
                               >
                                 {isPinnedHome ? "📌 고정중" : "📌 홈"}
+                              </button>
+                            )}
+                            {canEditTab("notices") && (
+                              <button
+                                type="button"
+                                onClick={() => handleScheduleToNotice(item)}
+                                className="h-7 px-1.5 rounded-lg bg-stone-50 hover:bg-amber-50 border border-stone-200 text-stone-600 hover:text-amber-800 text-[10.5px] font-extrabold whitespace-nowrap shrink-0"
+                                title="가족공지로 공유"
+                              >
+                                공지
                               </button>
                             )}
                             {canEditTab("schedule") && (
@@ -22216,6 +22304,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                           setScheduleForm({
                             title: n.title || "",
                             date: getTodayStr(),
+                            endDate: "",
                             category: "할일(To-Do)",
                             members: ["수혁", "아리나"],
                             isAnnual: false,
@@ -23412,7 +23501,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-1.5 flex-wrap">
-                            <span className={`px-1.5 py-0.5 rounded text-[10px] font-black ${sel.done ? "bg-[#EEF3EE] text-[#35503C]" : "bg-amber-100 text-amber-800"}`}>
+                            <span className={`px-1.5 py-0.5 rounded text-[10px] font-black ${sel.done ? "bg-[#EEF3EE] text-[#35503C]" : "bg-amber-100 text-amber-800"} whitespace-nowrap`}>
                               {sel.done ? "✅ 다녀옴" : "📍 갈 곳"}
                             </span>
                             <span className="text-[14.5px] font-black text-stone-900">{sel.title}</span>
@@ -24570,7 +24659,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                                 >
                                   <div className={`h-11 relative ${cov?.bg || "bg-stone-100/90"}`}>
                                     {pgTodos.length > 0 && (
-                                      <span className="absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded-full bg-white/90 text-[10px] font-extrabold text-[#2383E2] shadow-2xs">
+                                      <span className="absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded-full bg-white/90 text-[10px] font-extrabold text-[#2383E2] shadow-2xs whitespace-nowrap">
                                         {pgDone}/{pgTodos.length}
                                       </span>
                                     )}
@@ -26188,7 +26277,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                             alt={r.title}
                             className={`w-full h-full object-cover ${!isEditorUnlocked ? "blur-md" : "group-hover:scale-105 transition"}`}
                           />
-                          <span className="absolute bottom-1 right-1 px-1.5 py-0.5 rounded bg-black/60 text-white text-[10.5px] font-bold">
+                          <span className="absolute bottom-1 right-1 px-1.5 py-0.5 rounded bg-black/60 text-white text-[10.5px] font-bold whitespace-nowrap">
                             {isEditorUnlocked ? "🔍 확대" : "🔒"}
                           </span>
                         </div>
@@ -26196,7 +26285,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                       <div className="flex-1 min-w-0 space-y-1.5">
                         <div className="flex items-start justify-between gap-1">
                           <div className="min-w-0">
-                            <span className="inline-block px-2 py-0.5 rounded-md bg-rose-50 text-rose-700 text-[11.5px] font-extrabold mb-1">
+                            <span className="inline-block px-2 py-0.5 rounded-md bg-rose-50 text-rose-700 text-[11.5px] font-extrabold mb-1 whitespace-nowrap">
                               {r.category || "기타"}
                             </span>
                             <div className="text-[15.5px] font-black text-stone-900 break-keep">{r.title}</div>
@@ -26300,7 +26389,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                       {["수혁", "아리나", "시목", "시율"].map((mName) => {
                         const score = Number(r.ratings?.[mName] || 0);
                         return score > 0 ? (
-                          <span key={mName} className="px-2 py-0.5 rounded-full bg-amber-50 border border-amber-200 text-amber-900">
+                          <span key={mName} className="px-2 py-0.5 rounded-full bg-amber-50 border border-amber-200 text-amber-900 whitespace-nowrap">
                             {mName} {"⭐".repeat(score)}
                           </span>
                         ) : null;
@@ -26646,7 +26735,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                           <div className="flex items-center justify-between gap-2">
                             <div className="flex items-center gap-1.5 text-[13.5px] font-black text-emerald-950">
                               <span>{meta?.emoji} {act.type} 진행 중</span>
-                              <span className="px-2 py-0.5 rounded-lg bg-emerald-600 text-white font-mono text-[12.5px]">
+                              <span className="px-2 py-0.5 rounded-lg bg-emerald-600 text-white font-mono text-[12.5px] whitespace-nowrap">
                                 {mm}:{ss}
                               </span>
                             </div>
@@ -28272,7 +28361,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-[13.5px] font-black text-stone-900 flex items-center gap-1.5">
                         <span>📖 육아일기 {editingDiaryEntry ? "수정" : "작성"}</span>
-                        <span className="px-1.5 py-0.5 rounded-full bg-[#EEF3EE] text-[#35503C] text-[11.5px] font-black">
+                        <span className="px-1.5 py-0.5 rounded-full bg-[#EEF3EE] text-[#35503C] text-[11.5px] font-black whitespace-nowrap">
                           {babyDiaryEntries.filter((d) => getDiaryEntryChildIds(d).includes(activeChild.id)).length}편
                         </span>
                       </span>
@@ -30144,6 +30233,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
             setScheduleForm({
               title: t,
               date: d,
+                            endDate: "",
               category: "할일(To-Do)",
               members: ["수혁", "아리나"],
               isAnnual: Boolean(draft?.isAnnual),
@@ -30466,7 +30556,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                           {toSafeArray(activeDetail.members).map((mId) => {
                             const info = FAMILY_MEMBERS.find((f) => f.id === mId);
                             return info ? (
-                              <span key={mId} className={`px-2 py-0.5 rounded text-[11.5px] font-bold border ${info.color}`}>
+                              <span key={mId} className={`px-2 py-0.5 rounded text-[11.5px] font-bold border ${info.color} whitespace-nowrap`}>
                                 {info.name}
                               </span>
                             ) : null;
@@ -30721,6 +30811,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                         setScheduleForm({
                           title: "",
                           date: targetDate,
+                            endDate: "",
                           category: "할일(To-Do)",
                           members: ["수혁", "아리나"],
                           isAnnual: false,
@@ -31125,7 +31216,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <span className="px-2 py-0.5 rounded-lg bg-amber-500 text-white text-[12.5px] font-black">
+                      <span className="px-2 py-0.5 rounded-lg bg-amber-500 text-white text-[12.5px] font-black whitespace-nowrap">
                         {pn.version}
                       </span>
                       <span className="text-[13.5px] font-black text-stone-900">{pn.title}</span>
@@ -31995,7 +32086,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                             🧾 합계 대사 검증 ({scannedReceiptItems.length}건)
                           </span>
                           {receiptEngineUsed && (
-                            <span className="px-1.5 py-0.5 rounded bg-stone-200/80 text-[11.5px] font-bold text-stone-600">
+                            <span className="px-1.5 py-0.5 rounded bg-stone-200/80 text-[11.5px] font-bold text-stone-600 whitespace-nowrap">
                               🤖 {receiptEngineUsed}
                             </span>
                           )}
@@ -33386,7 +33477,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
             <div className="flex items-center justify-between gap-2">
               <h3 className="text-[15.5px] font-black text-stone-900 flex items-center gap-1.5 whitespace-nowrap">
                 <span>⚙️ 설정 · 백업 · 권한</span>
-                <span className="px-1.5 py-0.5 rounded-md bg-stone-100 text-stone-600 text-[10.5px] font-extrabold">
+                <span className="px-1.5 py-0.5 rounded-md bg-stone-100 text-stone-600 text-[10.5px] font-extrabold whitespace-nowrap">
                   {APP_CODE_VERSION}
                 </span>
               </h3>
@@ -33806,7 +33897,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                   <label className="text-[11.5px] font-bold text-stone-600">
                     🟢 OpenAI GPT API 키
                   </label>
-                  <span className={`text-[10.5px] font-extrabold px-1.5 py-0.5 rounded ${openaiApiKey ? "bg-emerald-100 text-emerald-800" : "bg-stone-200 text-stone-500"}`}>
+                  <span className={`text-[10.5px] font-extrabold px-1.5 py-0.5 rounded ${openaiApiKey ? "bg-emerald-100 text-emerald-800" : "bg-stone-200 text-stone-500"} whitespace-nowrap`}>
                     {openaiApiKey ? "✅ 저장됨" : "미입력"}
                   </span>
                 </div>
@@ -33825,7 +33916,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                   <label className="text-[11.5px] font-bold text-stone-600">
                     🔵 Google Gemini API 키
                   </label>
-                  <span className={`text-[10.5px] font-extrabold px-1.5 py-0.5 rounded ${geminiApiKey ? "bg-emerald-100 text-emerald-800" : "bg-stone-200 text-stone-500"}`}>
+                  <span className={`text-[10.5px] font-extrabold px-1.5 py-0.5 rounded ${geminiApiKey ? "bg-emerald-100 text-emerald-800" : "bg-stone-200 text-stone-500"} whitespace-nowrap`}>
                     {geminiApiKey ? "✅ 저장됨" : "미입력"}
                   </span>
                 </div>
@@ -35323,7 +35414,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                     {monthMilestones.map((m, idx) => (
                       <div key={`${m.childId}-${idx}`} className="flex items-center justify-between gap-2 text-[12px] py-1 border-b border-stone-100 last:border-0">
                         <span className="font-bold text-stone-800 truncate">
-                          <span className="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-800 text-[10.5px] mr-1.5">{m.childName}</span>
+                          <span className="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-800 text-[10.5px] mr-1.5 whitespace-nowrap">{m.childName}</span>
                           {m.title}
                         </span>
                         <span className="text-[11px] font-semibold text-stone-400 shrink-0">{m.date}</span>
@@ -37064,8 +37155,8 @@ ${item.memo}` : `${item.title} 다녀옴!`,
           .sort((a, b) => String(a.scheduledTime || "99:99").localeCompare(String(b.scheduledTime || "99:99")));
         const selectedRoutines = allTargetRoutines.filter((r) => isItemIncluded(`rt:${r.id}`));
 
-        const allTargetSchedules = schedules.filter((s) => {
-          if (s.date !== targetDate || s.done) return false;
+        const allTargetSchedules = getSchedulesForDate(targetDate).filter((s) => {
+          if (s.done) return false;
           const mems = extractMembers(s);
           if (mems.includes("시목") && handoverTargets["시목"]) return true;
           if (mems.includes("시율") && handoverTargets["시율"]) return true;
@@ -38561,6 +38652,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                       setScheduleForm({
                         title: "",
                         date: getTodayStr(),
+                            endDate: "",
                         category: "기념일/생일",
                         members: ["수혁", "아리나", "시목", "시율"],
                         isAnnual: false,
@@ -39454,6 +39546,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                       setScheduleForm({
                         title: taskModalDraft.taskName || "",
                         date: getTodayStr(),
+                            endDate: "",
                         category: "할일(To-Do)",
                         members: ["수혁", "아리나"],
                         isAnnual: false,
