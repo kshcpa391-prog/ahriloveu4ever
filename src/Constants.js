@@ -1178,7 +1178,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v13.10";
+export const APP_CODE_VERSION = "v13.11";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1196,7 +1196,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-22 10:15";
+export const APP_BUILD_DATE = "2026-11-22 10:26";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1264,6 +1264,17 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v13.11",
+    version: "v13.11",
+    date: "2026-11-22",
+    title: "🏠 홈 화면 비율 컴팩트 최적화 및 상단 버전·관리자 버튼 분리",
+    category: "UI/UX 미세조정 · 시인성",
+    changes: [
+      "홈 헤더·본문 전반의 글씨 크기와 높이를 위계 비율(섹션 14px · 항목 12.5px · 보조 11px)을 유지한 채 컴팩트하게 축소하여 첫 화면에서 한눈에 보이도록 개선",
+      "상단 유틸 바에 버전 버튼(패치노트)과 관리자·사용자 버튼(권한 전환)을 구분된 독립 버튼으로 직접 배치"
+    ]
+  },
   {
     id: "patch-v13.10",
     version: "v13.10",

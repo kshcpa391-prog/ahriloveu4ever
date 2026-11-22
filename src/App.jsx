@@ -24,7 +24,6 @@ import {
   ArrowRight,
   Database,
   Upload,
-  Zap,
   CalendarDays,
   Star,
   FileJson,
@@ -2360,7 +2359,6 @@ function MainApp() {
   const [isHomeDdayPickerOpen, setIsHomeDdayPickerOpen] = useState(false);
   const [isHomeRoutineFilterOpen, setIsHomeRoutineFilterOpen] = useState(false);
   const [homeExpandedCompletedRoutines, setHomeExpandedCompletedRoutines] = useState({});
-  const [isHomeAppInfoOpen, setIsHomeAppInfoOpen] = useState(false);
   const [homeMiniDdayIds, setHomeMiniDdayIds] = useState(() => {
     try {
       const saved = JSON.parse(localStorage.getItem("kim_home_mini_dday_ids_v1") || "[]");
@@ -13756,7 +13754,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
           상단 헤더 (패치노트 + 상단바 접기/펼치기 + 틀고정 해제/고정 토글 모두 유지!)
       ========================================== */}
       <header
-        className={`bg-white border-b border-stone-200 px-3.5 pt-2.5 pb-2.5 z-30 transition-all ${
+        className={`bg-white border-b border-stone-200 px-3 pt-1.5 pb-1.5 z-30 transition-all ${
           isHeaderPinned ? "sticky top-0 shadow-md" : "relative"
         }`}
       >
@@ -13789,8 +13787,8 @@ ${item.memo}` : `${item.title} 다녀옴!`,
         )}
 
 
-        <div className="mb-2 flex items-center justify-between gap-2">
-          <div className="flex items-center gap-1.5 min-w-0 flex-1">
+        <div className="mb-1.5 flex items-center justify-between gap-1">
+          <div className="flex items-center gap-1 min-w-0 flex-1 overflow-x-auto no-scrollbar">
             <button
               type="button"
               onClick={async () => {
@@ -13803,7 +13801,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                 }
               }}
               title={syncStatus === "connected" ? "서버 연결 정상" : "눌러서 서버 재연결 시도"}
-              className={`inline-flex items-center gap-1.5 min-h-[40px] px-2 rounded-full text-[13px] font-medium whitespace-nowrap shrink-0 transition ${
+              className={`inline-flex items-center gap-1 h-7 px-1.5 rounded-full text-[11px] font-medium whitespace-nowrap shrink-0 transition ${
                 syncStatus === "offline" || syncStatus === "error"
                   ? "bg-rose-50 text-rose-700 border border-rose-300 font-semibold cursor-pointer"
                   : syncStatus === "saving" || syncStatus === "connecting"
@@ -13812,7 +13810,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
               }`}
             >
               <span
-                className={`w-2 h-2 rounded-full shrink-0 ${
+                className={`w-1.5 h-1.5 rounded-full shrink-0 ${
                   syncStatus === "offline" || syncStatus === "error"
                     ? "bg-rose-600"
                     : syncStatus === "saving" || syncStatus === "connecting"
@@ -13822,9 +13820,9 @@ ${item.memo}` : `${item.title} 다녀옴!`,
               />
               <span>
                 {syncStatus === "offline"
-                  ? "연결 끊김 · 재시도"
+                  ? "끊김·재시도"
                   : syncStatus === "error"
-                  ? "동기화 오류 · 재시도"
+                  ? "오류·재시도"
                   : syncStatus === "saving"
                   ? "저장 중"
                   : syncStatus === "connecting"
@@ -13834,17 +13832,25 @@ ${item.memo}` : `${item.title} 다녀옴!`,
             </button>
             <button
               type="button"
-              onClick={() => setIsHomeAppInfoOpen((v) => !v)}
-              className={`min-h-[40px] px-2.5 rounded-full text-[13px] font-medium inline-flex items-center gap-1 whitespace-nowrap shrink-0 transition ${
-                isHomeAppInfoOpen
-                  ? "bg-stone-200 text-stone-900"
-                  : "text-stone-600 hover:bg-stone-100 hover:text-stone-900"
-              }`}
-              title="앱 버전 · 권한 정보 보기"
-              aria-label="앱 버전 및 권한 정보"
+              onClick={() => setIsPatchModalOpen(true)}
+              className="h-7 px-2 rounded-full bg-stone-100 hover:bg-stone-200 border border-stone-200 text-stone-700 text-[11px] font-semibold whitespace-nowrap shrink-0 transition"
+              title="앱 버전 및 패치노트 보기"
             >
-              <span>ⓘ</span>
-              <span>{actorName || "가족"}</span>
+              {APP_CODE_VERSION}
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsEditorUnlockModalOpen(true)}
+              className={`h-7 px-2 rounded-full border text-[11px] font-semibold whitespace-nowrap shrink-0 transition ${
+                isAdminUnlocked
+                  ? "bg-[#EEF3EE] hover:bg-[#DFE9E0] border-[#C9D8CC] text-[#35503C]"
+                  : isHelperUnlocked
+                  ? "bg-sky-50 hover:bg-sky-100 border-sky-200 text-sky-800"
+                  : "bg-stone-100 hover:bg-stone-200 border-stone-200 text-stone-700"
+              }`}
+              title="권한 및 사용자 전환"
+            >
+              {isAdminUnlocked ? `관리자 · ${actorName || "수혁"}` : isHelperUnlocked ? `육아지원군 · ${actorName || "이모님"}` : "보기 전용"}
             </button>
           </div>
           <div className="flex items-center gap-0.5 shrink-0">
@@ -13852,14 +13858,14 @@ ${item.memo}` : `${item.title} 다녀옴!`,
               <button
                 type="button"
                 onClick={() => setIsHomeEditMode((v) => !v)}
-                className={`min-h-[40px] px-2.5 rounded-full text-[13px] font-semibold whitespace-nowrap shrink-0 transition ${
+                className={`h-7 px-2 rounded-full text-[11px] font-semibold whitespace-nowrap shrink-0 transition ${
                   isHomeEditMode
                     ? "bg-[#3F624D] text-white"
                     : "text-stone-600 hover:bg-stone-100"
                 }`}
                 title="홈 화면 구성 편집"
               >
-                {isHomeEditMode ? "편집 완료" : "편집"}
+                {isHomeEditMode ? "완료" : "편집"}
               </button>
             )}
             {accessRole !== "guest" && (
@@ -13871,62 +13877,27 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                   try { localStorage.setItem("kim_last_seen_activity_ms_v1", String(nowMs)); } catch (e) {}
                   setIsActivityModalOpen(true);
                 }}
-                className="relative w-11 h-11 rounded-full hover:bg-stone-100 text-stone-600 hover:text-stone-900 flex items-center justify-center shrink-0"
+                className="relative w-8 h-8 rounded-full hover:bg-stone-100 text-stone-600 hover:text-stone-900 flex items-center justify-center shrink-0"
                 title="최근 수정 알림"
                 aria-label="최근 수정 알림"
               >
-                <Bell className="w-[18px] h-[18px]" />
+                <Bell className="w-3.5 h-3.5" />
                 {visibleRecentActivities[0]?.atMs && visibleRecentActivities[0].atMs > lastSeenActivityMs && (
-                  <span className="absolute top-2.5 right-2.5 w-2 h-2 rounded-full bg-rose-600" />
+                  <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-rose-600" />
                 )}
               </button>
             )}
             <button
               type="button"
               onClick={() => setIsSettingsOpen(true)}
-              className="w-11 h-11 rounded-full hover:bg-stone-100 text-stone-600 hover:text-stone-900 flex items-center justify-center shrink-0"
+              className="w-8 h-8 rounded-full hover:bg-stone-100 text-stone-600 hover:text-stone-900 flex items-center justify-center shrink-0"
               title="앱 설정"
               aria-label="앱 설정"
             >
-              <Settings className="w-[18px] h-[18px]" />
+              <Settings className="w-3.5 h-3.5" />
             </button>
           </div>
         </div>
-
-        {isHomeAppInfoOpen && (
-          <div className="mb-2.5 px-3 py-2 rounded-2xl bg-stone-50 border border-stone-200 flex items-center justify-between gap-2 flex-wrap text-[13px]">
-            <div className="flex items-center gap-2 flex-wrap">
-              <button
-                type="button"
-                onClick={() => {
-                  setIsHomeAppInfoOpen(false);
-                  setIsPatchModalOpen(true);
-                }}
-                className="min-h-[40px] px-3 py-1 rounded-xl bg-white border border-stone-200 text-stone-800 font-semibold whitespace-nowrap hover:bg-stone-100"
-              >
-                버전 {APP_CODE_VERSION} · 패치노트
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setIsHomeAppInfoOpen(false);
-                  setIsEditorUnlockModalOpen(true);
-                }}
-                className="min-h-[40px] px-3 py-1 rounded-xl bg-white border border-stone-200 text-stone-800 font-semibold whitespace-nowrap hover:bg-stone-100"
-              >
-                {isAdminUnlocked ? `관리자 · ${actorName || "수혁"}` : isHelperUnlocked ? `육아지원군 · ${actorName || "이모님"}` : "보기 전용 · 전환"}
-              </button>
-            </div>
-            <button
-              type="button"
-              onClick={() => setIsHomeAppInfoOpen(false)}
-              className="w-10 h-10 rounded-full hover:bg-stone-200/70 text-stone-600 flex items-center justify-center shrink-0"
-              aria-label="정보 닫기"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-        )}
 
         {activeTab === "home" && (
           <div
@@ -13935,7 +13906,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
               setHeroPhotoDraft({ ...heroPhotoConfig });
               setIsHeroPhotoModalOpen(true);
             }}
-            className="relative h-32 sm:h-36 rounded-2xl overflow-hidden mb-2 border border-stone-200 shadow-sm bg-gradient-to-r from-amber-100 via-stone-100 to-rose-100 cursor-pointer group"
+            className="relative h-24 sm:h-28 rounded-xl overflow-hidden mb-1.5 border border-stone-200 shadow-sm bg-gradient-to-r from-amber-100 via-stone-100 to-rose-100 cursor-pointer group"
             title="눌러서 가족사진 편집"
           >
             <img loading="lazy" decoding="async"
@@ -13944,13 +13915,13 @@ ${item.memo}` : `${item.title} 다녀옴!`,
               style={{ objectPosition: `50% ${heroPhotoConfig.posY ?? 35}%` }}
               className="w-full h-full object-cover transition group-hover:scale-[1.01]"
             />
-            <div className="absolute inset-x-0 bottom-0 h-14 bg-gradient-to-t from-stone-950/85 via-stone-950/40 to-transparent pointer-events-none" />
-            <div className="absolute top-2 right-2 px-2.5 py-1 rounded-full bg-stone-950/65 backdrop-blur-sm text-white text-[12px] font-semibold flex items-center gap-1">
-              <Camera className="w-3.5 h-3.5" />
+            <div className="absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-stone-950/80 via-stone-950/35 to-transparent pointer-events-none" />
+            <div className="absolute top-1.5 right-1.5 px-2 py-0.5 rounded-full bg-stone-950/60 backdrop-blur-sm text-white text-[10.5px] font-semibold flex items-center gap-1">
+              <Camera className="w-3 h-3" />
               <span>편집</span>
             </div>
-            <div className="absolute bottom-2 right-3">
-              <span className="text-[14px] font-bold text-white drop-shadow-sm">
+            <div className="absolute bottom-1.5 right-2.5">
+              <span className="text-[12px] font-bold text-white drop-shadow-sm">
                 {heroPhotoConfig.caption || "수혁 · 아리 · 시목 · 시율 ♡"}
               </span>
             </div>
@@ -13994,7 +13965,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
 
           const totalShown = selectedChildChips.length + selectedDdays.length + selectedElapsedSchedules.length;
           return (
-            <div className="flex items-center gap-1 overflow-x-auto no-scrollbar mb-2 px-0.5">
+            <div className="flex items-center gap-1 overflow-x-auto no-scrollbar mb-1 px-0.5">
               {selectedChildChips.map(({ ch, days }) => (
                 <button
                   key={`child_elapsed:${ch.id}`}
@@ -14076,7 +14047,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
 
 
         <div className="flex items-center justify-between gap-1">
-          <h1 className="text-[15.5px] font-black tracking-tight text-stone-900 whitespace-nowrap">
+          <h1 className="text-[13.5px] font-bold tracking-tight text-stone-900 whitespace-nowrap">
             {{
               home: "우리 가족 홈 ♡",
               daily: "오늘 뭐 먹지? 우리집 식탁 🍽️",
@@ -14135,7 +14106,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
             {!hdrHidden.includes("weather") && (
             <div
               onClick={() => weatherInfo && setIsWeatherModalOpen(true)}
-              className={`mt-2 flex items-center justify-between gap-1.5 border rounded-2xl px-3 py-1.5 cursor-pointer transition ${
+              className={`mt-1.5 flex items-center justify-between gap-1.5 border rounded-xl px-2.5 py-1.5 cursor-pointer transition ${
                 weatherInfo?.dust?.label && weatherInfo.dust.label.includes("나쁨")
                   ? "bg-rose-50 hover:bg-rose-100/70 border-rose-200 text-rose-900"
                   : weatherInfo?.hasUpcomingRain
@@ -14147,36 +14118,36 @@ ${item.memo}` : `${item.title} 다녀옴!`,
               <div className="min-w-0 flex-1 space-y-0.5">
                 {weatherInfo ? (
                   <>
-                    <div className="text-[16px] font-bold text-stone-900 leading-snug break-keep">
+                    <div className="text-[12.5px] font-bold text-stone-900 leading-snug break-keep">
                       {weatherInfo.emoji} {weatherInfo.temp}°C{" "}
-                      <span className="text-[13.5px] font-medium text-stone-600">({weatherInfo.min}°/{weatherInfo.max}°)</span> ·{" "}
-                      <span className={`text-[14px] font-semibold ${weatherInfo.hasUpcomingRain ? "text-amber-800" : "text-stone-700"}`}>
+                      <span className="text-[11px] font-medium text-stone-600">({weatherInfo.min}°/{weatherInfo.max}°)</span> ·{" "}
+                      <span className={`text-[11.5px] font-semibold ${weatherInfo.hasUpcomingRain ? "text-amber-800" : "text-stone-700"}`}>
                         {weatherInfo.rainBarText || "☔ 0%"}
                       </span>
-                      {isWeatherLoading && <span className="ml-1 text-[12px] text-stone-500">갱신 중</span>}
+                      {isWeatherLoading && <span className="ml-1 text-[10.5px] text-stone-500">갱신 중</span>}
                     </div>
-                    <div className="text-[13px] font-medium text-stone-600 leading-snug">
+                    <div className="text-[11px] font-medium text-stone-600 leading-snug">
                       미세 {weatherInfo.pm10}({weatherInfo.dust?.label || "-"}) · 초미세 {weatherInfo.pm25}
                       {weatherError && <span className="ml-1 text-rose-700 font-semibold">· 재시도 필요</span>}
                     </div>
                   </>
                 ) : weatherError ? (
-                  <span className="text-[13.5px] font-semibold text-rose-700">⚠️ 날씨 불러오기 실패 · 우측 버튼으로 재시도</span>
+                  <span className="text-[11.5px] font-semibold text-rose-700">⚠️ 날씨 불러오기 실패 · 우측 버튼으로 재시도</span>
                 ) : (
-                  <span className="text-[13.5px] font-medium text-stone-700">
+                  <span className="text-[11.5px] font-medium text-stone-700">
                     {isWeatherLoading ? "서울 중구 날씨 불러오는 중..." : "서울 중구 날씨 불러오는 중..."}
                   </span>
                 )}
               </div>
               <div className="flex items-center gap-1 shrink-0">
-                <span className="text-[13px] font-semibold text-stone-600 whitespace-nowrap">상세</span>
+                <span className="text-[11px] font-semibold text-stone-600 whitespace-nowrap">상세</span>
                 <button
                   type="button"
                   onClick={(e) => {
                     e.stopPropagation();
                     fetchSeoulJungGuWeather();
                   }}
-                  className="w-11 h-11 rounded-xl bg-white border border-stone-200 text-[15px] font-bold text-stone-700 hover:bg-stone-100 flex items-center justify-center shrink-0"
+                  className="w-8 h-8 rounded-lg bg-white border border-stone-200 text-[12.5px] font-bold text-stone-700 hover:bg-stone-100 flex items-center justify-center shrink-0"
                   aria-label="날씨 새로고침"
                 >
                   ↻
@@ -14743,10 +14714,6 @@ ${item.memo}` : `${item.title} 다녀옴!`,
 
         const actionFeedSize = blockSizes.action_feed || "normal";
         const previewLimit = actionFeedSize === "compact" ? 2 : actionFeedSize === "large" ? 5 : 3;
-        const blockPadClass = (bId) => {
-          const sz = blockSizes[bId] || "normal";
-          return sz === "compact" ? "p-2" : sz === "large" ? "p-3.5" : "p-2";
-        };
         const previewTodos = schedules
           .filter((s) => s.category === "할일(To-Do)" && !s.done)
           .sort((a, b) => String(a.date || "9999-99-99").localeCompare(String(b.date || "9999-99-99")))
@@ -14773,13 +14740,13 @@ ${item.memo}` : `${item.title} 다녀옴!`,
             const isNonDefaultFilter = homeRoutineDayOffset !== 0 || effHomeSlotFilter !== "auto" || homeRoutineTargetFilter !== "전체";
 
             return (
-              <div key="action_feed" className="space-y-5">
+              <div key="action_feed" className="space-y-3">
                 {/* 1) 3일 내 일정 */}
-                <section className="bg-white border border-stone-200/90 rounded-2xl shadow-sm p-4 space-y-3">
+                <section className="bg-white border border-stone-200/90 rounded-2xl shadow-sm p-3 space-y-2">
                   <div className="flex items-center justify-between gap-2">
-                    <h2 className="text-[17px] font-bold text-stone-900 whitespace-nowrap">
+                    <h2 className="text-[12px] font-bold text-stone-900 whitespace-nowrap">
                       3일 내 일정{" "}
-                      <span className="text-[14px] font-bold text-[#3F624D]">{imminentSchedulesWithin3Days.length}건</span>
+                      <span className="text-[12px] font-bold text-[#3F624D]">{imminentSchedulesWithin3Days.length}건</span>
                     </h2>
                     <div className="flex items-center gap-1 shrink-0">
                       {imminentSchedulesWithin3Days.length > 0 && (
@@ -14792,7 +14759,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                             ];
                             await copyTextSafe(lines.join("\n"), `📋 3일 내 일정 ${imminentSchedulesWithin3Days.length}건을 복사했습니다!`);
                           }}
-                          className="min-h-[40px] px-2.5 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-[13px] font-semibold whitespace-nowrap"
+                          className="h-7 px-2 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 text-[11px] font-semibold whitespace-nowrap"
                           title="3일 내 일정 복사"
                         >
                           복사
@@ -14815,7 +14782,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                           });
                           setIsScheduleModalOpen(true);
                         }}
-                        className="min-h-[40px] px-2.5 rounded-xl bg-[#EEF3EE] hover:bg-[#DFE9E0] text-[#35503C] text-[13px] font-semibold whitespace-nowrap"
+                        className="h-7 px-2 rounded-lg bg-[#EEF3EE] hover:bg-[#DFE9E0] text-[#35503C] text-[11px] font-semibold whitespace-nowrap"
                       >
                         + 추가
                       </button>
@@ -14825,7 +14792,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                           setScheduleSubTab("calendar");
                           setActiveTab("schedule");
                         }}
-                        className="min-h-[40px] px-2 rounded-xl text-stone-600 hover:bg-stone-100 text-[13px] font-semibold whitespace-nowrap"
+                        className="h-7 px-2 rounded-lg text-stone-600 hover:bg-stone-100 text-[11px] font-semibold whitespace-nowrap"
                       >
                         전체 보기
                       </button>
@@ -14833,7 +14800,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                   </div>
 
                   {imminentSchedulesWithin3Days.length === 0 ? (
-                    <div className="text-[14px] font-medium text-stone-600 py-1">
+                    <div className="text-[12px] font-medium text-stone-600 py-1">
                       3일 이내 예정된 일정이 없습니다.
                     </div>
                   ) : (
@@ -14857,15 +14824,15 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                               setCalDayPopupDate(targetDate);
                               setCalDayPopupItem({ ...ev, _isFamily: !ev._isPrivate });
                             }}
-                            className="w-full min-h-[46px] py-2.5 px-1 hover:bg-stone-50 rounded-xl flex items-center justify-between gap-3 text-left transition"
+                            className="w-full min-h-[36px] py-1.5 px-1 hover:bg-stone-50 rounded-xl flex items-center justify-between gap-3 text-left transition"
                           >
-                            <span className="text-[15px] font-semibold text-stone-900 leading-snug break-keep flex-1">
+                            <span className="text-[11px] font-semibold text-stone-900 leading-snug break-keep flex-1">
                               {ev._isPrivate ? "🔒 " : ""}
                               {ev.time ? `${ev.time} ` : ""}
                               {ev.title}
                             </span>
                             <span
-                              className={`px-2 py-0.5 rounded-lg text-[13px] font-bold shrink-0 whitespace-nowrap ${
+                              className={`px-2 py-0.5 rounded-lg text-[11px] font-bold shrink-0 whitespace-nowrap ${
                                 isTodayEv
                                   ? "bg-rose-50 text-rose-700 border border-rose-200"
                                   : isTomorrowEv
@@ -14883,11 +14850,11 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                 </section>
 
                 {/* 2) 지금 루틴 — 최우선 집중 개선 영역 */}
-                <section className="bg-white border border-stone-200/90 rounded-2xl shadow-sm p-4 space-y-3.5">
+                <section className="bg-white border border-stone-200/90 rounded-2xl shadow-sm p-3 space-y-2.5">
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0 space-y-1">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <h2 className="text-[17px] font-bold text-stone-900 leading-tight whitespace-nowrap">
+                        <h2 className="text-[12px] font-bold text-stone-900 leading-tight whitespace-nowrap">
                           {homeRoutineDayOffset === -1
                             ? "어제 루틴"
                             : homeRoutineDayOffset === 1
@@ -14898,11 +14865,11 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                             ? "오늘 남은 루틴"
                             : `${effHomeSlotFilter} 루틴`}
                         </h2>
-                        <span className="text-[14px] font-bold text-[#3F624D] whitespace-nowrap">
+                        <span className="text-[12px] font-bold text-[#3F624D] whitespace-nowrap">
                           {visibleRoutineList.length}건
                         </span>
                       </div>
-                      <div className="text-[13px] font-medium text-stone-600 flex items-center gap-1.5 flex-wrap">
+                      <div className="text-[11px] font-medium text-stone-600 flex items-center gap-1.5 flex-wrap">
                         <span>{homeHolidayName ? homeHolidayName : isHomeDayWeekend ? "주말·공휴일" : "평일"}</span>
                         {totalRtProgress > 0 && homeRoutineDayOffset !== 1 && (
                           <span>· 달성 {doneRtProgress}/{totalRtProgress} ({progressPct}%)</span>
@@ -14918,7 +14885,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                           setScheduleSubTab("routine");
                           setActiveTab("schedule");
                         }}
-                        className="min-h-[40px] px-2.5 rounded-xl bg-[#EEF3EE] hover:bg-[#DFE9E0] text-[#35503C] text-[13px] font-semibold whitespace-nowrap"
+                        className="h-7 px-2 rounded-lg bg-[#EEF3EE] hover:bg-[#DFE9E0] text-[#35503C] text-[11px] font-semibold whitespace-nowrap"
                       >
                         시간표
                       </button>
@@ -14928,7 +14895,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                           setScheduleSubTab("routine");
                           setActiveTab("schedule");
                         }}
-                        className="min-h-[40px] px-2.5 rounded-xl text-stone-600 hover:bg-stone-100 text-[13px] font-semibold whitespace-nowrap"
+                        className="h-7 px-2 rounded-lg text-stone-600 hover:bg-stone-100 text-[11px] font-semibold whitespace-nowrap"
                       >
                         관리
                       </button>
@@ -14944,7 +14911,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
 
                   {/* 간결한 필터 요약 바 + 상세 선택 패널 토글 */}
                   <div className="flex items-center justify-between gap-2 bg-stone-50 border border-stone-200/80 rounded-xl px-3 py-1">
-                    <div className="text-[13px] font-medium text-stone-700 truncate">
+                    <div className="text-[11px] font-medium text-stone-700 truncate">
                       {dayFilterLabel} · {targetFilterLabel} ·{" "}
                       <span className={effHomeSlotFilter === "auto" ? "text-[#3F624D] font-semibold" : "text-stone-900 font-semibold"}>
                         {slotFilterLabel}
@@ -14963,7 +14930,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                               localStorage.setItem("kim_home_routine_target_v1", "전체");
                             } catch (e) {}
                           }}
-                          className="min-h-[38px] px-2 rounded-lg text-[13px] font-semibold text-[#3F624D] hover:bg-[#EEF3EE] whitespace-nowrap"
+                          className="h-7 px-2 rounded-lg text-[11px] font-semibold text-[#3F624D] hover:bg-[#EEF3EE] whitespace-nowrap"
                         >
                           기본값
                         </button>
@@ -14971,7 +14938,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                       <button
                         type="button"
                         onClick={() => setIsHomeRoutineFilterOpen((v) => !v)}
-                        className="min-h-[38px] px-2.5 rounded-lg bg-white border border-stone-200 text-[13px] font-semibold text-stone-800 hover:bg-stone-100 whitespace-nowrap"
+                        className="h-7 px-2 rounded-lg bg-white border border-stone-200 text-[11px] font-semibold text-stone-800 hover:bg-stone-100 whitespace-nowrap"
                       >
                         {isHomeRoutineFilterOpen ? "필터 닫기 ▴" : "필터 ▾"}
                       </button>
@@ -14981,7 +14948,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                   {isHomeRoutineFilterOpen && (
                     <div className="bg-stone-50 border border-stone-200 rounded-xl p-3 space-y-3">
                       <div className="space-y-1.5">
-                        <div className="text-[12.5px] font-semibold text-stone-600">날짜</div>
+                        <div className="text-[11px] font-semibold text-stone-600">날짜</div>
                         <div className="flex flex-wrap gap-1.5">
                           {[
                             { off: -1, lbl: "어제" },
@@ -14992,7 +14959,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                               key={dOpt.off}
                               type="button"
                               onClick={() => setHomeRoutineDayOffset(dOpt.off)}
-                              className={`min-h-[40px] px-3 rounded-xl text-[13px] font-semibold border whitespace-nowrap ${
+                              className={`h-7 px-2.5 rounded-lg text-[11px] font-semibold border whitespace-nowrap ${
                                 homeRoutineDayOffset === dOpt.off
                                   ? "bg-[#3F624D] text-white border-[#3F624D]"
                                   : "bg-white text-stone-700 border-stone-200"
@@ -15004,7 +14971,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                         </div>
                       </div>
                       <div className="space-y-1.5">
-                        <div className="text-[12.5px] font-semibold text-stone-600">가족</div>
+                        <div className="text-[11px] font-semibold text-stone-600">가족</div>
                         <div className="flex flex-wrap gap-1.5">
                           {[
                             { id: "전체", label: "전체" },
@@ -15019,7 +14986,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                                 setHomeRoutineTargetFilter(tgt.id);
                                 try { localStorage.setItem("kim_home_routine_target_v1", tgt.id); } catch (e) {}
                               }}
-                              className={`min-h-[40px] px-3 rounded-xl text-[13px] font-semibold border whitespace-nowrap ${
+                              className={`h-7 px-2.5 rounded-lg text-[11px] font-semibold border whitespace-nowrap ${
                                 homeRoutineTargetFilter === tgt.id
                                   ? "bg-[#3F624D] text-white border-[#3F624D]"
                                   : "bg-white text-stone-700 border-stone-200"
@@ -15031,7 +14998,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                         </div>
                       </div>
                       <div className="space-y-1.5">
-                        <div className="text-[12.5px] font-semibold text-stone-600">시간대</div>
+                        <div className="text-[11px] font-semibold text-stone-600">시간대</div>
                         <div className="flex flex-wrap gap-1.5">
                           {[
                             { id: "auto", label: `자동(${curSlot})` },
@@ -15045,7 +15012,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                                 setHomeRoutineSlotFilter(opt.id);
                                 try { localStorage.setItem("kim_home_routine_slot_v1", opt.id); } catch (e) {}
                               }}
-                              className={`min-h-[40px] px-3 rounded-xl text-[13px] font-semibold border whitespace-nowrap ${
+                              className={`h-7 px-2.5 rounded-lg text-[11px] font-semibold border whitespace-nowrap ${
                                 effHomeSlotFilter === opt.id
                                   ? "bg-[#3F624D] text-white border-[#3F624D]"
                                   : "bg-white text-stone-700 border-stone-200"
@@ -15061,7 +15028,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
 
                   {/* 루틴 목록 */}
                   {activeRoutines.length === 0 ? (
-                    <div className="text-[14px] font-medium text-[#35503C] bg-[#EEF3EE]/70 rounded-xl px-3.5 py-3">
+                    <div className="text-[12px] font-medium text-[#35503C] bg-[#EEF3EE]/70 rounded-xl px-3.5 py-3">
                       {homeRoutineDayOffset === -1
                         ? "어제 예정된 루틴이 없습니다."
                         : homeRoutineDayOffset === 1
@@ -15069,7 +15036,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                         : "오늘 예정된 모든 루틴을 완료했습니다."}
                     </div>
                   ) : visibleRoutineList.length === 0 ? (
-                    <div className="text-[14px] font-medium text-stone-600 bg-stone-50 rounded-xl px-3.5 py-3">
+                    <div className="text-[12px] font-medium text-stone-600 bg-stone-50 rounded-xl px-3.5 py-3">
                       {homeRoutineDayOffset === -1
                         ? "어제 선택한 조건의 루틴이 없습니다."
                         : homeRoutineDayOffset === 1
@@ -15103,7 +15070,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                         const isCompletedExpanded = Boolean(homeExpandedCompletedRoutines[rt.id]);
 
                         return (
-                          <div key={rt.id} className="py-3 first:pt-1 last:pb-1 space-y-1.5">
+                          <div key={rt.id} className="py-2 first:pt-0.5 last:pb-0.5 space-y-1">
                             <div className="flex items-start gap-2">
                               {homeRoutineDayOffset === 0 ? (
                                 <button
@@ -15112,11 +15079,11 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                                     e.stopPropagation();
                                     handleToggleRoutine(rt.id);
                                   }}
-                                  className="w-11 h-11 -ml-2.5 -mt-2 flex items-center justify-center shrink-0"
+                                  className="w-9 h-9 -ml-2 -mt-1.5 flex items-center justify-center shrink-0"
                                   title="루틴 전체 완료"
                                   aria-label={`${rt.title} 완료`}
                                 >
-                                  <span className="w-5 h-5 rounded-md border-2 border-stone-400 bg-white hover:border-[#3F624D] flex items-center justify-center transition" />
+                                  <span className="w-4 h-4 rounded border-[1.75px] border-stone-400 bg-white hover:border-[#3F624D] flex items-center justify-center transition" />
                                 </button>
                               ) : (
                                 <span
@@ -15138,23 +15105,23 @@ ${item.memo}` : `${item.title} 다녀옴!`,
 
                               <div className="min-w-0 flex-1 space-y-1">
                                 <div className="flex items-baseline justify-between gap-2">
-                                  <span className="text-[15px] font-semibold text-stone-900 leading-snug break-keep">
+                                  <span className="text-[11px] font-semibold text-stone-900 leading-snug break-keep">
                                     {steps.length >= 2 ? steps[0] : rt.title}
                                     {steps.length >= 2 && (
-                                      <span className="ml-1.5 text-[13px] font-medium text-stone-600">
+                                      <span className="ml-1.5 text-[11px] font-medium text-stone-600">
                                         외 {steps.length - 1}단계
                                       </span>
                                     )}
                                   </span>
                                   {steps.length >= 2 && (
-                                    <span className="text-[13px] font-bold text-[#3F624D] whitespace-nowrap shrink-0">
+                                    <span className="text-[11px] font-bold text-[#3F624D] whitespace-nowrap shrink-0">
                                       진행 {stepDoneSet.size}/{steps.length}
                                     </span>
                                   )}
                                 </div>
 
                                 {/* 한 줄 보조 텍스트 (불필요한 컬러 배지 제거, 지연만 주의 강조) */}
-                                <div className="text-[13px] font-medium text-stone-600 leading-snug flex items-center gap-1.5 flex-wrap">
+                                <div className="text-[11px] font-medium text-stone-600 leading-snug flex items-center gap-1.5 flex-wrap">
                                   <span>{metaParts.join(" · ")}</span>
                                   {isOverdue && (
                                     <span className="text-amber-800 font-semibold whitespace-nowrap">· 시간 지남</span>
@@ -15172,12 +15139,12 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                                           e.stopPropagation();
                                           if (homeRoutineDayOffset === 0) handleToggleRoutineSubStep(rt.id, sIdx, steps.length);
                                         }}
-                                        className="w-full min-h-[44px] py-1.5 px-1 rounded-xl hover:bg-stone-50 flex items-center gap-2.5 text-left transition"
+                                        className="w-full min-h-[34px] py-1 px-1 rounded-xl hover:bg-stone-50 flex items-center gap-2.5 text-left transition"
                                       >
-                                        <span className="w-5 h-5 rounded-md border-2 border-stone-400 bg-white flex items-center justify-center text-[11px] font-semibold text-stone-700 shrink-0">
+                                        <span className="w-4 h-4 rounded border-[1.75px] border-stone-400 bg-white flex items-center justify-center text-[11px] font-semibold text-stone-700 shrink-0">
                                           {sIdx + 1}
                                         </span>
-                                        <span className="text-[14.5px] font-medium text-stone-900 leading-snug break-keep flex-1">
+                                        <span className="text-[12px] font-medium text-stone-900 leading-snug break-keep flex-1">
                                           {steps[sIdx]}
                                         </span>
                                       </button>
@@ -15191,7 +15158,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                                             e.stopPropagation();
                                             setHomeExpandedCompletedRoutines((prev) => ({ ...prev, [rt.id]: !prev[rt.id] }));
                                           }}
-                                          className="min-h-[40px] px-2 rounded-lg text-[13px] font-semibold text-stone-600 hover:bg-stone-100 inline-flex items-center gap-1 whitespace-nowrap"
+                                          className="h-7 px-2 rounded-lg text-[11px] font-semibold text-stone-600 hover:bg-stone-100 inline-flex items-center gap-1 whitespace-nowrap"
                                         >
                                           <span>
                                             {isCompletedExpanded
@@ -15210,12 +15177,12 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                                                   e.stopPropagation();
                                                   if (homeRoutineDayOffset === 0) handleToggleRoutineSubStep(rt.id, sIdx, steps.length);
                                                 }}
-                                                className="w-full min-h-[42px] py-1 px-2 rounded-lg hover:bg-stone-50 flex items-center gap-2.5 text-left transition"
+                                                className="w-full min-h-[32px] py-0.5 px-2 rounded-lg hover:bg-stone-50 flex items-center gap-2.5 text-left transition"
                                               >
                                                 <span className="w-4 h-4 rounded border border-[#3F624D] bg-[#3F624D] text-white flex items-center justify-center text-[10px] font-bold shrink-0">
                                                   ✓
                                                 </span>
-                                                <span className="text-[14px] font-normal text-stone-500 line-through leading-snug break-keep flex-1">
+                                                <span className="text-[12px] font-normal text-stone-500 line-through leading-snug break-keep flex-1">
                                                   {sIdx + 1}. {steps[sIdx]}
                                                 </span>
                                               </button>
@@ -15236,11 +15203,11 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                 </section>
 
                 {/* 3) 남은 할 일 */}
-                <section className="bg-white border border-stone-200/90 rounded-2xl shadow-sm p-4 space-y-3">
+                <section className="bg-white border border-stone-200/90 rounded-2xl shadow-sm p-3 space-y-2">
                   <div className="flex items-center justify-between gap-2">
-                    <h2 className="text-[17px] font-bold text-stone-900 whitespace-nowrap">
+                    <h2 className="text-[12px] font-bold text-stone-900 whitespace-nowrap">
                       남은 할 일{" "}
-                      <span className="text-[14px] font-bold text-[#3F624D]">{globalTodoBadgeStats.activeCount}건</span>
+                      <span className="text-[12px] font-bold text-[#3F624D]">{globalTodoBadgeStats.activeCount}건</span>
                     </h2>
                     <div className="flex items-center gap-1 shrink-0">
                       <button
@@ -15260,7 +15227,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                           });
                           setIsScheduleModalOpen(true);
                         }}
-                        className="min-h-[40px] px-2.5 rounded-xl bg-[#EEF3EE] hover:bg-[#DFE9E0] text-[#35503C] text-[13px] font-semibold whitespace-nowrap"
+                        className="h-7 px-2 rounded-lg bg-[#EEF3EE] hover:bg-[#DFE9E0] text-[#35503C] text-[11px] font-semibold whitespace-nowrap"
                       >
                         + 추가
                       </button>
@@ -15270,7 +15237,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                           setScheduleSubTab("todo");
                           setActiveTab("schedule");
                         }}
-                        className="min-h-[40px] px-2 rounded-xl text-stone-600 hover:bg-stone-100 text-[13px] font-semibold whitespace-nowrap"
+                        className="h-7 px-2 rounded-lg text-stone-600 hover:bg-stone-100 text-[11px] font-semibold whitespace-nowrap"
                       >
                         전체 보기
                       </button>
@@ -15278,7 +15245,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                   </div>
 
                   {previewTodos.length === 0 ? (
-                    <div className="text-[14px] font-medium text-stone-600 py-1">
+                    <div className="text-[12px] font-medium text-stone-600 py-1">
                       남은 할 일이 없습니다.
                     </div>
                   ) : (
@@ -15315,7 +15282,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                                 e.currentTarget.click();
                               }
                             }}
-                            className="w-full min-h-[46px] py-2 px-1 hover:bg-stone-50 rounded-xl flex items-center justify-between gap-2 text-left cursor-pointer transition"
+                            className="w-full min-h-[36px] py-1.5 px-1 hover:bg-stone-50 rounded-xl flex items-center justify-between gap-2 text-left cursor-pointer transition"
                           >
                             <div className="flex items-center gap-1.5 min-w-0 flex-1">
                               <button
@@ -15325,20 +15292,20 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                                   e.stopPropagation();
                                   handleToggleScheduleDone(todo);
                                 }}
-                                className="w-11 h-11 -ml-2.5 flex items-center justify-center shrink-0"
+                                className="w-9 h-9 -ml-2 flex items-center justify-center shrink-0"
                               >
                                 <span
-                                  className={`w-5 h-5 rounded-md border-2 bg-white flex items-center justify-center ${
+                                  className={`w-4 h-4 rounded border-[1.75px] bg-white flex items-center justify-center ${
                                     isOverdue ? "border-rose-500" : "border-stone-400"
                                   }`}
                                 />
                               </button>
                               <div className="min-w-0 flex-1">
-                                <div className="text-[15px] font-semibold text-stone-900 leading-snug break-keep">
+                                <div className="text-[11px] font-semibold text-stone-900 leading-snug break-keep">
                                   {todo.title}
                                 </div>
                                 {(hasMemo || attCount > 0) && (
-                                  <div className="text-[13px] font-medium text-stone-600">
+                                  <div className="text-[11px] font-medium text-stone-600">
                                     {[hasMemo ? "메모 있음" : "", attCount > 0 ? `첨부 ${attCount}건` : ""].filter(Boolean).join(" · ")}
                                   </div>
                                 )}
@@ -15346,7 +15313,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                             </div>
                             {todo.date && (
                               <span
-                                className={`px-2 py-0.5 rounded-lg text-[13px] font-semibold whitespace-nowrap shrink-0 ${
+                                className={`px-2 py-0.5 rounded-lg text-[11px] font-semibold whitespace-nowrap shrink-0 ${
                                   isOverdue
                                     ? "bg-rose-50 text-rose-700 border border-rose-200"
                                     : isDueToday
@@ -15378,7 +15345,6 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                   : id;
               return canViewTab(targetTab);
             });
-            const gridPad = blockSizes.menu_grid === "compact" ? "gap-1.5" : blockSizes.menu_grid === "large" ? "gap-2.5" : "gap-2";
             const HOME_MENU_GROUPS = [
               { id: "meal", label: "🍽️ 식단 · 살림", ids: ["daily", "fridge", "shopping", "house", "monthly_cal", "monthly_exp", "recipes", "ai"] },
               { id: "family", label: "👶 육아 · 일정", ids: ["baby", "routine_tab"] },
@@ -15395,11 +15361,11 @@ ${item.memo}` : `${item.title} 다녀옴!`,
             ].filter((g) => g.items.length > 0);
 
             return (
-              <div key="menu_grid" className="space-y-6 pt-1">
+              <div key="menu_grid" className="space-y-3.5 pt-0.5">
                 {groupedSections.map((group) => (
-                  <div key={group.id} className="space-y-2.5">
-                    <h3 className="text-[14px] font-bold text-stone-700 px-0.5">{group.label}</h3>
-                    <div className="grid grid-cols-2 gap-2.5">
+                  <div key={group.id} className="space-y-1.5">
+                    <h3 className="text-[11.5px] font-bold text-stone-600 px-0.5">{group.label}</h3>
+                    <div className="grid grid-cols-2 gap-2">
                       {group.items.map((id) => {
                         const item = MENU_DEFS[id];
                         const mSize = menuSizes[id] || "half";
@@ -15410,17 +15376,17 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                             key={id}
                             type="button"
                             onClick={item.onClick}
-                            className={`bg-white border border-stone-200/90 hover:border-[#3F624D]/50 rounded-2xl p-3.5 min-h-[78px] ${spanCls} text-left shadow-sm flex flex-col justify-between gap-1.5 transition active:scale-[0.99]`}
+                            className={`bg-white border border-stone-200/90 hover:border-[#3F624D]/50 rounded-xl p-2.5 min-h-[58px] ${spanCls} text-left shadow-sm flex flex-col justify-between gap-1 transition active:scale-[0.99]`}
                           >
-                            <div className="flex items-center justify-between gap-1.5">
-                              <span className="text-[15px] font-semibold text-stone-900 leading-snug break-keep">{item.title}</span>
+                            <div className="flex items-center justify-between gap-1">
+                              <span className="text-[12.5px] font-semibold text-stone-900 leading-snug break-keep">{item.title}</span>
                               {cleanAction ? (
-                                <span className={`text-[12px] font-semibold shrink-0 whitespace-nowrap ${item.actionColor}`}>{cleanAction}</span>
+                                <span className={`text-[10.5px] font-semibold shrink-0 whitespace-nowrap ${item.actionColor}`}>{cleanAction}</span>
                               ) : (
-                                <ChevronRight className="w-4 h-4 text-stone-400 shrink-0" />
+                                <ChevronRight className="w-3.5 h-3.5 text-stone-400 shrink-0" />
                               )}
                             </div>
-                            <div className="text-[13px] font-medium text-stone-600 leading-snug break-keep">{item.sub}</div>
+                            <div className="text-[11px] font-medium text-stone-600 leading-snug break-keep">{item.sub}</div>
                           </button>
                         );
                       })}
@@ -15435,10 +15401,10 @@ ${item.memo}` : `${item.title} 다녀옴!`,
 
 
         return (
-          <div className={`px-4 pt-3 pb-32 space-y-5 rounded-b-3xl ${modeMeta.bgClass}`}>
+          <div className={`px-3 pt-2 pb-28 space-y-3 rounded-b-3xl ${modeMeta.bgClass}`}>
             {/* 시간대 적응형 모드 전환 & 오늘 브리핑 복사 */}
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-1.5 overflow-x-auto py-0.5">
+            <div className="flex items-center justify-between gap-1.5">
+              <div className="flex items-center gap-1 overflow-x-auto no-scrollbar">
                 {[
                   { id: "auto", label: `자동(${modeMeta.label})` },
                   { id: "morning", label: "🌅 오전" },
@@ -15449,7 +15415,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                     key={m.id}
                     type="button"
                     onClick={() => setHomeTimeModeOverride(m.id)}
-                    className={`min-h-[38px] px-3 rounded-full text-[13px] font-semibold border whitespace-nowrap transition shrink-0 ${
+                    className={`h-7 px-2.5 rounded-full text-[11px] font-semibold border whitespace-nowrap transition shrink-0 ${
                       homeTimeModeOverride === m.id
                         ? "bg-[#3F624D] text-white border-[#3F624D]"
                         : "bg-white text-stone-700 border-stone-200 hover:bg-stone-50"
@@ -15464,7 +15430,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                 <button
                   type="button"
                   onClick={handleCopyTodayBriefing}
-                  className="min-h-[38px] px-3 rounded-full text-[13px] font-semibold border bg-[#EEF3EE] text-[#35503C] border-[#C9D8CC] hover:bg-[#DFE9E0] whitespace-nowrap shrink-0"
+                  className="h-7 px-2.5 rounded-full text-[11px] font-semibold border bg-[#EEF3EE] text-[#35503C] border-[#C9D8CC] hover:bg-[#DFE9E0] whitespace-nowrap shrink-0"
                   title="오늘 날씨·식단·일정·장보기 브리핑 복사"
                 >
                   브리핑 복사
@@ -15881,13 +15847,13 @@ ${item.memo}` : `${item.title} 다녀옴!`,
               const morningMeals = todayMealsList.filter((m) => m.slot === "아침" || m.slot === "점심" || m.slot === "오전간식");
               const morningRoutineLeft = activeRoutines.filter((r) => (r.timeSlot || "상시") === "아침" || (r.timeSlot || "상시") === "상시").length;
               return (
-                <div className="bg-white border border-stone-200/90 rounded-2xl p-4 space-y-2.5 shadow-sm">
+                <div className="bg-white border border-stone-200/90 rounded-2xl p-3 space-y-1.5 shadow-sm">
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-[16px] font-bold text-stone-900 leading-snug">🌅 좋은 아침 · 등원/오전 브리핑</span>
-                    <span className="text-[13px] font-medium text-stone-600 whitespace-nowrap shrink-0">{modeMeta.rangeLabel}</span>
+                    <span className="text-[13px] font-bold text-stone-900 leading-snug">🌅 좋은 아침 · 등원/오전 브리핑</span>
+                    <span className="text-[11px] font-medium text-stone-600 whitespace-nowrap shrink-0">{modeMeta.rangeLabel}</span>
                   </div>
-                  <div className="flex items-center justify-between gap-2.5">
-                    <span className="text-[14px] font-medium text-stone-700 leading-snug break-keep flex-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[12px] font-medium text-stone-700 leading-snug break-keep flex-1">
                       {morningMeals[0] ? `${morningMeals[0].slot}: ${morningMeals[0].menu}` : "오늘 아침·점심 식단을 기록해 보세요"}
                     </span>
                     <button
@@ -15899,7 +15865,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                           document.getElementById(`weekly-day-${todayKey}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
                         }, 160);
                       }}
-                      className="min-h-[40px] px-3 rounded-xl bg-[#3F624D] hover:bg-[#324F3E] text-white text-[13px] font-semibold shrink-0 whitespace-nowrap"
+                      className="h-7 px-2.5 rounded-lg bg-[#3F624D] hover:bg-[#324F3E] text-white text-[11px] font-semibold shrink-0 whitespace-nowrap"
                     >
                       식단 ({morningRoutineLeft > 0 ? `루틴 ${morningRoutineLeft}` : "확인"})
                     </button>
@@ -15912,30 +15878,30 @@ ${item.memo}` : `${item.title} 다녀옴!`,
             {activeHomeTimeMode === "afternoon" && (() => {
               const dinnerMeal = todayMealsList.find((m) => m.slot === "저녁");
               return (
-                <div className="bg-white border border-stone-200/90 rounded-2xl p-4 space-y-2.5 shadow-sm">
+                <div className="bg-white border border-stone-200/90 rounded-2xl p-3 space-y-1.5 shadow-sm">
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-[16px] font-bold text-stone-900 leading-snug">🌆 오후 · 저녁 준비 &amp; 냉장고 파먹기</span>
-                    <span className="text-[13px] font-medium text-stone-600 whitespace-nowrap shrink-0">{modeMeta.rangeLabel}</span>
+                    <span className="text-[13px] font-bold text-stone-900 leading-snug">🌆 오후 · 저녁 준비 &amp; 냉장고 파먹기</span>
+                    <span className="text-[11px] font-medium text-stone-600 whitespace-nowrap shrink-0">{modeMeta.rangeLabel}</span>
                   </div>
-                  <div className="flex flex-wrap items-center gap-1.5">
+                  <div className="flex flex-wrap items-center gap-1">
                     {expiringItems.length > 0 ? (
                       expiringItems.slice(0, 3).map((it) => (
                         <button
                           key={it.id}
                           type="button"
                           onClick={() => setActiveTab("fridge")}
-                          className="min-h-[36px] px-2.5 rounded-xl bg-rose-50 text-rose-700 border border-rose-200 text-[13px] font-semibold whitespace-nowrap shrink-0"
+                          className="h-7 px-2 rounded-lg bg-rose-50 text-rose-700 border border-rose-200 text-[11px] font-semibold whitespace-nowrap shrink-0"
                         >
                           {it.name} ({it.diff < 0 ? "만료" : `D-${it.diff}`})
                         </button>
                       ))
                     ) : (
-                      <span className="text-[14px] font-medium text-stone-600">임박한 냉장고 재료가 없습니다</span>
+                      <span className="text-[12px] font-medium text-stone-600">임박한 냉장고 재료가 없습니다</span>
                     )}
                     <button
                       type="button"
                       onClick={() => setActiveTab(dinnerMeal ? "daily" : "ai")}
-                      className="ml-auto min-h-[40px] px-3 rounded-xl bg-[#3F624D] hover:bg-[#324F3E] text-white text-[13px] font-semibold whitespace-nowrap"
+                      className="ml-auto h-7 px-2.5 rounded-lg bg-[#3F624D] hover:bg-[#324F3E] text-white text-[11px] font-semibold whitespace-nowrap"
                     >
                       {dinnerMeal ? `저녁: ${dinnerMeal.menu}` : "AI 저녁 추천"}
                     </button>
