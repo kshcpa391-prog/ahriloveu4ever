@@ -1181,7 +1181,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v13.41";
+export const APP_CODE_VERSION = "v13.42";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1199,7 +1199,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-23 10:52";
+export const APP_BUILD_DATE = "2026-11-23 11:30";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1267,6 +1267,18 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v13.42",
+    version: "v13.42",
+    date: "2026-11-23",
+    title: "장보기 화면 가로 넘침·중복 버튼 정리 + 카테고리별 필터·⚙️ 관리 추가",
+    highlights: [
+      "장보기 상단 헤더의 중복 복사(📋) 버튼을 제거하고 줄바꿈 허용(flex-wrap)·금액 표기 축약으로 모바일 우측 튀어나감 완전 해소",
+      "품목 등록 폼 및 사진입고 모달의 카테고리 드롭다운 너비를 고정해 긴 분류명 선택 시 메모·급함 버튼이 밀리던 현상 수정",
+      "장보기 목록에 카테고리별 개수 필터 칩과 '⚙️ 관리' 바로가기를 추가하고, AI 문장 분석에도 사용자 맞춤 카테고리를 동적 연동",
+      "급함 필터 적용 중 마지막 급함 품목을 체크했을 때 필터 버튼이 사라져 빈 목록에 갇히던 상태 버그 수정"
+    ]
+  },
   {
     id: "patch-v13.41",
     version: "v13.41",

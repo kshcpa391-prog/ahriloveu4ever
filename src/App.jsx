@@ -2396,6 +2396,7 @@ function MainApp() {
   const [shoppingList, setShoppingList] = useState([]);
   const [shoppingSearchQuery, setShoppingSearchQuery] = useState("");
   const [shoppingStatusFilter, setShoppingStatusFilter] = useState("all");
+  const [shoppingCatFilter, setShoppingCatFilter] = useState("전체");
   const [quickShoppingText, setQuickShoppingText] = useState("");
   const [isQuickShoppingOpen, setIsQuickShoppingOpen] = useState(false);
   const [isQuickParsingShopping, setIsQuickParsingShopping] = useState(false);
@@ -10879,7 +10880,7 @@ ${validText}
             openaiApiKey,
             aiProvider,
             expectObject: true,
-            promptText: `다음 한국어 장보기 메모/카톡 문장에서 구매할 품목만 추출해 JSON 객체로 응답하세요.\n문장: "${raw}"\n형식: {"items":[{"name":"품목명","quantity":"수량(예:1망,2모,1L,1개)","category":"채소/과일|육류/수산|유제품/계란|유아식/이유식 재료|반찬/김치|밀키트|양념/소스|기타"}]}`
+            promptText: `다음 한국어 장보기 메모/카톡 문장에서 구매할 품목만 추출해 JSON 객체로 응답하세요.\n문장: "${raw}"\n형식: {"items":[{"name":"품목명","quantity":"수량(예:1망,2모,1L,1개)","category":"${fridgeCategories.join("|")}"}]}`
           });
           if (Array.isArray(aiRes?.items) && aiRes.items.length > 0) {
             parsedItems = aiRes.items
@@ -13016,6 +13017,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
     // 기존 항목 일괄 갱신
     if (kind === "fridge") {
       if (fridgeCatFilter === oldName) setFridgeCatFilter(nextName);
+      if (shoppingCatFilter === oldName) setShoppingCatFilter(nextName);
       const affectedFridge = fridge.filter((it) => it.category === oldName);
       const affectedShop = shoppingList.filter((it) => it.category === oldName);
       if (affectedFridge.length > 0 && user && db) {
@@ -13102,6 +13104,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
     const nextList = curList.filter((c) => c !== targetName);
     const nextCats = { ...customCategories, [kind]: nextList };
     if (kind === "fridge" && fridgeCatFilter === targetName) setFridgeCatFilter("전체");
+    if (kind === "fridge" && shoppingCatFilter === targetName) setShoppingCatFilter("전체");
     if (kind === "recipe" && recipeCatFilter === targetName) setRecipeCatFilter("전체");
     if (kind === "bucket" && bucketCatFilter === targetName) setBucketCatFilter("전체");
     if (kind === "notice" && noticeCatFilter === targetName) setNoticeCatFilter("전체");
@@ -22372,12 +22375,12 @@ time: "", location: "",
 
 
           <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-sm space-y-3">
-            <div className="flex items-center justify-between gap-2">
-              <h2 className="text-[15px] font-black text-stone-900 flex items-center gap-1.5 whitespace-nowrap">
-                <ShoppingCart className="w-4 h-4 text-emerald-600 shrink-0" />
+            <div className="flex flex-wrap items-center justify-between gap-1.5">
+              <h2 className="text-[14.5px] font-black text-stone-900 flex items-center gap-1.5 whitespace-nowrap">
+                <ShoppingCart className="w-4 h-4 text-[#3F624D] shrink-0" />
                 <span>장보기 품목 등록</span>
               </h2>
-              <div className="flex items-center gap-1 shrink-0">
+              <div className="flex items-center gap-1.5 shrink-0">
                 <button
                   type="button"
                   onClick={() => {
@@ -22386,30 +22389,9 @@ time: "", location: "",
                     setIsShoppingPhotoModalOpen(true);
                   }}
                   className="px-2 py-1 rounded-xl bg-[#EEF3EE] hover:bg-[#DFE9E0] border border-[#C9D8CC] text-[#2F523E] text-[11px] font-extrabold whitespace-nowrap"
-                  title="손글씨 메모·영수증 사진 찍어 장보기에 바로 담기"
+                  title="손글씨 메모·화이트보드 사진 찍어 장보기에 바로 담기"
                 >
                   📸 사진입고
-                </button>
-                <button
-                  type="button"
-                  onClick={async () => {
-                    const rem = shoppingList
-                      .filter((s) => !s.checked)
-                      .sort((a, b) => Number(Boolean(b.urgent)) - Number(Boolean(a.urgent)));
-                    if (rem.length === 0) {
-                      showToast("🛒 남은 장보기 품목이 없습니다!");
-                      return;
-                    }
-                    const lines = [
-                      `🛒 장보기 목록 (${rem.length}건)`,
-                      ...rem.map((s) => `${s.urgent ? "🚨" : "☐"} ${s.name}${s.quantity ? ` (${s.quantity})` : ""}${s.memo ? ` - ${s.memo}` : ""}`)
-                    ];
-                    await copyTextSafe(lines.join("\n"), `📋 장보기 ${rem.length}건을 복사했습니다!`);
-                  }}
-                  className="px-2 py-1 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-[11px] font-extrabold whitespace-nowrap"
-                  title="남은 장보기 목록 카톡 공유용 복사"
-                >
-                  📋
                 </button>
                 {canViewTab("monthly") && (
                   <button
@@ -22421,7 +22403,7 @@ time: "", location: "",
                     className="px-2 py-1 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-[11px] font-extrabold whitespace-nowrap"
                     title="이달 식비 가계부 보기"
                   >
-                    💰 이달 {monthlyExpenseSummary.total.toLocaleString()}원
+                    💰 {monthlyExpenseSummary.total.toLocaleString()}원
                   </button>
                 )}
               </div>
@@ -22458,7 +22440,7 @@ time: "", location: "",
               />
             </div>
             {!shoppingForm.name.trim() && (
-              <div className="flex items-center gap-1 overflow-x-auto pb-0.5">
+              <div className="flex flex-wrap items-center gap-1">
                 {[
                   { name: "계란", quantity: "1판", category: "유제품/계란" },
                   { name: "우유", quantity: "1팩", category: "유제품/계란" },
@@ -22512,11 +22494,11 @@ time: "", location: "",
             })()}
 
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 min-w-0">
               <select
                 value={shoppingForm.category}
                 onChange={(e) => setShoppingForm({ ...shoppingForm, category: e.target.value })}
-                className="px-2.5 py-2 rounded-xl border border-stone-200 text-[13.5px] font-bold bg-stone-50"
+                className="w-[106px] shrink-0 px-2 py-2 rounded-xl border border-stone-200 text-[12px] font-bold bg-stone-50 truncate"
               >
                 {fridgeCategories.map((c) => (
                   <option key={c} value={c}>
@@ -22526,17 +22508,17 @@ time: "", location: "",
               </select>
               <input
                 type="text"
-                placeholder="메모 (예: 시목이 간식용)"
+                placeholder="메모 (예: 장조림)"
                 value={shoppingForm.memo}
                 onChange={(e) => setShoppingForm({ ...shoppingForm, memo: e.target.value })}
-                className="flex-1 min-w-0 px-3 py-2 rounded-xl border border-stone-200 text-[13px]"
+                className="flex-1 min-w-0 px-2.5 py-2 rounded-xl border border-stone-200 text-[12.5px]"
               />
               <button
                 type="button"
                 onClick={() =>
                   setShoppingForm({ ...shoppingForm, urgent: !shoppingForm.urgent })
                 }
-                className={`px-2.5 py-2 rounded-xl text-[12.5px] font-extrabold border whitespace-nowrap shrink-0 ${
+                className={`px-2 py-2 rounded-xl text-[12px] font-extrabold border whitespace-nowrap shrink-0 ${
                   shoppingForm.urgent
                     ? "bg-red-500 text-white border-red-500"
                     : "bg-stone-50 text-stone-500 border-stone-200"
@@ -22672,47 +22654,78 @@ time: "", location: "",
 
 
           {shoppingList.length > 0 && (
-            <div className="flex items-center gap-1.5">
-              <div className="relative flex-1 min-w-0">
-                <input
-                  type="text"
-                  value={shoppingSearchQuery}
-                  onChange={(e) => setShoppingSearchQuery(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === "Escape") setShoppingSearchQuery(""); }}
-                  enterKeyHint="search"
-                  placeholder="🔍 장보기 품목·메모 검색..."
-                  className="w-full px-3 py-1.5 pr-7 rounded-xl border border-stone-200 bg-white text-[12.5px] font-semibold text-stone-800"
-                />
-                {shoppingSearchQuery && (
+            <div className="space-y-1.5">
+              <div className="flex items-center gap-1.5 min-w-0">
+                <div className="relative flex-1 min-w-0">
+                  <input
+                    type="text"
+                    value={shoppingSearchQuery}
+                    onChange={(e) => setShoppingSearchQuery(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Escape") setShoppingSearchQuery(""); }}
+                    enterKeyHint="search"
+                    placeholder="🔍 품목·메모 검색..."
+                    className="w-full px-3 py-1.5 pr-7 rounded-xl border border-stone-200 bg-white text-[12.5px] font-semibold text-stone-800"
+                  />
+                  {shoppingSearchQuery && (
+                    <button
+                      type="button"
+                      onClick={() => setShoppingSearchQuery("")}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-700 text-[11.5px] font-black"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+                <div className="flex items-center gap-1 shrink-0">
+                  {[
+                    { id: "all", label: "전체" },
+                    { id: "todo", label: "남음" },
+                    ...(shoppingList.some((s) => !s.checked && s.urgent) || shoppingStatusFilter === "urgent" ? [{ id: "urgent", label: "🚨급함" }] : []),
+                    { id: "done", label: "담음" }
+                  ].map((fOpt) => (
+                    <button
+                      key={fOpt.id}
+                      type="button"
+                      onClick={() => setShoppingStatusFilter(fOpt.id)}
+                      className={`px-2 py-1.5 rounded-xl text-[11px] font-extrabold border whitespace-nowrap ${
+                        shoppingStatusFilter === fOpt.id
+                          ? "bg-[#3F624D] text-white border-[#3F624D]"
+                          : "bg-white text-stone-600 border-stone-200"
+                      }`}
+                    >
+                      {fOpt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="flex flex-wrap items-center gap-1">
+                {["전체", ...fridgeCategories.filter((c) => shoppingList.some((s) => s.category === c) || shoppingCatFilter === c)].map((cat) => {
+                  const cnt = cat === "전체" ? shoppingList.length : shoppingList.filter((s) => s.category === cat).length;
+                  return (
+                    <button
+                      key={cat}
+                      type="button"
+                      onClick={() => setShoppingCatFilter(cat)}
+                      className={`px-2 py-0.5 rounded-full text-[11px] font-extrabold border whitespace-nowrap transition ${
+                        shoppingCatFilter === cat
+                          ? "bg-[#3F624D] text-white border-[#3F624D]"
+                          : "bg-white text-stone-600 border-stone-200 hover:bg-stone-50"
+                      }`}
+                    >
+                      {cat === "전체" ? `전체 ${cnt}` : `${cat} ${cnt}`}
+                    </button>
+                  );
+                })}
+                {canEditTab("fridge") && (
                   <button
                     type="button"
-                    onClick={() => setShoppingSearchQuery("")}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-700 text-[11.5px] font-black"
+                    onClick={() => openCategoryManager("fridge")}
+                    className="px-2 py-0.5 rounded-full text-[11px] font-extrabold border whitespace-nowrap bg-white text-[#35503C] border-[#C9D8CC] hover:bg-[#EEF3EE]"
+                    title="재료·장보기 분류 관리"
                   >
-                    ✕
+                    ⚙️ 관리
                   </button>
                 )}
-              </div>
-              <div className="flex items-center gap-1 shrink-0">
-                {[
-                  { id: "all", label: "전체" },
-                  { id: "todo", label: "남음" },
-                  ...(shoppingList.some((s) => !s.checked && s.urgent) ? [{ id: "urgent", label: "🚨급함" }] : []),
-                  { id: "done", label: "담음" }
-                ].map((fOpt) => (
-                  <button
-                    key={fOpt.id}
-                    type="button"
-                    onClick={() => setShoppingStatusFilter(fOpt.id)}
-                    className={`px-2 py-1.5 rounded-xl text-[11.5px] font-extrabold border whitespace-nowrap ${
-                      shoppingStatusFilter === fOpt.id
-                        ? "bg-stone-900 text-white border-stone-900"
-                        : "bg-white text-stone-600 border-stone-200"
-                    }`}
-                  >
-                    {fOpt.label}
-                  </button>
-                ))}
               </div>
             </div>
           )}
@@ -22725,6 +22738,7 @@ time: "", location: "",
                   if (shoppingStatusFilter === "todo" && item.checked) return false;
                   if (shoppingStatusFilter === "urgent" && (item.checked || !item.urgent)) return false;
                   if (shoppingStatusFilter === "done" && !item.checked) return false;
+                  if (shoppingCatFilter !== "전체" && item.category !== shoppingCatFilter) return false;
                   const sq = shoppingSearchQuery.trim().toLowerCase();
                   if (!sq) return true;
                   return (
@@ -22744,10 +22758,10 @@ time: "", location: "",
                     <div className="text-[13px] font-bold text-stone-400">
                       {shoppingList.length === 0 ? "장보기 목록이 비어 있습니다." : "조건에 맞는 장보기 품목이 없습니다."}
                     </div>
-                    {(shoppingSearchQuery || shoppingStatusFilter !== "all") && (
+                    {(shoppingSearchQuery || shoppingStatusFilter !== "all" || shoppingCatFilter !== "전체") && (
                       <button
                         type="button"
-                        onClick={() => { setShoppingSearchQuery(""); setShoppingStatusFilter("all"); }}
+                        onClick={() => { setShoppingSearchQuery(""); setShoppingStatusFilter("all"); setShoppingCatFilter("전체"); }}
                         className="px-3 py-1 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-[11.5px] font-extrabold whitespace-nowrap"
                       >
                         🔄 필터 초기화
@@ -22796,7 +22810,14 @@ time: "", location: "",
                         ({item.quantity})
                       </span>
                     </div>
-                    {item.memo && <div className="text-[12.5px] text-stone-500">{item.memo}</div>}
+                    <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
+                      {item.category && (
+                        <span className="px-1.5 py-0.5 rounded bg-stone-100 text-stone-600 text-[10px] font-bold whitespace-nowrap">
+                          {item.category}
+                        </span>
+                      )}
+                      {item.memo && <span className="text-[12px] text-stone-500 break-words">{item.memo}</span>}
+                    </div>
                   </div>
                 </div>
 
@@ -32940,7 +32961,7 @@ time: "", location: "",
                               prev.map((row, i) => (i === idx ? { ...row, category: val } : row))
                             );
                           }}
-                          className="px-2 py-0.5 rounded-lg border border-stone-200 bg-white text-[11px] font-bold text-stone-700"
+                          className="max-w-[96px] shrink-0 px-1.5 py-0.5 rounded-lg border border-stone-200 bg-white text-[11px] font-bold text-stone-700 truncate"
                         >
                           {fridgeCategories.map((c) => (
                             <option key={c} value={c}>{c}</option>
