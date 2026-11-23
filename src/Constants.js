@@ -1181,7 +1181,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v13.46";
+export const APP_CODE_VERSION = "v13.48";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1199,7 +1199,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-23 12:25";
+export const APP_BUILD_DATE = "2026-11-23 14:50";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1267,6 +1267,29 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v13.48",
+    version: "v13.48",
+    date: "2026-11-23",
+    title: "레시피 사진 확대·사진입고·카테고리 모달 ESC/뒤로가기 완전 연동 + 루틴·예방접종 필터 시인성 개선",
+    highlights: [
+      "레시피 사진 확대 라이트박스(zoomedRecipePhoto)를 모바일 뒤로가기·배경 스크롤 잠금(anyOverlayModalOpen)·ESC 핸들러에 완전 연동",
+      "ESC 키 닫기 핸들러 및 의존성 배열에서 빠져 있던 장보기 사진입고(isShoppingPhotoModalOpen)·통합 카테고리 관리(categoryManageKind) 모달을 보완",
+      "루틴 시간대 필터('+ 예정' 칩 포함)와 육아수첩 예방접종 유형 필터를 가로 스크롤 대신 줄바꿈(flex-wrap)과 세이지 톤(#3F624D)으로 정리해 한눈에 보이도록 개선"
+    ]
+  },
+  {
+    id: "patch-v13.47",
+    version: "v13.47",
+    date: "2026-11-23",
+    title: "가계부 인라인 예산 편집·원장 줄바꿈 개선 + 알림 팝업 Firebase 동기화 이관 + 살림수첩 공지 연계",
+    highlights: [
+      "월간 식비 가계부 예산 수정 시 구식 브라우저 prompt() 팝업을 제거하고, 카드 내 인라인 숫자 입력창과 빠른 프리셋(80·100·120·150만)으로 개편",
+      "지출 원장 헤더의 필터 합계 배지와 복사 버튼 줄바꿈(flex-wrap)을 정리하고, 지출 카테고리 칩을 가로 스크롤 대신 개수 표시 + 줄바꿈으로 개선",
+      "새 수정 알림 팝업 ON/OFF(activityPopupEnabled) 설정을 Firebase 실시간 동기화(home_layout) 및 JSON 백업·복원으로 추가 이관",
+      "살림수첩 보증·AS 및 상비약 카드에도 '📌 공지' 원탭 공유 버튼을 추가해 수납·보증·상비약 3개 탭 모두 공지 연계 완성"
+    ]
+  },
   {
     id: "patch-v13.46",
     version: "v13.46",

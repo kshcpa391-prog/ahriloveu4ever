@@ -2805,6 +2805,8 @@ function MainApp() {
   const [newTableColName, setNewTableColName] = useState("");
   const [activeTableTaskModal, setActiveTableTaskModal] = useState(null);
   const [taskModalDraft, setTaskModalDraft] = useState(null);
+  const [isBudgetEditing, setIsBudgetEditing] = useState(false);
+  const [budgetDraftInput, setBudgetDraftInput] = useState("");
   const [monthlyBudget, setMonthlyBudget] = useState(() => {
     try { return Number(localStorage.getItem("kim_family_budget") || 800000); } catch (e) { return 800000; }
   });
@@ -5233,6 +5235,10 @@ function MainApp() {
             setHomeShowCarryOver(d.showCarryOver);
             try { localStorage.setItem("kim_home_routine_carryover_v1", String(d.showCarryOver)); } catch (e) {}
           }
+          if (typeof d?.activityPopupEnabled === "boolean") {
+            setActivityPopupEnabled(d.activityPopupEnabled);
+            try { localStorage.setItem("kim_activity_popup_enabled_v1", String(d.activityPopupEnabled)); } catch (e) {}
+          }
         },
         () => {}
       )
@@ -5966,6 +5972,7 @@ function MainApp() {
         handoverNote,
         handoverAttachedPageId,
         homeShowCarryOver,
+        activityPopupEnabled,
         homeMiniDdayIds,
         babyDreamLinks,
         houseStorageRooms,
@@ -6162,6 +6169,10 @@ function MainApp() {
       if (typeof payload.homeShowCarryOver === "boolean") {
         setHomeShowCarryOver(payload.homeShowCarryOver);
         try { localStorage.setItem("kim_home_routine_carryover_v1", String(payload.homeShowCarryOver)); } catch (e) {}
+      }
+      if (typeof payload.activityPopupEnabled === "boolean") {
+        setActivityPopupEnabled(payload.activityPopupEnabled);
+        try { localStorage.setItem("kim_activity_popup_enabled_v1", String(payload.activityPopupEnabled)); } catch (e) {}
       }
       if (Number(payload.monthlyBudget) > 0) {
         const mb = Math.round(Number(payload.monthlyBudget));
@@ -6370,11 +6381,15 @@ function MainApp() {
             )
           );
         }
-        if (typeof payload.homeShowCarryOver === "boolean") {
+        if (typeof payload.homeShowCarryOver === "boolean" || typeof payload.activityPopupEnabled === "boolean") {
           writePromises.push(
             setDoc(
               getDocRef("family_meta_v4", "home_layout"),
-              { showCarryOver: payload.homeShowCarryOver, updatedAtMs: Date.now() },
+              {
+                ...(typeof payload.homeShowCarryOver === "boolean" ? { showCarryOver: payload.homeShowCarryOver } : {}),
+                ...(typeof payload.activityPopupEnabled === "boolean" ? { activityPopupEnabled: payload.activityPopupEnabled } : {}),
+                updatedAtMs: Date.now()
+              },
               { merge: true }
             )
           );
@@ -14519,6 +14534,8 @@ ${item.memo}` : `${item.title} 다녀옴!`,
         setIsRecipeModalOpen(false);
         setIsDaycareModalOpen(false);
         setIsReceiptModalOpen(false);
+        setIsShoppingPhotoModalOpen(false);
+        setZoomedRecipePhoto(null);
         setIsInventoryExportOpen(false);
         setStockInItem(null);
         setQuickLogRecipe(null);
@@ -14528,7 +14545,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
     };
     window.addEventListener("keydown", onEsc);
     return () => window.removeEventListener("keydown", onEsc);
-  }, [isMoreNavOpen, isHomeEditMode, isQuickShoppingOpen, isGrowthPctPickerOpen, isHomeRoutineFilterOpen, isRoutineRangeEditOpen, isQuickFabOpen, isRoutineModalOpen, isActivityModalOpen, isEditorUnlockModalOpen, isMealCopyModalOpen, diaryExportPreviewUrl, diaryLightboxUrl, diaryImportModal, cropModal, isWeatherModalOpen, liveActivityPopup, activityEditModal, zipImportPicker, magazineMonth, isSettingsOpen, isHeroPhotoModalOpen, isPageModalOpen, pageMenuTargetId, isPagePasteModalOpen, activeTableTaskModal, isDreamLinksModalOpen, isPatchModalOpen, isBucketModalOpen, isHouseModalOpen, isHandoverModalOpen, isHomeDdayPickerOpen, isPrivateCalModalOpen, isPrivateCalCsvModalOpen, calDayPopupDate, isScheduleModalOpen, isMealModalOpen, isFridgeModalOpen, isNoticeModalOpen, isRecipeModalOpen, isDaycareModalOpen, isReceiptModalOpen, isInventoryExportOpen, stockInItem, quickLogRecipe, cookingConfirmModal, quickFridgeItem]);
+  }, [isMoreNavOpen, isHomeEditMode, isQuickShoppingOpen, isGrowthPctPickerOpen, isHomeRoutineFilterOpen, isRoutineRangeEditOpen, isQuickFabOpen, isRoutineModalOpen, isActivityModalOpen, isEditorUnlockModalOpen, isMealCopyModalOpen, diaryExportPreviewUrl, diaryLightboxUrl, diaryImportModal, cropModal, isWeatherModalOpen, liveActivityPopup, activityEditModal, zipImportPicker, magazineMonth, isSettingsOpen, isHeroPhotoModalOpen, isPageModalOpen, pageMenuTargetId, isPagePasteModalOpen, activeTableTaskModal, isDreamLinksModalOpen, isPatchModalOpen, isBucketModalOpen, isHouseModalOpen, isHandoverModalOpen, isHomeDdayPickerOpen, categoryManageKind, isPrivateCalModalOpen, isPrivateCalCsvModalOpen, calDayPopupDate, isScheduleModalOpen, isMealModalOpen, isFridgeModalOpen, isNoticeModalOpen, isRecipeModalOpen, isDaycareModalOpen, isReceiptModalOpen, isShoppingPhotoModalOpen, zoomedRecipePhoto, isInventoryExportOpen, stockInItem, quickLogRecipe, cookingConfirmModal, quickFridgeItem]);
 
   // ==========================================
   // 모바일·브라우저 뒤로가기 이전 화면 이동 (Chrome User-Gesture History API + URL 해시)
@@ -14618,6 +14635,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
     diaryExportPreviewUrl ||
     diaryLightboxUrl ||
     Boolean(diaryImportModal) ||
+    Boolean(zoomedRecipePhoto) ||
     Boolean(cropModal)
   );
 
@@ -14643,6 +14661,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
       setIsDaycareModalOpen(false);
       setIsReceiptModalOpen(false);
       setIsShoppingPhotoModalOpen(false);
+      setZoomedRecipePhoto(null);
       setIsInventoryExportOpen(false);
       setIsPatchModalOpen(false);
       setIsSettingsOpen(false);
@@ -18635,32 +18654,78 @@ time: "", location: "",
                   <span className="font-bold whitespace-nowrap">{currentMonth}월 총 식비</span>
                   <button
                     type="button"
-                    onClick={async () => {
-                      const next = prompt("월 목표 식비 예산(원)을 입력하세요 (예: 1,200,000):", monthlyBudget.toLocaleString());
-                      if (next === null) return;
-                      const parsed = Number(String(next).replace(/[^\d]/g, ""));
-                      if (Number.isFinite(parsed) && parsed > 0) {
-                        setMonthlyBudget(parsed);
-                        try { localStorage.setItem("kim_family_budget", String(parsed)); } catch (e) {}
-                        if (user && db) {
-                          try {
-                            await setDoc(
-                              getDocRef("family_meta_v4", "monthly_budget_v1"),
-                              { amount: parsed, updatedAtMs: Date.now() },
-                              { merge: true }
-                            );
-                          } catch (e) {}
-                        }
-                        showToast(`💰 월 목표 식비 예산을 ${parsed.toLocaleString()}원으로 저장·동기화했습니다!`);
-                      } else {
-                        showToast("⚠️ 0보다 큰 숫자(원)를 입력해 주세요.");
-                      }
+                    onClick={() => {
+                      setBudgetDraftInput(String(monthlyBudget || ""));
+                      setIsBudgetEditing((v) => !v);
                     }}
                     className="underline text-amber-300 font-bold whitespace-nowrap shrink-0"
                   >
-                    예산: {monthlyBudget.toLocaleString()}원
+                    예산: {monthlyBudget.toLocaleString()}원 ✏️
                   </button>
                 </div>
+                {isBudgetEditing && (
+                  <div className="my-2 p-2.5 rounded-xl bg-stone-800 border border-stone-700 space-y-2">
+                    <div className="flex items-center gap-1.5">
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        value={budgetDraftInput}
+                        onChange={(e) => setBudgetDraftInput(e.target.value.replace(/[^\d,]/g, ""))}
+                        placeholder="예: 1200000"
+                        className="flex-1 min-w-0 px-2.5 py-1.5 rounded-lg bg-stone-900 border border-stone-600 text-white text-[13px] font-bold"
+                      />
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          const parsed = Number(String(budgetDraftInput).replace(/[^\d]/g, ""));
+                          if (!Number.isFinite(parsed) || parsed <= 0) {
+                            showToast("⚠️ 0보다 큰 숫자(원)를 입력해 주세요.");
+                            return;
+                          }
+                          setMonthlyBudget(parsed);
+                          setIsBudgetEditing(false);
+                          try { localStorage.setItem("kim_family_budget", String(parsed)); } catch (e) {}
+                          if (user && db) {
+                            try {
+                              await setDoc(
+                                getDocRef("family_meta_v4", "monthly_budget_v1"),
+                                { amount: parsed, updatedAtMs: Date.now() },
+                                { merge: true }
+                              );
+                            } catch (e) {}
+                          }
+                          showToast(`💰 월 목표 식비 예산을 ${parsed.toLocaleString()}원으로 동기화했습니다!`);
+                        }}
+                        className="px-2.5 py-1.5 rounded-lg bg-amber-400 hover:bg-amber-300 text-stone-950 text-[12px] font-black whitespace-nowrap shrink-0"
+                      >
+                        저장
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setIsBudgetEditing(false)}
+                        className="px-2 py-1.5 rounded-lg bg-stone-700 hover:bg-stone-600 text-stone-200 text-[12px] font-bold whitespace-nowrap shrink-0"
+                      >
+                        취소
+                      </button>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-1">
+                      {[800000, 1000000, 1200000, 1500000].map((preset) => (
+                        <button
+                          key={preset}
+                          type="button"
+                          onClick={() => setBudgetDraftInput(String(preset))}
+                          className={`px-2 py-0.5 rounded-lg text-[11px] font-bold border whitespace-nowrap ${
+                            Number(String(budgetDraftInput).replace(/[^\d]/g, "")) === preset
+                              ? "bg-amber-400 text-stone-950 border-amber-400"
+                              : "bg-stone-900 text-stone-300 border-stone-600 hover:bg-stone-700"
+                          }`}
+                        >
+                          {Math.round(preset / 10000)}만
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 <div className="text-2xl font-black text-amber-400">
                   {monthlyExpenseSummary.total.toLocaleString()}원
                 </div>
@@ -18862,30 +18927,32 @@ time: "", location: "",
                 const filteredSum = filteredLedger.reduce((acc, cur) => acc + (Number(cur.amount) || 0), 0);
                 return (
                   <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-sm space-y-2.5">
-                    <div className="flex items-center justify-between gap-2">
+                    <div className="flex flex-wrap items-center justify-between gap-1.5">
                       <h3 className="text-[13.5px] font-black text-stone-900">
                         🧾 {currentMonth}월 장보기 지출 원장 ({filteredLedger.length}건)
                       </h3>
-                      {filteredLedger.length > 0 && (
-                        <button
-                          type="button"
-                          onClick={async () => {
-                            const lines = filteredLedger.map(
-                              (ex) => `- ${ex.date} | ${ex.category || "기타"} | ${ex.title} : ${(Number(ex.amount) || 0).toLocaleString()}원`
-                            );
-                            const txt = `🧾 ${currentMonth} 식비 원장 (${filteredLedger.length}건 · 합계 ${filteredSum.toLocaleString()}원)\n${lines.join("\n")}`;
-                            await copyTextSafe(txt, `📋 지출 원장 ${filteredLedger.length}건을 복사했습니다!`);
-                          }}
-                          className="px-2 py-1 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 text-[11.5px] font-extrabold whitespace-nowrap shrink-0"
-                        >
-                          📋 원장 복사
-                        </button>
-                      )}
-                      {(expenseCatFilter !== "전체" || eq) && (
-                        <span className="text-[12.5px] font-black text-emerald-700 whitespace-nowrap">
-                          합계 {filteredSum.toLocaleString()}원
-                        </span>
-                      )}
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {(expenseCatFilter !== "전체" || eq) && (
+                          <span className="text-[12px] font-black text-[#2F523E] whitespace-nowrap">
+                            합계 {filteredSum.toLocaleString()}원
+                          </span>
+                        )}
+                        {filteredLedger.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              const lines = filteredLedger.map(
+                                (ex) => `- ${ex.date} | ${ex.category || "기타"} | ${ex.title} : ${(Number(ex.amount) || 0).toLocaleString()}원`
+                              );
+                              const txt = `🧾 ${currentMonth} 식비 원장 (${filteredLedger.length}건 · 합계 ${filteredSum.toLocaleString()}원)\n${lines.join("\n")}`;
+                              await copyTextSafe(txt, `📋 지출 원장 ${filteredLedger.length}건을 복사했습니다!`);
+                            }}
+                            className="px-2 py-1 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 text-[11px] font-extrabold whitespace-nowrap shrink-0"
+                          >
+                            📋 원장 복사
+                          </button>
+                        )}
+                      </div>
                     </div>
                     {monthlyExpenseSummary.ledgerItems.length > 0 && (
                       <div className="space-y-1.5">
@@ -18909,21 +18976,24 @@ time: "", location: "",
                             </button>
                           )}
                         </div>
-                        <div className="flex items-center gap-1 overflow-x-auto pb-0.5">
-                          {cats.map((c) => (
-                            <button
-                              key={c}
-                              type="button"
-                              onClick={() => setExpenseCatFilter(c)}
-                              className={`px-2 py-0.5 rounded-full text-[11.5px] font-extrabold border whitespace-nowrap shrink-0 ${
-                                expenseCatFilter === c
-                                  ? "bg-stone-900 text-white border-stone-900"
-                                  : "bg-stone-50 text-stone-600 border-stone-200"
-                              }`}
-                            >
-                              {c}
-                            </button>
-                          ))}
+                        <div className="flex flex-wrap items-center gap-1">
+                          {cats.map((c) => {
+                            const cCnt = c === "전체" ? monthlyExpenseSummary.ledgerItems.length : monthlyExpenseSummary.ledgerItems.filter((x) => (x.category || "기타") === c).length;
+                            return (
+                              <button
+                                key={c}
+                                type="button"
+                                onClick={() => setExpenseCatFilter(c)}
+                                className={`px-2 py-0.5 rounded-full text-[11px] font-extrabold border whitespace-nowrap shrink-0 ${
+                                  expenseCatFilter === c
+                                    ? "bg-[#3F624D] text-white border-[#3F624D]"
+                                    : "bg-stone-50 text-stone-600 border-stone-200 hover:bg-stone-100"
+                                }`}
+                              >
+                                {c} {cCnt}
+                              </button>
+                            );
+                          })}
                         </div>
                       </div>
                     )}
@@ -20487,7 +20557,7 @@ time: "", location: "",
             })()}
 
 
-            <div className="flex gap-1 overflow-x-auto pb-0.5">
+            <div className="flex flex-wrap items-center gap-1">
               {["전체", ...activeRoutineTimeSlots].map((ts) => (
                 <button
                   key={ts}
@@ -20495,7 +20565,7 @@ time: "", location: "",
                   onClick={() => setRoutineTimeFilter(ts)}
                   className={`px-2 py-0.5 rounded-full text-[11.5px] font-extrabold border whitespace-nowrap shrink-0 ${
                     routineTimeFilter === ts
-                      ? "bg-stone-900 text-white border-stone-900"
+                      ? "bg-[#3F624D] text-white border-[#3F624D]"
                       : "bg-stone-50 text-stone-600 border-stone-200"
                   }`}
                 >
@@ -25313,27 +25383,28 @@ time: "", location: "",
                                   🗓️ 보증일정
                                 </button>
                               )}
-                              {it.warrantyEnd && canEditTab("schedule") && (
+                              {canEditTab("notices") && (
                                 <button
                                   type="button"
                                   onClick={() => {
-                                    setEditingSchedule(null);
-                                    setScheduleForm({
-                                      title: `🛠️ ${it.title} 무상 A/S 만료 점검`,
-                                      date: it.warrantyEnd,
-                                      category: "할일(To-Do)",
-                                      members: ["수혁", "아리나"],
-                                      isAnnual: false,
-                                      showDday: true,
-                                      hasOriginYear: false,
-                                      memo: [it.brand ? `브랜드: ${it.brand}` : "", it.asPhone ? `A/S: ${it.asPhone}` : "", it.memo || ""].filter(Boolean).join("\n"),
-                                      attachments: []
+                                    setEditingNotice(null);
+                                    setNoticeForm({
+                                      title: `🛠️ ${it.title} 보증·A/S 안내`,
+                                      content: [
+                                        it.brand ? `브랜드: ${it.brand}` : "",
+                                        it.warrantyEnd ? `무상 A/S 만료: ${it.warrantyEnd}` : "",
+                                        it.asPhone ? `A/S 연락처: ${it.asPhone}` : "",
+                                        it.memo || ""
+                                      ].filter(Boolean).join("\n"),
+                                      category: noticeCategories.includes("집안일") ? "집안일" : (noticeCategories[0] || "일반"),
+                                      author: actorName || "수혁",
+                                      pinned: false
                                     });
-                                    setIsScheduleModalOpen(true);
+                                    setIsNoticeModalOpen(true);
                                   }}
-                                  className="px-2 py-1 rounded-lg bg-[#EEF3EE] hover:bg-[#DFE9E0] text-[#35503C] text-[11px] font-extrabold whitespace-nowrap"
+                                  className="px-2 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-800 text-[11px] font-extrabold whitespace-nowrap"
                                 >
-                                  🗓️ 만료알림
+                                  📌 공지
                                 </button>
                               )}
                             </>
@@ -25411,6 +25482,30 @@ time: "", location: "",
                                   className="px-2 py-1 rounded-lg bg-[#EEF3EE] hover:bg-[#DFE9E0] text-[#35503C] text-[11px] font-extrabold whitespace-nowrap"
                                 >
                                   🗓️ 폐기일정
+                                </button>
+                              )}
+                              {canEditTab("notices") && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setEditingNotice(null);
+                                    setNoticeForm({
+                                      title: `💊 [${it.target || "공통"}] ${it.title} 복용·기한 안내`,
+                                      content: [
+                                        it.dosage ? `복용량: ${it.dosage}` : "",
+                                        it.expiryDate ? `유통기한: ${it.expiryDate}` : "",
+                                        it.openedDate ? `개봉일: ${it.openedDate}` : "",
+                                        it.memo || ""
+                                      ].filter(Boolean).join("\n"),
+                                      category: noticeCategories.includes("육아/아이들") ? "육아/아이들" : (noticeCategories[0] || "일반"),
+                                      author: actorName || "수혁",
+                                      pinned: false
+                                    });
+                                    setIsNoticeModalOpen(true);
+                                  }}
+                                  className="px-2 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-800 text-[11px] font-extrabold whitespace-nowrap"
+                                >
+                                  📌 공지
                                 </button>
                               )}
                             </>
@@ -28488,7 +28583,7 @@ time: "", location: "",
                     </div>
 
 
-                    <div className="flex items-center gap-1 overflow-x-auto pb-0.5">
+                    <div className="flex flex-wrap items-center gap-1">
                       {["전체", "국가접종", "선택접종", "영유아검진"].map((tp) => (
                         <button
                           key={tp}
@@ -28496,7 +28591,7 @@ time: "", location: "",
                           onClick={() => setVaccineTypeFilter(tp)}
                           className={`px-2.5 py-0.5 rounded-full text-[11px] font-extrabold border whitespace-nowrap shrink-0 ${
                             vaccineTypeFilter === tp
-                              ? "bg-stone-900 text-white border-stone-900"
+                              ? "bg-[#3F624D] text-white border-[#3F624D]"
                               : "bg-stone-50 text-stone-600 border-stone-200"
                           }`}
                         >
@@ -37196,6 +37291,9 @@ time: "", location: "",
                     const nextVal = !activityPopupEnabled;
                     setActivityPopupEnabled(nextVal);
                     try { localStorage.setItem("kim_activity_popup_enabled_v1", String(nextVal)); } catch (e) {}
+                    if (user && db) {
+                      setDoc(getDocRef("family_meta_v4", "home_layout"), { activityPopupEnabled: nextVal, updatedAtMs: Date.now() }, { merge: true }).catch(() => {});
+                    }
                     if (nextVal && typeof Notification !== "undefined" && Notification.permission === "default") {
                       Notification.requestPermission().catch(() => {});
                     }
