@@ -1181,7 +1181,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v13.49";
+export const APP_CODE_VERSION = "v13.50";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1199,7 +1199,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-23 15:42";
+export const APP_BUILD_DATE = "2026-11-23 15:55";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1267,6 +1267,17 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v13.50",
+    version: "v13.50",
+    date: "2026-11-23",
+    title: "맞춤 카테고리 삭제·변경 시 폼 초기값/기존항목 보호 완결 + 냉장고 모달 드롭다운 넘침 방지",
+    highlights: [
+      "장보기·버킷·살림수첩·가족공지 등록 및 메뉴 연계 6곳의 기본 분류·수납장소 초기값을 사용자 맞춤 목록(fridgeCategories·bucketCategories·noticeCategories·houseStorageRooms) 기반으로 동적화해 기본 분류를 삭제·변경해도 고아 값이 생기지 않도록 보완",
+      "냉장고·장보기·버킷·레시피 수정 드롭다운에 기존 분류 유지 fallback 옵션을 추가해 삭제된 예전 분류 항목을 수정할 때 분류가 임의로 바뀌지 않도록 보호",
+      "냉장고 등록 모달의 카테고리 드롭다운에도 너비 제한(w-full min-w-0 truncate)을 적용해 긴 맞춤 분류명 선택 시 모달 가로 넘침 방지"
+    ]
+  },
   {
     id: "patch-v13.49",
     version: "v13.49",

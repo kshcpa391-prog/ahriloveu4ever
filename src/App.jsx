@@ -11488,7 +11488,7 @@ ${validText}
       memo: shoppingForm.memo || ""
     };
     setShoppingList((prev) => [payload, ...prev]);
-    setShoppingForm({ name: "", quantity: "1개", category: "채소/과일", urgent: false, memo: "" });
+    setShoppingForm({ name: "", quantity: "1개", category: fridgeCategories[0] || "채소/과일", urgent: false, memo: "" });
     if (user && db) {
       try {
         await setDoc(getDocRef("family_shopping_v4", id), payload);
@@ -11998,7 +11998,7 @@ ${validText}
       setBucketSearchQuery("");
       setBucketForm({
         title: "",
-        category: "나들이/여행",
+        category: bucketCategories[0] || "나들이/여행",
         weather: "무관",
         memo: "",
         members: ["수혁", "아리나", "시목", "시율"],
@@ -19072,7 +19072,7 @@ time: "", location: "",
                                     setHouseForm({
                                       kind: "warranty",
                                       title: exp.title || "",
-                                      room: "거실",
+                                      room: houseStorageRooms[0] || "거실",
                                       detailLoc: "",
                                       brand: "",
                                       purchaseDate: exp.date || getTodayStr(),
@@ -22852,6 +22852,9 @@ time: "", location: "",
                     {c}
                   </option>
                 ))}
+                {shoppingForm.category && !fridgeCategories.includes(shoppingForm.category) && (
+                  <option value={shoppingForm.category}>{shoppingForm.category}</option>
+                )}
               </select>
               <input
                 type="text"
@@ -28481,7 +28484,7 @@ time: "", location: "",
                                     `💡 핵심 팁: ${ms.tip}`,
                                     ms.redFlags ? `⚠️ 주의 신호: ${ms.redFlags}` : ""
                                   ].filter(Boolean).join("\n"),
-                                  category: "육아/아이들",
+                                  category: noticeCategories.includes("육아/아이들") ? "육아/아이들" : (noticeCategories[0] || "일반"),
                                   author: actorName || "수혁",
                                   pinned: false
                                 });
@@ -29566,7 +29569,7 @@ time: "", location: "",
                                   setHouseForm({
                                     kind: "medicine",
                                     title: n.title || "",
-                                    room: "거실",
+                                    room: houseStorageRooms[0] || "거실",
                                     detailLoc: "",
                                     brand: "",
                                     purchaseDate: getTodayStr(),
@@ -30895,7 +30898,7 @@ time: "", location: "",
                       setNoticeForm({
                         title: "",
                         content: "",
-                        category: "육아/아이들",
+                        category: noticeCategories.includes("육아/아이들") ? "육아/아이들" : (noticeCategories[0] || "일반"),
                         author: actorName || "수혁",
                         pinned: true
                       });
@@ -32368,6 +32371,9 @@ time: "", location: "",
                   {bucketCategories.map((c) => (
                     <option key={c} value={c}>{c}</option>
                   ))}
+                  {bucketForm.category && !bucketCategories.includes(bucketForm.category) && (
+                    <option value={bucketForm.category}>{bucketForm.category}</option>
+                  )}
                 </select>
                 <select
                   value={bucketForm.weather}
@@ -34462,13 +34468,16 @@ time: "", location: "",
               <select
                 value={fridgeForm.category}
                 onChange={(e) => setFridgeForm({ ...fridgeForm, category: e.target.value })}
-                className="px-3 py-2 rounded-xl border border-stone-200 text-[13.5px] font-bold"
+                className="w-full min-w-0 px-2.5 py-2 rounded-xl border border-stone-200 text-[13px] font-bold truncate"
               >
                 {fridgeCategories.map((cat) => (
                   <option key={cat} value={cat}>
                     {cat}
                   </option>
                 ))}
+                {fridgeForm.category && !fridgeCategories.includes(fridgeForm.category) && (
+                  <option value={fridgeForm.category}>{fridgeForm.category}</option>
+                )}
               </select>
             </div>
 
@@ -37941,6 +37950,9 @@ time: "", location: "",
                 {recipeCategories.map((c) => (
                   <option key={c} value={c}>{c}</option>
                 ))}
+                {recipeForm.category && !recipeCategories.includes(recipeForm.category) && (
+                  <option value={recipeForm.category}>{recipeForm.category}</option>
+                )}
               </select>
             </div>
 
