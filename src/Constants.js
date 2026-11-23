@@ -1181,7 +1181,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v13.57";
+export const APP_CODE_VERSION = "v13.59";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1199,7 +1199,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-23 21:06";
+export const APP_BUILD_DATE = "2026-11-24 00:35";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1267,6 +1267,27 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v13.59",
+    version: "v13.59",
+    date: "2026-11-24",
+    title: "🛡️ 냉장고 소비기한 v3 동기화 누락 버그 수정 · 장보기 일괄입고/비우기 200건 배치 분할 · 경조사비 개별 내역 1탭 복사",
+    highlights: [
+      "버그 수정: ① 냉장고 퀵시트 소비기한 변경(handleQuickUpdateFridgeExpiry)에서 v3 키 오참조(fridgeMap.v3→fridgeMap.src_1)로 구버전 재고 기한이 서버에 반영되지 않던 버그 수정 ② 장보기→냉장고 일괄 입고(fridgeMap.local 단일화 및 150건 분할 배치)·체크 완료 일괄 비우기(200건 분할 배치) 안전화",
+      "편의성·백업: ① 경조사비 각 내역 카드에 1탭 [📋] 복사 버튼 추가 ② 김수혁 관리자 전체 JSON 백업·복원에 경조사비 비밀번호(condolencePin) 포함"
+    ]
+  },
+  {
+    id: "patch-v13.58",
+    version: "v13.58",
+    date: "2026-11-24",
+    title: "🐛 장보기→냉장고 일괄입고 상태구조/수량단위 버그 수정 + 경조사비 입력 시 기존 인물 주고받은 이력 자동힌트 + 공지→경조사 연계",
+    highlights: [
+      "핵심 버그 수정: 장보기 [❄️ 냉장고에 바로 넣기](handleMoveCheckedShoppingToFridge) 시 fridgeMap 최상위에 잘못 저장되어 즉시 화면에 반영되지 않던 상태 구조 버그를 prev.v4/prev.local로 수정하고, 품목 수량 문자열('2팩' 등) 자동 분리 및 맞춤 카테고리 반영 보완",
+      "사용자 편의성·고도화: 경조사비 내역 추가·수정 시 성명 입력란에 기존 동일 인물(또는 부분 일치)의 주고받은 이력(날짜·입출금·금액·카테고리) 힌트를 자동 표시해 답례 금액 결정 지원",
+      "메뉴 연계: 가족공지 카드에 '경조사/축의/조의/결혼/장례' 키워드가 포함된 경우 1탭 [💌 경조사] 바로 기록 버튼 자동 표시 및 Babel AST·ReferenceError 0건 검증 완료"
+    ]
+  },
   {
     id: "patch-v13.57",
     version: "v13.57",
@@ -6400,3 +6421,4 @@ export const CONDOLENCE_GROUPS = [
   "기타"
 ];
 export const CONDOLENCE_PAY_METHODS = ["계좌이체", "현금", "선물/기프티콘"];
+

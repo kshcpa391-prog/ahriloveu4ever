@@ -6134,7 +6134,8 @@ function MainApp() {
         routineSlotDefs,
         routineViewMode,
         ...(isAdminUnlocked ? { babyDiaryEntries: safeDiaryEntries, privateSchedules } : {}),
-        ...(isAdminUnlocked || isCondolenceUnlocked ? { condolenceList } : {})
+        ...(isAdminUnlocked || isCondolenceUnlocked ? { condolenceList } : {}),
+        ...(isSuhyeokAdmin ? { condolencePin } : {})
       }
     };
     return JSON.stringify(fullSnapshot, null, 2);
@@ -6402,6 +6403,14 @@ function MainApp() {
         setRoutineViewMode(payload.routineViewMode);
         try { localStorage.setItem("kim_routine_view_mode_v1", payload.routineViewMode); } catch (e) {}
         syncHomeSettingsToCloud(null, null, null, null, payload.routineViewMode);
+      }
+      if (isSuhyeokAdmin && typeof payload.condolencePin === "string" && payload.condolencePin.trim().length >= 4) {
+        const rp = payload.condolencePin.trim();
+        setCondolencePin(rp);
+        try { localStorage.setItem("kim_condolence_pin_v1", rp); } catch (e) {}
+        if (user && db) {
+          setDoc(getDocRef("family_meta_v4", "condolence_config_v1"), { pin: rp, updatedAtMs: Date.now(), updatedBy: "김수혁" }, { merge: true }).catch(() => {});
+        }
       }
       if ((isAdminUnlocked || isCondolenceUnlocked) && Array.isArray(payload.condolenceList)) {
         const cleanCond = payload.condolenceList.filter((c) => c && c.id);
@@ -11817,9 +11826,11 @@ ${validText}
     if (user && db) {
       beginWrite();
       try {
-        const batch = writeBatch(db);
-        checkedItems.forEach((s) => batch.delete(getDocRef("family_shopping_v4", s.id)));
-        await batch.commit();
+        for (let i = 0; i < checkedItems.length; i += 200) {
+          const batch = writeBatch(db);
+          checkedItems.slice(i, i + 200).forEach((s) => batch.delete(getDocRef("family_shopping_v4", s.id)));
+          await batch.commit();
+        }
         showToast(`🧹 체크 완료된 장보기 ${checkedItems.length}건을 비웠습니다.`);
       } catch (e) {
         setSyncErrorMsg(e?.message || "장보기 일괄 삭제 오류");
@@ -11831,7 +11842,7 @@ ${validText}
 
 
   const handleMoveCheckedShoppingToFridge = async () => {
-    if (!requireEditorAccess()) return;
+    if (!requireEditorAccess("shopping")) return;
     const checkedItems = shoppingList.filter((s) => s.checked);
     if (checkedItems.length === 0) return;
     const todayStr = getTodayStr();
@@ -11839,16 +11850,20 @@ ${validText}
     const createdItems = [];
     checkedItems.forEach((s, idx) => {
       const fId = `f-shop-${Date.now()}-${idx}`;
-      const cat = s.category || "기타";
-      const loc = cat === "냉동식품" ? "메인 냉동실" : cat === "양념·오일" || cat === "곡물·면" ? "실온·팬트리" : "냉장실";
+      const cat = s.category || fridgeCategories[0] || "기타";
+      const loc = cat.includes("냉동") ? "메인 냉동실" : (cat.includes("양념") || cat.includes("곡물") || cat.includes("음료")) ? "실온·팬트리" : "냉장실";
+      const rawQty = String(s.quantity || "").trim();
+      const qMatch = rawQty.match(/^(\d+(?:\.\d+)?)\s*(.*)$/);
+      const parsedQty = qMatch ? (Number(qMatch[1]) || 1) : 1;
+      const parsedUnit = qMatch && qMatch[2] ? qMatch[2].trim() : "개";
       createdItems.push({
         id: fId,
         name: s.name,
         category: cat,
         location: loc,
-        qty: 1,
-        quantity: 1,
-        unit: "개",
+        qty: parsedQty,
+        quantity: parsedQty,
+        unit: parsedUnit,
         expiryDate: defaultExp,
         purchaseDate: todayStr,
         memo: s.memo || "장보기 완료 자동입고",
@@ -11857,18 +11872,22 @@ ${validText}
     });
     const checkedIds = new Set(checkedItems.map((s) => s.id));
     setFridgeMap((prev) => {
-      const next = { ...prev };
-      createdItems.forEach((it) => { next[it.id] = it; });
-      return next;
+      const nextLocal = { ...(prev.local || {}) };
+      createdItems.forEach((it) => {
+        nextLocal[it.id] = it;
+      });
+      return { ...prev, local: nextLocal };
     });
     setShoppingList((prev) => prev.filter((s) => !checkedIds.has(s.id)));
     if (user && db) {
       beginWrite();
       try {
-        const batch = writeBatch(db);
-        createdItems.forEach((it) => batch.set(getDocRef("family_fridge_v4", it.id), it));
-        checkedItems.forEach((s) => batch.delete(getDocRef("family_shopping_v4", s.id)));
-        await batch.commit();
+        for (let i = 0; i < createdItems.length; i += 150) {
+          const batch = writeBatch(db);
+          createdItems.slice(i, i + 150).forEach((it) => batch.set(getDocRef("family_fridge_v4", it.id), it));
+          checkedItems.slice(i, i + 150).forEach((s) => batch.delete(getDocRef("family_shopping_v4", s.id)));
+          await batch.commit();
+        }
         recordActivity("냉장고", "장보기입고", `${createdItems.length}건 냉장고 이동`);
         showToast(`❄️ 담은 품목 ${createdItems.length}건을 냉장고에 바로 넣었습니다!`);
       } catch (e) {
@@ -11887,10 +11906,8 @@ ${validText}
     if (!requireEditorAccess("fridge") || !item?.id || !nextExpiryDate) return;
     const updated = { ...item, expiryDate: nextExpiryDate, updatedAt: Date.now() };
     setFridgeMap((prev) => {
-      const nextV4 = prev.v4?.[item.id] ? { ...prev.v4, [item.id]: updated } : prev.v4;
-      const nextV3 = prev.v3?.[item.id] ? { ...prev.v3, [item.id]: updated } : prev.v3;
       const nextLocal = { ...(prev.local || {}), [item.id]: updated };
-      return { ...prev, v4: nextV4, v3: nextV3, local: nextLocal };
+      return { ...prev, local: nextLocal };
     });
     setQuickFridgeItem((prev) => (prev && prev.id === item.id ? updated : prev));
     if (user && db) {
@@ -11900,7 +11917,7 @@ ${validText}
       try {
         const batch = writeBatch(db);
         batch.set(getDocRef("family_fridge_v4", item.id), updated, { merge: true });
-        if (fridgeMap.v3?.[item.id]) {
+        if (fridgeMap.src_1?.[item.id]) {
           batch.set(getDocRef("family_fridge_v3", item.id), updated, { merge: true });
         }
         await batch.commit();
@@ -24817,6 +24834,16 @@ time: "", location: "",
                         🗂️ 노트
                       </button>
                     )}
+                    {/경조사|축의|조의|결혼|장례|부고|돌잔치/.test(`${n.title || ""} ${n.content || ""} ${n.category || ""}`) && (
+                      <button
+                        type="button"
+                        onClick={() => handleScheduleToCondolence({ title: n.title || "", date: getTodayStr(), location: "", memo: n.content || "" })}
+                        className="px-2 py-0.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-[11.5px] font-extrabold whitespace-nowrap"
+                        title="경조사비 입출금 기록"
+                      >
+                        💌 경조사
+                      </button>
+                    )}
                     {canEditTab("schedule") && (
                       <button
                         type="button"
@@ -24826,8 +24853,9 @@ time: "", location: "",
                             title: n.title || "",
                             date: getTodayStr(),
                             endDate: "",
-time: "", location: "",
-                            category: "할일(To-Do)",
+                            time: "",
+                            location: "",
+                            category: scheduleCategories.includes("할일(To-Do)") ? "할일(To-Do)" : (scheduleCategories[0] || "할일(To-Do)"),
                             members: ["수혁", "아리나"],
                             isAnnual: false,
                             showDday: false,
@@ -24859,7 +24887,7 @@ time: "", location: "",
                             id: sid,
                             name: cleanName,
                             quantity: "1개",
-                            category: "기타",
+                            category: fridgeCategories.includes("기타") ? "기타" : (fridgeCategories[fridgeCategories.length - 1] || "기타"),
                             urgent: Boolean(n.pinned),
                             checked: false,
                             memo: n.content ? String(n.content).slice(0, 60) : "가족공지에서 추가"
@@ -27747,6 +27775,17 @@ time: "", location: "",
                         </div>
                       )}
                       <div className="flex items-center justify-end gap-1 pt-0.5" onClick={(e) => e.stopPropagation()}>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const txt = `${item.date} | ${isIn ? "입금" : "출금"} | ${item.person} (${item.group}/${item.category}) | ${Number(item.amount || 0).toLocaleString()}원${item.memo ? ` - ${item.memo}` : ""}`;
+                            copyTextSafe(txt, "📋 내역을 복사했습니다.");
+                          }}
+                          className="h-7 px-2 rounded-lg bg-stone-50 hover:bg-stone-100 border border-stone-200 text-stone-600 text-[11px] font-extrabold whitespace-nowrap"
+                          title="내역 복사"
+                        >
+                          📋
+                        </button>
                         <button
                           type="button"
                           onClick={() => handleCondolenceToSchedule(item)}
@@ -37094,6 +37133,20 @@ time: "", location: "",
                   placeholder="예: 홍길동"
                   className="w-full min-w-0 h-9 px-3 rounded-xl border border-stone-200 bg-stone-50 text-[13px] font-bold text-stone-900 focus:outline-none focus:border-[#3F624D] focus:bg-white"
                 />
+                {(() => {
+                  const pTrim = String(condolenceForm.person || "").trim();
+                  if (!pTrim) return null;
+                  const matched = condolenceList.filter((x) => x.id !== editingCondolenceId && String(x.person || "").trim() === pTrim);
+                  if (matched.length === 0) return null;
+                  const mIn = matched.filter((x) => x.type === "in").reduce((s, x) => s + (Number(x.amount) || 0), 0);
+                  const mOut = matched.filter((x) => x.type !== "in").reduce((s, x) => s + (Number(x.amount) || 0), 0);
+                  const latest = matched[0];
+                  return (
+                    <div className="rounded-lg bg-sky-50 border border-sky-200 px-2 py-1 text-[10.5px] font-bold text-sky-900 leading-snug">
+                      💡 <b>{pTrim}</b>님 기존 {matched.length}건 (받음 +{mIn.toLocaleString()} · 보냄 -{mOut.toLocaleString()}원) · 최근 {latest.date} {latest.category} {Number(latest.amount || 0).toLocaleString()}원
+                    </div>
+                  );
+                })()}
                 {recentPeople.length > 0 && (
                   <div className="flex flex-wrap gap-1 pt-0.5">
                     {recentPeople.map((pName) => (
