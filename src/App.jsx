@@ -1609,6 +1609,31 @@ function MainApp() {
       document.removeEventListener("visibilitychange", syncMinute);
     };
   }, []);
+
+  const getTodayScheduleCountdown = (timeStr, nowMin = liveMinuteTick) => {
+    const raw = String(timeStr || "").trim();
+    const m = raw.match(/^(\d{1,2}):(\d{2})/);
+    if (!m) return null;
+    const targetMin = Number(m[1]) * 60 + Number(m[2]);
+    const diff = targetMin - Number(nowMin || 0);
+    if (diff === 0) {
+      return { text: "지금 시작", tone: "urgent", cls: "bg-rose-50 text-rose-700 border-rose-200" };
+    }
+    const abs = Math.abs(diff);
+    const h = Math.floor(abs / 60);
+    const mm = abs % 60;
+    const dur = h > 0 ? (mm > 0 ? `${h}시간 ${mm}분` : `${h}시간`) : `${mm}분`;
+    if (diff > 0) {
+      if (diff <= 60) {
+        return { text: `${dur} 전`, tone: "urgent", cls: "bg-rose-50 text-rose-700 border-rose-200" };
+      }
+      if (diff <= 180) {
+        return { text: `${dur} 전`, tone: "soon", cls: "bg-amber-50 text-amber-800 border-amber-200" };
+      }
+      return { text: `${dur} 전`, tone: "upcoming", cls: "bg-[#EEF3EE] text-[#35503C] border-[#C9D8CC]" };
+    }
+    return { text: `${dur} 지남`, tone: "passed", cls: "bg-stone-100 text-stone-500 border-stone-200" };
+  };
   const [isHomeEditMode, setIsHomeEditMode] = useState(false);
   const [isRoutineRangeEditOpen, setIsRoutineRangeEditOpen] = useState(false);
   const [routineSlotDefs, setRoutineSlotDefs] = useState(() => {
@@ -3799,6 +3824,12 @@ function MainApp() {
 
   // 마트 영수증 실제 이미지 스캐너 상태
   const [isReceiptModalOpen, setIsReceiptModalOpen] = useState(false);
+  const [isShoppingPhotoModalOpen, setIsShoppingPhotoModalOpen] = useState(false);
+  const [isShoppingPhotoScanning, setIsShoppingPhotoScanning] = useState(false);
+  const [shoppingPhotoPreviewUrl, setShoppingPhotoPreviewUrl] = useState("");
+  const [shoppingPhotoErrorMsg, setShoppingPhotoErrorMsg] = useState("");
+  const [scannedShoppingItems, setScannedShoppingItems] = useState([]);
+  const shoppingPhotoInputRef = useRef(null);
   const [receiptPreviewUrl, setReceiptPreviewUrl] = useState("");
   const [receiptTotalAmount, setReceiptTotalAmount] = useState("");
   const [receiptExcludedAmount, setReceiptExcludedAmount] = useState("0");
@@ -8461,6 +8492,121 @@ ${validText}
     } finally {
       if (receiptFileInputRef.current) receiptFileInputRef.current.value = "";
     }
+  };
+
+  // 📸 손글씨 메모·화이트보드·장보기 사진 AI 스캔 → 장보기 입고
+  const handleShoppingPhotoUpload = async (e) => {
+    if (!requireEditorAccess("shopping")) return;
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setShoppingPhotoErrorMsg("");
+    setIsShoppingPhotoScanning(true);
+    try {
+      const { base64, mimeType, previewUrl } = await fileToBase64(file, {
+        maxSide: 1800,
+        quality: 0.9,
+        enhanceContrast: true
+      });
+      setShoppingPhotoPreviewUrl(previewUrl);
+      const imagePart = { base64, mimeType };
+      const catListStr = fridgeCategories.join(" | ");
+      const promptText = `당신은 한국 가정의 냉장고 손글씨 메모·화이트보드·장보기 메모 사진 정밀 OCR 전문가입니다.
+이미지에 적힌 글자만 100% 사실 그대로 판독하세요. 이미지에 없는 품목을 절대 추측해 지어내지 마세요.
+
+규칙:
+1. 한 줄에 "요리명 - 재료1, 재료2" 형태로 묶여 있으면 각 재료를 개별 품목으로 분리하고 요리명은 memo에 적으세요.
+   예) "장조림 - 고기, 메추리알" -> {"name":"장조림용 고기","quantity":"1개","category":"육류/수산","memo":"장조림"}, {"name":"메추리알","quantity":"1개","category":"유제품/계란","memo":"장조림"}
+   예) "나물류 - 콩나물" -> {"name":"콩나물","quantity":"1개","category":"채소/과일","memo":"나물류"}
+2. 단순 품목("멸치", "계란", "애호박", "오이" 등)은 그대로 품목명으로 추출하세요.
+3. quantity는 이미지에 적힌 수량(예: "2모", "1판", "1망")이 있으면 그대로, 없으면 "1개"로 적으세요.
+4. category는 반드시 다음 목록 중 가장 알맞은 하나를 고르세요: [${catListStr}]
+
+마크다운 코드블록 없이 아래 순수 JSON 객체만 출력하세요:
+{
+  "items": [
+    {"name":"품목명","quantity":"1개","category":"채소/과일","memo":""}
+  ]
+}`;
+      const parsedObj = await callReliableAiEngine({
+        apiKey: geminiApiKey,
+        openaiApiKey,
+        aiProvider,
+        promptText,
+        imagePart,
+        temperature: 0.0,
+        expectObject: true
+      });
+      const rawItems = Array.isArray(parsedObj?.items) ? parsedObj.items : [];
+      if (rawItems.length === 0) {
+        setShoppingPhotoErrorMsg("사진에서 장보기 품목을 찾지 못했습니다. 글자가 또렷하게 나온 사진으로 다시 시도해 주세요.");
+        setScannedShoppingItems([]);
+        return;
+      }
+      const existingOpenSet = new Set(
+        shoppingList.filter((s) => !s.checked).map((s) => String(s.name || "").trim().toLowerCase())
+      );
+      const normalized = rawItems
+        .filter((it) => String(it?.name || "").trim())
+        .map((it, idx) => {
+          const cleanName = String(it.name || "").trim();
+          const isDup = existingOpenSet.has(cleanName.toLowerCase());
+          const matchedCat = fridgeCategories.includes(it.category) ? it.category : (fridgeCategories[0] || "기타");
+          return {
+            tempId: `sp-${Date.now()}-${idx}`,
+            name: cleanName,
+            quantity: String(it.quantity || "1개").trim() || "1개",
+            category: matchedCat,
+            memo: String(it.memo || "").trim(),
+            urgent: false,
+            selected: !isDup,
+            isDuplicate: isDup
+          };
+        });
+      setScannedShoppingItems(normalized);
+      showToast(`📸 사진에서 ${normalized.length}개 품목을 인식했습니다! 확인 후 담아보세요.`);
+    } catch (err) {
+      setShoppingPhotoErrorMsg(err?.message || "사진 AI 분석 중 오류가 발생했습니다. API 키와 네트워크를 확인해 주세요.");
+    } finally {
+      setIsShoppingPhotoScanning(false);
+      if (shoppingPhotoInputRef.current) shoppingPhotoInputRef.current.value = "";
+    }
+  };
+
+  const handleSaveScannedShoppingItems = async () => {
+    if (!requireEditorAccess("shopping")) return;
+    const picked = scannedShoppingItems.filter((it) => it.selected && String(it.name || "").trim());
+    if (picked.length === 0) {
+      showToast("장보기에 담을 품목을 1개 이상 선택해 주세요.");
+      return;
+    }
+    const baseTs = Date.now();
+    const newPayloads = picked.map((it, idx) => ({
+      id: `sh-${baseTs}-${idx}`,
+      name: String(it.name).trim(),
+      quantity: String(it.quantity || "1개").trim() || "1개",
+      category: it.category || fridgeCategories[0] || "기타",
+      urgent: Boolean(it.urgent),
+      checked: false,
+      memo: String(it.memo || "").trim() || "사진 스캔"
+    }));
+    setShoppingList((prev) => [...newPayloads, ...prev]);
+    if (user && db) {
+      try {
+        const batch = writeBatch(db);
+        newPayloads.forEach((p) => {
+          batch.set(getDocRef("family_shopping_v4", p.id), p);
+        });
+        await batch.commit();
+      } catch (e) {
+        setSyncErrorMsg(e?.message || "장보기 사진 입고 동기화 오류");
+      }
+    }
+    recordActivity("장보기", "사진입고", `${newPayloads.map((x) => x.name).slice(0, 3).join(", ")}${newPayloads.length > 3 ? ` 외 ${newPayloads.length - 3}건` : ""}`);
+    setIsShoppingPhotoModalOpen(false);
+    setScannedShoppingItems([]);
+    setShoppingPhotoPreviewUrl("");
+    setShoppingPhotoErrorMsg("");
+    showToast(`🛒 ${newPayloads.length}개 품목을 장보기 목록에 담았습니다!`);
   };
 
 
@@ -14212,6 +14358,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
     isRecipeModalOpen ||
     isDaycareModalOpen ||
     isReceiptModalOpen ||
+    isShoppingPhotoModalOpen ||
     isInventoryExportOpen ||
     isPatchModalOpen ||
     isSettingsOpen ||
@@ -14261,6 +14408,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
       setIsRecipeModalOpen(false);
       setIsDaycareModalOpen(false);
       setIsReceiptModalOpen(false);
+      setIsShoppingPhotoModalOpen(false);
       setIsInventoryExportOpen(false);
       setIsPatchModalOpen(false);
       setIsSettingsOpen(false);
@@ -14483,6 +14631,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
       isNoticeModalOpen ||
       isRecipeModalOpen ||
       isReceiptModalOpen ||
+    isShoppingPhotoModalOpen ||
       isDaycareModalOpen ||
       isInventoryExportOpen
     );
@@ -15833,19 +15982,27 @@ time: "", location: "",
                                 {ev._isPrivate ? "🔒 " : ""}
                                 {ev.title}
                               </div>
-                              {(ev.time || ev.location) && (
-                                <div className="flex items-center gap-1.5 mt-0.5 text-[11px] font-semibold text-stone-500 truncate">
-                                  {ev.time && (
-                                    <span className="text-[#35503C] font-bold whitespace-nowrap shrink-0">
-                                      ⏰ {formatRoutineTimeLabel(ev.time)}
-                                    </span>
-                                  )}
-                                  {ev.time && ev.location && <span className="text-stone-300">·</span>}
-                                  {ev.location && (
-                                    <span className="truncate">📍 {ev.location}</span>
-                                  )}
-                                </div>
-                              )}
+                              {(ev.time || ev.location) && (() => {
+                                const cd = isTodayEv && ev.time ? getTodayScheduleCountdown(ev.time) : null;
+                                return (
+                                  <div className="flex items-center gap-1.5 mt-0.5 text-[11px] font-semibold text-stone-500 min-w-0">
+                                    {ev.time && (
+                                      <span className="text-[#35503C] font-bold whitespace-nowrap shrink-0">
+                                        ⏰ {formatRoutineTimeLabel(ev.time)}
+                                      </span>
+                                    )}
+                                    {cd && (
+                                      <span className={`px-1.5 py-0.5 rounded-md border text-[10px] font-extrabold whitespace-nowrap shrink-0 leading-none ${cd.cls}`}>
+                                        {cd.text}
+                                      </span>
+                                    )}
+                                    {ev.time && ev.location && <span className="text-stone-300 shrink-0">·</span>}
+                                    {ev.location && (
+                                      <span className="truncate">📍 {ev.location}</span>
+                                    )}
+                                  </div>
+                                );
+                              })()}
                             </div>
                             {(() => {
                               const evDt = ev.calc?.nextDateStr || ev.date || "";
@@ -16446,16 +16603,26 @@ time: "", location: "",
                                 <div className="text-[13.5px] font-bold text-stone-900 leading-snug truncate">
                                   {todo.title}
                                 </div>
-                                {(todo.time || todo.location || hasMemo || attCount > 0) && (
-                                  <div className="text-[11.5px] font-medium text-stone-600 truncate">
-                                    {[
-                                      todo.time ? `⏰${formatRoutineTimeLabel(todo.time)}` : "",
-                                      todo.location ? `📍${todo.location}` : "",
-                                      hasMemo ? "메모 있음" : "",
-                                      attCount > 0 ? `첨부 ${attCount}건` : ""
-                                    ].filter(Boolean).join(" · ")}
-                                  </div>
-                                )}
+                                {(todo.time || todo.location || hasMemo || attCount > 0) && (() => {
+                                  const cd = isDueToday && todo.time ? getTodayScheduleCountdown(todo.time) : null;
+                                  return (
+                                    <div className="flex items-center gap-1 text-[11.5px] font-medium text-stone-600 min-w-0">
+                                      {cd && (
+                                        <span className={`px-1.5 py-0.5 rounded-md border text-[10px] font-extrabold whitespace-nowrap shrink-0 leading-none ${cd.cls}`}>
+                                          {cd.text}
+                                        </span>
+                                      )}
+                                      <span className="truncate">
+                                        {[
+                                          todo.time ? `⏰${formatRoutineTimeLabel(todo.time)}` : "",
+                                          todo.location ? `📍${todo.location}` : "",
+                                          hasMemo ? "메모 있음" : "",
+                                          attCount > 0 ? `첨부 ${attCount}건` : ""
+                                        ].filter(Boolean).join(" · ")}
+                                      </span>
+                                    </div>
+                                  );
+                                })()}
                               </div>
                             </div>
                             {todo.date && (() => {
@@ -19403,6 +19570,14 @@ time: "", location: "",
                                         ⏰ {formatRoutineTimeLabel(ev.time)}
                                       </span>
                                     )}
+                                    {ev.time && ev.date === getTodayStr() && (() => {
+                                      const cd = getTodayScheduleCountdown(ev.time);
+                                      return cd ? (
+                                        <span className={`px-1.5 py-0.5 rounded-md border text-[10.5px] font-extrabold whitespace-nowrap ${cd.cls}`}>
+                                          {cd.text}
+                                        </span>
+                                      ) : null;
+                                    })()}
                                     {ev.location && (
                                       <a
                                         href={`https://map.naver.com/p/search/${encodeURIComponent(ev.location)}`}
@@ -22198,11 +22373,23 @@ time: "", location: "",
 
           <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-sm space-y-3">
             <div className="flex items-center justify-between gap-2">
-              <h2 className="text-[15.5px] font-black text-stone-900 flex items-center gap-1.5">
-                <ShoppingCart className="w-4 h-4 text-emerald-600" />
+              <h2 className="text-[15px] font-black text-stone-900 flex items-center gap-1.5 whitespace-nowrap">
+                <ShoppingCart className="w-4 h-4 text-emerald-600 shrink-0" />
                 <span>장보기 품목 등록</span>
               </h2>
               <div className="flex items-center gap-1 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!requireEditorAccess("shopping")) return;
+                    setShoppingPhotoErrorMsg("");
+                    setIsShoppingPhotoModalOpen(true);
+                  }}
+                  className="px-2 py-1 rounded-xl bg-[#EEF3EE] hover:bg-[#DFE9E0] border border-[#C9D8CC] text-[#2F523E] text-[11px] font-extrabold whitespace-nowrap"
+                  title="손글씨 메모·영수증 사진 찍어 장보기에 바로 담기"
+                >
+                  📸 사진입고
+                </button>
                 <button
                   type="button"
                   onClick={async () => {
@@ -31165,11 +31352,21 @@ time: "", location: "",
                     </div>
                     <div>
                       <div className="text-[11.5px] font-extrabold text-stone-400">언제</div>
-                      <div className="font-bold text-stone-800 mt-0.5">
-                        {activeDetail.date}
-                        {activeDetail.endDate && activeDetail.endDate > activeDetail.date ? ` ~ ${activeDetail.endDate}` : ""}
-                        {activeDetail.time ? ` · ⏰ ${formatRoutineTimeLabel(activeDetail.time)}` : ""}
-                        {activeDetail.isAnnual ? " (매년 반복)" : ""}
+                      <div className="font-bold text-stone-800 mt-0.5 flex flex-wrap items-center gap-1.5">
+                        <span>
+                          {activeDetail.date}
+                          {activeDetail.endDate && activeDetail.endDate > activeDetail.date ? ` ~ ${activeDetail.endDate}` : ""}
+                          {activeDetail.time ? ` · ⏰ ${formatRoutineTimeLabel(activeDetail.time)}` : ""}
+                          {activeDetail.isAnnual ? " (매년 반복)" : ""}
+                        </span>
+                        {activeDetail.time && activeDetail.date === getTodayStr() && (() => {
+                          const cd = getTodayScheduleCountdown(activeDetail.time);
+                          return cd ? (
+                            <span className={`px-1.5 py-0.5 rounded-md border text-[10.5px] font-extrabold whitespace-nowrap ${cd.cls}`}>
+                              {cd.text}
+                            </span>
+                          ) : null;
+                        })()}
                       </div>
                     </div>
                     {activeDetail.location && (
@@ -32570,6 +32767,237 @@ time: "", location: "",
 
 
       {/* 모달 7: 마트 영수증 실제 이미지 스캔 모달 */}
+      {isShoppingPhotoModalOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+          onClick={() => setIsShoppingPhotoModalOpen(false)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-3xl max-w-sm w-full p-5 space-y-3 max-h-[88vh] flex flex-col"
+          >
+            <div className="flex items-center justify-between gap-2 shrink-0">
+              <div className="min-w-0">
+                <h3 className="text-[15.5px] font-black text-stone-900 truncate">📸 메모·사진으로 장보기 입고</h3>
+                <p className="text-[11px] font-semibold text-stone-500 mt-0.5">
+                  냉장고 손글씨 메모·화이트보드·장보기 목록 사진 자동 인식
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsShoppingPhotoModalOpen(false)}
+                className="p-1 text-stone-400 hover:text-stone-700 shrink-0"
+                aria-label="닫기"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <input
+              ref={shoppingPhotoInputRef}
+              type="file"
+              accept="image/*"
+              onChange={handleShoppingPhotoUpload}
+              className="hidden"
+            />
+            <button
+              type="button"
+              onClick={() => shoppingPhotoInputRef.current?.click()}
+              disabled={isShoppingPhotoScanning}
+              className="w-full py-3 rounded-2xl bg-[#3F624D] hover:bg-[#324E3D] disabled:opacity-60 text-white text-[13.5px] font-black flex items-center justify-center gap-2 shrink-0 transition"
+            >
+              {isShoppingPhotoScanning ? (
+                <>
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                  <span>AI가 사진 속 장보기 품목 읽는 중...</span>
+                </>
+              ) : (
+                <>
+                  <Upload className="w-4 h-4" />
+                  <span>{shoppingPhotoPreviewUrl ? "다른 메모 사진 다시 올리기" : "메모 사진 촬영 / 앨범에서 올리기"}</span>
+                </>
+              )}
+            </button>
+
+            {shoppingPhotoErrorMsg && (
+              <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-[12.5px] text-rose-700 font-bold shrink-0">
+                ⚠️ {shoppingPhotoErrorMsg}
+              </div>
+            )}
+
+            <div className="flex-1 overflow-y-auto space-y-2.5 min-h-0 pr-0.5">
+              {shoppingPhotoPreviewUrl && (
+                <img
+                  loading="lazy"
+                  decoding="async"
+                  src={shoppingPhotoPreviewUrl}
+                  alt="장보기 메모 미리보기"
+                  className="w-full max-h-40 object-contain bg-stone-50 rounded-xl border border-stone-200"
+                />
+              )}
+
+              {scannedShoppingItems.length > 0 && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[12px] font-extrabold text-stone-700">
+                      인식된 품목 {scannedShoppingItems.filter((x) => x.selected).length}/{scannedShoppingItems.length}건 선택
+                    </span>
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setScannedShoppingItems((prev) => {
+                            const allSel = prev.every((x) => x.selected);
+                            return prev.map((x) => ({ ...x, selected: !allSel }));
+                          })
+                        }
+                        className="px-2 py-0.5 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 text-[10.5px] font-bold whitespace-nowrap"
+                      >
+                        전체 선택/해제
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setScannedShoppingItems((prev) => [
+                            ...prev,
+                            {
+                              tempId: `sp-add-${Date.now()}`,
+                              name: "",
+                              quantity: "1개",
+                              category: fridgeCategories[0] || "기타",
+                              memo: "",
+                              urgent: false,
+                              selected: true,
+                              isDuplicate: false
+                            }
+                          ])
+                        }
+                        className="px-2 py-0.5 rounded-lg bg-[#EEF3EE] text-[#35503C] text-[10.5px] font-extrabold whitespace-nowrap"
+                      >
+                        + 행 추가
+                      </button>
+                    </div>
+                  </div>
+
+                  {scannedShoppingItems.map((it, idx) => (
+                    <div
+                      key={it.tempId || idx}
+                      className={`p-2.5 rounded-xl border space-y-1.5 transition ${
+                        it.selected ? "bg-stone-50 border-stone-200" : "bg-white border-stone-100 opacity-55"
+                      }`}
+                    >
+                      <div className="flex items-center gap-1.5">
+                        <input
+                          type="checkbox"
+                          checked={Boolean(it.selected)}
+                          onChange={(e) => {
+                            const checked = e.target.checked;
+                            setScannedShoppingItems((prev) =>
+                              prev.map((row, i) => (i === idx ? { ...row, selected: checked } : row))
+                            );
+                          }}
+                          className="w-4 h-4 accent-[#3F624D] shrink-0"
+                        />
+                        <input
+                          type="text"
+                          value={it.name}
+                          placeholder="품목명"
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setScannedShoppingItems((prev) =>
+                              prev.map((row, i) => (i === idx ? { ...row, name: val } : row))
+                            );
+                          }}
+                          className="flex-1 min-w-0 px-2 py-1 rounded-lg border border-stone-200 bg-white text-[13px] font-bold"
+                        />
+                        <input
+                          type="text"
+                          value={it.quantity}
+                          placeholder="1개"
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setScannedShoppingItems((prev) =>
+                              prev.map((row, i) => (i === idx ? { ...row, quantity: val } : row))
+                            );
+                          }}
+                          className="w-14 px-1.5 py-1 rounded-lg border border-stone-200 bg-white text-[12px] font-bold text-center shrink-0"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setScannedShoppingItems((prev) => prev.filter((_, i) => i !== idx))}
+                          className="w-6 h-6 flex items-center justify-center rounded-lg text-stone-400 hover:text-rose-600 shrink-0"
+                          title="제외"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                      <div className="flex items-center gap-1.5 pl-5">
+                        <select
+                          value={it.category}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setScannedShoppingItems((prev) =>
+                              prev.map((row, i) => (i === idx ? { ...row, category: val } : row))
+                            );
+                          }}
+                          className="px-2 py-0.5 rounded-lg border border-stone-200 bg-white text-[11px] font-bold text-stone-700"
+                        >
+                          {fridgeCategories.map((c) => (
+                            <option key={c} value={c}>{c}</option>
+                          ))}
+                        </select>
+                        <input
+                          type="text"
+                          value={it.memo}
+                          placeholder="메모 (예: 장조림)"
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setScannedShoppingItems((prev) =>
+                              prev.map((row, i) => (i === idx ? { ...row, memo: val } : row))
+                            );
+                          }}
+                          className="flex-1 min-w-0 px-2 py-0.5 rounded-lg border border-stone-200 bg-white text-[11px] font-semibold text-stone-600"
+                        />
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setScannedShoppingItems((prev) =>
+                              prev.map((row, i) => (i === idx ? { ...row, urgent: !row.urgent } : row))
+                            )
+                          }
+                          className={`px-1.5 py-0.5 rounded-lg text-[10.5px] font-extrabold border whitespace-nowrap shrink-0 ${
+                            it.urgent
+                              ? "bg-rose-500 text-white border-rose-500"
+                              : "bg-white text-stone-500 border-stone-200"
+                          }`}
+                        >
+                          🚨급함
+                        </button>
+                      </div>
+                      {it.isDuplicate && (
+                        <div className="pl-5 text-[10.5px] font-bold text-amber-700">
+                          ⚠️ 이미 장보기 목록에 담겨 있어 기본 해제됨
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {scannedShoppingItems.length > 0 && (
+              <button
+                type="button"
+                onClick={handleSaveScannedShoppingItems}
+                className="w-full py-2.5 rounded-2xl bg-[#3F624D] hover:bg-[#324E3D] text-white text-[13.5px] font-black shrink-0 transition"
+              >
+                🛒 선택한 {scannedShoppingItems.filter((x) => x.selected && String(x.name || "").trim()).length}건 장보기에 담기
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
       {isReceiptModalOpen && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setIsReceiptModalOpen(false)}>
           <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-3xl max-w-sm w-full p-5 space-y-3 max-h-[85vh] overflow-y-auto">

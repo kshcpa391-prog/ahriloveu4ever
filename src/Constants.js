@@ -1181,7 +1181,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v13.40";
+export const APP_CODE_VERSION = "v13.41";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1199,7 +1199,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-23 10:25";
+export const APP_BUILD_DATE = "2026-11-23 10:52";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1267,6 +1267,16 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v13.41",
+    version: "v13.41",
+    date: "2026-11-23",
+    title: "오늘 일정 실시간 카운트다운('N시간 N분 전') + 📸 손글씨 메모·사진 AI 스캔 장보기 입고",
+    highlights: [
+      "오늘 일정·할 일에 시간이 등록되어 있으면 현재 시각 기준으로 '4시간 12분 전', '35분 전', '지금 시작', '1시간 지남' 실시간 카운트다운 배지를 홈 3일 내 일정·홈 남은 할 일·달력 팝업·달력 하단 목록에 자동 표시",
+      "장보기 탭에 '📸 사진입고' AI 스캔 기능을 추가해 냉장고 손글씨 메모·화이트보드·목록 사진을 올리면 복합 항목(예: '장조림 - 고기, 메추리알')까지 자동 분리·분류해 체크 후 일괄 담기 지원 (이미 담긴 품목 중복 자동 감지)"
+    ]
+  },
   {
     id: "patch-v13.40",
     version: "v13.40",
