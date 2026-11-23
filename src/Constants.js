@@ -1181,7 +1181,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v13.42";
+export const APP_CODE_VERSION = "v13.46";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1199,7 +1199,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-23 11:30";
+export const APP_BUILD_DATE = "2026-11-23 12:25";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1267,6 +1267,50 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v13.46",
+    version: "v13.46",
+    date: "2026-11-23",
+    title: "로컬 전용 가족 설정 3종 Firebase 실시간 동기화 이관 + 인수인계 맞춤 가이드 동기화 버그 수정",
+    highlights: [
+      "전체 49개 localStorage 키를 전수 감사해 로컬 기기에만 남던 가족 공유 설정 3종(인수인계 전달 메모, 인수인계 첨부 공유노트, 홈 어제 미완료 루틴 이월 표시 ON/OFF)을 Firebase Firestore 실시간 동기화 및 JSON 백업·복원으로 이관",
+      "인수인계 고정 가이드(handover_profile_v1) 실시간 수신 시 사용자 맞춤 항목(customItems)이 누락되던 치명 동기화 버그를 수정해 기기 간 맞춤 가이드가 완벽히 유지되도록 보강"
+    ]
+  },
+  {
+    id: "patch-v13.45",
+    version: "v13.45",
+    date: "2026-11-23",
+    title: "레시피 리스트 모바일 제목 잘림 해소 + 🛒 냉장고 대조 부족재료 원탭 담기 연계",
+    highlights: [
+      "레시피 리스트 뷰에서 사진·제목·버튼 5개가 한 줄에 몰려 요리명이 2~3글자로 잘리던 레이아웃을 상단 정보 + 하단 액션 바 2단 구조로 개편해 시인성 대폭 개선",
+      "레시피 재료와 현재 냉장고 보유 재고를 자동 대조해 없는 재료만 골라 장보기에 일괄 입고하는 '🛒 부족재료' 원탭 연계 기능 추가",
+      "레시피 수정 버튼의 권한 체크에 탭 키('recipes')를 명시해 도우미·세부 권한 설정 시 정상 동작하도록 수정"
+    ]
+  },
+  {
+    id: "patch-v13.44",
+    version: "v13.44",
+    date: "2026-11-23",
+    title: "월 목표 식비 예산 가족 클라우드 실시간 동기화 + 잔여 일정 등록 6개소 위치·시간 초기화 + 성장차트 모바일 넘침 수정",
+    highlights: [
+      "월 목표 식비 예산(monthlyBudget)을 Firestore 실시간 동기화 및 JSON 전체 백업/복원에 편입해 수혁·아리 기기 간 예산이 자동 일치하도록 개선 (쉼표 포함 입력 '1,200,000'도 정상 인식)",
+      "버킷 지도 상세(주소 자동 전달)·공유노트·육아 진료메모·FAB 빠른추가·냉장고 기한알림(칸 위치 전달) 등 잔여 6개 일정 등록 진입점의 시간·기간·장소 필드를 100% 일관화",
+      "육아수첩 성장차트에서 백분위 4~5개 선택 시 우측 확대보기 버튼이 화면 밖으로 밀리던 현상을 flex-wrap 및 라벨 최적화로 해소"
+    ]
+  },
+  {
+    id: "patch-v13.43",
+    version: "v13.43",
+    date: "2026-11-23",
+    title: "공지 작성자 매핑 버그·영수증 AI 동적 분류 수정 + 살림수첩 보증일정 연계 + 6종 통합 카테고리 관리",
+    highlights: [
+      "공지 등록 모달 작성자 값이 '수혁/아리' vs '김수혁/최아리나' 불일치로 아리 작성 시 수혁으로 표기되던 버그를 정규화해 7개 공지 공유 진입점 전체 수정",
+      "마트 영수증 AI 스캔 프롬프트의 정적 분류 목록을 사용자 맞춤 재료 카테고리(fridgeCategories)로 동적 연동",
+      "공지·버킷·레시피 모달의 카테고리 드롭다운에 너비 제한(min-w-0 w-full truncate)을 적용해 긴 맞춤 분류명 선택 시 모달 가로 넘침 방지",
+      "살림수첩 보증·AS 카드에 '🗓️ 보증일정' 원탭 등록 버튼을 추가하고, 수납지도 필터를 개수 표시+줄바꿈(flex-wrap)으로 개선하며 통합 카테고리 관리에 6번째 '🏠 수납 장소' 탭(3×2 그리드)을 편입"
+    ]
+  },
   {
     id: "patch-v13.42",
     version: "v13.42",

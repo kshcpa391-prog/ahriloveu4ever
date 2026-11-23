@@ -996,16 +996,16 @@ const NoticeFormModal = React.memo(({
           <select
             value={draft.category || "육아/아이들"}
             onChange={(e) => setDraft((p) => ({ ...p, category: e.target.value }))}
-            className="px-3 py-2 rounded-xl border border-stone-200 text-[13.5px] font-bold"
+            className="w-full min-w-0 px-2.5 py-2 rounded-xl border border-stone-200 text-[13px] font-bold truncate"
           >
             {(Array.isArray(noticeCategories) && noticeCategories.length > 0 ? noticeCategories : NOTICE_CATEGORIES).map((c) => (
               <option key={c} value={c}>{c}</option>
             ))}
           </select>
           <select
-            value={draft.author || "김수혁"}
+            value={/아리/.test(String(draft.author || "")) ? "최아리나" : "김수혁"}
             onChange={(e) => setDraft((p) => ({ ...p, author: e.target.value }))}
-            className="px-3 py-2 rounded-xl border border-stone-200 text-[13.5px] font-bold"
+            className="w-full min-w-0 px-2.5 py-2 rounded-xl border border-stone-200 text-[13px] font-bold truncate"
           >
             <option value="김수혁">👨🏻 수혁</option>
             <option value="최아리나">👩🏻 아리</option>
@@ -5229,6 +5229,10 @@ function MainApp() {
             setRoutineSlotDefs(normSlots);
             try { localStorage.setItem("kim_routine_slot_defs_v1", JSON.stringify(normSlots)); } catch (e) {}
           }
+          if (typeof d?.showCarryOver === "boolean") {
+            setHomeShowCarryOver(d.showCarryOver);
+            try { localStorage.setItem("kim_home_routine_carryover_v1", String(d.showCarryOver)); } catch (e) {}
+          }
         },
         () => {}
       )
@@ -5357,6 +5361,21 @@ function MainApp() {
 
     unsubscribers.push(
       onSnapshot(
+        getDocRef("family_meta_v4", "monthly_budget_v1"),
+        (snap) => {
+          if (!snap.exists()) return;
+          const amt = Number(snap.data()?.amount);
+          if (Number.isFinite(amt) && amt > 0) {
+            setMonthlyBudget(amt);
+            try { localStorage.setItem("kim_family_budget", String(amt)); } catch (e) {}
+          }
+        },
+        () => {}
+      )
+    );
+
+    unsubscribers.push(
+      onSnapshot(
         getDocRef("family_meta_v4", "custom_categories_v1"),
         (snap) => {
           if (snap.exists()) {
@@ -5426,6 +5445,8 @@ function MainApp() {
                 bathGuide: typeof dCg[cid]?.bathGuide === "string" ? dCg[cid].bathGuide : (useLegacy && typeof d.bathGuide === "string" ? d.bathGuide : (prevCg[cid]?.bathGuide || "")),
                 cautionGuide: typeof dCg[cid]?.cautionGuide === "string" ? dCg[cid].cautionGuide : (useLegacy && typeof d.cautionGuide === "string" ? d.cautionGuide : (prevCg[cid]?.cautionGuide || ""))
               });
+              const prevCi = prev.customItems && typeof prev.customItems === "object" ? prev.customItems : {};
+              const dCi = d.customItems && typeof d.customItems === "object" ? d.customItems : null;
               const merged = {
                 momMealGuide: typeof d.momMealGuide === "string" ? d.momMealGuide : prev.momMealGuide,
                 houseworkGuide: typeof d.houseworkGuide === "string" ? d.houseworkGuide : prev.houseworkGuide,
@@ -5434,11 +5455,30 @@ function MainApp() {
                 childGuides: {
                   "시목": mergeChild("시목", false),
                   "시율": mergeChild("시율", true)
+                },
+                customItems: {
+                  "공통": Array.isArray(dCi?.["공통"]) ? dCi["공통"] : (Array.isArray(prevCi["공통"]) ? prevCi["공통"] : []),
+                  "시목": Array.isArray(dCi?.["시목"]) ? dCi["시목"] : (Array.isArray(prevCi["시목"]) ? prevCi["시목"] : []),
+                  "시율": Array.isArray(dCi?.["시율"]) ? dCi["시율"] : (Array.isArray(prevCi["시율"]) ? prevCi["시율"] : [])
                 }
               };
               try { localStorage.setItem("kim_handover_profile_v1", JSON.stringify(merged)); } catch (e) {}
               return merged;
             });
+            if (typeof d.sharedNote === "string") {
+              setHandoverNote(d.sharedNote);
+              try {
+                if (d.sharedNote) localStorage.setItem("kim_handover_note_v1", d.sharedNote);
+                else localStorage.removeItem("kim_handover_note_v1");
+              } catch (e) {}
+            }
+            if (typeof d.attachedPageId === "string") {
+              setHandoverAttachedPageId(d.attachedPageId);
+              try {
+                if (d.attachedPageId) localStorage.setItem("kim_handover_page_id_v1", d.attachedPageId);
+                else localStorage.removeItem("kim_handover_page_id_v1");
+              } catch (e) {}
+            }
           }
         },
         () => {}
@@ -5923,10 +5963,14 @@ function MainApp() {
         houseItems,
         familyPages,
         handoverProfile,
+        handoverNote,
+        handoverAttachedPageId,
+        homeShowCarryOver,
         homeMiniDdayIds,
         babyDreamLinks,
         houseStorageRooms,
         customCategories,
+        monthlyBudget,
         homeLayoutConfig,
         homeTimeRanges,
         routineTimeRanges,
@@ -6101,6 +6145,29 @@ function MainApp() {
           setBabyDreamLinks(payload.babyDreamLinks);
           try { localStorage.setItem("kim_baby_dream_links_v1", JSON.stringify(payload.babyDreamLinks)); } catch (e) {}
         }
+      if (typeof payload.handoverNote === "string") {
+        setHandoverNote(payload.handoverNote);
+        try {
+          if (payload.handoverNote) localStorage.setItem("kim_handover_note_v1", payload.handoverNote);
+          else localStorage.removeItem("kim_handover_note_v1");
+        } catch (e) {}
+      }
+      if (typeof payload.handoverAttachedPageId === "string") {
+        setHandoverAttachedPageId(payload.handoverAttachedPageId);
+        try {
+          if (payload.handoverAttachedPageId) localStorage.setItem("kim_handover_page_id_v1", payload.handoverAttachedPageId);
+          else localStorage.removeItem("kim_handover_page_id_v1");
+        } catch (e) {}
+      }
+      if (typeof payload.homeShowCarryOver === "boolean") {
+        setHomeShowCarryOver(payload.homeShowCarryOver);
+        try { localStorage.setItem("kim_home_routine_carryover_v1", String(payload.homeShowCarryOver)); } catch (e) {}
+      }
+      if (Number(payload.monthlyBudget) > 0) {
+        const mb = Math.round(Number(payload.monthlyBudget));
+        setMonthlyBudget(mb);
+        try { localStorage.setItem("kim_family_budget", String(mb)); } catch (e) {}
+      }
       if (payload.customCategories && typeof payload.customCategories === "object") {
         const nextCats = {
           fridge: Array.isArray(payload.customCategories.fridge) && payload.customCategories.fridge.length > 0 ? payload.customCategories.fridge.map((s) => String(s || "").trim()).filter(Boolean) : [...FRIDGE_CATEGORIES],
@@ -6286,6 +6353,37 @@ function MainApp() {
             setDoc(
               getDocRef("family_meta_v4", "baby_dream_links"),
               { items: payload.babyDreamLinks, updatedAtMs: Date.now() },
+              { merge: true }
+            )
+          );
+        }
+        if (typeof payload.handoverNote === "string" || typeof payload.handoverAttachedPageId === "string") {
+          writePromises.push(
+            setDoc(
+              getDocRef("family_meta_v4", "handover_profile_v1"),
+              {
+                ...(typeof payload.handoverNote === "string" ? { sharedNote: payload.handoverNote } : {}),
+                ...(typeof payload.handoverAttachedPageId === "string" ? { attachedPageId: payload.handoverAttachedPageId } : {}),
+                updatedAtMs: Date.now()
+              },
+              { merge: true }
+            )
+          );
+        }
+        if (typeof payload.homeShowCarryOver === "boolean") {
+          writePromises.push(
+            setDoc(
+              getDocRef("family_meta_v4", "home_layout"),
+              { showCarryOver: payload.homeShowCarryOver, updatedAtMs: Date.now() },
+              { merge: true }
+            )
+          );
+        }
+        if (Number(payload.monthlyBudget) > 0) {
+          writePromises.push(
+            setDoc(
+              getDocRef("family_meta_v4", "monthly_budget_v1"),
+              { amount: Math.round(Number(payload.monthlyBudget)), updatedAtMs: Date.now() },
               { merge: true }
             )
           );
@@ -8387,7 +8485,7 @@ ${validText}
 - 수량(quantity)은 영수증의 수량 칸 숫자(보통 1~5개)만 정확히 숫자로 적으세요. 줄번호("01"), "1+1", 가격, 중량 숫자를 합쳐 11로 오인식하지 마세요. 불확실하면 quantity는 1로 적으세요.
 - "재사용봉투", "종량제봉투", "쇼핑백" 등 비식품은 items에서 빼고 그 합계를 excludedTotal에 적으세요.
 - 영수증 하단의 실제 총 결제금액(예: 결제대상금액 20,580)을 receiptTotal에 적으세요.
-- location은 ["냉장실", "냉동실", "실온·팬트리"] 중 하나, category는 ["채소/과일", "육류/수산", "유제품/계란", "유아식/이유식 재료", "반찬/김치", "밀키트", "양념/소스", "기타"] 중 하나입니다.
+- location은 ["냉장실", "냉동실", "실온·팬트리"] 중 하나, category는 ${JSON.stringify(fridgeCategories)} 중 하나입니다.
 
 
 마크다운 코드블록 없이 아래 순수 JSON 객체만 출력하세요:
@@ -11388,6 +11486,78 @@ ${validText}
   };
 
 
+  // 📖 레시피 재료 ↔ ❄️ 냉장고 재고 대조 → 부족 재료만 🛒 장보기 일괄 담기
+  const handleRecipeMissingToShopping = async (recipe) => {
+    if (!requireEditorAccess("shopping") || !recipe) return;
+    const rawText = String(recipe.ingredientsText || "").trim();
+    if (!rawText) {
+      showToast("이 레시피에 등록된 재료 목록이 없습니다.");
+      return;
+    }
+    const tokens = rawText
+      .split(/[,·\/\n]+/)
+      .map((s) => s.replace(/\([^)]*\)/g, "").replace(/\s*\d+(?:\.\d+)?\s*(?:g|kg|ml|L|개|모|큰술|작은술|컵|스푼|봉|팩|단|망|알|쪽|장|T|t)\b/gi, "").trim())
+      .filter((s) => s.length >= 1);
+    const uniqueTokens = Array.from(new Set(tokens));
+    if (uniqueTokens.length === 0) {
+      showToast("추출할 재료가 없습니다.");
+      return;
+    }
+    const fridgeNames = fridge
+      .filter((f) => Number(f.quantity ?? f.qty ?? 1) > 0)
+      .map((f) => String(f.name || "").trim().toLowerCase())
+      .filter(Boolean);
+    const openShopNames = new Set(
+      shoppingList.filter((s) => !s.checked).map((s) => String(s.name || "").trim().toLowerCase()).filter(Boolean)
+    );
+    const missing = [];
+    let inFridgeCount = 0;
+    let alreadyShopCount = 0;
+    uniqueTokens.forEach((tok) => {
+      const low = tok.toLowerCase();
+      if (fridgeNames.some((fn) => fn.includes(low) || low.includes(fn))) {
+        inFridgeCount += 1;
+      } else if (openShopNames.has(low)) {
+        alreadyShopCount += 1;
+      } else {
+        openShopNames.add(low);
+        missing.push(tok);
+      }
+    });
+    if (missing.length === 0) {
+      if (alreadyShopCount > 0) {
+        showToast(`🛒 부족한 재료 ${alreadyShopCount}건이 이미 장보기에 담겨 있어요!`);
+      } else {
+        showToast(`❄️ '${recipe.title}' 재료(${inFridgeCount}종)가 모두 냉장고에 있어요!`);
+      }
+      return;
+    }
+    const baseTs = Date.now();
+    const newPayloads = missing.map((name, idx) => ({
+      id: `sh-${baseTs}-${idx}`,
+      name,
+      quantity: "1개",
+      category: fridgeCategories[0] || "채소/과일",
+      urgent: false,
+      checked: false,
+      memo: `📖 ${recipe.title}`
+    }));
+    setShoppingList((prev) => [...newPayloads, ...prev]);
+    if (user && db) {
+      try {
+        const batch = writeBatch(db);
+        newPayloads.forEach((p) => {
+          batch.set(getDocRef("family_shopping_v4", p.id), p);
+        });
+        await batch.commit();
+      } catch (e) {
+        setSyncErrorMsg(e?.message || "레시피 부족재료 장보기 동기화 오류");
+      }
+    }
+    recordActivity("장보기", "레시피부족재료", `${recipe.title}: ${missing.slice(0, 3).join(", ")}${missing.length > 3 ? ` 외 ${missing.length - 3}건` : ""}`);
+    showToast(`🛒 냉장고에 없는 ${missing.length}개 재료를 장보기에 담았습니다!${inFridgeCount > 0 ? ` (보유 ${inFridgeCount}종 제외)` : ""}`);
+  };
+
   const handleQuickAddFridgeItemToShopping = async (fItem) => {
     if (!requireEditorAccess("shopping") || !fItem?.name) return;
     const norm = String(fItem.name).trim().toLowerCase();
@@ -12980,10 +13150,19 @@ ${item.memo}` : `${item.title} 다녀옴!`,
   };
 
   const handleAddCustomCategory = async (kind, rawName) => {
-    const tabKey = kind === "fridge" ? "fridge" : kind === "recipe" ? "recipes" : kind === "bucket" ? "bucket" : kind === "schedule" ? "schedule" : "notices";
+    const tabKey = kind === "fridge" ? "fridge" : kind === "recipe" ? "recipes" : kind === "bucket" ? "bucket" : kind === "schedule" ? "schedule" : kind === "house_room" ? "house" : "notices";
     if (!requireEditorAccess(tabKey)) return;
     const name = String(rawName || "").trim();
     if (!name) return;
+    if (kind === "house_room") {
+      if (houseStorageRooms.includes(name)) {
+        showToast(`'${name}' 장소가 이미 있습니다.`);
+        return;
+      }
+      setNewCategoryInput("");
+      await saveHouseStorageRoomsToCloud([...houseStorageRooms, name], `📍 '${name}' 수납 장소를 추가했습니다.`);
+      return;
+    }
     const curList = customCategories[kind] || [];
     if (curList.includes(name)) {
       showToast(`'${name}' 분류가 이미 있습니다.`);
@@ -12995,12 +13174,38 @@ ${item.memo}` : `${item.title} 다녀옴!`,
   };
 
   const handleRenameCustomCategory = async (kind, oldName, rawNext) => {
-    const tabKey = kind === "fridge" ? "fridge" : kind === "recipe" ? "recipes" : kind === "bucket" ? "bucket" : kind === "schedule" ? "schedule" : "notices";
+    const tabKey = kind === "fridge" ? "fridge" : kind === "recipe" ? "recipes" : kind === "bucket" ? "bucket" : kind === "schedule" ? "schedule" : kind === "house_room" ? "house" : "notices";
     if (!requireEditorAccess(tabKey)) return;
     const nextName = String(rawNext || "").trim();
     if (!nextName || nextName === oldName) {
       setEditingCategoryOrig("");
       setEditingCategoryDraft("");
+      return;
+    }
+    if (kind === "house_room") {
+      if (houseStorageRooms.includes(nextName)) {
+        showToast(`'${nextName}' 장소가 이미 있습니다.`);
+        return;
+      }
+      const nextRooms = houseStorageRooms.map((r) => (r === oldName ? nextName : r));
+      setEditingCategoryOrig("");
+      setEditingCategoryDraft("");
+      await saveHouseStorageRoomsToCloud(nextRooms);
+      if (houseFilter === oldName) setHouseFilter(nextName);
+      const affected = houseItems.filter((it) => it.room === oldName);
+      if (affected.length > 0) {
+        setHouseItems((prev) => prev.map((it) => (it.room === oldName ? { ...it, room: nextName } : it)));
+        if (user && db) {
+          try {
+            const batch = writeBatch(db);
+            affected.forEach((it) => {
+              batch.set(getDocRef("family_house_v1", it.id), { ...it, room: nextName }, { merge: true });
+            });
+            await batch.commit();
+          } catch (e) {}
+        }
+      }
+      showToast(`✏️ '${oldName}' → '${nextName}' 장소로 변경했습니다.`);
       return;
     }
     const curList = customCategories[kind] || [];
@@ -13094,8 +13299,17 @@ ${item.memo}` : `${item.title} 다녀옴!`,
   };
 
   const handleDeleteCustomCategory = async (kind, targetName) => {
-    const tabKey = kind === "fridge" ? "fridge" : kind === "recipe" ? "recipes" : kind === "bucket" ? "bucket" : kind === "schedule" ? "schedule" : "notices";
+    const tabKey = kind === "fridge" ? "fridge" : kind === "recipe" ? "recipes" : kind === "bucket" ? "bucket" : kind === "schedule" ? "schedule" : kind === "house_room" ? "house" : "notices";
     if (!requireEditorAccess(tabKey)) return;
+    if (kind === "house_room") {
+      if (houseStorageRooms.length <= 1) {
+        showToast("최소 1개 이상의 장소는 유지해야 합니다.");
+        return;
+      }
+      if (houseFilter === targetName) setHouseFilter("전체");
+      await saveHouseStorageRoomsToCloud(houseStorageRooms.filter((r) => r !== targetName), `🗑️ '${targetName}' 장소를 삭제했습니다.`);
+      return;
+    }
     const curList = customCategories[kind] || [];
     if (curList.length <= 1) {
       showToast("최소 1개 이상의 분류는 유지해야 합니다.");
@@ -13113,6 +13327,16 @@ ${item.memo}` : `${item.title} 다녀옴!`,
   };
 
   const handleMoveCustomCategory = async (kind, idx, delta) => {
+    if (kind === "house_room") {
+      const curRooms = [...houseStorageRooms];
+      const targetIdx = idx + delta;
+      if (targetIdx < 0 || targetIdx >= curRooms.length) return;
+      const tmp = curRooms[idx];
+      curRooms[idx] = curRooms[targetIdx];
+      curRooms[targetIdx] = tmp;
+      await saveHouseStorageRoomsToCloud(curRooms);
+      return;
+    }
     const curList = [...(customCategories[kind] || [])];
     const targetIdx = idx + delta;
     if (targetIdx < 0 || targetIdx >= curList.length) return;
@@ -13123,8 +13347,12 @@ ${item.memo}` : `${item.title} 다녀옴!`,
   };
 
   const handleResetCustomCategories = async (kind) => {
-    const tabKey = kind === "fridge" ? "fridge" : kind === "recipe" ? "recipes" : kind === "bucket" ? "bucket" : kind === "schedule" ? "schedule" : "notices";
+    const tabKey = kind === "fridge" ? "fridge" : kind === "recipe" ? "recipes" : kind === "bucket" ? "bucket" : kind === "schedule" ? "schedule" : kind === "house_room" ? "house" : "notices";
     if (!requireEditorAccess(tabKey)) return;
+    if (kind === "house_room") {
+      await saveHouseStorageRoomsToCloud([...HOUSE_STORAGE_ROOMS], "↺ 기본 수납 장소로 복원했습니다.");
+      return;
+    }
     const defList = kind === "fridge" ? [...FRIDGE_CATEGORIES] : kind === "recipe" ? [...RECIPE_CATEGORIES] : kind === "bucket" ? [...BUCKET_CATEGORIES] : kind === "schedule" ? [...SCHEDULE_CATEGORIES] : [...NOTICE_CATEGORIES];
     await saveCustomCategoriesToCloud({ ...customCategories, [kind]: defList }, "↺ 기본 분류로 복원했습니다.");
   };
@@ -13485,6 +13713,9 @@ ${item.memo}` : `${item.title} 다녀옴!`,
     if (handoverAttachedPageId && delSet.has(handoverAttachedPageId)) {
       setHandoverAttachedPageId("");
       try { localStorage.removeItem("kim_handover_page_id_v1"); } catch (e) {}
+      if (user && db) {
+        setDoc(getDocRef("family_meta_v4", "handover_profile_v1"), { attachedPageId: "", updatedAtMs: Date.now() }, { merge: true }).catch(() => {});
+      }
     }
     setRecentPageIds((prev) => {
       const next = prev.filter((id) => !delSet.has(id));
@@ -16211,6 +16442,9 @@ time: "", location: "",
                             const next = !homeShowCarryOver;
                             setHomeShowCarryOver(next);
                             try { localStorage.setItem("kim_home_routine_carryover_v1", String(next)); } catch (e) {}
+                            if (user && db) {
+                              setDoc(getDocRef("family_meta_v4", "home_layout"), { showCarryOver: next, updatedAtMs: Date.now() }, { merge: true }).catch(() => {});
+                            }
                           }}
                           className={`h-6 px-2.5 rounded-lg text-[10.5px] font-extrabold border whitespace-nowrap transition ${
                             homeShowCarryOver
@@ -18401,11 +18635,25 @@ time: "", location: "",
                   <span className="font-bold whitespace-nowrap">{currentMonth}월 총 식비</span>
                   <button
                     type="button"
-                    onClick={() => {
-                      const next = prompt("월 목표 식비 예산(원)을 입력하세요:", monthlyBudget);
-                      if (next && !isNaN(Number(next))) {
-                        setMonthlyBudget(Number(next));
-                        try { localStorage.setItem("kim_family_budget", String(Number(next))); } catch (e) {}
+                    onClick={async () => {
+                      const next = prompt("월 목표 식비 예산(원)을 입력하세요 (예: 1,200,000):", monthlyBudget.toLocaleString());
+                      if (next === null) return;
+                      const parsed = Number(String(next).replace(/[^\d]/g, ""));
+                      if (Number.isFinite(parsed) && parsed > 0) {
+                        setMonthlyBudget(parsed);
+                        try { localStorage.setItem("kim_family_budget", String(parsed)); } catch (e) {}
+                        if (user && db) {
+                          try {
+                            await setDoc(
+                              getDocRef("family_meta_v4", "monthly_budget_v1"),
+                              { amount: parsed, updatedAtMs: Date.now() },
+                              { merge: true }
+                            );
+                          } catch (e) {}
+                        }
+                        showToast(`💰 월 목표 식비 예산을 ${parsed.toLocaleString()}원으로 저장·동기화했습니다!`);
+                      } else {
+                        showToast("⚠️ 0보다 큰 숫자(원)를 입력해 주세요.");
                       }
                     }}
                     className="underline text-amber-300 font-bold whitespace-nowrap shrink-0"
@@ -24386,7 +24634,10 @@ time: "", location: "",
                               setScheduleForm({
                                 title: sel.title,
                                 date: getTodayStr(),
-                                category: "가족행사/경조사",
+                                endDate: "",
+                                time: "",
+                                location: sel.address || "",
+                                category: scheduleCategories.includes("가족행사/경조사") ? "가족행사/경조사" : (scheduleCategories[0] || "가족행사/경조사"),
                                 members: getItemMembers(sel),
                                 isAnnual: false,
                                 showDday: true,
@@ -24806,28 +25057,52 @@ time: "", location: "",
                 )}
               </div>
 
-              <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5">
+              <div className="flex flex-wrap items-center gap-1.5">
                 {(houseSubTab === "storage"
                   ? ["전체", ...houseStorageRooms]
                   : houseSubTab === "warranty"
                   ? ["전체", "임박·만료"]
                   : ["전체", "임박·만료", ...HOUSE_MEDICINE_TARGETS]
-                ).map((chip) => (
+                ).map((chip) => {
+                  const subItems = houseItems.filter((x) => (x.kind || "storage") === houseSubTab);
+                  const chipCnt =
+                    chip === "전체"
+                      ? subItems.length
+                      : chip === "임박·만료"
+                      ? subItems.filter((x) => {
+                          const dt = houseSubTab === "warranty" ? x.warrantyEnd : x.expiryDate;
+                          return dt && getDaysDiff(dt) <= 30;
+                        }).length
+                      : houseSubTab === "storage"
+                      ? subItems.filter((x) => (x.room || "기타") === chip).length
+                      : subItems.filter((x) => (x.target || "공통") === chip).length;
+                  return (
+                    <button
+                      key={chip}
+                      type="button"
+                      onClick={() => setHouseFilter(chip)}
+                      className={`px-2.5 py-1 rounded-full text-[11.5px] font-extrabold border whitespace-nowrap shrink-0 transition ${
+                        houseFilter === chip
+                          ? chip === "임박·만료"
+                            ? "bg-rose-600 text-white border-rose-600"
+                            : "bg-[#3F624D] text-white border-[#3F624D]"
+                          : "bg-white text-stone-600 border-stone-200"
+                      }`}
+                    >
+                      {chip === "임박·만료" ? `⏰ 임박·만료 ${chipCnt}` : `${chip} ${chipCnt}`}
+                    </button>
+                  );
+                })}
+                {houseSubTab === "storage" && canEditTab("house") && (
                   <button
-                    key={chip}
                     type="button"
-                    onClick={() => setHouseFilter(chip)}
-                    className={`px-2.5 py-1 rounded-full text-[11.5px] font-extrabold border whitespace-nowrap shrink-0 transition ${
-                      houseFilter === chip
-                        ? chip === "임박·만료"
-                          ? "bg-rose-600 text-white border-rose-600"
-                          : "bg-stone-900 text-white border-stone-900"
-                        : "bg-white text-stone-600 border-stone-200"
-                    }`}
+                    onClick={() => openCategoryManager("house_room")}
+                    className="px-2.5 py-1 rounded-full text-[11.5px] font-extrabold border whitespace-nowrap shrink-0 bg-white text-[#35503C] border-[#C9D8CC] hover:bg-[#EEF3EE]"
+                    title="수납 장소 추가·수정·삭제"
                   >
-                    {chip === "임박·만료" ? "⏰ 임박·만료" : chip}
+                    ⚙️ 관리
                   </button>
-                ))}
+                )}
               </div>
             </div>
 
@@ -25011,6 +25286,32 @@ time: "", location: "",
                                 >
                                   📞 전화
                                 </a>
+                              )}
+                              {it.warrantyEnd && canEditTab("schedule") && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setEditingSchedule(null);
+                                    setScheduleForm({
+                                      title: `🛠️ ${it.title} 무상 A/S 만료`,
+                                      date: it.warrantyEnd,
+                                      endDate: "",
+                                      time: "",
+                                      location: it.brand || "",
+                                      category: "할일(To-Do)",
+                                      members: ["수혁", "아리나"],
+                                      isAnnual: false,
+                                      showDday: true,
+                                      hasOriginYear: false,
+                                      memo: [it.asPhone ? `A/S: ${it.asPhone}` : "", it.memo || ""].filter(Boolean).join("\n"),
+                                      attachments: []
+                                    });
+                                    setIsScheduleModalOpen(true);
+                                  }}
+                                  className="px-2 py-1 rounded-lg bg-[#EEF3EE] hover:bg-[#DFE9E0] text-[#35503C] text-[11px] font-extrabold whitespace-nowrap"
+                                >
+                                  🗓️ 보증일정
+                                </button>
                               )}
                               {it.warrantyEnd && canEditTab("schedule") && (
                                 <button
@@ -25782,6 +26083,9 @@ time: "", location: "",
                                 setScheduleForm({
                                   title: currentPage.title || "공유노트 할 일",
                                   date: getTodayStr(),
+                                  endDate: "",
+                                  time: "",
+                                  location: "",
                                   category: "할일(To-Do)",
                                   members: ["수혁", "아리나"],
                                   isAnnual: false,
@@ -26969,8 +27273,8 @@ time: "", location: "",
                   ? (ratingsVals.reduce((a, b) => a + Number(b), 0) / ratingsVals.length).toFixed(1)
                   : null;
                 return (
-                  <div key={r.id} className="p-3 flex items-center justify-between gap-2.5 hover:bg-stone-50/70">
-                    <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                  <div key={r.id} className="p-3 space-y-2 hover:bg-stone-50/70">
+                    <div className="flex items-center gap-2.5 min-w-0">
                       {validPhoto ? (
                         <img
                           loading="lazy"
@@ -26979,7 +27283,7 @@ time: "", location: "",
                           alt={r.title}
                           onClick={() => {
                             if (!isEditorUnlocked) {
-                              requireEditorAccess();
+                              requireEditorAccess("recipes");
                               return;
                             }
                             setZoomedRecipePhoto({ title: r.title, url: r.photoDataUrl });
@@ -26993,11 +27297,11 @@ time: "", location: "",
                         </div>
                       )}
                       <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-1.5 flex-wrap">
+                        <div className="flex items-center gap-1.5 min-w-0">
                           <span className="px-1.5 py-0.5 rounded bg-rose-50 text-rose-700 text-[10.5px] font-extrabold whitespace-nowrap shrink-0">
                             {r.category || "기타"}
                           </span>
-                          <span className="text-[13.5px] font-black text-stone-900 truncate">{r.title}</span>
+                          <span className="text-[14px] font-black text-stone-900 truncate">{r.title}</span>
                         </div>
                         <div className="text-[11.5px] text-stone-500 font-semibold mt-0.5 truncate">
                           ⏱️ {r.cookTime || "20분"} · {r.difficulty || "쉬움"}
@@ -27006,60 +27310,72 @@ time: "", location: "",
                         </div>
                       </div>
                     </div>
-                    <div className="flex items-center gap-1 shrink-0">
-                      <button
-                        type="button"
-                        onClick={() => startRecipeCookTimer(r)}
-                        className="p-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-800 text-[11px] font-extrabold whitespace-nowrap"
-                        title={`${r.cookTime || "10분"} 조리 타이머 시작`}
-                      >
-                        ⏱️
-                      </button>
-                      {canEditTab("notices") && (
+                    <div className="flex items-center justify-between gap-1.5 pt-1.5 border-t border-stone-100">
+                      <div className="flex items-center gap-1 flex-wrap">
                         <button
                           type="button"
-                          onClick={() => {
-                            if (!requireEditorAccess("notices")) return;
-                            setEditingNotice(null);
-                            setNoticeForm({
-                              title: `🍽️ [메뉴 제안] ${r.title}`,
-                              content: [
-                                `⏱️ ${r.cookTime || "20분"} · ${r.difficulty || "쉬움"}`,
-                                r.ingredientsText ? `🧂 재료: ${r.ingredientsText}` : "",
-                                r.memo ? `📝 메모: ${r.memo}` : ""
-                              ].filter(Boolean).join("\n"),
-                              category: noticeCategories.includes("집안일") ? "집안일" : (noticeCategories[0] || "일반"),
-                              author: actorName || "수혁",
-                              pinned: false
-                            });
-                            setIsNoticeModalOpen(true);
-                          }}
-                          className="p-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-700 text-[11px] font-bold"
-                          title="가족공지로 메뉴 제안"
+                          onClick={() => handleApplyRecipeToMeal(r)}
+                          className="px-2 py-1 rounded-lg bg-[#3F624D] hover:bg-[#324E3D] text-white text-[11px] font-extrabold whitespace-nowrap"
+                          title="오늘 식단으로 재현"
                         >
-                          📌
+                          🍽️ 식단재현
                         </button>
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => copyTextSafe(`🍽️ [${r.category || "레시피"}] ${r.title}\n⏱️ ${r.cookTime || "20분"} · ${r.difficulty || "쉬움"}${r.ingredientsText ? `\n🧂 재료: ${r.ingredientsText}` : ""}${r.memo ? `\n📝 메모: ${r.memo}` : ""}`, "📋 레시피를 복사했습니다!")}
-                        className="p-1.5 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-600 text-[11px] font-bold"
-                        title="레시피 복사"
-                      >
-                        📋
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleApplyRecipeToMeal(r)}
-                        className="px-2 py-1.5 rounded-lg bg-stone-900 text-white text-[11.5px] font-extrabold whitespace-nowrap"
-                        title="오늘 식단으로 재현"
-                      >
-                        재현
-                      </button>
+                        {r.ingredientsText && canEditTab("shopping") && (
+                          <button
+                            type="button"
+                            onClick={() => handleRecipeMissingToShopping(r)}
+                            className="px-2 py-1 rounded-lg bg-[#EEF3EE] hover:bg-[#DFE9E0] border border-[#C9D8CC] text-[#2F523E] text-[11px] font-extrabold whitespace-nowrap"
+                            title="냉장고에 없는 재료만 장보기에 담기"
+                          >
+                            🛒 부족재료
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => startRecipeCookTimer(r)}
+                          className="px-2 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-800 text-[11px] font-extrabold whitespace-nowrap"
+                          title={`${r.cookTime || "10분"} 조리 타이머 시작`}
+                        >
+                          ⏱️ 타이머
+                        </button>
+                        {canEditTab("notices") && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (!requireEditorAccess("notices")) return;
+                              setEditingNotice(null);
+                              setNoticeForm({
+                                title: `🍽️ [메뉴 제안] ${r.title}`,
+                                content: [
+                                  `⏱️ ${r.cookTime || "20분"} · ${r.difficulty || "쉬움"}`,
+                                  r.ingredientsText ? `🧂 재료: ${r.ingredientsText}` : "",
+                                  r.memo ? `📝 메모: ${r.memo}` : ""
+                                ].filter(Boolean).join("\n"),
+                                category: noticeCategories.includes("집안일") ? "집안일" : (noticeCategories[0] || "일반"),
+                                author: actorName || "수혁",
+                                pinned: false
+                              });
+                              setIsNoticeModalOpen(true);
+                            }}
+                            className="p-1.5 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 text-[11px] font-bold"
+                            title="가족공지로 메뉴 제안"
+                          >
+                            📌
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => copyTextSafe(`🍽️ [${r.category || "레시피"}] ${r.title}\n⏱️ ${r.cookTime || "20분"} · ${r.difficulty || "쉬움"}${r.ingredientsText ? `\n🧂 재료: ${r.ingredientsText}` : ""}${r.memo ? `\n📝 메모: ${r.memo}` : ""}`, "📋 레시피를 복사했습니다!")}
+                          className="p-1.5 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-600 text-[11px] font-bold"
+                          title="레시피 복사"
+                        >
+                          📋
+                        </button>
+                      </div>
                       <button
                         type="button"
                         onClick={() => {
-                          if (!requireEditorAccess()) return;
+                          if (!requireEditorAccess("recipes")) return;
                           setEditingRecipe(r);
                           setRecipeForm({
                             title: r.title || "",
@@ -27074,7 +27390,8 @@ time: "", location: "",
                           });
                           setIsRecipeModalOpen(true);
                         }}
-                        className="p-1.5 rounded-lg hover:bg-stone-100 text-stone-500"
+                        className="p-1.5 rounded-lg hover:bg-stone-100 text-stone-500 shrink-0"
+                        title="레시피 수정"
                       >
                         <Edit2 className="w-3.5 h-3.5" />
                       </button>
@@ -28637,11 +28954,11 @@ time: "", location: "",
                         </div>
                       </div>
 
-                      <div className="flex items-center justify-between gap-1.5">
+                      <div className="flex flex-wrap items-center justify-between gap-1.5">
                         <button
                           type="button"
                           onClick={() => setIsGrowthPctPickerOpen((v) => !v)}
-                          className={`h-7 px-2.5 rounded-lg border text-[11.5px] font-semibold whitespace-nowrap shrink-0 transition ${
+                          className={`h-7 px-2 rounded-lg border text-[11px] font-semibold whitespace-nowrap shrink-0 transition ${
                             isGrowthPctPickerOpen
                               ? "bg-[#EEF3EE] border-[#3F624D] text-[#35503C]"
                               : "bg-stone-50 border-stone-200 text-stone-700 hover:bg-stone-100"
@@ -28652,9 +28969,9 @@ time: "", location: "",
                         <button
                           type="button"
                           onClick={() => setGrowthChartZoom((z) => (z === "zoom" ? "full" : "zoom"))}
-                          className="h-7 px-2.5 rounded-lg bg-sky-50 hover:bg-sky-100 border border-sky-200 text-sky-800 text-[11.5px] font-bold whitespace-nowrap shrink-0 transition"
+                          className="h-7 px-2 rounded-lg bg-sky-50 hover:bg-sky-100 border border-sky-200 text-sky-800 text-[11px] font-bold whitespace-nowrap shrink-0 transition"
                         >
-                          {growthChartZoom === "zoom" ? "전체보기 (0~35개월)" : "확대보기 (내 아이 구간)"}
+                          {growthChartZoom === "zoom" ? "전체보기 (0~35m)" : "내 아이 구간 확대"}
                         </button>
                       </div>
 
@@ -29098,6 +29415,9 @@ time: "", location: "",
                                   setScheduleForm({
                                     title: `${activeChild.name} ${n.title || "소아과 재진"}`,
                                     date: getTodayStr(),
+                                    endDate: "",
+                                    time: "",
+                                    location: "",
                                     category: "육아/병원",
                                     members: [activeChild.id],
                                     isAnnual: false,
@@ -30371,6 +30691,9 @@ time: "", location: "",
                       setScheduleForm({
                         title: "",
                         date: scheduleSelectedDate || getTodayStr(),
+                        endDate: "",
+                        time: "",
+                        location: "",
                         category: "육아/병원",
                         members: (scheduleMemberFilter === "전체" || scheduleMemberFilter === "공통") ? ["수혁", "아리나", "시목", "시율"] : [scheduleMemberFilter],
                         isAnnual: false,
@@ -30401,6 +30724,9 @@ time: "", location: "",
                       setScheduleForm({
                         title: "",
                         date: getTodayStr(),
+                        endDate: "",
+                        time: "",
+                        location: "",
                         category: "할일(To-Do)",
                         members: (scheduleMemberFilter === "전체" || scheduleMemberFilter === "공통") ? ["수혁", "아리나", "시목", "시율"] : [scheduleMemberFilter],
                         isAnnual: false,
@@ -31913,7 +32239,7 @@ time: "", location: "",
                 <select
                   value={bucketForm.category}
                   onChange={(e) => setBucketForm((p) => ({ ...p, category: e.target.value }))}
-                  className="px-2.5 py-2 rounded-xl border border-stone-200 text-[12px] font-bold bg-white"
+                  className="w-full min-w-0 px-2.5 py-2 rounded-xl border border-stone-200 text-[12px] font-bold bg-white truncate"
                 >
                   {bucketCategories.map((c) => (
                     <option key={c} value={c}>{c}</option>
@@ -31922,7 +32248,7 @@ time: "", location: "",
                 <select
                   value={bucketForm.weather}
                   onChange={(e) => setBucketForm((p) => ({ ...p, weather: e.target.value }))}
-                  className="px-2.5 py-2 rounded-xl border border-stone-200 text-[12px] font-bold bg-white"
+                  className="w-full min-w-0 px-2.5 py-2 rounded-xl border border-stone-200 text-[12px] font-bold bg-white truncate"
                 >
                   <option value="무관">🌤️ 날씨 무관</option>
                   <option value="맑음">☀️ 맑은 날</option>
@@ -34278,13 +34604,14 @@ time: "", location: "",
 
       {/* ⚙️ 통합 세부 카테고리 자유 관리 모달 (재료 · 레시피 · 가족공지) */}
       {categoryManageKind && (() => {
-        const curList = customCategories[categoryManageKind] || [];
+        const curList = categoryManageKind === "house_room" ? houseStorageRooms : (customCategories[categoryManageKind] || []);
         const kindMeta = {
           fridge: { title: "❄️ 재료 카테고리", placeholder: "새 재료 분류 (예: 간식/과자, 냉동식품)" },
           recipe: { title: "📖 레시피 카테고리", placeholder: "새 레시피 분류 (예: 에어프라이어, 캠핑요리)" },
           notice: { title: "📌 공지 카테고리", placeholder: "새 공지 분류 (예: 어린이집, 건강/병원)" },
           bucket: { title: "🌟 버킷 카테고리", placeholder: "새 버킷 분류 (예: 캠핑, 해외여행, 전시회)" },
-          schedule: { title: "🗓️ 일정 카테고리", placeholder: "새 일정 분류 (예: 어린이집, 친정/시댁, 차량)" }
+          schedule: { title: "🗓️ 일정 카테고리", placeholder: "새 일정 분류 (예: 어린이집, 친정/시댁, 차량)" },
+          house_room: { title: "🏠 수납 장소", placeholder: "새 수납 장소 (예: 드레스룸, 팬트리, 서재)" }
         }[categoryManageKind] || { title: "⚙️ 분류 관리", placeholder: "새 분류 입력" };
         return (
           <div
@@ -34319,26 +34646,27 @@ time: "", location: "",
                 </div>
               </div>
 
-              {/* 5종 카테고리 빠른 전환 탭 */}
-              <div className="flex flex-wrap gap-1 bg-stone-100 p-1 rounded-xl">
+              {/* 6종 카테고리 빠른 전환 탭 */}
+              <div className="grid grid-cols-3 gap-1 bg-stone-100 p-1 rounded-xl">
                 {[
-                  { id: "fridge", label: "❄️ 재료" },
-                  { id: "recipe", label: "📖 레시피" },
-                  { id: "notice", label: "📌 공지" },
-                  { id: "bucket", label: "🌟 버킷" },
-                  { id: "schedule", label: "🗓️ 일정" }
+                  { id: "fridge", label: "❄️ 재료", cnt: (customCategories.fridge || []).length },
+                  { id: "recipe", label: "📖 레시피", cnt: (customCategories.recipe || []).length },
+                  { id: "notice", label: "📌 공지", cnt: (customCategories.notice || []).length },
+                  { id: "bucket", label: "🌟 버킷", cnt: (customCategories.bucket || []).length },
+                  { id: "schedule", label: "🗓️ 일정", cnt: (customCategories.schedule || []).length },
+                  { id: "house_room", label: "🏠 수납", cnt: houseStorageRooms.length }
                 ].map((t) => (
                   <button
                     key={t.id}
                     type="button"
                     onClick={() => openCategoryManager(t.id)}
-                    className={`flex-1 min-w-[62px] py-1.5 px-1.5 rounded-lg text-[11px] font-extrabold whitespace-nowrap transition ${
+                    className={`py-1.5 px-1.5 rounded-lg text-[11px] font-extrabold whitespace-nowrap transition ${
                       categoryManageKind === t.id
                         ? "bg-white text-stone-900 shadow-sm"
                         : "text-stone-500 hover:text-stone-800"
                     }`}
                   >
-                    {t.label} {(customCategories[t.id] || []).length}
+                    {t.label} {t.cnt}
                   </button>
                 ))}
               </div>
@@ -37481,7 +37809,7 @@ time: "", location: "",
               <select
                 value={recipeForm.category || "메인반찬"}
                 onChange={(e) => setRecipeForm({ ...recipeForm, category: e.target.value })}
-                className="px-2 py-2 rounded-xl border border-stone-200 text-[13.5px] font-bold bg-stone-50"
+                className="w-full min-w-0 px-2 py-2 rounded-xl border border-stone-200 text-[12.5px] font-bold bg-stone-50 truncate"
               >
                 {recipeCategories.map((c) => (
                   <option key={c} value={c}>{c}</option>
@@ -38117,6 +38445,9 @@ time: "", location: "",
                     setScheduleForm({
                       title: `❄️ ${targetItem?.name || "재료"} 소진·소비기한 확인`,
                       date: targetItem?.expiryDate || getTodayStr(),
+                      endDate: "",
+                      time: "",
+                      location: resolveItemShelfZone(targetItem) || "",
                       category: "할일(To-Do)",
                       members: ["수혁", "아리나"],
                       isAnnual: false,
@@ -39379,6 +39710,9 @@ time: "", location: "",
                                 if (val) localStorage.setItem("kim_handover_page_id_v1", val);
                                 else localStorage.removeItem("kim_handover_page_id_v1");
                               } catch (err) {}
+                              if (user && db) {
+                                setDoc(getDocRef("family_meta_v4", "handover_profile_v1"), { attachedPageId: val, updatedAtMs: Date.now() }, { merge: true }).catch(() => {});
+                              }
                             }}
                             className="flex-1 bg-transparent text-[11.5px] font-bold text-stone-800 focus:outline-none min-w-0"
                           >
@@ -39411,7 +39745,13 @@ time: "", location: "",
                             setHandoverNote(v);
                             try { localStorage.setItem("kim_handover_note_v1", v); } catch (err) {}
                           }}
-                          placeholder="이번 교대 한 줄 전달사항 (실시간 반영)"
+                          onBlur={(e) => {
+                            const v = e.target.value;
+                            if (user && db) {
+                              setDoc(getDocRef("family_meta_v4", "handover_profile_v1"), { sharedNote: v, updatedAtMs: Date.now() }, { merge: true }).catch(() => {});
+                            }
+                          }}
+                          placeholder="이번 교대 한 줄 전달사항 (가족 실시간 동기화)"
                           className="flex-1 bg-transparent text-[11.5px] font-bold text-stone-800 focus:outline-none"
                         />
                         {handoverNote && (
@@ -39420,6 +39760,9 @@ time: "", location: "",
                             onClick={() => {
                               setHandoverNote("");
                               try { localStorage.removeItem("kim_handover_note_v1"); } catch (err) {}
+                              if (user && db) {
+                                setDoc(getDocRef("family_meta_v4", "handover_profile_v1"), { sharedNote: "", updatedAtMs: Date.now() }, { merge: true }).catch(() => {});
+                              }
                             }}
                             className="text-stone-400 hover:text-stone-700"
                           >
@@ -40879,6 +41222,9 @@ time: "", location: "",
                   onClick={() => {
                     setHandoverAttachedPageId(targetPg.id);
                     try { localStorage.setItem("kim_handover_page_id_v1", targetPg.id); } catch (err) {}
+                    if (user && db) {
+                      setDoc(getDocRef("family_meta_v4", "handover_profile_v1"), { attachedPageId: targetPg.id, updatedAtMs: Date.now() }, { merge: true }).catch(() => {});
+                    }
                     setHandoverTargets({ "시목": true, "시율": true, "산모가사": true });
                     setHandoverModalTab("config");
                     setPageMenuTargetId(null);
