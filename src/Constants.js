@@ -1181,7 +1181,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v13.38";
+export const APP_CODE_VERSION = "v13.40";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1199,7 +1199,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-23 08:30";
+export const APP_BUILD_DATE = "2026-11-23 10:25";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1267,6 +1267,30 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v13.40",
+    version: "v13.40",
+    date: "2026-11-23",
+    title: "공지 공유 6개소 분류 버그 일괄 수정 + 가족↔개인 일정 변환·빠른등록 고도화 + 달력/할일 지도 연계",
+    highlights: [
+      "버킷리스트·살림수첩·레시피·루틴·인수인계·공유노트 6개소에서 공지 공유 시 잘못된 분류('가족공지')로 저장되어 필터에 걸리지 않던 버그를 동적 공지 카테고리로 일괄 수정",
+      "가족↔개인 일정 복사·변환 시 시간(time)·종료일(endDate)·장소(location)가 유실되거나 메모에 섞이던 문제를 완전 복구",
+      "달력 일자 팝업 1줄 빠른등록에서 '16:30', '4시반', '오전 10시' 등 시간 표현을 자동 파싱해 시간 필드에 저장하도록 고도화",
+      "버킷리스트→일정(주소 자동 입력), 살림수첩→일정(수납 위치 자동 입력), 달력 하단 목록(⏰시간·📍장소·네이버지도 원탭 링크), 홈 남은 할 일(시간·장소 표시 및 복사) 연계 강화"
+    ]
+  },
+  {
+    id: "patch-v13.39",
+    version: "v13.39",
+    date: "2026-11-23",
+    title: "일정 ⏰시간·📍장소 선택 등록 + 네이버지도 연계 + 홈 시간대 바 잘림 수정 + 🗓️ 일정 분류 자유 관리",
+    highlights: [
+      "일정 등록·수정 모달에 선택 입력 필드(⏰ 시간 + 빠른시간 5종 칩, 📍 장소)를 추가해 제목에 시간·장소를 억지로 적지 않아도 깔끔하게 기록 가능",
+      "홈 3일 내 일정(시간순 정렬·복사), 달력 일자 팝업(원탭 🗺️ 네이버지도 길찾기·장소 복사), 할 일 카드, 오늘 브리핑 복사, 육아 인수인계 타임테이블·리스트, 가족공지 전환에 시간·장소 전면 연계",
+      "홈 상단 시간대 전환 바의 '🌙 밤' 칩이 '📋 브리핑' 버튼에 가려 잘리던 모바일 폭 이슈를 '자동·오전' 축약 및 간격 최적화로 완전 해소",
+      "세부 카테고리 통합 관리(⚙️)에 5번째 '🗓️ 일정 분류'를 추가해 달력 필터·일정 모달 분류를 자유롭게 추가·이름변경(기존 일정 일괄 반영)·삭제·순서변경 가능"
+    ]
+  },
   {
     id: "patch-v13.38",
     version: "v13.38",

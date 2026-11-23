@@ -524,7 +524,9 @@ const ScheduleFormModal = React.memo(({
   onSubmitForm,
   onReadAttachments,
   onPreviewImage,
-  showToast
+  showToast,
+  scheduleCategories = SCHEDULE_CATEGORIES,
+  onManageCategories
 }) => {
   const [draft, setDraft] = useState(initialForm);
 
@@ -553,7 +555,7 @@ const ScheduleFormModal = React.memo(({
         <input
           type="text"
           autoFocus
-          placeholder="일정 제목 (예: 시목 어린이집상담 2시반, 병원 예약)"
+          placeholder="일정 제목 (예: 시목 예방접종, 어린이집 상담)"
           value={draft.title || ""}
           onChange={(e) => setDraft((p) => ({ ...p, title: e.target.value }))}
           className="w-full px-3 py-2.5 rounded-xl border border-stone-200 text-[13.5px] font-bold"
@@ -648,18 +650,94 @@ const ScheduleFormModal = React.memo(({
             })}
           </div>
         </div>
+        {/* 선택 입력: ⏰ 시간 & 📍 장소 */}
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <div className="flex items-center justify-between">
+              <label className="text-[11.5px] font-bold text-stone-500 whitespace-nowrap">⏰ 시간 (선택)</label>
+              {draft.time && (
+                <button
+                  type="button"
+                  onClick={() => setDraft((p) => ({ ...p, time: "" }))}
+                  className="text-[10.5px] font-bold text-stone-400 hover:text-rose-500 whitespace-nowrap"
+                >
+                  지우기
+                </button>
+              )}
+            </div>
+            <input
+              type="time"
+              value={draft.time || ""}
+              onChange={(e) => setDraft((p) => ({ ...p, time: e.target.value }))}
+              className="w-full px-2.5 py-2 rounded-xl border border-stone-200 text-[13px] font-bold bg-white"
+            />
+          </div>
+          <div>
+            <div className="flex items-center justify-between">
+              <label className="text-[11.5px] font-bold text-stone-500 whitespace-nowrap">📍 장소 (선택)</label>
+              {draft.location && (
+                <button
+                  type="button"
+                  onClick={() => setDraft((p) => ({ ...p, location: "" }))}
+                  className="text-[10.5px] font-bold text-stone-400 hover:text-rose-500 whitespace-nowrap"
+                >
+                  지우기
+                </button>
+              )}
+            </div>
+            <input
+              type="text"
+              placeholder="예: 이진소아과"
+              value={draft.location || ""}
+              onChange={(e) => setDraft((p) => ({ ...p, location: e.target.value }))}
+              className="w-full px-2.5 py-2 rounded-xl border border-stone-200 text-[13px] font-bold bg-white"
+            />
+          </div>
+        </div>
+        <div className="flex items-center gap-1 flex-wrap -mt-1.5">
+          <span className="text-[10.5px] font-bold text-stone-400 whitespace-nowrap">빠른시간:</span>
+          {["09:30", "11:00", "14:00", "16:30", "18:30"].map((tm) => (
+            <button
+              key={tm}
+              type="button"
+              onClick={() => setDraft((p) => ({ ...p, time: p.time === tm ? "" : tm }))}
+              className={`px-2 py-0.5 rounded-lg text-[10.5px] font-extrabold border whitespace-nowrap transition ${
+                draft.time === tm
+                  ? "bg-[#3F624D] text-white border-[#3F624D]"
+                  : "bg-stone-50 hover:bg-stone-100 text-stone-600 border-stone-200"
+              }`}
+            >
+              {tm}
+            </button>
+          ))}
+        </div>
+
         <div>
-          <label className="text-[11.5px] font-bold text-stone-500">분류</label>
+          <div className="flex items-center justify-between mb-0.5">
+            <label className="text-[11.5px] font-bold text-stone-500">분류</label>
+            {onManageCategories && (
+              <button
+                type="button"
+                onClick={onManageCategories}
+                className="text-[10.5px] font-bold text-[#35503C] hover:underline whitespace-nowrap"
+              >
+                ⚙️ 분류 관리
+              </button>
+            )}
+          </div>
           <select
             value={draft.category || "할일(To-Do)"}
             onChange={(e) => setDraft((p) => ({ ...p, category: e.target.value }))}
             className="w-full px-3 py-2 rounded-xl border border-stone-200 text-[13.5px] font-bold"
           >
-            {SCHEDULE_CATEGORIES.map((c) => (
+            {(Array.isArray(scheduleCategories) && scheduleCategories.length > 0 ? scheduleCategories : SCHEDULE_CATEGORIES).map((c) => (
               <option key={c} value={c}>
                 {c}
               </option>
             ))}
+            {draft.category && !(Array.isArray(scheduleCategories) ? scheduleCategories : SCHEDULE_CATEGORIES).includes(draft.category) && (
+              <option value={draft.category}>{draft.category}</option>
+            )}
           </select>
         </div>
 
@@ -2449,7 +2527,8 @@ function MainApp() {
           fridge: Array.isArray(saved.fridge) && saved.fridge.length > 0 ? saved.fridge.map((s) => String(s || "").trim()).filter(Boolean) : [...FRIDGE_CATEGORIES],
           recipe: Array.isArray(saved.recipe) && saved.recipe.length > 0 ? saved.recipe.map((s) => String(s || "").trim()).filter(Boolean) : [...RECIPE_CATEGORIES],
           notice: Array.isArray(saved.notice) && saved.notice.length > 0 ? saved.notice.map((s) => String(s || "").trim()).filter(Boolean) : [...NOTICE_CATEGORIES],
-          bucket: Array.isArray(saved.bucket) && saved.bucket.length > 0 ? saved.bucket.map((s) => String(s || "").trim()).filter(Boolean) : [...BUCKET_CATEGORIES]
+          bucket: Array.isArray(saved.bucket) && saved.bucket.length > 0 ? saved.bucket.map((s) => String(s || "").trim()).filter(Boolean) : [...BUCKET_CATEGORIES],
+          schedule: Array.isArray(saved.schedule) && saved.schedule.length > 0 ? saved.schedule.map((s) => String(s || "").trim()).filter(Boolean) : [...SCHEDULE_CATEGORIES]
         };
       }
     } catch (e) {}
@@ -2457,14 +2536,16 @@ function MainApp() {
       fridge: [...FRIDGE_CATEGORIES],
       recipe: [...RECIPE_CATEGORIES],
       notice: [...NOTICE_CATEGORIES],
-      bucket: [...BUCKET_CATEGORIES]
+      bucket: [...BUCKET_CATEGORIES],
+      schedule: [...SCHEDULE_CATEGORIES]
     };
   });
   const fridgeCategories = customCategories.fridge;
   const recipeCategories = customCategories.recipe;
   const noticeCategories = customCategories.notice;
   const bucketCategories = customCategories.bucket;
-  const [categoryManageKind, setCategoryManageKind] = useState(""); // "" | "fridge" | "recipe" | "notice" | "bucket"
+  const scheduleCategories = customCategories.schedule;
+  const [categoryManageKind, setCategoryManageKind] = useState(""); // "" | "fridge" | "recipe" | "notice" | "bucket" | "schedule"
   const [noticeCatFilter, setNoticeCatFilter] = useState("전체");
   const [newCategoryInput, setNewCategoryInput] = useState("");
   const [editingCategoryOrig, setEditingCategoryOrig] = useState("");
@@ -5252,7 +5333,8 @@ function MainApp() {
               fridge: Array.isArray(d.fridge) && d.fridge.length > 0 ? d.fridge.map((s) => String(s || "").trim()).filter(Boolean) : [...FRIDGE_CATEGORIES],
               recipe: Array.isArray(d.recipe) && d.recipe.length > 0 ? d.recipe.map((s) => String(s || "").trim()).filter(Boolean) : [...RECIPE_CATEGORIES],
               notice: Array.isArray(d.notice) && d.notice.length > 0 ? d.notice.map((s) => String(s || "").trim()).filter(Boolean) : [...NOTICE_CATEGORIES],
-              bucket: Array.isArray(d.bucket) && d.bucket.length > 0 ? d.bucket.map((s) => String(s || "").trim()).filter(Boolean) : [...BUCKET_CATEGORIES]
+              bucket: Array.isArray(d.bucket) && d.bucket.length > 0 ? d.bucket.map((s) => String(s || "").trim()).filter(Boolean) : [...BUCKET_CATEGORIES],
+              schedule: Array.isArray(d.schedule) && d.schedule.length > 0 ? d.schedule.map((s) => String(s || "").trim()).filter(Boolean) : [...SCHEDULE_CATEGORIES]
             };
             setCustomCategories(nextCats);
             try { localStorage.setItem("kim_custom_categories_v1", JSON.stringify(nextCats)); } catch (e) {}
@@ -5992,7 +6074,8 @@ function MainApp() {
           fridge: Array.isArray(payload.customCategories.fridge) && payload.customCategories.fridge.length > 0 ? payload.customCategories.fridge.map((s) => String(s || "").trim()).filter(Boolean) : [...FRIDGE_CATEGORIES],
           recipe: Array.isArray(payload.customCategories.recipe) && payload.customCategories.recipe.length > 0 ? payload.customCategories.recipe.map((s) => String(s || "").trim()).filter(Boolean) : [...RECIPE_CATEGORIES],
           notice: Array.isArray(payload.customCategories.notice) && payload.customCategories.notice.length > 0 ? payload.customCategories.notice.map((s) => String(s || "").trim()).filter(Boolean) : [...NOTICE_CATEGORIES],
-          bucket: Array.isArray(payload.customCategories.bucket) && payload.customCategories.bucket.length > 0 ? payload.customCategories.bucket.map((s) => String(s || "").trim()).filter(Boolean) : [...BUCKET_CATEGORIES]
+          bucket: Array.isArray(payload.customCategories.bucket) && payload.customCategories.bucket.length > 0 ? payload.customCategories.bucket.map((s) => String(s || "").trim()).filter(Boolean) : [...BUCKET_CATEGORIES],
+          schedule: Array.isArray(payload.customCategories.schedule) && payload.customCategories.schedule.length > 0 ? payload.customCategories.schedule.map((s) => String(s || "").trim()).filter(Boolean) : [...SCHEDULE_CATEGORIES]
         };
         setCustomCategories(nextCats);
         try { localStorage.setItem("kim_custom_categories_v1", JSON.stringify(nextCats)); } catch (e) {}
@@ -6184,6 +6267,7 @@ function MainApp() {
                 recipe: Array.isArray(payload.customCategories.recipe) && payload.customCategories.recipe.length > 0 ? payload.customCategories.recipe : [...RECIPE_CATEGORIES],
                 notice: Array.isArray(payload.customCategories.notice) && payload.customCategories.notice.length > 0 ? payload.customCategories.notice : [...NOTICE_CATEGORIES],
                 bucket: Array.isArray(payload.customCategories.bucket) && payload.customCategories.bucket.length > 0 ? payload.customCategories.bucket : [...BUCKET_CATEGORIES],
+                schedule: Array.isArray(payload.customCategories.schedule) && payload.customCategories.schedule.length > 0 ? payload.customCategories.schedule : [...SCHEDULE_CATEGORIES],
                 updatedAtMs: Date.now()
               },
               { merge: true }
@@ -6276,7 +6360,7 @@ function MainApp() {
           .filter((p) => p.calc.daysUntil >= 0 && p.calc.daysUntil <= 3)
       : [];
 
-    return [...famList, ...privList].sort((a, b) => a.calc.daysUntil - b.calc.daysUntil);
+    return [...famList, ...privList].sort((a, b) => (a.calc.daysUntil - b.calc.daysUntil) || String(a.time || "99:99").localeCompare(String(b.time || "99:99")));
   }, [schedules, privateSchedules, isAdminUnlocked, currentAdminOwner, currentDayKey]);
 
   // 1,800+건 개인일정 O(1) 날짜 인덱싱 (달력 렌더링·스와이프 초고속화)
@@ -6522,11 +6606,16 @@ function MainApp() {
 
     const startDate = srcForm.date || scheduleSelectedDate;
     const cleanEndDate = srcForm.endDate && String(srcForm.endDate) > String(startDate) ? String(srcForm.endDate).slice(0, 10) : "";
+    const rawTime = String(srcForm.time || "").trim();
+    const cleanTime = /^\d{1,2}:\d{2}$/.test(rawTime) ? rawTime.padStart(5, "0") : "";
+    const cleanLocation = String(srcForm.location || "").trim();
     const payload = {
       id,
       title: String(srcForm.title || "").trim(),
       date: startDate,
       ...(cleanEndDate ? { endDate: cleanEndDate } : { endDate: "" }),
+      time: cleanTime,
+      location: cleanLocation,
       category: srcForm.category || "할일(To-Do)",
       members: safeMembers.length > 0 ? safeMembers : ["수혁", "아리나", "시목", "시율"],
       isAnnual: Boolean(srcForm.isAnnual),
@@ -9217,9 +9306,15 @@ ${validText}
       }
     }
     if (canViewTab("schedule")) {
-      const todaySch = getSchedulesForDate(today).filter((s) => !s.done);
+      const todaySch = getSchedulesForDate(today)
+        .filter((s) => !s.done)
+        .sort((a, b) => String(a.time || "99:99").localeCompare(String(b.time || "99:99")));
       if (todaySch.length > 0) {
-        linesOut.push(`🗓️ 오늘 일정·할일: ${todaySch.map((s) => s.title).join(", ")}`);
+        linesOut.push(
+          `🗓️ 오늘 일정·할일: ${todaySch
+            .map((s) => `${s.time ? `⏰${formatRoutineTimeLabel(s.time)} ` : ""}${s.title}${s.location ? `(${s.location})` : ""}`)
+            .join(", ")}`
+        );
       }
       const pendingRoutines = familyRoutines
         .filter((r) => isRoutineDueTodayOrPast(r, today) && !isRoutineDoneNow(r))
@@ -11810,21 +11905,26 @@ ${validText}
     }
     const existing = privateSchedules.find((p) => p.id === editingPrivateCalId);
     const dateVal = String(draftForm?.date || existing?.date || getTodayStr()).slice(0, 10);
-    const timeVal = String(draftForm?.time || "").trim();
+    const endDateRaw = String(draftForm?.endDate || existing?.endDate || "").slice(0, 10);
+    const cleanEndDate = endDateRaw && endDateRaw > dateVal ? endDateRaw : "";
+    const timeRaw = String(draftForm?.time || existing?.time || "").trim();
+    const cleanTime = /^\d{1,2}:\d{2}$/.test(timeRaw) ? timeRaw.padStart(5, "0") : "";
     const memoRaw = String(draftForm?.memo || "").trim();
-    const combinedMemo = timeVal ? `[${timeVal}]${memoRaw ? `\n${memoRaw}` : ""}` : memoRaw;
     const famId = `sch-${Date.now()}`;
     const famPayload = {
       id: famId,
       title,
       date: dateVal,
+      endDate: cleanEndDate,
+      time: cleanTime,
+      location: "",
       category: "할일(To-Do)",
       members: ["수혁", "아리나"],
       isAnnual: Boolean(draftForm?.isAnnual),
       showDday: false,
       hasOriginYear: false,
       done: Boolean(existing?.done),
-      memo: combinedMemo,
+      memo: memoRaw,
       attachments: []
     };
 
@@ -11920,18 +12020,21 @@ ${validText}
     if (!isAdminUnlocked || !famEv) return;
     const dateVal = String(famEv.date || getTodayStr()).slice(0, 10);
     const id = `priv-copy-${Date.now()}`;
+    const famLoc = String(famEv.location || "").trim();
+    const famMemo = String(famEv.memo || "").trim();
+    const mergedMemo = [famLoc ? `📍 장소: ${famLoc}` : "", famMemo].filter(Boolean).join("\n");
     const payload = {
       id,
       owner: currentAdminOwner,
       isPrivate: true,
       title: String(famEv.title || "").trim(),
       date: dateVal,
-      endDate: "",
-      time: "",
+      endDate: famEv.endDate && String(famEv.endDate) > dateVal ? String(famEv.endDate).slice(0, 10) : "",
+      time: String(famEv.time || "").trim(),
       color: "default",
       highlight: false,
       isAnnual: Boolean(famEv.isAnnual),
-      memo: String(famEv.memo || "").trim(),
+      memo: mergedMemo,
       done: Boolean(famEv.done),
       updatedAtMs: Date.now()
     };
@@ -11984,10 +12087,27 @@ ${validText}
     }
     if (!requireEditorAccess("schedule")) return;
     const id = `sch-${Date.now()}`;
+    let parsedTime = "";
+    const hmM = title.match(/(?:^|\s)(\d{1,2}):(\d{2})(?:\s|$)/);
+    const krM = !hmM ? title.match(/(오전|오후)?\s*(\d{1,2})시\s*(반|\d{1,2}분)?/) : null;
+    if (hmM) {
+      const hh = Math.min(23, Number(hmM[1]));
+      parsedTime = `${String(hh).padStart(2, "0")}:${hmM[2]}`;
+    } else if (krM) {
+      let hh = Number(krM[2]);
+      if (krM[1] === "오후" && hh < 12) hh += 12;
+      else if (krM[1] === "오전" && hh === 12) hh = 0;
+      else if (!krM[1] && hh >= 1 && hh <= 6) hh += 12;
+      const mm = krM[3] === "반" ? "30" : krM[3] ? String(Math.min(59, Number(krM[3].replace("분", "")))).padStart(2, "0") : "00";
+      parsedTime = `${String(Math.min(23, hh)).padStart(2, "0")}:${mm}`;
+    }
     const payload = {
       id,
       title,
       date: dVal,
+      endDate: "",
+      time: parsedTime,
+      location: "",
       category: "할일(To-Do)",
       members: ["수혁", "아리나"],
       isAnnual: false,
@@ -12673,8 +12793,9 @@ ${item.memo}` : `${item.title} 다녀옴!`,
       title: ev.title || "",
       content: [
         ev.date
-          ? `📅 ${ev.isAnnual ? `매년 ${String(ev.date).slice(5).replace("-", "월 ")}일` : `${ev.date}${ev.endDate && ev.endDate > ev.date ? ` ~ ${ev.endDate}` : ""}`}${ev.time ? ` ${ev.time}` : ""}${ev.calc?.dDayText ? ` (${ev.calc.dDayText})` : ""}`
+          ? `📅 ${ev.isAnnual ? `매년 ${String(ev.date).slice(5).replace("-", "월 ")}일` : `${ev.date}${ev.endDate && ev.endDate > ev.date ? ` ~ ${ev.endDate}` : ""}`}${ev.time ? ` ⏰${formatRoutineTimeLabel(ev.time)}` : ""}${ev.calc?.dDayText ? ` (${ev.calc.dDayText})` : ""}`
           : "",
+        ev.location ? `📍 장소: ${ev.location}` : "",
         ev.memo || ""
       ].filter(Boolean).join("\n"),
       category: ev.category === "육아/병원" ? (noticeCategories[0] || "육아/아이들") : (noticeCategories.includes("일정/행사") ? "일정/행사" : (noticeCategories[0] || "일정/행사")),
@@ -12712,7 +12833,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
   };
 
   const handleAddCustomCategory = async (kind, rawName) => {
-    const tabKey = kind === "fridge" ? "fridge" : kind === "recipe" ? "recipes" : kind === "bucket" ? "bucket" : "notices";
+    const tabKey = kind === "fridge" ? "fridge" : kind === "recipe" ? "recipes" : kind === "bucket" ? "bucket" : kind === "schedule" ? "schedule" : "notices";
     if (!requireEditorAccess(tabKey)) return;
     const name = String(rawName || "").trim();
     if (!name) return;
@@ -12727,7 +12848,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
   };
 
   const handleRenameCustomCategory = async (kind, oldName, rawNext) => {
-    const tabKey = kind === "fridge" ? "fridge" : kind === "recipe" ? "recipes" : kind === "bucket" ? "bucket" : "notices";
+    const tabKey = kind === "fridge" ? "fridge" : kind === "recipe" ? "recipes" : kind === "bucket" ? "bucket" : kind === "schedule" ? "schedule" : "notices";
     if (!requireEditorAccess(tabKey)) return;
     const nextName = String(rawNext || "").trim();
     if (!nextName || nextName === oldName) {
@@ -12805,12 +12926,27 @@ ${item.memo}` : `${item.title} 다녀옴!`,
           await batch.commit();
         } catch (e) {}
       }
+    } else if (kind === "schedule") {
+      if (scheduleCatFilter === oldName) setScheduleCatFilter(nextName);
+      const affected = schedules.filter((s) => s.category === oldName);
+      if (affected.length > 0) {
+        setSchedules((prev) => prev.map((s) => (s.category === oldName ? { ...s, category: nextName } : s)));
+        if (user && db) {
+          try {
+            const batch = writeBatch(db);
+            affected.forEach((s) => {
+              batch.set(getDocRef("family_schedules_v4", s.id), { ...s, category: nextName }, { merge: true });
+            });
+            await batch.commit();
+          } catch (e) {}
+        }
+      }
     }
     showToast(`✏️ '${oldName}' → '${nextName}' 분류로 변경했습니다.`);
   };
 
   const handleDeleteCustomCategory = async (kind, targetName) => {
-    const tabKey = kind === "fridge" ? "fridge" : kind === "recipe" ? "recipes" : kind === "bucket" ? "bucket" : "notices";
+    const tabKey = kind === "fridge" ? "fridge" : kind === "recipe" ? "recipes" : kind === "bucket" ? "bucket" : kind === "schedule" ? "schedule" : "notices";
     if (!requireEditorAccess(tabKey)) return;
     const curList = customCategories[kind] || [];
     if (curList.length <= 1) {
@@ -12823,6 +12959,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
     if (kind === "recipe" && recipeCatFilter === targetName) setRecipeCatFilter("전체");
     if (kind === "bucket" && bucketCatFilter === targetName) setBucketCatFilter("전체");
     if (kind === "notice" && noticeCatFilter === targetName) setNoticeCatFilter("전체");
+    if (kind === "schedule" && scheduleCatFilter === targetName) setScheduleCatFilter("전체");
     await saveCustomCategoriesToCloud(nextCats, `🗑️ '${targetName}' 분류를 삭제했습니다.`);
   };
 
@@ -12837,9 +12974,9 @@ ${item.memo}` : `${item.title} 다녀옴!`,
   };
 
   const handleResetCustomCategories = async (kind) => {
-    const tabKey = kind === "fridge" ? "fridge" : kind === "recipe" ? "recipes" : kind === "bucket" ? "bucket" : "notices";
+    const tabKey = kind === "fridge" ? "fridge" : kind === "recipe" ? "recipes" : kind === "bucket" ? "bucket" : kind === "schedule" ? "schedule" : "notices";
     if (!requireEditorAccess(tabKey)) return;
-    const defList = kind === "fridge" ? [...FRIDGE_CATEGORIES] : kind === "recipe" ? [...RECIPE_CATEGORIES] : kind === "bucket" ? [...BUCKET_CATEGORIES] : [...NOTICE_CATEGORIES];
+    const defList = kind === "fridge" ? [...FRIDGE_CATEGORIES] : kind === "recipe" ? [...RECIPE_CATEGORIES] : kind === "bucket" ? [...BUCKET_CATEGORIES] : kind === "schedule" ? [...SCHEDULE_CATEGORIES] : [...NOTICE_CATEGORIES];
     await saveCustomCategoriesToCloud({ ...customCategories, [kind]: defList }, "↺ 기본 분류로 복원했습니다.");
   };
 
@@ -12866,6 +13003,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
       memo: editItem?.memo || "",
       photoUrl: editItem?.photoUrl || ""
     });
+    setIsHouseRoomManageOpen(false);
     setIsHouseModalOpen(true);
   };
 
@@ -15616,7 +15754,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                               ...imminentSchedulesWithin3Days.map((ev) => {
                                 const dt = ev.calc?.nextDateStr || ev.date || "";
                                 const dtLbl = dt ? ` · ${String(dt).slice(5).replace("-", "/")}(${getDayName(dt)})` : "";
-                                return `• [${ev.calc.daysUntil <= 0 ? "오늘" : ev.calc.dDayText}${dtLbl}] ${ev.time ? `${ev.time} ` : ""}${ev.title}`;
+                                return `• [${ev.calc.daysUntil <= 0 ? "오늘" : ev.calc.dDayText}${dtLbl}] ${ev.time ? `⏰${ev.time} ` : ""}${ev.title}${ev.location ? ` · 📍${ev.location}` : ""}`;
                               })
                             ];
                             await copyTextSafe(lines.join("\n"), `📋 3일 내 일정 ${imminentSchedulesWithin3Days.length}건을 복사했습니다!`);
@@ -15635,6 +15773,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                             title: "",
                             date: getTodayStr(),
                             endDate: "",
+time: "", location: "",
                             category: "육아/병원",
                             members: ["수혁", "아리나", "시목", "시율"],
                             isAnnual: false,
@@ -15689,11 +15828,25 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                             }}
                             className="w-full min-h-[36px] py-1.5 px-1 hover:bg-stone-50 rounded-xl flex items-center justify-between gap-2 min-w-0 text-left transition"
                           >
-                            <span className="text-[13.5px] font-bold text-stone-900 leading-snug truncate flex-1 min-w-0">
-                              {ev._isPrivate ? "🔒 " : ""}
-                              {ev.time ? `${ev.time} ` : ""}
-                              {ev.title}
-                            </span>
+                            <div className="flex-1 min-w-0">
+                              <div className="text-[13.5px] font-bold text-stone-900 leading-snug truncate">
+                                {ev._isPrivate ? "🔒 " : ""}
+                                {ev.title}
+                              </div>
+                              {(ev.time || ev.location) && (
+                                <div className="flex items-center gap-1.5 mt-0.5 text-[11px] font-semibold text-stone-500 truncate">
+                                  {ev.time && (
+                                    <span className="text-[#35503C] font-bold whitespace-nowrap shrink-0">
+                                      ⏰ {formatRoutineTimeLabel(ev.time)}
+                                    </span>
+                                  )}
+                                  {ev.time && ev.location && <span className="text-stone-300">·</span>}
+                                  {ev.location && (
+                                    <span className="truncate">📍 {ev.location}</span>
+                                  )}
+                                </div>
+                              )}
+                            </div>
                             {(() => {
                               const evDt = ev.calc?.nextDateStr || ev.date || "";
                               const evDateShort = evDt ? `${String(evDt).slice(5).replace("-", "/")}(${getDayName(evDt)})` : "";
@@ -16183,7 +16336,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                                 if (!t.date) return `• ${t.title}`;
                                 const df = getDaysDiff(t.date);
                                 const dTxt = df < 0 ? `${Math.abs(df)}일 지남` : df === 0 ? "오늘" : `D-${df}`;
-                                return `• [${dTxt} · ${String(t.date).slice(5).replace("-", "/")}(${getDayName(t.date)})] ${t.title}`;
+                                return `• [${dTxt} · ${String(t.date).slice(5).replace("-", "/")}(${getDayName(t.date)})] ${t.time ? `⏰${formatRoutineTimeLabel(t.time)} ` : ""}${t.title}${t.location ? ` · 📍${t.location}` : ""}`;
                               })
                             ];
                             await copyTextSafe(lines.join("\n"), `📋 남은 할 일 ${allOpenTodos.length}건을 복사했습니다!`);
@@ -16202,6 +16355,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                             title: "",
                             date: getTodayStr(),
                             endDate: "",
+time: "", location: "",
                             category: "할일(To-Do)",
                             members: ["수혁", "아리나", "시목", "시율"],
                             isAnnual: false,
@@ -16250,6 +16404,8 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                                 title: todo.title || "",
                                 date: todo.date || getTodayStr(),
                                 endDate: todo.endDate || "",
+                                time: todo.time || "",
+                                location: todo.location || "",
                                 category: todo.category || "할일(To-Do)",
                                 members: toSafeArray(todo.members).length > 0 ? toSafeArray(todo.members) : ["수혁", "아리나"],
                                 isAnnual: Boolean(todo.isAnnual),
@@ -16290,9 +16446,14 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                                 <div className="text-[13.5px] font-bold text-stone-900 leading-snug truncate">
                                   {todo.title}
                                 </div>
-                                {(hasMemo || attCount > 0) && (
-                                  <div className="text-[12px] font-medium text-stone-700 truncate">
-                                    {[hasMemo ? "메모 있음" : "", attCount > 0 ? `첨부 ${attCount}건` : ""].filter(Boolean).join(" · ")}
+                                {(todo.time || todo.location || hasMemo || attCount > 0) && (
+                                  <div className="text-[11.5px] font-medium text-stone-600 truncate">
+                                    {[
+                                      todo.time ? `⏰${formatRoutineTimeLabel(todo.time)}` : "",
+                                      todo.location ? `📍${todo.location}` : "",
+                                      hasMemo ? "메모 있음" : "",
+                                      attCount > 0 ? `첨부 ${attCount}건` : ""
+                                    ].filter(Boolean).join(" · ")}
                                   </div>
                                 )}
                               </div>
@@ -16408,9 +16569,9 @@ ${item.memo}` : `${item.title} 다녀옴!`,
           <div className={`px-3 pt-1.5 pb-28 space-y-2.5 rounded-b-3xl ${modeMeta.bgClass}`}>
             {/* 시간대 적응형 모드 전환 & 오늘 브리핑 복사 */}
             <div className="flex items-center justify-between gap-1">
-              <div className="flex items-center gap-1 overflow-x-auto no-scrollbar">
+              <div className="flex items-center gap-1 overflow-x-auto no-scrollbar min-w-0">
                 {[
-                  { id: "auto", label: `자동(${modeMeta.label})` },
+                  { id: "auto", label: `자동·${String(modeMeta.label || "").replace(/^\S+\s*/, "")}` },
                   { id: "morning", label: "🌅 오전" },
                   { id: "afternoon", label: "🌆 오후" },
                   { id: "night", label: "🌙 밤" }
@@ -16419,7 +16580,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                     key={m.id}
                     type="button"
                     onClick={() => setHomeTimeModeOverride(m.id)}
-                    className={`h-7 px-2.5 rounded-full text-[11.5px] font-bold border whitespace-nowrap transition shrink-0 ${
+                    className={`h-7 px-2 rounded-full text-[11px] font-bold border whitespace-nowrap transition shrink-0 ${
                       homeTimeModeOverride === m.id
                         ? "bg-[#3F624D] text-white border-[#3F624D]"
                         : "bg-white text-stone-700 border-stone-200 hover:bg-stone-50"
@@ -16434,7 +16595,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                 <button
                   type="button"
                   onClick={handleCopyTodayBriefing}
-                  className="h-7 px-2.5 rounded-full text-[11.5px] font-bold border bg-[#EEF3EE] text-[#2F523E] border-[#C9D8CC] hover:bg-[#DFE9E0] whitespace-nowrap shrink-0"
+                  className="h-7 px-2 rounded-full text-[11px] font-bold border bg-[#EEF3EE] text-[#2F523E] border-[#C9D8CC] hover:bg-[#DFE9E0] whitespace-nowrap shrink-0"
                   title="오늘 날씨·식단·일정·장보기 브리핑 복사"
                 >
                   📋 브리핑
@@ -18818,21 +18979,31 @@ ${item.memo}` : `${item.title} 다녀옴!`,
 
                     {/* 카테고리 필터 (가족 일정 포함 시) */}
                     {effectiveScope !== "private" && (
-                      <div className="flex gap-1 overflow-x-auto pb-0.5">
-                        {["전체", ...SCHEDULE_CATEGORIES].map((cat) => (
+                      <div className="flex flex-wrap items-center gap-1 pb-0.5">
+                        {["전체", ...scheduleCategories].map((cat) => (
                           <button
                             key={cat}
                             type="button"
                             onClick={() => setScheduleCatFilter(cat)}
-                            className={`px-2 py-0.5 rounded-full text-[11px] font-extrabold shrink-0 border ${
+                            className={`px-2 py-0.5 rounded-full text-[11px] font-extrabold shrink-0 whitespace-nowrap border ${
                               scheduleCatFilter === cat
-                                ? "bg-pink-600 text-white border-pink-600"
+                                ? "bg-[#3F624D] text-white border-[#3F624D]"
                                 : "bg-stone-50 text-stone-600 border-stone-200"
                             }`}
                           >
                             {cat}
                           </button>
                         ))}
+                        {canEditTab("schedule") && (
+                          <button
+                            type="button"
+                            onClick={() => openCategoryManager("schedule")}
+                            className="px-2 py-0.5 rounded-full text-[11px] font-extrabold shrink-0 whitespace-nowrap border bg-white text-[#35503C] border-[#C9D8CC] hover:bg-[#EEF3EE]"
+                            title="일정 분류 추가·수정·삭제"
+                          >
+                            ⚙️ 관리
+                          </button>
+                        )}
                       </div>
                     )}
 
@@ -19084,6 +19255,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                             title: "",
                             date: scheduleSelectedDate,
                             endDate: "",
+time: "", location: "",
                             category: "할일(To-Do)",
                             members: ["수혁", "아리나"],
                             isAnnual: false,
@@ -19191,6 +19363,8 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                                           title: ev.title,
                                           date: ev.date,
                                           endDate: ev.endDate || "",
+                                          time: ev.time || "",
+                                          location: ev.location || "",
                                           category: ev.category,
                                           members: toSafeArray(ev.members),
                                           isAnnual: Boolean(ev.isAnnual),
@@ -19222,6 +19396,28 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                                 >
                                   {ev.title}
                                 </div>
+                                {(ev.time || ev.location) && (
+                                  <div className="flex flex-wrap items-center gap-1.5 text-[11.5px] font-bold text-stone-600">
+                                    {ev.time && (
+                                      <span className="px-1.5 py-0.5 rounded-md bg-[#EEF3EE] text-[#35503C] whitespace-nowrap">
+                                        ⏰ {formatRoutineTimeLabel(ev.time)}
+                                      </span>
+                                    )}
+                                    {ev.location && (
+                                      <a
+                                        href={`https://map.naver.com/p/search/${encodeURIComponent(ev.location)}`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        onClick={(e) => e.stopPropagation()}
+                                        className="px-1.5 py-0.5 rounded-md bg-white hover:bg-[#EEF3EE] border border-stone-200 text-stone-700 whitespace-nowrap inline-flex items-center gap-1"
+                                        title="네이버지도에서 위치 보기"
+                                      >
+                                        <span>📍 {ev.location}</span>
+                                        <span className="text-[10px] text-[#35503C] font-extrabold">지도↗</span>
+                                      </a>
+                                    )}
+                                  </div>
+                                )}
                                 {ev.memo && <div className="text-[12.5px] text-stone-600 line-clamp-2">💬 {ev.memo}</div>}
                                 {Array.isArray(ev.attachments) && ev.attachments.length > 0 && (
                                   <div className="flex flex-wrap gap-1 pt-0.5">
@@ -20529,6 +20725,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                           title: quickTodoTitle.trim(),
                           date: quickTodoDate || getTodayStr(),
                           endDate: "",
+time: "", location: "",
                           category: "할일(To-Do)",
                           members: ["수혁", "아리나"],
                           isAnnual: false,
@@ -20691,6 +20888,16 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                               {todo.category}
                             </span>
                           )}
+                          {todo.time && (
+                            <span className="px-1 py-0.5 rounded bg-[#EEF3EE] text-[#35503C] text-[9.5px] font-extrabold whitespace-nowrap shrink-0">
+                              ⏰{formatRoutineTimeLabel(todo.time)}
+                            </span>
+                          )}
+                          {todo.location && (
+                            <span className="px-1 py-0.5 rounded bg-stone-100 text-stone-700 text-[9.5px] font-bold whitespace-nowrap shrink-0 max-w-[110px] truncate">
+                              📍{todo.location}
+                            </span>
+                          )}
                           {Array.isArray(todo.attachments) && todo.attachments.length > 0 && (
                             <span className="px-1 py-0.5 rounded bg-sky-100 text-sky-800 text-[9.5px] font-black whitespace-nowrap shrink-0">
                               📎{todo.attachments.length}
@@ -20731,6 +20938,8 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                             title: todo.title,
                             date: todo.date,
                             endDate: todo.endDate || "",
+                            time: todo.time || "",
+                            location: todo.location || "",
                             category: todo.category,
                             members: toSafeArray(todo.members),
                             isAnnual: Boolean(todo.isAnnual),
@@ -20830,6 +21039,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                               title: "",
                               date: getTodayStr(),
                               endDate: "",
+time: "", location: "",
                               category: "기념일/생일",
                               members: ["수혁", "아리나", "시목", "시율"],
                               isAnnual: false,
@@ -20946,6 +21156,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                             title: "",
                             date: getTodayStr(),
                             endDate: "",
+time: "", location: "",
                             category: "기념일/생일",
                             members: ["수혁", "아리나", "시목", "시율"],
                             isAnnual: false,
@@ -21054,6 +21265,8 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                                     title: item.title || "",
                                     date: item.date || getTodayStr(),
                                     endDate: item.endDate || "",
+                                    time: item.time || "",
+                                    location: item.location || "",
                                     category: item.category || "기념일/생일",
                                     members: Array.isArray(item.members) ? item.members : ["수혁", "아리나", "시목", "시율"],
                                     isAnnual: Boolean(item.isAnnual),
@@ -22676,6 +22889,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                             title: n.title || "",
                             date: getTodayStr(),
                             endDate: "",
+time: "", location: "",
                             category: "할일(To-Do)",
                             members: ["수혁", "아리나"],
                             isAnnual: false,
@@ -24155,7 +24369,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                                     item.address ? `📍 위치: ${item.address}` : "",
                                     item.memo ? `📝 메모: ${item.memo}` : ""
                                   ].filter(Boolean).join("\n"),
-                                  category: "가족공지",
+                                  category: noticeCategories.includes("일정/행사") ? "일정/행사" : (noticeCategories[0] || "일반"),
                                   author: actorName || "수혁",
                                   pinned: false
                                 });
@@ -24174,7 +24388,10 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                               setScheduleForm({
                                 title: item.title,
                                 date: getTodayStr(),
-                                category: "가족행사/경조사",
+                                endDate: "",
+                                time: "",
+                                location: item.address || "",
+                                category: scheduleCategories.includes("가족행사/경조사") ? "가족행사/경조사" : (scheduleCategories[0] || "가족행사/경조사"),
                                 members: getItemMembers(item),
                                 isAnnual: false,
                                 showDday: true,
@@ -24537,7 +24754,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                                     setNoticeForm({
                                       title: `📍 ${it.title} 위치 공유`,
                                       content: `위치: ${it.room}${it.detailLoc ? ` · ${it.detailLoc}` : ""}${it.memo ? `\n${it.memo}` : ""}`,
-                                      category: "가족공지",
+                                      category: noticeCategories.includes("집안일") ? "집안일" : (noticeCategories[0] || "일반"),
                                       author: actorName || "수혁",
                                       pinned: false
                                     });
@@ -24669,6 +24886,9 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                                     setScheduleForm({
                                       title: `💊 ${it.title} 유통기한 확인·폐기`,
                                       date: it.expiryDate,
+                                      endDate: "",
+                                      time: "",
+                                      location: [it.room, it.detailLoc].filter(Boolean).join(" "),
                                       category: "할일(To-Do)",
                                       members: ["수혁", "아리나"],
                                       isAnnual: false,
@@ -25564,7 +25784,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                                           ...(nt === "heading" ? { color: b.color || "amber" } : {})
                                         }));
                                       }}
-                                      className="px-1.5 py-0.5 rounded-lg bg-white border border-stone-200 text-[10.5px] font-extrabold text-stone-700"
+                                      className="px-1.5 py-0.5 rounded-lg bg-white border border-stone-200 text-[10.5px] font-extrabold text-stone-700 whitespace-nowrap"
                                       title="블록 유형"
                                     >
                                       <option value="todo">☑️ 체크</option>
@@ -26600,7 +26820,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                                 r.ingredientsText ? `🧂 재료: ${r.ingredientsText}` : "",
                                 r.memo ? `📝 메모: ${r.memo}` : ""
                               ].filter(Boolean).join("\n"),
-                              category: "가족공지",
+                              category: noticeCategories.includes("집안일") ? "집안일" : (noticeCategories[0] || "일반"),
                               author: actorName || "수혁",
                               pinned: false
                             });
@@ -30298,7 +30518,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                                   [next[idx - 1], next[idx]] = [next[idx], next[idx - 1]];
                                   saveBabyDreamLinksToCloud(next);
                                 }}
-                                className="p-1 rounded-lg bg-stone-100 text-stone-600 text-[10px] font-bold disabled:opacity-30"
+                                className="p-1 rounded-lg bg-stone-100 text-stone-600 text-[10px] font-bold disabled:opacity-30 whitespace-nowrap"
                                 title="위로"
                               >
                                 ▲
@@ -30312,7 +30532,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                                   [next[idx], next[idx + 1]] = [next[idx + 1], next[idx]];
                                   saveBabyDreamLinksToCloud(next);
                                 }}
-                                className="p-1 rounded-lg bg-stone-100 text-stone-600 text-[10px] font-bold disabled:opacity-30"
+                                className="p-1 rounded-lg bg-stone-100 text-stone-600 text-[10px] font-bold disabled:opacity-30 whitespace-nowrap"
                                 title="아래로"
                               >
                                 ▼
@@ -30636,6 +30856,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
               title: t,
               date: d,
                             endDate: "",
+time: "", location: "",
               category: "할일(To-Do)",
               members: ["수혁", "아리나"],
               isAnnual: Boolean(draft?.isAnnual),
@@ -30947,10 +31168,35 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                       <div className="font-bold text-stone-800 mt-0.5">
                         {activeDetail.date}
                         {activeDetail.endDate && activeDetail.endDate > activeDetail.date ? ` ~ ${activeDetail.endDate}` : ""}
-                        {activeDetail.time ? ` · ${activeDetail.time}` : ""}
+                        {activeDetail.time ? ` · ⏰ ${formatRoutineTimeLabel(activeDetail.time)}` : ""}
                         {activeDetail.isAnnual ? " (매년 반복)" : ""}
                       </div>
                     </div>
+                    {activeDetail.location && (
+                      <div>
+                        <div className="text-[11.5px] font-extrabold text-stone-400">장소</div>
+                        <div className="mt-0.5 flex items-center justify-between gap-2">
+                          <span className="font-bold text-stone-800 break-keep">📍 {activeDetail.location}</span>
+                          <div className="flex items-center gap-1 shrink-0">
+                            <a
+                              href={`https://map.naver.com/p/search/${encodeURIComponent(activeDetail.location)}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="px-2 py-0.5 rounded-lg bg-[#EEF3EE] hover:bg-[#DFE9E0] border border-[#C9D8CC] text-[#2F523E] text-[11px] font-extrabold whitespace-nowrap"
+                            >
+                              🗺️ 네이버지도
+                            </a>
+                            <button
+                              type="button"
+                              onClick={() => copyTextSafe(activeDetail.location, "📍 장소를 복사했습니다!")}
+                              className="px-2 py-0.5 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 text-[11px] font-bold whitespace-nowrap"
+                            >
+                              복사
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                     {activeDetail._isFamily && toSafeArray(activeDetail.members).length > 0 && (
                       <div>
                         <div className="text-[11.5px] font-extrabold text-stone-400">대상</div>
@@ -31083,11 +31329,14 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                               } ${ev.done ? "line-through opacity-45" : ""}`}
                             >
                               {ev._isFamily ? "🏠 " : ""}
-                              {ev.time ? <span className="mr-1 opacity-75">{ev.time}</span> : null}
+                              {ev.time ? <span className="mr-1 text-[#35503C] text-[12.5px]">⏰{formatRoutineTimeLabel(ev.time)}</span> : null}
                               {ev.title}
                             </div>
-                            {ev.memo && (
-                              <div className="text-[11.5px] text-stone-400 truncate mt-0.5">{ev.memo}</div>
+                            {(ev.location || ev.memo) && (
+                              <div className="text-[11.5px] text-stone-500 truncate mt-0.5">
+                                {ev.location ? <span className="font-semibold text-stone-600 mr-1.5">📍 {ev.location}</span> : null}
+                                {ev.memo ? <span className="text-stone-400">{ev.memo}</span> : null}
+                              </div>
                             )}
                           </div>
                           <ChevronRight className="w-4 h-4 text-stone-300 shrink-0" />
@@ -31172,6 +31421,8 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                           title: target.title,
                           date: target.date,
                           endDate: target.endDate || "",
+                          time: target.time || "",
+                          location: target.location || "",
                           category: target.category,
                           members: toSafeArray(target.members),
                           isAnnual: Boolean(target.isAnnual),
@@ -31214,6 +31465,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                           title: "",
                           date: targetDate,
                             endDate: "",
+time: "", location: "",
                           category: "할일(To-Do)",
                           members: ["수혁", "아리나"],
                           isAnnual: false,
@@ -32017,7 +32269,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                           `시간대: ${newRoutineTimeSlot}${newRoutineScheduledTime ? ` (${formatRoutineTimeLabel(newRoutineScheduledTime)})` : ""}`,
                           `대상: ${newRoutineAssignee}`
                         ].join("\n"),
-                        category: "가족공지",
+                        category: noticeCategories.includes("집안일") ? "집안일" : (noticeCategories[0] || "일반"),
                         author: actorName || "수혁",
                         pinned: false
                       });
@@ -32061,6 +32313,8 @@ ${item.memo}` : `${item.title} 다녀옴!`,
           onReadAttachments={readAttachmentsFromFiles}
           onPreviewImage={(url) => setDiaryLightboxUrl(url)}
           showToast={showToast}
+          scheduleCategories={scheduleCategories}
+          onManageCategories={canEditTab("schedule") ? () => openCategoryManager("schedule") : undefined}
         />
       )}
 
@@ -33580,7 +33834,8 @@ ${item.memo}` : `${item.title} 다녀옴!`,
           fridge: { title: "❄️ 재료 카테고리", placeholder: "새 재료 분류 (예: 간식/과자, 냉동식품)" },
           recipe: { title: "📖 레시피 카테고리", placeholder: "새 레시피 분류 (예: 에어프라이어, 캠핑요리)" },
           notice: { title: "📌 공지 카테고리", placeholder: "새 공지 분류 (예: 어린이집, 건강/병원)" },
-          bucket: { title: "🌟 버킷 카테고리", placeholder: "새 버킷 분류 (예: 캠핑, 해외여행, 전시회)" }
+          bucket: { title: "🌟 버킷 카테고리", placeholder: "새 버킷 분류 (예: 캠핑, 해외여행, 전시회)" },
+          schedule: { title: "🗓️ 일정 카테고리", placeholder: "새 일정 분류 (예: 어린이집, 친정/시댁, 차량)" }
         }[categoryManageKind] || { title: "⚙️ 분류 관리", placeholder: "새 분류 입력" };
         return (
           <div
@@ -33615,19 +33870,20 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                 </div>
               </div>
 
-              {/* 4종 카테고리 빠른 전환 탭 */}
-              <div className="grid grid-cols-4 gap-1 bg-stone-100 p-1 rounded-xl">
+              {/* 5종 카테고리 빠른 전환 탭 */}
+              <div className="flex flex-wrap gap-1 bg-stone-100 p-1 rounded-xl">
                 {[
                   { id: "fridge", label: "❄️ 재료" },
                   { id: "recipe", label: "📖 레시피" },
                   { id: "notice", label: "📌 공지" },
-                  { id: "bucket", label: "🌟 버킷" }
+                  { id: "bucket", label: "🌟 버킷" },
+                  { id: "schedule", label: "🗓️ 일정" }
                 ].map((t) => (
                   <button
                     key={t.id}
                     type="button"
                     onClick={() => openCategoryManager(t.id)}
-                    className={`py-1.5 px-1 rounded-lg text-[11px] font-extrabold whitespace-nowrap transition ${
+                    className={`flex-1 min-w-[62px] py-1.5 px-1.5 rounded-lg text-[11px] font-extrabold whitespace-nowrap transition ${
                       categoryManageKind === t.id
                         ? "bg-white text-stone-900 shadow-sm"
                         : "text-stone-500 hover:text-stone-800"
@@ -37828,11 +38084,16 @@ ${item.memo}` : `${item.title} 다녀옴!`,
             });
             selectedSchedules.forEach((s) => {
               const titleStr = String(s.title || "");
+              const locStr = String(s.location || "").trim();
+              const explicitTime = String(s.time || "").trim();
               const hmMatch = titleStr.match(/(\d{1,2}):(\d{2})/);
               const hrMatch = titleStr.match(/(오전|오후)?\s*(\d{1,2})시/);
               let sk = "98:00";
               let tLabel = "일정";
-              if (hmMatch) {
+              if (/^\d{1,2}:\d{2}/.test(explicitTime)) {
+                sk = explicitTime.slice(0, 5).padStart(5, "0");
+                tLabel = sk;
+              } else if (hmMatch) {
                 const hh = String(Math.min(23, Number(hmMatch[1]))).padStart(2, "0");
                 sk = `${hh}:${hmMatch[2]}`;
                 tLabel = sk;
@@ -37846,7 +38107,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
               rows.push({
                 sortKey: sk,
                 timeLabel: tLabel,
-                text: `🗓️ ${titleStr}`,
+                text: `🗓️ ${titleStr}${locStr ? ` 📍${locStr}` : ""}`,
                 kind: "schedule",
                 raw: s
               });
@@ -37969,7 +38230,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                 );
               }
               if (selectedSchedules.length > 0) {
-                out.push(`▸ 일정·할일(${selectedSchedules.length}건): ${selectedSchedules.map((s) => s.title).join(" · ")}`);
+                out.push(`▸ 일정·할일(${selectedSchedules.length}건): ${selectedSchedules.map((s) => `${s.time ? `⏰${formatRoutineTimeLabel(s.time)} ` : ""}${s.title}${s.location ? `(${s.location})` : ""}`).join(" · ")}`);
               }
             }
           }
@@ -38816,6 +39077,8 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                               title: s.title || "",
                               date: s.date || targetDate,
                               endDate: s.endDate || "",
+                              time: s.time || "",
+                              location: s.location || "",
                               category: s.category || "육아/병원",
                               members: extractMembers(s),
                               isAnnual: Boolean(s.isAnnual),
@@ -39347,7 +39610,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                       setNoticeForm({
                         title: `🤝 ${handoverPreset === "helper" ? "산후관리" : "육아"} 인수인계 (${dayLabel} ${targetDate})`,
                         content: finalKakaoText,
-                        category: "가족공지",
+                        category: noticeCategories.includes("육아/아이들") ? "육아/아이들" : (noticeCategories[0] || "일반"),
                         author: actorName || "수혁",
                         pinned: true
                       });
@@ -39623,6 +39886,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                         title: "",
                         date: getTodayStr(),
                             endDate: "",
+time: "", location: "",
                         category: "기념일/생일",
                         members: ["수혁", "아리나", "시목", "시율"],
                         isAnnual: false,
@@ -40147,7 +40411,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                     setNoticeForm({
                       title: `${targetPg.icon || "📄"} ${targetPg.title || ""}`.trim(),
                       content: summaryBody,
-                      category: "가족공지",
+                      category: noticeCategories.includes("일반") ? "일반" : (noticeCategories[0] || "일반"),
                       author: actorName || "수혁",
                       pinned: true
                     });
@@ -40517,6 +40781,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                         title: taskModalDraft.taskName || "",
                         date: getTodayStr(),
                             endDate: "",
+time: "", location: "",
                         category: "할일(To-Do)",
                         members: ["수혁", "아리나"],
                         isAnnual: false,
