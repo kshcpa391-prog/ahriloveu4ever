@@ -1181,7 +1181,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v13.56";
+export const APP_CODE_VERSION = "v13.57";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1199,7 +1199,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-23 20:50";
+export const APP_BUILD_DATE = "2026-11-23 21:06";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1267,6 +1267,17 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v13.57",
+    version: "v13.57",
+    date: "2026-11-23",
+    title: "🛡️ 살림수첩 맞춤 수납장소·상비약대상 동적 초기값 완결 + 월간 식비 가계부 원장 1탭 엑셀(.csv) 내보내기 추가",
+    highlights: [
+      "버그 수정: 살림수첩 등록·저장(openHouseModal·handleSaveHouseItem) 시 기본 수납장소('거실')·상비약 대상('공통')이 하드코딩돼 있던 부분을 사용자 맞춤 목록(houseStorageRooms[0]·houseMedTargets[0]) 기반으로 동적화해 기본 분류 삭제·변경 시에도 고아 값이 생기지 않도록 완결",
+      "편의성·고도화: 월간 식비 가계부 지출 원장 헤더에 현재 필터 기준(월·카테고리·검색어)으로 엑셀 호환 UTF-8 BOM 파일(합계 행 포함)을 즉시 저장하는 [📊 CSV] 1탭 내보내기 버튼 추가",
+      "최종 검증: Babel JSX AST 0오류 · ./Constants 111개 export 1:1 일치 · 전체 파일 미선언 함수 호출(ReferenceError) 0건 통과"
+    ]
+  },
   {
     id: "patch-v13.56",
     version: "v13.56",

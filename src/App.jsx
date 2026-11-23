@@ -14714,7 +14714,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
       warrantyEnd: editItem?.warrantyEnd || (k === "warranty" ? addMonthsToDateStr(getTodayStr(), 12, 0) : ""),
       asPhone: editItem?.asPhone || "",
       price: editItem?.price || "",
-      target: editItem?.target || "공통",
+      target: editItem?.target || houseMedTargets[0] || "공통",
       openedDate: editItem?.openedDate || "",
       expiryDate: editItem?.expiryDate || (k === "medicine" ? addMonthsToDateStr(getTodayStr(), 3, 0) : ""),
       dosage: editItem?.dosage || "",
@@ -14752,14 +14752,14 @@ ${item.memo}` : `${item.title} 다녀옴!`,
       id,
       kind: houseForm.kind || "storage",
       title,
-      room: houseForm.room || "거실",
+      room: houseForm.room || houseStorageRooms[0] || "거실",
       detailLoc: String(houseForm.detailLoc || "").trim(),
       brand: String(houseForm.brand || "").trim(),
       purchaseDate: houseForm.purchaseDate || "",
       warrantyEnd: houseForm.warrantyEnd || "",
       asPhone: String(houseForm.asPhone || "").trim(),
       price: houseForm.price ? Number(houseForm.price) || 0 : 0,
-      target: houseForm.target || "공통",
+      target: houseForm.target || houseMedTargets[0] || "공통",
       openedDate: houseForm.openedDate || "",
       expiryDate: houseForm.expiryDate || "",
       dosage: String(houseForm.dosage || "").trim(),
@@ -20317,6 +20317,34 @@ time: "", location: "",
                             className="px-2 py-1 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 text-[11px] font-extrabold whitespace-nowrap shrink-0"
                           >
                             📋 원장 복사
+                          </button>
+                        )}
+                        {filteredLedger.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const esc = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+                              const totalAmt = filteredLedger.reduce((s, it) => s + (Number(it.amount) || 0), 0);
+                              const rows = [
+                                ["날짜", "품목", "카테고리", "금액"].map(esc).join(","),
+                                ...filteredLedger.map((it) => [it.date || "", it.name || it.title || "", it.category || "기타", Number(it.amount) || 0].map(esc).join(",")),
+                                ["합계", `${filteredLedger.length}건`, "", totalAmt].map(esc).join(",")
+                              ];
+                              const blob = new Blob(["\uFEFF" + rows.join("\r\n")], { type: "text/csv;charset=utf-8;" });
+                              const url = URL.createObjectURL(blob);
+                              const link = document.createElement("a");
+                              link.href = url;
+                              link.setAttribute("download", `식비원장_${monthlyYm}.csv`);
+                              document.body.appendChild(link);
+                              link.click();
+                              document.body.removeChild(link);
+                              setTimeout(() => { try { URL.revokeObjectURL(url); } catch (e) {} }, 1000);
+                              showToast(`📊 ${monthlyYm} 식비 원장(${filteredLedger.length}건) CSV를 저장했습니다.`);
+                            }}
+                            className="px-2 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-800 text-[11px] font-extrabold whitespace-nowrap shrink-0"
+                            title="현재 필터 식비 원장을 엑셀(.csv)로 내보내기"
+                          >
+                            📊 CSV
                           </button>
                         )}
                       </div>
