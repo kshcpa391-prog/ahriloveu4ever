@@ -1181,7 +1181,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v13.53";
+export const APP_CODE_VERSION = "v13.54";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1199,7 +1199,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-23 20:15";
+export const APP_BUILD_DATE = "2026-11-23 20:20";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1267,6 +1267,16 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v13.54",
+    version: "v13.54",
+    date: "2026-11-23",
+    title: "🛠️ .xlsx 업로드 parseZip ReferenceError 즉시 수정(parseZipEntriesInBrowser 연결) + 경조사비 플로팅(+) 가림 해소·안내문구 줄바꿈 정리",
+    highlights: [
+      "긴급 버그 수정: .xlsx 멀티시트 파서(parseXlsxWorkbookSheets)가 내장 ZIP 파서 함수명(parseZipEntriesInBrowser)을 parseZip으로 잘못 호출해 발생하던 ReferenceError 즉시 수정 및 전체 코드 미선언 식별자 AST 전수 점검 완료",
+      "시각 최적화: 경조사비 탭에서 우측 하단 플로팅(+) 버튼이 부분합 표를 가리던 현상을 자동 숨김 처리하고, 엑셀 모달 안내 문구의 어색한 1글자 줄바꿈('니다.')을 1줄로 슬림화"
+    ]
+  },
   {
     id: "patch-v13.53",
     version: "v13.53",

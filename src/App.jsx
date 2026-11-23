@@ -14076,7 +14076,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
   };
 
   const parseXlsxWorkbookSheets = async (arrayBuffer) => {
-    const filesMap = await parseZip(arrayBuffer);
+    const filesMap = await parseZipEntriesInBrowser(arrayBuffer);
     const dec = new TextDecoder("utf-8");
     const readText = (path) => {
       const key = Object.keys(filesMap).find((k) => k.toLowerCase() === path.toLowerCase());
@@ -33063,7 +33063,7 @@ time: "", location: "",
         </button>
       )}
 
-      {isEditorUnlocked && !isPageVisualEditMode && !isPagePasteModalOpen && !activeTableTaskModal && !editingBlockId && !(activeTab === "bucket" && bucketViewMode === "map") && (
+      {isEditorUnlocked && !isPageVisualEditMode && !isPagePasteModalOpen && !activeTableTaskModal && !editingBlockId && !(activeTab === "bucket" && bucketViewMode === "map") && activeTab !== "condolence" && (
         <button
           type="button"
           onClick={() => setIsQuickFabOpen((v) => !v)}
@@ -37067,7 +37067,7 @@ time: "", location: "",
             <div className="rounded-2xl border border-emerald-200 bg-emerald-50/50 p-3.5 space-y-2">
               <div className="text-[12.5px] font-black text-emerald-900">📥 엑셀 파일로 내보내기</div>
               <p className="text-[11px] text-emerald-800/80 font-semibold">
-                엑셀(.xls)은 [경조사비 내역] + [부분합 요약] 2개 시트와 총계 행이 자동 포함됩니다.
+                엑셀(.xls)은 [내역] + [부분합 요약] 2시트·총계가 자동 포함됩니다.
               </p>
               <div className="grid grid-cols-2 gap-1.5">
                 <button
@@ -37118,7 +37118,7 @@ time: "", location: "",
                 </button>
               </div>
               <p className="text-[11px] text-stone-500">
-                자유 양식 <b>.xlsx</b>(멀티시트)·.xls·.csv를 AI가 자동 분석합니다.
+                자유 양식 <b>.xlsx</b>(멀티시트)·.xls·.csv 자동 분석
               </p>
               <label className="block w-full text-center py-2.5 px-3 rounded-xl border border-dashed border-stone-300 bg-white hover:bg-stone-50 text-[12.5px] font-extrabold text-stone-700 cursor-pointer transition">
                 <span>{condolenceAiAnalyzing ? "✨ AI 엑셀 구조 분석 중..." : "📂 엑셀·CSV 선택 (.xlsx / .xls / .csv)"}</span>
