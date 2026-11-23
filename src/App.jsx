@@ -13037,6 +13037,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
       (r) => String(r.title || "").trim().toLowerCase() === cleanTitle.toLowerCase()
     );
     if (matched) {
+      setRecipeCatFilter("전체");
       setRecipeSearch(matched.title);
       setActiveTab("recipes");
       showToast(`📖 레시피북에서 '${matched.title}'을(를) 열었습니다.`);
@@ -13053,6 +13054,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
   const handleFridgeToRecipeSearch = (itemName) => {
     const q = String(itemName || "").trim();
     if (!q) return;
+    setRecipeCatFilter("전체");
     setRecipeSearch(q);
     setActiveTab("recipes");
     showToast(`📖 '${q}' 관련 레시피를 검색했습니다.`);
@@ -13073,7 +13075,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
       id,
       name: cleanName,
       quantity: "1개",
-      category: "기타",
+      category: fridgeCategories.includes("기타") ? "기타" : (fridgeCategories[fridgeCategories.length - 1] || "기타"),
       urgent: false,
       checked: false,
       memo: todo.memo ? `할일: ${todo.memo}` : "할 일에서 추가"
@@ -17824,13 +17826,13 @@ time: "", location: "",
 
           {/* 상단 고정(Sticky) 1줄 인원 빠른 전환 바 */}
           <div className={`sticky z-20 bg-white/95 backdrop-blur border border-stone-200 rounded-2xl px-2 py-1.5 shadow-sm ${isHeaderPinned ? "top-[82px]" : "top-1"}`}>
-            <div className="flex items-center gap-1 overflow-x-auto">
+            <div className="flex flex-wrap items-center gap-1">
               <button
                 type="button"
                 onClick={() => setSelectedMember("전체")}
-                className={`px-2.5 py-1.5 rounded-xl text-[12.5px] font-extrabold border whitespace-nowrap shrink-0 transition ${
+                className={`px-2 py-1 rounded-xl text-[11.5px] font-extrabold border whitespace-nowrap shrink-0 transition ${
                   selectedMember === "전체"
-                    ? "bg-stone-900 text-white border-stone-900"
+                    ? "bg-[#3F624D] text-white border-[#3F624D]"
                     : "bg-stone-50 text-stone-600 border-stone-200"
                 }`}
               >
@@ -17855,9 +17857,9 @@ time: "", location: "",
                         }, 100);
                       }
                     }}
-                    className={`px-2 py-1 rounded-xl text-[12px] font-extrabold border whitespace-nowrap shrink-0 inline-flex items-center gap-1 transition ${
+                    className={`px-2 py-1 rounded-xl text-[11.5px] font-extrabold border whitespace-nowrap shrink-0 inline-flex items-center gap-1 transition ${
                       isSel
-                        ? "bg-stone-900 text-white border-stone-900"
+                        ? "bg-[#3F624D] text-white border-[#3F624D]"
                         : "bg-stone-50 text-stone-700 border-stone-200"
                     }`}
                   >
@@ -17917,6 +17919,33 @@ time: "", location: "",
                             title="이 날짜 식단 복사"
                           >
                             📋
+                          </button>
+                        )}
+                        {dayMeals.length > 0 && canEditTab("notices") && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const slotLines = MEAL_SLOTS
+                                .map((s) => {
+                                  const items = dayMeals.filter((m) => m.slot === s.id);
+                                  if (items.length === 0) return "";
+                                  return `${s.icon} ${s.shortLabel}: ${items.map((it) => it.menu).join(" / ")}`;
+                                })
+                                .filter(Boolean);
+                              setEditingNotice(null);
+                              setNoticeForm({
+                                title: `🍽️ ${d.slice(5)}(${getDayName(d)}) 가족 식단 안내`,
+                                content: slotLines.join("\n"),
+                                category: noticeCategories.includes("집안일") ? "집안일" : (noticeCategories[0] || "일반"),
+                                author: actorName || "수혁",
+                                pinned: false
+                              });
+                              setIsNoticeModalOpen(true);
+                            }}
+                            className="px-2 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-800 text-[11px] font-extrabold whitespace-nowrap"
+                            title="이 날짜 식단을 가족공지로 공유"
+                          >
+                            📌
                           </button>
                         )}
                       <button

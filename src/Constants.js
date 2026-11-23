@@ -1181,7 +1181,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v13.48";
+export const APP_CODE_VERSION = "v13.49";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1199,7 +1199,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-23 14:50";
+export const APP_BUILD_DATE = "2026-11-23 15:42";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1267,6 +1267,17 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v13.49",
+    version: "v13.49",
+    date: "2026-11-23",
+    title: "식단·냉장고→레시피 필터 꼬임 버그 수정 + 일별 식단 가족공지 공유 + 식단 인원 바 개선",
+    highlights: [
+      "식단(handleMealToRecipe)이나 냉장고(handleFridgeToRecipeSearch)에서 레시피북으로 이동할 때 이전 레시피 카테고리 필터가 남아 검색 결과가 비어 보이던 버그를 '전체' 자동 초기화로 수정",
+      "할 일→장보기 변환(handleTodoToShopping) 시 맞춤 재료 카테고리에 맞춘 안전한 동적 분류 fallback 적용",
+      "오늘 식단 상단 고정 인원 바를 가로 스크롤 대신 줄바꿈(flex-wrap)·세이지 톤(#3F624D)으로 정리하고, 일별 식단 카드에 '📌 가족공지 공유' 원탭 버튼 추가"
+    ]
+  },
   {
     id: "patch-v13.48",
     version: "v13.48",
