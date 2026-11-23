@@ -1181,7 +1181,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v13.50";
+export const APP_CODE_VERSION = "v13.53";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1199,7 +1199,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-23 15:55";
+export const APP_BUILD_DATE = "2026-11-23 20:15";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1267,6 +1267,43 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v13.53",
+    version: "v13.53",
+    date: "2026-11-23",
+    title: "🤖 경조사비 네이티브 .xlsx 멀티시트·AI 구조 자동인식 + 일괄기재(결혼식·날짜·구분) + 필터·체크 인원 일괄 그룹핑",
+    highlights: [
+      "네이티브 .xlsx 멀티시트 파싱 + AI 자동 구조 인식: 추가 라이브러리 없이 .xlsx(멀티시트 선택 지원)/.xls/.csv 파일을 읽고, 내장 AI(Gemini/GPT)가 비정형 헤더·합계행·컬럼(성명·Amount·중분류·소분류·Group·입금방식 등)을 자동 판별 (AI 키 미설정 시 스마트 휴리스틱 자동 폴백)",
+      "엑셀 가져오기 일괄 기재 패널: 파일에 없는 결혼식 카테고리·거래일(결혼기념일 1탭)·입출금 구분·당사자·그룹·메모를 일괄 지정해 미리보기 즉시 반영 및 중복 실시간 재계산",
+      "필터·체크박스 인원 일괄 그룹핑: 메인 경조사비 장부([☑️ 일괄그룹])와 엑셀 가져오기 미리보기 양쪽 모두에서 검색·필터로 인원을 좁혀 체크한 뒤 기존 그룹 또는 즉석 새 그룹으로 1탭 일괄 배정(Firebase 배치 동기화)",
+      "UI·배포 점검: 육아 수유·일기 드롭다운(activityDateFilter·diaryMonthFilter) min-w-0 truncate 보강 및 Babel AST·import/export 1:1 검증 0오류 통과"
+    ]
+  },
+  {
+    id: "patch-v13.52",
+    version: "v13.52",
+    date: "2026-11-23",
+    title: "🛡️ 경조사비 일정연계 잠금해제 자동이어쓰기·필터 엑셀출력·결제수단 자유관리 + 공유노트 최근항목 Firebase 이관 + 드롭다운 줄바꿈 교정",
+    highlights: [
+      "버그 수정: ① 경조사비 잠금 상태에서 일정(가족행사/경조사)→💌 경조사 버튼 클릭 시 비밀번호 해제 직후 해당 날짜·메모가 자동 채워진 등록창이 이어 열리도록 보완 ② 경조사비 삭제 실패 롤백 시 로컬 캐시 동시 복구",
+      "기능 고도화·자유도 확장: ① 경조사비 엑셀 모달에 [현재 필터 적용분만 엑셀(.xls)/CSV 내보내기] 추가 ② 경조사비 결제수단(계좌이체·현금·선물 등)을 통합 ⚙️ 분류 관리에 편입해 자유 추가·이름수정(기존 내역 일괄 갱신)·삭제·순서이동 지원",
+      "줄바꿈·시각 최적화: 냉장고 다중이동·레시피 난이도/정렬 드롭다운에 min-w-0 truncate를 적용하고 공통 상태 버튼에 whitespace-nowrap을 보강해 모바일 넘침·줄바꿈 제거",
+      "로컬→Firebase 추가 이관: 공유노트 최근 열람 목록(kim_pages_recent_v1)을 Firestore(home_layout.recentPageIds) 실시간 동기화로 이관"
+    ]
+  },
+  {
+    id: "patch-v13.51",
+    version: "v13.51",
+    date: "2026-11-23",
+    title: "🔒 비밀메뉴 [경조사비 입출금내역] 신설(비번 247233·김수혁 전용 변경·엑셀 클라우드 입출력·부분합/총계) + 전수 버그수정·Firebase 이관",
+    highlights: [
+      "비밀메뉴 [💌 경조사비 입출금내역] 신설: 홈 화면에는 비노출(더보기 하단·설정 진입), 열람 비밀번호(기본 247233) 잠금 및 김수혁 관리자 전용 비밀번호 변경(Firestore 실시간 동기화)",
+      "카테고리·그룹·인별·당사자·결제수단·메모 기록, 다차원 검색·필터, 전체 총계·필터 부분합·카테고리/그룹/인별/연도별 부분합 집계표(행 클릭 즉시 필터) 및 분류·그룹 자유 추가·수정·삭제 지원",
+      "클라우드 기반 엑셀(.xls 2시트: 내역+부분합요약 / .csv UTF-8 BOM) 내보내기 및 엑셀/CSV 가져오기(중복 자동 제외·200건 분할 배치 저장) 구현, 일정(가족행사/경조사)↔경조사비 양방향 연계 추가",
+      "버그·안정화: 살림수첩 수납장소 이름변경 시 잘못된 Firestore 컬렉션(family_house_v1→family_house_items_v1) 쓰기 치명 버그 수정, 카테고리 순서이동 권한 가드 추가, 달력 헤더 추가 시 endDate/time/location 누락 수정, 버킷/레시피 필터 드롭다운 넘침 방지",
+      "로컬→Firebase 추가 이관: 월간 백업 완료월(kim_backup_done_month) 및 루틴 보기모드(kim_routine_view_mode_v1)를 Firestore 실시간 동기화로 이관"
+    ]
+  },
   {
     id: "patch-v13.50",
     version: "v13.50",
@@ -6300,3 +6337,24 @@ export const INITIAL_BABY_DREAM_LINKS = [
 export const BABY_DREAM_ICON_PRESETS = ["🗣️", "📄", "🎵", "🤫", "🌊", "🌧️", "🚗", "🌙", "🧸", "💤"];
 export const HOUSE_STORAGE_ROOMS = ["거실", "안방", "아이방", "주방", "현관·베란다", "기타"];
 export const HOUSE_MEDICINE_TARGETS = ["공통", "시목", "시율", "어른"];
+
+export const DEFAULT_CONDOLENCE_PIN = "247233";
+export const CONDOLENCE_CATEGORIES = [
+  "결혼식",
+  "장례식/조의",
+  "돌잔치",
+  "출산/백일",
+  "생일/기념일",
+  "명절/용돈",
+  "승진/개업",
+  "기타"
+];
+export const CONDOLENCE_GROUPS = [
+  "가족/친척",
+  "처가/친정",
+  "직장/동료",
+  "친구/지인",
+  "이웃/어린이집",
+  "기타"
+];
+export const CONDOLENCE_PAY_METHODS = ["계좌이체", "현금", "선물/기프티콘"];

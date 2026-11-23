@@ -158,7 +158,11 @@ import {
   INITIAL_BABY_DREAM_LINKS,
   BABY_DREAM_ICON_PRESETS,
   HOUSE_STORAGE_ROOMS,
-  HOUSE_MEDICINE_TARGETS
+  HOUSE_MEDICINE_TARGETS,
+  DEFAULT_CONDOLENCE_PIN,
+  CONDOLENCE_CATEGORIES,
+  CONDOLENCE_GROUPS,
+  CONDOLENCE_PAY_METHODS
 } from "./Constants";
 
 
@@ -1800,7 +1804,7 @@ function MainApp() {
   const [homeDragOverKey, setHomeDragOverKey] = useState("");
 
 
-  const syncHomeSettingsToCloud = async (nextLayout, nextRanges, nextRoutineRanges = null, nextSlotDefs = null) => {
+  const syncHomeSettingsToCloud = async (nextLayout, nextRanges, nextRoutineRanges = null, nextSlotDefs = null, nextRoutineViewMode = null) => {
     if (!user || !db || !isEditorUnlocked) return;
     homeLayoutLocalWriteAtRef.current = Date.now();
     try {
@@ -1811,6 +1815,7 @@ function MainApp() {
           ...(nextRanges ? { timeRanges: nextRanges } : {}),
           ...(nextRoutineRanges ? { routineRanges: nextRoutineRanges } : {}),
           ...(Array.isArray(nextSlotDefs) ? { routineSlotDefs: nextSlotDefs } : {}),
+          ...(nextRoutineViewMode === "card" || nextRoutineViewMode === "timetable" ? { routineViewMode: nextRoutineViewMode } : {}),
           updatedAt: new Date().toISOString()
         },
         { merge: true }
@@ -2554,7 +2559,10 @@ function MainApp() {
           recipe: Array.isArray(saved.recipe) && saved.recipe.length > 0 ? saved.recipe.map((s) => String(s || "").trim()).filter(Boolean) : [...RECIPE_CATEGORIES],
           notice: Array.isArray(saved.notice) && saved.notice.length > 0 ? saved.notice.map((s) => String(s || "").trim()).filter(Boolean) : [...NOTICE_CATEGORIES],
           bucket: Array.isArray(saved.bucket) && saved.bucket.length > 0 ? saved.bucket.map((s) => String(s || "").trim()).filter(Boolean) : [...BUCKET_CATEGORIES],
-          schedule: Array.isArray(saved.schedule) && saved.schedule.length > 0 ? saved.schedule.map((s) => String(s || "").trim()).filter(Boolean) : [...SCHEDULE_CATEGORIES]
+          schedule: Array.isArray(saved.schedule) && saved.schedule.length > 0 ? saved.schedule.map((s) => String(s || "").trim()).filter(Boolean) : [...SCHEDULE_CATEGORIES],
+          condolence_cat: Array.isArray(saved.condolence_cat) && saved.condolence_cat.length > 0 ? saved.condolence_cat.map((s) => String(s || "").trim()).filter(Boolean) : [...CONDOLENCE_CATEGORIES],
+          condolence_group: Array.isArray(saved.condolence_group) && saved.condolence_group.length > 0 ? saved.condolence_group.map((s) => String(s || "").trim()).filter(Boolean) : [...CONDOLENCE_GROUPS],
+          condolence_pay: Array.isArray(saved.condolence_pay) && saved.condolence_pay.length > 0 ? saved.condolence_pay.map((s) => String(s || "").trim()).filter(Boolean) : [...CONDOLENCE_PAY_METHODS]
         };
       }
     } catch (e) {}
@@ -2563,7 +2571,10 @@ function MainApp() {
       recipe: [...RECIPE_CATEGORIES],
       notice: [...NOTICE_CATEGORIES],
       bucket: [...BUCKET_CATEGORIES],
-      schedule: [...SCHEDULE_CATEGORIES]
+      schedule: [...SCHEDULE_CATEGORIES],
+      condolence_cat: [...CONDOLENCE_CATEGORIES],
+      condolence_group: [...CONDOLENCE_GROUPS],
+      condolence_pay: [...CONDOLENCE_PAY_METHODS]
     };
   });
   const fridgeCategories = customCategories.fridge;
@@ -2571,6 +2582,85 @@ function MainApp() {
   const noticeCategories = customCategories.notice;
   const bucketCategories = customCategories.bucket;
   const scheduleCategories = customCategories.schedule;
+  const condolenceCategories = customCategories.condolence_cat || CONDOLENCE_CATEGORIES;
+  const condolenceGroups = customCategories.condolence_group || CONDOLENCE_GROUPS;
+  const condolencePayMethods = customCategories.condolence_pay || CONDOLENCE_PAY_METHODS;
+
+  // === 🔒 비밀메뉴: 경조사비 입출금내역 상태 ===
+  const isSuhyeokAdmin = isAdminUnlocked && (actorName === "수혁" || actorName === "김수혁");
+  const [condolencePin, setCondolencePin] = useState(() => {
+    try {
+      return localStorage.getItem("kim_condolence_pin_v1") || DEFAULT_CONDOLENCE_PIN;
+    } catch (e) {
+      return DEFAULT_CONDOLENCE_PIN;
+    }
+  });
+  const [isCondolenceUnlocked, setIsCondolenceUnlocked] = useState(false);
+  const [condolencePinInput, setCondolencePinInput] = useState("");
+  const [condolencePinError, setCondolencePinError] = useState("");
+  const [isCondolencePinModalOpen, setIsCondolencePinModalOpen] = useState(false);
+  const [condolencePinChangeForm, setCondolencePinChangeForm] = useState({ current: "", next: "", confirm: "" });
+  const [condolenceList, setCondolenceList] = useState(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem("kim_condolence_cache_v1") || "[]");
+      return Array.isArray(saved) ? saved : [];
+    } catch (e) {
+      return [];
+    }
+  });
+  const [condolenceSearch, setCondolenceSearch] = useState("");
+  const [condolenceTypeFilter, setCondolenceTypeFilter] = useState("all"); // all | in | out
+  const [condolenceCatFilter, setCondolenceCatFilter] = useState("전체");
+  const [condolenceGroupFilter, setCondolenceGroupFilter] = useState("전체");
+  const [condolencePersonFilter, setCondolencePersonFilter] = useState("전체");
+  const [condolenceYearFilter, setCondolenceYearFilter] = useState("전체");
+  const [condolenceDateFrom, setCondolenceDateFrom] = useState("");
+  const [condolenceDateTo, setCondolenceDateTo] = useState("");
+  const [condolenceSort, setCondolenceSort] = useState("date_desc"); // date_desc | date_asc | amount_desc | person_asc
+  const [condolenceSubtotalTab, setCondolenceSubtotalTab] = useState("category"); // category | group | person | year | none
+  const [isCondolenceFormOpen, setIsCondolenceFormOpen] = useState(false);
+  const [editingCondolenceId, setEditingCondolenceId] = useState(null);
+  const [condolenceForm, setCondolenceForm] = useState({
+    date: getTodayStr(),
+    type: "out",
+    category: CONDOLENCE_CATEGORIES[0],
+    group: CONDOLENCE_GROUPS[0],
+    person: "",
+    owner: "공통",
+    amount: "",
+    paymentMethod: CONDOLENCE_PAY_METHODS[0],
+    memo: ""
+  });
+  const [isCondolenceExcelModalOpen, setIsCondolenceExcelModalOpen] = useState(false);
+  const [condolenceImportPreview, setCondolenceImportPreview] = useState(null);
+  const [condolenceImportBusy, setCondolenceImportBusy] = useState(false);
+  const [pendingCondolencePrefill, setPendingCondolencePrefill] = useState(null);
+  const [condolenceBulkMode, setCondolenceBulkMode] = useState(false);
+  const [condolenceBulkIds, setCondolenceBulkIds] = useState([]);
+  const [condolenceBulkGroup, setCondolenceBulkGroup] = useState("");
+  const [condolenceBulkNewGroup, setCondolenceBulkNewGroup] = useState("");
+  const [condolenceBulkCat, setCondolenceBulkCat] = useState("");
+  const [condolenceBulkOwner, setCondolenceBulkOwner] = useState("");
+  const [condolenceBulkBusy, setCondolenceBulkBusy] = useState(false);
+  const [condolenceWorkbookSheets, setCondolenceWorkbookSheets] = useState([]);
+  const [condolenceActiveSheetIdx, setCondolenceActiveSheetIdx] = useState(0);
+  const [condolenceImportFileName, setCondolenceImportFileName] = useState("");
+  const [condolenceAiAnalyzing, setCondolenceAiAnalyzing] = useState(false);
+  const [condolenceAiEngineLabel, setCondolenceAiEngineLabel] = useState("");
+  const [condolenceBatchDefaults, setCondolenceBatchDefaults] = useState({
+    date: getTodayStr(),
+    type: "in",
+    category: "결혼식",
+    group: "",
+    groupMode: "empty_only",
+    owner: "공통",
+    memoPrefix: "",
+    includeZeroItems: false
+  });
+  const [condolenceImportSearch, setCondolenceImportSearch] = useState("");
+  const [condolenceImportSelectedIds, setCondolenceImportSelectedIds] = useState([]);
+  const [condolenceImportAssignGroup, setCondolenceImportAssignGroup] = useState("");
+  const [condolenceImportNewGroup, setCondolenceImportNewGroup] = useState("");
   const [categoryManageKind, setCategoryManageKind] = useState(""); // "" | "fridge" | "recipe" | "notice" | "bucket" | "schedule"
   const [noticeCatFilter, setNoticeCatFilter] = useState("전체");
   const [newCategoryInput, setNewCategoryInput] = useState("");
@@ -4345,7 +4435,7 @@ function MainApp() {
           <button
             type="button"
             onClick={onAction}
-            className="mt-1 px-3.5 py-1.5 rounded-xl bg-stone-900 text-white text-[12.5px] font-extrabold"
+            className="mt-1 px-3.5 py-1.5 rounded-xl bg-stone-900 text-white text-[12.5px] font-extrabold whitespace-nowrap"
           >
             {actionLabel}
           </button>
@@ -4931,12 +5021,18 @@ function MainApp() {
                 try { localStorage.setItem("kim_family_ai_provider", d.data().aiProvider); } catch (e) {}
               }
             }
-            if (d.id === "backup_status" && d.data().lastSlot) {
-              setLastAutoBackupSlot(d.data().lastSlot);
-              try { localStorage.setItem("kim_twice_daily_backup_slot", d.data().lastSlot); } catch (e) {}
+            if (d.id === "backup_status") {
+              if (d.data().lastSlot) {
+                setLastAutoBackupSlot(d.data().lastSlot);
+                try { localStorage.setItem("kim_twice_daily_backup_slot", d.data().lastSlot); } catch (e) {}
+              }
               if (d.data().email) {
                 setBackupEmail(d.data().email);
                 try { localStorage.setItem("kim_family_backup_email", d.data().email); } catch (e) {}
+              }
+              if (d.data().doneMonth) {
+                setBackupBannerDismissedMonth(String(d.data().doneMonth));
+                try { localStorage.setItem("kim_backup_done_month", String(d.data().doneMonth)); } catch (e) {}
               }
             }
             if (d.id === "kr_holidays" && d.data()?.map && typeof d.data().map === "object") {
@@ -5239,6 +5335,15 @@ function MainApp() {
             setActivityPopupEnabled(d.activityPopupEnabled);
             try { localStorage.setItem("kim_activity_popup_enabled_v1", String(d.activityPopupEnabled)); } catch (e) {}
           }
+          if (d?.routineViewMode === "card" || d?.routineViewMode === "timetable") {
+            setRoutineViewMode(d.routineViewMode);
+            try { localStorage.setItem("kim_routine_view_mode_v1", d.routineViewMode); } catch (e) {}
+          }
+          if (Array.isArray(d?.recentPageIds)) {
+            const cleanRec = d.recentPageIds.map((x) => String(x || "").trim()).filter(Boolean).slice(0, 12);
+            setRecentPageIds(cleanRec);
+            try { localStorage.setItem("kim_pages_recent_v1", JSON.stringify(cleanRec)); } catch (e) {}
+          }
         },
         () => {}
       )
@@ -5391,13 +5496,51 @@ function MainApp() {
               recipe: Array.isArray(d.recipe) && d.recipe.length > 0 ? d.recipe.map((s) => String(s || "").trim()).filter(Boolean) : [...RECIPE_CATEGORIES],
               notice: Array.isArray(d.notice) && d.notice.length > 0 ? d.notice.map((s) => String(s || "").trim()).filter(Boolean) : [...NOTICE_CATEGORIES],
               bucket: Array.isArray(d.bucket) && d.bucket.length > 0 ? d.bucket.map((s) => String(s || "").trim()).filter(Boolean) : [...BUCKET_CATEGORIES],
-              schedule: Array.isArray(d.schedule) && d.schedule.length > 0 ? d.schedule.map((s) => String(s || "").trim()).filter(Boolean) : [...SCHEDULE_CATEGORIES]
+              schedule: Array.isArray(d.schedule) && d.schedule.length > 0 ? d.schedule.map((s) => String(s || "").trim()).filter(Boolean) : [...SCHEDULE_CATEGORIES],
+              condolence_cat: Array.isArray(d.condolence_cat) && d.condolence_cat.length > 0 ? d.condolence_cat.map((s) => String(s || "").trim()).filter(Boolean) : [...CONDOLENCE_CATEGORIES],
+              condolence_group: Array.isArray(d.condolence_group) && d.condolence_group.length > 0 ? d.condolence_group.map((s) => String(s || "").trim()).filter(Boolean) : [...CONDOLENCE_GROUPS],
+              condolence_pay: Array.isArray(d.condolence_pay) && d.condolence_pay.length > 0 ? d.condolence_pay.map((s) => String(s || "").trim()).filter(Boolean) : [...CONDOLENCE_PAY_METHODS]
             };
             setCustomCategories(nextCats);
             try { localStorage.setItem("kim_custom_categories_v1", JSON.stringify(nextCats)); } catch (e) {}
           }
         },
         () => {}
+      )
+    );
+
+    // 🔒 비밀메뉴: 경조사비 비밀번호 설정 실시간 동기화
+    unsubscribers.push(
+      onSnapshot(
+        getDocRef("family_meta_v4", "condolence_config_v1"),
+        (snap) => {
+          if (snap.exists()) {
+            const p = String(snap.data()?.pin || "").trim();
+            if (p.length >= 4) {
+              setCondolencePin(p);
+              try { localStorage.setItem("kim_condolence_pin_v1", p); } catch (e) {}
+            }
+          }
+        },
+        () => {}
+      )
+    );
+
+    // 🔒 비밀메뉴: 경조사비 입출금내역 실시간 동기화
+    unsubscribers.push(
+      onSnapshot(
+        getColRef("family_condolence_v1"),
+        (snap) => {
+          const loaded = snap.docs
+            .map((d) => ({ id: d.id, ...d.data() }))
+            .filter((x) => x && x.id)
+            .sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")) || (Number(b.updatedAtMs) || 0) - (Number(a.updatedAtMs) || 0));
+          setCondolenceList(loaded);
+          try { localStorage.setItem("kim_condolence_cache_v1", JSON.stringify(loaded)); } catch (e) {}
+        },
+        (err) => {
+          setSyncErrorMsg(`경조사비 동기화 오류: ${err?.message || "권한/네트워크 확인"}`);
+        }
       )
     );
 
@@ -5982,7 +6125,9 @@ function MainApp() {
         homeTimeRanges,
         routineTimeRanges,
         routineSlotDefs,
-        ...(isAdminUnlocked ? { babyDiaryEntries: safeDiaryEntries, privateSchedules } : {})
+        routineViewMode,
+        ...(isAdminUnlocked ? { babyDiaryEntries: safeDiaryEntries, privateSchedules } : {}),
+        ...(isAdminUnlocked || isCondolenceUnlocked ? { condolenceList } : {})
       }
     };
     return JSON.stringify(fullSnapshot, null, 2);
@@ -6004,6 +6149,9 @@ function MainApp() {
     const curYm = getCurrentYearMonth();
     try { localStorage.setItem("kim_backup_done_month", curYm); } catch (e) {}
     setBackupBannerDismissedMonth(curYm);
+    if (user && db) {
+      setDoc(getDocRef("family_meta_v4", "backup_status"), { doneMonth: curYm, updatedAtMs: Date.now() }, { merge: true }).catch(() => {});
+    }
     showToast("전체 DB 원본(JSON) 백업 파일이 다운로드되었습니다!");
   };
 
@@ -6185,7 +6333,10 @@ function MainApp() {
           recipe: Array.isArray(payload.customCategories.recipe) && payload.customCategories.recipe.length > 0 ? payload.customCategories.recipe.map((s) => String(s || "").trim()).filter(Boolean) : [...RECIPE_CATEGORIES],
           notice: Array.isArray(payload.customCategories.notice) && payload.customCategories.notice.length > 0 ? payload.customCategories.notice.map((s) => String(s || "").trim()).filter(Boolean) : [...NOTICE_CATEGORIES],
           bucket: Array.isArray(payload.customCategories.bucket) && payload.customCategories.bucket.length > 0 ? payload.customCategories.bucket.map((s) => String(s || "").trim()).filter(Boolean) : [...BUCKET_CATEGORIES],
-          schedule: Array.isArray(payload.customCategories.schedule) && payload.customCategories.schedule.length > 0 ? payload.customCategories.schedule.map((s) => String(s || "").trim()).filter(Boolean) : [...SCHEDULE_CATEGORIES]
+          schedule: Array.isArray(payload.customCategories.schedule) && payload.customCategories.schedule.length > 0 ? payload.customCategories.schedule.map((s) => String(s || "").trim()).filter(Boolean) : [...SCHEDULE_CATEGORIES],
+          condolence_cat: Array.isArray(payload.customCategories.condolence_cat) && payload.customCategories.condolence_cat.length > 0 ? payload.customCategories.condolence_cat.map((s) => String(s || "").trim()).filter(Boolean) : [...CONDOLENCE_CATEGORIES],
+          condolence_group: Array.isArray(payload.customCategories.condolence_group) && payload.customCategories.condolence_group.length > 0 ? payload.customCategories.condolence_group.map((s) => String(s || "").trim()).filter(Boolean) : [...CONDOLENCE_GROUPS],
+          condolence_pay: Array.isArray(payload.customCategories.condolence_pay) && payload.customCategories.condolence_pay.length > 0 ? payload.customCategories.condolence_pay.map((s) => String(s || "").trim()).filter(Boolean) : [...CONDOLENCE_PAY_METHODS]
         };
         setCustomCategories(nextCats);
         try { localStorage.setItem("kim_custom_categories_v1", JSON.stringify(nextCats)); } catch (e) {}
@@ -6239,6 +6390,25 @@ function MainApp() {
       if (Array.isArray(payload.babyGrowthLogs)) setBabyGrowthLogs(payload.babyGrowthLogs);
       if (Array.isArray(payload.babyActivities)) setBabyActivities(payload.babyActivities);
       if (Array.isArray(payload.babyMedicalNotes)) setBabyMedicalNotes(payload.babyMedicalNotes);
+      if (payload.routineViewMode === "card" || payload.routineViewMode === "timetable") {
+        setRoutineViewMode(payload.routineViewMode);
+        try { localStorage.setItem("kim_routine_view_mode_v1", payload.routineViewMode); } catch (e) {}
+        syncHomeSettingsToCloud(null, null, null, null, payload.routineViewMode);
+      }
+      if ((isAdminUnlocked || isCondolenceUnlocked) && Array.isArray(payload.condolenceList)) {
+        const cleanCond = payload.condolenceList.filter((c) => c && c.id);
+        setCondolenceList(cleanCond);
+        try { localStorage.setItem("kim_condolence_cache_v1", JSON.stringify(cleanCond)); } catch (e) {}
+        if (user && db && cleanCond.length > 0) {
+          for (let i = 0; i < cleanCond.length; i += 200) {
+            const batch = writeBatch(db);
+            cleanCond.slice(i, i + 200).forEach((c) => {
+              batch.set(getDocRef("family_condolence_v1", c.id), c, { merge: true });
+            });
+            await batch.commit();
+          }
+        }
+      }
       if (isAdminUnlocked && Array.isArray(payload.babyDiaryEntries)) setBabyDiaryEntries(payload.babyDiaryEntries);
       if (isAdminUnlocked && Array.isArray(payload.privateSchedules)) {
         const groupedBuckets = {};
@@ -12881,6 +13051,9 @@ ${validText}
       try {
         localStorage.setItem("kim_pages_recent_v1", JSON.stringify(next));
       } catch (e) {}
+      if (user && db && isEditorUnlocked) {
+        setDoc(getDocRef("family_meta_v4", "home_layout"), { recentPageIds: next, updatedAt: new Date().toISOString() }, { merge: true }).catch(() => {});
+      }
       return next;
     });
   };
@@ -13167,8 +13340,10 @@ ${item.memo}` : `${item.title} 다녀옴!`,
   };
 
   const handleAddCustomCategory = async (kind, rawName) => {
-    const tabKey = kind === "fridge" ? "fridge" : kind === "recipe" ? "recipes" : kind === "bucket" ? "bucket" : kind === "schedule" ? "schedule" : kind === "house_room" ? "house" : "notices";
-    if (!requireEditorAccess(tabKey)) return;
+    const tabKey = kind === "fridge" ? "fridge" : kind === "recipe" ? "recipes" : kind === "bucket" ? "bucket" : kind === "schedule" ? "schedule" : kind === "house_room" ? "house" : (kind === "condolence_cat" || kind === "condolence_group" || kind === "condolence_pay") ? "condolence" : "notices";
+    if (tabKey === "condolence") {
+      if (!isCondolenceUnlocked) { showToast("🔒 경조사비 비밀번호 해제 후 편집할 수 있습니다."); return; }
+    } else if (!requireEditorAccess(tabKey)) return;
     const name = String(rawName || "").trim();
     if (!name) return;
     if (kind === "house_room") {
@@ -13191,8 +13366,10 @@ ${item.memo}` : `${item.title} 다녀옴!`,
   };
 
   const handleRenameCustomCategory = async (kind, oldName, rawNext) => {
-    const tabKey = kind === "fridge" ? "fridge" : kind === "recipe" ? "recipes" : kind === "bucket" ? "bucket" : kind === "schedule" ? "schedule" : kind === "house_room" ? "house" : "notices";
-    if (!requireEditorAccess(tabKey)) return;
+    const tabKey = kind === "fridge" ? "fridge" : kind === "recipe" ? "recipes" : kind === "bucket" ? "bucket" : kind === "schedule" ? "schedule" : kind === "house_room" ? "house" : (kind === "condolence_cat" || kind === "condolence_group" || kind === "condolence_pay") ? "condolence" : "notices";
+    if (tabKey === "condolence") {
+      if (!isCondolenceUnlocked) { showToast("🔒 경조사비 비밀번호 해제 후 편집할 수 있습니다."); return; }
+    } else if (!requireEditorAccess(tabKey)) return;
     const nextName = String(rawNext || "").trim();
     if (!nextName || nextName === oldName) {
       setEditingCategoryOrig("");
@@ -13216,7 +13393,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
           try {
             const batch = writeBatch(db);
             affected.forEach((it) => {
-              batch.set(getDocRef("family_house_v1", it.id), { ...it, room: nextName }, { merge: true });
+              batch.set(getDocRef("family_house_items_v1", it.id), { ...it, room: nextName }, { merge: true });
             });
             await batch.commit();
           } catch (e) {}
@@ -13311,13 +13488,65 @@ ${item.memo}` : `${item.title} 다녀옴!`,
           } catch (e) {}
         }
       }
+    } else if (kind === "condolence_cat") {
+      if (condolenceCatFilter === oldName) setCondolenceCatFilter(nextName);
+      const affected = condolenceList.filter((c) => c.category === oldName);
+      if (affected.length > 0) {
+        setCondolenceList((prev) => prev.map((c) => (c.category === oldName ? { ...c, category: nextName } : c)));
+        if (user && db) {
+          try {
+            for (let i = 0; i < affected.length; i += 200) {
+              const batch = writeBatch(db);
+              affected.slice(i, i + 200).forEach((c) => {
+                batch.set(getDocRef("family_condolence_v1", c.id), { ...c, category: nextName, updatedAtMs: Date.now() }, { merge: true });
+              });
+              await batch.commit();
+            }
+          } catch (e) {}
+        }
+      }
+    } else if (kind === "condolence_group") {
+      if (condolenceGroupFilter === oldName) setCondolenceGroupFilter(nextName);
+      const affected = condolenceList.filter((c) => c.group === oldName);
+      if (affected.length > 0) {
+        setCondolenceList((prev) => prev.map((c) => (c.group === oldName ? { ...c, group: nextName } : c)));
+        if (user && db) {
+          try {
+            for (let i = 0; i < affected.length; i += 200) {
+              const batch = writeBatch(db);
+              affected.slice(i, i + 200).forEach((c) => {
+                batch.set(getDocRef("family_condolence_v1", c.id), { ...c, group: nextName, updatedAtMs: Date.now() }, { merge: true });
+              });
+              await batch.commit();
+            }
+          } catch (e) {}
+        }
+      }
+    } else if (kind === "condolence_pay") {
+      const affected = condolenceList.filter((c) => c.paymentMethod === oldName);
+      if (affected.length > 0) {
+        setCondolenceList((prev) => prev.map((c) => (c.paymentMethod === oldName ? { ...c, paymentMethod: nextName } : c)));
+        if (user && db) {
+          try {
+            for (let i = 0; i < affected.length; i += 200) {
+              const batch = writeBatch(db);
+              affected.slice(i, i + 200).forEach((c) => {
+                batch.set(getDocRef("family_condolence_v1", c.id), { ...c, paymentMethod: nextName, updatedAtMs: Date.now() }, { merge: true });
+              });
+              await batch.commit();
+            }
+          } catch (e) {}
+        }
+      }
     }
     showToast(`✏️ '${oldName}' → '${nextName}' 분류로 변경했습니다.`);
   };
 
   const handleDeleteCustomCategory = async (kind, targetName) => {
-    const tabKey = kind === "fridge" ? "fridge" : kind === "recipe" ? "recipes" : kind === "bucket" ? "bucket" : kind === "schedule" ? "schedule" : kind === "house_room" ? "house" : "notices";
-    if (!requireEditorAccess(tabKey)) return;
+    const tabKey = kind === "fridge" ? "fridge" : kind === "recipe" ? "recipes" : kind === "bucket" ? "bucket" : kind === "schedule" ? "schedule" : kind === "house_room" ? "house" : (kind === "condolence_cat" || kind === "condolence_group" || kind === "condolence_pay") ? "condolence" : "notices";
+    if (tabKey === "condolence") {
+      if (!isCondolenceUnlocked) { showToast("🔒 경조사비 비밀번호 해제 후 편집할 수 있습니다."); return; }
+    } else if (!requireEditorAccess(tabKey)) return;
     if (kind === "house_room") {
       if (houseStorageRooms.length <= 1) {
         showToast("최소 1개 이상의 장소는 유지해야 합니다.");
@@ -13340,10 +13569,16 @@ ${item.memo}` : `${item.title} 다녀옴!`,
     if (kind === "bucket" && bucketCatFilter === targetName) setBucketCatFilter("전체");
     if (kind === "notice" && noticeCatFilter === targetName) setNoticeCatFilter("전체");
     if (kind === "schedule" && scheduleCatFilter === targetName) setScheduleCatFilter("전체");
+    if (kind === "condolence_cat" && condolenceCatFilter === targetName) setCondolenceCatFilter("전체");
+    if (kind === "condolence_group" && condolenceGroupFilter === targetName) setCondolenceGroupFilter("전체");
     await saveCustomCategoriesToCloud(nextCats, `🗑️ '${targetName}' 분류를 삭제했습니다.`);
   };
 
   const handleMoveCustomCategory = async (kind, idx, delta) => {
+    const tabKey = kind === "fridge" ? "fridge" : kind === "recipe" ? "recipes" : kind === "bucket" ? "bucket" : kind === "schedule" ? "schedule" : kind === "house_room" ? "house" : (kind === "condolence_cat" || kind === "condolence_group" || kind === "condolence_pay") ? "condolence" : "notices";
+    if (tabKey === "condolence") {
+      if (!isCondolenceUnlocked) { showToast("🔒 경조사비 비밀번호 해제 후 편집할 수 있습니다."); return; }
+    } else if (!requireEditorAccess(tabKey)) return;
     if (kind === "house_room") {
       const curRooms = [...houseStorageRooms];
       const targetIdx = idx + delta;
@@ -13364,14 +13599,1021 @@ ${item.memo}` : `${item.title} 다녀옴!`,
   };
 
   const handleResetCustomCategories = async (kind) => {
-    const tabKey = kind === "fridge" ? "fridge" : kind === "recipe" ? "recipes" : kind === "bucket" ? "bucket" : kind === "schedule" ? "schedule" : kind === "house_room" ? "house" : "notices";
-    if (!requireEditorAccess(tabKey)) return;
+    const tabKey = kind === "fridge" ? "fridge" : kind === "recipe" ? "recipes" : kind === "bucket" ? "bucket" : kind === "schedule" ? "schedule" : kind === "house_room" ? "house" : (kind === "condolence_cat" || kind === "condolence_group" || kind === "condolence_pay") ? "condolence" : "notices";
+    if (tabKey === "condolence") {
+      if (!isCondolenceUnlocked) { showToast("🔒 경조사비 비밀번호 해제 후 편집할 수 있습니다."); return; }
+    } else if (!requireEditorAccess(tabKey)) return;
     if (kind === "house_room") {
       await saveHouseStorageRoomsToCloud([...HOUSE_STORAGE_ROOMS], "↺ 기본 수납 장소로 복원했습니다.");
       return;
     }
-    const defList = kind === "fridge" ? [...FRIDGE_CATEGORIES] : kind === "recipe" ? [...RECIPE_CATEGORIES] : kind === "bucket" ? [...BUCKET_CATEGORIES] : kind === "schedule" ? [...SCHEDULE_CATEGORIES] : [...NOTICE_CATEGORIES];
-    await saveCustomCategoriesToCloud({ ...customCategories, [kind]: defList }, "↺ 기본 분류로 복원했습니다.");
+    const defaults =
+      kind === "fridge"
+        ? [...FRIDGE_CATEGORIES]
+        : kind === "recipe"
+        ? [...RECIPE_CATEGORIES]
+        : kind === "bucket"
+        ? [...BUCKET_CATEGORIES]
+        : kind === "schedule"
+        ? [...SCHEDULE_CATEGORIES]
+        : kind === "condolence_cat"
+        ? [...CONDOLENCE_CATEGORIES]
+        : kind === "condolence_group"
+        ? [...CONDOLENCE_GROUPS]
+        : kind === "condolence_pay"
+        ? [...CONDOLENCE_PAY_METHODS]
+        : [...NOTICE_CATEGORIES];
+    await saveCustomCategoriesToCloud({ ...customCategories, [kind]: defaults }, "↺ 기본 분류 목록으로 복원했습니다.");
+  };
+
+  // ==========================================
+  // 🔒 비밀메뉴: 경조사비 입출금내역 핸들러 (비밀번호 · CRUD · 클라우드 엑셀 입출력 · 일정 연계)
+  // ==========================================
+  const handleUnlockCondolence = (e) => {
+    if (e?.preventDefault) e.preventDefault();
+    const entered = String(condolencePinInput || "").trim();
+    if (!entered) {
+      setCondolencePinError("비밀번호를 입력해 주세요.");
+      return;
+    }
+    if (entered === String(condolencePin || DEFAULT_CONDOLENCE_PIN)) {
+      setIsCondolenceUnlocked(true);
+      setCondolencePinInput("");
+      setCondolencePinError("");
+      if (pendingCondolencePrefill) {
+        const pf = pendingCondolencePrefill;
+        setPendingCondolencePrefill(null);
+        setEditingCondolenceId(null);
+        setCondolenceForm({
+          date: pf.date || getTodayStr(),
+          type: pf.type === "in" ? "in" : "out",
+          category: pf.category || condolenceCategories[0] || "결혼식",
+          group: pf.group || condolenceGroups[0] || "가족/친척",
+          person: pf.person || "",
+          owner: pf.owner || "공통",
+          amount: pf.amount ? String(pf.amount) : "",
+          paymentMethod: condolencePayMethods[0] || CONDOLENCE_PAY_METHODS[0],
+          memo: pf.memo || ""
+        });
+        setIsCondolenceFormOpen(true);
+        showToast("🔓 잠금 해제 완료! 일정 정보를 불러왔습니다.");
+      } else {
+        showToast("🔓 경조사비 내역 잠금이 해제되었습니다.");
+      }
+    } else {
+      setCondolencePinError("비밀번호가 올바르지 않습니다.");
+    }
+  };
+
+  const handleChangeCondolencePin = async (e) => {
+    if (e?.preventDefault) e.preventDefault();
+    if (!isSuhyeokAdmin) {
+      showToast("🔒 경조사비 비밀번호 변경은 김수혁 관리자만 가능합니다.");
+      return;
+    }
+    const cur = String(condolencePinChangeForm.current || "").trim();
+    const nxt = String(condolencePinChangeForm.next || "").trim();
+    const cfm = String(condolencePinChangeForm.confirm || "").trim();
+    if (cur !== String(condolencePin || DEFAULT_CONDOLENCE_PIN)) {
+      showToast("⚠️ 현재 비밀번호가 일치하지 않습니다.");
+      return;
+    }
+    if (nxt.length < 4 || nxt.length > 12) {
+      showToast("⚠️ 새 비밀번호는 4~12자리로 입력해 주세요.");
+      return;
+    }
+    if (nxt !== cfm) {
+      showToast("⚠️ 새 비밀번호 확인이 일치하지 않습니다.");
+      return;
+    }
+    setCondolencePin(nxt);
+    try { localStorage.setItem("kim_condolence_pin_v1", nxt); } catch (err) {}
+    if (user && db) {
+      beginWrite();
+      try {
+        await setDoc(
+          getDocRef("family_meta_v4", "condolence_config_v1"),
+          { pin: nxt, updatedAtMs: Date.now(), updatedBy: "김수혁" },
+          { merge: true }
+        );
+      } catch (err) {
+        setSyncErrorMsg(`경조사비 비밀번호 저장 오류: ${err?.message || "권한 확인"}`);
+      } finally {
+        endWrite();
+      }
+    }
+    setCondolencePinChangeForm({ current: "", next: "", confirm: "" });
+    setIsCondolencePinModalOpen(false);
+    showToast("🔑 경조사비 비밀번호가 클라우드에 안전하게 변경되었습니다.");
+  };
+
+  const openCondolenceForm = (item = null, prefill = null) => {
+    if (!isCondolenceUnlocked) {
+      showToast("🔒 비밀번호 해제 후 입력할 수 있습니다.");
+      return;
+    }
+    if (item) {
+      setEditingCondolenceId(item.id);
+      setCondolenceForm({
+        date: item.date || getTodayStr(),
+        type: item.type === "in" ? "in" : "out",
+        category: item.category || condolenceCategories[0] || "결혼식",
+        group: item.group || condolenceGroups[0] || "가족/친척",
+        person: item.person || "",
+        owner: item.owner || "공통",
+        amount: String(Number(item.amount) || ""),
+        paymentMethod: item.paymentMethod || CONDOLENCE_PAY_METHODS[0],
+        memo: item.memo || ""
+      });
+    } else {
+      setEditingCondolenceId(null);
+      setCondolenceForm({
+        date: prefill?.date || getTodayStr(),
+        type: prefill?.type === "in" ? "in" : "out",
+        category: prefill?.category || (condolenceCatFilter !== "전체" ? condolenceCatFilter : condolenceCategories[0] || "결혼식"),
+        group: prefill?.group || (condolenceGroupFilter !== "전체" ? condolenceGroupFilter : condolenceGroups[0] || "가족/친척"),
+        person: prefill?.person || (condolencePersonFilter !== "전체" ? condolencePersonFilter : ""),
+        owner: prefill?.owner || "공통",
+        amount: prefill?.amount ? String(prefill.amount) : "",
+        paymentMethod: CONDOLENCE_PAY_METHODS[0],
+        memo: prefill?.memo || ""
+      });
+    }
+    setIsCondolenceFormOpen(true);
+  };
+
+  const handleSaveCondolence = async (e) => {
+    if (e?.preventDefault) e.preventDefault();
+    if (!isCondolenceUnlocked) return;
+    const person = String(condolenceForm.person || "").trim();
+    const amountNum = Number(String(condolenceForm.amount || "").replace(/[^0-9]/g, ""));
+    if (!person) {
+      showToast("⚠️ 성명(인별)을 입력해 주세요.");
+      return;
+    }
+    if (!Number.isFinite(amountNum) || amountNum <= 0) {
+      showToast("⚠️ 올바른 금액을 입력해 주세요.");
+      return;
+    }
+    const id = editingCondolenceId || `cond-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    const record = {
+      id,
+      date: condolenceForm.date || getTodayStr(),
+      type: condolenceForm.type === "in" ? "in" : "out",
+      category: String(condolenceForm.category || condolenceCategories[0] || "기타").trim(),
+      group: String(condolenceForm.group || condolenceGroups[0] || "기타").trim(),
+      person,
+      owner: condolenceForm.owner || "공통",
+      amount: amountNum,
+      paymentMethod: condolenceForm.paymentMethod || CONDOLENCE_PAY_METHODS[0],
+      memo: String(condolenceForm.memo || "").trim(),
+      updatedAtMs: Date.now(),
+      updatedBy: actorName || "수혁"
+    };
+    const nextList = editingCondolenceId
+      ? condolenceList.map((x) => (x.id === id ? record : x))
+      : [record, ...condolenceList];
+    setCondolenceList(nextList);
+    try { localStorage.setItem("kim_condolence_cache_v1", JSON.stringify(nextList)); } catch (err) {}
+    if (user && db) {
+      beginWrite();
+      try {
+        await setDoc(getDocRef("family_condolence_v1", id), record, { merge: true });
+      } catch (err) {
+        setSyncErrorMsg(`경조사비 저장 오류: ${err?.message || "네트워크 확인"}`);
+      } finally {
+        endWrite();
+      }
+    }
+    setIsCondolenceFormOpen(false);
+    setEditingCondolenceId(null);
+    showToast(editingCondolenceId ? "✏️ 경조사비 내역을 수정했습니다." : `💌 ${person} (${record.type === "in" ? "입금" : "출금"} ${amountNum.toLocaleString()}원) 등록 완료!`);
+  };
+
+  const handleDeleteCondolence = async (item) => {
+    if (!isCondolenceUnlocked || !item?.id) return;
+    if (!window.confirm(`'${item.person} (${Number(item.amount || 0).toLocaleString()}원)' 경조사 내역을 삭제할까요?`)) return;
+    const prev = condolenceList;
+    const nextList = condolenceList.filter((x) => x.id !== item.id);
+    setCondolenceList(nextList);
+    try { localStorage.setItem("kim_condolence_cache_v1", JSON.stringify(nextList)); } catch (err) {}
+    if (user && db) {
+      beginWrite();
+      try {
+        await deleteDoc(getDocRef("family_condolence_v1", item.id));
+      } catch (err) {
+        setCondolenceList(prev);
+        try { localStorage.setItem("kim_condolence_cache_v1", JSON.stringify(prev)); } catch (e2) {}
+        setSyncErrorMsg(`경조사비 삭제 오류: ${err?.message || "네트워크 확인"}`);
+        return;
+      } finally {
+        endWrite();
+      }
+    }
+    showToast("🗑️ 경조사비 내역을 삭제했습니다.");
+  };
+
+  const handleCondolenceToSchedule = (item) => {
+    if (!item) return;
+    const defaultCat = scheduleCategories.find((c) => c.includes("경조사") || c.includes("가족행사")) || scheduleCategories[0] || "가족행사/경조사";
+    setEditingSchedule(null);
+    setScheduleForm({
+      title: `${item.category || "경조사"} - ${item.person}`,
+      date: item.date || getTodayStr(),
+      endDate: "",
+      time: "",
+      location: "",
+      category: defaultCat,
+      members: item.owner === "수혁" ? ["수혁"] : item.owner === "아리" ? ["아리나"] : ["수혁", "아리나"],
+      isAnnual: false,
+      showDday: false,
+      hasOriginYear: false,
+      memo: `[경조사비 연계] ${item.type === "in" ? "입금(받음)" : "출금(보냄)"} ${Number(item.amount || 0).toLocaleString()}원 (${item.group || ""})${item.memo ? ` / ${item.memo}` : ""}`,
+      attachments: []
+    });
+    setActiveTab("schedule");
+    setScheduleSubTab("calendar");
+    setIsScheduleModalOpen(true);
+  };
+
+  const handleScheduleToCondolence = (sched) => {
+    if (!sched) return;
+    const prefill = {
+      date: sched.date || getTodayStr(),
+      memo: [sched.title, sched.location, sched.memo].filter(Boolean).join(" · ")
+    };
+    setCalDayPopupDate(null);
+    setActiveTab("condolence");
+    if (isCondolenceUnlocked) {
+      openCondolenceForm(null, prefill);
+    } else {
+      setPendingCondolencePrefill(prefill);
+      showToast("🔒 비밀번호를 입력하면 해당 일정이 바로 채워집니다.");
+    }
+  };
+
+  // --- 경조사비 엑셀(.xls SpreadsheetML) & CSV 내보내기 / 가져오기 (클라우드 연동) ---
+  const escapeXmlCell = (v) =>
+    String(v ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&apos;");
+
+  const handleExportCondolenceExcel = (targetRows = condolenceList, scopeLabel = "전체") => {
+    if (!isCondolenceUnlocked) return;
+    const rows = Array.isArray(targetRows) ? targetRows : [];
+    const totalIn = rows.filter((r) => r.type === "in").reduce((s, r) => s + (Number(r.amount) || 0), 0);
+    const totalOut = rows.filter((r) => r.type !== "in").reduce((s, r) => s + (Number(r.amount) || 0), 0);
+    const netTotal = totalIn - totalOut;
+
+    const buildSubtotalRows = (fieldKey, title) => {
+      const map = new Map();
+      rows.forEach((r) => {
+        const k = String(r[fieldKey] || "미분류").trim() || "미분류";
+        const cur = map.get(k) || { key: k, count: 0, inAmt: 0, outAmt: 0 };
+        cur.count += 1;
+        if (r.type === "in") cur.inAmt += Number(r.amount) || 0;
+        else cur.outAmt += Number(r.amount) || 0;
+        map.set(k, cur);
+      });
+      const list = Array.from(map.values()).sort((a, b) => (b.inAmt + b.outAmt) - (a.inAmt + a.outAmt));
+      const xmlRows = [
+        `<Row><Cell ss:StyleID="Section"><Data ss:Type="String">${escapeXmlCell(title)}</Data></Cell></Row>`,
+        `<Row><Cell ss:StyleID="Header"><Data ss:Type="String">항목</Data></Cell><Cell ss:StyleID="Header"><Data ss:Type="String">건수</Data></Cell><Cell ss:StyleID="Header"><Data ss:Type="String">입금 합계</Data></Cell><Cell ss:StyleID="Header"><Data ss:Type="String">출금 합계</Data></Cell><Cell ss:StyleID="Header"><Data ss:Type="String">차액(입금-출금)</Data></Cell></Row>`
+      ];
+      list.forEach((it) => {
+        xmlRows.push(
+          `<Row><Cell><Data ss:Type="String">${escapeXmlCell(it.key)}</Data></Cell><Cell><Data ss:Type="Number">${it.count}</Data></Cell><Cell ss:StyleID="Num"><Data ss:Type="Number">${it.inAmt}</Data></Cell><Cell ss:StyleID="Num"><Data ss:Type="Number">${it.outAmt}</Data></Cell><Cell ss:StyleID="Num"><Data ss:Type="Number">${it.inAmt - it.outAmt}</Data></Cell></Row>`
+        );
+      });
+      xmlRows.push(
+        `<Row><Cell ss:StyleID="Total"><Data ss:Type="String">합계</Data></Cell><Cell ss:StyleID="Total"><Data ss:Type="Number">${rows.length}</Data></Cell><Cell ss:StyleID="TotalNum"><Data ss:Type="Number">${totalIn}</Data></Cell><Cell ss:StyleID="TotalNum"><Data ss:Type="Number">${totalOut}</Data></Cell><Cell ss:StyleID="TotalNum"><Data ss:Type="Number">${netTotal}</Data></Cell></Row>`,
+        `<Row/>`
+      );
+      return xmlRows.join("");
+    };
+
+    const detailRowsXml = rows.map((r, idx) => {
+      const amt = Number(r.amount) || 0;
+      const inAmt = r.type === "in" ? amt : 0;
+      const outAmt = r.type === "in" ? 0 : amt;
+      return `<Row>` +
+        `<Cell><Data ss:Type="Number">${idx + 1}</Data></Cell>` +
+        `<Cell><Data ss:Type="String">${escapeXmlCell(r.date || "")}</Data></Cell>` +
+        `<Cell><Data ss:Type="String">${r.type === "in" ? "입금" : "출금"}</Data></Cell>` +
+        `<Cell><Data ss:Type="String">${escapeXmlCell(r.category || "")}</Data></Cell>` +
+        `<Cell><Data ss:Type="String">${escapeXmlCell(r.group || "")}</Data></Cell>` +
+        `<Cell><Data ss:Type="String">${escapeXmlCell(r.person || "")}</Data></Cell>` +
+        `<Cell><Data ss:Type="String">${escapeXmlCell(r.owner || "공통")}</Data></Cell>` +
+        `<Cell ss:StyleID="Num"><Data ss:Type="Number">${amt}</Data></Cell>` +
+        `<Cell ss:StyleID="Num"><Data ss:Type="Number">${inAmt}</Data></Cell>` +
+        `<Cell ss:StyleID="Num"><Data ss:Type="Number">${outAmt}</Data></Cell>` +
+        `<Cell><Data ss:Type="String">${escapeXmlCell(r.paymentMethod || "")}</Data></Cell>` +
+        `<Cell><Data ss:Type="String">${escapeXmlCell(r.memo || "")}</Data></Cell>` +
+        `</Row>`;
+    }).join("");
+
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<?mso-application progid="Excel.Sheet"?>
+<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+ <Styles>
+  <Style ss:ID="Header"><Font ss:Bold="1" ss:Color="#FFFFFF"/><Interior ss:Color="#35503C" ss:Pattern="Solid"/></Style>
+  <Style ss:ID="Section"><Font ss:Bold="1" ss:Size="12" ss:Color="#35503C"/></Style>
+  <Style ss:ID="Num"><NumberFormat ss:Format="#,##0"/></Style>
+  <Style ss:ID="Total"><Font ss:Bold="1"/><Interior ss:Color="#EEF3EE" ss:Pattern="Solid"/></Style>
+  <Style ss:ID="TotalNum"><Font ss:Bold="1"/><Interior ss:Color="#EEF3EE" ss:Pattern="Solid"/><NumberFormat ss:Format="#,##0"/></Style>
+ </Styles>
+ <Worksheet ss:Name="경조사비 내역">
+  <Table>
+   <Row>
+    <Cell ss:StyleID="Header"><Data ss:Type="String">번호</Data></Cell>
+    <Cell ss:StyleID="Header"><Data ss:Type="String">날짜</Data></Cell>
+    <Cell ss:StyleID="Header"><Data ss:Type="String">구분</Data></Cell>
+    <Cell ss:StyleID="Header"><Data ss:Type="String">카테고리</Data></Cell>
+    <Cell ss:StyleID="Header"><Data ss:Type="String">그룹</Data></Cell>
+    <Cell ss:StyleID="Header"><Data ss:Type="String">성명</Data></Cell>
+    <Cell ss:StyleID="Header"><Data ss:Type="String">당사자</Data></Cell>
+    <Cell ss:StyleID="Header"><Data ss:Type="String">금액</Data></Cell>
+    <Cell ss:StyleID="Header"><Data ss:Type="String">입금액</Data></Cell>
+    <Cell ss:StyleID="Header"><Data ss:Type="String">출금액</Data></Cell>
+    <Cell ss:StyleID="Header"><Data ss:Type="String">결제수단</Data></Cell>
+    <Cell ss:StyleID="Header"><Data ss:Type="String">메모</Data></Cell>
+   </Row>
+   ${detailRowsXml}
+   <Row>
+    <Cell ss:StyleID="Total"><Data ss:Type="String">총계</Data></Cell>
+    <Cell ss:StyleID="Total"><Data ss:Type="String">${rows.length}건</Data></Cell>
+    <Cell ss:StyleID="Total"><Data ss:Type="String">순액</Data></Cell>
+    <Cell ss:StyleID="Total"/><Cell ss:StyleID="Total"/><Cell ss:StyleID="Total"/><Cell ss:StyleID="Total"/>
+    <Cell ss:StyleID="TotalNum"><Data ss:Type="Number">${netTotal}</Data></Cell>
+    <Cell ss:StyleID="TotalNum"><Data ss:Type="Number">${totalIn}</Data></Cell>
+    <Cell ss:StyleID="TotalNum"><Data ss:Type="Number">${totalOut}</Data></Cell>
+    <Cell ss:StyleID="Total"/><Cell ss:StyleID="Total"/>
+   </Row>
+  </Table>
+ </Worksheet>
+ <Worksheet ss:Name="부분합 요약">
+  <Table>
+   ${buildSubtotalRows("category", "1. 카테고리별 부분합")}
+   ${buildSubtotalRows("group", "2. 그룹별 부분합")}
+   ${buildSubtotalRows("person", "3. 인별 부분합")}
+  </Table>
+ </Worksheet>
+</Workbook>`;
+
+    const blob = new Blob([xml], { type: "application/vnd.ms-excel;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.setAttribute("download", `경조사비_입출금내역_${scopeLabel}_${getTodayStr()}.xls`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    setTimeout(() => { try { URL.revokeObjectURL(url); } catch (e) {} }, 1000);
+    showToast(`📊 엑셀 파일(${rows.length}건 · 내역+부분합 2시트)을 내보냈습니다!`);
+  };
+
+  const handleExportCondolenceCsv = (targetRows = condolenceList, scopeLabel = "전체", templateOnly = false) => {
+    if (!isCondolenceUnlocked) return;
+    const esc = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+    const header = ["날짜", "구분", "카테고리", "그룹", "성명", "당사자", "금액", "결제수단", "메모"].map(esc).join(",");
+    const lines = [header];
+    if (templateOnly) {
+      lines.push([getTodayStr(), "출금", "결혼식", "직장/동료", "홍길동", "수혁", "100000", "계좌이체", "예시 행(삭제 후 사용)"].map(esc).join(","));
+      lines.push([getTodayStr(), "입금", "출산/백일", "가족/친척", "김철수", "공통", "200000", "계좌이체", "둘째 출산 축하금"].map(esc).join(","));
+    } else {
+      (Array.isArray(targetRows) ? targetRows : []).forEach((r) => {
+        lines.push([
+          r.date || "",
+          r.type === "in" ? "입금" : "출금",
+          r.category || "",
+          r.group || "",
+          r.person || "",
+          r.owner || "공통",
+          Number(r.amount) || 0,
+          r.paymentMethod || "",
+          r.memo || ""
+        ].map(esc).join(","));
+      });
+    }
+    const blob = new Blob(["\uFEFF" + lines.join("\r\n")], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.setAttribute("download", templateOnly ? `경조사비_입력양식.csv` : `경조사비_입출금내역_${scopeLabel}_${getTodayStr()}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    setTimeout(() => { try { URL.revokeObjectURL(url); } catch (e) {} }, 1000);
+    showToast(templateOnly ? "📋 엑셀 입력 양식(.csv)을 다운로드했습니다." : `📄 CSV 파일(${targetRows.length}건)을 내보냈습니다.`);
+  };
+
+  const parseDelimitedTable = (rawText) => {
+    const text = String(rawText || "").replace(/^\uFEFF/, "");
+    // Check if SpreadsheetML XML (.xls exported from this app)
+    if (text.trim().startsWith("<?xml") && text.includes("<Worksheet")) {
+      try {
+        const doc = new DOMParser().parseFromString(text, "application/xml");
+        const firstSheet = doc.getElementsByTagName("Worksheet")[0];
+        if (firstSheet) {
+          const xmlRows = Array.from(firstSheet.getElementsByTagName("Row"));
+          return xmlRows.map((row) =>
+            Array.from(row.getElementsByTagName("Cell")).map((cell) => {
+              const d = cell.getElementsByTagName("Data")[0];
+              return d ? String(d.textContent || "").trim() : "";
+            })
+          );
+        }
+      } catch (e) {}
+    }
+    const firstLine = text.split(/\r?\n/)[0] || "";
+    const sep = firstLine.includes("\t") && !firstLine.includes(",") ? "	" : ",";
+    const rows = [];
+    let curRow = [];
+    let curCell = "";
+    let inQuotes = false;
+    for (let i = 0; i < text.length; i++) {
+      const ch = text[i];
+      const next = text[i + 1];
+      if (inQuotes) {
+        if (ch === '"' && next === '"') { curCell += '"'; i++; }
+        else if (ch === '"') { inQuotes = false; }
+        else { curCell += ch; }
+      } else {
+        if (ch === '"') { inQuotes = true; }
+        else if (ch === sep) { curRow.push(curCell.trim()); curCell = ""; }
+        else if (ch === "\r" || ch === "\n") {
+          if (ch === "\r" && next === "\n") i++;
+          curRow.push(curCell.trim());
+          if (curRow.some((c) => c !== "")) rows.push(curRow);
+          curRow = [];
+          curCell = "";
+        } else {
+          curCell += ch;
+        }
+      }
+    }
+    if (curCell.trim() !== "" || curRow.length > 0) {
+      curRow.push(curCell.trim());
+      if (curRow.some((c) => c !== "")) rows.push(curRow);
+    }
+    return rows;
+  };
+
+  // --- 네이티브 .xlsx (OpenXML ZIP) 멀티시트 파서 (외부 패키지 0개 · parseZip 재사용) ---
+  const xlsxColToIdx = (refStr) => {
+    const m = String(refStr || "").match(/^([A-Z]+)/i);
+    if (!m) return -1;
+    const letters = m[1].toUpperCase();
+    let idx = 0;
+    for (let i = 0; i < letters.length; i++) {
+      idx = idx * 26 + (letters.charCodeAt(i) - 64);
+    }
+    return idx - 1;
+  };
+
+  const parseXlsxWorkbookSheets = async (arrayBuffer) => {
+    const filesMap = await parseZip(arrayBuffer);
+    const dec = new TextDecoder("utf-8");
+    const readText = (path) => {
+      const key = Object.keys(filesMap).find((k) => k.toLowerCase() === path.toLowerCase());
+      return key ? dec.decode(filesMap[key]) : "";
+    };
+
+    const sharedStrings = [];
+    const sstXml = readText("xl/sharedStrings.xml");
+    if (sstXml) {
+      const sstDoc = new DOMParser().parseFromString(sstXml, "application/xml");
+      const siNodes = Array.from(sstDoc.getElementsByTagName("si"));
+      siNodes.forEach((si) => {
+        const tNodes = Array.from(si.getElementsByTagName("t"));
+        sharedStrings.push(tNodes.map((t) => t.textContent || "").join(""));
+      });
+    }
+
+    const relMap = {};
+    const relsXml = readText("xl/_rels/workbook.xml.rels");
+    if (relsXml) {
+      const relDoc = new DOMParser().parseFromString(relsXml, "application/xml");
+      Array.from(relDoc.getElementsByTagName("Relationship")).forEach((rel) => {
+        const id = rel.getAttribute("Id");
+        const target = rel.getAttribute("Target");
+        if (id && target) relMap[id] = target.replace(/^\/+/, "");
+      });
+    }
+
+    const wbXml = readText("xl/workbook.xml");
+    const sheetDefs = [];
+    if (wbXml) {
+      const wbDoc = new DOMParser().parseFromString(wbXml, "application/xml");
+      Array.from(wbDoc.getElementsByTagName("sheet")).forEach((sh, idx) => {
+        const name = sh.getAttribute("name") || `Sheet${idx + 1}`;
+        const rid = sh.getAttribute("r:id") || sh.getAttributeNS("http://schemas.openxmlformats.org/officeDocument/2006/relationships", "id") || "";
+        const target = relMap[rid] || `worksheets/sheet${idx + 1}.xml`;
+        const fullPath = target.startsWith("xl/") ? target : `xl/${target}`;
+        sheetDefs.push({ name, path: fullPath });
+      });
+    }
+
+    const sheets = [];
+    for (const def of sheetDefs) {
+      const shXml = readText(def.path);
+      if (!shXml) continue;
+      const shDoc = new DOMParser().parseFromString(shXml, "application/xml");
+      const rowNodes = Array.from(shDoc.getElementsByTagName("row"));
+      const rows = [];
+      rowNodes.forEach((rowEl) => {
+        const cells = Array.from(rowEl.getElementsByTagName("c"));
+        const arr = [];
+        let maxCol = -1;
+        cells.forEach((cEl) => {
+          const ref = cEl.getAttribute("r") || "";
+          const cIdx = xlsxColToIdx(ref);
+          const col = cIdx >= 0 ? cIdx : arr.length;
+          const tAttr = cEl.getAttribute("t") || "";
+          let val = "";
+          if (tAttr === "s") {
+            const vEl = cEl.getElementsByTagName("v")[0];
+            const si = vEl ? Number(vEl.textContent) : -1;
+            val = Number.isFinite(si) && sharedStrings[si] !== undefined ? sharedStrings[si] : "";
+          } else if (tAttr === "inlineStr") {
+            const tNodes = Array.from(cEl.getElementsByTagName("t"));
+            val = tNodes.map((t) => t.textContent || "").join("");
+          } else {
+            const vEl = cEl.getElementsByTagName("v")[0];
+            val = vEl ? String(vEl.textContent || "") : "";
+          }
+          arr[col] = String(val || "").trim();
+          if (col > maxCol) maxCol = col;
+        });
+        if (maxCol >= 0) {
+          for (let i = 0; i <= maxCol; i++) {
+            if (arr[i] === undefined) arr[i] = "";
+          }
+          if (arr.some((c) => c !== "")) rows.push(arr);
+        }
+      });
+      if (rows.length > 0) sheets.push({ name: def.name, rows });
+    }
+    return sheets;
+  };
+
+  const cleanImportedGroupText = (rawGrp, rawMid = "", rawSub = "") => {
+    const cleanPieces = (s) =>
+      String(s || "")
+        .split(/[-–—]+/)
+        .map((x) => x.trim())
+        .filter((x) => x && x !== "본인" && x !== "미상");
+    const subClean = String(rawSub || "").trim();
+    if (subClean) return subClean;
+    const grpParts = cleanPieces(rawGrp);
+    if (grpParts.length > 0) return grpParts[grpParts.length - 1];
+    const midClean = String(rawMid || "").trim();
+    if (midClean && midClean !== "본인") return midClean;
+    return "";
+  };
+
+  const inferCondolenceDefaultsFromMeta = (fileName, sheetName, sampleRows) => {
+    const joined = `${fileName || ""} ${sheetName || ""} ${sampleRows.slice(0, 6).map((r) => r.join(" ")).join(" ")}`;
+    const isWedding = /축의|결혼|신랑|신부|웨딩/.test(joined);
+    const isFuneral = /조의|부의|장례|빈소/.test(joined);
+    const isDol = /돌잔치|백일|출산/.test(joined);
+    const category = isWedding
+      ? (condolenceCategories.find((c) => c.includes("결혼")) || condolenceCategories[0] || "결혼식")
+      : isFuneral
+      ? (condolenceCategories.find((c) => c.includes("장례") || c.includes("조의")) || condolenceCategories[0] || "장례식/조의")
+      : isDol
+      ? (condolenceCategories.find((c) => c.includes("돌") || c.includes("출산")) || condolenceCategories[0] || "돌잔치")
+      : (condolenceCategories[0] || "결혼식");
+    const type = /지출|보냄|출금/.test(joined) && !/축의금정리|축의금\s*명단|입금방식|입금방법/.test(joined) ? "out" : "in";
+    let date = getTodayStr();
+    const mmdd = String(fileName || "").match(/(?:^|[^0-9])(0[1-9]|1[0-2])(0[1-9]|[12][0-9]|3[01])(?:[^0-9]|$)/);
+    if (mmdd && mmdd[1] === "04" && mmdd[2] === "02") {
+      date = "2023-04-02";
+    } else if (mmdd) {
+      date = `${new Date().getFullYear()}-${mmdd[1]}-${mmdd[2]}`;
+    }
+    return { date, type, category };
+  };
+
+  const detectCondolenceSchemaHeuristic = (rows) => {
+    let headerRowIndex = 0;
+    const headerKeywords = ["성명", "이름", "금액", "amount", "구분", "입금방법", "입금방식", "group", "중분류", "소분류", "비고", "날짜"];
+    let bestScore = -1;
+    for (let i = 0; i < Math.min(10, rows.length); i++) {
+      const cells = rows[i].map((c) => String(c || "").replace(/\s+/g, "").toLowerCase());
+      const score = cells.reduce((s, c) => s + (headerKeywords.some((k) => c.includes(k)) ? 1 : 0), 0);
+      if (score > bestScore) {
+        bestScore = score;
+        headerRowIndex = i;
+      }
+    }
+    const headers = (rows[headerRowIndex] || []).map((h) => String(h || "").replace(/\s+/g, "").toLowerCase());
+    const findCol = (kws) => headers.findIndex((h) => kws.some((k) => h.includes(k)));
+    return {
+      headerRowIndex,
+      colMap: {
+        date: findCol(["날짜", "일자", "date"]),
+        type: findCol(["입출", "유형", "type"]),
+        category: findCol(["카테고리", "행사", "종류", "category"]),
+        midGroup: findCol(["중분류"]),
+        subGroup: findCol(["소분류"]),
+        group: findCol(["group", "그룹", "소속", "관계"]),
+        person: findCol(["성명", "이름", "인별", "대상", "person", "name"]),
+        owner: findCol(["당사자", "주체", "계정", "owner"]),
+        amount: findCol(["amount", "금액", "액수", "축의금"]),
+        inAmt: findCol(["입금액"]),
+        outAmt: findCol(["출금액"]),
+        payMethod: findCol(["입금방법", "입금방식", "결제", "수단", "방법"]),
+        memo: findCol(["비고", "메모", "내용", "memo", "note"])
+      }
+    };
+  };
+
+  const buildCondolencePreviewFromRows = (rows, schema, batchDef, fileName, sheetName) => {
+    const hIdx = Math.max(0, Number(schema?.headerRowIndex) || 0);
+    const cm = schema?.colMap || {};
+    const existingKeys = new Set(
+      condolenceList.map((x) => `${x.date}|${x.type}|${String(x.person || "").trim()}|${Number(x.amount) || 0}|${String(x.category || "").trim()}`)
+    );
+    const parsedItems = [];
+    let dupCount = 0;
+    let skipCount = 0;
+    const summaryWordRe = /^(합계|총계|소계|계|누계|total|sum|아빠통장)$/i;
+
+    for (let i = hIdx + 1; i < rows.length; i++) {
+      const r = rows[i] || [];
+      if (r.every((c) => !String(c || "").trim())) continue;
+      if (r.some((c) => summaryWordRe.test(String(c || "").trim()))) {
+        skipCount++;
+        continue;
+      }
+
+      const personRaw = cm.person >= 0 ? String(r[cm.person] || "").trim() : "";
+      if (!personRaw || summaryWordRe.test(personRaw) || /^\d+$/.test(personRaw)) {
+        skipCount++;
+        continue;
+      }
+
+      const rawDate = cm.date >= 0 ? String(r[cm.date] || "").trim().replace(/[./]/g, "-") : "";
+      const dm = rawDate.match(/(\d{4})-(\d{1,2})-(\d{1,2})/);
+      const dateStr = dm
+        ? `${dm[1]}-${String(dm[2]).padStart(2, "0")}-${String(dm[3]).padStart(2, "0")}`
+        : (batchDef.date || getTodayStr());
+
+      const rawType = cm.type >= 0 ? String(r[cm.type] || "").trim() : "";
+      const parseExcelNum = (v) => {
+        const cleaned = String(v ?? "").replace(/,/g, "").trim();
+        if (!cleaned) return 0;
+        const direct = Number(cleaned);
+        if (Number.isFinite(direct)) return Math.round(Math.abs(direct));
+        const m = cleaned.match(/-?\d+(?:\.\d+)?/);
+        return m ? Math.round(Math.abs(Number(m[0]))) : 0;
+      };
+      const inVal = cm.inAmt >= 0 ? parseExcelNum(r[cm.inAmt]) : 0;
+      const outVal = cm.outAmt >= 0 ? parseExcelNum(r[cm.outAmt]) : 0;
+      let amt = cm.amount >= 0 ? parseExcelNum(r[cm.amount]) : 0;
+      let type = batchDef.type === "out" ? "out" : "in";
+      if (rawType) {
+        if (/출금|보냄|지출|out|-/i.test(rawType)) type = "out";
+        else if (/입금|받음|수입|in|\+/i.test(rawType)) type = "in";
+      }
+      if (!amt && (inVal > 0 || outVal > 0)) {
+        if (inVal > 0) { amt = inVal; type = "in"; }
+        else { amt = outVal; type = "out"; }
+      }
+      const payRaw = cm.payMethod >= 0 ? String(r[cm.payMethod] || "").trim() : "";
+      if (!Number.isFinite(amt) || amt <= 0) {
+        if (!batchDef.includeZeroItems) {
+          skipCount++;
+          continue;
+        }
+        amt = 0;
+      }
+
+      const rawCat = cm.category >= 0 ? String(r[cm.category] || "").trim() : "";
+      const category = rawCat || batchDef.category || condolenceCategories[0] || "결혼식";
+
+      const rawMid = cm.midGroup >= 0 ? String(r[cm.midGroup] || "").trim() : "";
+      const rawSub = cm.subGroup >= 0 ? String(r[cm.subGroup] || "").trim() : "";
+      const rawGrp = cm.group >= 0 ? String(r[cm.group] || "").trim() : "";
+      let group = cleanImportedGroupText(rawGrp, rawMid, rawSub);
+      if (batchDef.group) {
+        if (batchDef.groupMode === "overwrite_all" || !group) {
+          group = batchDef.group;
+        }
+      }
+      if (!group) group = "미분류";
+
+      const ownerRaw = cm.owner >= 0 ? String(r[cm.owner] || "").trim() : "";
+      const owner =
+        ownerRaw === "수혁" || ownerRaw === "김수혁"
+          ? "수혁"
+          : ownerRaw === "아리" || ownerRaw === "아리나" || ownerRaw === "최아리나"
+          ? "아리"
+          : (batchDef.owner || "공통");
+
+      let paymentMethod = condolencePayMethods[0] || CONDOLENCE_PAY_METHODS[0];
+      if (/계좌|이체|송금/.test(payRaw)) paymentMethod = "계좌이체";
+      else if (/현금|축의금|봉투/.test(payRaw)) paymentMethod = "현금";
+      else if (/화\s*환|선물|기프티콘/.test(payRaw)) paymentMethod = payRaw.replace(/\s+/g, "") || "선물/기프티콘";
+      else if (payRaw) paymentMethod = payRaw;
+
+      const memoParts = [];
+      if (batchDef.memoPrefix) memoParts.push(batchDef.memoPrefix.trim());
+      if (rawMid && rawMid !== "본인" && rawMid !== group) memoParts.push(rawMid);
+      if (cm.memo >= 0 && r[cm.memo]) memoParts.push(String(r[cm.memo]).trim());
+      if (/화\s*환/.test(payRaw) && amt === 0) memoParts.push("화환");
+      const memo = memoParts.filter(Boolean).join(" · ");
+
+      const key = `${dateStr}|${type}|${personRaw}|${amt}|${category}`;
+      if (existingKeys.has(key)) {
+        dupCount++;
+        continue;
+      }
+      existingKeys.add(key);
+      parsedItems.push({
+        id: `cond-imp-${Date.now()}-${i}-${Math.random().toString(36).slice(2, 5)}`,
+        date: dateStr,
+        type,
+        category,
+        group,
+        person: personRaw,
+        owner,
+        amount: amt,
+        paymentMethod,
+        memo,
+        updatedAtMs: Date.now(),
+        updatedBy: actorName || "수혁"
+      });
+    }
+
+    return {
+      fileName: sheetName ? `${fileName} [${sheetName}]` : fileName,
+      sheetName: sheetName || "",
+      schema,
+      totalCount: parsedItems.length + dupCount,
+      freshCount: parsedItems.length,
+      dupCount,
+      skipCount,
+      totalAmount: parsedItems.reduce((s, it) => s + (Number(it.amount) || 0), 0),
+      items: parsedItems
+    };
+  };
+
+  const analyzeAndBuildCondolenceSheet = async (sheetObj, fileName, overrideBatchDef = null, useAi = true) => {
+    if (!sheetObj || !Array.isArray(sheetObj.rows) || sheetObj.rows.length < 2) {
+      showToast("⚠️ 선택한 시트에 불러올 데이터 행이 부족합니다.");
+      return;
+    }
+    const heuristicSchema = detectCondolenceSchemaHeuristic(sheetObj.rows);
+    const inferredDef = inferCondolenceDefaultsFromMeta(fileName, sheetObj.name, sheetObj.rows);
+    let nextBatchDef = overrideBatchDef || {
+      ...condolenceBatchDefaults,
+      date: inferredDef.date,
+      type: inferredDef.type,
+      category: inferredDef.category
+    };
+
+    let finalSchema = heuristicSchema;
+    let engineLabel = "⚡ 스마트 자동 분석";
+
+    const hasAi = Boolean(String(geminiApiKey || EMBEDDED_GEMINI_KEY || "").trim() || String(openaiApiKey || "").trim());
+    if (useAi && hasAi) {
+      setCondolenceAiAnalyzing(true);
+      try {
+        const sampleRows = sheetObj.rows.slice(0, 18).map((r, idx) => `${idx}: ${JSON.stringify(r.slice(0, 12))}`).join("\n");
+        const promptText = `아래 한국어 경조사비/축의금 엑셀 시트의 앞부분 18행 샘플을 보고 컬럼 구조(0-based index)와 기본 메타정보를 JSON 객체로만 출력하세요.\n파일명: ${fileName}\n시트명: ${sheetObj.name}\n샘플:\n${sampleRows}\n\n규칙:\n- headerRowIndex: 실제 컬럼 헤더가 있는 행 번호(상단에 합계/제목행이 있으면 건너뜀)\n- colMap: 존재하지 않는 컬럼은 -1로 지정 { "date": -1, "type": -1, "category": -1, "midGroup": -1, "subGroup": -1, "group": -1, "person": -1, "owner": -1, "amount": -1, "inAmt": -1, "outAmt": -1, "payMethod": -1, "memo": -1 }\n- suggestedType: "in"(축의금/받음) 또는 "out"(보냄)\n- suggestedCategory: 파일명/내용 기준 경조사 분류(예: "결혼식", "장례식/조의", "돌잔치")\n- suggestedDate: 파일명에 0402 같은 날짜 힌트가 있으면 YYYY-MM-DD(결혼식 0402는 2023-04-02), 없으면 ""\nJSON 객체만 출력하세요.`;
+        let usedProvider = "";
+        const aiRes = await callReliableAiEngine({
+          apiKey: geminiApiKey,
+          openaiApiKey,
+          aiProvider,
+          promptText,
+          temperature: 0.1,
+          expectObject: true,
+          onProviderUsed: (p) => { usedProvider = p; }
+        });
+        if (aiRes && typeof aiRes === "object" && aiRes.colMap && Number(aiRes.colMap.person) >= 0) {
+          finalSchema = {
+            headerRowIndex: Number.isFinite(Number(aiRes.headerRowIndex)) ? Number(aiRes.headerRowIndex) : heuristicSchema.headerRowIndex,
+            colMap: { ...heuristicSchema.colMap, ...aiRes.colMap }
+          };
+          if (!overrideBatchDef) {
+            nextBatchDef = {
+              ...nextBatchDef,
+              type: aiRes.suggestedType === "out" ? "out" : "in",
+              category: aiRes.suggestedCategory || nextBatchDef.category,
+              date: /^\d{4}-\d{2}-\d{2}$/.test(String(aiRes.suggestedDate || "")) ? aiRes.suggestedDate : nextBatchDef.date
+            };
+          }
+          engineLabel = `✨ AI 구조 분석 (${usedProvider || "AI"})`;
+        }
+      } catch (err) {
+        engineLabel = "⚡ 스마트 자동 분석 (AI 폴백)";
+      } finally {
+        setCondolenceAiAnalyzing(false);
+      }
+    }
+
+    setCondolenceBatchDefaults(nextBatchDef);
+    setCondolenceAiEngineLabel(engineLabel);
+    setCondolenceImportSearch("");
+    setCondolenceImportSelectedIds([]);
+    const preview = buildCondolencePreviewFromRows(sheetObj.rows, finalSchema, nextBatchDef, fileName, sheetObj.name);
+    setCondolenceImportPreview(preview);
+  };
+
+  const handleSelectCondolenceImportFile = async (e) => {
+    const file = e.target.files?.[0];
+    if (e.target) e.target.value = "";
+    if (!file) return;
+    try {
+      const buf = await file.arrayBuffer();
+      const lowerName = String(file.name || "").toLowerCase();
+      let sheets = [];
+      const u8 = new Uint8Array(buf.slice(0, 4));
+      const isZipMagic = u8[0] === 0x50 && u8[1] === 0x4b;
+
+      if (lowerName.endsWith(".xlsx") || isZipMagic) {
+        sheets = await parseXlsxWorkbookSheets(buf);
+      } else {
+        let text = new TextDecoder("utf-8").decode(buf);
+        if (text.includes("\uFFFD")) {
+          try { text = new TextDecoder("euc-kr").decode(buf); } catch (err) {}
+        }
+        const rows = parseDelimitedTable(text);
+        if (rows.length > 0) sheets = [{ name: "기본 시트", rows }];
+      }
+
+      if (sheets.length === 0) {
+        showToast("⚠️ 시트 데이터를 읽지 못했습니다. (.xlsx / .xls / .csv 지원)");
+        return;
+      }
+      setCondolenceImportFileName(file.name);
+      setCondolenceWorkbookSheets(sheets);
+      // 행 수가 가장 많거나 'Sheet2'/'정리' 등 상세 컬럼이 있는 시트를 기본 우선 선택
+      let bestIdx = 0;
+      let bestColScore = -1;
+      sheets.forEach((sh, idx) => {
+        const sc = detectCondolenceSchemaHeuristic(sh.rows);
+        const colCnt = Object.values(sc.colMap).filter((v) => v >= 0).length;
+        if (colCnt > bestColScore) {
+          bestColScore = colCnt;
+          bestIdx = idx;
+        }
+      });
+      setCondolenceActiveSheetIdx(bestIdx);
+      await analyzeAndBuildCondolenceSheet(sheets[bestIdx], file.name, null, true);
+    } catch (err) {
+      showToast(`⚠️ 파일 분석 실패: ${err?.message || ".xlsx/.xls/.csv 형식을 확인해 주세요."}`);
+    }
+  };
+
+  const handleApplyCondolenceBatchDefaultsToPreview = () => {
+    const curSheet = condolenceWorkbookSheets[condolenceActiveSheetIdx];
+    if (!curSheet || !condolenceImportPreview) return;
+    const rebuilt = buildCondolencePreviewFromRows(
+      curSheet.rows,
+      condolenceImportPreview.schema,
+      condolenceBatchDefaults,
+      condolenceImportFileName,
+      curSheet.name
+    );
+    setCondolenceImportPreview(rebuilt);
+    setCondolenceImportSelectedIds([]);
+    showToast(`✅ 일괄 기재(${condolenceBatchDefaults.category} · ${condolenceBatchDefaults.date})를 ${rebuilt.freshCount}건에 반영했습니다.`);
+  };
+
+  const handleAssignGroupInImportPreview = () => {
+    if (!condolenceImportPreview || condolenceImportSelectedIds.length === 0) return;
+    const targetGroup = String(condolenceImportNewGroup || condolenceImportAssignGroup || "").trim();
+    if (!targetGroup) {
+      showToast("⚠️ 지정할 그룹을 선택하거나 입력해 주세요.");
+      return;
+    }
+    const idSet = new Set(condolenceImportSelectedIds);
+    const updatedItems = condolenceImportPreview.items.map((it) =>
+      idSet.has(it.id) ? { ...it, group: targetGroup } : it
+    );
+    setCondolenceImportPreview({ ...condolenceImportPreview, items: updatedItems });
+    setCondolenceImportSelectedIds([]);
+    setCondolenceImportNewGroup("");
+    showToast(`👥 선택한 ${idSet.size}명을 '${targetGroup}' 그룹으로 지정했습니다.`);
+  };
+
+  const handleApplyMainCondolenceBulkUpdate = async () => {
+    if (!isCondolenceUnlocked || condolenceBulkIds.length === 0) return;
+    const nextGroup = String(condolenceBulkNewGroup || condolenceBulkGroup || "").trim();
+    const nextCat = String(condolenceBulkCat || "").trim();
+    const nextOwner = String(condolenceBulkOwner || "").trim();
+    if (!nextGroup && !nextCat && !nextOwner) {
+      showToast("⚠️ 변경할 그룹, 카테고리, 또는 당사자를 선택해 주세요.");
+      return;
+    }
+    setCondolenceBulkBusy(true);
+    try {
+      const idSet = new Set(condolenceBulkIds);
+      const nowMs = Date.now();
+      const updatedRecords = [];
+      const nextList = condolenceList.map((it) => {
+        if (!idSet.has(it.id)) return it;
+        const patched = {
+          ...it,
+          ...(nextGroup ? { group: nextGroup } : {}),
+          ...(nextCat ? { category: nextCat } : {}),
+          ...(nextOwner ? { owner: nextOwner } : {}),
+          updatedAtMs: nowMs,
+          updatedBy: actorName || "수혁"
+        };
+        updatedRecords.push(patched);
+        return patched;
+      });
+      setCondolenceList(nextList);
+      try { localStorage.setItem("kim_condolence_cache_v1", JSON.stringify(nextList)); } catch (e) {}
+
+      if (nextGroup && !condolenceGroups.includes(nextGroup)) {
+        await saveCustomCategoriesToCloud({
+          ...customCategories,
+          condolence_group: [...condolenceGroups, nextGroup]
+        });
+      }
+
+      if (user && db && updatedRecords.length > 0) {
+        beginWrite();
+        try {
+          for (let i = 0; i < updatedRecords.length; i += 200) {
+            const batch = writeBatch(db);
+            updatedRecords.slice(i, i + 200).forEach((rec) => {
+              batch.set(getDocRef("family_condolence_v1", rec.id), rec, { merge: true });
+            });
+            await batch.commit();
+          }
+        } finally {
+          endWrite();
+        }
+      }
+      setCondolenceBulkIds([]);
+      setCondolenceBulkNewGroup("");
+      setCondolenceBulkGroup("");
+      setCondolenceBulkCat("");
+      setCondolenceBulkOwner("");
+      showToast(`✅ 선택 ${updatedRecords.length}건 일괄 반영 완료!`);
+    } catch (err) {
+      setSyncErrorMsg(`경조사비 일괄 수정 오류: ${err?.message || "네트워크 확인"}`);
+    } finally {
+      setCondolenceBulkBusy(false);
+    }
+  };
+
+  const handleConfirmCondolenceImport = async () => {
+    if (!condolenceImportPreview || condolenceImportPreview.freshCount === 0) return;
+    setCondolenceImportBusy(true);
+    try {
+      const fresh = condolenceImportPreview.items;
+      const merged = [...fresh, ...condolenceList].sort(
+        (a, b) => String(b.date || "").localeCompare(String(a.date || "")) || (Number(b.updatedAtMs) || 0) - (Number(a.updatedAtMs) || 0)
+      );
+      setCondolenceList(merged);
+      try { localStorage.setItem("kim_condolence_cache_v1", JSON.stringify(merged)); } catch (e) {}
+
+      // 신규 카테고리/그룹 자동 반영
+      const nextCats = [...condolenceCategories];
+      const nextGroups = [...condolenceGroups];
+      let catChanged = false;
+      fresh.forEach((it) => {
+        if (it.category && !nextCats.includes(it.category)) { nextCats.push(it.category); catChanged = true; }
+        if (it.group && !nextGroups.includes(it.group)) { nextGroups.push(it.group); catChanged = true; }
+      });
+      if (catChanged) {
+        await saveCustomCategoriesToCloud({ ...customCategories, condolence_cat: nextCats, condolence_group: nextGroups });
+      }
+
+      if (user && db) {
+        beginWrite();
+        try {
+          for (let i = 0; i < fresh.length; i += 200) {
+            const batch = writeBatch(db);
+            fresh.slice(i, i + 200).forEach((item) => {
+              batch.set(getDocRef("family_condolence_v1", item.id), item, { merge: true });
+            });
+            await batch.commit();
+          }
+        } finally {
+          endWrite();
+        }
+      }
+      setCondolenceImportPreview(null);
+      setIsCondolenceExcelModalOpen(false);
+      showToast(`☁️ ${fresh.length}건의 경조사비 내역을 클라우드에 저장했습니다!`);
+    } catch (err) {
+      setSyncErrorMsg(`경조사비 가져오기 오류: ${err?.message || "권한/네트워크 확인"}`);
+    } finally {
+      setCondolenceImportBusy(false);
+    }
   };
 
 
@@ -13383,7 +14625,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
     setHouseForm({
       kind: k,
       title: editItem?.title || "",
-      room: editItem?.room || "거실",
+      room: editItem?.room || houseStorageRooms[0] || "거실",
       detailLoc: editItem?.detailLoc || "",
       brand: editItem?.brand || "",
       purchaseDate: editItem?.purchaseDate || getTodayStr(),
@@ -14527,6 +15769,9 @@ ${item.memo}` : `${item.title} 다녀옴!`,
         setCategoryManageKind("");
         setIsPrivateCalModalOpen(false);
         setIsPrivateCalCsvModalOpen(false);
+        setIsCondolenceFormOpen(false);
+        setIsCondolenceExcelModalOpen(false);
+        setIsCondolencePinModalOpen(false);
         setCalDayPopupDate(null);
         setCalDayPopupItem(null);
         setIsScheduleModalOpen(false);
@@ -14547,7 +15792,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
     };
     window.addEventListener("keydown", onEsc);
     return () => window.removeEventListener("keydown", onEsc);
-  }, [isMoreNavOpen, isHomeEditMode, isQuickShoppingOpen, isGrowthPctPickerOpen, isHomeRoutineFilterOpen, isRoutineRangeEditOpen, isQuickFabOpen, isRoutineModalOpen, isActivityModalOpen, isEditorUnlockModalOpen, isMealCopyModalOpen, diaryExportPreviewUrl, diaryLightboxUrl, diaryImportModal, cropModal, isWeatherModalOpen, liveActivityPopup, activityEditModal, zipImportPicker, magazineMonth, isSettingsOpen, isHeroPhotoModalOpen, isPageModalOpen, pageMenuTargetId, isPagePasteModalOpen, activeTableTaskModal, isDreamLinksModalOpen, isPatchModalOpen, isBucketModalOpen, isHouseModalOpen, isHandoverModalOpen, isHomeDdayPickerOpen, categoryManageKind, isPrivateCalModalOpen, isPrivateCalCsvModalOpen, calDayPopupDate, isScheduleModalOpen, isMealModalOpen, isFridgeModalOpen, isNoticeModalOpen, isRecipeModalOpen, isDaycareModalOpen, isReceiptModalOpen, isShoppingPhotoModalOpen, zoomedRecipePhoto, isInventoryExportOpen, stockInItem, quickLogRecipe, cookingConfirmModal, quickFridgeItem]);
+  }, [isMoreNavOpen, isHomeEditMode, isQuickShoppingOpen, isGrowthPctPickerOpen, isHomeRoutineFilterOpen, isRoutineRangeEditOpen, isQuickFabOpen, isRoutineModalOpen, isActivityModalOpen, isEditorUnlockModalOpen, isMealCopyModalOpen, diaryExportPreviewUrl, diaryLightboxUrl, diaryImportModal, cropModal, isWeatherModalOpen, liveActivityPopup, activityEditModal, zipImportPicker, magazineMonth, isSettingsOpen, isHeroPhotoModalOpen, isPageModalOpen, pageMenuTargetId, isPagePasteModalOpen, activeTableTaskModal, isDreamLinksModalOpen, isPatchModalOpen, isBucketModalOpen, isHouseModalOpen, isHandoverModalOpen, isHomeDdayPickerOpen, categoryManageKind, isPrivateCalModalOpen, isPrivateCalCsvModalOpen, isCondolenceFormOpen, isCondolenceExcelModalOpen, isCondolencePinModalOpen, calDayPopupDate, isScheduleModalOpen, isMealModalOpen, isFridgeModalOpen, isNoticeModalOpen, isRecipeModalOpen, isDaycareModalOpen, isReceiptModalOpen, isShoppingPhotoModalOpen, zoomedRecipePhoto, isInventoryExportOpen, stockInItem, quickLogRecipe, cookingConfirmModal, quickFridgeItem]);
 
   // ==========================================
   // 모바일·브라우저 뒤로가기 이전 화면 이동 (Chrome User-Gesture History API + URL 해시)
@@ -14603,6 +15848,9 @@ ${item.memo}` : `${item.title} 다녀옴!`,
     Boolean(categoryManageKind) ||
     isPrivateCalModalOpen ||
     isPrivateCalCsvModalOpen ||
+    isCondolenceFormOpen ||
+    isCondolenceExcelModalOpen ||
+    isCondolencePinModalOpen ||
     Boolean(calDayPopupDate) ||
     isScheduleModalOpen ||
     isMealModalOpen ||
@@ -14653,6 +15901,9 @@ ${item.memo}` : `${item.title} 다녀옴!`,
       setIsBucketModalOpen(false);
       setIsPrivateCalModalOpen(false);
       setIsPrivateCalCsvModalOpen(false);
+      setIsCondolenceFormOpen(false);
+      setIsCondolenceExcelModalOpen(false);
+      setIsCondolencePinModalOpen(false);
       setCalDayPopupDate(null);
       setCalDayPopupItem(null);
       setIsScheduleModalOpen(false);
@@ -14809,7 +16060,8 @@ ${item.memo}` : `${item.title} 다녀옴!`,
       pages: "공유노트",
       recipes: "레시피",
       baby: "육아",
-      house: "살림수첩"
+      house: "살림수첩",
+      condolence: "경조사비"
     };
     if (typeof document !== "undefined") {
       const label = TAB_TITLES[activeTab];
@@ -15072,6 +16324,9 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                   const curYm = getCurrentYearMonth();
                   try { localStorage.setItem("kim_backup_done_month", curYm); } catch (e) {}
                   setBackupBannerDismissedMonth(curYm);
+                  if (user && db) {
+                    setDoc(getDocRef("family_meta_v4", "backup_status"), { doneMonth: curYm, updatedAtMs: Date.now() }, { merge: true }).catch(() => {});
+                  }
                 }}
                 className="p-1 text-white/80 hover:text-white"
               >
@@ -15397,7 +16652,8 @@ ${item.memo}` : `${item.title} 다녀옴!`,
               bucket: "설레는 가족 버킷리스트 🌟",
               house: "든든한 우리집 살림수첩 🏠",
               pages: "공유노트 🗂️",
-              ai: "똑똑한 AI 식단·요리 ✨"
+              ai: "똑똑한 AI 식단·요리 ✨",
+              condolence: "경조사비 입출금내역 💌"
             }[activeTab] || "우리 가족 홈 ♡"}
           </h1>
 
@@ -16336,7 +17592,7 @@ time: "", location: "",
                         type="button"
                         onClick={() => {
                           setRoutineViewMode("timetable");
-                          try { localStorage.setItem("kim_routine_view_mode_v1", "timetable"); } catch (e) {}
+                          try { localStorage.setItem("kim_routine_view_mode_v1", "timetable"); } catch (e) {} syncHomeSettingsToCloud(null, null, null, null, "timetable");
                           setScheduleMemberFilter(homeRoutineTargetFilter);
                           setRoutineTargetFilter(homeRoutineTargetFilter);
                           setScheduleSubTab("routine");
@@ -19437,7 +20693,10 @@ time: "", location: "",
                               setScheduleForm({
                                 title: "",
                                 date: scheduleSelectedDate,
-                                category: "할일(To-Do)",
+                                endDate: "",
+                                time: "",
+                                location: "",
+                                category: scheduleCategories.includes("할일(To-Do)") ? "할일(To-Do)" : (scheduleCategories[0] || "할일(To-Do)"),
                                 members:
                                   (scheduleMemberFilter === "전체" || scheduleMemberFilter === "공통")
                                     ? ["수혁", "아리나", "시목", "시율"]
@@ -19446,8 +20705,8 @@ time: "", location: "",
                                 showDday: false,
                                 hasOriginYear: false,
                                 memo: "",
-                            attachments: []
-                          });
+                                attachments: []
+                              });
                               setIsScheduleModalOpen(true);
                             }
                           }}
@@ -20267,7 +21526,7 @@ time: "", location: "",
                   onClick={() => {
                     const next = routineViewMode === "timetable" ? "card" : "timetable";
                     setRoutineViewMode(next);
-                    try { localStorage.setItem("kim_routine_view_mode_v1", next); } catch (e) {}
+                    try { localStorage.setItem("kim_routine_view_mode_v1", next); } catch (e) {} syncHomeSettingsToCloud(null, null, null, null, next);
                   }}
                   className={`px-2 py-1.5 rounded-xl text-[11.5px] font-extrabold border whitespace-nowrap ${
                     routineViewMode === "timetable"
@@ -21771,6 +23030,16 @@ time: "", location: "",
                                 {isPinnedHome ? "📌 고정중" : "📌 홈"}
                               </button>
                             )}
+                            {String(item.category || "").includes("경조사") && (
+                              <button
+                                type="button"
+                                onClick={() => handleScheduleToCondolence(item)}
+                                className="h-7 px-1.5 rounded-lg bg-stone-50 hover:bg-emerald-50 border border-stone-200 text-stone-600 hover:text-emerald-800 text-[10.5px] font-extrabold whitespace-nowrap shrink-0"
+                                title="경조사비 입출금 기록"
+                              >
+                                💌 경조사
+                              </button>
+                            )}
                             {canEditTab("notices") && (
                               <button
                                 type="button"
@@ -22400,7 +23669,7 @@ time: "", location: "",
                       <select
                         value={bulkTargetZone}
                         onChange={(e) => setBulkTargetZone(e.target.value)}
-                        className="flex-1 px-2 py-1 rounded-lg border border-stone-300 bg-white text-[12.5px] font-bold text-stone-800"
+                        className="flex-1 min-w-0 truncate px-2 py-1 rounded-lg border border-stone-300 bg-white text-[12.5px] font-bold text-stone-800"
                       >
                         {FRIDGE_SHELF_ZONES.map((z) => (
                           <option key={z} value={z}>{z}</option>
@@ -24568,7 +25837,7 @@ time: "", location: "",
                   value={bucketMemberFilter}
                   onChange={(e) => setBucketMemberFilter(e.target.value)}
                   aria-label="가족 필터"
-                  className="px-2 py-1 rounded-xl border border-stone-200 bg-stone-50 text-[11.5px] font-bold text-stone-700"
+                  className="min-w-0 max-w-[115px] truncate px-2 py-1 rounded-xl border border-stone-200 bg-stone-50 text-[11.5px] font-bold text-stone-700"
                 >
                   <option value="전체">👨‍👩‍👧‍👦 가족 전체</option>
                   {FAMILY_MEMBERS.map((m) => (
@@ -24579,7 +25848,7 @@ time: "", location: "",
                   value={bucketCatFilter}
                   onChange={(e) => setBucketCatFilter(e.target.value)}
                   aria-label="분류 필터"
-                  className="px-2 py-1 rounded-xl border border-stone-200 bg-stone-50 text-[11.5px] font-bold text-stone-700"
+                  className="min-w-0 max-w-[125px] truncate px-2 py-1 rounded-xl border border-stone-200 bg-stone-50 text-[11.5px] font-bold text-stone-700"
                 >
                   {["전체", ...bucketCategories].map((cat) => (
                     <option key={cat} value={cat}>{cat === "전체" ? "🏷️ 분류 전체" : cat}</option>
@@ -25572,6 +26841,772 @@ time: "", location: "",
           </div>
         );
       })())}
+
+
+      {/* ==========================================
+          🔒 비밀메뉴: 경조사비 입출금내역 (홈 화면 비노출 · 비밀번호 247233 · 김수혁 관리자 전용 비번변경)
+      ========================================== */}
+      {activeTab === "condolence" && (() => {
+        if (!isCondolenceUnlocked) {
+          return (
+            <div className="bg-white rounded-3xl border border-stone-200 shadow-sm p-6 max-w-sm mx-auto mt-4 space-y-4">
+              <div className="text-center space-y-1.5">
+                <div className="w-12 h-12 rounded-2xl bg-stone-900 text-white flex items-center justify-center mx-auto shadow-sm">
+                  <Lock className="w-5 h-5" />
+                </div>
+                <h2 className="text-[16px] font-black text-stone-900">경조사비 입출금내역</h2>
+                <p className="text-[12px] font-semibold text-stone-500">
+                  비밀 메뉴입니다. 열람 비밀번호를 입력해 주세요.
+                </p>
+              </div>
+              <form onSubmit={handleUnlockCondolence} className="space-y-2.5">
+                <input
+                  type="password"
+                  inputMode="numeric"
+                  autoComplete="off"
+                  value={condolencePinInput}
+                  onChange={(e) => {
+                    setCondolencePinInput(e.target.value);
+                    if (condolencePinError) setCondolencePinError("");
+                  }}
+                  placeholder="비밀번호 입력"
+                  className="w-full h-11 px-3.5 rounded-xl border border-stone-300 bg-stone-50 text-center text-[16px] font-black tracking-[0.25em] text-stone-900 focus:outline-none focus:border-[#3F624D] focus:bg-white"
+                />
+                {condolencePinError && (
+                  <p className="text-[11.5px] font-extrabold text-rose-600 text-center">{condolencePinError}</p>
+                )}
+                <button
+                  type="submit"
+                  className="w-full h-11 rounded-xl bg-[#3F624D] hover:bg-[#324F3E] text-white text-[13.5px] font-black transition whitespace-nowrap"
+                >
+                  🔓 잠금 해제
+                </button>
+              </form>
+              <div className="text-[11px] text-stone-400 font-semibold text-center">
+                비밀번호 변경은 김수혁 관리자 로그인 시 가능합니다.
+              </div>
+            </div>
+          );
+        }
+
+        const q = condolenceSearch.trim().toLowerCase();
+        const allYears = Array.from(
+          new Set(condolenceList.map((x) => String(x.date || "").slice(0, 4)).filter((y) => /^\d{4}$/.test(y)))
+        ).sort((a, b) => b.localeCompare(a));
+        const allPersons = Array.from(
+          new Set(condolenceList.map((x) => String(x.person || "").trim()).filter(Boolean))
+        ).sort((a, b) => a.localeCompare(b, "ko"));
+
+        const filteredList = condolenceList
+          .filter((item) => {
+            if (condolenceTypeFilter !== "all" && item.type !== condolenceTypeFilter) return false;
+            if (condolenceCatFilter !== "전체" && item.category !== condolenceCatFilter) return false;
+            if (condolenceGroupFilter !== "전체" && item.group !== condolenceGroupFilter) return false;
+            if (condolencePersonFilter !== "전체" && item.person !== condolencePersonFilter) return false;
+            if (condolenceYearFilter !== "전체" && String(item.date || "").slice(0, 4) !== condolenceYearFilter) return false;
+            if (condolenceDateFrom && String(item.date || "") < condolenceDateFrom) return false;
+            if (condolenceDateTo && String(item.date || "") > condolenceDateTo) return false;
+            if (q) {
+              const hay = `${item.person || ""} ${item.category || ""} ${item.group || ""} ${item.memo || ""} ${item.date || ""} ${item.amount || ""} ${item.owner || ""} ${item.paymentMethod || ""}`.toLowerCase();
+              if (!hay.includes(q)) return false;
+            }
+            return true;
+          })
+          .sort((a, b) => {
+            if (condolenceSort === "date_asc") return String(a.date || "").localeCompare(String(b.date || ""));
+            if (condolenceSort === "amount_desc") return (Number(b.amount) || 0) - (Number(a.amount) || 0);
+            if (condolenceSort === "person_asc") return String(a.person || "").localeCompare(String(b.person || ""), "ko");
+            return String(b.date || "").localeCompare(String(a.date || "")) || (Number(b.updatedAtMs) || 0) - (Number(a.updatedAtMs) || 0);
+          });
+
+        const hasActiveFilter = Boolean(
+          q ||
+          condolenceTypeFilter !== "all" ||
+          condolenceCatFilter !== "전체" ||
+          condolenceGroupFilter !== "전체" ||
+          condolencePersonFilter !== "전체" ||
+          condolenceYearFilter !== "전체" ||
+          condolenceDateFrom ||
+          condolenceDateTo
+        );
+
+        const grandIn = condolenceList.filter((r) => r.type === "in").reduce((s, r) => s + (Number(r.amount) || 0), 0);
+        const grandOut = condolenceList.filter((r) => r.type !== "in").reduce((s, r) => s + (Number(r.amount) || 0), 0);
+        const grandNet = grandIn - grandOut;
+
+        const subIn = filteredList.filter((r) => r.type === "in").reduce((s, r) => s + (Number(r.amount) || 0), 0);
+        const subOut = filteredList.filter((r) => r.type !== "in").reduce((s, r) => s + (Number(r.amount) || 0), 0);
+        const subNet = subIn - subOut;
+
+        // 부분합 집계 데이터
+        const subtotalMap = new Map();
+        if (condolenceSubtotalTab !== "none") {
+          filteredList.forEach((r) => {
+            const k =
+              condolenceSubtotalTab === "category"
+                ? (r.category || "기타")
+                : condolenceSubtotalTab === "group"
+                ? (r.group || "기타")
+                : condolenceSubtotalTab === "person"
+                ? (r.person || "미지정")
+                : (String(r.date || "").slice(0, 4) || "미지정");
+            const cur = subtotalMap.get(k) || { key: k, count: 0, inAmt: 0, outAmt: 0 };
+            cur.count += 1;
+            if (r.type === "in") cur.inAmt += Number(r.amount) || 0;
+            else cur.outAmt += Number(r.amount) || 0;
+            subtotalMap.set(k, cur);
+          });
+        }
+        const subtotalRows = Array.from(subtotalMap.values()).sort((a, b) =>
+          condolenceSubtotalTab === "year"
+            ? b.key.localeCompare(a.key)
+            : (b.inAmt + b.outAmt) - (a.inAmt + a.outAmt)
+        );
+
+        const resetCondolenceFilters = () => {
+          setCondolenceSearch("");
+          setCondolenceTypeFilter("all");
+          setCondolenceCatFilter("전체");
+          setCondolenceGroupFilter("전체");
+          setCondolencePersonFilter("전체");
+          setCondolenceYearFilter("전체");
+          setCondolenceDateFrom("");
+          setCondolenceDateTo("");
+        };
+
+        const handleCopyCondolenceSummary = () => {
+          const lines = [
+            `[💌 경조사비 입출금내역${hasActiveFilter ? " (필터 적용)" : " (전체)"}]`,
+            `총 ${filteredList.length}건 · 입금 +${subIn.toLocaleString()}원 · 출금 -${subOut.toLocaleString()}원 · 차액 ${subNet >= 0 ? "+" : ""}${subNet.toLocaleString()}원`,
+            "---",
+            ...filteredList.slice(0, 50).map((r) =>
+              `${r.date} | ${r.type === "in" ? "입금" : "출금"} | ${r.person} (${r.group}/${r.category}) | ${Number(r.amount || 0).toLocaleString()}원${r.memo ? ` - ${r.memo}` : ""}`
+            )
+          ];
+          if (filteredList.length > 50) lines.push(`... 외 ${filteredList.length - 50}건`);
+          copyTextSafe(lines.join("\n"), "📋 경조사비 요약을 복사했습니다.");
+        };
+
+        return (
+          <div className="space-y-3 pb-4">
+            {/* 상단 액션 바 */}
+            <div className="bg-white rounded-2xl border border-stone-200 p-3 shadow-sm space-y-2.5">
+              <div className="flex flex-wrap items-center justify-between gap-1.5">
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <span className="text-[14px] font-black text-stone-900 whitespace-nowrap">💌 경조사비 장부</span>
+                  <span className="px-1.5 py-0.5 rounded-full bg-stone-100 text-stone-600 text-[10.5px] font-extrabold whitespace-nowrap">
+                    {condolenceList.length}건
+                  </span>
+                </div>
+                <div className="flex flex-wrap items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => openCondolenceForm(null)}
+                    className="h-7 px-2.5 rounded-lg bg-[#3F624D] hover:bg-[#324F3E] text-white text-[11px] font-extrabold whitespace-nowrap"
+                  >
+                    + 내역 추가
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCondolenceBulkMode((v) => !v);
+                      setCondolenceBulkIds([]);
+                    }}
+                    className={`h-7 px-2 rounded-lg border text-[11px] font-extrabold whitespace-nowrap ${
+                      condolenceBulkMode
+                        ? "bg-stone-900 text-white border-stone-900"
+                        : "bg-stone-50 hover:bg-stone-100 border-stone-200 text-stone-700"
+                    }`}
+                  >
+                    ☑️ 일괄그룹
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCondolenceImportPreview(null);
+                      setCondolenceWorkbookSheets([]);
+                      setCondolenceImportSelectedIds([]);
+                      setIsCondolenceExcelModalOpen(true);
+                    }}
+                    className="h-7 px-2 rounded-lg bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-800 text-[11px] font-extrabold whitespace-nowrap"
+                  >
+                    📊 엑셀·AI
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => openCategoryManager("condolence_cat")}
+                    className="h-7 px-2 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 text-[11px] font-extrabold whitespace-nowrap"
+                    title="경조사 분류·그룹 자유 관리"
+                  >
+                    ⚙️ 분류
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleCopyCondolenceSummary}
+                    className="h-7 px-2 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 text-[11px] font-extrabold whitespace-nowrap"
+                    title="현재 내역 복사"
+                  >
+                    📋
+                  </button>
+                  {isSuhyeokAdmin && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCondolencePinChangeForm({ current: "", next: "", confirm: "" });
+                        setIsCondolencePinModalOpen(true);
+                      }}
+                      className="h-7 px-2 rounded-lg bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-800 text-[11px] font-extrabold whitespace-nowrap"
+                      title="김수혁 관리자 전용 비밀번호 변경"
+                    >
+                      🔑 비번변경
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsCondolenceUnlocked(false);
+                      setCondolencePinInput("");
+                      showToast("🔒 경조사비 메뉴를 잠갔습니다.");
+                    }}
+                    className="h-7 px-2 rounded-lg bg-stone-900 hover:bg-stone-800 text-white text-[11px] font-extrabold whitespace-nowrap"
+                    title="즉시 잠그기"
+                  >
+                    🔒
+                  </button>
+                </div>
+              </div>
+
+              {/* 전체 총계 카드 */}
+              <div className="grid grid-cols-3 gap-1.5">
+                <div className="rounded-xl bg-emerald-50/80 border border-emerald-200/80 px-2.5 py-2 text-center">
+                  <div className="text-[10.5px] font-extrabold text-emerald-700 whitespace-nowrap">총 입금(받음)</div>
+                  <div className="text-[13px] font-black text-emerald-800 whitespace-nowrap mt-0.5">
+                    +{grandIn.toLocaleString()}원
+                  </div>
+                </div>
+                <div className="rounded-xl bg-rose-50/80 border border-rose-200/80 px-2.5 py-2 text-center">
+                  <div className="text-[10.5px] font-extrabold text-rose-700 whitespace-nowrap">총 출금(보냄)</div>
+                  <div className="text-[13px] font-black text-rose-800 whitespace-nowrap mt-0.5">
+                    -{grandOut.toLocaleString()}원
+                  </div>
+                </div>
+                <div className="rounded-xl bg-stone-50 border border-stone-200 px-2.5 py-2 text-center">
+                  <div className="text-[10.5px] font-extrabold text-stone-600 whitespace-nowrap">순액(차액)</div>
+                  <div className={`text-[13px] font-black whitespace-nowrap mt-0.5 ${grandNet >= 0 ? "text-emerald-700" : "text-rose-700"}`}>
+                    {grandNet >= 0 ? "+" : ""}{grandNet.toLocaleString()}원
+                  </div>
+                </div>
+              </div>
+
+              {/* 필터 적용 시 실시간 부분합 바 */}
+              {hasActiveFilter && (
+                <div className="rounded-xl bg-[#EEF3EE] border border-[#C9D8CC] px-2.5 py-2 flex flex-wrap items-center justify-between gap-1.5">
+                  <div className="text-[11px] font-black text-[#35503C] whitespace-nowrap">
+                    🔍 필터 부분합 ({filteredList.length}건)
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2 text-[11px] font-extrabold">
+                    <span className="text-emerald-700 whitespace-nowrap">입금 +{subIn.toLocaleString()}</span>
+                    <span className="text-rose-700 whitespace-nowrap">출금 -{subOut.toLocaleString()}</span>
+                    <span className={`whitespace-nowrap ${subNet >= 0 ? "text-emerald-800" : "text-rose-800"}`}>
+                      차액 {subNet >= 0 ? "+" : ""}{subNet.toLocaleString()}원
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {!isSuhyeokAdmin && (
+                <div className="text-[10.5px] font-semibold text-stone-400 text-right">
+                  🔒 비밀번호 변경은 김수혁 관리자 전용
+                </div>
+              )}
+            </div>
+
+            {/* 검색 및 다차원 필터 */}
+            <div className="bg-white rounded-2xl border border-stone-200 p-3 shadow-sm space-y-2.5">
+              {/* 검색창 + 정렬 */}
+              <div className="flex items-center gap-1.5">
+                <div className="relative flex-1 min-w-0">
+                  <Search className="w-3.5 h-3.5 text-stone-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <input
+                    type="text"
+                    enterKeyHint="search"
+                    value={condolenceSearch}
+                    onChange={(e) => setCondolenceSearch(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Escape") setCondolenceSearch(""); }}
+                    placeholder="성명·메모·카테고리·그룹·금액 검색..."
+                    className="w-full min-w-0 h-8 pl-8 pr-7 rounded-xl border border-stone-200 bg-stone-50 text-[12px] font-semibold text-stone-800 focus:outline-none focus:border-[#3F624D] focus:bg-white"
+                  />
+                  {condolenceSearch && (
+                    <button
+                      type="button"
+                      onClick={() => setCondolenceSearch("")}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-700"
+                      aria-label="검색어 지우기"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+                <select
+                  value={condolenceSort}
+                  onChange={(e) => setCondolenceSort(e.target.value)}
+                  aria-label="정렬 기준"
+                  className="h-8 px-2 rounded-xl border border-stone-200 bg-stone-50 text-[11px] font-extrabold text-stone-700 shrink-0"
+                >
+                  <option value="date_desc">최신순</option>
+                  <option value="date_asc">오래된순</option>
+                  <option value="amount_desc">금액순</option>
+                  <option value="person_asc">인별(가나다)</option>
+                </select>
+              </div>
+
+              {/* 구분 + 인별 + 연도 드롭다운 */}
+              <div className="flex flex-wrap items-center gap-1.5">
+                <div className="inline-flex bg-stone-100 p-0.5 rounded-xl shrink-0">
+                  {[
+                    { id: "all", label: "전체" },
+                    { id: "in", label: "입금" },
+                    { id: "out", label: "출금" }
+                  ].map((t) => (
+                    <button
+                      key={t.id}
+                      type="button"
+                      onClick={() => setCondolenceTypeFilter(t.id)}
+                      className={`px-2 py-1 rounded-lg text-[11px] font-extrabold whitespace-nowrap transition ${
+                        condolenceTypeFilter === t.id
+                          ? "bg-[#3F624D] text-white"
+                          : "text-stone-600"
+                      }`}
+                    >
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
+                <select
+                  value={condolencePersonFilter}
+                  onChange={(e) => setCondolencePersonFilter(e.target.value)}
+                  aria-label="인별 필터"
+                  className="min-w-0 max-w-[120px] truncate h-7 px-2 rounded-xl border border-stone-200 bg-stone-50 text-[11px] font-extrabold text-stone-700"
+                >
+                  <option value="전체">👤 인별 전체</option>
+                  {allPersons.map((p) => (
+                    <option key={p} value={p}>{p}</option>
+                  ))}
+                </select>
+                <select
+                  value={condolenceYearFilter}
+                  onChange={(e) => setCondolenceYearFilter(e.target.value)}
+                  aria-label="연도 필터"
+                  className="h-7 px-2 rounded-xl border border-stone-200 bg-stone-50 text-[11px] font-extrabold text-stone-700 shrink-0"
+                >
+                  <option value="전체">📅 전체연도</option>
+                  {allYears.map((y) => (
+                    <option key={y} value={y}>{y}년</option>
+                  ))}
+                </select>
+                {hasActiveFilter && (
+                  <button
+                    type="button"
+                    onClick={resetCondolenceFilters}
+                    className="h-7 px-2 rounded-xl bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 text-[11px] font-extrabold whitespace-nowrap shrink-0"
+                  >
+                    🔄 초기화
+                  </button>
+                )}
+              </div>
+
+              {/* 기간 상세 필터 */}
+              <div className="flex items-center gap-1.5 text-[11px]">
+                <input
+                  type="date"
+                  value={condolenceDateFrom}
+                  onChange={(e) => setCondolenceDateFrom(e.target.value)}
+                  aria-label="시작일"
+                  className="flex-1 min-w-0 h-7 px-2 rounded-lg border border-stone-200 bg-stone-50 text-[11px] font-bold text-stone-700"
+                />
+                <span className="text-stone-400 font-bold">~</span>
+                <input
+                  type="date"
+                  value={condolenceDateTo}
+                  onChange={(e) => setCondolenceDateTo(e.target.value)}
+                  aria-label="종료일"
+                  className="flex-1 min-w-0 h-7 px-2 rounded-lg border border-stone-200 bg-stone-50 text-[11px] font-bold text-stone-700"
+                />
+              </div>
+
+              {/* 카테고리 칩 (멀티줄) */}
+              <div className="space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10.5px] font-extrabold text-stone-500">카테고리</span>
+                  <button
+                    type="button"
+                    onClick={() => openCategoryManager("condolence_cat")}
+                    className="text-[10.5px] font-extrabold text-[#3F624D] hover:underline whitespace-nowrap"
+                  >
+                    ⚙️ 카테고리 편집
+                  </button>
+                </div>
+                <div className="flex flex-wrap gap-1">
+                  {["전체", ...condolenceCategories].map((cat) => {
+                    const cnt = cat === "전체" ? condolenceList.length : condolenceList.filter((x) => x.category === cat).length;
+                    const active = condolenceCatFilter === cat;
+                    return (
+                      <button
+                        key={cat}
+                        type="button"
+                        onClick={() => setCondolenceCatFilter(cat)}
+                        className={`px-2 py-0.5 rounded-lg text-[11px] font-extrabold whitespace-nowrap border transition ${
+                          active
+                            ? "bg-[#3F624D] text-white border-[#3F624D]"
+                            : "bg-stone-50 text-stone-700 border-stone-200 hover:bg-stone-100"
+                        }`}
+                      >
+                        {cat} {cnt > 0 ? cnt : ""}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* 그룹 칩 (멀티줄) */}
+              <div className="space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10.5px] font-extrabold text-stone-500">그룹</span>
+                  <button
+                    type="button"
+                    onClick={() => openCategoryManager("condolence_group")}
+                    className="text-[10.5px] font-extrabold text-[#3F624D] hover:underline whitespace-nowrap"
+                  >
+                    ⚙️ 그룹 편집
+                  </button>
+                </div>
+                <div className="flex flex-wrap gap-1">
+                  {["전체", ...condolenceGroups].map((grp) => {
+                    const cnt = grp === "전체" ? condolenceList.length : condolenceList.filter((x) => x.group === grp).length;
+                    const active = condolenceGroupFilter === grp;
+                    return (
+                      <button
+                        key={grp}
+                        type="button"
+                        onClick={() => setCondolenceGroupFilter(grp)}
+                        className={`px-2 py-0.5 rounded-lg text-[11px] font-extrabold whitespace-nowrap border transition ${
+                          active
+                            ? "bg-stone-900 text-white border-stone-900"
+                            : "bg-stone-50 text-stone-700 border-stone-200 hover:bg-stone-100"
+                        }`}
+                      >
+                        {grp} {cnt > 0 ? cnt : ""}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
+            {/* 부분합 & 총계 집계표 */}
+            <div className="bg-white rounded-2xl border border-stone-200 p-3 shadow-sm space-y-2">
+              <div className="flex flex-wrap items-center justify-between gap-1.5">
+                <span className="text-[12.5px] font-black text-stone-900 whitespace-nowrap">📊 부분합 · 총계</span>
+                <div className="flex flex-wrap gap-1">
+                  {[
+                    { id: "category", label: "카테고리별" },
+                    { id: "group", label: "그룹별" },
+                    { id: "person", label: "인별" },
+                    { id: "year", label: "연도별" },
+                    { id: "none", label: "접기" }
+                  ].map((tab) => (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      onClick={() => setCondolenceSubtotalTab(tab.id)}
+                      className={`px-2 py-0.5 rounded-lg text-[11px] font-extrabold whitespace-nowrap transition ${
+                        condolenceSubtotalTab === tab.id
+                          ? "bg-[#3F624D] text-white"
+                          : "bg-stone-100 text-stone-600 hover:bg-stone-200"
+                      }`}
+                    >
+                      {tab.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {condolenceSubtotalTab !== "none" && (
+                subtotalRows.length === 0 ? (
+                  <div className="text-center py-3 text-[11.5px] text-stone-400 font-semibold">
+                    집계할 내역이 없습니다.
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto -mx-1 px-1">
+                    <table className="w-full text-[11.5px] border-collapse">
+                      <thead>
+                        <tr className="border-b border-stone-200 text-stone-500">
+                          <th className="py-1.5 px-1.5 text-left font-extrabold whitespace-nowrap">항목</th>
+                          <th className="py-1.5 px-1 text-right font-extrabold whitespace-nowrap">건수</th>
+                          <th className="py-1.5 px-1.5 text-right font-extrabold whitespace-nowrap">입금</th>
+                          <th className="py-1.5 px-1.5 text-right font-extrabold whitespace-nowrap">출금</th>
+                          <th className="py-1.5 px-1.5 text-right font-extrabold whitespace-nowrap">차액</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-stone-100">
+                        {subtotalRows.map((row) => {
+                          const net = row.inAmt - row.outAmt;
+                          return (
+                            <tr
+                              key={row.key}
+                              onClick={() => {
+                                if (condolenceSubtotalTab === "category") setCondolenceCatFilter(row.key);
+                                else if (condolenceSubtotalTab === "group") setCondolenceGroupFilter(row.key);
+                                else if (condolenceSubtotalTab === "person") setCondolencePersonFilter(row.key);
+                                else if (condolenceSubtotalTab === "year") setCondolenceYearFilter(row.key);
+                              }}
+                              className="hover:bg-[#FAF8F3] cursor-pointer"
+                            >
+                              <td className="py-1.5 px-1.5 font-extrabold text-stone-800 whitespace-nowrap max-w-[110px] truncate">
+                                {row.key}
+                              </td>
+                              <td className="py-1.5 px-1 text-right text-stone-500 font-bold whitespace-nowrap">{row.count}</td>
+                              <td className="py-1.5 px-1.5 text-right text-emerald-700 font-extrabold whitespace-nowrap">
+                                {row.inAmt > 0 ? `+${row.inAmt.toLocaleString()}` : "-"}
+                              </td>
+                              <td className="py-1.5 px-1.5 text-right text-rose-700 font-extrabold whitespace-nowrap">
+                                {row.outAmt > 0 ? `-${row.outAmt.toLocaleString()}` : "-"}
+                              </td>
+                              <td className={`py-1.5 px-1.5 text-right font-black whitespace-nowrap ${net >= 0 ? "text-emerald-800" : "text-rose-800"}`}>
+                                {net >= 0 ? "+" : ""}{net.toLocaleString()}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                      <tfoot>
+                        <tr className="border-t-2 border-stone-200 bg-[#EEF3EE]/70 font-black">
+                          <td className="py-1.5 px-1.5 text-stone-900 whitespace-nowrap">합계</td>
+                          <td className="py-1.5 px-1 text-right text-stone-700 whitespace-nowrap">{filteredList.length}</td>
+                          <td className="py-1.5 px-1.5 text-right text-emerald-700 whitespace-nowrap">+{subIn.toLocaleString()}</td>
+                          <td className="py-1.5 px-1.5 text-right text-rose-700 whitespace-nowrap">-{subOut.toLocaleString()}</td>
+                          <td className={`py-1.5 px-1.5 text-right whitespace-nowrap ${subNet >= 0 ? "text-emerald-800" : "text-rose-800"}`}>
+                            {subNet >= 0 ? "+" : ""}{subNet.toLocaleString()}
+                          </td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                )
+              )}
+            </div>
+
+            {/* ☑️ 필터 + 체크 인원 일괄 그룹핑·분류 변경 바 */}
+            {condolenceBulkMode && (
+              <div className="bg-amber-50/90 rounded-2xl border border-amber-300 p-3 shadow-sm space-y-2">
+                <div className="flex flex-wrap items-center justify-between gap-1.5">
+                  <span className="text-[12px] font-black text-amber-900 whitespace-nowrap">
+                    ☑️ 일괄 그룹핑 · 선택 {condolenceBulkIds.length}명
+                  </span>
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const filteredIds = filteredList.map((x) => x.id);
+                        const allChecked = filteredIds.length > 0 && filteredIds.every((id) => condolenceBulkIds.includes(id));
+                        setCondolenceBulkIds(allChecked ? [] : filteredIds);
+                      }}
+                      className="h-7 px-2 rounded-lg bg-white border border-amber-300 text-amber-900 text-[11px] font-extrabold whitespace-nowrap"
+                    >
+                      {filteredList.length > 0 && filteredList.every((x) => condolenceBulkIds.includes(x.id))
+                        ? "전체 해제"
+                        : `필터 ${filteredList.length}건 전체선택`}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setCondolenceBulkMode(false); setCondolenceBulkIds([]); }}
+                      className="h-7 px-2 rounded-lg bg-stone-200 text-stone-700 text-[11px] font-extrabold whitespace-nowrap"
+                    >
+                      닫기
+                    </button>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-1.5">
+                  <select
+                    value={condolenceBulkGroup}
+                    onChange={(e) => setCondolenceBulkGroup(e.target.value)}
+                    className="min-w-0 truncate h-8 px-2 rounded-xl border border-amber-300 bg-white text-[11.5px] font-bold text-stone-800"
+                  >
+                    <option value="">👥 그룹 선택 (유지)</option>
+                    {condolenceGroups.map((g) => (
+                      <option key={g} value={g}>{g}</option>
+                    ))}
+                  </select>
+                  <input
+                    type="text"
+                    value={condolenceBulkNewGroup}
+                    onChange={(e) => setCondolenceBulkNewGroup(e.target.value)}
+                    placeholder="+ 새 그룹 직접입력"
+                    className="min-w-0 h-8 px-2.5 rounded-xl border border-amber-300 bg-white text-[11.5px] font-bold text-stone-800"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-1.5">
+                  <select
+                    value={condolenceBulkCat}
+                    onChange={(e) => setCondolenceBulkCat(e.target.value)}
+                    className="min-w-0 truncate h-8 px-2 rounded-xl border border-stone-200 bg-white text-[11.5px] font-bold text-stone-700"
+                  >
+                    <option value="">💌 카테고리 (유지)</option>
+                    {condolenceCategories.map((c) => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
+                  </select>
+                  <select
+                    value={condolenceBulkOwner}
+                    onChange={(e) => setCondolenceBulkOwner(e.target.value)}
+                    className="min-w-0 truncate h-8 px-2 rounded-xl border border-stone-200 bg-white text-[11.5px] font-bold text-stone-700"
+                  >
+                    <option value="">👤 당사자 (유지)</option>
+                    <option value="공통">공통</option>
+                    <option value="수혁">수혁</option>
+                    <option value="아리">아리</option>
+                  </select>
+                </div>
+                <button
+                  type="button"
+                  disabled={condolenceBulkBusy || condolenceBulkIds.length === 0}
+                  onClick={handleApplyMainCondolenceBulkUpdate}
+                  className="w-full h-8 rounded-xl bg-[#3F624D] disabled:bg-stone-300 text-white text-[12px] font-black whitespace-nowrap"
+                >
+                  {condolenceBulkBusy ? "☁️ 반영 중..." : `✅ 선택 ${condolenceBulkIds.length}명 일괄 적용`}
+                </button>
+              </div>
+            )}
+
+            {/* 입출금 내역 리스트 */}
+            <div className="space-y-2">
+              {filteredList.length === 0 ? (
+                <div className="bg-white rounded-2xl border border-stone-200 p-6 text-center space-y-2">
+                  <div className="text-[13px] font-bold text-stone-500">
+                    {condolenceList.length === 0
+                      ? "등록된 경조사비 내역이 없습니다."
+                      : "검색·필터 조건에 맞는 내역이 없습니다."}
+                  </div>
+                  <div className="flex items-center justify-center gap-2">
+                    {hasActiveFilter && (
+                      <button
+                        type="button"
+                        onClick={resetCondolenceFilters}
+                        className="h-8 px-3 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-[12px] font-extrabold whitespace-nowrap"
+                      >
+                        🔄 필터 초기화
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => openCondolenceForm(null)}
+                      className="h-8 px-3 rounded-xl bg-[#3F624D] text-white text-[12px] font-extrabold whitespace-nowrap"
+                    >
+                      + 첫 내역 등록
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                filteredList.map((item) => {
+                  const isIn = item.type === "in";
+                  const isBulkChecked = condolenceBulkMode && condolenceBulkIds.includes(item.id);
+                  return (
+                    <div
+                      key={item.id}
+                      onClick={() => {
+                        if (!condolenceBulkMode) return;
+                        setCondolenceBulkIds((prev) =>
+                          prev.includes(item.id) ? prev.filter((x) => x !== item.id) : [...prev, item.id]
+                        );
+                      }}
+                      className={`bg-white rounded-2xl border p-3 shadow-sm space-y-1.5 transition ${
+                        isBulkChecked ? "border-[#3F624D] bg-[#EEF3EE]/40 ring-1 ring-[#3F624D]" : "border-stone-200"
+                      } ${condolenceBulkMode ? "cursor-pointer" : ""}`}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        {condolenceBulkMode && (
+                          <input
+                            type="checkbox"
+                            checked={isBulkChecked}
+                            onChange={() => {}}
+                            aria-label={`${item.person} 선택`}
+                            className="mt-1 w-4 h-4 accent-[#3F624D] shrink-0"
+                          />
+                        )}
+                        <div className="min-w-0 flex-1 space-y-1">
+                          <div className="flex flex-wrap items-center gap-1">
+                            <span className={`px-1.5 py-0.5 rounded-md text-[10.5px] font-black whitespace-nowrap ${
+                              isIn ? "bg-emerald-100 text-emerald-800" : "bg-rose-100 text-rose-800"
+                            }`}>
+                              {isIn ? "입금" : "출금"}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => setCondolencePersonFilter(condolencePersonFilter === item.person ? "전체" : item.person)}
+                              className="text-[13.5px] font-black text-stone-900 hover:text-[#3F624D] hover:underline truncate"
+                              title="이 사람 내역만 필터링"
+                            >
+                              {item.person}
+                            </button>
+                            <span className="px-1.5 py-0.5 rounded-md bg-stone-100 text-stone-700 text-[10.5px] font-bold whitespace-nowrap">
+                              {item.category}
+                            </span>
+                            <span className="px-1.5 py-0.5 rounded-md bg-amber-50 text-amber-800 text-[10.5px] font-bold whitespace-nowrap">
+                              {item.group}
+                            </span>
+                            {item.owner && item.owner !== "공통" && (
+                              <span className="px-1.5 py-0.5 rounded-md bg-sky-50 text-sky-800 text-[10px] font-bold whitespace-nowrap">
+                                {item.owner}
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-[11px] font-semibold text-stone-500 flex flex-wrap items-center gap-1.5">
+                            <span className="whitespace-nowrap">{item.date}</span>
+                            {item.paymentMethod && <span className="whitespace-nowrap">· {item.paymentMethod}</span>}
+                          </div>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <div className={`text-[14.5px] font-black whitespace-nowrap ${isIn ? "text-emerald-700" : "text-rose-700"}`}>
+                            {isIn ? "+" : "-"}{Number(item.amount || 0).toLocaleString()}원
+                          </div>
+                        </div>
+                      </div>
+                      {item.memo && (
+                        <div className="text-[12px] text-stone-700 bg-stone-50 rounded-xl px-2.5 py-1.5 leading-snug break-words">
+                          {item.memo}
+                        </div>
+                      )}
+                      <div className="flex items-center justify-end gap-1 pt-0.5">
+                        <button
+                          type="button"
+                          onClick={() => handleCondolenceToSchedule(item)}
+                          className="h-7 px-2 rounded-lg bg-stone-50 hover:bg-stone-100 border border-stone-200 text-stone-600 text-[11px] font-extrabold whitespace-nowrap"
+                        >
+                          🗓️ 일정
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => openCondolenceForm(item)}
+                          className="h-7 px-2 rounded-lg bg-stone-50 hover:bg-stone-100 border border-stone-200 text-stone-700 text-[11px] font-extrabold whitespace-nowrap"
+                        >
+                          ✏️ 수정
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteCondolence(item)}
+                          className="h-7 px-2 rounded-lg bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 text-[11px] font-extrabold whitespace-nowrap"
+                        >
+                          삭제
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        );
+      })()}
 
       {activeTab === "pages" && (!canViewTab("pages") ? renderLockedTabScreen("🗂️ 공유노트") : (() => {
         const currentPage = selectedPageId ? familyPages.find((p) => p.id === selectedPageId) || null : null;
@@ -27271,7 +29306,7 @@ time: "", location: "",
                 <select
                   value={recipeDiffFilter}
                   onChange={(e) => setRecipeDiffFilter(e.target.value)}
-                  className="flex-1 px-2.5 py-1.5 rounded-xl border border-stone-200 bg-white text-[12.5px] font-bold"
+                  className="flex-1 min-w-0 truncate px-2.5 py-1.5 rounded-xl border border-stone-200 bg-white text-[12.5px] font-bold"
                 >
                   <option value="전체">난이도 전체</option>
                   <option value="쉬움">쉬움</option>
@@ -27281,7 +29316,7 @@ time: "", location: "",
                 <select
                   value={recipeSort}
                   onChange={(e) => setRecipeSort(e.target.value)}
-                  className="flex-1 px-2.5 py-1.5 rounded-xl border border-stone-200 bg-white text-[12.5px] font-bold"
+                  className="flex-1 min-w-0 truncate px-2.5 py-1.5 rounded-xl border border-stone-200 bg-white text-[12.5px] font-bold"
                 >
                   <option value="latest">최신순</option>
                   <option value="rating">별점순</option>
@@ -28206,7 +30241,7 @@ time: "", location: "",
                           <select
                             value={activityDateFilter}
                             onChange={(e) => setActivityDateFilter(e.target.value)}
-                            className="px-2 py-1 rounded-full border border-stone-200 bg-white text-[11.5px] font-extrabold text-stone-700"
+                            className="min-w-0 truncate px-2 py-1 rounded-full border border-stone-200 bg-white text-[11.5px] font-extrabold text-stone-700"
                           >
                             <option value="all">📅 전체</option>
                             {[...new Set(sum.list.map((a) => a.date).filter(Boolean))]
@@ -30137,7 +32172,7 @@ time: "", location: "",
                           <select
                             value={diaryMonthFilter}
                             onChange={(e) => setDiaryMonthFilter(e.target.value)}
-                            className="px-2 py-1 rounded-full border border-stone-200 bg-white text-[11.5px] font-extrabold text-stone-700"
+                            className="min-w-0 truncate px-2 py-1 rounded-full border border-stone-200 bg-white text-[11.5px] font-extrabold text-stone-700"
                           >
                           <option value="all">📅 전체 월</option>
                           {[...new Set(babyDiaryEntries.map((d) => String(d.date || "").slice(0, 7)).filter(Boolean))]
@@ -31413,6 +33448,24 @@ time: "", location: "",
                   </div>
                 </div>
               ))}
+              {/* 🔒 비밀메뉴 (홈 화면 비노출 · 비밀번호 보호) */}
+              <div className="pt-2 border-t border-stone-100 flex items-center justify-between gap-2">
+                <span className="text-[11px] font-bold text-stone-400">비밀 메뉴 (비밀번호 필요)</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveTab("condolence");
+                    setIsMoreNavOpen(false);
+                  }}
+                  className={`px-2.5 py-1.5 rounded-xl border text-[11.5px] font-extrabold whitespace-nowrap transition flex items-center gap-1 ${
+                    activeTab === "condolence"
+                      ? "bg-stone-900 text-white border-stone-900"
+                      : "bg-stone-50 hover:bg-stone-100 text-stone-700 border-stone-200"
+                  }`}
+                >
+                  <span>🔒 경조사비</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -31476,14 +33529,14 @@ time: "", location: "",
           ref={moreNavBtnRef}
           onClick={() => setIsMoreNavOpen((v) => !v)}
           className={`flex flex-col items-center justify-center py-1.5 rounded-xl transition ${
-            ["monthly", "shopping", "notices", "ai", "recipes", "bucket", "pages", "house"].includes(activeTab) || isMoreNavOpen
+            ["monthly", "shopping", "notices", "ai", "recipes", "bucket", "pages", "house", "condolence"].includes(activeTab) || isMoreNavOpen
               ? "text-[#2F523E] font-black bg-[#EEF3EE]"
               : "text-stone-600 font-semibold"
           }`}
         >
           <LayoutGrid
             className={`w-4 h-4 ${
-              ["monthly", "shopping", "notices", "ai", "recipes", "bucket", "pages", "house"].includes(activeTab) || isMoreNavOpen
+              ["monthly", "shopping", "notices", "ai", "recipes", "bucket", "pages", "house", "condolence"].includes(activeTab) || isMoreNavOpen
                 ? "text-amber-600"
                 : ""
             }`}
@@ -31516,9 +33569,10 @@ time: "", location: "",
             setScheduleForm({
               title: t,
               date: d,
-                            endDate: "",
-time: "", location: "",
-              category: "할일(To-Do)",
+              endDate: "",
+              time: "",
+              location: "",
+              category: scheduleCategories.includes("할일(To-Do)") ? "할일(To-Do)" : (scheduleCategories[0] || "할일(To-Do)"),
               members: ["수혁", "아리나"],
               isAnnual: Boolean(draft?.isAnnual),
               showDday: false,
@@ -34735,7 +36789,685 @@ time: "", location: "",
       )}
 
 
-      {/* ⚙️ 통합 세부 카테고리 자유 관리 모달 (재료 · 레시피 · 가족공지) */}
+
+      {/* 🔒 모달: 경조사비 내역 추가·수정 */}
+      {isCondolenceFormOpen && isCondolenceUnlocked && (() => {
+        const recentPeople = Array.from(new Set(condolenceList.map((x) => String(x.person || "").trim()).filter(Boolean))).slice(0, 8);
+        const catOptions = condolenceCategories.includes(condolenceForm.category)
+          ? condolenceCategories
+          : [condolenceForm.category, ...condolenceCategories].filter(Boolean);
+        const grpOptions = condolenceGroups.includes(condolenceForm.group)
+          ? condolenceGroups
+          : [condolenceForm.group, ...condolenceGroups].filter(Boolean);
+        return (
+          <div
+            className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4"
+            onClick={() => setIsCondolenceFormOpen(false)}
+          >
+            <form
+              onSubmit={handleSaveCondolence}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white rounded-3xl max-w-sm w-full p-4 space-y-3 shadow-2xl max-h-[88vh] overflow-y-auto"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <h3 className="text-[15px] font-black text-stone-900">
+                  {editingCondolenceId ? "✏️ 경조사비 내역 수정" : "💌 경조사비 내역 추가"}
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => setIsCondolenceFormOpen(false)}
+                  className="p-1 text-stone-400 hover:text-stone-700"
+                  aria-label="닫기"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* 입금 / 출금 선택 */}
+              <div className="grid grid-cols-2 gap-1.5 bg-stone-100 p-1 rounded-xl">
+                <button
+                  type="button"
+                  onClick={() => setCondolenceForm((p) => ({ ...p, type: "out" }))}
+                  className={`py-2 rounded-lg text-[12.5px] font-black transition whitespace-nowrap ${
+                    condolenceForm.type === "out" ? "bg-rose-600 text-white shadow-sm" : "text-stone-600"
+                  }`}
+                >
+                  📤 출금 (보냄)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCondolenceForm((p) => ({ ...p, type: "in" }))}
+                  className={`py-2 rounded-lg text-[12.5px] font-black transition whitespace-nowrap ${
+                    condolenceForm.type === "in" ? "bg-emerald-600 text-white shadow-sm" : "text-stone-600"
+                  }`}
+                >
+                  📥 입금 (받음)
+                </button>
+              </div>
+
+              {/* 날짜 & 당사자 */}
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1">
+                  <label className="text-[11px] font-extrabold text-stone-500">날짜</label>
+                  <input
+                    type="date"
+                    value={condolenceForm.date}
+                    onChange={(e) => setCondolenceForm((p) => ({ ...p, date: e.target.value }))}
+                    className="w-full min-w-0 h-9 px-2.5 rounded-xl border border-stone-200 bg-stone-50 text-[12.5px] font-bold text-stone-800"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[11px] font-extrabold text-stone-500">당사자 구분</label>
+                  <div className="grid grid-cols-3 gap-1 h-9">
+                    {["공통", "수혁", "아리"].map((ow) => (
+                      <button
+                        key={ow}
+                        type="button"
+                        onClick={() => setCondolenceForm((p) => ({ ...p, owner: ow }))}
+                        className={`rounded-xl text-[11.5px] font-extrabold border whitespace-nowrap ${
+                          condolenceForm.owner === ow
+                            ? "bg-stone-900 text-white border-stone-900"
+                            : "bg-stone-50 text-stone-600 border-stone-200"
+                        }`}
+                      >
+                        {ow}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* 카테고리 & 그룹 */}
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1 min-w-0">
+                  <label className="text-[11px] font-extrabold text-stone-500">카테고리</label>
+                  <select
+                    value={condolenceForm.category}
+                    onChange={(e) => setCondolenceForm((p) => ({ ...p, category: e.target.value }))}
+                    className="w-full min-w-0 truncate h-9 px-2.5 rounded-xl border border-stone-200 bg-stone-50 text-[12.5px] font-bold text-stone-800"
+                  >
+                    {catOptions.map((c) => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="space-y-1 min-w-0">
+                  <label className="text-[11px] font-extrabold text-stone-500">그룹</label>
+                  <select
+                    value={condolenceForm.group}
+                    onChange={(e) => setCondolenceForm((p) => ({ ...p, group: e.target.value }))}
+                    className="w-full min-w-0 truncate h-9 px-2.5 rounded-xl border border-stone-200 bg-stone-50 text-[12.5px] font-bold text-stone-800"
+                  >
+                    {grpOptions.map((g) => (
+                      <option key={g} value={g}>{g}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* 성명(인별) + 최근 인물 빠른 선택 */}
+              <div className="space-y-1">
+                <label className="text-[11px] font-extrabold text-stone-500">성명 (인별) *</label>
+                <input
+                  type="text"
+                  value={condolenceForm.person}
+                  onChange={(e) => setCondolenceForm((p) => ({ ...p, person: e.target.value }))}
+                  placeholder="예: 홍길동"
+                  className="w-full min-w-0 h-9 px-3 rounded-xl border border-stone-200 bg-stone-50 text-[13px] font-bold text-stone-900 focus:outline-none focus:border-[#3F624D] focus:bg-white"
+                />
+                {recentPeople.length > 0 && (
+                  <div className="flex flex-wrap gap-1 pt-0.5">
+                    {recentPeople.map((pName) => (
+                      <button
+                        key={pName}
+                        type="button"
+                        onClick={() => setCondolenceForm((p) => ({ ...p, person: pName }))}
+                        className="px-2 py-0.5 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 text-[10.5px] font-bold whitespace-nowrap"
+                      >
+                        {pName}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* 금액 + 빠른 프리셋 */}
+              <div className="space-y-1">
+                <label className="text-[11px] font-extrabold text-stone-500">금액 (원) *</label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={condolenceForm.amount ? Number(String(condolenceForm.amount).replace(/[^0-9]/g, "")).toLocaleString() : ""}
+                  onChange={(e) => setCondolenceForm((p) => ({ ...p, amount: e.target.value.replace(/[^0-9]/g, "") }))}
+                  placeholder="예: 100,000"
+                  className="w-full min-w-0 h-10 px-3 rounded-xl border border-stone-200 bg-stone-50 text-[14.5px] font-black text-stone-900 focus:outline-none focus:border-[#3F624D] focus:bg-white"
+                />
+                <div className="grid grid-cols-6 gap-1">
+                  {[30000, 50000, 100000, 200000, 300000, 500000].map((v) => (
+                    <button
+                      key={v}
+                      type="button"
+                      onClick={() => setCondolenceForm((p) => ({ ...p, amount: String(v) }))}
+                      className="py-1 rounded-lg bg-stone-100 hover:bg-[#EEF3EE] text-stone-700 text-[10.5px] font-extrabold whitespace-nowrap"
+                    >
+                      {v / 10000}만
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* 결제수단 */}
+              <div className="space-y-1">
+                <div className="flex items-center justify-between">
+                  <label className="text-[11px] font-extrabold text-stone-500">결제수단</label>
+                  <button
+                    type="button"
+                    onClick={() => openCategoryManager("condolence_pay")}
+                    className="text-[10.5px] font-extrabold text-[#3F624D] hover:underline whitespace-nowrap"
+                  >
+                    ⚙️ 수단 편집
+                  </button>
+                </div>
+                <div className="flex flex-wrap gap-1">
+                  {(condolencePayMethods.includes(condolenceForm.paymentMethod) ? condolencePayMethods : [condolenceForm.paymentMethod, ...condolencePayMethods].filter(Boolean)).map((pm) => (
+                    <button
+                      key={pm}
+                      type="button"
+                      onClick={() => setCondolenceForm((p) => ({ ...p, paymentMethod: pm }))}
+                      className={`px-2.5 py-1.5 rounded-xl text-[11px] font-extrabold border whitespace-nowrap ${
+                        condolenceForm.paymentMethod === pm
+                          ? "bg-[#3F624D] text-white border-[#3F624D]"
+                          : "bg-stone-50 text-stone-600 border-stone-200"
+                      }`}
+                    >
+                      {pm}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* 메모 */}
+              <div className="space-y-1">
+                <label className="text-[11px] font-extrabold text-stone-500">메모사항</label>
+                <textarea
+                  rows={3}
+                  value={condolenceForm.memo}
+                  onChange={(e) => setCondolenceForm((p) => ({ ...p, memo: e.target.value }))}
+                  placeholder="관계, 행사 장소, 답례품, 참석 여부 등..."
+                  className="w-full p-2.5 rounded-xl border border-stone-200 bg-stone-50 text-[12.5px] font-semibold text-stone-800 focus:outline-none focus:border-[#3F624D] focus:bg-white"
+                />
+              </div>
+
+              <div className="flex items-center gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setIsCondolenceFormOpen(false)}
+                  className="flex-1 h-10 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-[13px] font-extrabold whitespace-nowrap"
+                >
+                  취소
+                </button>
+                <button
+                  type="submit"
+                  className="flex-[2] h-10 rounded-xl bg-[#3F624D] hover:bg-[#324F3E] text-white text-[13px] font-black whitespace-nowrap"
+                >
+                  💾 클라우드 저장
+                </button>
+              </div>
+            </form>
+          </div>
+        );
+      })()}
+
+      {/* 📊 모달: 경조사비 클라우드 엑셀 내보내기 · 가져오기 */}
+      {isCondolenceExcelModalOpen && isCondolenceUnlocked && (() => {
+        const fq = condolenceSearch.trim().toLowerCase();
+        const modalFilteredRows = condolenceList.filter((item) => {
+          if (condolenceTypeFilter !== "all" && item.type !== condolenceTypeFilter) return false;
+          if (condolenceCatFilter !== "전체" && item.category !== condolenceCatFilter) return false;
+          if (condolenceGroupFilter !== "전체" && item.group !== condolenceGroupFilter) return false;
+          if (condolencePersonFilter !== "전체" && item.person !== condolencePersonFilter) return false;
+          if (condolenceYearFilter !== "전체" && String(item.date || "").slice(0, 4) !== condolenceYearFilter) return false;
+          if (condolenceDateFrom && String(item.date || "") < condolenceDateFrom) return false;
+          if (condolenceDateTo && String(item.date || "") > condolenceDateTo) return false;
+          if (fq) {
+            const hay = `${item.person || ""} ${item.category || ""} ${item.group || ""} ${item.memo || ""} ${item.date || ""} ${item.amount || ""} ${item.owner || ""} ${item.paymentMethod || ""}`.toLowerCase();
+            if (!hay.includes(fq)) return false;
+          }
+          return true;
+        });
+        const isFilteredExport = modalFilteredRows.length !== condolenceList.length;
+        return (
+        <div
+          className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4"
+          onClick={() => !condolenceImportBusy && setIsCondolenceExcelModalOpen(false)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-3xl max-w-sm w-full p-5 space-y-4 shadow-2xl max-h-[88vh] overflow-y-auto"
+          >
+            <div className="flex items-center justify-between gap-2">
+              <div>
+                <h3 className="text-[15px] font-black text-stone-900">📊 클라우드 엑셀 내보내기 · 가져오기</h3>
+                <p className="text-[11px] font-semibold text-stone-400 mt-0.5">
+                  Firebase 클라우드 저장분 ({condolenceList.length}건) 연동
+                </p>
+              </div>
+              <button
+                type="button"
+                disabled={condolenceImportBusy}
+                onClick={() => setIsCondolenceExcelModalOpen(false)}
+                className="p-1 text-stone-400 hover:text-stone-700"
+                aria-label="닫기"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* 1. 엑셀 내보내기 */}
+            <div className="rounded-2xl border border-emerald-200 bg-emerald-50/50 p-3.5 space-y-2">
+              <div className="text-[12.5px] font-black text-emerald-900">📥 엑셀 파일로 내보내기</div>
+              <p className="text-[11px] text-emerald-800/80 font-semibold">
+                엑셀(.xls)은 [경조사비 내역] + [부분합 요약] 2개 시트와 총계 행이 자동 포함됩니다.
+              </p>
+              <div className="grid grid-cols-2 gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => handleExportCondolenceExcel(condolenceList, "전체")}
+                  className="h-9 px-2.5 rounded-xl bg-[#3F624D] hover:bg-[#324F3E] text-white text-[12px] font-extrabold whitespace-nowrap"
+                >
+                  📊 전체 엑셀(.xls)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleExportCondolenceCsv(condolenceList, "전체", false)}
+                  className="h-9 px-2.5 rounded-xl bg-white hover:bg-stone-50 border border-emerald-300 text-emerald-900 text-[12px] font-extrabold whitespace-nowrap"
+                >
+                  📄 전체 CSV(.csv)
+                </button>
+              </div>
+              {isFilteredExport && (
+                <div className="grid grid-cols-2 gap-1.5 pt-1 border-t border-emerald-200/70">
+                  <button
+                    type="button"
+                    onClick={() => handleExportCondolenceExcel(modalFilteredRows, "필터")}
+                    className="h-8 px-2 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white text-[11px] font-extrabold whitespace-nowrap"
+                  >
+                    🔍 필터 {modalFilteredRows.length}건 엑셀
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleExportCondolenceCsv(modalFilteredRows, "필터", false)}
+                    className="h-8 px-2 rounded-xl bg-white hover:bg-stone-50 border border-emerald-300 text-emerald-800 text-[11px] font-extrabold whitespace-nowrap"
+                  >
+                    🔍 필터 {modalFilteredRows.length}건 CSV
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* 2. AI 엑셀(.xlsx/.xls/.csv) 자동 인식 → 일괄 기재 · 인원 그룹핑 → 클라우드 저장 */}
+            <div className="rounded-2xl border border-stone-200 bg-stone-50/70 p-3.5 space-y-2.5">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[12.5px] font-black text-stone-800">🤖 AI 엑셀 불러오기 → 클라우드</span>
+                <button
+                  type="button"
+                  onClick={() => handleExportCondolenceCsv([], "", true)}
+                  className="text-[11px] font-extrabold text-[#3F624D] hover:underline whitespace-nowrap"
+                >
+                  📋 양식 받기
+                </button>
+              </div>
+              <p className="text-[11px] text-stone-500">
+                자유 양식 <b>.xlsx</b>(멀티시트)·.xls·.csv를 AI가 자동 분석합니다.
+              </p>
+              <label className="block w-full text-center py-2.5 px-3 rounded-xl border border-dashed border-stone-300 bg-white hover:bg-stone-50 text-[12.5px] font-extrabold text-stone-700 cursor-pointer transition">
+                <span>{condolenceAiAnalyzing ? "✨ AI 엑셀 구조 분석 중..." : "📂 엑셀·CSV 선택 (.xlsx / .xls / .csv)"}</span>
+                <input
+                  type="file"
+                  accept=".xlsx,.xls,.csv,.tsv,.txt,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv"
+                  disabled={condolenceImportBusy || condolenceAiAnalyzing}
+                  onChange={handleSelectCondolenceImportFile}
+                  className="hidden"
+                />
+              </label>
+
+              {/* 멀티시트 선택 바 */}
+              {condolenceWorkbookSheets.length > 1 && (
+                <div className="space-y-1">
+                  <div className="text-[10.5px] font-extrabold text-stone-500">📑 시트 선택 ({condolenceWorkbookSheets.length}개)</div>
+                  <div className="flex flex-wrap gap-1">
+                    {condolenceWorkbookSheets.map((sh, idx) => (
+                      <button
+                        key={`${sh.name}-${idx}`}
+                        type="button"
+                        disabled={condolenceAiAnalyzing}
+                        onClick={() => {
+                          setCondolenceActiveSheetIdx(idx);
+                          analyzeAndBuildCondolenceSheet(sh, condolenceImportFileName, null, true);
+                        }}
+                        className={`px-2 py-1 rounded-lg text-[11px] font-extrabold whitespace-nowrap border ${
+                          condolenceActiveSheetIdx === idx
+                            ? "bg-stone-900 text-white border-stone-900"
+                            : "bg-white text-stone-700 border-stone-200 hover:bg-stone-100"
+                        }`}
+                      >
+                        {sh.name} ({sh.rows.length}행)
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {condolenceImportPreview && (() => {
+                const pq = condolenceImportSearch.trim().toLowerCase();
+                const previewVisible = condolenceImportPreview.items.filter((it) => {
+                  if (!pq) return true;
+                  return `${it.person} ${it.group} ${it.category} ${it.memo} ${it.amount}`.toLowerCase().includes(pq);
+                });
+                return (
+                <div className="rounded-xl bg-white border border-stone-200 p-3 space-y-2.5">
+                  <div className="flex items-center justify-between gap-1.5">
+                    <div className="text-[11.5px] font-extrabold text-stone-700 truncate min-w-0">
+                      📄 {condolenceImportPreview.fileName}
+                    </div>
+                    {condolenceAiEngineLabel && (
+                      <span className="px-1.5 py-0.5 rounded-md bg-[#EEF3EE] text-[#35503C] text-[10px] font-extrabold whitespace-nowrap shrink-0">
+                        {condolenceAiEngineLabel}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* 요약 지표 */}
+                  <div className="grid grid-cols-3 gap-1.5 text-center">
+                    <div className="rounded-lg bg-emerald-50 py-1.5">
+                      <div className="text-[10px] font-bold text-emerald-600">신규 등록</div>
+                      <div className="text-[13px] font-black text-emerald-700">{condolenceImportPreview.freshCount}건</div>
+                    </div>
+                    <div className="rounded-lg bg-stone-50 py-1.5">
+                      <div className="text-[10px] font-bold text-stone-500">합계 금액</div>
+                      <div className="text-[11.5px] font-black text-stone-800 whitespace-nowrap">
+                        {(condolenceImportPreview.totalAmount || 0).toLocaleString()}원
+                      </div>
+                    </div>
+                    <div className="rounded-lg bg-amber-50 py-1.5">
+                      <div className="text-[10px] font-bold text-amber-600">중복/제외</div>
+                      <div className="text-[13px] font-black text-amber-700">
+                        {condolenceImportPreview.dupCount}/{condolenceImportPreview.skipCount}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 1. 일괄 기재 (결혼식·날짜·구분·그룹·메모) */}
+                  <div className="rounded-xl bg-stone-50 border border-stone-200 p-2.5 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-black text-stone-800">📝 일괄 기재 (파일에 없는 정보 채우기)</span>
+                      <button
+                        type="button"
+                        onClick={() => setCondolenceBatchDefaults((p) => ({ ...p, date: "2023-04-02", category: "결혼식", type: "in" }))}
+                        className="text-[10px] font-extrabold text-[#3F624D] hover:underline whitespace-nowrap"
+                      >
+                        💍 결혼식(04.02)
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      <select
+                        value={condolenceBatchDefaults.type}
+                        onChange={(e) => setCondolenceBatchDefaults((p) => ({ ...p, type: e.target.value }))}
+                        className="min-w-0 h-7 px-2 rounded-lg border border-stone-200 bg-white text-[11px] font-extrabold text-stone-800"
+                      >
+                        <option value="in">📥 입금 (받음)</option>
+                        <option value="out">📤 출금 (보냄)</option>
+                      </select>
+                      <input
+                        type="date"
+                        value={condolenceBatchDefaults.date}
+                        onChange={(e) => setCondolenceBatchDefaults((p) => ({ ...p, date: e.target.value }))}
+                        className="min-w-0 h-7 px-2 rounded-lg border border-stone-200 bg-white text-[11px] font-bold text-stone-800"
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      <select
+                        value={condolenceBatchDefaults.category}
+                        onChange={(e) => setCondolenceBatchDefaults((p) => ({ ...p, category: e.target.value }))}
+                        className="min-w-0 truncate h-7 px-2 rounded-lg border border-stone-200 bg-white text-[11px] font-bold text-stone-800"
+                      >
+                        {condolenceCategories.map((c) => (
+                          <option key={c} value={c}>{c}</option>
+                        ))}
+                      </select>
+                      <select
+                        value={condolenceBatchDefaults.owner}
+                        onChange={(e) => setCondolenceBatchDefaults((p) => ({ ...p, owner: e.target.value }))}
+                        className="min-w-0 truncate h-7 px-2 rounded-lg border border-stone-200 bg-white text-[11px] font-bold text-stone-800"
+                      >
+                        <option value="공통">👤 공통</option>
+                        <option value="수혁">👤 수혁</option>
+                        <option value="아리">👤 아리</option>
+                      </select>
+                    </div>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      <select
+                        value={condolenceBatchDefaults.group}
+                        onChange={(e) => setCondolenceBatchDefaults((p) => ({ ...p, group: e.target.value }))}
+                        className="min-w-0 truncate h-7 px-2 rounded-lg border border-stone-200 bg-white text-[11px] font-bold text-stone-800"
+                      >
+                        <option value="">👥 그룹(시트 유지)</option>
+                        {condolenceGroups.map((g) => (
+                          <option key={g} value={g}>{g}</option>
+                        ))}
+                      </select>
+                      <input
+                        type="text"
+                        value={condolenceBatchDefaults.memoPrefix}
+                        onChange={(e) => setCondolenceBatchDefaults((p) => ({ ...p, memoPrefix: e.target.value }))}
+                        placeholder="일괄 메모 (예: 결혼식)"
+                        className="min-w-0 h-7 px-2 rounded-lg border border-stone-200 bg-white text-[11px] font-semibold text-stone-800"
+                      />
+                    </div>
+                    <div className="flex items-center justify-between gap-2">
+                      <label className="flex items-center gap-1 text-[10.5px] font-bold text-stone-600 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={condolenceBatchDefaults.includeZeroItems}
+                          onChange={(e) => setCondolenceBatchDefaults((p) => ({ ...p, includeZeroItems: e.target.checked }))}
+                          className="accent-[#3F624D]"
+                        />
+                        <span>화환 등 0원 포함</span>
+                      </label>
+                      <button
+                        type="button"
+                        onClick={handleApplyCondolenceBatchDefaultsToPreview}
+                        className="h-7 px-2.5 rounded-lg bg-stone-900 hover:bg-stone-800 text-white text-[11px] font-extrabold whitespace-nowrap"
+                      >
+                        ✅ 일괄 반영
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* 2. 저장 전 필터·체크 인원 그룹핑 */}
+                  {condolenceImportPreview.items.length > 0 && (
+                    <div className="rounded-xl bg-amber-50/70 border border-amber-200 p-2.5 space-y-2">
+                      <div className="flex items-center justify-between gap-1">
+                        <span className="text-[11px] font-black text-amber-900">👥 인원 필터·체크 그룹핑</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const visIds = previewVisible.map((x) => x.id);
+                            const allSel = visIds.length > 0 && visIds.every((id) => condolenceImportSelectedIds.includes(id));
+                            setCondolenceImportSelectedIds(allSel ? [] : visIds);
+                          }}
+                          className="text-[10.5px] font-extrabold text-amber-900 hover:underline whitespace-nowrap"
+                        >
+                          {previewVisible.length > 0 && previewVisible.every((x) => condolenceImportSelectedIds.includes(x.id))
+                            ? "표시 전체해제"
+                            : `표시 ${previewVisible.length}명 전체선택`}
+                        </button>
+                      </div>
+                      <input
+                        type="text"
+                        enterKeyHint="search"
+                        value={condolenceImportSearch}
+                        onChange={(e) => setCondolenceImportSearch(e.target.value)}
+                        placeholder="이름·그룹 필터 (예: 이사님, 미분류)..."
+                        className="w-full h-7 px-2.5 rounded-lg border border-amber-200 bg-white text-[11px] font-semibold"
+                      />
+                      <div className="max-h-36 overflow-y-auto divide-y divide-amber-100 bg-white rounded-lg border border-amber-200/80">
+                        {previewVisible.slice(0, 80).map((it) => {
+                          const checked = condolenceImportSelectedIds.includes(it.id);
+                          return (
+                            <label
+                              key={it.id}
+                              className={`flex items-center justify-between gap-1.5 px-2 py-1.5 text-[11px] cursor-pointer ${
+                                checked ? "bg-[#EEF3EE]/70" : "hover:bg-stone-50"
+                              }`}
+                            >
+                              <div className="flex items-center gap-1.5 min-w-0">
+                                <input
+                                  type="checkbox"
+                                  checked={checked}
+                                  onChange={() =>
+                                    setCondolenceImportSelectedIds((prev) =>
+                                      prev.includes(it.id) ? prev.filter((x) => x !== it.id) : [...prev, it.id]
+                                    )
+                                  }
+                                  className="accent-[#3F624D] shrink-0"
+                                />
+                                <span className="font-extrabold text-stone-800 truncate">{it.person}</span>
+                                <span className="px-1.5 py-0.5 rounded bg-stone-100 text-stone-600 text-[10px] font-bold whitespace-nowrap shrink-0">
+                                  {it.group}
+                                </span>
+                              </div>
+                              <span className="font-black text-emerald-700 whitespace-nowrap shrink-0">
+                                {Number(it.amount || 0).toLocaleString()}
+                              </span>
+                            </label>
+                          );
+                        })}
+                        {previewVisible.length > 80 && (
+                          <div className="py-1 text-center text-[10px] text-stone-400 font-bold">
+                            상위 80건 표시 중 (검색어로 좁혀 보세요)
+                          </div>
+                        )}
+                      </div>
+                      <div className="grid grid-cols-2 gap-1">
+                        <select
+                          value={condolenceImportAssignGroup}
+                          onChange={(e) => setCondolenceImportAssignGroup(e.target.value)}
+                          className="min-w-0 truncate h-7 px-1.5 rounded-lg border border-amber-300 bg-white text-[11px] font-bold"
+                        >
+                          <option value="">그룹 선택...</option>
+                          {condolenceGroups.map((g) => (
+                            <option key={g} value={g}>{g}</option>
+                          ))}
+                        </select>
+                        <input
+                          type="text"
+                          value={condolenceImportNewGroup}
+                          onChange={(e) => setCondolenceImportNewGroup(e.target.value)}
+                          placeholder="+ 새 그룹 입력"
+                          className="min-w-0 h-7 px-2 rounded-lg border border-amber-300 bg-white text-[11px] font-bold"
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        disabled={condolenceImportSelectedIds.length === 0}
+                        onClick={handleAssignGroupInImportPreview}
+                        className="w-full h-7 rounded-lg bg-amber-600 disabled:bg-stone-300 text-white text-[11px] font-black whitespace-nowrap"
+                      >
+                        👥 선택 {condolenceImportSelectedIds.length}명 그룹 바로 지정
+                      </button>
+                    </div>
+                  )}
+
+                  <button
+                    type="button"
+                    disabled={condolenceImportBusy || condolenceImportPreview.freshCount === 0}
+                    onClick={handleConfirmCondolenceImport}
+                    className="w-full h-9 rounded-xl bg-[#3F624D] disabled:bg-stone-300 text-white text-[12.5px] font-black whitespace-nowrap"
+                  >
+                    {condolenceImportBusy ? "☁️ 클라우드 저장 중..." : `☁️ 신규 ${condolenceImportPreview.freshCount}건 클라우드 저장`}
+                  </button>
+                </div>
+                );
+              })()}
+            </div>
+          </div>
+        </div>
+        );
+      })()}
+
+      {/* 🔑 모달: 경조사비 비밀번호 변경 (김수혁 관리자 전용) */}
+      {isCondolencePinModalOpen && isSuhyeokAdmin && (
+        <div
+          className="fixed inset-0 bg-black/50 z-[65] flex items-center justify-center p-4"
+          onClick={() => setIsCondolencePinModalOpen(false)}
+        >
+          <form
+            onSubmit={handleChangeCondolencePin}
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-3xl max-w-xs w-full p-5 space-y-3 shadow-2xl"
+          >
+            <div className="flex items-center justify-between gap-2">
+              <h3 className="text-[14.5px] font-black text-stone-900">🔑 경조사비 비밀번호 변경</h3>
+              <button
+                type="button"
+                onClick={() => setIsCondolencePinModalOpen(false)}
+                className="p-1 text-stone-400 hover:text-stone-700"
+                aria-label="닫기"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <p className="text-[11px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-2.5 py-1.5">
+              김수혁 관리자 전용 · 변경 즉시 모든 기기에 동기화됩니다.
+            </p>
+            <input
+              type="password"
+              inputMode="numeric"
+              autoComplete="off"
+              value={condolencePinChangeForm.current}
+              onChange={(e) => setCondolencePinChangeForm((p) => ({ ...p, current: e.target.value }))}
+              placeholder="현재 비밀번호"
+              className="w-full h-9 px-3 rounded-xl border border-stone-200 bg-stone-50 text-[13px] font-bold"
+            />
+            <input
+              type="password"
+              inputMode="numeric"
+              autoComplete="off"
+              value={condolencePinChangeForm.next}
+              onChange={(e) => setCondolencePinChangeForm((p) => ({ ...p, next: e.target.value }))}
+              placeholder="새 비밀번호 (4~12자리)"
+              className="w-full h-9 px-3 rounded-xl border border-stone-200 bg-stone-50 text-[13px] font-bold"
+            />
+            <input
+              type="password"
+              inputMode="numeric"
+              autoComplete="off"
+              value={condolencePinChangeForm.confirm}
+              onChange={(e) => setCondolencePinChangeForm((p) => ({ ...p, confirm: e.target.value }))}
+              placeholder="새 비밀번호 확인"
+              className="w-full h-9 px-3 rounded-xl border border-stone-200 bg-stone-50 text-[13px] font-bold"
+            />
+            <div className="flex items-center gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => setIsCondolencePinModalOpen(false)}
+                className="flex-1 h-9 rounded-xl bg-stone-100 text-stone-700 text-[12.5px] font-extrabold whitespace-nowrap"
+              >
+                취소
+              </button>
+              <button
+                type="submit"
+                className="flex-[2] h-9 rounded-xl bg-stone-900 text-white text-[12.5px] font-black whitespace-nowrap"
+              >
+                변경 저장
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* ⚙️ 통합 세부 카테고리 자유 관리 모달 (재료 · 레시피 · 가족공지 · 경조사) */}
       {categoryManageKind && (() => {
         const curList = categoryManageKind === "house_room" ? houseStorageRooms : (customCategories[categoryManageKind] || []);
         const kindMeta = {
@@ -34744,7 +37476,10 @@ time: "", location: "",
           notice: { title: "📌 공지 카테고리", placeholder: "새 공지 분류 (예: 어린이집, 건강/병원)" },
           bucket: { title: "🌟 버킷 카테고리", placeholder: "새 버킷 분류 (예: 캠핑, 해외여행, 전시회)" },
           schedule: { title: "🗓️ 일정 카테고리", placeholder: "새 일정 분류 (예: 어린이집, 친정/시댁, 차량)" },
-          house_room: { title: "🏠 수납 장소", placeholder: "새 수납 장소 (예: 드레스룸, 팬트리, 서재)" }
+          house_room: { title: "🏠 수납 장소", placeholder: "새 수납 장소 (예: 드레스룸, 팬트리, 서재)" },
+          condolence_cat: { title: "💌 경조사 카테고리", placeholder: "새 경조사 분류 (예: 칠순/팔순, 집들이, 승진)" },
+          condolence_group: { title: "👥 경조사 그룹", placeholder: "새 경조사 그룹 (예: 동호회, 대학동기, 거래처)" },
+          condolence_pay: { title: "💳 경조사 결제수단", placeholder: "새 결제수단 (예: 카카오페이, 토스, 상품권, 화환)" }
         }[categoryManageKind] || { title: "⚙️ 분류 관리", placeholder: "새 분류 입력" };
         return (
           <div
@@ -34787,7 +37522,12 @@ time: "", location: "",
                   { id: "notice", label: "📌 공지", cnt: (customCategories.notice || []).length },
                   { id: "bucket", label: "🌟 버킷", cnt: (customCategories.bucket || []).length },
                   { id: "schedule", label: "🗓️ 일정", cnt: (customCategories.schedule || []).length },
-                  { id: "house_room", label: "🏠 수납", cnt: houseStorageRooms.length }
+                  { id: "house_room", label: "🏠 수납", cnt: houseStorageRooms.length },
+                  ...(isCondolenceUnlocked ? [
+                    { id: "condolence_cat", label: "💌 경조분류", cnt: condolenceCategories.length },
+                    { id: "condolence_group", label: "👥 경조그룹", cnt: condolenceGroups.length },
+                    { id: "condolence_pay", label: "💳 결제수단", cnt: condolencePayMethods.length }
+                  ] : [])
                 ].map((t) => (
                   <button
                     key={t.id}
@@ -35257,10 +37997,22 @@ time: "", location: "",
                 }}
                 className="w-full py-2 px-3 rounded-xl bg-[#EEF3EE] hover:bg-[#DFE9E0] border border-[#C9D8CC] text-[#35503C] text-[12px] font-extrabold flex items-center justify-between gap-2 whitespace-nowrap"
               >
-                <span>⚙️ 세부 카테고리 통합 관리 (재료·레시피·공지·버킷)</span>
+                <span className="truncate">⚙️ 세부 카테고리 통합 관리</span>
                 <ChevronRight className="w-4 h-4 shrink-0" />
               </button>
             )}
+
+            <button
+              type="button"
+              onClick={() => {
+                setIsSettingsOpen(false);
+                setActiveTab("condolence");
+              }}
+              className="w-full py-2 px-3 rounded-xl bg-stone-50 hover:bg-stone-100 border border-stone-200 text-stone-700 text-[12px] font-extrabold flex items-center justify-between gap-2 whitespace-nowrap"
+            >
+              <span className="truncate">🔒 경조사비 입출금내역 (비밀메뉴)</span>
+              <ChevronRight className="w-4 h-4 shrink-0" />
+            </button>
 
 
             <button
