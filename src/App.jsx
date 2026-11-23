@@ -1005,6 +1005,9 @@ const NoticeFormModal = React.memo(({
             {(Array.isArray(noticeCategories) && noticeCategories.length > 0 ? noticeCategories : NOTICE_CATEGORIES).map((c) => (
               <option key={c} value={c}>{c}</option>
             ))}
+            {draft.category && !(Array.isArray(noticeCategories) && noticeCategories.length > 0 ? noticeCategories : NOTICE_CATEGORIES).includes(draft.category) && (
+              <option value={draft.category}>{draft.category}</option>
+            )}
           </select>
           <select
             value={/아리/.test(String(draft.author || "")) ? "최아리나" : "김수혁"}
@@ -2562,7 +2565,8 @@ function MainApp() {
           schedule: Array.isArray(saved.schedule) && saved.schedule.length > 0 ? saved.schedule.map((s) => String(s || "").trim()).filter(Boolean) : [...SCHEDULE_CATEGORIES],
           condolence_cat: Array.isArray(saved.condolence_cat) && saved.condolence_cat.length > 0 ? saved.condolence_cat.map((s) => String(s || "").trim()).filter(Boolean) : [...CONDOLENCE_CATEGORIES],
           condolence_group: Array.isArray(saved.condolence_group) && saved.condolence_group.length > 0 ? saved.condolence_group.map((s) => String(s || "").trim()).filter(Boolean) : [...CONDOLENCE_GROUPS],
-          condolence_pay: Array.isArray(saved.condolence_pay) && saved.condolence_pay.length > 0 ? saved.condolence_pay.map((s) => String(s || "").trim()).filter(Boolean) : [...CONDOLENCE_PAY_METHODS]
+          condolence_pay: Array.isArray(saved.condolence_pay) && saved.condolence_pay.length > 0 ? saved.condolence_pay.map((s) => String(s || "").trim()).filter(Boolean) : [...CONDOLENCE_PAY_METHODS],
+          house_med_target: Array.isArray(saved.house_med_target) && saved.house_med_target.length > 0 ? saved.house_med_target.map((s) => String(s || "").trim()).filter(Boolean) : [...HOUSE_MEDICINE_TARGETS]
         };
       }
     } catch (e) {}
@@ -2574,7 +2578,8 @@ function MainApp() {
       schedule: [...SCHEDULE_CATEGORIES],
       condolence_cat: [...CONDOLENCE_CATEGORIES],
       condolence_group: [...CONDOLENCE_GROUPS],
-      condolence_pay: [...CONDOLENCE_PAY_METHODS]
+      condolence_pay: [...CONDOLENCE_PAY_METHODS],
+      house_med_target: [...HOUSE_MEDICINE_TARGETS]
     };
   });
   const fridgeCategories = customCategories.fridge;
@@ -2585,6 +2590,7 @@ function MainApp() {
   const condolenceCategories = customCategories.condolence_cat || CONDOLENCE_CATEGORIES;
   const condolenceGroups = customCategories.condolence_group || CONDOLENCE_GROUPS;
   const condolencePayMethods = customCategories.condolence_pay || CONDOLENCE_PAY_METHODS;
+  const houseMedTargets = customCategories.house_med_target || HOUSE_MEDICINE_TARGETS;
 
   // === 🔒 비밀메뉴: 경조사비 입출금내역 상태 ===
   const isSuhyeokAdmin = isAdminUnlocked && (actorName === "수혁" || actorName === "김수혁");
@@ -5499,7 +5505,8 @@ function MainApp() {
               schedule: Array.isArray(d.schedule) && d.schedule.length > 0 ? d.schedule.map((s) => String(s || "").trim()).filter(Boolean) : [...SCHEDULE_CATEGORIES],
               condolence_cat: Array.isArray(d.condolence_cat) && d.condolence_cat.length > 0 ? d.condolence_cat.map((s) => String(s || "").trim()).filter(Boolean) : [...CONDOLENCE_CATEGORIES],
               condolence_group: Array.isArray(d.condolence_group) && d.condolence_group.length > 0 ? d.condolence_group.map((s) => String(s || "").trim()).filter(Boolean) : [...CONDOLENCE_GROUPS],
-              condolence_pay: Array.isArray(d.condolence_pay) && d.condolence_pay.length > 0 ? d.condolence_pay.map((s) => String(s || "").trim()).filter(Boolean) : [...CONDOLENCE_PAY_METHODS]
+              condolence_pay: Array.isArray(d.condolence_pay) && d.condolence_pay.length > 0 ? d.condolence_pay.map((s) => String(s || "").trim()).filter(Boolean) : [...CONDOLENCE_PAY_METHODS],
+              house_med_target: Array.isArray(d.house_med_target) && d.house_med_target.length > 0 ? d.house_med_target.map((s) => String(s || "").trim()).filter(Boolean) : [...HOUSE_MEDICINE_TARGETS]
             };
             setCustomCategories(nextCats);
             try { localStorage.setItem("kim_custom_categories_v1", JSON.stringify(nextCats)); } catch (e) {}
@@ -6336,7 +6343,8 @@ function MainApp() {
           schedule: Array.isArray(payload.customCategories.schedule) && payload.customCategories.schedule.length > 0 ? payload.customCategories.schedule.map((s) => String(s || "").trim()).filter(Boolean) : [...SCHEDULE_CATEGORIES],
           condolence_cat: Array.isArray(payload.customCategories.condolence_cat) && payload.customCategories.condolence_cat.length > 0 ? payload.customCategories.condolence_cat.map((s) => String(s || "").trim()).filter(Boolean) : [...CONDOLENCE_CATEGORIES],
           condolence_group: Array.isArray(payload.customCategories.condolence_group) && payload.customCategories.condolence_group.length > 0 ? payload.customCategories.condolence_group.map((s) => String(s || "").trim()).filter(Boolean) : [...CONDOLENCE_GROUPS],
-          condolence_pay: Array.isArray(payload.customCategories.condolence_pay) && payload.customCategories.condolence_pay.length > 0 ? payload.customCategories.condolence_pay.map((s) => String(s || "").trim()).filter(Boolean) : [...CONDOLENCE_PAY_METHODS]
+          condolence_pay: Array.isArray(payload.customCategories.condolence_pay) && payload.customCategories.condolence_pay.length > 0 ? payload.customCategories.condolence_pay.map((s) => String(s || "").trim()).filter(Boolean) : [...CONDOLENCE_PAY_METHODS],
+          house_med_target: Array.isArray(payload.customCategories.house_med_target) && payload.customCategories.house_med_target.length > 0 ? payload.customCategories.house_med_target.map((s) => String(s || "").trim()).filter(Boolean) : [...HOUSE_MEDICINE_TARGETS]
         };
         setCustomCategories(nextCats);
         try { localStorage.setItem("kim_custom_categories_v1", JSON.stringify(nextCats)); } catch (e) {}
@@ -13340,7 +13348,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
   };
 
   const handleAddCustomCategory = async (kind, rawName) => {
-    const tabKey = kind === "fridge" ? "fridge" : kind === "recipe" ? "recipes" : kind === "bucket" ? "bucket" : kind === "schedule" ? "schedule" : kind === "house_room" ? "house" : (kind === "condolence_cat" || kind === "condolence_group" || kind === "condolence_pay") ? "condolence" : "notices";
+    const tabKey = kind === "fridge" ? "fridge" : kind === "recipe" ? "recipes" : kind === "bucket" ? "bucket" : kind === "schedule" ? "schedule" : (kind === "house_room" || kind === "house_med_target") ? "house" : (kind === "condolence_cat" || kind === "condolence_group" || kind === "condolence_pay") ? "condolence" : "notices";
     if (tabKey === "condolence") {
       if (!isCondolenceUnlocked) { showToast("🔒 경조사비 비밀번호 해제 후 편집할 수 있습니다."); return; }
     } else if (!requireEditorAccess(tabKey)) return;
@@ -13366,7 +13374,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
   };
 
   const handleRenameCustomCategory = async (kind, oldName, rawNext) => {
-    const tabKey = kind === "fridge" ? "fridge" : kind === "recipe" ? "recipes" : kind === "bucket" ? "bucket" : kind === "schedule" ? "schedule" : kind === "house_room" ? "house" : (kind === "condolence_cat" || kind === "condolence_group" || kind === "condolence_pay") ? "condolence" : "notices";
+    const tabKey = kind === "fridge" ? "fridge" : kind === "recipe" ? "recipes" : kind === "bucket" ? "bucket" : kind === "schedule" ? "schedule" : (kind === "house_room" || kind === "house_med_target") ? "house" : (kind === "condolence_cat" || kind === "condolence_group" || kind === "condolence_pay") ? "condolence" : "notices";
     if (tabKey === "condolence") {
       if (!isCondolenceUnlocked) { showToast("🔒 경조사비 비밀번호 해제 후 편집할 수 있습니다."); return; }
     } else if (!requireEditorAccess(tabKey)) return;
@@ -13391,11 +13399,13 @@ ${item.memo}` : `${item.title} 다녀옴!`,
         setHouseItems((prev) => prev.map((it) => (it.room === oldName ? { ...it, room: nextName } : it)));
         if (user && db) {
           try {
-            const batch = writeBatch(db);
-            affected.forEach((it) => {
-              batch.set(getDocRef("family_house_items_v1", it.id), { ...it, room: nextName }, { merge: true });
-            });
-            await batch.commit();
+            for (let i = 0; i < affected.length; i += 200) {
+              const batch = writeBatch(db);
+              affected.slice(i, i + 200).forEach((it) => {
+                batch.set(getDocRef("family_house_items_v1", it.id), { ...it, room: nextName }, { merge: true });
+              });
+              await batch.commit();
+            }
           } catch (e) {}
         }
       }
@@ -13421,20 +13431,24 @@ ${item.memo}` : `${item.title} 다녀옴!`,
       const affectedShop = shoppingList.filter((it) => it.category === oldName);
       if (affectedFridge.length > 0 && user && db) {
         try {
-          const batch = writeBatch(db);
-          affectedFridge.forEach((it) => {
-            batch.set(getDocRef("family_fridge_v4", it.id), { ...it, category: nextName }, { merge: true });
-          });
-          await batch.commit();
+          for (let i = 0; i < affectedFridge.length; i += 200) {
+            const batch = writeBatch(db);
+            affectedFridge.slice(i, i + 200).forEach((it) => {
+              batch.set(getDocRef("family_fridge_v4", it.id), { ...it, category: nextName }, { merge: true });
+            });
+            await batch.commit();
+          }
         } catch (e) {}
       }
       if (affectedShop.length > 0 && user && db) {
         try {
-          const batch = writeBatch(db);
-          affectedShop.forEach((it) => {
-            batch.set(getDocRef("family_shopping_v4", it.id), { ...it, category: nextName }, { merge: true });
-          });
-          await batch.commit();
+          for (let i = 0; i < affectedShop.length; i += 200) {
+            const batch = writeBatch(db);
+            affectedShop.slice(i, i + 200).forEach((it) => {
+              batch.set(getDocRef("family_shopping_v4", it.id), { ...it, category: nextName }, { merge: true });
+            });
+            await batch.commit();
+          }
         } catch (e) {}
       }
     } else if (kind === "recipe") {
@@ -13442,11 +13456,13 @@ ${item.memo}` : `${item.title} 다녀옴!`,
       const affected = recipes.filter((r) => r.category === oldName);
       if (affected.length > 0 && user && db) {
         try {
-          const batch = writeBatch(db);
-          affected.forEach((r) => {
-            batch.set(getDocRef("family_recipes_v8", r.id), { ...r, category: nextName }, { merge: true });
-          });
-          await batch.commit();
+          for (let i = 0; i < affected.length; i += 200) {
+            const batch = writeBatch(db);
+            affected.slice(i, i + 200).forEach((r) => {
+              batch.set(getDocRef("family_recipes_v8", r.id), { ...r, category: nextName }, { merge: true });
+            });
+            await batch.commit();
+          }
         } catch (e) {}
       }
     } else if (kind === "notice") {
@@ -13454,11 +13470,13 @@ ${item.memo}` : `${item.title} 다녀옴!`,
       const affected = notices.filter((n) => n.category === oldName);
       if (affected.length > 0 && user && db) {
         try {
-          const batch = writeBatch(db);
-          affected.forEach((n) => {
-            batch.set(getDocRef("family_notices_v4", n.id), { ...n, category: nextName }, { merge: true });
-          });
-          await batch.commit();
+          for (let i = 0; i < affected.length; i += 200) {
+            const batch = writeBatch(db);
+            affected.slice(i, i + 200).forEach((n) => {
+              batch.set(getDocRef("family_notices_v4", n.id), { ...n, category: nextName }, { merge: true });
+            });
+            await batch.commit();
+          }
         } catch (e) {}
       }
     } else if (kind === "bucket") {
@@ -13466,11 +13484,13 @@ ${item.memo}` : `${item.title} 다녀옴!`,
       const affected = bucketList.filter((b) => b.category === oldName);
       if (affected.length > 0 && user && db) {
         try {
-          const batch = writeBatch(db);
-          affected.forEach((b) => {
-            batch.set(getDocRef("family_bucket_v1", b.id), { ...b, category: nextName }, { merge: true });
-          });
-          await batch.commit();
+          for (let i = 0; i < affected.length; i += 200) {
+            const batch = writeBatch(db);
+            affected.slice(i, i + 200).forEach((b) => {
+              batch.set(getDocRef("family_bucket_v1", b.id), { ...b, category: nextName }, { merge: true });
+            });
+            await batch.commit();
+          }
         } catch (e) {}
       }
     } else if (kind === "schedule") {
@@ -13480,11 +13500,13 @@ ${item.memo}` : `${item.title} 다녀옴!`,
         setSchedules((prev) => prev.map((s) => (s.category === oldName ? { ...s, category: nextName } : s)));
         if (user && db) {
           try {
-            const batch = writeBatch(db);
-            affected.forEach((s) => {
-              batch.set(getDocRef("family_schedules_v4", s.id), { ...s, category: nextName }, { merge: true });
-            });
-            await batch.commit();
+            for (let i = 0; i < affected.length; i += 200) {
+              const batch = writeBatch(db);
+              affected.slice(i, i + 200).forEach((s) => {
+                batch.set(getDocRef("family_schedules_v4", s.id), { ...s, category: nextName }, { merge: true });
+              });
+              await batch.commit();
+            }
           } catch (e) {}
         }
       }
@@ -13538,12 +13560,29 @@ ${item.memo}` : `${item.title} 다녀옴!`,
           } catch (e) {}
         }
       }
+    } else if (kind === "house_med_target") {
+      if (houseFilter === oldName) setHouseFilter(nextName);
+      const affected = houseItems.filter((it) => it.kind === "medicine" && it.target === oldName);
+      if (affected.length > 0) {
+        setHouseItems((prev) => prev.map((it) => (it.kind === "medicine" && it.target === oldName ? { ...it, target: nextName } : it)));
+        if (user && db) {
+          try {
+            for (let i = 0; i < affected.length; i += 200) {
+              const batch = writeBatch(db);
+              affected.slice(i, i + 200).forEach((it) => {
+                batch.set(getDocRef("family_house_items_v1", it.id), { ...it, target: nextName }, { merge: true });
+              });
+              await batch.commit();
+            }
+          } catch (e) {}
+        }
+      }
     }
     showToast(`✏️ '${oldName}' → '${nextName}' 분류로 변경했습니다.`);
   };
 
   const handleDeleteCustomCategory = async (kind, targetName) => {
-    const tabKey = kind === "fridge" ? "fridge" : kind === "recipe" ? "recipes" : kind === "bucket" ? "bucket" : kind === "schedule" ? "schedule" : kind === "house_room" ? "house" : (kind === "condolence_cat" || kind === "condolence_group" || kind === "condolence_pay") ? "condolence" : "notices";
+    const tabKey = kind === "fridge" ? "fridge" : kind === "recipe" ? "recipes" : kind === "bucket" ? "bucket" : kind === "schedule" ? "schedule" : (kind === "house_room" || kind === "house_med_target") ? "house" : (kind === "condolence_cat" || kind === "condolence_group" || kind === "condolence_pay") ? "condolence" : "notices";
     if (tabKey === "condolence") {
       if (!isCondolenceUnlocked) { showToast("🔒 경조사비 비밀번호 해제 후 편집할 수 있습니다."); return; }
     } else if (!requireEditorAccess(tabKey)) return;
@@ -13571,11 +13610,12 @@ ${item.memo}` : `${item.title} 다녀옴!`,
     if (kind === "schedule" && scheduleCatFilter === targetName) setScheduleCatFilter("전체");
     if (kind === "condolence_cat" && condolenceCatFilter === targetName) setCondolenceCatFilter("전체");
     if (kind === "condolence_group" && condolenceGroupFilter === targetName) setCondolenceGroupFilter("전체");
+    if (kind === "house_med_target" && houseFilter === targetName) setHouseFilter("전체");
     await saveCustomCategoriesToCloud(nextCats, `🗑️ '${targetName}' 분류를 삭제했습니다.`);
   };
 
   const handleMoveCustomCategory = async (kind, idx, delta) => {
-    const tabKey = kind === "fridge" ? "fridge" : kind === "recipe" ? "recipes" : kind === "bucket" ? "bucket" : kind === "schedule" ? "schedule" : kind === "house_room" ? "house" : (kind === "condolence_cat" || kind === "condolence_group" || kind === "condolence_pay") ? "condolence" : "notices";
+    const tabKey = kind === "fridge" ? "fridge" : kind === "recipe" ? "recipes" : kind === "bucket" ? "bucket" : kind === "schedule" ? "schedule" : (kind === "house_room" || kind === "house_med_target") ? "house" : (kind === "condolence_cat" || kind === "condolence_group" || kind === "condolence_pay") ? "condolence" : "notices";
     if (tabKey === "condolence") {
       if (!isCondolenceUnlocked) { showToast("🔒 경조사비 비밀번호 해제 후 편집할 수 있습니다."); return; }
     } else if (!requireEditorAccess(tabKey)) return;
@@ -13599,7 +13639,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
   };
 
   const handleResetCustomCategories = async (kind) => {
-    const tabKey = kind === "fridge" ? "fridge" : kind === "recipe" ? "recipes" : kind === "bucket" ? "bucket" : kind === "schedule" ? "schedule" : kind === "house_room" ? "house" : (kind === "condolence_cat" || kind === "condolence_group" || kind === "condolence_pay") ? "condolence" : "notices";
+    const tabKey = kind === "fridge" ? "fridge" : kind === "recipe" ? "recipes" : kind === "bucket" ? "bucket" : kind === "schedule" ? "schedule" : (kind === "house_room" || kind === "house_med_target") ? "house" : (kind === "condolence_cat" || kind === "condolence_group" || kind === "condolence_pay") ? "condolence" : "notices";
     if (tabKey === "condolence") {
       if (!isCondolenceUnlocked) { showToast("🔒 경조사비 비밀번호 해제 후 편집할 수 있습니다."); return; }
     } else if (!requireEditorAccess(tabKey)) return;
@@ -13622,6 +13662,8 @@ ${item.memo}` : `${item.title} 다녀옴!`,
         ? [...CONDOLENCE_GROUPS]
         : kind === "condolence_pay"
         ? [...CONDOLENCE_PAY_METHODS]
+        : kind === "house_med_target"
+        ? [...HOUSE_MEDICINE_TARGETS]
         : [...NOTICE_CATEGORIES];
     await saveCustomCategoriesToCloud({ ...customCategories, [kind]: defaults }, "↺ 기본 분류 목록으로 복원했습니다.");
   };
@@ -14423,6 +14465,8 @@ ${item.memo}` : `${item.title} 다녀옴!`,
     setCondolenceAiEngineLabel(engineLabel);
     setCondolenceImportSearch("");
     setCondolenceImportSelectedIds([]);
+    setCondolenceImportAssignGroup("");
+    setCondolenceImportNewGroup("");
     const preview = buildCondolencePreviewFromRows(sheetObj.rows, finalSchema, nextBatchDef, fileName, sheetObj.name);
     setCondolenceImportPreview(preview);
   };
@@ -14569,6 +14613,42 @@ ${item.memo}` : `${item.title} 다녀옴!`,
     }
   };
 
+  const handleBulkDeleteCondolence = async () => {
+    if (!isCondolenceUnlocked || condolenceBulkIds.length === 0) return;
+    if (!window.confirm(`선택한 경조사비 내역 ${condolenceBulkIds.length}건을 클라우드에서 일괄 삭제할까요?`)) return;
+    setCondolenceBulkBusy(true);
+    const idSet = new Set(condolenceBulkIds);
+    const prev = condolenceList;
+    const nextList = condolenceList.filter((it) => !idSet.has(it.id));
+    setCondolenceList(nextList);
+    try { localStorage.setItem("kim_condolence_cache_v1", JSON.stringify(nextList)); } catch (e) {}
+    try {
+      if (user && db) {
+        beginWrite();
+        try {
+          const idsArr = Array.from(idSet);
+          for (let i = 0; i < idsArr.length; i += 200) {
+            const batch = writeBatch(db);
+            idsArr.slice(i, i + 200).forEach((id) => {
+              batch.delete(getDocRef("family_condolence_v1", id));
+            });
+            await batch.commit();
+          }
+        } finally {
+          endWrite();
+        }
+      }
+      setCondolenceBulkIds([]);
+      showToast(`🗑️ 선택한 ${idSet.size}건을 일괄 삭제했습니다.`);
+    } catch (err) {
+      setCondolenceList(prev);
+      try { localStorage.setItem("kim_condolence_cache_v1", JSON.stringify(prev)); } catch (e2) {}
+      setSyncErrorMsg(`경조사비 일괄 삭제 오류: ${err?.message || "네트워크 확인"}`);
+    } finally {
+      setCondolenceBulkBusy(false);
+    }
+  };
+
   const handleConfirmCondolenceImport = async () => {
     if (!condolenceImportPreview || condolenceImportPreview.freshCount === 0) return;
     setCondolenceImportBusy(true);
@@ -14580,16 +14660,18 @@ ${item.memo}` : `${item.title} 다녀옴!`,
       setCondolenceList(merged);
       try { localStorage.setItem("kim_condolence_cache_v1", JSON.stringify(merged)); } catch (e) {}
 
-      // 신규 카테고리/그룹 자동 반영
+      // 신규 카테고리/그룹/결제수단 자동 반영
       const nextCats = [...condolenceCategories];
       const nextGroups = [...condolenceGroups];
+      const nextPays = [...condolencePayMethods];
       let catChanged = false;
       fresh.forEach((it) => {
         if (it.category && !nextCats.includes(it.category)) { nextCats.push(it.category); catChanged = true; }
         if (it.group && !nextGroups.includes(it.group)) { nextGroups.push(it.group); catChanged = true; }
+        if (it.paymentMethod && !nextPays.includes(it.paymentMethod)) { nextPays.push(it.paymentMethod); catChanged = true; }
       });
       if (catChanged) {
-        await saveCustomCategoriesToCloud({ ...customCategories, condolence_cat: nextCats, condolence_group: nextGroups });
+        await saveCustomCategoriesToCloud({ ...customCategories, condolence_cat: nextCats, condolence_group: nextGroups, condolence_pay: nextPays });
       }
 
       if (user && db) {
@@ -26433,7 +26515,7 @@ time: "", location: "",
                   ? ["전체", ...houseStorageRooms]
                   : houseSubTab === "warranty"
                   ? ["전체", "임박·만료"]
-                  : ["전체", "임박·만료", ...HOUSE_MEDICINE_TARGETS]
+                  : ["전체", "임박·만료", ...houseMedTargets]
                 ).map((chip) => {
                   const subItems = houseItems.filter((x) => (x.kind || "storage") === houseSubTab);
                   const chipCnt =
@@ -26464,6 +26546,16 @@ time: "", location: "",
                     </button>
                   );
                 })}
+                {houseSubTab === "medicine" && canEditTab("house") && (
+                  <button
+                    type="button"
+                    onClick={() => openCategoryManager("house_med_target")}
+                    className="px-2.5 py-1 rounded-full text-[11.5px] font-extrabold border whitespace-nowrap shrink-0 bg-white text-[#35503C] border-[#C9D8CC] hover:bg-[#EEF3EE]"
+                    title="상비약 복용 대상 추가·수정·삭제"
+                  >
+                    ⚙️ 대상
+                  </button>
+                )}
                 {houseSubTab === "storage" && canEditTab("house") && (
                   <button
                     type="button"
@@ -27114,6 +27206,26 @@ time: "", location: "",
                 </div>
               )}
 
+              {condolencePersonFilter !== "전체" && (() => {
+                const pRows = condolenceList.filter((x) => x.person === condolencePersonFilter);
+                const pIn = pRows.filter((x) => x.type === "in").reduce((s, x) => s + (Number(x.amount) || 0), 0);
+                const pOut = pRows.filter((x) => x.type !== "in").reduce((s, x) => s + (Number(x.amount) || 0), 0);
+                const pNet = pIn - pOut;
+                return (
+                  <div className="rounded-xl bg-sky-50/90 border border-sky-200 px-2.5 py-2 flex flex-wrap items-center justify-between gap-1.5">
+                    <div className="text-[11px] font-black text-sky-900">
+                      👤 {condolencePersonFilter} 상호 내역 ({pRows.length}건) · 받음 +{pIn.toLocaleString()} / 보냄 -{pOut.toLocaleString()} / 차액 {pNet >= 0 ? "+" : ""}{pNet.toLocaleString()}원
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => openCondolenceForm(null, { person: condolencePersonFilter })}
+                      className="h-6 px-2 rounded-lg bg-sky-700 text-white text-[10.5px] font-extrabold whitespace-nowrap"
+                    >
+                      + {condolencePersonFilter} 추가
+                    </button>
+                  </div>
+                );
+              })()}
               {!isSuhyeokAdmin && (
                 <div className="text-[10.5px] font-semibold text-stone-400 text-right">
                   🔒 비밀번호 변경은 김수혁 관리자 전용
@@ -27306,7 +27418,27 @@ time: "", location: "",
             {/* 부분합 & 총계 집계표 */}
             <div className="bg-white rounded-2xl border border-stone-200 p-3 shadow-sm space-y-2">
               <div className="flex flex-wrap items-center justify-between gap-1.5">
-                <span className="text-[12.5px] font-black text-stone-900 whitespace-nowrap">📊 부분합 · 총계</span>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[12.5px] font-black text-stone-900 whitespace-nowrap">📊 부분합 · 총계</span>
+                  {condolenceSubtotalTab !== "none" && subtotalRows.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const tabTitle = { category: "카테고리별", group: "그룹별", person: "인별", year: "연도별" }[condolenceSubtotalTab] || "부분합";
+                        const lines = [
+                          `[📊 경조사비 ${tabTitle} 부분합]`,
+                          ...subtotalRows.map((r) => `${r.key} (${r.count}건): 입금 +${r.inAmt.toLocaleString()} / 출금 -${r.outAmt.toLocaleString()} / 차액 ${r.inAmt - r.outAmt >= 0 ? "+" : ""}${(r.inAmt - r.outAmt).toLocaleString()}원`),
+                          `합계 (${filteredList.length}건): 입금 +${subIn.toLocaleString()} / 출금 -${subOut.toLocaleString()} / 차액 ${subNet >= 0 ? "+" : ""}${subNet.toLocaleString()}원`
+                        ];
+                        copyTextSafe(lines.join("\n"), `📋 ${tabTitle} 부분합을 복사했습니다.`);
+                      }}
+                      className="h-6 px-1.5 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 text-[10.5px] font-extrabold whitespace-nowrap"
+                      title="현재 부분합 표 복사"
+                    >
+                      📋
+                    </button>
+                  )}
+                </div>
                 <div className="flex flex-wrap gap-1">
                   {[
                     { id: "category", label: "카테고리별" },
@@ -27467,14 +27599,24 @@ time: "", location: "",
                     <option value="아리">아리</option>
                   </select>
                 </div>
-                <button
-                  type="button"
-                  disabled={condolenceBulkBusy || condolenceBulkIds.length === 0}
-                  onClick={handleApplyMainCondolenceBulkUpdate}
-                  className="w-full h-8 rounded-xl bg-[#3F624D] disabled:bg-stone-300 text-white text-[12px] font-black whitespace-nowrap"
-                >
-                  {condolenceBulkBusy ? "☁️ 반영 중..." : `✅ 선택 ${condolenceBulkIds.length}명 일괄 적용`}
-                </button>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    disabled={condolenceBulkBusy || condolenceBulkIds.length === 0}
+                    onClick={handleApplyMainCondolenceBulkUpdate}
+                    className="flex-[2] h-8 rounded-xl bg-[#3F624D] disabled:bg-stone-300 text-white text-[12px] font-black whitespace-nowrap"
+                  >
+                    {condolenceBulkBusy ? "☁️ 반영 중..." : `✅ 선택 ${condolenceBulkIds.length}명 일괄 적용`}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={condolenceBulkBusy || condolenceBulkIds.length === 0}
+                    onClick={handleBulkDeleteCondolence}
+                    className="flex-1 h-8 rounded-xl bg-rose-600 disabled:bg-stone-300 text-white text-[11.5px] font-black whitespace-nowrap"
+                  >
+                    🗑️ 삭제
+                  </button>
+                </div>
               </div>
             )}
 
@@ -27542,7 +27684,7 @@ time: "", location: "",
                             </span>
                             <button
                               type="button"
-                              onClick={() => setCondolencePersonFilter(condolencePersonFilter === item.person ? "전체" : item.person)}
+                              onClick={(e) => { e.stopPropagation(); setCondolencePersonFilter(condolencePersonFilter === item.person ? "전체" : item.person); }}
                               className="text-[13.5px] font-black text-stone-900 hover:text-[#3F624D] hover:underline truncate"
                               title="이 사람 내역만 필터링"
                             >
@@ -27576,7 +27718,7 @@ time: "", location: "",
                           {item.memo}
                         </div>
                       )}
-                      <div className="flex items-center justify-end gap-1 pt-0.5">
+                      <div className="flex items-center justify-end gap-1 pt-0.5" onClick={(e) => e.stopPropagation()}>
                         <button
                           type="button"
                           onClick={() => handleCondolenceToSchedule(item)}
@@ -34017,6 +34159,15 @@ time: "", location: "",
                         ⏭️ 내일로 미루기 (+1일)
                       </button>
                     )}
+                    {activeDetail._isFamily && String(activeDetail.category || "").includes("경조사") && (
+                      <button
+                        type="button"
+                        onClick={() => handleScheduleToCondolence(activeDetail)}
+                        className="px-2.5 py-1.5 rounded-lg border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-[11.5px] font-extrabold transition whitespace-nowrap"
+                      >
+                        💌 경조사비 기록
+                      </button>
+                    )}
                     {isAdminUnlocked && activeDetail._isFamily && (
                       <button
                         type="button"
@@ -37477,6 +37628,7 @@ time: "", location: "",
           bucket: { title: "🌟 버킷 카테고리", placeholder: "새 버킷 분류 (예: 캠핑, 해외여행, 전시회)" },
           schedule: { title: "🗓️ 일정 카테고리", placeholder: "새 일정 분류 (예: 어린이집, 친정/시댁, 차량)" },
           house_room: { title: "🏠 수납 장소", placeholder: "새 수납 장소 (예: 드레스룸, 팬트리, 서재)" },
+          house_med_target: { title: "💊 상비약 대상", placeholder: "새 복용 대상 (예: 수혁, 아리, 친정)" },
           condolence_cat: { title: "💌 경조사 카테고리", placeholder: "새 경조사 분류 (예: 칠순/팔순, 집들이, 승진)" },
           condolence_group: { title: "👥 경조사 그룹", placeholder: "새 경조사 그룹 (예: 동호회, 대학동기, 거래처)" },
           condolence_pay: { title: "💳 경조사 결제수단", placeholder: "새 결제수단 (예: 카카오페이, 토스, 상품권, 화환)" }
@@ -37514,8 +37666,8 @@ time: "", location: "",
                 </div>
               </div>
 
-              {/* 6종 카테고리 빠른 전환 탭 */}
-              <div className="grid grid-cols-3 gap-1 bg-stone-100 p-1 rounded-xl">
+              {/* 통합 카테고리 빠른 전환 탭 */}
+              <div className="flex flex-wrap gap-1 bg-stone-100 p-1.5 rounded-xl">
                 {[
                   { id: "fridge", label: "❄️ 재료", cnt: (customCategories.fridge || []).length },
                   { id: "recipe", label: "📖 레시피", cnt: (customCategories.recipe || []).length },
@@ -37523,6 +37675,7 @@ time: "", location: "",
                   { id: "bucket", label: "🌟 버킷", cnt: (customCategories.bucket || []).length },
                   { id: "schedule", label: "🗓️ 일정", cnt: (customCategories.schedule || []).length },
                   { id: "house_room", label: "🏠 수납", cnt: houseStorageRooms.length },
+                  { id: "house_med_target", label: "💊 약대상", cnt: houseMedTargets.length },
                   ...(isCondolenceUnlocked ? [
                     { id: "condolence_cat", label: "💌 경조분류", cnt: condolenceCategories.length },
                     { id: "condolence_group", label: "👥 경조그룹", cnt: condolenceGroups.length },
@@ -37533,7 +37686,7 @@ time: "", location: "",
                     key={t.id}
                     type="button"
                     onClick={() => openCategoryManager(t.id)}
-                    className={`py-1.5 px-1.5 rounded-lg text-[11px] font-extrabold whitespace-nowrap transition ${
+                    className={`py-1 px-2 rounded-lg text-[11px] font-extrabold whitespace-nowrap transition ${
                       categoryManageKind === t.id
                         ? "bg-white text-stone-900 shadow-sm"
                         : "text-stone-500 hover:text-stone-800"
@@ -43906,7 +44059,7 @@ time: "", location: "",
             {houseForm.kind === "medicine" && (
               <>
                 <div className="grid grid-cols-4 gap-1.5">
-                  {HOUSE_MEDICINE_TARGETS.map((tg) => (
+                  {(houseMedTargets.includes(houseForm.target) ? houseMedTargets : [houseForm.target, ...houseMedTargets].filter(Boolean)).map((tg) => (
                     <button
                       key={tg}
                       type="button"

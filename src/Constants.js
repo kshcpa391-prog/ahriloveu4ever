@@ -1181,7 +1181,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v13.54";
+export const APP_CODE_VERSION = "v13.56";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1199,7 +1199,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-23 20:20";
+export const APP_BUILD_DATE = "2026-11-23 20:50";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1267,6 +1267,27 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v13.56",
+    version: "v13.56",
+    date: "2026-11-23",
+    title: "🛡️ 경조사비 일괄그룹 클릭간섭 수정·대용량 분류변경 200건 배치분할 + 부분합 1탭복사·상비약 대상 바로관리·카테고리 탭 균형정렬",
+    highlights: [
+      "버그 수정: ① 경조사비 [☑️ 일괄그룹] 모드에서 카드 내 [🗓️ 일정·✏️ 수정·삭제·성명] 클릭 시 체크박스까지 함께 토글되던 이벤트 전파 버그 수정 ② 새 엑셀 파일 선택 시 이전 그룹 입력값 자동 초기화 ③ 카테고리 이름변경 일괄 갱신을 전 컬렉션 200건 분할 배치(Firestore 500건 한도 안전)로 보강",
+      "편의성·시각 최적화: ① 경조사비 [📊 부분합 · 총계] 헤더에 현재 집계표(카테고리/그룹/인별/연도별) 1탭 [📋] 복사 버튼 추가 ② 살림수첩 상비약 필터 옆에 [⚙️ 대상] 바로가기 추가 ③ 통합 카테고리 관리 모달 탭을 균형 줄바꿈(flex-wrap)으로 정리해 빈 칸(고아 행) 제거"
+    ]
+  },
+  {
+    id: "patch-v13.55",
+    version: "v13.55",
+    date: "2026-11-23",
+    title: "🛡️ 공지 수정 분류보호·엑셀 결제수단 자동등록 + 경조사비 일괄삭제·인별 주고받기 배너 + 달력팝업→경조사비 연계 + 상비약 대상 자유관리",
+    highlights: [
+      "버그 수정: ① NoticeFormModal(공지 수정)에 삭제된 기존 분류 유지 fallback 옵션을 추가해 예전 공지 수정 시 분류가 임의 변경되던 버그 수정 ② 엑셀 가져오기 시 신규 결제수단(예: 화환)도 커스텀 결제수단 목록에 자동 등록되도록 보완",
+      "경조사비 고도화·편의성: ① [☑️ 일괄그룹] 모드에 [🗑️ 선택 N건 삭제](200건 분할 배치 삭제) 추가 ② 인별 필터 선택 시 해당 인물과 주고받은 입금·출금·차액 요약 배너 및 [+ 바로 추가] 버튼 표시",
+      "메뉴 연계·자유도 확장: ① 조르테 달력 일자 팝업 상세에서 [가족행사/경조사] 일정일 때 1탭 [💌 경조사비] 바로가기 추가 ② 살림수첩 [💊 상비약 대상](공통·시목·시율·어른 등)을 통합 ⚙️ 분류 관리 모달에 편입해 자유 추가·이름수정(기존 약품 일괄 갱신)·삭제·순서이동·Firebase 실시간 동기화 지원"
+    ]
+  },
   {
     id: "patch-v13.54",
     version: "v13.54",
