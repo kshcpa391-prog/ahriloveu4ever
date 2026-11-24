@@ -48,6 +48,8 @@ import {
   signInWithCustomToken,
   GoogleAuthProvider,
   signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   updateProfile,
@@ -4529,13 +4531,41 @@ function MainApp() {
   const handleGoogleLogin = async () => {
     if (!auth) return;
     setAuthFormError("");
+    setAuthFormNotice("");
     setAuthSubmitting(true);
+    const provider = new GoogleAuthProvider();
+    provider.setCustomParameters({ prompt: "select_account" });
     try {
-      const provider = new GoogleAuthProvider();
-      provider.setCustomParameters({ prompt: "select_account" });
       await signInWithPopup(auth, provider);
     } catch (err) {
-      setAuthFormError(err?.message || "Google 로그인에 실패했습니다.");
+      const code = err?.code || "";
+      if (
+        code === "auth/popup-blocked" ||
+        code === "auth/operation-not-supported-in-this-environment"
+      ) {
+        try {
+          await signInWithRedirect(auth, provider);
+          return;
+        } catch (redirErr) {
+          setAuthFormError(
+            `Google 리디렉션 로그인 실패 (${redirErr?.code || "error"}): ${redirErr?.message || ""}`
+          );
+        }
+      } else if (code === "auth/unauthorized-domain") {
+        setAuthFormError(
+          `현재 도메인(${window.location.hostname})이 Firebase Authentication > Settings > 승인된 도메인에 등록되어 있지 않습니다.`
+        );
+      } else if (code === "auth/operation-not-allowed") {
+        setAuthFormError(
+          "Firebase Console > Authentication > Sign-in method에서 Google 로그인을 사용 설정하고 지원 이메일을 저장해 주세요."
+        );
+      } else if (code === "auth/invalid-api-key" || code === "auth/invalid-credential") {
+        setAuthFormError(
+          `Firebase 인증 설정 오류(${code}): Firebase 프로젝트의 웹 API 키 또는 Google OAuth 설정을 확인해 주세요.`
+        );
+      } else if (code !== "auth/popup-closed-by-user" && code !== "auth/cancelled-popup-request") {
+        setAuthFormError(`Google 로그인 오류${code ? ` (${code})` : ""}: ${err?.message || "설정을 확인해 주세요."}`);
+      }
     } finally {
       setAuthSubmitting(false);
     }
@@ -4651,6 +4681,20 @@ function MainApp() {
     } catch (err) {
       endWrite(false);
       showToast("권한 변경 실패: " + (err?.message || "오류"));
+    }
+  };
+
+  const handleDeleteUserDoc = async (targetUid, labelName = "사용자") => {
+    if (!db || !isAdminUnlocked || !targetUid || targetUid === user?.uid) return;
+    if (!window.confirm(`[${labelName}] 계정을 목록에서 삭제하시겠습니까?`)) return;
+    beginWrite();
+    try {
+      await deleteDoc(getDocRef("users", targetUid));
+      endWrite(true);
+      showToast("🗑️ 사용자 목록에서 삭제되었습니다.");
+    } catch (err) {
+      endWrite(false);
+      showToast("삭제 실패: " + (err?.message || "오류"));
     }
   };
 
@@ -5196,6 +5240,11 @@ function MainApp() {
       return;
     }
     setPersistence(auth, browserLocalPersistence).catch(() => {});
+    getRedirectResult(auth).catch((err) => {
+      if (err?.code && err.code !== "auth/popup-closed-by-user") {
+        setAuthFormError(`Google 로그인 오류 (${err.code}): ${err.message || ""}`);
+      }
+    });
     if (typeof __initial_auth_token !== "undefined" && __initial_auth_token) {
       signInWithCustomToken(auth, __initial_auth_token).catch((err) => {
         console.error("Custom token auth error:", err);
@@ -17119,11 +17168,14 @@ ${item.memo}` : `${item.title} 다녀옴!`,
             <button
               type="button"
               onClick={() => setIsSettingsOpen(true)}
-              className="w-8 h-8 rounded-full hover:bg-stone-100 text-stone-600 hover:text-stone-900 flex items-center justify-center shrink-0"
+              className="relative w-8 h-8 rounded-full hover:bg-stone-100 text-stone-600 hover:text-stone-900 flex items-center justify-center shrink-0"
               title="앱 설정"
               aria-label="앱 설정"
             >
               <Settings className="w-3.5 h-3.5" />
+              {isAdminUnlocked && managedUsers.some((u) => u.role === "pending") && (
+                <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-amber-500 ring-2 ring-white animate-pulse" />
+              )}
             </button>
           </div>
         </div>
@@ -39041,136 +39093,29 @@ time: "", location: "",
                 </div>
 
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  <div className="bg-white p-2 rounded-xl border border-emerald-200 space-y-1">
-                    <div className="flex items-center justify-between text-[11.5px] font-extrabold text-emerald-900">
-                      <span>👑 수혁 관리자 비밀번호</span>
-                      <span>현재: {suhyeokCode}</span>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <input
-                        type="text"
-                        value={suhyeokCodeDraft}
-                        onChange={(e) => setSuhyeokCodeDraft(e.target.value)}
-                        placeholder="수혁 비밀번호 (4자리+)"
-                        className="flex-1 min-w-0 px-2.5 py-1 rounded-lg border border-emerald-200 text-[13.5px] font-bold"
-                      />
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          const nextS = suhyeokCodeDraft.trim();
-                          if (nextS.length < 4) {
-                            showToast("비밀번호는 4자리 이상으로 입력해 주세요.");
-                            return;
-                          }
-                          if (nextS === helperCode) {
-                            showToast("육아지원군 비밀번호와 다른 번호를 입력해 주세요.");
-                            return;
-                          }
-                          await saveAccessConfigToCloud({ suhyeokCode: nextS, adminCode: nextS });
-                          showToast(`👑 수혁 관리자 비밀번호가 [${nextS}]로 변경되었습니다!`);
-                        }}
-                        className="px-2.5 py-1 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-[12.5px] font-extrabold shrink-0 whitespace-nowrap"
-                      >
-                        저장
-                      </button>
-                    </div>
-                  </div>
-
-
-                  <div className="bg-white p-2 rounded-xl border border-pink-200 space-y-1">
-                    <div className="flex items-center justify-between text-[11.5px] font-extrabold text-pink-900">
-                      <span>👑 아리나 관리자 비밀번호</span>
-                      <span>현재: {arinaCode}</span>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <input
-                        type="text"
-                        value={arinaCodeDraft}
-                        onChange={(e) => setArinaCodeDraft(e.target.value)}
-                        placeholder="아리나 비밀번호 (4자리+)"
-                        className="flex-1 min-w-0 px-2.5 py-1 rounded-lg border border-pink-200 text-[13.5px] font-bold"
-                      />
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          const nextAr = arinaCodeDraft.trim();
-                          if (nextAr.length < 4) {
-                            showToast("비밀번호는 4자리 이상으로 입력해 주세요.");
-                            return;
-                          }
-                          if (nextAr === helperCode) {
-                            showToast("육아지원군 비밀번호와 다른 번호를 입력해 주세요.");
-                            return;
-                          }
-                          await saveAccessConfigToCloud({ arinaCode: nextAr });
-                          showToast(`👑 아리나 관리자 비밀번호가 [${nextAr}]로 변경되었습니다!`);
-                        }}
-                        className="px-2.5 py-1 rounded-lg bg-pink-600 hover:bg-pink-700 text-white text-[12.5px] font-extrabold shrink-0 whitespace-nowrap"
-                      >
-                        저장
-                      </button>
-                    </div>
-                  </div>
-
-
-                  {suhyeokCode === arinaCode && (
-                    <div className="sm:col-span-2 px-2.5 py-1.5 rounded-xl bg-amber-50 border border-amber-200 text-[11px] font-bold text-amber-900">
-                      💡 비밀번호를 다르게 설정하면 본인 계정으로 바로 접속됩니다.
-                    </div>
-                  )}
-                  <div className="bg-white p-2 rounded-xl border border-sky-200 space-y-1 sm:col-span-2">
-                    <div className="flex items-center justify-between text-[11.5px] font-extrabold text-sky-900">
-                      <span>🌿 육아지원군 비밀번호</span>
-                      <span>현재: {helperCode}</span>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <input
-                        type="text"
-                        value={helperCodeDraft}
-                        onChange={(e) => setHelperCodeDraft(e.target.value)}
-                        placeholder="육아지원군 비밀번호"
-                        className="flex-1 min-w-0 px-2.5 py-1 rounded-lg border border-sky-200 text-[13.5px] font-bold"
-                      />
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          const nextC = helperCodeDraft.trim();
-                          if (nextC.length < 4) {
-                            showToast("비밀번호는 4자리 이상으로 입력해 주세요.");
-                            return;
-                          }
-                          if (nextC === suhyeokCode || nextC === arinaCode || nextC === adminCode) {
-                            showToast("관리자 비밀번호와 다른 번호를 입력해 주세요.");
-                            return;
-                          }
-                          await saveAccessConfigToCloud({ helperCode: nextC });
-                          showToast(`🌿 육아지원군 비밀번호가 [${nextC}]로 변경되었습니다!`);
-                        }}
-                        className="px-2.5 py-1 rounded-lg bg-sky-700 hover:bg-sky-800 text-white text-[12.5px] font-extrabold shrink-0 whitespace-nowrap"
-                      >
-                        저장
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-
                 <div className="bg-white rounded-xl border border-emerald-200 p-3 space-y-2.5">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[13px] font-black text-emerald-950">👥 회원 승인 및 권한 관리</span>
-                    <span className="text-[11px] font-bold text-emerald-700">
-                      총 {managedUsers.length}명 · 대기 {managedUsers.filter((u) => u.role === "pending").length}명
-                    </span>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[13px] font-black text-emerald-950 whitespace-nowrap">👥 회원 승인 및 권한 관리</span>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {managedUsers.some((u) => u.role === "pending") && (
+                        <span className="px-2 py-0.5 rounded-full bg-amber-500 text-white text-[10.5px] font-black animate-pulse whitespace-nowrap">
+                          승인 대기 {managedUsers.filter((u) => u.role === "pending").length}건
+                        </span>
+                      )}
+                      <span className="text-[11px] font-bold text-emerald-700 whitespace-nowrap">
+                        총 {managedUsers.length}명
+                      </span>
+                    </div>
                   </div>
                   {managedUsers.length === 0 ? (
                     <div className="text-[12px] text-stone-500 py-2 text-center">
                       가입된 사용자 목록을 불러오는 중입니다.
                     </div>
                   ) : (
-                    <div className="space-y-2 max-h-64 overflow-y-auto pr-0.5">
+                    <div className="space-y-2 max-h-72 overflow-y-auto pr-0.5">
                       {managedUsers.map((mu) => {
                         const isSelf = mu.uid === user?.uid;
+                        const isPending = mu.role === "pending";
                         const roleBadge =
                           mu.role === "admin"
                             ? "bg-stone-900 text-white"
@@ -39178,7 +39123,7 @@ time: "", location: "",
                             ? "bg-sky-100 text-sky-900"
                             : mu.role === "rejected"
                             ? "bg-rose-100 text-rose-800"
-                            : "bg-amber-100 text-amber-900";
+                            : "bg-amber-500 text-white";
                         const roleText =
                           mu.role === "admin"
                             ? "관리자"
@@ -39190,19 +39135,30 @@ time: "", location: "",
                         return (
                           <div
                             key={mu.uid}
-                            className="p-2.5 rounded-xl border border-stone-200 bg-stone-50/80 space-y-2"
+                            className={`p-2.5 rounded-xl border space-y-2 ${
+                              isPending
+                                ? "border-amber-300 bg-amber-50/70"
+                                : "border-stone-200 bg-stone-50/80"
+                            }`}
                           >
                             <div className="flex items-center justify-between gap-2">
                               <div className="min-w-0">
                                 <div className="text-[12.5px] font-black text-stone-900 truncate">
                                   {mu.actorName || mu.displayName || "이름 없음"} {isSelf ? "(나)" : ""}
                                 </div>
-                                <div className="text-[11px] text-stone-500 truncate">{mu.email || mu.uid}</div>
+                                <div className="text-[11px] text-stone-500 truncate">
+                                  {mu.email || `이메일 없음 (${mu.uid.slice(0, 8)}…)`}
+                                </div>
                               </div>
-                              <span className={`px-2 py-0.5 rounded-full text-[10.5px] font-black shrink-0 ${roleBadge}`}>
+                              <span className={`px-2 py-0.5 rounded-full text-[10.5px] font-black shrink-0 whitespace-nowrap ${roleBadge}`}>
                                 {roleText}
                               </span>
                             </div>
+                            {isPending && (
+                              <div className="text-[11px] font-extrabold text-amber-900">
+                                ⏳ 새 권한 신청 — 아래에서 부여할 권한을 선택하세요
+                              </div>
+                            )}
                             {!isSelf && (
                               <div className="flex flex-wrap gap-1">
                                 <button
@@ -39239,6 +39195,18 @@ time: "", location: "",
                                 >
                                   🚫 차단
                                 </button>
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    handleDeleteUserDoc(
+                                      mu.uid,
+                                      mu.actorName || mu.displayName || mu.email || mu.uid
+                                    )
+                                  }
+                                  className="px-2 py-1 rounded-lg bg-white border border-stone-200 text-stone-500 hover:text-rose-700 text-[11px] font-extrabold whitespace-nowrap"
+                                >
+                                  🗑️ 삭제
+                                </button>
                               </div>
                             )}
                           </div>
@@ -39249,39 +39217,21 @@ time: "", location: "",
                 </div>
 
                 <div className="bg-white rounded-xl border border-sky-200 overflow-hidden">
-                  <div className="grid grid-cols-[1fr_54px_54px_54px] items-center bg-sky-100/70 px-2.5 py-1.5 text-[11.5px] font-black text-sky-950 text-center">
+                  <div className="grid grid-cols-[1fr_68px_68px] items-center bg-sky-100/70 px-2.5 py-1.5 text-[11.5px] font-black text-sky-950 text-center">
                     <span className="text-left">메뉴</span>
-                    <span>미로그인</span>
-                    <span>지원군열람</span>
-                    <span>지원군편집</span>
+                    <span className="whitespace-nowrap">지원군열람</span>
+                    <span className="whitespace-nowrap">지원군편집</span>
                   </div>
                   <div className="divide-y divide-stone-100">
                     {HELPER_CONFIGURABLE_TABS.map((t) => {
-                      const gView = guestAllowedTabs.includes(t.id);
                       const hView = helperAllowedTabs.includes(t.id);
                       const hEdit = helperEditTabs.includes(t.id);
                       return (
                         <div
                           key={t.id}
-                          className="grid grid-cols-[1fr_54px_54px_54px] items-center px-2.5 py-1.5 text-[12.5px] font-bold text-stone-800"
+                          className="grid grid-cols-[1fr_68px_68px] items-center px-2.5 py-1.5 text-[12.5px] font-bold text-stone-800"
                         >
                           <span className="truncate">{t.label}</span>
-                          <div className="flex justify-center">
-                            <button
-                              type="button"
-                              onClick={async () => {
-                                const nextG = gView
-                                  ? guestAllowedTabs.filter((x) => x !== t.id)
-                                  : [...guestAllowedTabs, t.id];
-                                await saveAccessConfigToCloud({ guestAllowedTabs: nextG });
-                              }}
-                              className={`w-7 h-5 rounded text-[11.5px] font-black border ${
-                                gView ? "bg-amber-500 text-white border-amber-500" : "bg-stone-100 text-stone-400 border-stone-200"
-                              }`}
-                            >
-                              {gView ? "O" : "-"}
-                            </button>
-                          </div>
                           <div className="flex justify-center">
                             <button
                               type="button"
