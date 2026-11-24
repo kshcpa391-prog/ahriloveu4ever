@@ -1181,7 +1181,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v13.84";
+export const APP_CODE_VERSION = "v13.86";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1199,7 +1199,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-24 14:45";
+export const APP_BUILD_DATE = "2026-11-24 16:33";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1268,6 +1268,26 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v13.86",
+    version: "v13.86",
+    date: "2026-11-24",
+    title: "🎨 전 메뉴 모달 제목 폰트(13.5px) 및 세이지그린(#3F624D) 색감 일괄 통일",
+    highlights: [
+      "모든 메뉴·모달 제목(h3)에서 15~15.5px로 불규칙하게 크게 남아 있던 폰트를 13.5px 규격으로 일괄 통일",
+      "루틴·일정·장보기·육아·공지 등에 흩어져 있던 이질적 원색(indigo-600/pink-600) 배지·버튼을 앱 공통 세이지그린(#3F624D · #EEF3EE) 톤으로 정리하고 전체 구문·배포 오류 점검 완료"
+    ]
+  },
+  {
+    id: "patch-v13.85",
+    version: "v13.85",
+    date: "2026-11-24",
+    title: "⚙️ [세부 분류 관리] 모달 컴팩트 통일 + 회원 [개별 메뉴 권한] 분류별 권한 연계",
+    highlights: [
+      "세부 분류 관리 모달 경량화: 전환 탭(10px)·목록 행(11px)·편집 버튼(10px) 규격을 설정창·패치노트·분류권한 팝업과 동일하게 통일하고 하단 불필요 안내 문구 제거",
+      "회원 개별 메뉴 권한 연계 고도화: [개별 메뉴 권한]을 켤 때 공통 기본값이 아니라 해당 회원의 분류(roleLabel)에 설정된 권한을 기준으로 불러오도록 개선"
+    ]
+  },
   {
     id: "patch-v13.84",
     version: "v13.84",

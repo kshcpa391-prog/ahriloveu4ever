@@ -433,7 +433,7 @@ const PrivateCalFormModal = React.memo(({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between">
-          <h3 className="text-[15.5px] font-black text-stone-900">
+          <h3 className="text-[13.5px] font-black text-stone-900">
             {isEditing ? "✏️ 개인 일정 수정" : "🔒 개인 일정 추가"}
           </h3>
           <button
@@ -453,7 +453,7 @@ const PrivateCalFormModal = React.memo(({
               <button
                 type="button"
                 onClick={() => onConvertToFamily(draft)}
-                className="px-2 py-0.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-[10.5px] font-black whitespace-nowrap shrink-0"
+                className="px-2 py-0.5 rounded-lg bg-[#3F624D] hover:bg-[#324F3E] text-white text-[10.5px] font-black whitespace-nowrap shrink-0"
               >
                 🏠 가족일정으로 이동
               </button>
@@ -628,7 +628,7 @@ const ScheduleFormModal = React.memo(({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between gap-2">
-          <h3 className="text-[15.5px] font-black truncate min-w-0">
+          <h3 className="text-[13.5px] font-black truncate min-w-0">
             {isPrivateMode
               ? (isEditing ? "🔒 내 개인일정 수정" : "🔒 새 개인일정 추가")
               : (isEditing ? "🏠 가족 일정 수정" : "🏠 새 가족 일정 추가")}
@@ -1185,7 +1185,7 @@ const NoticeFormModal = React.memo(({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between">
-          <h3 className="text-[15.5px] font-black">
+          <h3 className="text-[13.5px] font-black">
             {isEditing ? "가족 공지 수정" : "새 가족 공지사항 작성"}
           </h3>
           <button type="button" onClick={onClose} aria-label="닫기">
@@ -5173,7 +5173,7 @@ function MainApp() {
           <Lock className="w-6 h-6" />
         </div>
         <div className="space-y-1">
-          <h3 className="text-[15.5px] font-black text-stone-900">{tabLabel} 메뉴는 잠겨 있습니다</h3>
+          <h3 className="text-[13.5px] font-black text-stone-900">{tabLabel} 메뉴는 잠겨 있습니다</h3>
           <p className="text-[13.5px] text-stone-500 leading-relaxed">
             현재 계정에서는 접근이 제한된 메뉴입니다. 관리자(수혁)에게 해당 메뉴의 열람 권한을 요청해 주세요.
           </p>
@@ -22134,7 +22134,7 @@ time: "", location: "",
             >
               <span className="whitespace-nowrap">{canViewTab("routines") ? "🔄 루틴" : "🔒 루틴"}</span>
               {familyRoutines.filter((r) => isRoutineDueTodayOrPast(r, currentDayKey) && !isRoutineDoneNow(r)).length > 0 && (
-                <span className="px-1.5 py-0.5 rounded-full bg-indigo-600 text-white text-[10px] font-black leading-none whitespace-nowrap shrink-0">
+                <span className="px-1.5 py-0.5 rounded-full bg-[#3F624D] text-white text-[10px] font-black leading-none whitespace-nowrap shrink-0">
                   {familyRoutines.filter((r) => isRoutineDueTodayOrPast(r, currentDayKey) && !isRoutineDoneNow(r)).length}
                 </span>
               )}
@@ -22797,7 +22797,7 @@ time: "", location: "",
                                       {ev.category}
                                     </span>
                                     {ev.isAnnual && (
-                                      <span className="px-2 py-0.5 rounded-md text-[11px] font-extrabold bg-pink-600 text-white whitespace-nowrap">
+                                      <span className="px-2 py-0.5 rounded-md text-[11px] font-extrabold bg-[#EEF3EE] text-[#35503C] border border-[#C9D8CC] whitespace-nowrap">
                                         🔄 매년 반복
                                       </span>
                                     )}
@@ -23414,7 +23414,7 @@ time: "", location: "",
                               }}
                               className={`px-2.5 py-0.5 rounded-lg text-[11.5px] font-extrabold border whitespace-nowrap ${
                                 slot.weekday
-                                  ? "bg-indigo-600 text-white border-indigo-600"
+                                  ? "bg-[#3F624D] text-white border-[#3F624D]"
                                   : "bg-stone-50 text-stone-400 border-stone-200"
                               }`}
                             >
@@ -23494,7 +23494,7 @@ time: "", location: "",
                         type="button"
                         onClick={() => setNewSlotWeekday((v) => !v)}
                         className={`px-2 py-1 rounded-lg text-[11.5px] font-extrabold border whitespace-nowrap ${
-                          newSlotWeekday ? "bg-indigo-600 text-white border-indigo-600" : "bg-white text-stone-400 border-stone-200"
+                          newSlotWeekday ? "bg-[#3F624D] text-white border-[#3F624D]" : "bg-white text-stone-400 border-stone-200"
                         }`}
                       >
                         평일
@@ -23840,7 +23840,7 @@ time: "", location: "",
                             onClick={() => handleToggleRoutine(rt.id)}
                             className={`w-5 h-5 mt-0.5 rounded-lg border flex items-center justify-center shrink-0 ${
                               doneNow
-                                ? "bg-indigo-600 border-indigo-600 text-white"
+                                ? "bg-[#3F624D] border-[#3F624D] text-white"
                                 : "bg-white border-indigo-300"
                             }`}
                             title="전체 완료"
@@ -25305,7 +25305,7 @@ time: "", location: "",
                             }}
                             className={`px-2 py-1 rounded-lg border text-[11.5px] font-extrabold flex items-center gap-1 transition active:scale-95 select-none ${
                               bulkMoveMode && selectedBulkFridgeIds.includes(it.id)
-                                ? "bg-indigo-600 border-indigo-700 text-white ring-2 ring-indigo-300"
+                                ? "bg-[#3F624D] border-[#324F3E] text-white ring-2 ring-[#C9D8CC]"
                                 : Number(it.quantity) === 0
                                 ? "bg-stone-100/80 border-stone-200/80 text-stone-400"
                                 : isUrgent
@@ -25349,7 +25349,7 @@ time: "", location: "",
                         }}
                         className={`px-2 py-0.5 rounded-lg text-[11.5px] font-extrabold border whitespace-nowrap ${
                           bulkMoveMode
-                            ? "bg-indigo-600 text-white border-indigo-600"
+                            ? "bg-[#3F624D] text-white border-[#3F624D]"
                             : "bg-white text-stone-600 border-stone-200"
                         }`}
                       >
@@ -25393,7 +25393,7 @@ time: "", location: "",
                         type="button"
                         disabled={selectedBulkFridgeIds.length === 0}
                         onClick={() => handleBulkMoveFridgeShelfZone(selectedBulkFridgeIds, bulkTargetZone)}
-                        className="px-2.5 py-1 rounded-lg bg-indigo-600 disabled:opacity-40 text-white text-[12.5px] font-extrabold whitespace-nowrap shrink-0"
+                        className="px-2.5 py-1 rounded-lg bg-[#3F624D] disabled:opacity-40 text-white text-[12.5px] font-extrabold whitespace-nowrap shrink-0"
                       >
                         📦 {selectedBulkFridgeIds.length}개 일괄 이동
                       </button>
@@ -26383,7 +26383,7 @@ time: "", location: "",
                 <div className="flex items-start justify-between gap-2 mb-1.5">
                   <div className="flex items-center gap-1.5 flex-wrap">
                     {n.pinned && (
-                      <span className="px-2 py-0.5 rounded-md text-[11.5px] font-extrabold bg-indigo-600 text-white flex items-center gap-1 whitespace-nowrap">
+                      <span className="px-2 py-0.5 rounded-md text-[11.5px] font-extrabold bg-[#3F624D] text-white flex items-center gap-1 whitespace-nowrap">
                         <Pin className="w-2.5 h-2.5" /> 상단고정
                       </span>
                     )}
@@ -32509,7 +32509,7 @@ time: "", location: "",
                         <button
                           type="button"
                           onClick={() => handleSyncAllUpcomingBabySchedules(activeChild)}
-                          className="px-2.5 py-1 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-extrabold flex items-center gap-1 whitespace-nowrap"
+                          className="px-2.5 py-1 rounded-xl bg-[#3F624D] hover:bg-[#324F3E] text-white text-[11px] font-extrabold flex items-center gap-1 whitespace-nowrap"
                         >
                           <CalendarDays className="w-3.5 h-3.5" />
                           <span>일정 일괄등록</span>
@@ -35581,7 +35581,7 @@ time: "", location: "",
             >
               <div className="flex items-center justify-between">
                 <div>
-                  <h3 className="text-[15.5px] font-black text-stone-900 flex items-center gap-1.5">
+                  <h3 className="text-[13.5px] font-black text-stone-900 flex items-center gap-1.5">
                     <CloudUpload className="w-4 h-4 text-stone-700" />
                     <span>클라우드 CSV 연동</span>
                   </h3>
@@ -36227,7 +36227,7 @@ time: "", location: "",
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between">
-              <h3 className="text-[15.5px] font-black text-stone-900">
+              <h3 className="text-[13.5px] font-black text-stone-900">
                 {editingBucketId ? "✏️ 버킷리스트 장소 수정" : "📍 위치 검색 후 버킷리스트 추가"}
               </h3>
               <button
@@ -36647,7 +36647,7 @@ time: "", location: "",
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between">
-              <h3 className="text-[15.5px] font-black text-stone-900">
+              <h3 className="text-[13.5px] font-black text-stone-900">
                 {editingRoutineId ? "🔄 반복 루틴 수정" : "🔄 새 반복 루틴 추가"}
               </h3>
               <button type="button" onClick={handleCancelEditRoutine}>
@@ -36721,7 +36721,7 @@ time: "", location: "",
                     className={`px-2.5 py-1.5 rounded-xl text-[12.5px] font-extrabold border transition whitespace-nowrap ${
                       newRoutineCycle === c.id
                         ? c.id === "weekdays"
-                          ? "bg-indigo-600 text-white border-indigo-600"
+                          ? "bg-[#3F624D] text-white border-[#3F624D]"
                           : c.id === "weekend_holiday"
                           ? "bg-teal-600 text-white border-teal-600"
                           : "bg-stone-900 text-white border-stone-900"
@@ -37050,7 +37050,7 @@ time: "", location: "",
           <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-3xl max-w-md w-full p-5 space-y-3.5 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="text-[15.5px] font-black text-stone-900">
+                <h3 className="text-[13.5px] font-black text-stone-900">
                   📸 식단표 이미지 AI 고속 스캔 (손글씨·인쇄물)
                 </h3>
                 <p className="text-[12.5px] text-stone-500">
@@ -37306,7 +37306,7 @@ time: "", location: "",
           >
             <div className="flex items-center justify-between gap-2 shrink-0">
               <div className="min-w-0">
-                <h3 className="text-[15.5px] font-black text-stone-900 truncate">📸 메모·사진으로 장보기 입고</h3>
+                <h3 className="text-[13.5px] font-black text-stone-900 truncate">📸 메모·사진으로 장보기 입고</h3>
                 <p className="text-[11px] font-semibold text-stone-500 mt-0.5">
                   냉장고 손글씨 메모·화이트보드·장보기 목록 사진 자동 인식
                 </p>
@@ -37530,7 +37530,7 @@ time: "", location: "",
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setIsReceiptModalOpen(false)}>
           <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-3xl max-w-sm w-full p-5 space-y-3 max-h-[85vh] overflow-y-auto">
             <div className="flex items-center justify-between">
-              <h3 className="text-[15.5px] font-black">🧾 마트 영수증 사진 고속 스캔</h3>
+              <h3 className="text-[13.5px] font-black">🧾 마트 영수증 사진 고속 스캔</h3>
               <button type="button" onClick={() => setIsReceiptModalOpen(false)}>
                 <X className="w-5 h-5 text-stone-400" />
               </button>
@@ -37937,7 +37937,7 @@ time: "", location: "",
             onClick={(e) => e.stopPropagation()}
             className="bg-white rounded-3xl max-w-sm w-full p-5 pt-0 space-y-3.5 max-h-[90vh] overflow-y-auto">
             <div className="sticky top-0 bg-white z-10 pt-4 pb-2.5 border-b border-stone-100 flex items-center justify-between gap-2">
-              <h3 className="text-[15.5px] font-black">
+              <h3 className="text-[13.5px] font-black">
                 {editingMeal ? "식단 수정하기" : "새 식단 기록하기"}
               </h3>
               <div className="flex items-center gap-1.5">
@@ -38442,7 +38442,7 @@ time: "", location: "",
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between">
-              <h3 className="text-[15.5px] font-black">
+              <h3 className="text-[13.5px] font-black">
                 {editingFridge ? "냉장고 재료 수정" : "냉장고 재료 추가"}
               </h3>
               <button type="button" onClick={() => { setFridgeConflictData(null); setIsFridgeModalOpen(false); }}>
@@ -38698,7 +38698,7 @@ time: "", location: "",
       {stockInItem && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setStockInItem(null)}>
           <div className="bg-white rounded-3xl max-w-sm w-full p-5 space-y-3" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-[15.5px] font-black">🛒 구매 완료 및 냉장고 입고</h3>
+            <h3 className="text-[13.5px] font-black">🛒 구매 완료 및 냉장고 입고</h3>
             <p className="text-[13px] text-stone-600">
               <b>{stockInItem.name}</b> 입고 (금액 입력 시 가계부 자동 기록)
             </p>
@@ -38807,7 +38807,7 @@ time: "", location: "",
               className="bg-white rounded-3xl max-w-sm w-full p-4 space-y-3 shadow-2xl max-h-[88vh] overflow-y-auto"
             >
               <div className="flex items-center justify-between gap-2">
-                <h3 className="text-[15px] font-black text-stone-900">
+                <h3 className="text-[13.5px] font-black text-stone-900">
                   {editingCondolenceId ? "✏️ 경조사비 내역 수정" : "💌 경조사비 내역 추가"}
                 </h3>
                 <button
@@ -39058,7 +39058,7 @@ time: "", location: "",
           >
             <div className="flex items-center justify-between gap-2">
               <div>
-                <h3 className="text-[15px] font-black text-stone-900">📊 클라우드 엑셀 내보내기 · 가져오기</h3>
+                <h3 className="text-[13.5px] font-black text-stone-900">📊 클라우드 엑셀 내보내기 · 가져오기</h3>
                 <p className="text-[11px] font-semibold text-stone-400 mt-0.5">
                   Firebase 클라우드 저장분 ({condolenceList.length}건) 연동
                 </p>
@@ -39503,7 +39503,7 @@ time: "", location: "",
             onClick={() => setCategoryManageKind("")}
           >
             <div
-              className="bg-white rounded-3xl max-w-sm w-full p-4 space-y-3 shadow-2xl max-h-[82vh] flex flex-col"
+              className="bg-white rounded-2xl max-w-sm w-full p-3.5 space-y-2.5 shadow-2xl border border-stone-200 max-h-[82vh] flex flex-col"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex items-center justify-between gap-2">
@@ -39514,7 +39514,7 @@ time: "", location: "",
                   <button
                     type="button"
                     onClick={() => handleResetCustomCategories(categoryManageKind)}
-                    className="h-7 px-2 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-600 text-[11px] font-extrabold whitespace-nowrap"
+                    className="h-6 px-2 rounded-md bg-stone-100 hover:bg-stone-200 text-stone-600 text-[10px] font-extrabold whitespace-nowrap"
                     title="기본 분류로 복원"
                   >
                     ↺ 기본복원
@@ -39554,9 +39554,9 @@ time: "", location: "",
                     key={t.id}
                     type="button"
                     onClick={() => openCategoryManager(t.id)}
-                    className={`py-1 px-2 rounded-lg text-[11px] font-extrabold whitespace-nowrap transition ${
+                    className={`py-0.5 px-1.5 rounded-md text-[10px] font-extrabold whitespace-nowrap transition ${
                       categoryManageKind === t.id
-                        ? "bg-white text-stone-900 shadow-sm"
+                        ? "bg-white text-stone-900 shadow-xs"
                         : "text-stone-500 hover:text-stone-800"
                     }`}
                   >
@@ -39593,7 +39593,7 @@ time: "", location: "",
                   return (
                     <div
                       key={cat}
-                      className="px-2.5 py-2 rounded-xl border border-stone-200 bg-stone-50/70 flex items-center justify-between gap-1.5"
+                      className="px-2 py-1.5 rounded-lg border border-stone-200 bg-stone-50/70 flex items-center justify-between gap-1.5"
                     >
                       {isEd ? (
                         <div className="flex items-center gap-1 flex-1 min-w-0">
@@ -39605,27 +39605,27 @@ time: "", location: "",
                               if (e.key === "Enter") handleRenameCustomCategory(categoryManageKind, cat, editingCategoryDraft);
                               if (e.key === "Escape") { setEditingCategoryOrig(""); setEditingCategoryDraft(""); }
                             }}
-                            className="flex-1 min-w-0 h-7 px-2 rounded-lg border border-[#3F624D] bg-white text-[12px] font-bold"
+                            className="flex-1 min-w-0 h-6 px-2 rounded-md border border-[#3F624D] bg-white text-[11px] font-bold"
                             autoFocus
                           />
                           <button
                             type="button"
                             onClick={() => handleRenameCustomCategory(categoryManageKind, cat, editingCategoryDraft)}
-                            className="h-7 px-2 rounded-lg bg-[#3F624D] text-white text-[11px] font-extrabold whitespace-nowrap shrink-0"
+                            className="h-6 px-2 rounded-md bg-[#3F624D] text-white text-[10px] font-extrabold whitespace-nowrap shrink-0"
                           >
                             저장
                           </button>
                           <button
                             type="button"
                             onClick={() => { setEditingCategoryOrig(""); setEditingCategoryDraft(""); }}
-                            className="h-7 px-1.5 rounded-lg bg-stone-200 text-stone-700 text-[11px] font-bold whitespace-nowrap shrink-0"
+                            className="h-6 px-1.5 rounded-md bg-stone-200 text-stone-700 text-[10px] font-bold whitespace-nowrap shrink-0"
                           >
                             취소
                           </button>
                         </div>
                       ) : (
                         <>
-                          <span className="text-[12.5px] font-extrabold text-stone-800 truncate flex-1 min-w-0">
+                          <span className="text-[11px] font-extrabold text-stone-800 truncate flex-1 min-w-0">
                             {categoryManageKind === "fridge" ? `${getFridgeCategoryIcon(cat)} ` : ""}{cat}
                           </span>
                           <div className="flex items-center gap-0.5 shrink-0">
@@ -39633,7 +39633,7 @@ time: "", location: "",
                               type="button"
                               disabled={idx === 0}
                               onClick={() => handleMoveCustomCategory(categoryManageKind, idx, -1)}
-                              className="h-6 w-6 rounded-md bg-white hover:bg-stone-100 disabled:opacity-30 border border-stone-200 text-[10px] font-black text-stone-600 flex items-center justify-center"
+                              className="h-5 w-5 rounded bg-white hover:bg-stone-100 disabled:opacity-30 border border-stone-200 text-[9px] font-black text-stone-600 flex items-center justify-center"
                               title="위로 이동"
                             >
                               ▲
@@ -39642,7 +39642,7 @@ time: "", location: "",
                               type="button"
                               disabled={idx === curList.length - 1}
                               onClick={() => handleMoveCustomCategory(categoryManageKind, idx, 1)}
-                              className="h-6 w-6 rounded-md bg-white hover:bg-stone-100 disabled:opacity-30 border border-stone-200 text-[10px] font-black text-stone-600 flex items-center justify-center"
+                              className="h-5 w-5 rounded bg-white hover:bg-stone-100 disabled:opacity-30 border border-stone-200 text-[9px] font-black text-stone-600 flex items-center justify-center"
                               title="아래로 이동"
                             >
                               ▼
@@ -39653,7 +39653,7 @@ time: "", location: "",
                                 setEditingCategoryOrig(cat);
                                 setEditingCategoryDraft(cat);
                               }}
-                              className="h-6 px-1.5 rounded-md bg-white hover:bg-stone-100 border border-stone-200 text-[10.5px] font-bold text-stone-700 whitespace-nowrap"
+                              className="h-5 px-1.5 rounded bg-white hover:bg-stone-100 border border-stone-200 text-[10px] font-bold text-stone-700 whitespace-nowrap"
                               title="이름 수정"
                             >
                               수정
@@ -39662,7 +39662,7 @@ time: "", location: "",
                               type="button"
                               disabled={curList.length <= 1}
                               onClick={() => handleDeleteCustomCategory(categoryManageKind, cat)}
-                              className="h-6 px-1.5 rounded-md bg-rose-50 hover:bg-rose-100 disabled:opacity-30 border border-rose-200 text-[10.5px] font-bold text-rose-700 whitespace-nowrap"
+                              className="h-5 px-1.5 rounded bg-white hover:bg-rose-50 disabled:opacity-30 border border-rose-200 text-[10px] font-bold text-rose-600 whitespace-nowrap"
                               title="삭제"
                             >
                               삭제
@@ -39673,9 +39673,6 @@ time: "", location: "",
                     </div>
                   );
                 })}
-              </div>
-              <div className="text-[10.5px] font-semibold text-stone-500 text-center">
-                이름 수정 시 기존 항목의 분류도 자동 변경됩니다.
               </div>
             </div>
           </div>
@@ -39696,7 +39693,7 @@ time: "", location: "",
       {quickLogRecipe && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setQuickLogRecipe(null)}>
           <div className="bg-white rounded-3xl max-w-sm w-full p-5 space-y-3" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-[15.5px] font-black">식단표에 바로 등록하기</h3>
+            <h3 className="text-[13.5px] font-black">식단표에 바로 등록하기</h3>
             <div className="text-[13.5px] font-bold text-stone-700">{quickLogRecipe.title}</div>
             <input
               type="date"
@@ -39746,7 +39743,7 @@ time: "", location: "",
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setCookingConfirmModal(null)}>
           <div className="bg-white rounded-3xl max-w-sm w-full p-5 space-y-3.5" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between">
-              <h3 className="text-[15.5px] font-black">🍳 요리 완료 · 재고 차감 확인</h3>
+              <h3 className="text-[13.5px] font-black">🍳 요리 완료 · 재고 차감 확인</h3>
               <button type="button" onClick={() => setCookingConfirmModal(null)}>
                 <X className="w-5 h-5 text-stone-400" />
               </button>
@@ -39834,7 +39831,7 @@ time: "", location: "",
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between gap-2">
-              <h3 className="text-[15.5px] font-black text-stone-900">📷 홈 가족사진 편집</h3>
+              <h3 className="text-[13.5px] font-black text-stone-900">📷 홈 가족사진 편집</h3>
               <button type="button" onClick={() => setIsHeroPhotoModalOpen(false)} className="p-1">
                 <X className="w-5 h-5 text-stone-400" />
               </button>
@@ -40515,17 +40512,20 @@ time: "", location: "",
                               {!isSelf && mu.role === "helper" && editingPermUid === mu.uid && (
                                 <div className="px-2.5 pb-2 pt-1.5 border-t border-stone-100 bg-stone-50/80 space-y-1.5">
                                   <div className="flex items-center justify-between gap-2">
-                                    <span className="text-[10.5px] font-black text-stone-800">
-                                      {mu.useCustomTabs ? "✨ 개별 메뉴 권한 적용 중" : "📋 공통 권한 사용 중"}
+                                    <span className="text-[10px] font-black text-stone-800">
+                                      {mu.useCustomTabs ? "✨ 개별 메뉴 권한 적용 중" : `📋 [${mu.roleLabel || "육아지원군"}] 분류 권한 사용 중`}
                                     </span>
                                     <button
                                       type="button"
                                       onClick={() => {
                                         const nextUse = !mu.useCustomTabs;
+                                        const roleCfg = mu.roleLabel ? helperRolePermissions?.[mu.roleLabel] : null;
+                                        const baseView = Array.isArray(roleCfg?.viewTabs) ? roleCfg.viewTabs : helperAllowedTabs;
+                                        const baseEdit = Array.isArray(roleCfg?.editTabs) ? roleCfg.editTabs : helperEditTabs;
                                         handleUpdateUserCustomTabs(mu.uid, {
                                           useCustomTabs: nextUse,
-                                          customAllowedTabs: Array.isArray(mu.customAllowedTabs) ? mu.customAllowedTabs : helperAllowedTabs,
-                                          customEditTabs: Array.isArray(mu.customEditTabs) ? mu.customEditTabs : helperEditTabs
+                                          customAllowedTabs: Array.isArray(mu.customAllowedTabs) ? mu.customAllowedTabs : baseView,
+                                          customEditTabs: Array.isArray(mu.customEditTabs) ? mu.customEditTabs : baseEdit
                                         });
                                       }}
                                       className="px-2 py-0.5 rounded-md bg-stone-800 text-white text-[10px] font-extrabold whitespace-nowrap"
@@ -41702,7 +41702,7 @@ time: "", location: "",
           >
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="text-[15.5px] font-black text-stone-900">
+                <h3 className="text-[13.5px] font-black text-stone-900">
                   {weatherInfo.emoji} {weatherInfo.location} 상세 날씨
                 </h3>
                 <div className="text-[11.5px] font-bold text-stone-400">
@@ -41845,7 +41845,7 @@ time: "", location: "",
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between">
-              <h3 className="text-[15.5px] font-black text-stone-900">
+              <h3 className="text-[13.5px] font-black text-stone-900">
                 {zipImportPicker === "diary" ? "📥 외부 육아일기(.zip) 가져오기" : "📥 베이비타임 활동(.zip) 가져오기"}
               </h3>
               <button type="button" onClick={() => setZipImportPicker(null)}>
@@ -41937,7 +41937,7 @@ time: "", location: "",
                 <button type="button" onClick={() => setActivityEditModal(null)} className="p-0.5 hover:opacity-80">
                   <X className="w-5 h-5" />
                 </button>
-                <h3 className="text-[15.5px] font-black">
+                <h3 className="text-[13.5px] font-black">
                   {actMeta.emoji} {activityEditModal.type}
                 </h3>
               </div>
@@ -42210,7 +42210,7 @@ time: "", location: "",
                       onClick={() => setActivityEditModal((p) => ({ ...p, subType: sub }))}
                       className={`py-2 rounded-xl text-[13.5px] font-extrabold border ${
                         activityEditModal.subType === sub
-                          ? "bg-indigo-600 text-white border-indigo-600"
+                          ? "bg-[#3F624D] text-white border-[#3F624D]"
                           : "bg-stone-50 text-stone-700 border-stone-200"
                       }`}
                     >
@@ -42345,7 +42345,7 @@ time: "", location: "",
           >
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="text-[15.5px] font-black text-stone-900">✨ 불러올 기록 선택</h3>
+                <h3 className="text-[13.5px] font-black text-stone-900">✨ 불러올 기록 선택</h3>
                 <p className="text-[11.5px] font-bold text-stone-500">
                   {diaryImportModal.date} · {diaryImportModal.childLabel}
                 </p>
@@ -42565,7 +42565,7 @@ time: "", location: "",
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between">
-              <h3 className="text-[15.5px] font-black text-stone-900">🖼️ 예쁜 육아일기 한 장</h3>
+              <h3 className="text-[13.5px] font-black text-stone-900">🖼️ 예쁜 육아일기 한 장</h3>
               <button type="button" onClick={() => setDiaryExportPreviewUrl("")}>
                 <X className="w-5 h-5 text-stone-400" />
               </button>
@@ -43101,7 +43101,7 @@ time: "", location: "",
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setIsEditorUnlockModalOpen(false)}>
           <div className="bg-white rounded-3xl max-w-sm w-full p-5 space-y-4 shadow-xl" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between">
-              <h3 className="text-[15.5px] font-black text-stone-900">
+              <h3 className="text-[13.5px] font-black text-stone-900">
                 {isAdminUnlocked
                   ? "👑 관리자 권한 활성화됨"
                   : isHelperUnlocked
@@ -43222,7 +43222,7 @@ time: "", location: "",
           <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setIsInventoryExportOpen(false)}>
             <div className="bg-white rounded-3xl max-w-md w-full p-5 space-y-3.5 max-h-[90vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
               <div className="flex items-center justify-between">
-                <h3 className="text-[15.5px] font-black text-stone-900">
+                <h3 className="text-[13.5px] font-black text-stone-900">
                   📤 식단 · 전체 재고 통합 내보내기
                 </h3>
                 <button
@@ -43438,7 +43438,7 @@ time: "", location: "",
             onClick={(e) => e.stopPropagation()}
           >
             <div className="sticky top-0 bg-white z-10 pt-4 pb-2.5 border-b border-stone-100 flex items-center justify-between gap-2">
-              <h3 className="text-[15.5px] font-black text-stone-900">
+              <h3 className="text-[13.5px] font-black text-stone-900">
                 📖 {editingRecipe ? "가족 레시피 수정" : "새 가족 레시피 등록"}
               </h3>
               <div className="flex items-center gap-1.5">
@@ -43734,7 +43734,7 @@ time: "", location: "",
           <div className="bg-white w-full max-w-md rounded-3xl p-4 space-y-3 shadow-2xl">
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="text-[15.5px] font-black text-stone-900">✂️ 한상차림 사진 자르기 (자유비율)</h3>
+                <h3 className="text-[13.5px] font-black text-stone-900">✂️ 한상차림 사진 자르기 (자유비율)</h3>
                 <p className="text-[12.5px] text-stone-500">사각형을 드래그해 이동하고 모서리 핸들로 크기를 조절하세요.</p>
               </div>
               <button
@@ -44159,7 +44159,7 @@ time: "", location: "",
             className="bg-white rounded-3xl max-w-sm w-full p-5 space-y-3.5 shadow-2xl"
           >
             <div className="flex items-center justify-between">
-              <h3 className="text-[15.5px] font-black text-stone-900">
+              <h3 className="text-[13.5px] font-black text-stone-900">
                 {editingPageMeta ? "✏️ 페이지 정보 수정" : "🗂️ 새 공유 페이지 만들기"}
               </h3>
               <button type="button" onClick={() => setIsPageModalOpen(false)}>
@@ -44991,7 +44991,7 @@ time: "", location: "",
               {/* 상단 헤더 */}
               <div className="flex items-center justify-between gap-2 pb-2 border-b border-stone-200 shrink-0">
                 <div className="flex items-center gap-1.5 min-w-0">
-                  <h3 className="text-[15px] font-black text-stone-900 truncate min-w-0">🤝 카톡 육아 인수인계</h3>
+                  <h3 className="text-[13.5px] font-black text-stone-900 truncate min-w-0">🤝 카톡 육아 인수인계</h3>
                   <span
                     className={`px-2 py-0.5 rounded-full text-[10px] font-black whitespace-nowrap ${
                       isFutureTarget ? "bg-indigo-100 text-indigo-800" : "bg-[#EEF3EE] text-[#35503C]"
@@ -46403,7 +46403,7 @@ time: "", location: "",
             className="bg-white rounded-3xl max-w-sm w-full p-5 space-y-3 max-h-[88vh] overflow-y-auto shadow-2xl"
           >
             <div className="flex items-center justify-between gap-2">
-              <h3 className="text-[15.5px] font-black text-stone-900">
+              <h3 className="text-[13.5px] font-black text-stone-900">
                 🏠 {editingHouseItem ? "살림 기록 수정" : "살림 기록 추가"}
               </h3>
               <button
@@ -46938,7 +46938,7 @@ time: "", location: "",
             >
               <div className="flex items-center justify-between gap-2 shrink-0">
                 <div className="min-w-0">
-                  <h3 className="text-[15.5px] font-black text-stone-900">📥 노션 마크다운 붙여넣기</h3>
+                  <h3 className="text-[13.5px] font-black text-stone-900">📥 노션 마크다운 붙여넣기</h3>
                   <p className="text-[11.5px] font-semibold text-stone-500 truncate">
                     ### 제목 -&gt; 위치 · - [x] / - [ ] 체크리스트 자동 변환
                   </p>
