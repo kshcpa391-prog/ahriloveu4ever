@@ -1181,7 +1181,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v13.60";
+export const APP_CODE_VERSION = "v13.62";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1199,7 +1199,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-24 09:40";
+export const APP_BUILD_DATE = "2026-11-24 10:02";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1220,7 +1220,8 @@ export const HELPER_CONFIGURABLE_TABS = [
   { id: "notices", label: "📌 가족공지" },
   { id: "recipes", label: "📖 레시피북" },
   { id: "baby", label: "👶 육아수첩" },
-  { id: "schedule", label: "🗓️ 일정·루틴" },
+  { id: "schedule", label: "🗓️ 일정" },
+  { id: "routines", label: "🔄 루틴" },
   { id: "pages", label: "🗂️ 공유노트" },
   { id: "ai", label: "✨ AI추천" },
   { id: "monthly", label: "💰 월간·식비" },
@@ -1267,6 +1268,26 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v13.62",
+    version: "v13.62",
+    date: "2026-11-24",
+    title: "⚡ 경조사비 대용량(100건+) 부분합·목록 스마트 접기/더보기 최적화 + 일정 분류 드롭다운 넘침 방지",
+    highlights: [
+      "성능·시각적 피로도 최소화: 경조사비 인별 부분합(15건 초과 시 접기/전체보기) 및 입출금 내역 목록(40건 단위 더보기/전체보기)에 스마트 페이지네이션을 적용해 엑셀 대량 가져오기 후에도 모바일 스크롤이 쾌적하게 유지되도록 개선",
+      "UI 교정: ScheduleFormModal 카테고리 드롭다운에 min-w-0 truncate를 적용해 긴 맞춤 일정 분류명 선택 시 모달 가로 넘침 방지 및 전체 Babel AST·ReferenceError 0건 검증 완료"
+    ]
+  },
+  {
+    id: "patch-v13.61",
+    version: "v13.61",
+    date: "2026-11-24",
+    title: "🔐 [🗓️ 일정] · [🔄 루틴] 권한 완전 분리 (미로그인/지원군 열람·편집 개별 제어 + 홈·달력·서브탭·알림 자동 격리)",
+    highlights: [
+      "권한 매트릭스 분리: ⚙️ 설정의 [메뉴 | 미로그인 | 지원군열람 | 지원군편집] 표에서 [🗓️ 일정(달력·할일·D-Day)]과 [🔄 루틴(반복 루틴)]을 완전히 분리해 각각 독립적으로 열람·편집 허용 가능",
+      "전 화면 자동 연동: 루틴만 허용 시 홈 [행동 피드]에 루틴만 노출되고 3일내 일정·할일은 숨김 처리되며, 하단 [일정/루틴] 탭 클릭 시 자동으로 [🔄 루틴]으로 직행하고 달력·할일·D-Day·수정알림은 잠금 보호"
+    ]
+  },
   {
     id: "patch-v13.60",
     version: "v13.60",

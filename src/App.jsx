@@ -310,12 +310,12 @@ const ensureLeafletLoaded = () => {
 };
 
 const PRIVATE_CAL_COLORS = [
-  { id: "default", label: "기본", textCls: "text-stone-900", bgCls: "", dotCls: "bg-stone-800" },
-  { id: "rose", label: "빨강", textCls: "text-rose-700", bgCls: "bg-rose-100/80", dotCls: "bg-rose-600" },
-  { id: "blue", label: "파랑", textCls: "text-sky-700", bgCls: "bg-sky-100/80", dotCls: "bg-sky-600" },
-  { id: "green", label: "초록", textCls: "text-emerald-700", bgCls: "bg-emerald-100/80", dotCls: "bg-emerald-600" },
-  { id: "amber", label: "주황", textCls: "text-amber-800", bgCls: "bg-amber-100/80", dotCls: "bg-amber-500" },
-  { id: "purple", label: "보라", textCls: "text-purple-700", bgCls: "bg-purple-100/80", dotCls: "bg-purple-600" }
+  { id: "default", label: "기본", textCls: "text-stone-900", bgCls: "", dotCls: "bg-stone-800", dot: "#292524" },
+  { id: "rose", label: "빨강", textCls: "text-rose-700", bgCls: "bg-rose-100/80", dotCls: "bg-rose-600", dot: "#e11d48" },
+  { id: "blue", label: "파랑", textCls: "text-sky-700", bgCls: "bg-sky-100/80", dotCls: "bg-sky-600", dot: "#0284c7" },
+  { id: "green", label: "초록", textCls: "text-emerald-700", bgCls: "bg-emerald-100/80", dotCls: "bg-emerald-600", dot: "#059669" },
+  { id: "amber", label: "주황", textCls: "text-amber-800", bgCls: "bg-amber-100/80", dotCls: "bg-amber-500", dot: "#f59e0b" },
+  { id: "purple", label: "보라", textCls: "text-purple-700", bgCls: "bg-purple-100/80", dotCls: "bg-purple-600", dot: "#9333ea" }
 ];
 
 const lunarDateCache = new Map();
@@ -783,7 +783,7 @@ const ScheduleFormModal = React.memo(({
           <select
             value={draft.category || "할일(To-Do)"}
             onChange={(e) => setDraft((p) => ({ ...p, category: e.target.value }))}
-            className="w-full px-3 py-2 rounded-xl border border-stone-200 text-[13.5px] font-bold"
+            className="w-full min-w-0 truncate px-3 py-2 rounded-xl border border-stone-200 text-[13.5px] font-bold"
           >
             {(Array.isArray(scheduleCategories) && scheduleCategories.length > 0 ? scheduleCategories : SCHEDULE_CATEGORIES).map((c) => (
               <option key={c} value={c}>
@@ -918,11 +918,16 @@ const ScheduleFormModal = React.memo(({
                     key={cMeta.id}
                     type="button"
                     onClick={() => setDraft((p) => ({ ...p, color: cMeta.id }))}
-                    className={`px-2 py-1 rounded-xl text-[11px] font-extrabold border flex items-center gap-1 whitespace-nowrap transition ${
-                      isSel ? "bg-stone-900 text-white border-stone-900" : "bg-white text-stone-700 border-stone-200"
+                    className={`px-2.5 py-1 rounded-xl text-[11px] font-extrabold border flex items-center gap-1.5 whitespace-nowrap transition ${
+                      isSel
+                        ? "bg-stone-900 text-white border-stone-900 ring-2 ring-stone-300"
+                        : `bg-white hover:bg-stone-50 ${cMeta.textCls} border-stone-200`
                     }`}
                   >
-                    <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: cMeta.dot }} />
+                    <span
+                      className={`w-2.5 h-2.5 rounded-full shrink-0 ${cMeta.dotCls} ${isSel ? "ring-1 ring-white/80" : ""}`}
+                      style={{ backgroundColor: cMeta.dot }}
+                    />
                     <span>{cMeta.label}</span>
                   </button>
                 );
@@ -2733,6 +2738,8 @@ function MainApp() {
   const [condolenceDateTo, setCondolenceDateTo] = useState("");
   const [condolenceSort, setCondolenceSort] = useState("date_desc"); // date_desc | date_asc | amount_desc | person_asc
   const [condolenceSubtotalTab, setCondolenceSubtotalTab] = useState("category"); // category | group | person | year | none
+  const [condolenceSubtotalShowAll, setCondolenceSubtotalShowAll] = useState(false);
+  const [condolenceListLimit, setCondolenceListLimit] = useState(40);
   const [isCondolenceFormOpen, setIsCondolenceFormOpen] = useState(false);
   const [editingCondolenceId, setEditingCondolenceId] = useState(null);
   const [condolenceForm, setCondolenceForm] = useState({
@@ -3371,7 +3378,7 @@ function MainApp() {
 
 
   const handleToggleRoutine = (rtId) => {
-    if (!requireEditorAccess("schedule")) return;
+    if (!requireEditorAccess("routines")) return;
     const todayKey = getTodayStr();
     if (todayKey !== currentDayKey) setCurrentDayKey(todayKey);
     let wasDone = false;
@@ -3408,7 +3415,7 @@ function MainApp() {
 
 
   const handleSkipRoutineCarryOver = (rtId) => {
-    if (!requireEditorAccess("schedule")) return;
+    if (!requireEditorAccess("routines")) return;
     const todayKey = getTodayStr();
     if (todayKey !== currentDayKey) setCurrentDayKey(todayKey);
     let targetTitle = "";
@@ -3427,7 +3434,7 @@ function MainApp() {
 
 
   const handleRestoreSkippedRoutine = (rtId) => {
-    if (!requireEditorAccess("schedule")) return;
+    if (!requireEditorAccess("routines")) return;
     let targetTitle = "";
     const nextList = familyRoutines.map((r) => {
       if (r.id !== rtId) return r;
@@ -3453,7 +3460,7 @@ function MainApp() {
 
 
   const handleToggleRoutineSubStep = (rtId, stepIdx, totalSteps) => {
-    if (!requireEditorAccess("schedule")) return;
+    if (!requireEditorAccess("routines")) return;
     const todayKey = getTodayStr();
     if (todayKey !== currentDayKey) setCurrentDayKey(todayKey);
     let completedAll = false;
@@ -3490,7 +3497,7 @@ function MainApp() {
 
 
   const handleStartEditRoutine = (rt) => {
-    if (!requireEditorAccess("schedule") || !rt) return;
+    if (!requireEditorAccess("routines") || !rt) return;
     setEditingRoutineId(rt.id);
     routineTitleLiveRef.current = rt.title || "";
     setNewRoutineTitle(rt.title || "");
@@ -3538,7 +3545,7 @@ function MainApp() {
 
 
   const handleAddRoutine = (overrideTitle = null) => {
-    if (!requireEditorAccess("schedule")) return;
+    if (!requireEditorAccess("routines")) return;
     const safeOverride = typeof overrideTitle === "string" ? overrideTitle : null;
     const title = String(safeOverride !== null ? safeOverride : (routineTitleLiveRef.current || newRoutineTitle || "")).trim();
     if (!title) return;
@@ -3638,7 +3645,7 @@ function MainApp() {
 
 
   const handleDeleteRoutine = (rtId) => {
-    if (!requireEditorAccess("schedule")) return;
+    if (!requireEditorAccess("routines")) return;
     const nextList = familyRoutines.filter((r) => r.id !== rtId);
     setFamilyRoutines(nextList);
     const delTarget = familyRoutines.find((r) => r.id === rtId);
@@ -4156,7 +4163,7 @@ function MainApp() {
     "냉장고": "fridge",
     "일정": "schedule",
     "할일": "schedule",
-    "루틴": "schedule",
+    "루틴": "routines",
     "육아": "baby",
     "장보기": "shopping",
     "공지": "notices",
@@ -9889,6 +9896,8 @@ ${validText}
             .join(", ")}`
         );
       }
+    }
+    if (canViewTab("routines")) {
       const pendingRoutines = familyRoutines
         .filter((r) => isRoutineDueTodayOrPast(r, today) && !isRoutineDoneNow(r))
         .sort((a, b) => String(a.scheduledTime || "99:99").localeCompare(String(b.scheduledTime || "99:99")));
@@ -13504,7 +13513,9 @@ ${item.memo}` : `${item.title} 다녀옴!`,
           { ...nextCats, updatedAtMs: Date.now() },
           { merge: true }
         );
-      } catch (e) {}
+      } catch (e) {
+        setSyncErrorMsg(e?.message || "맞춤 분류 클라우드 동기화 오류");
+      }
     }
     if (toastMsg) showToast(toastMsg);
   };
@@ -16886,7 +16897,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
             {{
               home: "우리 가족 홈 ♡",
               daily: "오늘 뭐 먹지? 우리집 식탁 🍽️",
-              schedule: "알콩달콩 일정·루틴 🗓️",
+              schedule: !canViewTab("schedule") && canViewTab("routines") ? "오늘의 반복 루틴 🔄" : canViewTab("schedule") && !canViewTab("routines") ? "알콩달콩 일정 🗓️" : "알콩달콩 일정·루틴 🗓️",
               baby: "쑥쑥 시목·시율 육아수첩 👶",
               fridge: "든든한 우리집 냉장고 ❄️",
               shopping: "똑똑한 장보기 바구니 🛒",
@@ -17629,7 +17640,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
         const renderHomeBlock = (blockId) => {
           if (hiddenBlocks.includes(blockId)) return null;
           if (blockId === "action_feed") {
-            if (accessRole === "guest" || !canViewTab("schedule")) return null;
+            if (accessRole === "guest" || (!canViewTab("schedule") && !canViewTab("routines"))) return null;
             const totalRtProgress = dueRoutines.length;
             const doneRtProgress = homeRoutineDayOffset === -1
               ? dueRoutines.filter((r) => isRoutineDoneOnDay(r, homeRoutineDayStr)).length
@@ -17648,6 +17659,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
             return (
               <div key="action_feed" className="space-y-3">
                 {/* 1) 3일 내 일정 */}
+                {canViewTab("schedule") && (
                 <section className="bg-white border border-stone-200/90 rounded-2xl shadow-sm px-3 py-2.5 space-y-1.5">
                   <div className="flex items-center justify-between gap-2">
                     <h2 className="text-[14px] font-extrabold text-stone-900 whitespace-nowrap">
@@ -17789,8 +17801,10 @@ time: "", location: "",
                     </div>
                   )}
                 </section>
+                )}
 
                 {/* 2) 지금 루틴 — 최우선 집중 개선 영역 */}
+                {canViewTab("routines") && (
                 <section className="bg-white border border-stone-200/90 rounded-2xl shadow-sm px-3 py-2.5 space-y-2">
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0 space-y-0.5">
@@ -18235,8 +18249,10 @@ time: "", location: "",
                     </div>
                   )}
                 </section>
+                )}
 
                 {/* 3) 남은 할 일 */}
+                {canViewTab("schedule") && (
                 <section className="bg-white border border-stone-200/90 rounded-2xl shadow-sm px-3 py-2.5 space-y-1.5">
                   <div className="flex items-center justify-between gap-2">
                     <h2 className="text-[14px] font-extrabold text-stone-900 whitespace-nowrap">
@@ -18418,6 +18434,7 @@ time: "", location: "",
                     </div>
                   )}
                 </section>
+                )}
               </div>
             );
           }
@@ -18427,7 +18444,7 @@ time: "", location: "",
               if (!MENU_DEFS[id] || hiddenMenus.includes(id)) return false;
               const targetTab =
                 id === "routine_tab"
-                  ? "schedule"
+                  ? "routines"
                   : id === "monthly_cal" || id === "monthly_exp"
                   ? "monthly"
                   : id === "handover"
@@ -18991,7 +19008,7 @@ time: "", location: "",
                       {morningMeals[0] ? `${morningMeals[0].slot}: ${morningMeals[0].menu}` : "아침·점심 식단 미기록"}
                     </span>
                     <div className="flex items-center gap-1 shrink-0">
-                      {morningRoutineLeft > 0 && canViewTab("schedule") && (
+                      {morningRoutineLeft > 0 && canViewTab("routines") && (
                         <button
                           type="button"
                           onClick={() => {
@@ -20227,7 +20244,9 @@ time: "", location: "",
                                 { amount: parsed, updatedAtMs: Date.now() },
                                 { merge: true }
                               );
-                            } catch (e) {}
+                            } catch (e) {
+                              setSyncErrorMsg(e?.message || "월간 예산 동기화 오류");
+                            }
                           }
                           showToast(`💰 월 목표 식비 예산을 ${parsed.toLocaleString()}원으로 동기화했습니다!`);
                         }}
@@ -20659,7 +20678,7 @@ time: "", location: "",
       {/* ==========================================
           탭 4: 일정 (1. 월간 달력 -> 2. 선택일 상세일정 -> 3. [신규] 주간 일정 요약 -> 4. [신규] 전체 To-Do 체크리스트 -> 5. 최하단 D-Day 보드)
       ========================================== */}
-      {activeTab === "schedule" && (!canViewTab("schedule") ? renderLockedTabScreen("🗓️ 일정·루틴") : (
+      {activeTab === "schedule" && (!canViewTab("schedule") && !canViewTab("routines") ? renderLockedTabScreen("🗓️ 일정·루틴") : (
         <div className="px-3 pt-2.5 pb-4 space-y-2.5">
 
 
@@ -20673,7 +20692,7 @@ time: "", location: "",
                   : "text-stone-500 hover:text-stone-800"
               }`}
             >
-              <span className="whitespace-nowrap">📅 달력</span>
+              <span className="whitespace-nowrap">{canViewTab("schedule") ? "📅 달력" : "🔒 달력"}</span>
               {imminentSchedulesWithin3Days.length > 0 && (
                 <span className="px-1.5 py-0.5 rounded-full bg-rose-600 text-white text-[10px] font-black leading-none whitespace-nowrap shrink-0">
                   {imminentSchedulesWithin3Days.length}
@@ -20689,7 +20708,7 @@ time: "", location: "",
                   : "text-stone-500 hover:text-stone-800"
               }`}
             >
-              <span className="whitespace-nowrap">✅ 할 일</span>
+              <span className="whitespace-nowrap">{canViewTab("schedule") ? "✅ 할 일" : "🔒 할 일"}</span>
               {globalTodoBadgeStats.activeCount > 0 && (
                 <span className="px-1.5 py-0.5 rounded-full bg-amber-500 text-white text-[10px] font-black leading-none whitespace-nowrap shrink-0">
                   {globalTodoBadgeStats.activeCount}
@@ -20705,7 +20724,7 @@ time: "", location: "",
                   : "text-stone-500 hover:text-stone-800"
               }`}
             >
-              <span className="whitespace-nowrap">🔄 루틴</span>
+              <span className="whitespace-nowrap">{canViewTab("routines") ? "🔄 루틴" : "🔒 루틴"}</span>
               {familyRoutines.filter((r) => isRoutineDueTodayOrPast(r, currentDayKey) && !isRoutineDoneNow(r)).length > 0 && (
                 <span className="px-1.5 py-0.5 rounded-full bg-indigo-600 text-white text-[10px] font-black leading-none whitespace-nowrap shrink-0">
                   {familyRoutines.filter((r) => isRoutineDueTodayOrPast(r, currentDayKey) && !isRoutineDoneNow(r)).length}
@@ -20721,7 +20740,7 @@ time: "", location: "",
                   : "text-stone-500 hover:text-stone-800"
               }`}
             >
-              <span className="whitespace-nowrap">⭐ D-Day</span>
+              <span className="whitespace-nowrap">{canViewTab("schedule") ? "⭐ D-Day" : "🔒 D-Day"}</span>
               {dDayCards.length > 0 && (
                 <span className="px-1.5 py-0.5 rounded-full bg-[#3F624D] text-white text-[10px] font-black leading-none whitespace-nowrap shrink-0">
                   {dDayCards.length}
@@ -20764,7 +20783,7 @@ time: "", location: "",
           )}
 
 
-          {scheduleSubTab === "calendar" && (
+          {scheduleSubTab === "calendar" && (!canViewTab("schedule") ? renderLockedTabScreen("📅 달력·일정") : (
             <>
           {/* [1순위 최상단 배치] 통합 조르테 스타일 달력 (가족 일정 + 내 개인일정·다이어리) */}
           {(() => {
@@ -21732,11 +21751,11 @@ time: "", location: "",
 
 
             </>
-          )}
+          ))}
 
 
           {/* 🔄 자정/주간 자동 리셋 데일리·위클리 육아/집안일 루틴 */}
-          {scheduleSubTab === "routine" && (
+          {scheduleSubTab === "routine" && (!canViewTab("routines") ? renderLockedTabScreen("🔄 반복 루틴") : (
           <div id="routine-board-section" className="bg-white p-4 rounded-2xl border border-stone-200 shadow-sm space-y-3">
             <div className="flex items-start justify-between gap-2 flex-wrap">
               <div className="min-w-0">
@@ -21866,7 +21885,7 @@ time: "", location: "",
                     <button
                       type="button"
                       onClick={() => {
-                        if (!requireEditorAccess("schedule")) return;
+                        if (!requireEditorAccess("routines")) return;
                         persistSlots(DEFAULT_ROUTINE_SLOT_DEFS);
                         showToast("루틴 시간대를 기본값으로 초기화했습니다.");
                       }}
@@ -21918,7 +21937,7 @@ time: "", location: "",
                                 e.target.value = slot.label;
                                 return;
                               }
-                              if (!requireEditorAccess("schedule")) {
+                              if (!requireEditorAccess("routines")) {
                                 e.target.value = slot.label;
                                 return;
                               }
@@ -21942,7 +21961,7 @@ time: "", location: "",
                             value={slot.startTime}
                             onChange={(e) => {
                               const val = e.target.value;
-                              if (!val || !requireEditorAccess("schedule")) return;
+                              if (!val || !requireEditorAccess("routines")) return;
                               persistSlots(
                                 routineSlotDefs.map((x) => (x.id === slot.id ? { ...x, startTime: val } : x))
                               );
@@ -21953,7 +21972,7 @@ time: "", location: "",
                             <button
                               type="button"
                               onClick={() => {
-                                if (!requireEditorAccess("schedule")) return;
+                                if (!requireEditorAccess("routines")) return;
                                 const nextDefs = routineSlotDefs.filter((x) => x.id !== slot.id);
                                 persistSlots(nextDefs);
                                 const migratedRoutines = familyRoutines.map((r) =>
@@ -21976,7 +21995,7 @@ time: "", location: "",
                             <button
                               type="button"
                               onClick={() => {
-                                if (!requireEditorAccess("schedule")) return;
+                                if (!requireEditorAccess("routines")) return;
                                 persistSlots(
                                   routineSlotDefs.map((x) => (x.id === slot.id ? { ...x, weekday: !x.weekday } : x))
                                 );
@@ -21992,7 +22011,7 @@ time: "", location: "",
                             <button
                               type="button"
                               onClick={() => {
-                                if (!requireEditorAccess("schedule")) return;
+                                if (!requireEditorAccess("routines")) return;
                                 persistSlots(
                                   routineSlotDefs.map((x) => (x.id === slot.id ? { ...x, weekend: !x.weekend } : x))
                                 );
@@ -22023,7 +22042,7 @@ time: "", location: "",
                       onKeyDown={(e) => {
                         if (e.key === "Enter") {
                           e.preventDefault();
-                          if (!requireEditorAccess("schedule")) return;
+                          if (!requireEditorAccess("routines")) return;
                           const lbl = newSlotLabelInput.trim();
                           if (!lbl) {
                             showToast("추가할 시간대 이름을 입력해 주세요.");
@@ -22081,7 +22100,7 @@ time: "", location: "",
                     <button
                       type="button"
                       onClick={() => {
-                        if (!requireEditorAccess("schedule")) return;
+                        if (!requireEditorAccess("routines")) return;
                         const lbl = newSlotLabelInput.trim();
                         if (!lbl) {
                           showToast("추가할 시간대 이름을 입력해 주세요.");
@@ -22646,13 +22665,13 @@ time: "", location: "",
           </div>
 
 
-          )}
+          ))}
 
 
           {/* ==========================================
               [신규 요청사항 1 완벽 반영] To-Do List 전체를 체크리스트처럼 표시하는 화면
           ========================================== */}
-          {scheduleSubTab === "todo" && (
+          {scheduleSubTab === "todo" && (!canViewTab("schedule") ? renderLockedTabScreen("✅ 할 일") : (
           <div id="schedule-todo-section" className="bg-white p-3 rounded-2xl border border-stone-200 shadow-sm space-y-2.5">
             {/* 헤더: 제목·진행률·핵심 액션 1줄 정리 (중복 추가 버튼 제거) */}
             <div className="space-y-1.5">
@@ -23037,11 +23056,11 @@ time: "", location: "",
           </div>
 
 
-          )}
+          ))}
 
 
           {/* 별도 서브메뉴: 우리 가족 D-Day & 기념일 카운트다운 */}
-          {scheduleSubTab === "dday" && (() => {
+          {scheduleSubTab === "dday" && (!canViewTab("schedule") ? renderLockedTabScreen("⭐ D-Day") : (() => {
             const filteredDdays = dDayCards.filter((item) => {
               if (ddayFilter === "upcoming") return item.calc.daysUntil >= 0;
               if (ddayFilter === "annual") return Boolean(item.isAnnual);
@@ -23379,7 +23398,7 @@ time: "", location: "",
                 )}
               </div>
             );
-          })()}
+          })())}
         </div>
       ))}
 
@@ -27438,6 +27457,28 @@ time: "", location: "",
                   </div>
                 );
               })()}
+              {(() => {
+                const ungroupedCnt = condolenceList.filter((x) => !x.group || x.group === "미분류").length;
+                if (ungroupedCnt === 0) return null;
+                return (
+                  <div className="flex items-center justify-between gap-2 rounded-xl bg-amber-50 border border-amber-200 px-2.5 py-1.5">
+                    <span className="text-[11px] font-extrabold text-amber-900">
+                      ⚠️ 그룹 미분류 인원 {ungroupedCnt}건
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCondolenceGroupFilter("미분류");
+                        setCondolenceBulkMode(true);
+                        setCondolenceBulkIds([]);
+                      }}
+                      className="h-6 px-2 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-[10.5px] font-black whitespace-nowrap"
+                    >
+                      1탭 그룹지정 →
+                    </button>
+                  </div>
+                );
+              })()}
               {!isSuhyeokAdmin && (
                 <div className="text-[10.5px] font-semibold text-stone-400 text-right">
                   🔒 비밀번호 변경은 김수혁 관리자 전용
@@ -27693,7 +27734,7 @@ time: "", location: "",
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-stone-100">
-                        {subtotalRows.map((row) => {
+                        {(condolenceSubtotalShowAll ? subtotalRows : subtotalRows.slice(0, 15)).map((row) => {
                           const net = row.inAmt - row.outAmt;
                           return (
                             <tr
@@ -27735,6 +27776,17 @@ time: "", location: "",
                         </tr>
                       </tfoot>
                     </table>
+                    {subtotalRows.length > 15 && (
+                      <div className="pt-1.5 text-center">
+                        <button
+                          type="button"
+                          onClick={() => setCondolenceSubtotalShowAll((v) => !v)}
+                          className="px-3 py-1 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 text-[11px] font-extrabold whitespace-nowrap"
+                        >
+                          {condolenceSubtotalShowAll ? "▲ 상위 15건만 보기" : `▼ 전체 ${subtotalRows.length}개 항목 모두 보기`}
+                        </button>
+                      </div>
+                    )}
                   </div>
                 )
               )}
@@ -27861,7 +27913,7 @@ time: "", location: "",
                   </div>
                 </div>
               ) : (
-                filteredList.map((item) => {
+                filteredList.slice(0, condolenceListLimit).map((item) => {
                   const isIn = item.type === "in";
                   const isBulkChecked = condolenceBulkMode && condolenceBulkIds.includes(item.id);
                   return (
@@ -27967,6 +28019,24 @@ time: "", location: "",
                     </div>
                   );
                 })
+              )}
+              {filteredList.length > condolenceListLimit && (
+                <div className="flex items-center justify-center gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setCondolenceListLimit((n) => n + 40)}
+                    className="h-8 px-3 rounded-xl bg-white hover:bg-stone-100 border border-stone-200 text-stone-700 text-[11.5px] font-extrabold whitespace-nowrap"
+                  >
+                    + 40건 더보기 ({filteredList.length - condolenceListLimit}건 남음)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCondolenceListLimit(filteredList.length)}
+                    className="h-8 px-3 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-[11.5px] font-extrabold whitespace-nowrap"
+                  >
+                    전체 보기
+                  </button>
+                </div>
               )}
             </div>
           </div>
@@ -33842,7 +33912,7 @@ time: "", location: "",
         {[
           { id: "home", label: "홈", icon: Home },
           { id: "daily", label: "식단", icon: Utensils },
-          { id: "schedule", label: "일정", icon: CalendarDays },
+          { id: "schedule", label: !canViewTab("schedule") && canViewTab("routines") ? "루틴" : "일정", icon: CalendarDays },
           { id: "baby", label: "육아", icon: Baby },
           { id: "fridge", label: "냉장고", icon: Package }
         ].map((item) => {
@@ -33862,6 +33932,14 @@ time: "", location: "",
                   openDailyTodayAll();
                 } else if (item.id === "baby") {
                   openBabyTab();
+                } else if (item.id === "schedule") {
+                  if (!canViewTab("schedule") && canViewTab("routines")) {
+                    setScheduleSubTab("routine");
+                  } else if (canViewTab("schedule") && !canViewTab("routines") && scheduleSubTab === "routine") {
+                    setScheduleSubTab("calendar");
+                  }
+                  setActiveTab("schedule");
+                  setIsMoreNavOpen(false);
                 } else {
                   setActiveTab(item.id);
                   setIsMoreNavOpen(false);
@@ -33873,7 +33951,7 @@ time: "", location: "",
             >
               <div className="relative">
                 <IconComp className={`w-4 h-4 ${active ? "text-[#5E7A65]" : ""}`} />
-                {item.id === "schedule" && globalTodoBadgeStats.activeCount > 0 && (
+                {item.id === "schedule" && canViewTab("schedule") && globalTodoBadgeStats.activeCount > 0 && (
                   <span
                     className={`absolute -top-1.5 -right-2.5 min-w-[16px] h-4 px-1 rounded-full text-[10.5px] font-black text-white flex items-center justify-center leading-none shadow-sm ${
                       globalTodoBadgeStats.urgentCount > 0 ? "bg-rose-600" : "bg-amber-500"
