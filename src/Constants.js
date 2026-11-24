@@ -1181,7 +1181,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v13.96";
+export const APP_CODE_VERSION = "v13.97";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1199,7 +1199,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-24 19:58";
+export const APP_BUILD_DATE = "2026-11-24 21:18";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1268,6 +1268,16 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v13.97",
+    version: "v13.97",
+    date: "2026-11-24",
+    title: "🔔 상태바 알림 권한 요청 무반응 수정(타임아웃·오류 안내·SW 등록 시도)",
+    highlights: [
+      "[🔔 상태바 켜기] 클릭 시 무반응으로 멈추던 원인 해결: Notification.requestPermission Promise/콜백 양방향 호환 및 3초 타임아웃 방어, 에러 발생 시 브라우저/웹뷰 제한 사유를 토스트로 즉시 안내",
+      "ServiceWorker 미등록 환경에서 /sw.js 등록을 자동 시도하고 상태바 알림 발송 실패 시 정확한 원인 안내 제공"
+    ]
+  },
   {
     id: "patch-v13.96",
     version: "v13.96",

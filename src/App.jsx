@@ -2577,10 +2577,16 @@ function MainApp() {
     if (typeof Notification === "undefined" || Notification.permission !== "granted") return false;
     try {
       if (typeof navigator !== "undefined" && "serviceWorker" in navigator) {
-        const reg = await Promise.race([
-          navigator.serviceWorker.ready,
-          new Promise((resolve) => setTimeout(() => resolve(null), 1200))
-        ]);
+        let reg = await navigator.serviceWorker.getRegistration().catch(() => null);
+        if (!reg) {
+          reg = await navigator.serviceWorker.register("/sw.js").catch(() => null);
+        }
+        if (!reg) {
+          reg = await Promise.race([
+            navigator.serviceWorker.ready,
+            new Promise((resolve) => setTimeout(() => resolve(null), 1200))
+          ]);
+        }
         if (reg && typeof reg.showNotification === "function") {
           await reg.showNotification(title, {
             body: body || "",
@@ -43061,15 +43067,36 @@ time: "", location: "",
                         return;
                       }
                       try {
-                        const perm = await Notification.requestPermission();
+                        const reqPromise = new Promise((resolve, reject) => {
+                          try {
+                            const maybe = Notification.requestPermission((cbPerm) => resolve(cbPerm));
+                            if (maybe && typeof maybe.then === "function") {
+                              maybe.then(resolve).catch(reject);
+                            }
+                          } catch (err) {
+                            reject(err);
+                          }
+                        });
+                        const perm = await Promise.race([
+                          reqPromise,
+                          new Promise((resolve) => setTimeout(() => resolve("timeout"), 3000))
+                        ]);
+                        if (perm === "timeout") {
+                          showToast("⚠️ 이 브라우저(웹뷰)에서는 알림 권한 팝업이 차단되었습니다. 크롬·홈화면 앱에서 열어주세요.");
+                          return;
+                        }
                         setNotifPermState(perm);
                         if (perm === "granted") {
-                          await showStatusBarNotification("🏡 알림 허용 완료!", "이제 새 소식을 상태표시줄에서도 받을 수 있어요.", "perm-ok");
-                          showToast("📲 상태표시줄 알림이 켜졌습니다!");
+                          const sent = await showStatusBarNotification("🏡 알림 허용 완료!", "이제 새 소식을 상태표시줄에서도 받을 수 있어요.", "perm-ok");
+                          showToast(sent ? "📲 상태표시줄 알림이 켜졌습니다!" : "🔔 알림 권한은 허용됐으나 모바일 상태바 출력(sw.js)이 지원되지 않는 환경입니다.");
+                        } else if (perm === "denied") {
+                          showToast("🚫 알림 권한이 차단되어 있습니다. 브라우저 사이트 설정에서 허용해 주세요.");
                         } else {
                           showToast("알림 권한이 허용되지 않았습니다.");
                         }
-                      } catch (e) {}
+                      } catch (e) {
+                        showToast("⚠️ 이 환경에서는 상태표시줄 알림을 지원하지 않습니다.");
+                      }
                     }}
                     className={`h-7 px-2 rounded-lg text-[10.5px] font-extrabold border whitespace-nowrap ${
                       notifPermState === "granted"
