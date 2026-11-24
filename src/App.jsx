@@ -2573,14 +2573,45 @@ function MainApp() {
   const [notifPermState, setNotifPermState] = useState(() =>
     typeof Notification !== "undefined" ? Notification.permission : "unsupported"
   );
+  const [swStatus, setSwStatus] = useState(() =>
+    typeof navigator !== "undefined" && "serviceWorker" in navigator ? "확인중" : "미지원"
+  );
+  const [lastNotifError, setLastNotifError] = useState("");
   const lastNotifErrorRef = useRef("");
+  const refreshSwStatus = async () => {
+    if (typeof navigator === "undefined" || !("serviceWorker" in navigator)) {
+      setSwStatus("미지원");
+      return;
+    }
+    try {
+      const reg = await navigator.serviceWorker.getRegistration();
+      if (!reg) setSwStatus("미등록");
+      else if (reg.active) setSwStatus("활성");
+      else setSwStatus("설치중");
+    } catch (e) {
+      setSwStatus("오류");
+    }
+  };
   useEffect(() => {
     if (typeof navigator !== "undefined" && "serviceWorker" in navigator) {
-      navigator.serviceWorker.register("/sw.js").catch(() => {});
+      navigator.serviceWorker
+        .register("/sw.js")
+        .then((reg) => {
+          setSwStatus(reg?.active ? "활성" : "설치중");
+          return navigator.serviceWorker.ready;
+        })
+        .then(() => setSwStatus("활성"))
+        .catch((err) => {
+          setSwStatus("등록실패");
+          const msg = err?.message ? `sw.js 등록 실패(${err.message})` : "sw.js 없음";
+          lastNotifErrorRef.current = msg;
+          setLastNotifError(msg);
+        });
     }
   }, []);
   const showStatusBarNotification = async (title, body, tag = "family-app") => {
     lastNotifErrorRef.current = "";
+    setLastNotifError("");
     if (typeof Notification === "undefined") {
       lastNotifErrorRef.current = "이 브라우저는 알림을 지원하지 않습니다.";
       return false;
@@ -2612,6 +2643,7 @@ function MainApp() {
           ]);
         }
         if (reg && reg.active && typeof reg.showNotification === "function") {
+          setSwStatus("활성");
           await reg.showNotification(title, {
             body: body || "",
             tag,
@@ -2633,6 +2665,7 @@ function MainApp() {
       if (!lastNotifErrorRef.current) {
         lastNotifErrorRef.current = e?.message || "이 환경에서는 상태바 알림이 제한됩니다.";
       }
+      setLastNotifError(lastNotifErrorRef.current);
       return false;
     }
   };
@@ -43088,9 +43121,14 @@ time: "", location: "",
                         const ok = await showStatusBarNotification(
                           "🏡 혁리나목율♡ 상태표시줄 알림 테스트",
                           "상태표시줄 알림이 정상 작동하고 있습니다.",
-                          "test-notif"
+                          `test-notif-${Date.now()}`
                         );
-                        showToast(ok ? "📲 상태표시줄 알림을 발송했습니다!" : `⚠️ ${lastNotifErrorRef.current || "이 브라우저에서는 상태표시줄 알림이 제한됩니다."}`);
+                        await refreshSwStatus();
+                        showToast(
+                          ok
+                            ? "📲 무음 상태바 알림 발송! (안 보이면 폰 설정→알림→무음 알림 숨기기 해제 확인)"
+                            : `⚠️ ${lastNotifErrorRef.current || "이 브라우저에서는 상태표시줄 알림이 제한됩니다."}`
+                        );
                         return;
                       }
                       if (Notification.permission === "denied") {
@@ -43175,6 +43213,24 @@ time: "", location: "",
                   >
                     비우기
                   </button>
+                )}
+              </div>
+              <div className="text-[10px] text-stone-500 flex flex-wrap items-center gap-x-2 gap-y-0.5 px-0.5">
+                <span>
+                  권한:{" "}
+                  <strong className={notifPermState === "granted" ? "text-[#3F624D]" : notifPermState === "denied" ? "text-rose-600" : "text-stone-700"}>
+                    {notifPermState === "granted" ? "허용됨" : notifPermState === "denied" ? "차단됨" : notifPermState === "default" ? "대기" : "미지원"}
+                  </strong>
+                </span>
+                <span>·</span>
+                <span>
+                  SW(/sw.js):{" "}
+                  <strong className={swStatus === "활성" ? "text-[#3F624D]" : swStatus === "등록실패" || swStatus === "미지원" ? "text-rose-600" : "text-stone-700"}>
+                    {swStatus}
+                  </strong>
+                </span>
+                {lastNotifError && (
+                  <span className="text-rose-600 font-bold truncate max-w-full">· {lastNotifError}</span>
                 )}
               </div>
             </div>

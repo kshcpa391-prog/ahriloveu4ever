@@ -1181,7 +1181,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v13.98";
+export const APP_CODE_VERSION = "v13.99";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1199,7 +1199,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-24 23:35";
+export const APP_BUILD_DATE = "2026-11-25 00:12";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1268,6 +1268,17 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v13.99",
+    version: "v13.99",
+    date: "2026-11-25",
+    title: "🔎 상태바 알림 실시간 진단 표시 및 테스트 태그 고유화",
+    highlights: [
+      "수정 알림 모달 상단에 권한(허용/대기/차단)과 서비스 워커(/sw.js 활성/미등록) 상태 1줄 진단 표시 추가",
+      "[📲 상태바 테스트] 실행 시 매번 새 태그(test-notif-timestamp)로 발송하여 중복 병합 방지",
+      "안드로이드 무음 알림(silent: true) 발송 시 기기 '무음 알림 숨기기' 설정 안내 추가"
+    ]
+  },
   {
     id: "patch-v13.98",
     version: "v13.98",
