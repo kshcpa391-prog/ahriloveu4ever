@@ -1181,7 +1181,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v13.62";
+export const APP_CODE_VERSION = "v13.63";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1199,7 +1199,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-24 10:02";
+export const APP_BUILD_DATE = "2026-11-24 11:52";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1268,6 +1268,17 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v13.63",
+    version: "v13.63",
+    date: "2026-11-24",
+    title: "🛡️ 배포 JSX 오류({null})·식비 CSV 미선언(monthlyYm)·PWA prompt() 수정 + 수유메모/장보기 자유관리 + 월간식비 결산연계 + 공유노트 펼침 Firebase 이관",
+    highlights: [
+      "배포·런타임 버그 3종 수정: ① 홈 화면 JSX 중괄호 구문 오류({accessRole === 'guest' && ({null})}) 제거로 빌드 오류 완전 해소 ② 월간 식비 원장 [📊 CSV] 내보내기의 미선언 변수(monthlyYm→currentMonth) ReferenceError 수정 및 필터명 파일명 반영 ③ 관리자 설정 사용자 이름 수정의 구식 window.prompt()를 모바일 PWA 호환 인라인 입력 UI로 교체",
+      "시스템 자유도 확장: 통합 ⚙️ 분류 관리에 [🍼 수유메모 태그](트림 함·유산균 등) 및 [🛒 자주사는 품목](계란|1판|유제품/계란 등) 2종을 추가해 자유 추가·수정·삭제·순서이동·기본복원 및 Firestore 실시간 동기화 지원",
+      "메뉴 연계·시각 최적화·Firebase 이관: ① 월간 식비 가계부에 [🗂️ 결산노트]·[📌 공지] 원탭 공유 연계 추가 ② 경조사비 상단 불필요 안내 문구 제거 및 다수 드롭다운 min-w-0 truncate 보강 ③ 공유노트 폴더 펼침 상태(kim_pages_expanded_v1)를 Firestore(home_layout.expandedPageIds) 실시간 동기화로 이관"
+    ]
+  },
   {
     id: "patch-v13.62",
     version: "v13.62",
@@ -6454,3 +6465,13 @@ export const CONDOLENCE_GROUPS = [
 ];
 export const CONDOLENCE_PAY_METHODS = ["계좌이체", "현금", "선물/기프티콘"];
 
+
+export const DEFAULT_BABY_MEMO_TAGS = ["트림 안함", "트림 함", "유산균", "잘 먹음", "게워냄"];
+export const DEFAULT_SHOPPING_PRESETS = [
+  "계란|1판|유제품/계란",
+  "우유|1팩|유제품/계란",
+  "두부|1모|반찬/김치",
+  "대파|1단|채소/과일",
+  "양파|1망|채소/과일",
+  "바나나|1송이|채소/과일"
+];

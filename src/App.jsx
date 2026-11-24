@@ -172,7 +172,9 @@ import {
   DEFAULT_CONDOLENCE_PIN,
   CONDOLENCE_CATEGORIES,
   CONDOLENCE_GROUPS,
-  CONDOLENCE_PAY_METHODS
+  CONDOLENCE_PAY_METHODS,
+  DEFAULT_BABY_MEMO_TAGS,
+  DEFAULT_SHOPPING_PRESETS
 } from "./Constants";
 
 
@@ -1596,6 +1598,18 @@ class ErrorBoundary extends React.Component {
 // ==========================================
 
 
+const inferShoppingCategoryByName = (name) => {
+  const n = String(name || "");
+  if (/(우유|두부|계란|달걀|치즈|요거트|버터|생크림)/.test(n)) return "유제품/계란";
+  if (/(소고기|한우|돼지|삼겹|목살|닭|오리|고등어|연어|조기|새우|오징어|어묵|햄|소시지)/.test(n)) return "육류/수산";
+  if (/(이유식|분유|기저귀|물티슈|아기|유아)/.test(n)) return "유아식/이유식 재료";
+  if (/(김치|단무지|장아찌|멸치|젓갈)/.test(n)) return "반찬/김치";
+  if (/(간장|된장|고추장|소금|설탕|식용유|참기름|올리브유|소스|케첩|마요네즈)/.test(n)) return "양념/소스";
+  if (/(밀키트|만두|피자|냉동|떡볶이)/.test(n)) return "밀키트";
+  if (/(양파|대파|마늘|감자|고구마|당근|브로콜리|시금치|애호박|무|배추|상추|깻잎|토마토|사과|바나나|딸기|포도|귤|버섯|콩나물|숙주|고사리|고추)/.test(n)) return "채소/과일";
+  return "기타";
+};
+
 const parseQuickShoppingTextLocal = (rawText) => {
   const cleaned = String(rawText || "")
     .replace(/(사와|사야해|사야함|사오기|사기|부탁해|부탁|필요해|필요|좀|해주세요|해줘)/g, " ")
@@ -1607,17 +1621,7 @@ const parseQuickShoppingTextLocal = (rawText) => {
     .filter((s) => s.length >= 1);
 
 
-  const inferCategory = (name) => {
-    const n = String(name || "");
-    if (/(우유|두부|계란|달걀|치즈|요거트|버터|생크림)/.test(n)) return "유제품/계란";
-    if (/(소고기|한우|돼지|삼겹|목살|닭|오리|고등어|연어|조기|새우|오징어|어묵|햄|소시지)/.test(n)) return "육류/수산";
-    if (/(이유식|분유|기저귀|물티슈|아기|유아)/.test(n)) return "유아식/이유식 재료";
-    if (/(김치|단무지|장아찌|멸치|젓갈)/.test(n)) return "반찬/김치";
-    if (/(간장|된장|고추장|소금|설탕|식용유|참기름|올리브유|소스|케첩|마요네즈)/.test(n)) return "양념/소스";
-    if (/(밀키트|만두|피자|냉동|떡볶이)/.test(n)) return "밀키트";
-    if (/(양파|대파|마늘|감자|고구마|당근|브로콜리|시금치|애호박|무|배추|상추|깻잎|토마토|사과|바나나|딸기|포도|귤|버섯|콩나물|숙주|고사리|고추)/.test(n)) return "채소/과일";
-    return "기타";
-  };
+  const inferCategory = inferShoppingCategoryByName;
 
 
   const results = [];
@@ -1702,6 +1706,8 @@ function MainApp() {
   const [profileLoading, setProfileLoading] = useState(false);
   const [managedUsers, setManagedUsers] = useState([]);
   const [editingPermUid, setEditingPermUid] = useState(null);
+  const [editingUserNameUid, setEditingUserNameUid] = useState(null);
+  const [editingUserNameDraft, setEditingUserNameDraft] = useState("");
   const DEFAULT_HELPER_ROLE_LABELS = ["육아지원군", "친정엄마", "시어머니", "이모님", "가족"];
   const [helperRoleLabels, setHelperRoleLabels] = useState(() => {
     try {
@@ -2693,7 +2699,9 @@ function MainApp() {
           condolence_cat: Array.isArray(saved.condolence_cat) && saved.condolence_cat.length > 0 ? saved.condolence_cat.map((s) => String(s || "").trim()).filter(Boolean) : [...CONDOLENCE_CATEGORIES],
           condolence_group: Array.isArray(saved.condolence_group) && saved.condolence_group.length > 0 ? saved.condolence_group.map((s) => String(s || "").trim()).filter(Boolean) : [...CONDOLENCE_GROUPS],
           condolence_pay: Array.isArray(saved.condolence_pay) && saved.condolence_pay.length > 0 ? saved.condolence_pay.map((s) => String(s || "").trim()).filter(Boolean) : [...CONDOLENCE_PAY_METHODS],
-          house_med_target: Array.isArray(saved.house_med_target) && saved.house_med_target.length > 0 ? saved.house_med_target.map((s) => String(s || "").trim()).filter(Boolean) : [...HOUSE_MEDICINE_TARGETS]
+          house_med_target: Array.isArray(saved.house_med_target) && saved.house_med_target.length > 0 ? saved.house_med_target.map((s) => String(s || "").trim()).filter(Boolean) : [...HOUSE_MEDICINE_TARGETS],
+          baby_memo_tags: Array.isArray(saved.baby_memo_tags) && saved.baby_memo_tags.length > 0 ? saved.baby_memo_tags.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_BABY_MEMO_TAGS],
+          shopping_presets: Array.isArray(saved.shopping_presets) && saved.shopping_presets.length > 0 ? saved.shopping_presets.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_SHOPPING_PRESETS]
         };
       }
     } catch (e) {}
@@ -2706,7 +2714,9 @@ function MainApp() {
       condolence_cat: [...CONDOLENCE_CATEGORIES],
       condolence_group: [...CONDOLENCE_GROUPS],
       condolence_pay: [...CONDOLENCE_PAY_METHODS],
-      house_med_target: [...HOUSE_MEDICINE_TARGETS]
+      house_med_target: [...HOUSE_MEDICINE_TARGETS],
+      baby_memo_tags: [...DEFAULT_BABY_MEMO_TAGS],
+      shopping_presets: [...DEFAULT_SHOPPING_PRESETS]
     };
   });
   const fridgeCategories = customCategories.fridge;
@@ -2718,6 +2728,8 @@ function MainApp() {
   const condolenceGroups = customCategories.condolence_group || CONDOLENCE_GROUPS;
   const condolencePayMethods = customCategories.condolence_pay || CONDOLENCE_PAY_METHODS;
   const houseMedTargets = customCategories.house_med_target || HOUSE_MEDICINE_TARGETS;
+  const babyMemoTags = customCategories.baby_memo_tags || DEFAULT_BABY_MEMO_TAGS;
+  const shoppingPresets = customCategories.shopping_presets || DEFAULT_SHOPPING_PRESETS;
 
   // === 🔒 비밀메뉴: 경조사비 입출금내역 상태 ===
   const isSuhyeokAdmin = isAdminUnlocked && (actorName === "수혁" || actorName === "김수혁");
@@ -5723,6 +5735,10 @@ function MainApp() {
             setRecentPageIds(cleanRec);
             try { localStorage.setItem("kim_pages_recent_v1", JSON.stringify(cleanRec)); } catch (e) {}
           }
+          if (d?.expandedPageIds && typeof d.expandedPageIds === "object" && !Array.isArray(d.expandedPageIds)) {
+            setExpandedPageIds(d.expandedPageIds);
+            try { localStorage.setItem("kim_pages_expanded_v1", JSON.stringify(d.expandedPageIds)); } catch (e) {}
+          }
         },
         () => {}
       )
@@ -5879,7 +5895,9 @@ function MainApp() {
               condolence_cat: Array.isArray(d.condolence_cat) && d.condolence_cat.length > 0 ? d.condolence_cat.map((s) => String(s || "").trim()).filter(Boolean) : [...CONDOLENCE_CATEGORIES],
               condolence_group: Array.isArray(d.condolence_group) && d.condolence_group.length > 0 ? d.condolence_group.map((s) => String(s || "").trim()).filter(Boolean) : [...CONDOLENCE_GROUPS],
               condolence_pay: Array.isArray(d.condolence_pay) && d.condolence_pay.length > 0 ? d.condolence_pay.map((s) => String(s || "").trim()).filter(Boolean) : [...CONDOLENCE_PAY_METHODS],
-              house_med_target: Array.isArray(d.house_med_target) && d.house_med_target.length > 0 ? d.house_med_target.map((s) => String(s || "").trim()).filter(Boolean) : [...HOUSE_MEDICINE_TARGETS]
+              house_med_target: Array.isArray(d.house_med_target) && d.house_med_target.length > 0 ? d.house_med_target.map((s) => String(s || "").trim()).filter(Boolean) : [...HOUSE_MEDICINE_TARGETS],
+              baby_memo_tags: Array.isArray(d.baby_memo_tags) && d.baby_memo_tags.length > 0 ? d.baby_memo_tags.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_BABY_MEMO_TAGS],
+              shopping_presets: Array.isArray(d.shopping_presets) && d.shopping_presets.length > 0 ? d.shopping_presets.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_SHOPPING_PRESETS]
             };
             setCustomCategories(nextCats);
             try { localStorage.setItem("kim_custom_categories_v1", JSON.stringify(nextCats)); } catch (e) {}
@@ -6500,6 +6518,7 @@ function MainApp() {
         babyDreamLinks,
         houseStorageRooms,
         customCategories,
+        expandedPageIds,
         monthlyBudget,
         homeLayoutConfig,
         homeTimeRanges,
@@ -6708,6 +6727,10 @@ function MainApp() {
         setMonthlyBudget(mb);
         try { localStorage.setItem("kim_family_budget", String(mb)); } catch (e) {}
       }
+      if (payload.expandedPageIds && typeof payload.expandedPageIds === "object" && !Array.isArray(payload.expandedPageIds)) {
+        setExpandedPageIds(payload.expandedPageIds);
+        try { localStorage.setItem("kim_pages_expanded_v1", JSON.stringify(payload.expandedPageIds)); } catch (e) {}
+      }
       if (payload.customCategories && typeof payload.customCategories === "object") {
         const nextCats = {
           fridge: Array.isArray(payload.customCategories.fridge) && payload.customCategories.fridge.length > 0 ? payload.customCategories.fridge.map((s) => String(s || "").trim()).filter(Boolean) : [...FRIDGE_CATEGORIES],
@@ -6718,7 +6741,9 @@ function MainApp() {
           condolence_cat: Array.isArray(payload.customCategories.condolence_cat) && payload.customCategories.condolence_cat.length > 0 ? payload.customCategories.condolence_cat.map((s) => String(s || "").trim()).filter(Boolean) : [...CONDOLENCE_CATEGORIES],
           condolence_group: Array.isArray(payload.customCategories.condolence_group) && payload.customCategories.condolence_group.length > 0 ? payload.customCategories.condolence_group.map((s) => String(s || "").trim()).filter(Boolean) : [...CONDOLENCE_GROUPS],
           condolence_pay: Array.isArray(payload.customCategories.condolence_pay) && payload.customCategories.condolence_pay.length > 0 ? payload.customCategories.condolence_pay.map((s) => String(s || "").trim()).filter(Boolean) : [...CONDOLENCE_PAY_METHODS],
-          house_med_target: Array.isArray(payload.customCategories.house_med_target) && payload.customCategories.house_med_target.length > 0 ? payload.customCategories.house_med_target.map((s) => String(s || "").trim()).filter(Boolean) : [...HOUSE_MEDICINE_TARGETS]
+          house_med_target: Array.isArray(payload.customCategories.house_med_target) && payload.customCategories.house_med_target.length > 0 ? payload.customCategories.house_med_target.map((s) => String(s || "").trim()).filter(Boolean) : [...HOUSE_MEDICINE_TARGETS],
+          baby_memo_tags: Array.isArray(payload.customCategories.baby_memo_tags) && payload.customCategories.baby_memo_tags.length > 0 ? payload.customCategories.baby_memo_tags.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_BABY_MEMO_TAGS],
+          shopping_presets: Array.isArray(payload.customCategories.shopping_presets) && payload.customCategories.shopping_presets.length > 0 ? payload.customCategories.shopping_presets.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_SHOPPING_PRESETS]
         };
         setCustomCategories(nextCats);
         try { localStorage.setItem("kim_custom_categories_v1", JSON.stringify(nextCats)); } catch (e) {}
@@ -13501,6 +13526,9 @@ ${validText}
       try {
         localStorage.setItem("kim_pages_expanded_v1", JSON.stringify(next));
       } catch (e) {}
+      if (user && db && isEditorUnlocked) {
+        setDoc(getDocRef("family_meta_v4", "home_layout"), { expandedPageIds: next, updatedAt: new Date().toISOString() }, { merge: true }).catch(() => {});
+      }
       return next;
     });
   };
@@ -13778,7 +13806,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
   };
 
   const handleAddCustomCategory = async (kind, rawName) => {
-    const tabKey = kind === "fridge" ? "fridge" : kind === "recipe" ? "recipes" : kind === "bucket" ? "bucket" : kind === "schedule" ? "schedule" : (kind === "house_room" || kind === "house_med_target") ? "house" : (kind === "condolence_cat" || kind === "condolence_group" || kind === "condolence_pay") ? "condolence" : "notices";
+    const tabKey = (kind === "fridge" || kind === "shopping_presets") ? (kind === "shopping_presets" ? "shopping" : "fridge") : kind === "recipe" ? "recipes" : kind === "bucket" ? "bucket" : kind === "schedule" ? "schedule" : kind === "baby_memo_tags" ? "baby" : (kind === "house_room" || kind === "house_med_target") ? "house" : (kind === "condolence_cat" || kind === "condolence_group" || kind === "condolence_pay") ? "condolence" : "notices";
     if (tabKey === "condolence") {
       if (!isCondolenceUnlocked) { showToast("🔒 경조사비 비밀번호 해제 후 편집할 수 있습니다."); return; }
     } else if (!requireEditorAccess(tabKey)) return;
@@ -13804,7 +13832,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
   };
 
   const handleRenameCustomCategory = async (kind, oldName, rawNext) => {
-    const tabKey = kind === "fridge" ? "fridge" : kind === "recipe" ? "recipes" : kind === "bucket" ? "bucket" : kind === "schedule" ? "schedule" : (kind === "house_room" || kind === "house_med_target") ? "house" : (kind === "condolence_cat" || kind === "condolence_group" || kind === "condolence_pay") ? "condolence" : "notices";
+    const tabKey = (kind === "fridge" || kind === "shopping_presets") ? (kind === "shopping_presets" ? "shopping" : "fridge") : kind === "recipe" ? "recipes" : kind === "bucket" ? "bucket" : kind === "schedule" ? "schedule" : kind === "baby_memo_tags" ? "baby" : (kind === "house_room" || kind === "house_med_target") ? "house" : (kind === "condolence_cat" || kind === "condolence_group" || kind === "condolence_pay") ? "condolence" : "notices";
     if (tabKey === "condolence") {
       if (!isCondolenceUnlocked) { showToast("🔒 경조사비 비밀번호 해제 후 편집할 수 있습니다."); return; }
     } else if (!requireEditorAccess(tabKey)) return;
@@ -14012,7 +14040,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
   };
 
   const handleDeleteCustomCategory = async (kind, targetName) => {
-    const tabKey = kind === "fridge" ? "fridge" : kind === "recipe" ? "recipes" : kind === "bucket" ? "bucket" : kind === "schedule" ? "schedule" : (kind === "house_room" || kind === "house_med_target") ? "house" : (kind === "condolence_cat" || kind === "condolence_group" || kind === "condolence_pay") ? "condolence" : "notices";
+    const tabKey = (kind === "fridge" || kind === "shopping_presets") ? (kind === "shopping_presets" ? "shopping" : "fridge") : kind === "recipe" ? "recipes" : kind === "bucket" ? "bucket" : kind === "schedule" ? "schedule" : kind === "baby_memo_tags" ? "baby" : (kind === "house_room" || kind === "house_med_target") ? "house" : (kind === "condolence_cat" || kind === "condolence_group" || kind === "condolence_pay") ? "condolence" : "notices";
     if (tabKey === "condolence") {
       if (!isCondolenceUnlocked) { showToast("🔒 경조사비 비밀번호 해제 후 편집할 수 있습니다."); return; }
     } else if (!requireEditorAccess(tabKey)) return;
@@ -14045,7 +14073,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
   };
 
   const handleMoveCustomCategory = async (kind, idx, delta) => {
-    const tabKey = kind === "fridge" ? "fridge" : kind === "recipe" ? "recipes" : kind === "bucket" ? "bucket" : kind === "schedule" ? "schedule" : (kind === "house_room" || kind === "house_med_target") ? "house" : (kind === "condolence_cat" || kind === "condolence_group" || kind === "condolence_pay") ? "condolence" : "notices";
+    const tabKey = (kind === "fridge" || kind === "shopping_presets") ? (kind === "shopping_presets" ? "shopping" : "fridge") : kind === "recipe" ? "recipes" : kind === "bucket" ? "bucket" : kind === "schedule" ? "schedule" : kind === "baby_memo_tags" ? "baby" : (kind === "house_room" || kind === "house_med_target") ? "house" : (kind === "condolence_cat" || kind === "condolence_group" || kind === "condolence_pay") ? "condolence" : "notices";
     if (tabKey === "condolence") {
       if (!isCondolenceUnlocked) { showToast("🔒 경조사비 비밀번호 해제 후 편집할 수 있습니다."); return; }
     } else if (!requireEditorAccess(tabKey)) return;
@@ -14069,7 +14097,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
   };
 
   const handleResetCustomCategories = async (kind) => {
-    const tabKey = kind === "fridge" ? "fridge" : kind === "recipe" ? "recipes" : kind === "bucket" ? "bucket" : kind === "schedule" ? "schedule" : (kind === "house_room" || kind === "house_med_target") ? "house" : (kind === "condolence_cat" || kind === "condolence_group" || kind === "condolence_pay") ? "condolence" : "notices";
+    const tabKey = (kind === "fridge" || kind === "shopping_presets") ? (kind === "shopping_presets" ? "shopping" : "fridge") : kind === "recipe" ? "recipes" : kind === "bucket" ? "bucket" : kind === "schedule" ? "schedule" : kind === "baby_memo_tags" ? "baby" : (kind === "house_room" || kind === "house_med_target") ? "house" : (kind === "condolence_cat" || kind === "condolence_group" || kind === "condolence_pay") ? "condolence" : "notices";
     if (tabKey === "condolence") {
       if (!isCondolenceUnlocked) { showToast("🔒 경조사비 비밀번호 해제 후 편집할 수 있습니다."); return; }
     } else if (!requireEditorAccess(tabKey)) return;
@@ -14094,6 +14122,10 @@ ${item.memo}` : `${item.title} 다녀옴!`,
         ? [...CONDOLENCE_PAY_METHODS]
         : kind === "house_med_target"
         ? [...HOUSE_MEDICINE_TARGETS]
+        : kind === "baby_memo_tags"
+        ? [...DEFAULT_BABY_MEMO_TAGS]
+        : kind === "shopping_presets"
+        ? [...DEFAULT_SHOPPING_PRESETS]
         : [...NOTICE_CATEGORIES];
     await saveCustomCategoriesToCloud({ ...customCategories, [kind]: defaults }, "↺ 기본 분류 목록으로 복원했습니다.");
   };
@@ -19585,9 +19617,6 @@ time: "", location: "",
 
 
 
-            {accessRole === "guest" && (
-              {null}
-            )}
 
 
             {blockOrder.map((blockId) => renderHomeBlock(blockId))}
@@ -20674,18 +20703,74 @@ time: "", location: "",
           })() : (
             <div className="space-y-4">
               <div className="bg-stone-900 text-white p-4 rounded-2xl shadow-md">
-                <div className="flex items-center justify-between gap-2 text-[13px] text-stone-300 mb-1">
+                <div className="flex flex-wrap items-center justify-between gap-1.5 text-[13px] text-stone-300 mb-1">
                   <span className="font-bold whitespace-nowrap">{currentMonth}월 총 식비</span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setBudgetDraftInput(String(monthlyBudget || ""));
-                      setIsBudgetEditing((v) => !v);
-                    }}
-                    className="underline text-amber-300 font-bold whitespace-nowrap shrink-0"
-                  >
-                    예산: {monthlyBudget.toLocaleString()}원 ✏️
-                  </button>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    {canEditTab("pages") && (
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          const catLines = (monthlyExpenseSummary.categoryTop || []).map((c) => `- ${c.category}: ${c.amount.toLocaleString()}원 (${c.pct}%)`);
+                          const summaryBlocks = parseNotionMarkdownToBlocks([
+                            `### 💰 ${currentMonth} 식비 결산`,
+                            `- 총 식비: **${monthlyExpenseSummary.total.toLocaleString()}원** (예산 ${monthlyBudget.toLocaleString()}원 · ${monthlyBudget > 0 ? Math.round((monthlyExpenseSummary.total / monthlyBudget) * 100) : 0}%)`,
+                            `- 장보기/식재료: ${monthlyExpenseSummary.groceryTotal.toLocaleString()}원 · 외식/배달/야식: ${monthlyExpenseSummary.diningTotal.toLocaleString()}원`,
+                            ...(monthlyExpenseSummary.wasteCount > 0 ? [`- 폐기 손실: ${monthlyExpenseSummary.wasteCount}건 (${monthlyExpenseSummary.wasteTotal.toLocaleString()}원 · ${monthlyExpenseSummary.wasteRate}%)`] : []),
+                            ...(catLines.length > 0 ? ["### 📊 카테고리별 상위 지출", ...catLines] : [])
+                          ].join("\n"), "amber");
+                          const newPage = {
+                            id: `page-exp-${currentMonth}-${Date.now().toString(36)}`,
+                            title: `${currentMonth} 식비 결산`,
+                            icon: "💰",
+                            parentId: "",
+                            coverColor: "sage",
+                            blocks: summaryBlocks,
+                            updatedAt: new Date().toISOString(),
+                            updatedBy: actorName || "가족"
+                          };
+                          await savePageToCloud(newPage);
+                          setSelectedPageId(newPage.id);
+                          setActiveTab("pages");
+                          showToast(`🗂️ '${currentMonth} 식비 결산' 노트를 생성했습니다!`);
+                        }}
+                        className="px-2 py-0.5 rounded-lg bg-stone-800 hover:bg-stone-700 border border-stone-700 text-stone-200 text-[10.5px] font-extrabold whitespace-nowrap"
+                        title="이번 달 식비 요약을 공유노트에 저장"
+                      >
+                        🗂️ 결산노트
+                      </button>
+                    )}
+                    {canEditTab("notices") && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const pct = monthlyBudget > 0 ? Math.round((monthlyExpenseSummary.total / monthlyBudget) * 100) : 0;
+                          setNoticeForm({
+                            title: `💰 ${currentMonth} 식비 현황 (${monthlyExpenseSummary.total.toLocaleString()}원)`,
+                            content: `총 식비: ${monthlyExpenseSummary.total.toLocaleString()}원 / 예산 ${monthlyBudget.toLocaleString()}원 (${pct}%)\n• 장보기: ${monthlyExpenseSummary.groceryTotal.toLocaleString()}원\n• 외식·배달: ${monthlyExpenseSummary.diningTotal.toLocaleString()}원`,
+                            category: noticeCategories[0] || "일반",
+                            author: actorName || "수혁",
+                            pinned: false
+                          });
+                          setEditingNotice(null);
+                          setIsNoticeModalOpen(true);
+                        }}
+                        className="px-2 py-0.5 rounded-lg bg-stone-800 hover:bg-stone-700 border border-stone-700 text-stone-200 text-[10.5px] font-extrabold whitespace-nowrap"
+                        title="이번 달 식비 현황을 가족공지로 공유"
+                      >
+                        📌 공지
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setBudgetDraftInput(String(monthlyBudget || ""));
+                        setIsBudgetEditing((v) => !v);
+                      }}
+                      className="underline text-amber-300 font-bold whitespace-nowrap shrink-0"
+                    >
+                      예산: {monthlyBudget.toLocaleString()}원 ✏️
+                    </button>
+                  </div>
                 </div>
                 {isBudgetEditing && (
                   <div className="my-2 p-2.5 rounded-xl bg-stone-800 border border-stone-700 space-y-2">
@@ -20993,12 +21078,12 @@ time: "", location: "",
                               const url = URL.createObjectURL(blob);
                               const link = document.createElement("a");
                               link.href = url;
-                              link.setAttribute("download", `식비원장_${monthlyYm}.csv`);
+                              link.setAttribute("download", `식비원장_${currentMonth}${expenseCatFilter !== "전체" ? `_${expenseCatFilter.replace(/[\\/:*?"<>|]/g, "_")}` : ""}.csv`);
                               document.body.appendChild(link);
                               link.click();
                               document.body.removeChild(link);
                               setTimeout(() => { try { URL.revokeObjectURL(url); } catch (e) {} }, 1000);
-                              showToast(`📊 ${monthlyYm} 식비 원장(${filteredLedger.length}건) CSV를 저장했습니다.`);
+                              showToast(`📊 ${currentMonth}월 식비 원장(${filteredLedger.length}건) CSV를 저장했습니다.`);
                             }}
                             className="px-2 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-800 text-[11px] font-extrabold whitespace-nowrap shrink-0"
                             title="현재 필터 식비 원장을 엑셀(.csv)로 내보내기"
@@ -24831,30 +24916,40 @@ time: "", location: "",
             </div>
             {!shoppingForm.name.trim() && (
               <div className="flex flex-wrap items-center gap-1">
-                {[
-                  { name: "계란", quantity: "1판", category: "유제품/계란" },
-                  { name: "우유", quantity: "1팩", category: "유제품/계란" },
-                  { name: "두부", quantity: "1모", category: "반찬/김치" },
-                  { name: "대파", quantity: "1단", category: "채소/과일" },
-                  { name: "양파", quantity: "1망", category: "채소/과일" },
-                  { name: "바나나", quantity: "1송이", category: "채소/과일" }
-                ].map((qItem) => (
+                {shoppingPresets.map((rawPreset) => {
+                  const parts = String(rawPreset || "").split("|").map((s) => s.trim());
+                  const pName = parts[0] || "";
+                  if (!pName) return null;
+                  const pQty = parts[1] || "1개";
+                  const pCat = parts[2] || inferShoppingCategoryByName(pName) || fridgeCategories[0] || "기타";
+                  return (
+                    <button
+                      key={rawPreset}
+                      type="button"
+                      onClick={() =>
+                        setShoppingForm((prev) => ({
+                          ...prev,
+                          name: pName,
+                          quantity: pQty,
+                          category: pCat
+                        }))
+                      }
+                      className="px-2 py-0.5 rounded-full bg-stone-50 hover:bg-stone-100 border border-stone-200 text-[11px] font-bold text-stone-600 whitespace-nowrap shrink-0"
+                    >
+                      + {pName}
+                    </button>
+                  );
+                })}
+                {canEditTab("shopping") && (
                   <button
-                    key={qItem.name}
                     type="button"
-                    onClick={() =>
-                      setShoppingForm((prev) => ({
-                        ...prev,
-                        name: qItem.name,
-                        quantity: qItem.quantity,
-                        category: qItem.category
-                      }))
-                    }
-                    className="px-2 py-0.5 rounded-full bg-stone-50 hover:bg-stone-100 border border-stone-200 text-[11px] font-bold text-stone-600 whitespace-nowrap shrink-0"
+                    onClick={() => openCategoryManager("shopping_presets")}
+                    className="px-2 py-0.5 rounded-full bg-[#EEF3EE] hover:bg-[#dce8de] border border-[#C9D8CC] text-[10.5px] font-extrabold text-[#35503C] whitespace-nowrap shrink-0"
+                    title="자주 사는 품목 편집"
                   >
-                    + {qItem.name}
+                    ⚙️ 편집
                   </button>
-                ))}
+                )}
               </div>
             )}
             {shoppingForm.name.trim() && (() => {
@@ -27951,11 +28046,7 @@ time: "", location: "",
                   </div>
                 );
               })()}
-              {!isSuhyeokAdmin && (
-                <div className="text-[10.5px] font-semibold text-stone-400 text-right">
-                  🔒 비밀번호 변경은 김수혁 관리자 전용
-                </div>
-              )}
+
             </div>
 
             {/* 검색 및 다차원 필터 */}
@@ -35772,7 +35863,7 @@ time: "", location: "",
                 <select
                   value={newRoutineIntervalDays}
                   onChange={(e) => setNewRoutineIntervalDays(Number(e.target.value))}
-                  className="w-full px-3 py-2 rounded-xl border border-stone-200 bg-stone-50 text-[13.5px] font-extrabold text-stone-800"
+                  className="w-full min-w-0 truncate px-3 py-2 rounded-xl border border-stone-200 bg-stone-50 text-[13.5px] font-extrabold text-stone-800"
                 >
                   {[2, 3, 4, 5, 6, 7, 10, 14].map((d) => (
                     <option key={d} value={d}>{d}일마다</option>
@@ -35783,7 +35874,7 @@ time: "", location: "",
                 <select
                   value={newRoutineMonthDay}
                   onChange={(e) => setNewRoutineMonthDay(Number(e.target.value))}
-                  className="w-full px-3 py-2 rounded-xl border border-stone-200 bg-stone-50 text-[13.5px] font-extrabold text-stone-800"
+                  className="w-full min-w-0 truncate px-3 py-2 rounded-xl border border-stone-200 bg-stone-50 text-[13.5px] font-extrabold text-stone-800"
                 >
                   {Array.from({ length: 31 }, (_, idx) => idx + 1).map((dayNum) => (
                     <option key={dayNum} value={dayNum}>매월 {dayNum}일</option>
@@ -35794,7 +35885,7 @@ time: "", location: "",
                 <select
                   value={newRoutineNthWeek}
                   onChange={(e) => setNewRoutineNthWeek(Number(e.target.value))}
-                  className="w-full px-3 py-2 rounded-xl border border-stone-200 bg-stone-50 text-[13.5px] font-extrabold text-stone-800"
+                  className="w-full min-w-0 truncate px-3 py-2 rounded-xl border border-stone-200 bg-stone-50 text-[13.5px] font-extrabold text-stone-800"
                 >
                   <option value={1}>첫째 주</option>
                   <option value={2}>둘째 주</option>
@@ -35807,7 +35898,7 @@ time: "", location: "",
                 <select
                   value={newRoutineWeekDay}
                   onChange={(e) => setNewRoutineWeekDay(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border border-stone-200 bg-stone-50 text-[13.5px] font-extrabold text-stone-800"
+                  className="w-full min-w-0 truncate px-3 py-2 rounded-xl border border-stone-200 bg-stone-50 text-[13.5px] font-extrabold text-stone-800"
                 >
                   {newRoutineCycle === "weekly" && <option value="any">요일 무관</option>}
                   {["일", "월", "화", "수", "목", "금", "토"].map((dLabel, dIdx) => (
@@ -37473,7 +37564,7 @@ time: "", location: "",
               <select
                 value={fridgeForm.shelfZone || ""}
                 onChange={(e) => setFridgeForm({ ...fridgeForm, shelfZone: e.target.value })}
-                className="w-full px-3 py-2 rounded-xl border border-stone-200 text-[13.5px] font-bold bg-stone-50"
+                className="w-full min-w-0 truncate px-3 py-2 rounded-xl border border-stone-200 text-[13.5px] font-bold bg-stone-50"
               >
                 <option value="">자동 배치 (보관위치·카테고리 기준)</option>
                 {FRIDGE_SHELF_ZONES.map((z) => (
@@ -38424,6 +38515,8 @@ time: "", location: "",
           schedule: { title: "🗓️ 일정 카테고리", placeholder: "새 일정 분류 (예: 어린이집, 친정/시댁, 차량)" },
           house_room: { title: "🏠 수납 장소", placeholder: "새 수납 장소 (예: 드레스룸, 팬트리, 서재)" },
           house_med_target: { title: "💊 상비약 대상", placeholder: "새 복용 대상 (예: 수혁, 아리, 친정)" },
+          baby_memo_tags: { title: "🍼 수유메모 태그", placeholder: "새 메모 태그 (예: 분유거부, 낮잠잘잠)" },
+          shopping_presets: { title: "🛒 자주사는 품목", placeholder: "예: 식빵 또는 식빵|1봉|기타" },
           condolence_cat: { title: "💌 경조사 카테고리", placeholder: "새 경조사 분류 (예: 칠순/팔순, 집들이, 승진)" },
           condolence_group: { title: "👥 경조사 그룹", placeholder: "새 경조사 그룹 (예: 동호회, 대학동기, 거래처)" },
           condolence_pay: { title: "💳 경조사 결제수단", placeholder: "새 결제수단 (예: 카카오페이, 토스, 상품권, 화환)" }
@@ -38471,6 +38564,8 @@ time: "", location: "",
                   { id: "schedule", label: "🗓️ 일정", cnt: (customCategories.schedule || []).length },
                   { id: "house_room", label: "🏠 수납", cnt: houseStorageRooms.length },
                   { id: "house_med_target", label: "💊 약대상", cnt: houseMedTargets.length },
+                  { id: "baby_memo_tags", label: "🍼 수유태그", cnt: babyMemoTags.length },
+                  { id: "shopping_presets", label: "🛒 자주담기", cnt: shoppingPresets.length },
                   ...(isCondolenceUnlocked ? [
                     { id: "condolence_cat", label: "💌 경조분류", cnt: condolenceCategories.length },
                     { id: "condolence_group", label: "👥 경조그룹", cnt: condolenceGroups.length },
@@ -39254,21 +39349,65 @@ time: "", location: "",
                                       ⚙️
                                     </button>
                                   )}
-                                  <button
-                                    type="button"
-                                    title="이름 수정"
-                                    onClick={() => {
-                                      const cur = mu.actorName || mu.displayName || "";
-                                      const nextNm = window.prompt("앱에 표시될 사용자 이름을 입력하세요:", cur);
-                                      if (nextNm && nextNm.trim() && nextNm.trim() !== cur) {
-                                        handleUpdateUserCustomTabs(mu.uid, { actorName: nextNm.trim() });
-                                        showToast(`✏️ 이름이 [${nextNm.trim()}]로 변경되었습니다.`);
-                                      }
-                                    }}
-                                    className="px-1.5 py-1 rounded-lg bg-stone-50 border border-stone-200 text-stone-600 hover:bg-stone-100 text-[11px] font-extrabold whitespace-nowrap"
-                                  >
-                                    ✏️
-                                  </button>
+                                  {editingUserNameUid === mu.uid ? (
+                                    <div className="flex items-center gap-1">
+                                      <input
+                                        type="text"
+                                        value={editingUserNameDraft}
+                                        onChange={(e) => setEditingUserNameDraft(e.target.value)}
+                                        onKeyDown={(e) => {
+                                          if (e.key === "Enter") {
+                                            const trimmed = editingUserNameDraft.trim();
+                                            const cur = mu.actorName || mu.displayName || "";
+                                            if (trimmed && trimmed !== cur) {
+                                              handleUpdateUserCustomTabs(mu.uid, { actorName: trimmed });
+                                              showToast(`✏️ 이름이 [${trimmed}]로 변경되었습니다.`);
+                                            }
+                                            setEditingUserNameUid(null);
+                                          } else if (e.key === "Escape") {
+                                            setEditingUserNameUid(null);
+                                          }
+                                        }}
+                                        placeholder="이름"
+                                        autoFocus
+                                        className="w-20 px-1.5 py-0.5 rounded-lg border border-amber-300 bg-white text-[11px] font-bold text-stone-900"
+                                      />
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          const trimmed = editingUserNameDraft.trim();
+                                          const cur = mu.actorName || mu.displayName || "";
+                                          if (trimmed && trimmed !== cur) {
+                                            handleUpdateUserCustomTabs(mu.uid, { actorName: trimmed });
+                                            showToast(`✏️ 이름이 [${trimmed}]로 변경되었습니다.`);
+                                          }
+                                          setEditingUserNameUid(null);
+                                        }}
+                                        className="px-1.5 py-0.5 rounded-lg bg-[#3F624D] text-white text-[10.5px] font-extrabold whitespace-nowrap"
+                                      >
+                                        저장
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => setEditingUserNameUid(null)}
+                                        className="px-1 py-0.5 rounded-lg bg-stone-100 text-stone-500 text-[10.5px] font-bold whitespace-nowrap"
+                                      >
+                                        취소
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      title="이름 수정"
+                                      onClick={() => {
+                                        setEditingUserNameUid(mu.uid);
+                                        setEditingUserNameDraft(mu.actorName || mu.displayName || "");
+                                      }}
+                                      className="px-1.5 py-1 rounded-lg bg-stone-50 border border-stone-200 text-stone-600 hover:bg-stone-100 text-[11px] font-extrabold whitespace-nowrap"
+                                    >
+                                      ✏️
+                                    </button>
+                                  )}
                                   <button
                                     type="button"
                                     title="삭제"
@@ -40560,8 +40699,8 @@ time: "", location: "",
                     className="w-16 h-16 rounded-xl object-cover border border-stone-200"
                   />
                 )}
-                <div className="flex flex-wrap gap-1.5">
-                  {["트림 안함", "트림 함", "유산균", "잘 먹음", "게워냄"].map((tag) => (
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {babyMemoTags.map((tag) => (
                     <button
                       key={tag}
                       type="button"
@@ -40571,11 +40710,21 @@ time: "", location: "",
                           memo: p.memo ? (p.memo.includes(tag) ? p.memo : `${p.memo} · ${tag}`) : tag
                         }))
                       }
-                      className="px-2.5 py-1 rounded-full bg-sky-50 hover:bg-sky-100 border border-sky-200 text-[11.5px] font-extrabold text-sky-900"
+                      className="px-2.5 py-1 rounded-full bg-sky-50 hover:bg-sky-100 border border-sky-200 text-[11.5px] font-extrabold text-sky-900 whitespace-nowrap"
                     >
                       + {tag}
                     </button>
                   ))}
+                  {canEditTab("baby") && (
+                    <button
+                      type="button"
+                      onClick={() => openCategoryManager("baby_memo_tags")}
+                      className="px-2 py-1 rounded-full bg-[#EEF3EE] hover:bg-[#dce8de] border border-[#C9D8CC] text-[11px] font-extrabold text-[#35503C] whitespace-nowrap"
+                      title="빠른 메모 태그 편집"
+                    >
+                      ⚙️ 태그
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -42467,7 +42616,7 @@ time: "", location: "",
               <select
                 value={pageMetaForm.parentId || ""}
                 onChange={(e) => setPageMetaForm((p) => ({ ...p, parentId: e.target.value || null }))}
-                className="w-full px-3 py-2 rounded-xl border border-stone-200 bg-stone-50 text-[13px] font-bold"
+                className="w-full min-w-0 truncate px-3 py-2 rounded-xl border border-stone-200 bg-stone-50 text-[13px] font-bold"
               >
                 <option value="">최상위 (공유된 페이지 바로 아래)</option>
                 {familyPages
