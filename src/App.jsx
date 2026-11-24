@@ -36466,26 +36466,22 @@ time: "", location: "",
       )}
 
       {isPatchModalOpen && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setIsPatchModalOpen(false)}>
-          <div className="bg-white rounded-3xl max-w-md w-full p-5 space-y-4 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-[15.5px] font-black text-stone-900 flex items-center gap-1.5">
-                  <ClipboardList className="w-4 h-4 text-amber-600" />
-                  <span>우리 가족 식탁 앱 패치노트 (업데이트 기록)</span>
-                </h3>
-
-              </div>
-              <button type="button" onClick={() => setIsPatchModalOpen(false)}>
-                <X className="w-5 h-5 text-stone-400" />
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-3" onClick={() => setIsPatchModalOpen(false)}>
+          <div className="bg-white rounded-2xl max-w-md w-full p-3.5 space-y-3 max-h-[88vh] overflow-y-auto border border-stone-200 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between gap-2">
+              <h3 className="text-[13.5px] font-black text-stone-900 flex items-center gap-1.5 truncate">
+                <ClipboardList className="w-4 h-4 text-[#3F624D] shrink-0" />
+                <span className="truncate">패치노트 (업데이트 기록)</span>
+              </h3>
+              <button type="button" onClick={() => setIsPatchModalOpen(false)} className="w-7 h-7 rounded-full bg-stone-100 text-stone-500 flex items-center justify-center shrink-0">
+                <X className="w-4 h-4" />
               </button>
             </div>
 
-
-            <div className="bg-indigo-50 p-3 rounded-2xl border border-indigo-200 space-y-2">
+            <div className="bg-stone-50 p-2.5 rounded-xl border border-stone-200 space-y-1">
               <div className="flex items-center justify-between gap-2">
-                <div className="text-[12.5px] font-extrabold text-indigo-950">
-                  🔎 현재 실행 코드: <span className="text-indigo-700">{APP_CODE_VERSION}</span> ({APP_BUILD_DATE})
+                <div className="text-[11px] font-extrabold text-stone-800 truncate">
+                  🔎 현재: <span className="text-[#35503C] font-black">{APP_CODE_VERSION}</span> <span className="text-stone-400 font-bold">({APP_BUILD_DATE})</span>
                 </div>
                 <button
                   type="button"
@@ -36500,55 +36496,53 @@ time: "", location: "",
                     url.searchParams.set("_v", String(Date.now()));
                     window.location.replace(url.toString());
                   }}
-                  className="px-2.5 py-1 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-[11.5px] font-extrabold shrink-0 whitespace-nowrap"
+                  className="px-2 py-1 rounded-lg bg-[#3F624D] hover:bg-[#324F3E] text-white text-[10px] font-extrabold shrink-0 whitespace-nowrap"
                 >
-                  🔄 캐시 비우고 새로고침
+                  🔄 새로고침
                 </button>
               </div>
-              <div className="text-[11.5px] text-indigo-800 break-all">
-                접속 도메인: <span className="font-bold">{typeof window !== "undefined" ? window.location.hostname : ""}</span>
+              <div className="text-[10px] text-stone-500 truncate">
+                도메인: <span className="font-bold">{typeof window !== "undefined" ? window.location.hostname : ""}</span>
               </div>
             </div>
 
-
-            <div className="bg-stone-50 p-3.5 rounded-2xl border border-stone-200 space-y-2">
-              <div className="text-[13.5px] font-extrabold text-stone-800">
-                ✍️ 새 패치노트 기록 추가하기
+            <div className="bg-stone-50 p-2.5 rounded-xl border border-stone-200 space-y-1.5">
+              <div className="text-[11px] font-black text-stone-800">
+                ✍️ 새 패치노트 추가
               </div>
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-3 gap-1.5">
                 <input
                   type="text"
-                  placeholder="버전 (예: v5.7)"
+                  placeholder="버전(v13.84)"
                   value={patchForm.version}
                   onChange={(e) => setPatchForm({ ...patchForm, version: e.target.value })}
-                  className="px-2.5 py-1.5 rounded-xl border border-stone-200 text-[13.5px] font-black bg-white"
+                  className="min-w-0 px-2 py-1 rounded-lg border border-stone-200 text-[11px] font-black bg-white"
                 />
                 <input
                   type="text"
                   placeholder="패치 제목"
                   value={patchForm.title}
                   onChange={(e) => setPatchForm({ ...patchForm, title: e.target.value })}
-                  className="col-span-2 px-2.5 py-1.5 rounded-xl border border-stone-200 text-[13.5px] font-bold bg-white"
+                  className="col-span-2 min-w-0 px-2 py-1 rounded-lg border border-stone-200 text-[11px] font-bold bg-white"
                 />
               </div>
               <textarea
                 rows={2}
-                placeholder="상세 변경 내역 (줄바꿈으로 여러 줄 입력 가능)"
+                placeholder="상세 변경 내역 (줄바꿈으로 여러 줄 입력)"
                 value={patchForm.changesText}
                 onChange={(e) => setPatchForm({ ...patchForm, changesText: e.target.value })}
-                className="w-full px-2.5 py-1.5 rounded-xl border border-stone-200 text-[13.5px] bg-white"
+                className="w-full px-2 py-1 rounded-lg border border-stone-200 text-[11px] bg-white"
               />
               <button
                 type="button"
                 onClick={handleAddPatchNote}
-                className="w-full py-2 rounded-xl bg-stone-900 text-white text-[13.5px] font-extrabold"
+                className="w-full py-1.5 rounded-lg bg-stone-900 hover:bg-stone-800 text-white text-[11px] font-extrabold whitespace-nowrap"
               >
-                + 패치노트 저장하기
+                + 패치노트 저장
               </button>
             </div>
 
-
-            <div className="space-y-2.5">
+            <div className="space-y-2">
               <div className="relative">
                 <input
                   type="text"
@@ -36557,13 +36551,13 @@ time: "", location: "",
                   onKeyDown={(e) => { if (e.key === "Escape") setPatchSearchQuery(""); }}
                   enterKeyHint="search"
                   placeholder="🔍 패치노트 버전·키워드 검색..."
-                  className="w-full px-3 py-1.5 pr-8 rounded-xl border border-stone-200 bg-stone-50 text-[12px] font-bold text-stone-800"
+                  className="w-full px-2.5 py-1.5 pr-7 rounded-lg border border-stone-200 bg-stone-50 text-[11px] font-bold text-stone-800"
                 />
                 {patchSearchQuery && (
                   <button
                     type="button"
                     onClick={() => setPatchSearchQuery("")}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-700"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-700"
                   >
                     <X className="w-3.5 h-3.5" />
                   </button>
@@ -36587,28 +36581,28 @@ time: "", location: "",
                     {visibleNotes.map((pn) => (
                 <div
                   key={pn.id}
-                  className="p-3.5 rounded-2xl bg-white border border-stone-200 shadow-sm space-y-2"
+                  className="p-2.5 rounded-xl bg-white border border-stone-200 space-y-1.5"
                 >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className="px-2 py-0.5 rounded-lg bg-amber-500 text-white text-[12.5px] font-black whitespace-nowrap">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-start gap-1.5 min-w-0">
+                      <span className="px-1.5 py-0.5 rounded-md bg-[#3F624D] text-white text-[10px] font-black whitespace-nowrap shrink-0 mt-0.5">
                         {pn.version}
                       </span>
-                      <span className="text-[13.5px] font-black text-stone-900">{pn.title}</span>
+                      <span className="text-[11.5px] font-black text-stone-900 leading-snug break-keep">{pn.title}</span>
                     </div>
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-[11.5px] font-bold text-stone-400">{pn.date}</span>
+                    <div className="flex items-center gap-1 shrink-0 pt-0.5">
+                      <span className="text-[10px] font-bold text-stone-400 whitespace-nowrap">{pn.date}</span>
                       <button
                         type="button"
                         onClick={() => handleDeletePatchNote(pn.id)}
-                        className="text-stone-300 hover:text-red-500"
+                        className="text-stone-300 hover:text-rose-500"
                         title="삭제"
                       >
-                        <Trash2 className="w-3.5 h-3.5" />
+                        <Trash2 className="w-3 h-3" />
                       </button>
                     </div>
                   </div>
-                  <ul className="space-y-1 text-[13.5px] text-stone-600 pl-1">
+                  <ul className="space-y-0.5 text-[10.5px] text-stone-600 pl-1">
                     {toSafeArray(Array.isArray(pn.changes) && pn.changes.length > 0 ? pn.changes : pn.items).map((line, i) => (
                       <li key={i} className="leading-snug break-keep">
                         • {line}
@@ -39513,7 +39507,7 @@ time: "", location: "",
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex items-center justify-between gap-2">
-                <h3 className="text-[14.5px] font-black text-stone-900 truncate min-w-0">
+                <h3 className="text-[13px] font-black text-stone-900 truncate min-w-0">
                   ⚙️ {kindMeta.title} 관리
                 </h3>
                 <div className="flex items-center gap-1 shrink-0">
@@ -39581,12 +39575,12 @@ time: "", location: "",
                     if (e.key === "Enter") handleAddCustomCategory(categoryManageKind, newCategoryInput);
                   }}
                   placeholder={kindMeta.placeholder}
-                  className="flex-1 min-w-0 h-9 px-3 rounded-xl border border-stone-200 text-[12.5px] font-bold bg-stone-50"
+                  className="flex-1 min-w-0 h-8 px-2.5 rounded-lg border border-stone-200 text-[11px] font-bold bg-stone-50"
                 />
                 <button
                   type="button"
                   onClick={() => handleAddCustomCategory(categoryManageKind, newCategoryInput)}
-                  className="h-9 px-3 rounded-xl bg-[#3F624D] hover:bg-[#324E3D] text-white text-[12px] font-extrabold whitespace-nowrap shrink-0"
+                  className="h-8 px-2.5 rounded-lg bg-[#3F624D] hover:bg-[#324E3D] text-white text-[11px] font-extrabold whitespace-nowrap shrink-0"
                 >
                   + 추가
                 </button>
@@ -41538,7 +41532,7 @@ time: "", location: "",
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex items-center justify-between">
-                <h3 className="text-[15.5px] font-black text-stone-900">📋 식단 골라서 복사하기</h3>
+                <h3 className="text-[13.5px] font-black text-stone-900">📋 식단 골라서 복사하기</h3>
                 <button type="button" onClick={() => setIsMealCopyModalOpen(false)}>
                   <X className="w-5 h-5 text-stone-400" />
                 </button>

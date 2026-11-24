@@ -1181,7 +1181,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v13.83";
+export const APP_CODE_VERSION = "v13.84";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1199,7 +1199,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-24 14:40";
+export const APP_BUILD_DATE = "2026-11-24 14:45";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1268,6 +1268,16 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v13.84",
+    version: "v13.84",
+    date: "2026-11-24",
+    title: "📝 패치노트·세부분류·식단복사 모달 글자크기·날짜 줄바꿈·색감 일괄 통일",
+    highlights: [
+      "패치노트 모달 개선: 13.5~15.5px 큰 글씨를 10~11.5px로 축소, 버전 입력칸 잘림(placeholder) 해소, 날짜(2026-11-24) 2줄 줄바꿈 방지(whitespace-nowrap), 이질적인 남색/주황색 배지를 중립 무채색·세이지그린(#3F624D) 톤으로 통일",
+      "세부 분류 관리·식단 복사 모달 글자·입력창 높이를 설정창 컴팩트 규격(10.5~13px)으로 일괄 통일 및 배포 오류 점검 완료"
+    ]
+  },
   {
     id: "patch-v13.83",
     version: "v13.83",
