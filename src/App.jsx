@@ -44,9 +44,14 @@ import {
   Copy
 } from "lucide-react";
 import {
-  signInAnonymously,
   onAuthStateChanged,
-  signInWithCustomToken
+  signInWithCustomToken,
+  GoogleAuthProvider,
+  signInWithPopup,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  updateProfile,
+  signOut
 } from "firebase/auth";
 import {
   setDoc,
@@ -1687,6 +1692,16 @@ const computeFridgeProjectedUsage = (fridgeList, mealsList, baseDateStr, addDays
 
 function MainApp() {
   const [user, setUser] = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [userProfile, setUserProfile] = useState(null);
+  const [profileLoading, setProfileLoading] = useState(false);
+  const [managedUsers, setManagedUsers] = useState([]);
+  const [authMode, setAuthMode] = useState("login");
+  const [authEmailInput, setAuthEmailInput] = useState("");
+  const [authPasswordInput, setAuthPasswordInput] = useState("");
+  const [authNameInput, setAuthNameInput] = useState("");
+  const [authFormError, setAuthFormError] = useState("");
+  const [authSubmitting, setAuthSubmitting] = useState(false);
   const [activeTab, setActiveTab] = useState("home");
   const [scheduleSubTab, setScheduleSubTab] = useState("calendar");
   const [ddayFilter, setDdayFilter] = useState("all");
@@ -2162,45 +2177,9 @@ function MainApp() {
       return DEFAULT_HELPER_CODE;
     }
   });
-  const [accessRole, setAccessRole] = useState(() => {
-    try {
-      const params = new URLSearchParams(window.location.search);
-      const inv = params.get("invite");
-      const savedAdmin = localStorage.getItem("family_admin_code_v1") || EDITOR_INVITE_CODE;
-      const savedSuhyeok = localStorage.getItem("family_suhyeok_code_v1") || savedAdmin;
-      const savedArina = localStorage.getItem("family_arina_code_v1") || savedAdmin;
-      const savedHelper = localStorage.getItem("family_helper_code_v1") || DEFAULT_HELPER_CODE;
-      if (inv && (inv === savedSuhyeok || inv === savedArina || inv === savedAdmin)) {
-        localStorage.setItem("family_access_role_v1", "admin");
-        localStorage.setItem("family_editor_unlocked_v1", "true");
-        if (inv === savedArina && inv !== savedSuhyeok) {
-          localStorage.setItem("family_actor_name_v1", "아리나");
-        } else if (inv === savedSuhyeok && inv !== savedArina) {
-          localStorage.setItem("family_actor_name_v1", "수혁");
-        }
-        params.delete("invite");
-        const cleanQuery = params.toString();
-        const cleanUrl = window.location.pathname + (cleanQuery ? `?${cleanQuery}` : "") + window.location.hash;
-        window.history.replaceState({}, "", cleanUrl);
-        return "admin";
-      }
-      if (inv && inv === savedHelper) {
-        localStorage.setItem("family_access_role_v1", "helper");
-        localStorage.removeItem("family_editor_unlocked_v1");
-        params.delete("invite");
-        const cleanQuery = params.toString();
-        const cleanUrl = window.location.pathname + (cleanQuery ? `?${cleanQuery}` : "") + window.location.hash;
-        window.history.replaceState({}, "", cleanUrl);
-        return "helper";
-      }
-      const savedRole = localStorage.getItem("family_access_role_v1");
-      if (savedRole === "admin" || savedRole === "helper" || savedRole === "guest") return savedRole;
-      if (localStorage.getItem("family_editor_unlocked_v1") === "true") return "admin";
-      return "guest";
-    } catch (e) {
-      return "guest";
-    }
-  });
+  const [accessRole, setAccessRole] = useState("guest");
+  const isApprovedUser =
+    userProfile?.role === "admin" || userProfile?.role === "helper";
   const [actorName, setActorName] = useState(() => {
     try {
       return localStorage.getItem("family_actor_name_v1") || "수혁";
@@ -4527,16 +4506,106 @@ function MainApp() {
   };
 
 
-  const logoutToGuest = () => {
+  const handleGoogleLogin = async () => {
+    if (!auth) return;
+    setAuthFormError("");
+    setAuthSubmitting(true);
+    try {
+      const provider = new GoogleAuthProvider();
+      provider.setCustomParameters({ prompt: "select_account" });
+      await signInWithPopup(auth, provider);
+    } catch (err) {
+      setAuthFormError(err?.message || "Google 로그인에 실패했습니다.");
+    } finally {
+      setAuthSubmitting(false);
+    }
+  };
+
+  const handleEmailAuthSubmit = async (e) => {
+    if (e && e.preventDefault) e.preventDefault();
+    if (!auth) return;
+    const email = authEmailInput.trim();
+    const password = authPasswordInput;
+    if (!email || !password) {
+      setAuthFormError("이메일과 비밀번호를 모두 입력해 주세요.");
+      return;
+    }
+    if (authMode === "signup" && password.length < 6) {
+      setAuthFormError("비밀번호는 6자 이상으로 입력해 주세요.");
+      return;
+    }
+    setAuthFormError("");
+    setAuthSubmitting(true);
+    try {
+      if (authMode === "signup") {
+        const cred = await createUserWithEmailAndPassword(auth, email, password);
+        const cleanName = authNameInput.trim() || email.split("@")[0];
+        if (cred.user && cleanName) {
+          await updateProfile(cred.user, { displayName: cleanName }).catch(() => {});
+        }
+        showToast("✅ 회원가입이 완료되었습니다. 관리자 승인을 기다려 주세요.");
+      } else {
+        await signInWithEmailAndPassword(auth, email, password);
+      }
+    } catch (err) {
+      const code = err?.code || "";
+      if (code === "auth/email-already-in-use") {
+        setAuthFormError("이미 가입된 이메일입니다. 로그인으로 전환해 주세요.");
+      } else if (code === "auth/invalid-credential" || code === "auth/wrong-password" || code === "auth/user-not-found") {
+        setAuthFormError("이메일 또는 비밀번호가 올바르지 않습니다.");
+      } else if (code === "auth/weak-password") {
+        setAuthFormError("비밀번호는 6자 이상이어야 합니다.");
+      } else {
+        setAuthFormError(err?.message || "인증 처리 중 오류가 발생했습니다.");
+      }
+    } finally {
+      setAuthSubmitting(false);
+    }
+  };
+
+  const handleUpdateUserRole = async (targetUid, nextRole, nextActorName = null) => {
+    if (!db || !isAdminUnlocked || !targetUid) return;
+    beginWrite();
+    try {
+      const payload = {
+        role: nextRole,
+        updatedAtMs: Date.now()
+      };
+      if (nextActorName !== null) {
+        payload.actorName = nextActorName;
+      }
+      await setDoc(getDocRef("users", targetUid), payload, { merge: true });
+      endWrite(true);
+      showToast(
+        nextRole === "admin"
+          ? `👑 관리자(${nextActorName || "가족"}) 권한이 부여되었습니다.`
+          : nextRole === "helper"
+          ? "🌿 육아지원군 권한이 부여되었습니다."
+          : nextRole === "rejected"
+          ? "🚫 접근이 차단되었습니다."
+          : "⏳ 승인 대기 상태로 변경되었습니다."
+      );
+    } catch (err) {
+      endWrite(false);
+      showToast("권한 변경 실패: " + (err?.message || "오류"));
+    }
+  };
+
+  const logoutToGuest = async () => {
     try {
       localStorage.setItem("family_access_role_v1", "guest");
       localStorage.removeItem("family_editor_unlocked_v1");
     } catch (e) {}
+    if (auth) {
+      await signOut(auth).catch(() => {});
+    }
+    setUserProfile(null);
+    setManagedUsers([]);
     setAccessRole("guest");
     setIsEditorUnlockModalOpen(false);
     if (babySubTab === "diary") setBabySubTab("milestones");
     if (!guestAllowedTabs.includes(activeTab)) setActiveTab("home");
-    showToast("🔒 로그아웃되어 열람 제한 모드로 전환되었습니다.");
+    showToast("🔒 로그아웃되었습니다.");
   };
 
 
@@ -5059,38 +5128,116 @@ function MainApp() {
   // 6. 파이어베이스 실시간 동기화
   // ==========================================
   useEffect(() => {
-    if (!auth) return;
-    let retryTimer = null;
-    const initAuth = async (isRetry = false) => {
-      try {
-        if (typeof __initial_auth_token !== "undefined" && __initial_auth_token) {
-          await signInWithCustomToken(auth, __initial_auth_token);
-        } else {
-          await signInAnonymously(auth);
-        }
-      } catch (err) {
-        console.error("Auth error:", err);
-        if (!isRetry) {
-          retryTimer = setTimeout(() => initAuth(true), 2500);
-        } else {
-          setSyncErrorMsg("서버 인증 연결에 실패했습니다. 네트워크 확인 후 새로고침(F5)해 주세요.");
-        }
-      }
-    };
-    initAuth(false);
+    if (!auth) {
+      setAuthLoading(false);
+      return;
+    }
+    if (typeof __initial_auth_token !== "undefined" && __initial_auth_token) {
+      signInWithCustomToken(auth, __initial_auth_token).catch((err) => {
+        console.error("Custom token auth error:", err);
+      });
+    }
     const unsub = onAuthStateChanged(auth, (u) => {
       setUser(u);
-      if (u) setSyncErrorMsg((prev) => (prev.includes("서버 인증") ? "" : prev));
+      setAuthLoading(false);
+      if (!u) {
+        setUserProfile(null);
+        setProfileLoading(false);
+        setAccessRole("guest");
+      } else {
+        setSyncErrorMsg((prev) => (prev.includes("서버 인증") ? "" : prev));
+      }
     });
-    return () => {
-      if (retryTimer) clearTimeout(retryTimer);
-      unsub();
-    };
+    return () => unsub();
   }, []);
+
+  useEffect(() => {
+    if (!user || !db) {
+      setUserProfile(null);
+      setProfileLoading(false);
+      return;
+    }
+    setProfileLoading(true);
+    const userRef = getDocRef("users", user.uid);
+    const unsub = onSnapshot(
+      userRef,
+      async (snap) => {
+        if (!snap.exists()) {
+          const fallbackName =
+            user.displayName ||
+            (user.email ? user.email.split("@")[0] : "새 사용자");
+          const initDoc = {
+            uid: user.uid,
+            email: user.email || "",
+            displayName: fallbackName,
+            actorName: fallbackName,
+            role: "pending",
+            createdAtMs: Date.now(),
+            updatedAtMs: Date.now()
+          };
+          try {
+            await setDoc(userRef, initDoc, { merge: true });
+          } catch (e) {
+            console.error("Profile init error:", e);
+          }
+          setUserProfile(initDoc);
+          setAccessRole("guest");
+          setProfileLoading(false);
+          return;
+        }
+        const data = { ...snap.data(), uid: snap.id };
+        setUserProfile(data);
+        if (data.role === "admin" || data.role === "helper") {
+          setAccessRole(data.role);
+          const nextName =
+            data.actorName ||
+            data.displayName ||
+            (data.role === "admin" ? "수혁" : "육아지원군");
+          setActorName(nextName);
+          try {
+            localStorage.setItem("family_access_role_v1", data.role);
+            localStorage.setItem("family_actor_name_v1", nextName);
+          } catch (e) {}
+        } else {
+          setAccessRole("guest");
+        }
+        setProfileLoading(false);
+      },
+      (err) => {
+        console.error("Profile snapshot error:", err);
+        setProfileLoading(false);
+      }
+    );
+    return () => unsub();
+  }, [user]);
+
+  useEffect(() => {
+    if (!user || !db || userProfile?.role !== "admin") {
+      setManagedUsers([]);
+      return;
+    }
+    const unsub = onSnapshot(
+      getColRef("users"),
+      (snap) => {
+        const order = { pending: 0, admin: 1, helper: 2, rejected: 3 };
+        const list = snap.docs
+          .map((d) => ({ ...d.data(), uid: d.id }))
+          .sort((a, b) => {
+            const oa = order[a.role] ?? 9;
+            const ob = order[b.role] ?? 9;
+            if (oa !== ob) return oa - ob;
+            return (Number(b.createdAtMs) || 0) - (Number(a.createdAtMs) || 0);
+          });
+        setManagedUsers(list);
+      },
+      () => {}
+    );
+    return () => unsub();
+  }, [user, userProfile?.role]);
 
 
   useEffect(() => {
-    if (!user || !db) return;
+    if (!user || !db || !isApprovedUser) return;
 
 
     const unsubscribers = [];
@@ -5863,7 +6010,7 @@ function MainApp() {
     return () => {
       unsubscribers.forEach((u) => u && u());
     };
-  }, [user]);
+  }, [user, isApprovedUser]);
 
 
   const meals = useMemo(() => {
@@ -16501,6 +16648,154 @@ ${item.memo}` : `${item.title} 다녀옴!`,
   }, [kitchenTimer.running]);
 
 
+  if (authLoading || (user && profileLoading && !userProfile)) {
+    return (
+      <div className="min-h-screen bg-[#FAF8F3] text-stone-800 max-w-md mx-auto flex items-center justify-center p-6 font-sans">
+        <div className="bg-white rounded-3xl border border-stone-200 p-6 w-full text-center space-y-2 shadow-sm">
+          <div className="text-2xl animate-pulse">🔐</div>
+          <div className="text-[15px] font-black text-stone-900">인증 상태 확인 중...</div>
+          <div className="text-[12.5px] text-stone-500">잠시만 기다려 주세요.</div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-[#FAF8F3] text-stone-800 max-w-md mx-auto flex items-center justify-center p-5 font-sans">
+        <div className="bg-white rounded-3xl border border-stone-200 p-6 w-full space-y-4 shadow-lg">
+          <div className="text-center space-y-1">
+            <div className="text-2xl">🏡</div>
+            <h1 className="text-[18px] font-black text-stone-900">우리집 관리 앱 로그인</h1>
+            <p className="text-[12.5px] text-stone-500">
+              회원가입 후 관리자 승인을 받아야 가족 데이터를 열람할 수 있습니다.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            disabled={authSubmitting}
+            onClick={handleGoogleLogin}
+            className="w-full py-2.5 px-4 rounded-xl border border-stone-300 bg-white hover:bg-stone-50 text-stone-900 text-[13.5px] font-extrabold flex items-center justify-center gap-2 shadow-xs disabled:opacity-50"
+          >
+            <span>G</span>
+            <span>Google 계정으로 계속하기</span>
+          </button>
+
+          <div className="flex items-center gap-2 text-[11.5px] text-stone-400">
+            <div className="flex-1 h-px bg-stone-200" />
+            <span>또는 이메일로 {authMode === "login" ? "로그인" : "회원가입"}</span>
+            <div className="flex-1 h-px bg-stone-200" />
+          </div>
+
+          <div className="grid grid-cols-2 gap-1.5 bg-stone-100 p-1 rounded-xl">
+            <button
+              type="button"
+              onClick={() => {
+                setAuthMode("login");
+                setAuthFormError("");
+              }}
+              className={`py-1.5 rounded-lg text-[12.5px] font-black transition ${
+                authMode === "login" ? "bg-stone-900 text-white" : "text-stone-500"
+              }`}
+            >
+              로그인
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setAuthMode("signup");
+                setAuthFormError("");
+              }}
+              className={`py-1.5 rounded-lg text-[12.5px] font-black transition ${
+                authMode === "signup" ? "bg-stone-900 text-white" : "text-stone-500"
+              }`}
+            >
+              회원가입
+            </button>
+          </div>
+
+          <form onSubmit={handleEmailAuthSubmit} className="space-y-2.5">
+            {authMode === "signup" && (
+              <input
+                type="text"
+                value={authNameInput}
+                onChange={(e) => setAuthNameInput(e.target.value)}
+                placeholder="이름 또는 호칭 (예: 아리나, 이모님)"
+                className="w-full px-3 py-2.5 rounded-xl border border-stone-300 text-[13.5px] font-bold"
+              />
+            )}
+            <input
+              type="email"
+              value={authEmailInput}
+              onChange={(e) => setAuthEmailInput(e.target.value)}
+              placeholder="이메일 주소"
+              autoComplete="email"
+              className="w-full px-3 py-2.5 rounded-xl border border-stone-300 text-[13.5px] font-bold"
+            />
+            <input
+              type="password"
+              value={authPasswordInput}
+              onChange={(e) => setAuthPasswordInput(e.target.value)}
+              placeholder="비밀번호 (6자 이상)"
+              autoComplete={authMode === "signup" ? "new-password" : "current-password"}
+              className="w-full px-3 py-2.5 rounded-xl border border-stone-300 text-[13.5px] font-bold"
+            />
+            {authFormError && (
+              <div className="text-[12px] font-bold text-rose-600 bg-rose-50 border border-rose-200 rounded-xl px-3 py-2">
+                {authFormError}
+              </div>
+            )}
+            <button
+              type="submit"
+              disabled={authSubmitting}
+              className="w-full py-2.5 rounded-xl bg-stone-900 hover:bg-stone-800 text-white text-[13.5px] font-extrabold disabled:opacity-50"
+            >
+              {authSubmitting
+                ? "처리 중..."
+                : authMode === "signup"
+                ? "회원가입 및 승인 요청"
+                : "이메일로 로그인"}
+            </button>
+          </form>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isApprovedUser) {
+    const isRejected = userProfile?.role === "rejected";
+    return (
+      <div className="min-h-screen bg-[#FAF8F3] text-stone-800 max-w-md mx-auto flex items-center justify-center p-5 font-sans">
+        <div className="bg-white rounded-3xl border border-stone-200 p-6 w-full text-center space-y-4 shadow-lg">
+          <div className="text-3xl">{isRejected ? "🚫" : "⏳"}</div>
+          <div className="space-y-1">
+            <h2 className="text-[17px] font-black text-stone-900">
+              {isRejected ? "접근이 제한된 계정입니다" : "관리자 승인 대기 중입니다"}
+            </h2>
+            <p className="text-[12.5px] text-stone-500 leading-relaxed">
+              {isRejected
+                ? "관리자에 의해 접근이 제한되었습니다. 필요 시 관리자에게 문의해 주세요."
+                : "회원가입 요청이 접수되었습니다. 수혁님(관리자)이 권한을 승인하면 자동으로 화면이 열립니다."}
+            </p>
+          </div>
+          <div className="bg-stone-50 border border-stone-200 rounded-2xl p-3 text-left text-[12px] space-y-1 text-stone-600">
+            <div><strong className="text-stone-800">이름:</strong> {userProfile?.displayName || user.displayName || "-"}</div>
+            <div><strong className="text-stone-800">이메일:</strong> {user.email || "-"}</div>
+            <div className="break-all"><strong className="text-stone-800">UID:</strong> {user.uid}</div>
+          </div>
+          <button
+            type="button"
+            onClick={logoutToGuest}
+            className="w-full py-2.5 rounded-xl bg-stone-900 hover:bg-stone-800 text-white text-[13px] font-extrabold"
+          >
+            로그아웃 / 다른 계정으로 로그인
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[#FAF8F3] text-stone-800 pb-24 max-w-md mx-auto shadow-xl border-x border-stone-200 relative font-sans">
       {diaryUploadProgress && (
@@ -16600,7 +16895,9 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                 if (syncStatus === "connected" || !auth) return;
                 showToast("🔄 서버 재연결을 시도합니다...");
                 try {
-                  await signInAnonymously(auth);
+                  if (!auth.currentUser) {
+                    showToast("다시 로그인해 주세요.");
+                  }
                 } catch (e) {
                   setSyncErrorMsg("서버 재연결 실패: 네트워크를 확인해 주세요.");
                 }
@@ -38731,6 +39028,98 @@ time: "", location: "",
                   </div>
                 </div>
 
+
+                <div className="bg-white rounded-xl border border-emerald-200 p-3 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[13px] font-black text-emerald-950">👥 회원 승인 및 권한 관리</span>
+                    <span className="text-[11px] font-bold text-emerald-700">
+                      총 {managedUsers.length}명 · 대기 {managedUsers.filter((u) => u.role === "pending").length}명
+                    </span>
+                  </div>
+                  {managedUsers.length === 0 ? (
+                    <div className="text-[12px] text-stone-500 py-2 text-center">
+                      가입된 사용자 목록을 불러오는 중입니다.
+                    </div>
+                  ) : (
+                    <div className="space-y-2 max-h-64 overflow-y-auto pr-0.5">
+                      {managedUsers.map((mu) => {
+                        const isSelf = mu.uid === user?.uid;
+                        const roleBadge =
+                          mu.role === "admin"
+                            ? "bg-stone-900 text-white"
+                            : mu.role === "helper"
+                            ? "bg-sky-100 text-sky-900"
+                            : mu.role === "rejected"
+                            ? "bg-rose-100 text-rose-800"
+                            : "bg-amber-100 text-amber-900";
+                        const roleText =
+                          mu.role === "admin"
+                            ? "관리자"
+                            : mu.role === "helper"
+                            ? "육아지원군"
+                            : mu.role === "rejected"
+                            ? "차단됨"
+                            : "승인대기";
+                        return (
+                          <div
+                            key={mu.uid}
+                            className="p-2.5 rounded-xl border border-stone-200 bg-stone-50/80 space-y-2"
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="min-w-0">
+                                <div className="text-[12.5px] font-black text-stone-900 truncate">
+                                  {mu.actorName || mu.displayName || "이름 없음"} {isSelf ? "(나)" : ""}
+                                </div>
+                                <div className="text-[11px] text-stone-500 truncate">{mu.email || mu.uid}</div>
+                              </div>
+                              <span className={`px-2 py-0.5 rounded-full text-[10.5px] font-black shrink-0 ${roleBadge}`}>
+                                {roleText}
+                              </span>
+                            </div>
+                            {!isSelf && (
+                              <div className="flex flex-wrap gap-1">
+                                <button
+                                  type="button"
+                                  onClick={() => handleUpdateUserRole(mu.uid, "admin", "수혁")}
+                                  className="px-2 py-1 rounded-lg bg-stone-900 text-white text-[11px] font-extrabold"
+                                >
+                                  👑 수혁(관리자)
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleUpdateUserRole(mu.uid, "admin", "아리나")}
+                                  className="px-2 py-1 rounded-lg bg-stone-700 text-white text-[11px] font-extrabold"
+                                >
+                                  👑 아리나(관리자)
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    handleUpdateUserRole(
+                                      mu.uid,
+                                      "helper",
+                                      mu.displayName || "육아지원군"
+                                    )
+                                  }
+                                  className="px-2 py-1 rounded-lg bg-sky-700 text-white text-[11px] font-extrabold"
+                                >
+                                  🌿 육아지원군
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleUpdateUserRole(mu.uid, "rejected")}
+                                  className="px-2 py-1 rounded-lg bg-rose-100 text-rose-800 text-[11px] font-extrabold"
+                                >
+                                  🚫 차단
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
 
                 <div className="bg-white rounded-xl border border-sky-200 overflow-hidden">
                   <div className="grid grid-cols-[1fr_54px_54px_54px] items-center bg-sky-100/70 px-2.5 py-1.5 text-[11.5px] font-black text-sky-950 text-center">
