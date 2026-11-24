@@ -1181,7 +1181,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v13.86";
+export const APP_CODE_VERSION = "v13.95";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1199,7 +1199,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-24 16:33";
+export const APP_BUILD_DATE = "2026-11-24 19:55";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1268,6 +1268,96 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v13.95",
+    version: "v13.95",
+    date: "2026-11-24",
+    title: "🔕 상태표시줄 알림 무음(silent: true) 전용 전달 적용",
+    highlights: [
+      "ServiceWorker showNotification 및 Notification 호출에 silent: true, renotify: false 옵션을 적용해 모든 앱 상태표시줄 알림이 소리·진동 없이 무음으로만 전달되도록 개선",
+      "전체 코드 구문·임포트·미선언 식별자·localStorage 동기화·배포 오류 최종 점검 완료"
+    ]
+  },
+  {
+    id: "patch-v13.94",
+    version: "v13.94",
+    date: "2026-11-24",
+    title: "🔔 알림 기능 통합 고도화: 쪽지·가입승인 상태바 알림 + 수정알림 헤더 잘림 방지",
+    highlights: [
+      "수정 알림 모달 헤더 개선: 버튼 4개(상태바·팝업·비우기·닫기)가 모바일 폭에서 잘리지 않도록 제목·닫기 줄과 제어 버튼 줄을 깔끔하게 분리",
+      "실시간 상태표시줄 알림 연계 확장: 관리자에게 새 쪽지(admin_inbox_notes_v1) 또는 새 회원가입 승인 요청(pending)이 도착할 때도 상태표시줄 알림을 띄우고, 수정 알림에서 [쪽지] 항목 클릭 시 쪽지함으로 바로 이동하도록 연계"
+    ]
+  },
+  {
+    id: "patch-v13.93",
+    version: "v13.93",
+    date: "2026-11-24",
+    title: "📲 모바일 상태표시줄 알림(ServiceWorker showNotification) 지원 및 테스트 버튼 추가",
+    highlights: [
+      "모바일 상태표시줄 알림 버그 수정: 안드로이드 Chrome·PWA에서 무시되던 new Notification() 대신 navigator.serviceWorker.ready.showNotification()을 우선 호출하도록 개선",
+      "새 수정 알림뿐 아니라 관리자 새 쪽지·회원 승인 요청 도착 시에도 상태표시줄 알림 지원 및 수정 알림 창 내 [🔔 상태바 켜기 / 📲 상태바 테스트] 버튼 추가"
+    ]
+  },
+  {
+    id: "patch-v13.92",
+    version: "v13.92",
+    date: "2026-11-24",
+    title: "🛡️ 설정 권한메뉴 고도화: 일괄 승인 메일 자동발송·분류권한 연동·기본값 복원 2탭 안전장치",
+    highlights: [
+      "일괄 승인 메일 연계: 체크박스로 여러 대기 회원을 한 번에 승인(handleBulkUpdateUserRoles)할 때도 EmailJS 승인 완료 메일이 자동 발송되도록 보완",
+      "개별 메뉴 권한 정확도 개선: 개별 권한 표 기본값이 해당 회원의 분류(roleLabel) 권한을 정확히 따르도록 수정하고, [기본값 복원] 버튼에 실수 방지 2탭 확인 적용"
+    ]
+  },
+  {
+    id: "patch-v13.91",
+    version: "v13.91",
+    date: "2026-11-24",
+    title: "🗂️ 더보기 시트 및 하위 메뉴(AI·레시피·경조사·공지버튼) 폰트·세이지그린 통일",
+    highlights: [
+      "더보기 시트(전체 메뉴 바로가기) 제목(15.5px→13.5px) 및 메뉴 타일(12px→11px, py-2)을 컴팩트하게 통일해 한 화면 가독성 개선",
+      "더보기 하위 메뉴(AI추천·경조사비·레시피북·장보기·살림수첩)의 큰 제목(15~16px→13.5px)과 이질적 남색(bg-indigo-50) 공지 연계 버튼을 앱 공통 세이지그린(#EEF3EE / #35503C) 톤으로 정리 및 전체 오류 점검 완료"
+    ]
+  },
+  {
+    id: "patch-v13.90",
+    version: "v13.90",
+    date: "2026-11-24",
+    title: "❄️ 냉장고 메뉴 품목 폰트(13.5px)·하부냉동·버튼 색감 통일",
+    highlights: [
+      "냉장고 품목 카드의 큰 품목명(15.5px→13.5px) 및 수량(13.5px→12px) 폰트 규격을 다른 메뉴와 동일하게 통일",
+      "하부냉동 구역의 이질적 남색(indigo) 테두리·배경을 차분한 슬레이트(slate) 톤으로, 임박 재료 [✨ AI 추천] 버튼을 세이지그린(#3F624D)으로 정리 및 전체 구문·배포 오류 점검 완료"
+    ]
+  },
+  {
+    id: "patch-v13.89",
+    version: "v13.89",
+    date: "2026-11-24",
+    title: "🍽️ 식단메뉴 폰트(13.5px) 및 세이지그린(#3F624D) 색감 통일",
+    highlights: [
+      "식단표 상단 제목(14.5px→13.5px) 및 월간 식단 달력 월 입력(15px→13.5px) 폰트를 앱 공통 규격으로 통일",
+      "식단 [오늘] 버튼 및 일자별 [📌 가족공지 공유] 버튼 색상을 이질적 주황/남색에서 앱 공통 세이지그린(#EEF3EE / #35503C) 톤으로 정리 및 전체 구문·배포 오류 점검 완료"
+    ]
+  },
+  {
+    id: "patch-v13.88",
+    version: "v13.88",
+    date: "2026-11-24",
+    title: "👶 육아메뉴 폰트·세이지그린 색감 통일 및 진료·체온 헤더 잘림 방지",
+    highlights: [
+      "육아메뉴 내 이질적 남색·주황 배지/그래프(아이 카드·영유아검진·성장 백분위)를 앱 공통 세이지그린(#3F624D · #EEF3EE) 톤으로 통일하고 아이 이름(14px)·육아일기 제목(13.5px) 폰트 규격 조정",
+      "소아과 진료·체온 메모 헤더에 flex-wrap 및 컴팩트 버튼(10.5px)을 적용해 360px 모바일에서도 제목·버튼 잘림 없이 표시되도록 개선"
+    ]
+  },
+  {
+    id: "patch-v13.87",
+    version: "v13.87",
+    date: "2026-11-24",
+    title: "🔐 로그인·이름입력·대기화면 토스트 누락 버그 수정 및 디자인·폰트 규격 통일",
+    highlights: [
+      "버그 수정: 로그인·이름입력·승인대기·탈퇴 화면에서도 토스트 알림(toastBannerEl)이 정상 표시되도록 개선(주소 복사·쪽지 발송·확인 메일 알림 누락 해결)",
+      "로그인/이름입력/대기 화면 컴팩트 리뉴얼: 과도한 카드 여백·큰 폰트(18px→15.5px, 입력/버튼 13.5px→12px)를 앱 공통 톤(stone + 세이지그린 #3F624D)으로 통일하고, 로그인 하단에 관리자 연락처(01059147933) 및 이메일 저장 즉시 반영 추가"
+    ]
+  },
   {
     id: "patch-v13.86",
     version: "v13.86",

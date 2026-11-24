@@ -1790,6 +1790,7 @@ function MainApp() {
   const [editingUserNameDraft, setEditingUserNameDraft] = useState("");
   const [confirmDeleteUserUid, setConfirmDeleteUserUid] = useState(null);
   const [confirmBulkDeleteUsers, setConfirmBulkDeleteUsers] = useState(false);
+  const [confirmResetAccessDefaults, setConfirmResetAccessDefaults] = useState(false);
   const [selectedUserUids, setSelectedUserUids] = useState([]);
   const [bulkUserRoleVal, setBulkUserRoleVal] = useState("helper:육아지원군");
   const [expandedUserUid, setExpandedUserUid] = useState(null);
@@ -2569,7 +2570,40 @@ function MainApp() {
     }
   });
   const [liveActivityPopup, setLiveActivityPopup] = useState(null);
+  const [notifPermState, setNotifPermState] = useState(() =>
+    typeof Notification !== "undefined" ? Notification.permission : "unsupported"
+  );
+  const showStatusBarNotification = async (title, body, tag = "family-app") => {
+    if (typeof Notification === "undefined" || Notification.permission !== "granted") return false;
+    try {
+      if (typeof navigator !== "undefined" && "serviceWorker" in navigator) {
+        const reg = await Promise.race([
+          navigator.serviceWorker.ready,
+          new Promise((resolve) => setTimeout(() => resolve(null), 1200))
+        ]);
+        if (reg && typeof reg.showNotification === "function") {
+          await reg.showNotification(title, {
+            body: body || "",
+            tag,
+            silent: true,
+            renotify: false
+          });
+          return true;
+        }
+      }
+    } catch (e) {}
+    try {
+      new Notification(title, { body: body || "", tag, silent: true });
+      return true;
+    } catch (e) {
+      return false;
+    }
+  };
   const activitySnapshotInitRef = useRef(false);
+  const inboxSnapshotInitRef = useRef(false);
+  const lastInboxNotifIdRef = useRef("");
+  const usersSnapshotInitRef = useRef(false);
+  const lastPendingUidsRef = useRef(new Set());
   const localLastActIdRef = useRef("");
   const lastPopupActIdRef = useRef("");
   const activityPopupTimerRef = useRef(null);
@@ -4455,6 +4489,7 @@ function MainApp() {
       return "살림수첩";
     }
     if (act.category === "노트") return "공유노트";
+    if (act.category === "쪽지") return "쪽지함";
     return act.category || "이동";
   };
 
@@ -4467,6 +4502,10 @@ function MainApp() {
     try { localStorage.setItem("kim_last_seen_activity_ms_v1", String(nowMs)); } catch (e) {}
     setIsActivityModalOpen(false);
     setLiveActivityPopup(null);
+    if (act.category === "쪽지" && isAdminUnlocked) {
+      setShowAdminInboxModal(true);
+      return;
+    }
     setActiveTab(targetT);
 
     const actionStr = String(act.action || "");
@@ -5059,6 +5098,19 @@ function MainApp() {
           batch.set(getDocRef("users", uid), payload, { merge: true });
         });
         await batch.commit();
+      }
+      if (payload.role === "admin" || payload.role === "helper") {
+        targets.forEach((uid) => {
+          const uObj = managedUsers.find((u) => u.uid === uid);
+          if (uObj && uObj.role === "pending" && uObj.email) {
+            sendSignupCompleteEmail({
+              toEmail: uObj.email,
+              toName: payload.actorName || uObj.actorName || uObj.displayName || "가족",
+              kind: "approved",
+              roleLabel: payload.role === "admin" ? "관리자" : (payload.roleLabel || "육아지원군")
+            });
+          }
+        });
       }
       setSelectedUserUids([]);
       endWrite(true);
@@ -5806,6 +5858,21 @@ function MainApp() {
             if (oa !== ob) return oa - ob;
             return (Number(b.createdAtMs) || 0) - (Number(a.createdAtMs) || 0);
           });
+        const pendingList = list.filter((u) => u.role === "pending");
+        if (!usersSnapshotInitRef.current) {
+          usersSnapshotInitRef.current = true;
+          lastPendingUidsRef.current = new Set(pendingList.map((u) => u.uid));
+        } else {
+          const newPending = pendingList.find((u) => !lastPendingUidsRef.current.has(u.uid));
+          lastPendingUidsRef.current = new Set(pendingList.map((u) => u.uid));
+          if (newPending && activityPopupEnabled) {
+            showStatusBarNotification(
+              "⏳ 새 회원 승인 요청",
+              `${newPending.actorName || newPending.displayName || newPending.email || "새 사용자"}님이 가입 승인을 기다리고 있어요.`,
+              `pending-${newPending.uid}`
+            );
+          }
+        }
         setManagedUsers(list);
       },
       () => {}
@@ -5958,7 +6025,27 @@ function MainApp() {
               }
             }
             if (d.id === "admin_inbox_notes_v1" && Array.isArray(d.data().items)) {
-              setAdminInboxNotes(toSafeArray(d.data().items));
+              const incomingNotes = toSafeArray(d.data().items);
+              setAdminInboxNotes(incomingNotes);
+              const newest = incomingNotes[0];
+              if (!inboxSnapshotInitRef.current) {
+                inboxSnapshotInitRef.current = true;
+                if (newest?.id) lastInboxNotifIdRef.current = newest.id;
+              } else if (
+                isAdminUnlocked &&
+                activityPopupEnabled &&
+                newest?.id &&
+                newest.id !== lastInboxNotifIdRef.current &&
+                !newest.read &&
+                newest.fromUid !== user?.uid
+              ) {
+                lastInboxNotifIdRef.current = newest.id;
+                showStatusBarNotification(
+                  `💌 [${newest.fromName || "가족"}] 관리자 쪽지 도착`,
+                  newest.text || "첨부파일이 도착했습니다.",
+                  `note-${newest.id}`
+                );
+              }
             }
             if (d.id === "recent_activity" && Array.isArray(d.data().items)) {
               const acts = toSafeArray(d.data().items).slice(0, 30);
@@ -5983,13 +6070,11 @@ function MainApp() {
                   activityPopupTimerRef.current = setTimeout(() => {
                     setLiveActivityPopup(null);
                   }, 8000);
-                  if (typeof Notification !== "undefined" && Notification.permission === "granted") {
-                    try {
-                      new Notification(`[${latest.actor}] ${latest.category} ${latest.action}`, {
-                        body: latest.detail || "새로운 변경 사항이 있습니다."
-                      });
-                    } catch (e) {}
-                  }
+                  showStatusBarNotification(
+                    `[${latest.actor}] ${latest.category} ${latest.action}`,
+                    latest.detail || "새로운 변경 사항이 있습니다.",
+                    `act-${latest.id || "latest"}`
+                  );
                 }
               }
             }
@@ -17298,6 +17383,38 @@ ${item.memo}` : `${item.title} 다녀옴!`,
   }, [kitchenTimer.running]);
 
 
+  const toastBannerEl = toastMsg ? (
+    <div
+      role="status"
+      onClick={() => {
+        if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+        setToastMsg("");
+        setToastUndo(null);
+      }}
+      title="눌러서 닫기"
+      className="fixed top-4 left-1/2 -translate-x-1/2 z-[9999] max-w-[92vw] bg-stone-900 text-white px-3.5 py-2 rounded-2xl text-[12px] font-bold shadow-2xl border border-stone-700/60 flex items-center gap-2 cursor-pointer select-none"
+    >
+      <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+      <span className="line-clamp-2 leading-snug">{toastMsg}</span>
+      {toastUndo?.fn && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+            const fn = toastUndo.fn;
+            setToastMsg("");
+            setToastUndo(null);
+            fn();
+          }}
+          className="ml-1 px-2 py-0.5 rounded-full bg-amber-500 hover:bg-amber-400 text-stone-950 text-[11px] font-black shrink-0 whitespace-nowrap"
+        >
+          ↩️ 되돌리기
+        </button>
+      )}
+    </div>
+  ) : null;
+
   if (authLoading || (user && profileLoading && !userProfile)) {
     return (
       <div className="min-h-screen bg-[#FAF8F3] text-stone-800 max-w-md mx-auto flex items-center justify-center p-6 font-sans">
@@ -17315,21 +17432,22 @@ ${item.memo}` : `${item.title} 다녀옴!`,
     const isInAppBrowser = /KAKAOTALK|NAVER|Instagram|FBAN|FBAV|Line/i.test(ua);
     const isAndroidUa = /Android/i.test(ua);
     return (
-      <div className="min-h-screen bg-[#FAF8F3] text-stone-800 max-w-md mx-auto flex items-center justify-center p-5 font-sans">
-        <div className="bg-white rounded-3xl border border-stone-200 p-6 w-full space-y-4 shadow-lg">
-          <div className="text-center space-y-1">
-            <div className="text-2xl">🏡</div>
-            <h1 className="text-[18px] font-black text-stone-900">우리집 관리 앱 로그인</h1>
-            <p className="text-[12.5px] text-stone-500">
-              회원가입 후 관리자 승인을 받아야 가족 데이터를 열람할 수 있습니다.
+      <div className="min-h-screen bg-[#FAF8F3] text-stone-800 max-w-md mx-auto flex items-center justify-center p-4 font-sans">
+        {toastBannerEl}
+        <div className="bg-white rounded-2xl border border-stone-200 p-5 w-full space-y-3 shadow-lg">
+          <div className="text-center space-y-0.5">
+            <div className="text-xl">🏡</div>
+            <h1 className="text-[15.5px] font-black text-stone-900">혁리나목율♡ 가족 앱</h1>
+            <p className="text-[11px] text-stone-500">
+              로그인 · 가입 후 관리자 승인 시 이용할 수 있어요.
             </p>
           </div>
 
           {isInAppBrowser && (
-            <div className="p-3 rounded-2xl bg-amber-50 border border-amber-200 space-y-2 text-[11.5px] text-amber-950">
-              <div className="font-black">🌐 카카오톡 등 앱 내 브라우저로 열렸습니다</div>
-              <p className="text-[11px] text-amber-900 leading-relaxed">
-                앱 내 브라우저에서는 Google 로그인이 차단될 수 있어요. 아래 버튼으로 <strong>크롬/사파리</strong>에서 열거나 이메일로 가입해 주세요.
+            <div className="p-2.5 rounded-xl bg-stone-50 border border-stone-200 space-y-1.5 text-[11px] text-stone-800">
+              <div className="font-black">🌐 앱 내 브라우저로 열렸습니다</div>
+              <p className="text-[10.5px] text-stone-500 leading-snug">
+                Google 로그인이 차단될 수 있어 <strong>크롬/사파리</strong>로 열거나 이메일 가입을 권장해요.
               </p>
               <div className="flex items-center gap-1.5">
                 {isAndroidUa && (
@@ -17339,15 +17457,15 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                       const cleanUrl = window.location.href.replace(/^https?:\/\//i, "");
                       window.location.href = `intent://${cleanUrl}#Intent;scheme=https;package=com.android.chrome;end`;
                     }}
-                    className="flex-1 py-1.5 px-2.5 rounded-xl bg-stone-900 text-white text-[11px] font-extrabold whitespace-nowrap"
+                    className="flex-1 h-7 px-2 rounded-lg bg-[#3F624D] text-white text-[10.5px] font-extrabold whitespace-nowrap"
                   >
                     크롬으로 열기
                   </button>
                 )}
                 <button
                   type="button"
-                  onClick={() => copyTextSafe(window.location.href, "🔗 주소가 복사되었습니다! 사파리/크롬에 붙여넣어 열어주세요.")}
-                  className="flex-1 py-1.5 px-2.5 rounded-xl bg-white border border-amber-300 text-amber-950 text-[11px] font-extrabold whitespace-nowrap"
+                  onClick={() => copyTextSafe(window.location.href, "🔗 주소가 복사되었습니다! 외부 브라우저에서 열어주세요.")}
+                  className="flex-1 h-7 px-2 rounded-lg bg-white border border-stone-200 text-stone-700 text-[10.5px] font-extrabold whitespace-nowrap"
                 >
                   🔗 주소 복사
                 </button>
@@ -17359,19 +17477,19 @@ ${item.memo}` : `${item.title} 다녀옴!`,
             type="button"
             disabled={authSubmitting}
             onClick={handleGoogleLogin}
-            className="w-full py-2.5 px-4 rounded-xl border border-stone-300 bg-white hover:bg-stone-50 text-stone-900 text-[13.5px] font-extrabold flex items-center justify-center gap-2 shadow-xs disabled:opacity-50"
+            className="w-full h-9 px-3 rounded-xl border border-stone-200 bg-white hover:bg-stone-50 text-stone-900 text-[12px] font-extrabold flex items-center justify-center gap-2 shadow-xs disabled:opacity-50 whitespace-nowrap"
           >
-            <span>G</span>
+            <span className="w-4 h-4 rounded-full bg-stone-100 border border-stone-200 text-[10px] font-black flex items-center justify-center">G</span>
             <span>Google 계정으로 계속하기</span>
           </button>
 
-          <div className="flex items-center gap-2 text-[11.5px] text-stone-400">
+          <div className="flex items-center gap-2 text-[10.5px] text-stone-400">
             <div className="flex-1 h-px bg-stone-200" />
-            <span>또는 이메일로 {authMode === "login" ? "로그인" : "회원가입"}</span>
+            <span>이메일 {authMode === "login" ? "로그인" : "회원가입"}</span>
             <div className="flex-1 h-px bg-stone-200" />
           </div>
 
-          <div className="grid grid-cols-2 gap-1.5 bg-stone-100 p-1 rounded-xl">
+          <div className="grid grid-cols-2 gap-1 bg-stone-100 p-1 rounded-xl">
             <button
               type="button"
               onClick={() => {
@@ -17379,7 +17497,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                 setAuthFormError("");
                 setAuthFormNotice("");
               }}
-              className={`py-1.5 rounded-lg text-[12.5px] font-black transition whitespace-nowrap ${
+              className={`py-1 rounded-lg text-[11.5px] font-black transition whitespace-nowrap ${
                 authMode === "login" ? "bg-stone-900 text-white" : "text-stone-500"
               }`}
             >
@@ -17392,7 +17510,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                 setAuthFormError("");
                 setAuthFormNotice("");
               }}
-              className={`py-1.5 rounded-lg text-[12.5px] font-black transition whitespace-nowrap ${
+              className={`py-1 rounded-lg text-[11.5px] font-black transition whitespace-nowrap ${
                 authMode === "signup" ? "bg-stone-900 text-white" : "text-stone-500"
               }`}
             >
@@ -17400,7 +17518,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
             </button>
           </div>
 
-          <form onSubmit={handleEmailAuthSubmit} className="space-y-2.5">
+          <form onSubmit={handleEmailAuthSubmit} className="space-y-2">
             {authMode === "signup" && (
               <input
                 type="text"
@@ -17409,7 +17527,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                 onChange={(e) => setAuthNameInput(e.target.value)}
                 placeholder="사용자명 *필수 (예: 아리나, 친정엄마, 이모님)"
                 autoComplete="name"
-                className="w-full px-3 py-2.5 rounded-xl border border-stone-300 text-[13.5px] font-bold"
+                className="w-full h-9 px-3 rounded-xl border border-stone-200 bg-stone-50 focus:bg-white text-[12px] font-bold"
               />
             )}
             <input
@@ -17418,7 +17536,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
               onChange={(e) => setAuthEmailInput(e.target.value)}
               placeholder="이메일 주소"
               autoComplete="username"
-              className="w-full px-3 py-2.5 rounded-xl border border-stone-300 text-[13.5px] font-bold"
+              className="w-full h-9 px-3 rounded-xl border border-stone-200 bg-stone-50 focus:bg-white text-[12px] font-bold"
             />
             <div className="relative">
               <input
@@ -17427,12 +17545,12 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                 onChange={(e) => setAuthPasswordInput(e.target.value)}
                 placeholder="비밀번호 (6자 이상)"
                 autoComplete={authMode === "signup" ? "new-password" : "current-password"}
-                className="w-full pl-3 pr-14 py-2.5 rounded-xl border border-stone-300 text-[13.5px] font-bold"
+                className="w-full h-9 pl-3 pr-12 rounded-xl border border-stone-200 bg-stone-50 focus:bg-white text-[12px] font-bold"
               />
               <button
                 type="button"
                 onClick={() => setShowAuthPassword((p) => !p)}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[11.5px] font-extrabold text-stone-500 hover:text-stone-800 whitespace-nowrap"
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10.5px] font-extrabold text-stone-500 hover:text-stone-800 whitespace-nowrap"
               >
                 {showAuthPassword ? "숨김" : "보기"}
               </button>
@@ -17445,13 +17563,13 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                   onChange={(e) => setAuthPasswordConfirmInput(e.target.value)}
                   placeholder="비밀번호 확인"
                   autoComplete="new-password"
-                  className="w-full px-3 py-2.5 rounded-xl border border-stone-300 text-[13.5px] font-bold"
+                  className="w-full h-9 px-3 rounded-xl border border-stone-200 bg-stone-50 focus:bg-white text-[12px] font-bold"
                 />
                 {authPasswordConfirmInput && (
                   <div
-                    className={`text-[11.5px] font-bold px-1 ${
+                    className={`text-[10.5px] font-bold px-1 ${
                       authPasswordInput === authPasswordConfirmInput
-                        ? "text-emerald-700"
+                        ? "text-[#35503C]"
                         : "text-rose-600"
                     }`}
                   >
@@ -17462,13 +17580,20 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                 )}
               </div>
             )}
-            <div className="flex items-center justify-between gap-2 pt-0.5 text-[12px]">
+            <div className="flex items-center justify-between gap-2 pt-0.5 text-[11px]">
               <label className="inline-flex items-center gap-1.5 text-stone-600 font-bold cursor-pointer select-none">
                 <input
                   type="checkbox"
                   checked={rememberEmail}
-                  onChange={(e) => setRememberEmail(e.target.checked)}
-                  className="rounded border-stone-300"
+                  onChange={(e) => {
+                    const checked = e.target.checked;
+                    setRememberEmail(checked);
+                    try {
+                      localStorage.setItem("kim_remember_email_v1", checked ? "1" : "0");
+                      if (!checked) localStorage.removeItem("kim_saved_login_email_v1");
+                    } catch (err) {}
+                  }}
+                  className="accent-[#3F624D] rounded border-stone-300"
                 />
                 <span>이메일 저장</span>
               </label>
@@ -17484,19 +17609,19 @@ ${item.memo}` : `${item.title} 다녀옴!`,
               )}
             </div>
             {authFormError && (
-              <div className="text-[12px] font-bold text-rose-600 bg-rose-50 border border-rose-200 rounded-xl px-3 py-2">
+              <div className="text-[11px] font-bold text-rose-600 bg-rose-50 border border-rose-200 rounded-xl px-2.5 py-1.5">
                 {authFormError}
               </div>
             )}
             {authFormNotice && (
-              <div className="text-[12px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-xl px-3 py-2">
+              <div className="text-[11px] font-bold text-[#35503C] bg-[#EEF3EE] border border-[#C9D8CC] rounded-xl px-2.5 py-1.5">
                 {authFormNotice}
               </div>
             )}
             <button
               type="submit"
               disabled={authSubmitting}
-              className="w-full py-2.5 rounded-xl bg-stone-900 hover:bg-stone-800 text-white text-[13.5px] font-extrabold disabled:opacity-50 whitespace-nowrap"
+              className="w-full h-9 rounded-xl bg-[#3F624D] hover:bg-[#324F3E] text-white text-[12px] font-extrabold disabled:opacity-50 whitespace-nowrap"
             >
               {authSubmitting
                 ? "처리 중..."
@@ -17505,6 +17630,10 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                 : "이메일로 로그인"}
             </button>
           </form>
+
+          <div className="pt-1 border-t border-stone-100 text-center text-[10px] text-stone-400 font-bold">
+            <a href="tel:01059147933" className="underline hover:text-stone-700">관리자 연락처 : 01059147933</a>
+          </div>
         </div>
       </div>
     );
@@ -17513,17 +17642,18 @@ ${item.memo}` : `${item.title} 다녀옴!`,
   if (userProfile?.needsNameSetup || userProfile?.displayName === "새 사용자") {
     const suggestedName = googleNameSetupInput || (userProfile?.displayName && userProfile.displayName !== "새 사용자" ? userProfile.displayName : user.displayName || "");
     return (
-      <div className="min-h-screen bg-[#FAF8F3] text-stone-800 max-w-md mx-auto flex items-center justify-center p-5 font-sans">
-        <div className="bg-white rounded-3xl border border-stone-200 p-6 w-full space-y-4 shadow-lg">
-          <div className="text-center space-y-1">
-            <div className="text-3xl">👤</div>
-            <h2 className="text-[16px] font-black text-stone-900">사용자 이름 입력 (필수)</h2>
-            <p className="text-[12px] text-stone-500">
-              가족과 관리자가 알아볼 수 있도록 앱에서 사용할 이름을 입력해 주세요.
+      <div className="min-h-screen bg-[#FAF8F3] text-stone-800 max-w-md mx-auto flex items-center justify-center p-4 font-sans">
+        {toastBannerEl}
+        <div className="bg-white rounded-2xl border border-stone-200 p-5 w-full space-y-3 shadow-lg">
+          <div className="text-center space-y-0.5">
+            <div className="text-2xl">👤</div>
+            <h2 className="text-[14.5px] font-black text-stone-900">사용자 이름 입력 (필수)</h2>
+            <p className="text-[11px] text-stone-500">
+              가족과 관리자가 구분할 수 있도록 이름을 입력해 주세요.
             </p>
           </div>
-          <div className="bg-stone-50 border border-stone-200 rounded-xl px-3 py-2 text-[11.5px] text-stone-600">
-            <span className="font-bold text-stone-800">로그인 계정:</span> {user.email || user.uid}
+          <div className="bg-stone-50 border border-stone-200 rounded-xl px-2.5 py-1.5 text-[11px] text-stone-600 truncate">
+            <span className="font-bold text-stone-800">계정:</span> {user.email || user.uid}
           </div>
           <form
             onSubmit={async (e) => {
@@ -17548,7 +17678,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                 showToast("이름 저장 실패: " + (err?.message || "오류"));
               }
             }}
-            className="space-y-2.5"
+            className="space-y-2"
           >
             <input
               type="text"
@@ -17558,11 +17688,11 @@ ${item.memo}` : `${item.title} 다녀옴!`,
               placeholder="사용자명 *필수 (예: 아리나, 친정엄마, 이모님)"
               autoComplete="name"
               autoFocus
-              className="w-full px-3 py-2.5 rounded-xl border border-stone-300 text-[13.5px] font-bold"
+              className="w-full h-9 px-3 rounded-xl border border-stone-200 bg-stone-50 focus:bg-white text-[12px] font-bold"
             />
             <button
               type="submit"
-              className="w-full py-2.5 rounded-xl bg-[#3F624D] hover:bg-[#324F3E] text-white text-[13px] font-extrabold whitespace-nowrap"
+              className="w-full h-9 rounded-xl bg-[#3F624D] hover:bg-[#324F3E] text-white text-[12px] font-extrabold whitespace-nowrap"
             >
               ✅ 이름 저장하고 계속하기
             </button>
@@ -17570,7 +17700,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
           <button
             type="button"
             onClick={logoutToGuest}
-            className="w-full py-2 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-600 text-[12px] font-bold whitespace-nowrap"
+            className="w-full h-8 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-600 text-[11px] font-bold whitespace-nowrap"
           >
             다른 계정으로 로그인
           </button>
@@ -17700,8 +17830,9 @@ ${item.memo}` : `${item.title} 다녀옴!`,
     const isRejected = userProfile?.role === "rejected";
     if (isWithdrawn) {
       return (
-        <div className="min-h-screen bg-[#FAF8F3] text-stone-800 max-w-md mx-auto flex items-center justify-center p-5 font-sans">
-          <div className="bg-white rounded-3xl border border-stone-200 p-6 w-full text-center space-y-4 shadow-lg">
+        <div className="min-h-screen bg-[#FAF8F3] text-stone-800 max-w-md mx-auto flex items-center justify-center p-4 font-sans">
+          {toastBannerEl}
+          <div className="bg-white rounded-2xl border border-stone-200 p-5 w-full text-center space-y-3 shadow-lg">
             <div className="text-3xl">👋</div>
             <div className="space-y-1">
               <h2 className="text-[17px] font-black text-stone-900">탈퇴 처리된 계정입니다</h2>
@@ -17737,17 +17868,18 @@ ${item.memo}` : `${item.title} 다녀옴!`,
       );
     }
     return (
-      <div className="min-h-screen bg-[#FAF8F3] text-stone-800 max-w-md mx-auto flex items-center justify-center p-5 font-sans">
-        <div className="bg-white rounded-3xl border border-stone-200 p-6 w-full text-center space-y-4 shadow-lg">
-          <div className="text-3xl">{isRejected ? "🚫" : "⏳"}</div>
-          <div className="space-y-1">
-            <h2 className="text-[17px] font-black text-stone-900">
+      <div className="min-h-screen bg-[#FAF8F3] text-stone-800 max-w-md mx-auto flex items-center justify-center p-4 font-sans">
+        {toastBannerEl}
+        <div className="bg-white rounded-2xl border border-stone-200 p-5 w-full text-center space-y-3 shadow-lg">
+          <div className="text-2xl">{isRejected ? "🚫" : "⏳"}</div>
+          <div className="space-y-0.5">
+            <h2 className="text-[14.5px] font-black text-stone-900">
               {isRejected ? "접근이 제한된 계정입니다" : "관리자 승인 대기 중입니다"}
             </h2>
-            <p className="text-[12.5px] text-stone-500 leading-relaxed">
+            <p className="text-[11px] text-stone-500 leading-snug">
               {isRejected
-                ? "관리자에 의해 접근이 제한되었습니다. 필요 시 관리자에게 문의해 주세요."
-                : "회원가입 요청이 접수되었습니다. 수혁님(관리자)이 권한을 승인하면 자동으로 화면이 열립니다."}
+                ? "관리자에게 문의해 주세요."
+                : "관리자 승인 후 자동으로 화면이 열립니다."}
             </p>
           </div>
           <div className="bg-stone-50 border border-stone-200 rounded-2xl p-3 text-left text-[12px] space-y-1.5 text-stone-600">
@@ -17836,37 +17968,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
       )}
 
 
-      {toastMsg && (
-        <div
-          role="status"
-          onClick={() => {
-            if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
-            setToastMsg("");
-            setToastUndo(null);
-          }}
-          title="눌러서 닫기"
-          className="fixed top-4 left-1/2 -translate-x-1/2 z-[9999] max-w-[92vw] bg-stone-900 text-white px-4 py-2.5 rounded-2xl text-[13px] font-bold shadow-2xl border border-stone-700/60 flex items-center gap-2 cursor-pointer select-none"
-        >
-          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-          <span className="line-clamp-2 leading-snug">{toastMsg}</span>
-          {toastUndo?.fn && (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
-                const fn = toastUndo.fn;
-                setToastMsg("");
-                setToastUndo(null);
-                fn();
-              }}
-              className="ml-1 px-2.5 py-1 rounded-full bg-amber-500 hover:bg-amber-400 text-stone-950 text-[12.5px] font-black shrink-0 whitespace-nowrap"
-            >
-              ↩️ 되돌리기
-            </button>
-          )}
-        </div>
-      )}
+      {toastBannerEl}
 
 
       {/* ==========================================
@@ -20506,7 +20608,7 @@ time: "", location: "",
           >
             <div className="space-y-2">
               <div className="flex items-center justify-between gap-1.5 flex-wrap">
-                <h2 className="text-[14.5px] font-black text-stone-900 whitespace-nowrap">
+                <h2 className="text-[13.5px] font-black text-stone-900 whitespace-nowrap">
                   🍽️ 식단 ({weekDates[0].slice(5)}~{weekDates[6].slice(5)})
                 </h2>
                 <div className="flex items-center gap-1 flex-wrap">
@@ -20562,7 +20664,7 @@ time: "", location: "",
                     <button
                       type="button"
                       onClick={() => setSelectedDate(getTodayStr())}
-                      className="px-2 py-0.5 rounded-full bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-900 text-[11px] font-extrabold whitespace-nowrap"
+                      className="px-2 py-0.5 rounded-full bg-[#EEF3EE] hover:bg-[#DFE9E0] border border-[#C9D8CC] text-[#35503C] text-[11px] font-extrabold whitespace-nowrap"
                     >
                       오늘
                     </button>
@@ -20817,7 +20919,7 @@ time: "", location: "",
                               });
                               setIsNoticeModalOpen(true);
                             }}
-                            className="px-2 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-800 text-[11px] font-extrabold whitespace-nowrap"
+                            className="px-2 py-1 rounded-lg bg-[#EEF3EE] hover:bg-[#DFE9E0] text-[#35503C] text-[11px] font-extrabold whitespace-nowrap"
                             title="이 날짜 식단을 가족공지로 공유"
                           >
                             📌
@@ -21079,7 +21181,7 @@ time: "", location: "",
                     setSelectedDate(`${e.target.value}-01`);
                   }
                 }}
-                className="text-[15px] font-black text-stone-900 bg-transparent focus:outline-none"
+                className="text-[13.5px] font-black text-stone-900 bg-transparent focus:outline-none"
               />
               {currentMonth !== getCurrentYearMonth() && (
                 <button
@@ -24869,7 +24971,7 @@ time: "", location: "",
                     <button
                       type="button"
                       onClick={() => handleExpiringToAiChef(expiringItems.slice(0, 4).map((i) => i.name))}
-                      className="h-6 px-2 rounded-lg bg-orange-600 hover:bg-orange-700 text-white text-[10.5px] font-extrabold whitespace-nowrap"
+                      className="h-6 px-2 rounded-lg bg-[#3F624D] hover:bg-[#324F3E] text-white text-[10.5px] font-extrabold whitespace-nowrap"
                     >
                       ✨ AI 추천
                     </button>
@@ -25425,10 +25527,10 @@ time: "", location: "",
                       <div className="space-y-1.5 pt-1 border-t border-sky-200/80">
                         <div className="text-[11.5px] font-extrabold text-indigo-800 px-0.5">🧊 하부 냉동고 (4칸)</div>
                         <div className="grid grid-cols-2 gap-1.5">
-                          {renderShelfBox("하부냉동 1칸", "하부 1칸", "bg-indigo-50/60 border-indigo-200")}
-                          {renderShelfBox("하부냉동 2칸", "하부 2칸", "bg-indigo-50/60 border-indigo-200")}
-                          {renderShelfBox("하부냉동 3칸", "하부 3칸", "bg-indigo-50/60 border-indigo-200")}
-                          {renderShelfBox("하부냉동 4칸", "하부 4칸", "bg-indigo-50/60 border-indigo-200")}
+                          {renderShelfBox("하부냉동 1칸", "하부 1칸", "bg-slate-50/70 border-slate-200")}
+                          {renderShelfBox("하부냉동 2칸", "하부 2칸", "bg-slate-50/70 border-slate-200")}
+                          {renderShelfBox("하부냉동 3칸", "하부 3칸", "bg-slate-50/70 border-slate-200")}
+                          {renderShelfBox("하부냉동 4칸", "하부 4칸", "bg-slate-50/70 border-slate-200")}
                         </div>
                       </div>
                     )}
@@ -25438,7 +25540,7 @@ time: "", location: "",
 
                 {/* 2. 별도 4칸짜리 전용 냉동고 */}
                 {(fridgeLocFilter === "전체" || fridgeLocFilter === "별도 냉동고" || fridgeLocFilter === "냉동실") && (
-                  <div className="rounded-2xl border-2 border-indigo-200 bg-indigo-50/40 p-2.5 space-y-1.5">
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50/50 p-2.5 space-y-1.5">
                     <div className="text-[13.5px] font-black text-indigo-950 px-0.5">
                       ❄️ 별도 냉동고 (4칸)
                     </div>
@@ -25541,8 +25643,8 @@ time: "", location: "",
                               {item.expiryDate ? `${item.expiryDate} (${diff < 0 ? `${Math.abs(diff)}일 지남` : diff === 0 ? "오늘 만료" : `D-${diff}`})` : "⏳ 기한 미확인"}
                             </span>
                           </div>
-                          <div className="flex items-baseline gap-2 flex-wrap">
-                            <span className="text-[15.5px] font-black text-stone-900">{item.name}</span>
+                          <div className="flex items-baseline gap-1.5 flex-wrap">
+                            <span className="text-[13.5px] font-black text-stone-900">{item.name}</span>
                             {Number(item.quantity) > 0 && Number(item.quantity) < 1 && (
                               <span className="px-1.5 py-0.5 rounded bg-[#EEF3EE] text-[#35503C] border border-[#C9D8CC] text-[10.5px] font-black whitespace-nowrap">
                                 🌗 반남음
@@ -25565,7 +25667,7 @@ time: "", location: "",
                           >
                             -
                           </button>
-                          <span className="text-[13.5px] font-black px-1 whitespace-nowrap">
+                          <span className="text-[12px] font-black px-1 whitespace-nowrap">
                             {Number(item.quantity) || 0}
                             {item.unit}
                           </span>
@@ -26376,7 +26478,7 @@ time: "", location: "",
                   n.done
                     ? "bg-stone-100 border-stone-200 opacity-70"
                     : n.pinned
-                    ? "bg-indigo-50/60 border-indigo-200 shadow-sm"
+                    ? "bg-slate-50/70 border-slate-200 shadow-sm"
                     : "bg-white border-stone-200 shadow-sm"
                 }`}
               >
@@ -26607,8 +26709,8 @@ time: "", location: "",
           {aiSubMode === "plan3d" && (
             <div className="space-y-3.5">
               <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-sm space-y-3.5">
-                <h2 className="text-[15px] font-black text-stone-900 flex items-center gap-1.5">
-                  <CalendarDays className="w-4 h-4 text-amber-600" />
+                <h2 className="text-[13.5px] font-black text-stone-900 flex items-center gap-1.5">
+                  <CalendarDays className="w-4 h-4 text-[#3F624D]" />
                   <span>AI 날짜·대상별 맞춤 식단표</span>
                 </h2>
 
@@ -27057,8 +27159,8 @@ time: "", location: "",
           <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-sm space-y-3.5">
             <div className="flex items-center justify-between">
               <div>
-                <h2 className="text-[15.5px] font-black text-stone-900 flex items-center gap-1.5">
-                  <Sparkles className="w-4 h-4 text-amber-500" />
+                <h2 className="text-[13.5px] font-black text-stone-900 flex items-center gap-1.5">
+                  <Sparkles className="w-4 h-4 text-[#3F624D]" />
                   <span>AI 냉장고 맞춤 셰프</span>
                 </h2>
               </div>
@@ -27287,8 +27389,8 @@ time: "", location: "",
           <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-sm space-y-3">
             <div className="flex items-center justify-between">
               <div>
-                <h2 className="text-[15.5px] font-black text-stone-900 flex items-center gap-1.5">
-                  <Camera className="w-4 h-4 text-rose-500" />
+                <h2 className="text-[13.5px] font-black text-stone-900 flex items-center gap-1.5">
+                  <Camera className="w-4 h-4 text-[#3F624D]" />
                   <span>AI 플레이팅 코치</span>
                 </h2>
               </div>
@@ -28367,7 +28469,7 @@ time: "", location: "",
                                     });
                                     setIsNoticeModalOpen(true);
                                   }}
-                                  className="px-2 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-800 text-[11px] font-extrabold whitespace-nowrap"
+                                  className="px-2 py-1 rounded-lg bg-[#EEF3EE] hover:bg-[#DFE9E0] text-[#35503C] text-[11px] font-extrabold whitespace-nowrap"
                                 >
                                   📌 공지
                                 </button>
@@ -28456,7 +28558,7 @@ time: "", location: "",
                                     });
                                     setIsNoticeModalOpen(true);
                                   }}
-                                  className="px-2 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-800 text-[11px] font-extrabold whitespace-nowrap"
+                                  className="px-2 py-1 rounded-lg bg-[#EEF3EE] hover:bg-[#DFE9E0] text-[#35503C] text-[11px] font-extrabold whitespace-nowrap"
                                 >
                                   📌 공지
                                 </button>
@@ -28557,7 +28659,7 @@ time: "", location: "",
                                     });
                                     setIsNoticeModalOpen(true);
                                   }}
-                                  className="px-2 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-800 text-[11px] font-extrabold whitespace-nowrap"
+                                  className="px-2 py-1 rounded-lg bg-[#EEF3EE] hover:bg-[#DFE9E0] text-[#35503C] text-[11px] font-extrabold whitespace-nowrap"
                                 >
                                   📌 공지
                                 </button>
@@ -28607,7 +28709,7 @@ time: "", location: "",
                 <div className="w-12 h-12 rounded-2xl bg-stone-900 text-white flex items-center justify-center mx-auto shadow-sm">
                   <Lock className="w-5 h-5" />
                 </div>
-                <h2 className="text-[16px] font-black text-stone-900">경조사비 입출금내역</h2>
+                <h2 className="text-[13.5px] font-black text-stone-900">경조사비 입출금내역</h2>
                 <p className="text-[12px] font-semibold text-stone-500">
                   비밀 메뉴입니다. 열람 비밀번호를 입력해 주세요.
                 </p>
@@ -31147,7 +31249,7 @@ time: "", location: "",
           <div className="bg-gradient-to-br from-rose-50 via-white to-amber-50 p-4 rounded-2xl border border-rose-200 shadow-sm space-y-2.5">
             <div className="flex items-center justify-between gap-2">
               <div>
-                <h2 className="text-[15px] font-black text-stone-900 whitespace-nowrap">📖 레시피북 ({filteredRecipes.length})</h2>
+                <h2 className="text-[13.5px] font-black text-stone-900 whitespace-nowrap">📖 레시피북 ({filteredRecipes.length})</h2>
                 <p className="text-[11.5px] font-semibold text-stone-500 whitespace-nowrap truncate">
                   요약 · 사진 확대 · 플레이팅 연동
                 </p>
@@ -31704,15 +31806,15 @@ time: "", location: "",
                     <div className="flex items-center justify-between gap-1">
                       <MemberAvatar id={ch.id} size="lg" />
                       <span
-                        className={`whitespace-nowrap text-[11px] font-extrabold px-2 py-0.5 rounded-full ${
-                          isSel ? "bg-amber-400 text-stone-900" : "bg-stone-100 text-stone-600"
+                        className={`whitespace-nowrap text-[10.5px] font-extrabold px-2 py-0.5 rounded-full ${
+                          isSel ? "bg-[#3F624D] text-white" : "bg-stone-100 text-stone-600"
                         }`}
                       >
                         {ch.badge} · D+{st.days.toLocaleString()}일
                       </span>
                     </div>
                     <div className="flex items-center justify-between gap-1 mt-1">
-                      <span className="text-[15.5px] font-black">{ch.name}</span>
+                      <span className="text-[14px] font-black">{ch.name}</span>
                       {accessRole !== "guest" && (
                         <button
                           type="button"
@@ -32599,7 +32701,7 @@ time: "", location: "",
                                 <span
                                   className={`px-1.5 py-0.5 rounded text-[10.5px] font-black whitespace-nowrap ${
                                     item.type === "영유아검진"
-                                      ? "bg-indigo-100 text-indigo-800"
+                                      ? "bg-[#EEF3EE] text-[#35503C]"
                                       : item.type === "선택접종"
                                       ? "bg-amber-100 text-amber-800"
                                       : "bg-emerald-100 text-emerald-800"
@@ -32814,14 +32916,14 @@ time: "", location: "",
                               ? "bg-emerald-100 text-emerald-800"
                               : tone === "amber"
                               ? "bg-amber-100 text-amber-800"
-                              : "bg-indigo-100 text-indigo-800"
+                              : "bg-[#EEF3EE] text-[#35503C]"
                           }`}>
                             {m.label}
                           </span>
                         </div>
                         <div className="relative h-2 rounded-full bg-stone-200 overflow-visible">
                           <div
-                            className={`h-full rounded-full ${tone === "emerald" ? "bg-emerald-500" : tone === "amber" ? "bg-amber-500" : "bg-indigo-500"}`}
+                            className={`h-full rounded-full ${tone === "emerald" ? "bg-emerald-500" : tone === "amber" ? "bg-amber-500" : "bg-[#3F624D]"}`}
                             style={{ width: `${barPct}%` }}
                           />
                           <div
@@ -33229,7 +33331,7 @@ time: "", location: "",
                                 </span>
                               )}
                               {rowCmp?.weight && (
-                                <span className="px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 text-[10px] font-extrabold whitespace-nowrap">
+                                <span className="px-1.5 py-0.5 rounded bg-[#EEF3EE] text-[#35503C] text-[10px] font-extrabold whitespace-nowrap">
                                   체중 P{rowCmp.weight.pct}
                                 </span>
                               )}
@@ -33317,11 +33419,11 @@ time: "", location: "",
             {babySubTab === "medical" && (
               <div className="space-y-3">
                 <div className="bg-white p-3.5 rounded-2xl border border-stone-200 shadow-sm space-y-2.5">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="text-[13.5px] font-black text-stone-900 truncate">
-                      🩺 {activeChild.name} 소아과 진료 · 체온 메모
+                  <div className="flex flex-wrap items-center justify-between gap-1.5">
+                    <div className="text-[13px] font-black text-stone-900 whitespace-nowrap">
+                      🩺 {activeChild.name} 진료·체온 메모
                     </div>
-                    <div className="flex items-center gap-1 shrink-0">
+                    <div className="flex items-center gap-1 shrink-0 ml-auto">
                       {childNotes.length > 0 && (
                         <button
                           type="button"
@@ -34340,7 +34442,7 @@ time: "", location: "",
                                 </span>
                               )}
                             </div>
-                            {entry.title && <div className="text-[15.5px] font-black text-stone-900">{entry.title}</div>}
+                            {entry.title && <div className="text-[13.5px] font-black text-stone-900">{entry.title}</div>}
                             {(entry.contentHtml || entry.content) && (
                               entry.contentHtml ? (
                                 <div
@@ -35272,7 +35374,7 @@ time: "", location: "",
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between">
-              <span className="text-[15.5px] font-black text-stone-900">전체 메뉴 바로가기</span>
+              <span className="text-[13.5px] font-black text-stone-900">전체 메뉴 바로가기</span>
               <button
                 type="button"
                 ref={moreSheetCloseRef}
@@ -35350,10 +35452,10 @@ time: "", location: "",
                             setIsMoreNavOpen(false);
                           }
                         }}
-                        className={`relative py-2.5 px-1.5 rounded-2xl border text-[12px] font-extrabold flex flex-col items-center gap-1 transition ${
+                        className={`relative py-2 px-1 rounded-xl border text-[11px] font-extrabold flex flex-col items-center gap-1 transition ${
                           activeTab === m.id
                             ? "bg-stone-900 text-white border-stone-900"
-                            : "bg-stone-50 text-stone-800 border-stone-200 hover:bg-amber-50"
+                            : "bg-stone-50 text-stone-800 border-stone-200 hover:bg-[#EEF3EE]"
                         }`}
                       >
                         {badgeCount > 0 && (
@@ -40120,24 +40222,44 @@ time: "", location: "",
                     <ShieldCheck className="w-3.5 h-3.5 text-[#3F624D] shrink-0" />
                     <span>회원 권한 · 메뉴 설정</span>
                   </span>
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      await saveAccessConfigToCloud({
-                        adminCode: EDITOR_INVITE_CODE,
-                        suhyeokCode: EDITOR_INVITE_CODE,
-                        arinaCode: EDITOR_INVITE_CODE,
-                        helperCode: DEFAULT_HELPER_CODE,
-                        guestAllowedTabs: GUEST_ALLOWED_TABS,
-                        helperViewTabs: DEFAULT_HELPER_TABS,
-                        helperEditTabs: DEFAULT_HELPER_TABS
-                      });
-                      showToast("권한 및 비밀번호 설정을 기본값으로 복원했습니다.");
-                    }}
-                    className="text-[10px] font-extrabold text-stone-500 hover:text-stone-800 underline whitespace-nowrap"
-                  >
-                    기본값 복원
-                  </button>
+                  {confirmResetAccessDefaults ? (
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          await saveAccessConfigToCloud({
+                            adminCode: EDITOR_INVITE_CODE,
+                            suhyeokCode: EDITOR_INVITE_CODE,
+                            arinaCode: EDITOR_INVITE_CODE,
+                            helperCode: DEFAULT_HELPER_CODE,
+                            guestAllowedTabs: GUEST_ALLOWED_TABS,
+                            helperViewTabs: DEFAULT_HELPER_TABS,
+                            helperEditTabs: DEFAULT_HELPER_TABS
+                          });
+                          setConfirmResetAccessDefaults(false);
+                          showToast("권한 설정을 기본값으로 복원했습니다.");
+                        }}
+                        className="px-1.5 py-0.5 rounded bg-rose-600 text-white text-[9.5px] font-black whitespace-nowrap animate-pulse"
+                      >
+                        ⚠️ 복원확정
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setConfirmResetAccessDefaults(false)}
+                        className="px-1.5 py-0.5 rounded bg-stone-200 text-stone-600 text-[9.5px] font-bold whitespace-nowrap"
+                      >
+                        취소
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setConfirmResetAccessDefaults(true)}
+                      className="text-[10px] font-extrabold text-stone-500 hover:text-stone-800 underline whitespace-nowrap"
+                    >
+                      기본값 복원
+                    </button>
+                  )}
                 </div>
 
                 {/* 👥 회원 승인 및 권한 (표 형태 + 체크박스 일괄편집 + 클릭 전문보기) */}
@@ -40530,7 +40652,7 @@ time: "", location: "",
                                       }}
                                       className="px-2 py-0.5 rounded-md bg-stone-800 text-white text-[10px] font-extrabold whitespace-nowrap"
                                     >
-                                      {mu.useCustomTabs ? "공통으로 되돌리기" : "개별 설정 켜기"}
+                                      {mu.useCustomTabs ? "분류 권한으로" : "개별 설정 켜기"}
                                     </button>
                                   </div>
                                   {mu.useCustomTabs && (
@@ -40542,8 +40664,9 @@ time: "", location: "",
                                       </div>
                                       <div className="divide-y divide-stone-100 max-h-44 overflow-y-auto">
                                         {HELPER_CONFIGURABLE_TABS.map((t) => {
-                                          const uViewList = Array.isArray(mu.customAllowedTabs) ? mu.customAllowedTabs : helperAllowedTabs;
-                                          const uEditList = Array.isArray(mu.customEditTabs) ? mu.customEditTabs : helperEditTabs;
+                                          const roleCfg = mu.roleLabel ? helperRolePermissions?.[mu.roleLabel] : null;
+                                          const uViewList = Array.isArray(mu.customAllowedTabs) ? mu.customAllowedTabs : (Array.isArray(roleCfg?.viewTabs) ? roleCfg.viewTabs : helperAllowedTabs);
+                                          const uEditList = Array.isArray(mu.customEditTabs) ? mu.customEditTabs : (Array.isArray(roleCfg?.editTabs) ? roleCfg.editTabs : helperEditTabs);
                                           const uView = uViewList.includes(t.id);
                                           const uEdit = uEditList.includes(t.id);
                                           return (
@@ -42909,12 +43032,54 @@ time: "", location: "",
             className="bg-white rounded-3xl max-w-md w-full p-4 space-y-2.5 max-h-[85vh] flex flex-col shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between gap-2 shrink-0">
-              <h3 className="text-[14.5px] font-bold text-stone-900 flex items-center gap-1.5 whitespace-nowrap shrink-0">
-                <Bell className="w-4 h-4 text-[#3F624D] shrink-0" />
-                수정 알림 ({visibleRecentActivities.length})
-              </h3>
-              <div className="flex items-center gap-1 shrink-0">
+            <div className="space-y-1.5 shrink-0">
+              <div className="flex items-center justify-between gap-2">
+                <h3 className="text-[13.5px] font-black text-stone-900 flex items-center gap-1.5 whitespace-nowrap">
+                  <Bell className="w-4 h-4 text-[#3F624D] shrink-0" />
+                  <span>수정 알림 ({visibleRecentActivities.length})</span>
+                </h3>
+                <button type="button" onClick={() => setIsActivityModalOpen(false)} className="w-7 h-7 rounded-full hover:bg-stone-100 flex items-center justify-center shrink-0" aria-label="알림 닫기">
+                  <X className="w-4 h-4 text-stone-500" />
+                </button>
+              </div>
+              <div className="flex flex-wrap items-center gap-1">
+                {typeof Notification !== "undefined" && (
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (Notification.permission === "granted") {
+                        const ok = await showStatusBarNotification(
+                          "🏡 혁리나목율♡ 상태표시줄 알림 테스트",
+                          "상태표시줄 알림이 정상 작동하고 있습니다.",
+                          "test-notif"
+                        );
+                        showToast(ok ? "📲 상태표시줄 알림을 발송했습니다!" : "⚠️ 이 브라우저에서는 상태표시줄 알림이 제한됩니다.");
+                        return;
+                      }
+                      if (Notification.permission === "denied") {
+                        showToast("브라우저 사이트 설정에서 알림 권한을 허용해 주세요.");
+                        return;
+                      }
+                      try {
+                        const perm = await Notification.requestPermission();
+                        setNotifPermState(perm);
+                        if (perm === "granted") {
+                          await showStatusBarNotification("🏡 알림 허용 완료!", "이제 새 소식을 상태표시줄에서도 받을 수 있어요.", "perm-ok");
+                          showToast("📲 상태표시줄 알림이 켜졌습니다!");
+                        } else {
+                          showToast("알림 권한이 허용되지 않았습니다.");
+                        }
+                      } catch (e) {}
+                    }}
+                    className={`h-7 px-2 rounded-lg text-[10.5px] font-extrabold border whitespace-nowrap ${
+                      notifPermState === "granted"
+                        ? "bg-stone-100 text-stone-700 border-stone-200 hover:bg-stone-200"
+                        : "bg-[#3F624D] text-white border-[#3F624D]"
+                    }`}
+                  >
+                    {notifPermState === "granted" ? "📲 상태바 테스트" : "🔔 상태바 켜기"}
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => {
@@ -42925,11 +43090,11 @@ time: "", location: "",
                       setDoc(getDocRef("family_meta_v4", "home_layout"), { activityPopupEnabled: nextVal, updatedAtMs: Date.now() }, { merge: true }).catch(() => {});
                     }
                     if (nextVal && typeof Notification !== "undefined" && Notification.permission === "default") {
-                      Notification.requestPermission().catch(() => {});
+                      Notification.requestPermission().then((p) => setNotifPermState(p)).catch(() => {});
                     }
                     showToast(nextVal ? "🔔 새 수정 알림 팝업이 켜졌습니다." : "🔕 새 수정 알림 팝업이 꺼졌습니다.");
                   }}
-                  className={`h-7 px-2 rounded-lg text-[11px] font-semibold border whitespace-nowrap shrink-0 ${
+                  className={`h-7 px-2 rounded-lg text-[10.5px] font-extrabold border whitespace-nowrap ${
                     activityPopupEnabled
                       ? "bg-[#EEF3EE] text-[#35503C] border-[#C9D8CC]"
                       : "bg-stone-100 text-stone-600 border-stone-200"
@@ -42948,14 +43113,11 @@ time: "", location: "",
                       }
                       showToast("최근 수정 알림 내역을 비웠습니다.");
                     }}
-                    className="h-7 px-2 rounded-lg bg-stone-100 hover:bg-rose-50 text-stone-600 hover:text-rose-700 text-[11px] font-semibold whitespace-nowrap shrink-0"
+                    className="h-7 px-2 rounded-lg bg-stone-100 hover:bg-rose-50 text-stone-600 hover:text-rose-700 text-[10.5px] font-extrabold whitespace-nowrap ml-auto"
                   >
                     비우기
                   </button>
                 )}
-                <button type="button" onClick={() => setIsActivityModalOpen(false)} className="w-7 h-7 rounded-full hover:bg-stone-100 flex items-center justify-center shrink-0" aria-label="알림 닫기">
-                  <X className="w-4 h-4 text-stone-500" />
-                </button>
               </div>
             </div>
 
