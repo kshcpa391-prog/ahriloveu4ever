@@ -1181,7 +1181,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v13.78";
+export const APP_CODE_VERSION = "v13.80";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1199,7 +1199,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-24 14:00";
+export const APP_BUILD_DATE = "2026-11-24 14:09";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1268,6 +1268,25 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v13.80",
+    version: "v13.80",
+    date: "2026-11-24",
+    title: "💌 쪽지 수신자 [관리자] 단일화 + 연락처 명칭 통일(관리자 : 01059147933) 및 확인상태 표시",
+    highlights: [
+      "불필요한 수신자 선택 버튼(전체/아빠/엄마) 제거 및 [관리자] 단일 수신으로 간소화해 시각적 피로도 최소화",
+      "모든 연락처 표기를 [관리자 : 01059147933]으로 통일하고, 쪽지 창에 직전 보낸 쪽지의 관리자 확인 여부(확인됨/확인 대기) 표시 추가"
+    ]
+  },
+  {
+    id: "patch-v13.79",
+    version: "v13.79",
+    date: "2026-11-24",
+    title: "📞 관리자 연락처 노출을 아빠(01059147933) 번호만 표시하도록 정리",
+    highlights: [
+      "더보기 메뉴·승인 대기 화면·쪽지 모달의 관리자 연락처에서 엄마 번호를 제거하고 아빠 : 01059147933만 깔끔하게 표시"
+    ]
+  },
   {
     id: "patch-v13.78",
     version: "v13.78",

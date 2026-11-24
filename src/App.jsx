@@ -1806,7 +1806,6 @@ function MainApp() {
   const [showRolePermModal, setShowRolePermModal] = useState(false);
   const [adminInboxNotes, setAdminInboxNotes] = useState([]);
   const [showSendAdminNoteModal, setShowSendAdminNoteModal] = useState(false);
-  const [adminNoteTarget, setAdminNoteTarget] = useState("전체");
   const [adminNoteText, setAdminNoteText] = useState("");
   const [adminNoteAttachments, setAdminNoteAttachments] = useState([]);
   const [adminNoteSending, setAdminNoteSending] = useState(false);
@@ -4948,7 +4947,7 @@ function MainApp() {
       fromName: userProfile?.actorName || userProfile?.displayName || user.displayName || actorName || "가족",
       fromEmail: user.email || "",
       fromRoleLabel: userProfile?.roleLabel || (userProfile?.role === "pending" ? "승인대기" : "육아지원군"),
-      target: adminNoteTarget || "전체",
+      target: "관리자",
       text,
       ...(atts.length > 0 ? { attachments: atts } : {}),
       read: false,
@@ -17562,22 +17561,16 @@ ${item.memo}` : `${item.title} 다녀옴!`,
           </button>
         </div>
         <div className="p-3.5 space-y-2.5">
-          <div className="flex items-center gap-1.5">
-            {["전체", "아빠", "엄마"].map((t) => (
-              <button
-                key={t}
-                type="button"
-                onClick={() => setAdminNoteTarget(t)}
-                className={`flex-1 py-1 rounded-lg text-[11px] font-extrabold border transition ${
-                  adminNoteTarget === t
-                    ? "bg-[#3F624D] text-white border-[#3F624D]"
-                    : "bg-stone-50 text-stone-600 border-stone-200"
-                }`}
-              >
-                {t === "전체" ? "👨‍👩‍👦 전체" : t === "아빠" ? "👨 아빠" : "👩 엄마"}
-              </button>
-            ))}
-          </div>
+          {userProfile?.lastAdminNote && (
+            <div className="px-2.5 py-1.5 rounded-xl bg-stone-50 border border-stone-200 text-[10.5px] flex items-center justify-between gap-2">
+              <span className="truncate text-stone-600 font-bold">
+                최근: {userProfile.lastAdminNote.text || "첨부파일"}
+              </span>
+              <span className={`shrink-0 font-black whitespace-nowrap ${userProfile.lastAdminNote.read ? "text-[#3F624D]" : "text-amber-600"}`}>
+                {userProfile.lastAdminNote.read ? "✅ 확인됨" : "⏳ 확인 대기"}
+              </span>
+            </div>
+          )}
           <textarea
             rows={4}
             value={adminNoteText}
@@ -17651,10 +17644,8 @@ ${item.memo}` : `${item.title} 다녀옴!`,
           </button>
           <div className="pt-1.5 border-t border-stone-100 text-center text-[10.5px] text-stone-400 font-bold leading-relaxed">
             <div>관리자 연락처</div>
-            <div className="flex items-center justify-center gap-2.5 mt-0.5 text-stone-500">
-              <a href="tel:01059147933" className="underline hover:text-stone-800">아빠 : 01059147933</a>
-              <span>·</span>
-              <a href="tel:01054984948" className="underline hover:text-stone-800">엄마 : 01054984948</a>
+            <div className="flex items-center justify-center mt-0.5 text-stone-500">
+              <a href="tel:01059147933" className="underline hover:text-stone-800">관리자 : 01059147933</a>
             </div>
           </div>
         </div>
@@ -17769,9 +17760,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
             </button>
             <div className="text-[10.5px] text-stone-400 font-bold leading-relaxed">
               관리자 연락처 ·{" "}
-              <a href="tel:01059147933" className="underline hover:text-stone-700">아빠 : 01059147933</a>
-              {" · "}
-              <a href="tel:01054984948" className="underline hover:text-stone-700">엄마 : 01054984948</a>
+              <a href="tel:01059147933" className="underline hover:text-stone-700">관리자 : 01059147933</a>
             </div>
             <button
               type="button"
@@ -35357,9 +35346,7 @@ time: "", location: "",
                   </button>
                   <div className="text-center text-[10.5px] text-stone-400 font-bold">
                     관리자 연락처 ·{" "}
-                    <a href="tel:01059147933" className="underline hover:text-stone-700">아빠 : 01059147933</a>
-                    {" · "}
-                    <a href="tel:01054984948" className="underline hover:text-stone-700">엄마 : 01054984948</a>
+                    <a href="tel:01059147933" className="underline hover:text-stone-700">관리자 : 01059147933</a>
                   </div>
                 </div>
               )}
@@ -41334,7 +41321,7 @@ time: "", location: "",
                         <div className="flex items-center gap-1.5 min-w-0">
                           {!n.read && <span className="px-1.5 py-0.5 rounded bg-[#3F624D] text-white text-[9px] font-black">NEW</span>}
                           <span className="font-black text-stone-900 truncate">{n.fromName}</span>
-                          <span className="text-stone-400 font-bold shrink-0">({n.fromRoleLabel || "회원"} → {n.target || "전체"})</span>
+                          <span className="text-stone-400 font-bold shrink-0">({n.fromRoleLabel || "회원"} → {n.target === "아빠" || n.target === "전체" || !n.target ? "관리자" : n.target})</span>
                         </div>
                         <span className="text-[9.5px] text-stone-400 shrink-0">
                           {n.createdAtMs ? new Date(n.createdAtMs).toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }) : ""}
