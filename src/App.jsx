@@ -524,19 +524,35 @@ const PrivateCalFormModal = React.memo(({
 const ScheduleFormModal = React.memo(({
   initialForm,
   isEditing,
+  isAdminUnlocked = false,
+  currentAdminOwner = "수혁",
   onClose,
   onSubmitForm,
+  onSubmitPrivate,
+  onConvertToFamily,
   onReadAttachments,
   onPreviewImage,
   showToast,
   scheduleCategories = SCHEDULE_CATEGORIES,
   onManageCategories
 }) => {
-  const [draft, setDraft] = useState(initialForm);
+  const [draft, setDraft] = useState(() => ({
+    scheduleScope: "family",
+    color: "default",
+    highlight: false,
+    ...initialForm
+  }));
 
   useEffect(() => {
-    setDraft(initialForm);
+    setDraft({
+      scheduleScope: "family",
+      color: "default",
+      highlight: false,
+      ...initialForm
+    });
   }, [initialForm]);
+
+  const isPrivateMode = isAdminUnlocked && draft.scheduleScope === "private";
 
   return (
     <div
@@ -547,14 +563,49 @@ const ScheduleFormModal = React.memo(({
         className="bg-white rounded-3xl max-w-sm w-full p-5 space-y-3.5 max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between">
-          <h3 className="text-[15.5px] font-black">
-            {isEditing ? "가족 일정 수정" : "새 가족 일정 추가"}
+        <div className="flex items-center justify-between gap-2">
+          <h3 className="text-[15.5px] font-black truncate min-w-0">
+            {isPrivateMode
+              ? (isEditing ? "🔒 내 개인일정 수정" : "🔒 새 개인일정 추가")
+              : (isEditing ? "🏠 가족 일정 수정" : "🏠 새 가족 일정 추가")}
           </h3>
-          <button type="button" onClick={onClose} aria-label="닫기">
+          <button type="button" onClick={onClose} aria-label="닫기" className="shrink-0">
             <X className="w-5 h-5 text-stone-400" />
           </button>
         </div>
+
+        {isAdminUnlocked && (
+          <div className="flex items-center gap-1.5 bg-stone-100 p-1 rounded-xl">
+            <button
+              type="button"
+              onClick={() => {
+                if (isEditing && isPrivateMode && onConvertToFamily) {
+                  onConvertToFamily(draft);
+                } else {
+                  setDraft((p) => ({ ...p, scheduleScope: "family" }));
+                }
+              }}
+              className={`flex-1 py-1.5 px-2 rounded-lg text-[11.5px] font-extrabold whitespace-nowrap transition ${
+                !isPrivateMode
+                  ? "bg-white text-stone-900 shadow-sm"
+                  : "text-stone-500 hover:text-stone-800"
+              }`}
+            >
+              {isEditing && isPrivateMode ? "🏠 가족일정으로 이동" : "🏠 가족 일정"}
+            </button>
+            <button
+              type="button"
+              onClick={() => setDraft((p) => ({ ...p, scheduleScope: "private" }))}
+              className={`flex-1 py-1.5 px-2 rounded-lg text-[11.5px] font-extrabold whitespace-nowrap transition ${
+                isPrivateMode
+                  ? "bg-stone-900 text-white shadow-sm"
+                  : "text-stone-500 hover:text-stone-800"
+              }`}
+            >
+              🔒 내 개인일정 ({currentAdminOwner})
+            </button>
+          </div>
+        )}
 
         <input
           type="text"
@@ -745,6 +796,8 @@ const ScheduleFormModal = React.memo(({
           </select>
         </div>
 
+        {!isPrivateMode ? (
+          <>
         <div>
           <div className="flex items-center justify-between mb-1">
             <span className="text-[13.5px] font-bold text-stone-600">누구의 일정인가요?</span>
@@ -831,6 +884,52 @@ const ScheduleFormModal = React.memo(({
             </button>
           </div>
         </div>
+          </>
+        ) : (
+          <div className="p-2.5 rounded-2xl bg-stone-50 border border-stone-200 space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[11.5px] font-extrabold text-stone-700 whitespace-nowrap">🎨 색상 · 옵션</span>
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setDraft((p) => ({ ...p, highlight: !p.highlight }))}
+                  className={`px-2 py-0.5 rounded-lg text-[11px] font-extrabold border whitespace-nowrap transition ${
+                    draft.highlight ? "bg-amber-100 text-amber-900 border-amber-300" : "bg-white text-stone-600 border-stone-200"
+                  }`}
+                >
+                  ✨ 배경강조
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDraft((p) => ({ ...p, isAnnual: !p.isAnnual }))}
+                  className={`px-2 py-0.5 rounded-lg text-[11px] font-extrabold border whitespace-nowrap transition ${
+                    draft.isAnnual ? "bg-sky-600 text-white border-sky-600" : "bg-white text-stone-600 border-stone-200"
+                  }`}
+                >
+                  🔄 매년반복
+                </button>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {PRIVATE_CAL_COLORS.map((cMeta) => {
+                const isSel = (draft.color || "default") === cMeta.id;
+                return (
+                  <button
+                    key={cMeta.id}
+                    type="button"
+                    onClick={() => setDraft((p) => ({ ...p, color: cMeta.id }))}
+                    className={`px-2 py-1 rounded-xl text-[11px] font-extrabold border flex items-center gap-1 whitespace-nowrap transition ${
+                      isSel ? "bg-stone-900 text-white border-stone-900" : "bg-white text-stone-700 border-stone-200"
+                    }`}
+                  >
+                    <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: cMeta.dot }} />
+                    <span>{cMeta.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         <div className="space-y-1">
           <div className="flex items-center justify-between">
@@ -854,6 +953,7 @@ const ScheduleFormModal = React.memo(({
           />
         </div>
 
+        {!isPrivateMode && (
         <div className="p-2.5 rounded-2xl bg-stone-50 border border-stone-200 space-y-2">
           <div className="flex items-center justify-between gap-2">
             <span className="text-[12px] font-extrabold text-stone-700 whitespace-nowrap">
@@ -925,13 +1025,22 @@ const ScheduleFormModal = React.memo(({
             </div>
           )}
         </div>
+        )}
 
         <button
           type="button"
-          onClick={() => onSubmitForm(draft)}
-          className="w-full py-3 rounded-xl bg-stone-900 hover:bg-stone-800 text-white font-extrabold text-[14px]"
+          onClick={() => {
+            if (isPrivateMode && onSubmitPrivate) {
+              onSubmitPrivate(draft);
+            } else {
+              onSubmitForm(draft);
+            }
+          }}
+          className="w-full py-3 rounded-xl bg-stone-900 hover:bg-stone-800 text-white font-extrabold text-[14px] whitespace-nowrap"
         >
-          {isEditing ? "수정 저장" : "일정 저장"}
+          {isPrivateMode
+            ? (isEditing ? "🔒 개인일정 수정 저장" : "🔒 개인일정 저장")
+            : (isEditing ? "🏠 가족일정 수정 저장" : "🏠 가족일정 저장")}
         </button>
       </div>
     </div>
@@ -7145,9 +7254,9 @@ function MainApp() {
   }, [scheduleWeekDates, schedules, scheduleMemberFilter, scheduleCatFilter]);
 
 
-  // 전체 To-Do 체크리스트 전용 데이터 (기본: 할일(To-Do)만 / 토글 시 병원·행사 포함)
+  // 전체 To-Do 체크리스트 전용 데이터 (가족 + 관리자 본인 개인 할일 통합)
   const allTodoChecklistItems = useMemo(() => {
-    return schedules
+    const famTodos = schedules
       .filter((s) => {
         if (s.category === "기념일/생일" || s.isAnnual) return false;
         if (!todoIncludeOtherCats && s.category !== "할일(To-Do)") return false;
@@ -7157,27 +7266,44 @@ function MainApp() {
         if (todoStatusFilter === "completed") return Boolean(s.done);
         return true;
       })
-      .map((s) => ({
-        ...s,
-        calc: calculateScheduleDday(s)
-      }))
-      .sort((a, b) => {
-        if (Boolean(a.done) !== Boolean(b.done)) {
-          return a.done ? 1 : -1;
-        }
-        return String(a.date).localeCompare(String(b.date));
-      });
-  }, [schedules, scheduleMemberFilter, todoStatusFilter, todoIncludeOtherCats]);
+      .map((s) => ({ ...s, _isPrivate: false, calc: calculateScheduleDday(s) }));
+
+    const privTodos = isAdminUnlocked
+      ? privateSchedules
+          .filter((p) => {
+            if ((p.owner || "수혁") !== currentAdminOwner) return false;
+            if (p.isAnnual || p.category === "기념일/생일") return false;
+            if (p.category !== "할일(To-Do)") return false;
+            if (todoStatusFilter === "active") return !p.done;
+            if (todoStatusFilter === "completed") return Boolean(p.done);
+            return true;
+          })
+          .map((p) => ({ ...p, _isPrivate: true, category: p.category || "할일(To-Do)", calc: calculateScheduleDday(p) }))
+      : [];
+
+    return [...famTodos, ...privTodos].sort((a, b) => {
+      if (Boolean(a.done) !== Boolean(b.done)) {
+        return a.done ? 1 : -1;
+      }
+      return String(a.date).localeCompare(String(b.date));
+    });
+  }, [schedules, privateSchedules, isAdminUnlocked, currentAdminOwner, scheduleMemberFilter, todoStatusFilter, todoIncludeOtherCats]);
 
 
   const todoStats = useMemo(() => {
-    const nonAnniv = schedules.filter(
+    const famNonAnniv = schedules.filter(
       (s) =>
         s.category !== "기념일/생일" &&
         !s.isAnnual &&
         (todoIncludeOtherCats || s.category === "할일(To-Do)") &&
         matchesScheduleMemberFilter(s.members, scheduleMemberFilter)
     );
+    const privNonAnniv = isAdminUnlocked
+      ? privateSchedules.filter(
+          (p) => (p.owner || "수혁") === currentAdminOwner && !p.isAnnual && p.category === "할일(To-Do)"
+        )
+      : [];
+    const nonAnniv = [...famNonAnniv, ...privNonAnniv];
     const total = nonAnniv.length;
     const doneCount = nonAnniv.filter((s) => s.done).length;
     const activeCount = total - doneCount;
@@ -12305,34 +12431,49 @@ ${validText}
       showToast("🔒 관리자 로그인 후 개인 일정을 관리할 수 있습니다.");
       return;
     }
+    setEditingSchedule(null);
     if (editItem) {
       setEditingPrivateCalId(editItem.id);
-      setPrivateCalForm({
+      setScheduleForm({
+        scheduleScope: "private",
         title: editItem.title || "",
         date: editItem.date || dateStr || getTodayStr(),
         endDate: editItem.endDate || "",
         time: editItem.time || "",
+        location: editItem.location || "",
+        category: editItem.category || (scheduleCategories.includes("할일(To-Do)") ? "할일(To-Do)" : (scheduleCategories[0] || "할일(To-Do)")),
+        members: ["수혁", "아리나"],
         color: editItem.color || "default",
         highlight: Boolean(editItem.highlight),
         isAnnual: Boolean(editItem.isAnnual),
+        showDday: false,
+        hasOriginYear: false,
         memo: editItem.memo || "",
+        attachments: [],
         owner: editItem.owner === "아리나" ? "아리나" : "수혁"
       });
     } else {
       setEditingPrivateCalId(null);
-      setPrivateCalForm({
+      setScheduleForm({
+        scheduleScope: "private",
         title: "",
         date: dateStr || scheduleSelectedDate || getTodayStr(),
         endDate: "",
         time: "",
+        location: "",
+        category: scheduleCategories.includes("할일(To-Do)") ? "할일(To-Do)" : (scheduleCategories[0] || "할일(To-Do)"),
+        members: ["수혁", "아리나"],
         color: "default",
         highlight: false,
         isAnnual: false,
+        showDday: false,
+        hasOriginYear: false,
         memo: "",
+        attachments: [],
         owner: currentAdminOwner
       });
     }
-    setIsPrivateCalModalOpen(true);
+    setIsScheduleModalOpen(true);
   };
 
   const stripPrivateMeta = (it) => {
@@ -12390,6 +12531,8 @@ ${validText}
       date: dateVal,
       endDate: endDateVal,
       time: String(srcForm.time || "").trim(),
+      location: String(srcForm.location || "").trim(),
+      category: String(srcForm.category || (scheduleCategories.includes("할일(To-Do)") ? "할일(To-Do)" : (scheduleCategories[0] || "할일(To-Do)"))).trim(),
       color: srcForm.color || "default",
       highlight: Boolean(srcForm.highlight),
       isAnnual: Boolean(srcForm.isAnnual),
@@ -12406,6 +12549,7 @@ ${validText}
     setScheduleSelectedDate(dateVal);
     setScheduleMonth(dateVal.slice(0, 7));
     setIsPrivateCalModalOpen(false);
+    setIsScheduleModalOpen(false);
     setEditingPrivateCalId(null);
     if (user && db) {
       if (prevBucketId) {
@@ -12444,8 +12588,8 @@ ${validText}
       date: dateVal,
       endDate: cleanEndDate,
       time: cleanTime,
-      location: "",
-      category: "할일(To-Do)",
+      location: String(draftForm?.location || existing?.location || "").trim(),
+      category: String(draftForm?.category || existing?.category || (scheduleCategories.includes("할일(To-Do)") ? "할일(To-Do)" : "할일(To-Do)")).trim(),
       members: ["수혁", "아리나"],
       isAnnual: Boolean(draftForm?.isAnnual),
       showDday: false,
@@ -12463,6 +12607,7 @@ ${validText}
     } catch (e) {}
 
     setIsPrivateCalModalOpen(false);
+    setIsScheduleModalOpen(false);
     setEditingPrivateCalId(null);
     setScheduleSelectedDate(dateVal);
     setScheduleMonth(dateVal.slice(0, 7));
@@ -17469,8 +17614,14 @@ ${item.memo}` : `${item.title} 다녀옴!`,
 
         const actionFeedSize = blockSizes.action_feed || "normal";
         const previewLimit = actionFeedSize === "compact" ? 2 : actionFeedSize === "large" ? 5 : 3;
-        const previewTodos = schedules
-          .filter((s) => s.category === "할일(To-Do)" && !s.done)
+        const previewTodos = [
+          ...schedules.filter((s) => s.category === "할일(To-Do)" && !s.done).map((s) => ({ ...s, _isPrivate: false })),
+          ...(isAdminUnlocked
+            ? privateSchedules
+                .filter((p) => (p.owner || "수혁") === currentAdminOwner && p.category === "할일(To-Do)" && !p.done)
+                .map((p) => ({ ...p, _isPrivate: true }))
+            : [])
+        ]
           .sort((a, b) => String(a.date || "9999-99-99").localeCompare(String(b.date || "9999-99-99")))
           .slice(0, previewLimit);
 
@@ -22754,7 +22905,7 @@ time: "", location: "",
                     }`}
                   >
                     <div
-                      onClick={() => handleToggleScheduleDone(todo)}
+                      onClick={() => (todo._isPrivate ? handleTogglePrivateScheduleDone(todo) : handleToggleScheduleDone(todo))}
                       className="flex items-center gap-2 cursor-pointer flex-1 min-w-0"
                     >
                       <div
@@ -22769,6 +22920,11 @@ time: "", location: "",
 
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-1.5 min-w-0">
+                          {todo._isPrivate && (
+                            <span className="px-1.5 py-0.5 rounded bg-stone-900 text-white text-[9.5px] font-black whitespace-nowrap shrink-0">
+                              🔒 내 할일
+                            </span>
+                          )}
                           <span
                             className={`text-[13px] font-extrabold truncate ${
                               todo.done ? "line-through text-stone-400" : "text-stone-900"
@@ -35253,9 +35409,17 @@ time: "", location: "",
       {isScheduleModalOpen && (
         <ScheduleFormModal
           initialForm={scheduleForm}
-          isEditing={Boolean(editingSchedule)}
-          onClose={() => setIsScheduleModalOpen(false)}
+          isEditing={Boolean(editingSchedule || editingPrivateCalId)}
+          isAdminUnlocked={isAdminUnlocked}
+          currentAdminOwner={currentAdminOwner}
+          onClose={() => {
+            setIsScheduleModalOpen(false);
+            setEditingSchedule(null);
+            setEditingPrivateCalId(null);
+          }}
           onSubmitForm={(draft) => handleSaveSchedule(draft)}
+          onSubmitPrivate={(draft) => handleSavePrivateSchedule(draft)}
+          onConvertToFamily={(draft) => handleConvertPrivateToFamily(draft)}
           onReadAttachments={readAttachmentsFromFiles}
           onPreviewImage={(url) => setDiaryLightboxUrl(url)}
           showToast={showToast}

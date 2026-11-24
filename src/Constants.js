@@ -1181,7 +1181,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v13.59";
+export const APP_CODE_VERSION = "v13.60";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1199,7 +1199,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-24 00:35";
+export const APP_BUILD_DATE = "2026-11-24 09:40";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1267,6 +1267,17 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v13.60",
+    version: "v13.60",
+    date: "2026-11-24",
+    title: "🗓️ 가족일정·개인일정 입력 화면 완전 통합 + 개인일정 분류(할일 To-Do·일반일정 등) 선택 & 할일/홈 연동",
+    highlights: [
+      "가족·개인 일정 입력 화면 통합: 기존 분리되어 있던 개인일정 모달을 통합 ScheduleFormModal로 일원화해 상단 [🏠 가족 일정 | 🔒 내 개인일정] 1탭 전환과 동일한 날짜·기간·시간·장소·분류·메모 UI 제공",
+      "개인일정 분류 선택 및 할일(To-Do) 연동: 개인일정도 가족일정과 동일하게 분류(할일(To-Do)·가족행사/경조사·육아/병원·기념일/생일 및 맞춤 분류)를 선택할 수 있으며, 개인 할일은 일정 [✅ 할 일] 탭과 홈 [남은 할 일]에 🔒 배지로 함께 표시·체크 가능",
+      "버그·연계 보완: 개인일정→가족일정 이동(handleConvertPrivateToFamily) 시 장소(location)·분류(category) 유실 방지 및 중복 모달(PrivateCalFormModal) 제거로 코드 경량화·AST 무결성 0건 통과"
+    ]
+  },
   {
     id: "patch-v13.59",
     version: "v13.59",
