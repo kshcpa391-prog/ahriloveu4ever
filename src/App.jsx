@@ -1701,6 +1701,18 @@ function MainApp() {
   const [userProfile, setUserProfile] = useState(null);
   const [profileLoading, setProfileLoading] = useState(false);
   const [managedUsers, setManagedUsers] = useState([]);
+  const [editingPermUid, setEditingPermUid] = useState(null);
+  const DEFAULT_HELPER_ROLE_LABELS = ["육아지원군", "친정엄마", "시어머니", "이모님", "가족"];
+  const [helperRoleLabels, setHelperRoleLabels] = useState(() => {
+    try {
+      const raw = JSON.parse(localStorage.getItem("family_helper_role_labels_v1") || "null");
+      return Array.isArray(raw) && raw.length > 0 ? raw : DEFAULT_HELPER_ROLE_LABELS;
+    } catch (e) {
+      return DEFAULT_HELPER_ROLE_LABELS;
+    }
+  });
+  const [newRoleLabelInput, setNewRoleLabelInput] = useState("");
+  const [showRoleLabelManager, setShowRoleLabelManager] = useState(false);
   const [authMode, setAuthMode] = useState("login");
   const [rememberEmail, setRememberEmail] = useState(() => {
     try {
@@ -4145,16 +4157,30 @@ function MainApp() {
   const [toastMsg, setToastMsg] = useState("");
 
 
+  const effectiveHelperAllowedTabs =
+    isHelperUnlocked &&
+    userProfile?.useCustomTabs &&
+    Array.isArray(userProfile?.customAllowedTabs)
+      ? userProfile.customAllowedTabs
+      : helperAllowedTabs;
+
+  const effectiveHelperEditTabs =
+    isHelperUnlocked &&
+    userProfile?.useCustomTabs &&
+    Array.isArray(userProfile?.customEditTabs)
+      ? userProfile.customEditTabs
+      : helperEditTabs;
+
   const canViewTab = (tabId) => {
     if (isAdminUnlocked) return true;
-    if (isHelperUnlocked) return tabId === "home" || helperAllowedTabs.includes(tabId);
+    if (isHelperUnlocked) return tabId === "home" || effectiveHelperAllowedTabs.includes(tabId);
     return tabId === "home" || guestAllowedTabs.includes(tabId);
   };
 
 
   const canEditTab = (tabId = activeTab) => {
     if (isAdminUnlocked) return true;
-    if (isHelperUnlocked) return tabId === "home" ? true : helperEditTabs.includes(tabId);
+    if (isHelperUnlocked) return tabId === "home" ? true : effectiveHelperEditTabs.includes(tabId);
     return false;
   };
 
@@ -4189,7 +4215,7 @@ function MainApp() {
   const requireEditorAccess = (targetTab = activeTab) => {
     if (canEditTab(targetTab)) return true;
     if (accessRole === "guest") {
-      showToast("🔒 미로그인 상태입니다. 로그인 후 편집할 수 있어요.");
+      showToast("🔒 편집 권한이 없습니다. 관리자에게 권한을 요청해 주세요.");
     } else if (canViewTab(targetTab)) {
       showToast("🔒 이 메뉴는 열람만 허용되어 있습니다. 편집은 관리자 권한이 필요합니다.");
     } else {
@@ -4456,78 +4482,6 @@ function MainApp() {
   };
 
 
-  const applyLoginCode = (rawCode, forcedAdminTarget = null) => {
-    const code = String(rawCode || "").trim();
-    if (!code) {
-      showToast("비밀번호를 입력해 주세요.");
-      return false;
-    }
-    const isSuhyeokMatch = code === suhyeokCode;
-    const isArinaMatch = code === arinaCode;
-    const isLegacyAdminMatch = code === adminCode;
-
-    if (forcedAdminTarget === "수혁" || forcedAdminTarget === "아리나") {
-      const targetOk =
-        forcedAdminTarget === "아리나"
-          ? isArinaMatch
-          : isSuhyeokMatch || isLegacyAdminMatch;
-      if (!targetOk) {
-        showToast(`❌ ${forcedAdminTarget} 비밀번호가 일치하지 않습니다.`);
-        return false;
-      }
-      try {
-        localStorage.setItem("family_access_role_v1", "admin");
-        localStorage.setItem("family_editor_unlocked_v1", "true");
-        localStorage.setItem("family_actor_name_v1", forcedAdminTarget);
-      } catch (e) {}
-      setAccessRole("admin");
-      setActorName(forcedAdminTarget);
-      setEditorCodeInput("");
-      setSwitchAdminPinInput("");
-      setIsEditorUnlockModalOpen(false);
-      showToast(`👑 관리자(${forcedAdminTarget}) 계정으로 전환되었습니다!`);
-      return true;
-    }
-
-    if (isSuhyeokMatch || isArinaMatch || isLegacyAdminMatch) {
-      let nextActor = loginAdminTarget === "아리나" ? "아리나" : "수혁";
-      if (isArinaMatch && !isSuhyeokMatch) {
-        nextActor = "아리나";
-      } else if (isSuhyeokMatch && !isArinaMatch) {
-        nextActor = "수혁";
-      }
-      try {
-        localStorage.setItem("family_access_role_v1", "admin");
-        localStorage.setItem("family_editor_unlocked_v1", "true");
-        localStorage.setItem("family_actor_name_v1", nextActor);
-      } catch (e) {}
-      setAccessRole("admin");
-      setActorName(nextActor);
-      setEditorCodeInput("");
-      setSwitchAdminPinInput("");
-      setIsEditorUnlockModalOpen(false);
-      showToast(`👑 관리자(${nextActor}) 권한으로 로그인되었습니다!`);
-      return true;
-    }
-    if (code === helperCode) {
-      const nextActor = actorName && !["수혁", "아리나"].includes(actorName) ? actorName : "육아지원군";
-      try {
-        localStorage.setItem("family_access_role_v1", "helper");
-        localStorage.removeItem("family_editor_unlocked_v1");
-        localStorage.setItem("family_actor_name_v1", nextActor);
-      } catch (e) {}
-      setAccessRole("helper");
-      setActorName(nextActor);
-      setEditorCodeInput("");
-      setIsEditorUnlockModalOpen(false);
-      showToast(`🌿 ${nextActor} 권한(일부 메뉴 편집)으로 로그인되었습니다!`);
-      return true;
-    }
-    showToast("❌ 비밀번호가 일치하지 않습니다.");
-    return false;
-  };
-
-
   const handleGoogleLogin = async () => {
     if (!auth) return;
     setAuthFormError("");
@@ -4582,6 +4536,10 @@ function MainApp() {
       return;
     }
     if (authMode === "signup") {
+      if (!authNameInput.trim()) {
+        setAuthFormError("사용자명(이름 또는 호칭)을 필수 입력해 주세요.");
+        return;
+      }
       if (password.length < 6) {
         setAuthFormError("비밀번호는 6자 이상으로 입력해 주세요.");
         return;
@@ -4656,7 +4614,23 @@ function MainApp() {
     }
   };
 
-  const handleUpdateUserRole = async (targetUid, nextRole, nextActorName = null) => {
+  const saveHelperRoleLabelsToCloud = async (nextLabels) => {
+    const clean = Array.from(new Set(nextLabels.map((x) => String(x || "").trim()).filter(Boolean)));
+    if (clean.length === 0) return;
+    setHelperRoleLabels(clean);
+    try { localStorage.setItem("family_helper_role_labels_v1", JSON.stringify(clean)); } catch (e) {}
+    if (user && db && isAdminUnlocked) {
+      try {
+        await setDoc(
+          getDocRef("family_meta_v4", "access_config"),
+          { helperRoleLabels: clean, updatedAtMs: Date.now() },
+          { merge: true }
+        );
+      } catch (e) {}
+    }
+  };
+
+  const handleUpdateUserRole = async (targetUid, nextRole, nextActorName = null, nextRoleLabel = null) => {
     if (!db || !isAdminUnlocked || !targetUid) return;
     beginWrite();
     try {
@@ -4666,6 +4640,9 @@ function MainApp() {
       };
       if (nextActorName !== null) {
         payload.actorName = nextActorName;
+      }
+      if (nextRoleLabel !== null) {
+        payload.roleLabel = nextRoleLabel;
       }
       await setDoc(getDocRef("users", targetUid), payload, { merge: true });
       endWrite(true);
@@ -4681,6 +4658,22 @@ function MainApp() {
     } catch (err) {
       endWrite(false);
       showToast("권한 변경 실패: " + (err?.message || "오류"));
+    }
+  };
+
+  const handleUpdateUserCustomTabs = async (targetUid, patch) => {
+    if (!db || !isAdminUnlocked || !targetUid) return;
+    beginWrite();
+    try {
+      await setDoc(
+        getDocRef("users", targetUid),
+        { ...patch, updatedAtMs: Date.now() },
+        { merge: true }
+      );
+      endWrite(true);
+    } catch (err) {
+      endWrite(false);
+      showToast("개별 권한 저장 실패: " + (err?.message || "오류"));
     }
   };
 
@@ -4752,9 +4745,7 @@ function MainApp() {
         <div className="space-y-1">
           <h3 className="text-[15.5px] font-black text-stone-900">{tabLabel} 메뉴는 잠겨 있습니다</h3>
           <p className="text-[13.5px] text-stone-500 leading-relaxed">
-            {accessRole === "guest"
-              ? "미로그인 상태에서는 가족사진과 일부 메뉴(식단·레시피)만 볼 수 있습니다. 가족 또는 육아지원군 비밀번호로 로그인해 주세요."
-              : "현재 계정에서는 접근이 제한된 메뉴입니다. 관리자 비밀번호로 로그인하거나 설정에서 허용 메뉴를 변경할 수 있습니다."}
+            현재 계정에서는 접근이 제한된 메뉴입니다. 관리자(수혁)에게 해당 메뉴의 열람 권한을 요청해 주세요.
           </p>
         </div>
         <div className="flex items-center justify-center gap-2 pt-1">
@@ -4763,7 +4754,7 @@ function MainApp() {
             onClick={() => setIsEditorUnlockModalOpen(true)}
             className="px-4 py-2 rounded-xl bg-stone-900 hover:bg-stone-800 text-white text-[13.5px] font-extrabold whitespace-nowrap"
           >
-            🔑 로그인 / 권한 변경
+            👤 내 계정 정보
           </button>
           <button
             type="button"
@@ -5277,6 +5268,7 @@ function MainApp() {
       async (snap) => {
         if (!snap.exists()) {
           const fallbackName =
+            authNameInput.trim() ||
             user.displayName ||
             (user.email ? user.email.split("@")[0] : "새 사용자");
           const initDoc = {
@@ -5481,6 +5473,11 @@ function MainApp() {
                 const eTabs = toSafeArray(d.data().helperEditTabs);
                 setHelperEditTabs(eTabs);
                 try { localStorage.setItem("family_helper_edit_tabs_v1", JSON.stringify(eTabs)); } catch (e) {}
+              }
+              if (Array.isArray(cfgData.helperRoleLabels) && cfgData.helperRoleLabels.length > 0) {
+                const rLabels = toSafeArray(cfgData.helperRoleLabels);
+                setHelperRoleLabels(rLabels);
+                try { localStorage.setItem("family_helper_role_labels_v1", JSON.stringify(rLabels)); } catch (e) {}
               }
             }
             if (d.id === "recent_activity" && Array.isArray(d.data().items)) {
@@ -16834,9 +16831,10 @@ ${item.memo}` : `${item.title} 다녀옴!`,
             {authMode === "signup" && (
               <input
                 type="text"
+                required
                 value={authNameInput}
                 onChange={(e) => setAuthNameInput(e.target.value)}
-                placeholder="이름 또는 호칭 (예: 아리나, 이모님)"
+                placeholder="사용자명 *필수 (예: 아리나, 친정엄마, 이모님)"
                 autoComplete="name"
                 className="w-full px-3 py-2.5 rounded-xl border border-stone-300 text-[13.5px] font-bold"
               />
@@ -17179,6 +17177,23 @@ ${item.memo}` : `${item.title} 다녀옴!`,
             </button>
           </div>
         </div>
+
+        {isAdminUnlocked && managedUsers.some((u) => u.role === "pending") && (
+          <div className="px-3 pt-2">
+            <button
+              type="button"
+              onClick={() => setIsSettingsOpen(true)}
+              className="w-full px-3 py-2 rounded-xl bg-amber-50 hover:bg-amber-100 border border-amber-300 text-amber-950 text-[12px] font-black flex items-center justify-between gap-2 shadow-xs transition"
+            >
+              <span className="truncate">
+                ⏳ 새 회원 승인 요청 {managedUsers.filter((u) => u.role === "pending").length}건이 대기 중입니다
+              </span>
+              <span className="px-2 py-0.5 rounded-lg bg-amber-500 text-white text-[11px] font-black shrink-0 whitespace-nowrap">
+                바로 승인
+              </span>
+            </button>
+          </div>
+        )}
 
         {activeTab === "home" && (() => {
           const activeModeForHero =
@@ -19571,26 +19586,7 @@ time: "", location: "",
 
 
             {accessRole === "guest" && (
-              <div className="bg-white border border-amber-200 rounded-2xl p-3.5 shadow-sm flex items-center justify-between gap-3">
-                <div className="flex items-start gap-2.5 min-w-0">
-                  <div className="w-8 h-8 rounded-xl bg-amber-50 border border-amber-200 text-amber-700 flex items-center justify-center shrink-0">
-                    <Lock className="w-4 h-4" />
-                  </div>
-                  <div className="min-w-0">
-                    <div className="text-[13.5px] font-black text-stone-900">미로그인 상태 (일부 메뉴만 공개)</div>
-                    <p className="text-[12.5px] text-stone-500 leading-snug">
-                      일부 메뉴만 열람 중 · 전체 기능은 로그인 후 이용하세요.
-                    </p>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setIsEditorUnlockModalOpen(true)}
-                  className="px-3 py-1.5 rounded-xl bg-stone-900 hover:bg-stone-800 text-white text-[12.5px] font-extrabold shrink-0 whitespace-nowrap"
-                >
-                  🔑 로그인
-                </button>
-              </div>
+              {null}
             )}
 
 
@@ -39068,9 +39064,9 @@ time: "", location: "",
               <>
               <div className="p-3 rounded-2xl bg-sky-50/70 border border-sky-200 space-y-2.5">
                 <div className="flex items-center justify-between">
-                  <span className="text-[13.5px] font-black text-sky-950 flex items-center gap-1">
-                    <ShieldCheck className="w-4 h-4 text-sky-700" />
-                    3단계 권한 · 비밀번호 · 메뉴별 열람/편집 설정
+                  <span className="text-[13.5px] font-black text-sky-950 flex items-center gap-1 whitespace-nowrap">
+                    <ShieldCheck className="w-4 h-4 text-sky-700 shrink-0" />
+                    <span>회원 권한 · 메뉴 설정</span>
                   </span>
                   <button
                     type="button"
@@ -39093,120 +39089,305 @@ time: "", location: "",
                 </div>
 
 
-                <div className="bg-white rounded-xl border border-emerald-200 p-3 space-y-2.5">
+                <div className="bg-white rounded-xl border border-emerald-200 p-2.5 space-y-2">
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-[13px] font-black text-emerald-950 whitespace-nowrap">👥 회원 승인 및 권한 관리</span>
+                    <span className="text-[12.5px] font-black text-emerald-950 whitespace-nowrap">👥 회원 승인 및 권한 ({managedUsers.length}명)</span>
                     <div className="flex items-center gap-1.5 shrink-0">
                       {managedUsers.some((u) => u.role === "pending") && (
-                        <span className="px-2 py-0.5 rounded-full bg-amber-500 text-white text-[10.5px] font-black animate-pulse whitespace-nowrap">
-                          승인 대기 {managedUsers.filter((u) => u.role === "pending").length}건
+                        <span className="px-1.5 py-0.5 rounded-full bg-amber-500 text-white text-[10px] font-black animate-pulse whitespace-nowrap">
+                          대기 {managedUsers.filter((u) => u.role === "pending").length}
                         </span>
                       )}
-                      <span className="text-[11px] font-bold text-emerald-700 whitespace-nowrap">
-                        총 {managedUsers.length}명
-                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setShowRoleLabelManager((p) => !p)}
+                        className="px-2 py-0.5 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 text-[10.5px] font-extrabold whitespace-nowrap"
+                      >
+                        🏷️ 분류 {showRoleLabelManager ? "닫기" : "편집"}
+                      </button>
                     </div>
                   </div>
+                  {showRoleLabelManager && (
+                    <div className="bg-stone-50 border border-stone-200 rounded-xl p-2 space-y-1.5">
+                      <div className="flex flex-wrap gap-1">
+                        {helperRoleLabels.map((lbl) => (
+                          <span
+                            key={lbl}
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white border border-stone-200 text-[11px] font-bold text-stone-700 whitespace-nowrap"
+                          >
+                            <span>{lbl}</span>
+                            {helperRoleLabels.length > 1 && (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  saveHelperRoleLabelsToCloud(
+                                    helperRoleLabels.filter((x) => x !== lbl)
+                                  )
+                                }
+                                className="text-stone-400 hover:text-rose-600 font-black"
+                                aria-label={`${lbl} 삭제`}
+                              >
+                                ×
+                              </button>
+                            )}
+                          </span>
+                        ))}
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <input
+                          type="text"
+                          value={newRoleLabelInput}
+                          onChange={(e) => setNewRoleLabelInput(e.target.value)}
+                          placeholder="새 분류 입력 (예: 방문선생님, 외할머니)"
+                          className="flex-1 min-w-0 px-2 py-1 rounded-lg border border-stone-200 bg-white text-[11.5px] font-bold"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const v = newRoleLabelInput.trim();
+                            if (!v) return;
+                            saveHelperRoleLabelsToCloud([...helperRoleLabels, v]);
+                            setNewRoleLabelInput("");
+                            showToast(`🏷️ [${v}] 분류가 추가되었습니다.`);
+                          }}
+                          className="px-2.5 py-1 rounded-lg bg-stone-900 text-white text-[11px] font-extrabold shrink-0 whitespace-nowrap"
+                        >
+                          + 추가
+                        </button>
+                      </div>
+                    </div>
+                  )}
                   {managedUsers.length === 0 ? (
                     <div className="text-[12px] text-stone-500 py-2 text-center">
                       가입된 사용자 목록을 불러오는 중입니다.
                     </div>
                   ) : (
-                    <div className="space-y-2 max-h-72 overflow-y-auto pr-0.5">
+                    <div className="divide-y divide-stone-100 border border-stone-200 rounded-xl overflow-hidden max-h-64 overflow-y-auto">
                       {managedUsers.map((mu) => {
                         const isSelf = mu.uid === user?.uid;
                         const isPending = mu.role === "pending";
-                        const roleBadge =
+                        const curSelectVal =
                           mu.role === "admin"
-                            ? "bg-stone-900 text-white"
+                            ? `admin:${mu.actorName === "아리나" ? "아리나" : "수혁"}`
                             : mu.role === "helper"
-                            ? "bg-sky-100 text-sky-900"
+                            ? `helper:${mu.roleLabel || "육아지원군"}`
                             : mu.role === "rejected"
-                            ? "bg-rose-100 text-rose-800"
-                            : "bg-amber-500 text-white";
-                        const roleText =
+                            ? "rejected"
+                            : "pending";
+                        const selectCls =
                           mu.role === "admin"
-                            ? "관리자"
+                            ? "bg-stone-900 text-white border-stone-900"
                             : mu.role === "helper"
-                            ? "육아지원군"
+                            ? "bg-sky-700 text-white border-sky-700"
                             : mu.role === "rejected"
-                            ? "차단됨"
-                            : "승인대기";
+                            ? "bg-rose-100 text-rose-800 border-rose-200"
+                            : "bg-amber-500 text-white border-amber-500";
                         return (
                           <div
                             key={mu.uid}
-                            className={`p-2.5 rounded-xl border space-y-2 ${
-                              isPending
-                                ? "border-amber-300 bg-amber-50/70"
-                                : "border-stone-200 bg-stone-50/80"
-                            }`}
+                            className={`${isPending ? "bg-amber-50/70" : "bg-white"}`}
                           >
-                            <div className="flex items-center justify-between gap-2">
-                              <div className="min-w-0">
-                                <div className="text-[12.5px] font-black text-stone-900 truncate">
-                                  {mu.actorName || mu.displayName || "이름 없음"} {isSelf ? "(나)" : ""}
-                                </div>
-                                <div className="text-[11px] text-stone-500 truncate">
-                                  {mu.email || `이메일 없음 (${mu.uid.slice(0, 8)}…)`}
+                            <div className="flex items-center justify-between gap-2 px-2.5 py-2">
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center gap-1.5 min-w-0">
+                                  <span className="text-[12.5px] font-black text-stone-900 truncate">
+                                    {mu.actorName || mu.displayName || "이름 없음"}
+                                    {isSelf ? " (나)" : ""}
+                                  </span>
+                                  <span className="text-[10.5px] text-stone-400 truncate">
+                                    {mu.email || mu.uid.slice(0, 8)}
+                                  </span>
                                 </div>
                               </div>
-                              <span className={`px-2 py-0.5 rounded-full text-[10.5px] font-black shrink-0 whitespace-nowrap ${roleBadge}`}>
-                                {roleText}
-                              </span>
+                              {isSelf ? (
+                                <span className="px-2 py-0.5 rounded-full bg-stone-900 text-white text-[10.5px] font-black shrink-0 whitespace-nowrap">
+                                  관리자
+                                </span>
+                              ) : (
+                                <div className="flex items-center gap-1 shrink-0">
+                                  <select
+                                    value={curSelectVal}
+                                    onChange={(e) => {
+                                      const val = e.target.value;
+                                      if (val.startsWith("admin:")) {
+                                        const who = val.split(":")[1];
+                                        handleUpdateUserRole(mu.uid, "admin", who);
+                                      } else if (val.startsWith("helper:")) {
+                                        const lbl = val.slice("helper:".length);
+                                        handleUpdateUserRole(
+                                          mu.uid,
+                                          "helper",
+                                          mu.actorName || mu.displayName || lbl,
+                                          lbl
+                                        );
+                                      } else if (val === "rejected") {
+                                        handleUpdateUserRole(mu.uid, "rejected");
+                                      } else {
+                                        handleUpdateUserRole(mu.uid, "pending");
+                                      }
+                                    }}
+                                    className={`px-1.5 py-1 rounded-lg border text-[11px] font-extrabold cursor-pointer whitespace-nowrap ${selectCls}`}
+                                  >
+                                    <option value="pending" className="bg-white text-stone-900">⏳ 대기</option>
+                                    <option value="admin:수혁" className="bg-white text-stone-900">👑 수혁</option>
+                                    <option value="admin:아리나" className="bg-white text-stone-900">👑 아리나</option>
+                                    {helperRoleLabels.map((lbl) => (
+                                      <option key={lbl} value={`helper:${lbl}`} className="bg-white text-stone-900">
+                                        🌿 {lbl}
+                                      </option>
+                                    ))}
+                                    <option value="rejected" className="bg-white text-stone-900">🚫 차단</option>
+                                  </select>
+                                  {mu.role === "helper" && (
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        setEditingPermUid((prev) => (prev === mu.uid ? null : mu.uid))
+                                      }
+                                      title="개별 메뉴 권한"
+                                      className={`px-1.5 py-1 rounded-lg border text-[11px] font-extrabold whitespace-nowrap ${
+                                        mu.useCustomTabs
+                                          ? "bg-amber-50 border-amber-300 text-amber-900"
+                                          : "bg-stone-50 border-stone-200 text-stone-600"
+                                      }`}
+                                    >
+                                      ⚙️
+                                    </button>
+                                  )}
+                                  <button
+                                    type="button"
+                                    title="이름 수정"
+                                    onClick={() => {
+                                      const cur = mu.actorName || mu.displayName || "";
+                                      const nextNm = window.prompt("앱에 표시될 사용자 이름을 입력하세요:", cur);
+                                      if (nextNm && nextNm.trim() && nextNm.trim() !== cur) {
+                                        handleUpdateUserCustomTabs(mu.uid, { actorName: nextNm.trim() });
+                                        showToast(`✏️ 이름이 [${nextNm.trim()}]로 변경되었습니다.`);
+                                      }
+                                    }}
+                                    className="px-1.5 py-1 rounded-lg bg-stone-50 border border-stone-200 text-stone-600 hover:bg-stone-100 text-[11px] font-extrabold whitespace-nowrap"
+                                  >
+                                    ✏️
+                                  </button>
+                                  <button
+                                    type="button"
+                                    title="삭제"
+                                    onClick={() =>
+                                      handleDeleteUserDoc(
+                                        mu.uid,
+                                        mu.actorName || mu.displayName || mu.email || mu.uid
+                                      )
+                                    }
+                                    className="px-1.5 py-1 rounded-lg bg-stone-50 border border-stone-200 text-stone-500 hover:text-rose-700 text-[11px] font-extrabold whitespace-nowrap"
+                                  >
+                                    🗑️
+                                  </button>
+                                </div>
+                              )}
                             </div>
-                            {isPending && (
-                              <div className="text-[11px] font-extrabold text-amber-900">
-                                ⏳ 새 권한 신청 — 아래에서 부여할 권한을 선택하세요
-                              </div>
-                            )}
-                            {!isSelf && (
-                              <div className="flex flex-wrap gap-1">
-                                <button
-                                  type="button"
-                                  onClick={() => handleUpdateUserRole(mu.uid, "admin", "수혁")}
-                                  className="px-2 py-1 rounded-lg bg-stone-900 text-white text-[11px] font-extrabold whitespace-nowrap"
-                                >
-                                  👑 수혁(관리자)
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => handleUpdateUserRole(mu.uid, "admin", "아리나")}
-                                  className="px-2 py-1 rounded-lg bg-stone-700 text-white text-[11px] font-extrabold whitespace-nowrap"
-                                >
-                                  👑 아리나(관리자)
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    handleUpdateUserRole(
-                                      mu.uid,
-                                      "helper",
-                                      mu.displayName || "육아지원군"
-                                    )
-                                  }
-                                  className="px-2 py-1 rounded-lg bg-sky-700 text-white text-[11px] font-extrabold whitespace-nowrap"
-                                >
-                                  🌿 육아지원군
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => handleUpdateUserRole(mu.uid, "rejected")}
-                                  className="px-2 py-1 rounded-lg bg-rose-100 text-rose-800 text-[11px] font-extrabold whitespace-nowrap"
-                                >
-                                  🚫 차단
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    handleDeleteUserDoc(
-                                      mu.uid,
-                                      mu.actorName || mu.displayName || mu.email || mu.uid
-                                    )
-                                  }
-                                  className="px-2 py-1 rounded-lg bg-white border border-stone-200 text-stone-500 hover:text-rose-700 text-[11px] font-extrabold whitespace-nowrap"
-                                >
-                                  🗑️ 삭제
-                                </button>
+                            {!isSelf && mu.role === "helper" && editingPermUid === mu.uid && (
+                              <div className="px-2.5 pb-2.5 pt-1.5 border-t border-stone-100 bg-sky-50/40 space-y-1.5">
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="text-[11px] font-black text-sky-950">
+                                    {mu.useCustomTabs ? "✨ 개별 메뉴 권한 적용 중" : "📋 공통 권한 사용 중"}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const nextUse = !mu.useCustomTabs;
+                                      handleUpdateUserCustomTabs(mu.uid, {
+                                        useCustomTabs: nextUse,
+                                        customAllowedTabs: Array.isArray(mu.customAllowedTabs)
+                                          ? mu.customAllowedTabs
+                                          : helperAllowedTabs,
+                                        customEditTabs: Array.isArray(mu.customEditTabs)
+                                          ? mu.customEditTabs
+                                          : helperEditTabs
+                                      });
+                                    }}
+                                    className="px-2 py-0.5 rounded-md bg-stone-800 text-white text-[10.5px] font-extrabold whitespace-nowrap"
+                                  >
+                                    {mu.useCustomTabs ? "공통으로 되돌리기" : "개별 설정 켜기"}
+                                  </button>
+                                </div>
+                                {mu.useCustomTabs && (
+                                  <div className="bg-white rounded-lg border border-sky-200 overflow-hidden">
+                                    <div className="grid grid-cols-[1fr_52px_52px] items-center bg-sky-50 px-2 py-1 text-[10.5px] font-black text-sky-950 text-center">
+                                      <span className="text-left">메뉴</span>
+                                      <span className="whitespace-nowrap">열람</span>
+                                      <span className="whitespace-nowrap">편집</span>
+                                    </div>
+                                    <div className="divide-y divide-stone-100 max-h-44 overflow-y-auto">
+                                      {HELPER_CONFIGURABLE_TABS.map((t) => {
+                                        const uViewList = Array.isArray(mu.customAllowedTabs)
+                                          ? mu.customAllowedTabs
+                                          : helperAllowedTabs;
+                                        const uEditList = Array.isArray(mu.customEditTabs)
+                                          ? mu.customEditTabs
+                                          : helperEditTabs;
+                                        const uView = uViewList.includes(t.id);
+                                        const uEdit = uEditList.includes(t.id);
+                                        return (
+                                          <div
+                                            key={t.id}
+                                            className="grid grid-cols-[1fr_52px_52px] items-center px-2 py-1 text-[11.5px] font-bold text-stone-800"
+                                          >
+                                            <span className="truncate">{t.label}</span>
+                                            <div className="flex justify-center">
+                                              <button
+                                                type="button"
+                                                onClick={() => {
+                                                  const nextV = uView
+                                                    ? uViewList.filter((x) => x !== t.id)
+                                                    : [...uViewList, t.id];
+                                                  const nextE = uView
+                                                    ? uEditList.filter((x) => x !== t.id)
+                                                    : uEditList;
+                                                  handleUpdateUserCustomTabs(mu.uid, {
+                                                    useCustomTabs: true,
+                                                    customAllowedTabs: nextV,
+                                                    customEditTabs: nextE
+                                                  });
+                                                }}
+                                                className={`w-6 h-4 rounded text-[10.5px] font-black border ${
+                                                  uView
+                                                    ? "bg-sky-600 text-white border-sky-600"
+                                                    : "bg-stone-100 text-stone-400 border-stone-200"
+                                                }`}
+                                              >
+                                                {uView ? "O" : "-"}
+                                              </button>
+                                            </div>
+                                            <div className="flex justify-center">
+                                              <button
+                                                type="button"
+                                                onClick={() => {
+                                                  const nextE = uEdit
+                                                    ? uEditList.filter((x) => x !== t.id)
+                                                    : [...uEditList, t.id];
+                                                  const nextV =
+                                                    !uEdit && !uView ? [...uViewList, t.id] : uViewList;
+                                                  handleUpdateUserCustomTabs(mu.uid, {
+                                                    useCustomTabs: true,
+                                                    customAllowedTabs: nextV,
+                                                    customEditTabs: nextE
+                                                  });
+                                                }}
+                                                className={`w-6 h-4 rounded text-[10.5px] font-black border ${
+                                                  uEdit
+                                                    ? "bg-emerald-600 text-white border-emerald-600"
+                                                    : "bg-stone-100 text-stone-400 border-stone-200"
+                                                }`}
+                                              >
+                                                {uEdit ? "O" : "-"}
+                                              </button>
+                                            </div>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  </div>
+                                )}
                               </div>
                             )}
                           </div>
@@ -41272,50 +41453,23 @@ time: "", location: "",
                 <button
                   type="button"
                   onClick={logoutToGuest}
-                  className="w-full py-2 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-[13.5px] font-bold"
+                  className="w-full py-2 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-[13.5px] font-bold whitespace-nowrap"
                 >
-                  🔒 로그아웃 (미로그인 상태로 전환)
+                  🔒 로그아웃
                 </button>
               </div>
             ) : (
               <div className="space-y-3">
                 <div className="bg-stone-50 p-3 rounded-2xl border border-stone-200 space-y-1 text-[12px] text-stone-600">
-                  <div>· <strong className="text-stone-800">미로그인</strong>: 가족사진 및 식단·레시피 일부만 열람</div>
-                  <div>· <strong className="text-sky-800">육아지원군</strong>: 허용 메뉴 열람 및 편집 가능</div>
-                  <div>· <strong className="text-emerald-800">관리자(수혁·아리나)</strong>: 전체 메뉴·설정 및 본인 개인 일정</div>
+                  <div>· <strong className="text-stone-800">이메일</strong>: {user?.email || "-"}</div>
+                  <div>· <strong className="text-stone-800">권한 상태</strong>: {userProfile?.role || "승인 대기"}</div>
                 </div>
-                <div className="grid grid-cols-2 gap-1.5 bg-stone-100 p-1 rounded-xl">
-                  {["수혁", "아리나"].map((nm) => (
-                    <button
-                      key={nm}
-                      type="button"
-                      onClick={() => setLoginAdminTarget(nm)}
-                      className={`py-1.5 rounded-lg text-[12.5px] font-black transition ${
-                        loginAdminTarget === nm ? "bg-stone-900 text-white shadow-xs" : "text-stone-500"
-                      }`}
-                    >
-                      👑 {nm}
-                    </button>
-                  ))}
-                </div>
-                <input
-                  type="password"
-                  inputMode="numeric"
-                  autoComplete="off"
-                  placeholder="수혁 · 아리나 또는 육아지원군 비밀번호 입력"
-                  value={editorCodeInput}
-                  onChange={(e) => setEditorCodeInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") applyLoginCode(editorCodeInput);
-                  }}
-                  className="w-full px-3 py-2.5 rounded-xl border border-stone-300 text-[15.5px] font-bold text-center tracking-widest"
-                />
                 <button
                   type="button"
-                  onClick={() => applyLoginCode(editorCodeInput)}
-                  className="w-full py-2.5 rounded-xl bg-stone-900 hover:bg-stone-800 text-white text-[13.5px] font-extrabold"
+                  onClick={logoutToGuest}
+                  className="w-full py-2.5 rounded-xl bg-stone-900 hover:bg-stone-800 text-white text-[13.5px] font-extrabold whitespace-nowrap"
                 >
-                  로그인하기
+                  🔒 로그아웃
                 </button>
               </div>
             )}
