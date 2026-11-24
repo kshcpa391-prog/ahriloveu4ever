@@ -1181,7 +1181,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v13.75";
+export const APP_CODE_VERSION = "v13.77";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1199,7 +1199,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-24 13:50";
+export const APP_BUILD_DATE = "2026-11-24 13:58";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1268,6 +1268,26 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v13.77",
+    version: "v13.77",
+    date: "2026-11-24",
+    title: "📎 [관리자에게 쪽지남기기] 사진·파일 첨부 및 관리자 쪽지함 미리보기·다운로드 지원",
+    highlights: [
+      "쪽지 작성 시 사진·PDF·문서 등 최대 3개 파일 첨부 지원(이미지 자동 압축 및 용량 초과 안내, 파일만 단독 전송도 가능)",
+      "관리자 쪽지함에 첨부 이미지 미리보기(클릭 확대) 및 파일 다운로드 링크 추가"
+    ]
+  },
+  {
+    id: "patch-v13.76",
+    version: "v13.76",
+    date: "2026-11-24",
+    title: "💌 비관리자 전용 [관리자에게 쪽지남기기] 메뉴·연락처 + 관리자 쪽지함 신설",
+    highlights: [
+      "비관리자(육아지원군·승인대기) 전용 [관리자에게 쪽지남기기] 메뉴 추가: 더보기 시트 및 승인 대기 화면에서 아빠·엄마·전체에게 쪽지를 보낼 수 있으며, 하단에 관리자 연락처(아빠 : 01059147933 · 엄마 : 01054984948, 1탭 전화 연결)를 작게 표시",
+      "관리자 실시간 쪽지 수신 & 쪽지함: 도착한 쪽지를 홈 상단 배너 및 더보기 메뉴에서 즉시 확인·읽음 처리·삭제·메일 답장할 수 있도록 Firebase(admin_inbox_notes_v1 및 users) 이중 동기화"
+    ]
+  },
   {
     id: "patch-v13.75",
     version: "v13.75",

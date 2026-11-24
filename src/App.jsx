@@ -1804,6 +1804,13 @@ function MainApp() {
   });
   const [newRoleLabelInput, setNewRoleLabelInput] = useState("");
   const [showRolePermModal, setShowRolePermModal] = useState(false);
+  const [adminInboxNotes, setAdminInboxNotes] = useState([]);
+  const [showSendAdminNoteModal, setShowSendAdminNoteModal] = useState(false);
+  const [adminNoteTarget, setAdminNoteTarget] = useState("전체");
+  const [adminNoteText, setAdminNoteText] = useState("");
+  const [adminNoteAttachments, setAdminNoteAttachments] = useState([]);
+  const [adminNoteSending, setAdminNoteSending] = useState(false);
+  const [showAdminInboxModal, setShowAdminInboxModal] = useState(false);
   const [selectedPermRoleLabel, setSelectedPermRoleLabel] = useState("");
   const [editingRoleLabelMode, setEditingRoleLabelMode] = useState(false);
   const [editingRoleLabelDraft, setEditingRoleLabelDraft] = useState("");
@@ -4923,6 +4930,112 @@ function MainApp() {
     }
   };
 
+  const handleSendAdminNote = async () => {
+    const text = String(adminNoteText || "").trim();
+    const atts = Array.isArray(adminNoteAttachments) ? adminNoteAttachments.slice(0, 3) : [];
+    if (!text && atts.length === 0) {
+      showToast("쪽지 내용이나 첨부파일을 입력해 주세요.");
+      return;
+    }
+    if (!user || !db) {
+      showToast("로그인 후 이용할 수 있습니다.");
+      return;
+    }
+    setAdminNoteSending(true);
+    const noteObj = {
+      id: `note-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      fromUid: user.uid,
+      fromName: userProfile?.actorName || userProfile?.displayName || user.displayName || actorName || "가족",
+      fromEmail: user.email || "",
+      fromRoleLabel: userProfile?.roleLabel || (userProfile?.role === "pending" ? "승인대기" : "육아지원군"),
+      target: adminNoteTarget || "전체",
+      text,
+      ...(atts.length > 0 ? { attachments: atts } : {}),
+      read: false,
+      createdAtMs: Date.now()
+    };
+    try {
+      let savedToMeta = false;
+      if (isApprovedUser) {
+        try {
+          const nextNotes = [noteObj, ...(adminInboxNotes || [])].slice(0, 30);
+          await setDoc(
+            getDocRef("family_meta_v4", "admin_inbox_notes_v1"),
+            { items: nextNotes, updatedAtMs: Date.now() },
+            { merge: true }
+          );
+          setAdminInboxNotes(nextNotes);
+          savedToMeta = true;
+        } catch (e) {}
+      }
+      await setDoc(
+        getDocRef("users", user.uid),
+        { lastAdminNote: noteObj, updatedAtMs: Date.now() },
+        { merge: true }
+      ).catch(() => {});
+      if (savedToMeta) {
+        recordActivity("쪽지", `${noteObj.fromName}님이 관리자에게 쪽지를 남겼습니다`, text.slice(0, 40), {
+          targetTab: "home"
+        });
+      }
+      setAdminNoteText("");
+      setAdminNoteAttachments([]);
+      setShowSendAdminNoteModal(false);
+      showToast("💌 관리자에게 쪽지를 보냈습니다!");
+    } catch (err) {
+      showToast("쪽지 전송 실패: " + (err?.message || "오류"));
+    } finally {
+      setAdminNoteSending(false);
+    }
+  };
+
+  const handleMarkAdminNoteRead = async (noteId, fromUid = null) => {
+    if (!db || !isAdminUnlocked) return;
+    const nextNotes = (adminInboxNotes || []).map((n) => (n.id === noteId ? { ...n, read: true, readAtMs: Date.now() } : n));
+    setAdminInboxNotes(nextNotes);
+    try {
+      await setDoc(
+        getDocRef("family_meta_v4", "admin_inbox_notes_v1"),
+        { items: nextNotes, updatedAtMs: Date.now() },
+        { merge: true }
+      );
+      if (fromUid) {
+        const sender = managedUsers.find((u) => u.uid === fromUid);
+        if (sender?.lastAdminNote?.id === noteId) {
+          await setDoc(
+            getDocRef("users", fromUid),
+            { lastAdminNote: { ...sender.lastAdminNote, read: true, readAtMs: Date.now() } },
+            { merge: true }
+          ).catch(() => {});
+        }
+      }
+    } catch (e) {}
+  };
+
+  const handleDeleteAdminNote = async (noteId, fromUid = null) => {
+    if (!db || !isAdminUnlocked) return;
+    const nextNotes = (adminInboxNotes || []).filter((n) => n.id !== noteId);
+    setAdminInboxNotes(nextNotes);
+    try {
+      await setDoc(
+        getDocRef("family_meta_v4", "admin_inbox_notes_v1"),
+        { items: nextNotes, updatedAtMs: Date.now() },
+        { merge: true }
+      );
+      if (fromUid) {
+        const sender = managedUsers.find((u) => u.uid === fromUid);
+        if (sender?.lastAdminNote?.id === noteId) {
+          await setDoc(
+            getDocRef("users", fromUid),
+            { lastAdminNote: null },
+            { merge: true }
+          ).catch(() => {});
+        }
+      }
+      showToast("🗑️ 쪽지를 삭제했습니다.");
+    } catch (e) {}
+  };
+
   const handleBulkUpdateUserRoles = async (uids, val) => {
     if (!db || !isAdminUnlocked || !Array.isArray(uids) || uids.length === 0) return;
     const targets = uids.filter((id) => id && id !== user?.uid);
@@ -5835,6 +5948,9 @@ function MainApp() {
                 setHelperRolePermissions(cfgData.helperRolePermissions);
                 try { localStorage.setItem("family_helper_role_perms_v1", JSON.stringify(cfgData.helperRolePermissions)); } catch (e) {}
               }
+            }
+            if (d.id === "admin_inbox_notes_v1" && Array.isArray(d.data().items)) {
+              setAdminInboxNotes(toSafeArray(d.data().items));
             }
             if (d.id === "recent_activity" && Array.isArray(d.data().items)) {
               const acts = toSafeArray(d.data().items).slice(0, 30);
@@ -17422,6 +17538,130 @@ ${item.memo}` : `${item.title} 다녀옴!`,
     );
   }
 
+  const sendAdminNoteModalEl = showSendAdminNoteModal ? (
+    <div
+      className="fixed inset-0 bg-black/50 z-[9995] flex items-center justify-center p-3"
+      onClick={() => setShowSendAdminNoteModal(false)}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="bg-white rounded-2xl w-full max-w-sm shadow-2xl border border-stone-200 overflow-hidden"
+      >
+        <div className="px-4 py-3 border-b border-stone-100 flex items-center justify-between bg-stone-50">
+          <div className="flex items-center gap-1.5">
+            <span className="text-[14px]">💌</span>
+            <h3 className="text-[13.5px] font-black text-stone-900">관리자에게 쪽지남기기</h3>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowSendAdminNoteModal(false)}
+            className="w-7 h-7 rounded-full bg-white border border-stone-200 text-stone-500 hover:text-stone-800 flex items-center justify-center text-[12px] font-black"
+            aria-label="닫기"
+          >
+            ✕
+          </button>
+        </div>
+        <div className="p-3.5 space-y-2.5">
+          <div className="flex items-center gap-1.5">
+            {["전체", "아빠", "엄마"].map((t) => (
+              <button
+                key={t}
+                type="button"
+                onClick={() => setAdminNoteTarget(t)}
+                className={`flex-1 py-1 rounded-lg text-[11px] font-extrabold border transition ${
+                  adminNoteTarget === t
+                    ? "bg-[#3F624D] text-white border-[#3F624D]"
+                    : "bg-stone-50 text-stone-600 border-stone-200"
+                }`}
+              >
+                {t === "전체" ? "👨‍👩‍👦 전체" : t === "아빠" ? "👨 아빠" : "👩 엄마"}
+              </button>
+            ))}
+          </div>
+          <textarea
+            rows={4}
+            value={adminNoteText}
+            onChange={(e) => setAdminNoteText(e.target.value)}
+            placeholder="관리자에게 전할 말이나 요청사항을 편하게 남겨주세요."
+            className="w-full p-2.5 rounded-xl border border-stone-200 bg-stone-50 text-[12px] font-medium resize-none focus:outline-none focus:border-[#3F624D]"
+          />
+          <div className="space-y-1.5">
+            <label className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-stone-100 hover:bg-stone-200 border border-stone-200 text-stone-700 text-[11px] font-extrabold cursor-pointer">
+              <span>📎 사진·파일 첨부 ({adminNoteAttachments.length}/3)</span>
+              <input
+                type="file"
+                multiple
+                accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt,.hwp"
+                className="hidden"
+                onChange={async (e) => {
+                  const files = e.target.files;
+                  if (!files || files.length === 0) return;
+                  const { nextList, addedCount, skippedLarge } = await readAttachmentsFromFiles(
+                    files,
+                    adminNoteAttachments,
+                    350000
+                  );
+                  const capped = nextList.slice(0, 3);
+                  setAdminNoteAttachments(capped);
+                  e.target.value = "";
+                  if (skippedLarge > 0) {
+                    showToast(`⚠️ 350KB 초과 파일 ${skippedLarge}건은 제외되었습니다.`);
+                  } else if (addedCount > 0) {
+                    showToast(`📎 파일 ${Math.min(addedCount, 3)}건이 첨부되었습니다.`);
+                  }
+                }}
+              />
+            </label>
+            {adminNoteAttachments.length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {adminNoteAttachments.map((att) => {
+                  const isImg = String(att.mimeType || "").startsWith("image/");
+                  return (
+                    <div
+                      key={att.id}
+                      className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg bg-stone-50 border border-stone-200 text-[10.5px] font-bold text-stone-700 max-w-full"
+                    >
+                      {isImg && att.dataUrl ? (
+                        <img src={att.dataUrl} alt={att.name} className="w-5 h-5 rounded object-cover shrink-0" />
+                      ) : (
+                        <span>📄</span>
+                      )}
+                      <span className="truncate max-w-[140px]">{att.name}</span>
+                      <button
+                        type="button"
+                        onClick={() => setAdminNoteAttachments((prev) => prev.filter((x) => x.id !== att.id))}
+                        className="text-stone-400 hover:text-rose-600 font-black ml-0.5"
+                        aria-label="첨부 삭제"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+          <button
+            type="button"
+            disabled={adminNoteSending}
+            onClick={handleSendAdminNote}
+            className="w-full py-2.5 rounded-xl bg-stone-900 hover:bg-stone-800 disabled:opacity-50 text-white text-[12.5px] font-black"
+          >
+            {adminNoteSending ? "전송 중..." : "쪽지 보내기"}
+          </button>
+          <div className="pt-1.5 border-t border-stone-100 text-center text-[10.5px] text-stone-400 font-bold leading-relaxed">
+            <div>관리자 연락처</div>
+            <div className="flex items-center justify-center gap-2.5 mt-0.5 text-stone-500">
+              <a href="tel:01059147933" className="underline hover:text-stone-800">아빠 : 01059147933</a>
+              <span>·</span>
+              <a href="tel:01054984948" className="underline hover:text-stone-800">엄마 : 01054984948</a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  ) : null;
+
   if (!isApprovedUser) {
     const isWithdrawn = userProfile?.role === "withdrawn";
     const isRejected = userProfile?.role === "rejected";
@@ -17519,14 +17759,30 @@ ${item.memo}` : `${item.title} 다녀옴!`,
               </div>
             )}
           </div>
-          <button
-            type="button"
-            onClick={logoutToGuest}
-            className="w-full py-2.5 rounded-xl bg-stone-900 hover:bg-stone-800 text-white text-[13px] font-extrabold"
-          >
-            로그아웃 / 다른 계정으로 로그인
-          </button>
+          <div className="space-y-2 pt-1">
+            <button
+              type="button"
+              onClick={() => setShowSendAdminNoteModal(true)}
+              className="w-full py-2.5 rounded-xl bg-[#EEF3EE] hover:bg-[#DFE9E0] border border-[#C9D8CC] text-[#35503C] text-[13px] font-black"
+            >
+              💌 관리자에게 쪽지남기기
+            </button>
+            <div className="text-[10.5px] text-stone-400 font-bold leading-relaxed">
+              관리자 연락처 ·{" "}
+              <a href="tel:01059147933" className="underline hover:text-stone-700">아빠 : 01059147933</a>
+              {" · "}
+              <a href="tel:01054984948" className="underline hover:text-stone-700">엄마 : 01054984948</a>
+            </div>
+            <button
+              type="button"
+              onClick={logoutToGuest}
+              className="w-full py-2.5 rounded-xl bg-stone-900 hover:bg-stone-800 text-white text-[13px] font-extrabold"
+            >
+              로그아웃 / 다른 계정으로 로그인
+            </button>
+          </div>
         </div>
+        {sendAdminNoteModalEl}
       </div>
     );
   }
@@ -17755,6 +18011,32 @@ ${item.memo}` : `${item.title} 다녀옴!`,
             </button>
           </div>
         )}
+
+        {isAdminUnlocked && (() => {
+          const mergedIds = new Set((adminInboxNotes || []).map((n) => n.id));
+          const extraUserNotes = managedUsers
+            .map((u) => u.lastAdminNote)
+            .filter((n) => n && n.id && !mergedIds.has(n.id));
+          const allNotes = [...(adminInboxNotes || []), ...extraUserNotes];
+          const unreadCnt = allNotes.filter((n) => !n.read).length;
+          if (unreadCnt === 0) return null;
+          return (
+            <div className="px-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowAdminInboxModal(true)}
+                className="w-full px-3 py-2 rounded-xl bg-[#EEF3EE] hover:bg-[#DFE9E0] border border-[#C9D8CC] text-[#2F4A37] text-[12px] font-black flex items-center justify-between gap-2 shadow-xs transition"
+              >
+                <span className="truncate">
+                  💌 관리자에게 도착한 새 쪽지 {unreadCnt}건이 있습니다
+                </span>
+                <span className="px-2 py-0.5 rounded-lg bg-[#3F624D] text-white text-[11px] font-black shrink-0 whitespace-nowrap">
+                  쪽지 보기
+                </span>
+              </button>
+            </div>
+          );
+        })()}
 
         {activeTab === "home" && (() => {
           const activeModeForHero =
@@ -35059,6 +35341,54 @@ time: "", location: "",
                   </div>
                 </div>
               ))}
+              {/* 💌 비관리자 전용: 관리자에게 쪽지남기기 + 작은 관리자 연락처 */}
+              {!isAdminUnlocked && (
+                <div className="pt-2 border-t border-stone-100 space-y-1.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsMoreNavOpen(false);
+                      setShowSendAdminNoteModal(true);
+                    }}
+                    className="w-full py-2.5 px-3 rounded-2xl bg-[#EEF3EE] hover:bg-[#DFE9E0] border border-[#C9D8CC] text-[#2F4A37] text-[12.5px] font-black flex items-center justify-center gap-1.5 transition"
+                  >
+                    <span>💌</span>
+                    <span>관리자에게 쪽지남기기</span>
+                  </button>
+                  <div className="text-center text-[10.5px] text-stone-400 font-bold">
+                    관리자 연락처 ·{" "}
+                    <a href="tel:01059147933" className="underline hover:text-stone-700">아빠 : 01059147933</a>
+                    {" · "}
+                    <a href="tel:01054984948" className="underline hover:text-stone-700">엄마 : 01054984948</a>
+                  </div>
+                </div>
+              )}
+
+              {/* 💌 관리자 전용: 도착한 쪽지함 바로가기 */}
+              {isAdminUnlocked && (() => {
+                const mergedIds = new Set((adminInboxNotes || []).map((n) => n.id));
+                const extraUserNotes = managedUsers
+                  .map((u) => u.lastAdminNote)
+                  .filter((n) => n && n.id && !mergedIds.has(n.id));
+                const allNotes = [...(adminInboxNotes || []), ...extraUserNotes];
+                const unreadCnt = allNotes.filter((n) => !n.read).length;
+                return (
+                  <div className="pt-2 border-t border-stone-100 flex items-center justify-between gap-2">
+                    <span className="text-[11px] font-bold text-stone-400">관리자 쪽지함</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsMoreNavOpen(false);
+                        setShowAdminInboxModal(true);
+                      }}
+                      className="px-2.5 py-1 rounded-xl bg-[#EEF3EE] hover:bg-[#DFE9E0] border border-[#C9D8CC] text-[#2F4A37] text-[11px] font-black whitespace-nowrap"
+                    >
+                      💌 도착한 쪽지 ({allNotes.length}{unreadCnt > 0 ? ` · 새 ${unreadCnt}` : ""})
+                    </button>
+                  </div>
+                );
+              })()}
+
               {/* 🔒 비밀메뉴 (관리자 수혁 전용 · 타 계정 비노출) */}
               {isSuhyeokAdmin && (
                 <div className="pt-2 border-t border-stone-100 flex items-center justify-between gap-2">
@@ -40918,6 +41248,124 @@ time: "", location: "",
           </div>
         </div>
       )}
+
+      {sendAdminNoteModalEl}
+
+      {/* 관리자용: 도착한 쪽지함 모달 */}
+      {showAdminInboxModal && isAdminUnlocked && (() => {
+        const mergedIds = new Set((adminInboxNotes || []).map((n) => n.id));
+        const extraUserNotes = managedUsers
+          .map((u) => u.lastAdminNote)
+          .filter((n) => n && n.id && !mergedIds.has(n.id));
+        const allNotes = [...(adminInboxNotes || []), ...extraUserNotes].sort(
+          (a, b) => (Number(b.createdAtMs) || 0) - (Number(a.createdAtMs) || 0)
+        );
+        return (
+          <div
+            className="fixed inset-0 bg-black/50 z-[80] flex items-center justify-center p-3"
+            onClick={() => setShowAdminInboxModal(false)}
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white rounded-2xl w-full max-w-md max-h-[82vh] flex flex-col shadow-2xl border border-stone-200 overflow-hidden"
+            >
+              <div className="px-4 py-3 border-b border-stone-100 flex items-center justify-between bg-stone-50">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[14px]">💌</span>
+                  <h3 className="text-[13.5px] font-black text-stone-900">도착한 쪽지 ({allNotes.length}건)</h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowAdminInboxModal(false)}
+                  className="w-7 h-7 rounded-full bg-white border border-stone-200 text-stone-500 hover:text-stone-800 flex items-center justify-center text-[12px] font-black"
+                  aria-label="닫기"
+                >
+                  ✕
+                </button>
+              </div>
+              <div className="p-3 overflow-y-auto space-y-2">
+                {allNotes.length === 0 ? (
+                  <div className="py-8 text-center text-[12px] text-stone-400 font-bold">
+                    도착한 쪽지가 없습니다.
+                  </div>
+                ) : (
+                  allNotes.map((n) => (
+                    <div
+                      key={n.id}
+                      className={`p-2.5 rounded-xl border space-y-1.5 ${
+                        n.read ? "bg-stone-50 border-stone-200" : "bg-[#F4F8F4] border-[#C9D8CC]"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-2 text-[10.5px]">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          {!n.read && <span className="px-1.5 py-0.5 rounded bg-[#3F624D] text-white text-[9px] font-black">NEW</span>}
+                          <span className="font-black text-stone-900 truncate">{n.fromName}</span>
+                          <span className="text-stone-400 font-bold shrink-0">({n.fromRoleLabel || "회원"} → {n.target || "전체"})</span>
+                        </div>
+                        <span className="text-[9.5px] text-stone-400 shrink-0">
+                          {n.createdAtMs ? new Date(n.createdAtMs).toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }) : ""}
+                        </span>
+                      </div>
+                      {n.text && (
+                        <div className="text-[12px] text-stone-800 whitespace-pre-wrap leading-relaxed">{n.text}</div>
+                      )}
+                      {Array.isArray(n.attachments) && n.attachments.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5 pt-1">
+                          {n.attachments.map((att, idx) => {
+                            const isImg = String(att.mimeType || "").startsWith("image/");
+                            return isImg && att.dataUrl ? (
+                              <a
+                                key={att.id || idx}
+                                href={att.dataUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                download={att.name || "image.jpg"}
+                                className="block rounded-lg overflow-hidden border border-stone-200 bg-white"
+                                title={`${att.name || "이미지"} 보기/저장`}
+                              >
+                                <img src={att.dataUrl} alt={att.name || "첨부 이미지"} className="w-16 h-16 object-cover" />
+                              </a>
+                            ) : (
+                              <a
+                                key={att.id || idx}
+                                href={att.dataUrl}
+                                download={att.name || "attachment"}
+                                className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-white border border-stone-200 text-[10.5px] font-bold text-stone-700 hover:bg-stone-100"
+                              >
+                                <span>📄</span>
+                                <span className="truncate max-w-[160px]">{att.name || "첨부파일"}</span>
+                                <span className="text-stone-400">⬇</span>
+                              </a>
+                            );
+                          })}
+                        </div>
+                      )}
+                      <div className="flex items-center justify-end gap-1.5 pt-1">
+                        {!n.read && (
+                          <button
+                            type="button"
+                            onClick={() => handleMarkAdminNoteRead(n.id, n.fromUid)}
+                            className="px-2 py-0.5 rounded-md bg-[#3F624D] text-white text-[10px] font-extrabold"
+                          >
+                            ✓ 읽음
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteAdminNote(n.id, n.fromUid)}
+                          className="px-2 py-0.5 rounded-md bg-white border border-rose-200 text-rose-600 text-[10px] font-extrabold"
+                        >
+                          삭제
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {liveActivityPopup && (
         <div className="fixed top-3 left-1/2 -translate-x-1/2 z-[9990] w-[92%] max-w-sm bg-white border-2 border-[#5E7A65] rounded-2xl shadow-2xl p-3 space-y-2">
