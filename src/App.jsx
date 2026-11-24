@@ -2573,35 +2573,66 @@ function MainApp() {
   const [notifPermState, setNotifPermState] = useState(() =>
     typeof Notification !== "undefined" ? Notification.permission : "unsupported"
   );
+  const lastNotifErrorRef = useRef("");
+  useEffect(() => {
+    if (typeof navigator !== "undefined" && "serviceWorker" in navigator) {
+      navigator.serviceWorker.register("/sw.js").catch(() => {});
+    }
+  }, []);
   const showStatusBarNotification = async (title, body, tag = "family-app") => {
-    if (typeof Notification === "undefined" || Notification.permission !== "granted") return false;
+    lastNotifErrorRef.current = "";
+    if (typeof Notification === "undefined") {
+      lastNotifErrorRef.current = "이 브라우저는 알림을 지원하지 않습니다.";
+      return false;
+    }
+    if (Notification.permission !== "granted") {
+      lastNotifErrorRef.current = "알림 권한이 허용되지 않았습니다.";
+      return false;
+    }
     try {
       if (typeof navigator !== "undefined" && "serviceWorker" in navigator) {
         let reg = await navigator.serviceWorker.getRegistration().catch(() => null);
         if (!reg) {
-          reg = await navigator.serviceWorker.register("/sw.js").catch(() => null);
+          reg = await navigator.serviceWorker.register("/sw.js").catch((err) => {
+            lastNotifErrorRef.current = err?.message ? `sw.js 등록 실패(${err.message})` : "sw.js 등록 실패";
+            return null;
+          });
+        }
+        if (reg && !reg.active) {
+          const readyReg = await Promise.race([
+            navigator.serviceWorker.ready,
+            new Promise((resolve) => setTimeout(() => resolve(null), 3500))
+          ]);
+          if (readyReg) reg = readyReg;
         }
         if (!reg) {
           reg = await Promise.race([
             navigator.serviceWorker.ready,
-            new Promise((resolve) => setTimeout(() => resolve(null), 1200))
+            new Promise((resolve) => setTimeout(() => resolve(null), 1500))
           ]);
         }
-        if (reg && typeof reg.showNotification === "function") {
+        if (reg && reg.active && typeof reg.showNotification === "function") {
           await reg.showNotification(title, {
             body: body || "",
             tag,
+            icon: "/app-icon-512.png",
+            badge: "/app-icon-512.png",
             silent: true,
             renotify: false
           });
           return true;
         }
       }
-    } catch (e) {}
+    } catch (e) {
+      lastNotifErrorRef.current = e?.message || "서비스 워커 알림 실패";
+    }
     try {
-      new Notification(title, { body: body || "", tag, silent: true });
+      new Notification(title, { body: body || "", tag, icon: "/app-icon-512.png", silent: true });
       return true;
     } catch (e) {
+      if (!lastNotifErrorRef.current) {
+        lastNotifErrorRef.current = e?.message || "이 환경에서는 상태바 알림이 제한됩니다.";
+      }
       return false;
     }
   };
@@ -43059,7 +43090,7 @@ time: "", location: "",
                           "상태표시줄 알림이 정상 작동하고 있습니다.",
                           "test-notif"
                         );
-                        showToast(ok ? "📲 상태표시줄 알림을 발송했습니다!" : "⚠️ 이 브라우저에서는 상태표시줄 알림이 제한됩니다.");
+                        showToast(ok ? "📲 상태표시줄 알림을 발송했습니다!" : `⚠️ ${lastNotifErrorRef.current || "이 브라우저에서는 상태표시줄 알림이 제한됩니다."}`);
                         return;
                       }
                       if (Notification.permission === "denied") {
@@ -43088,7 +43119,7 @@ time: "", location: "",
                         setNotifPermState(perm);
                         if (perm === "granted") {
                           const sent = await showStatusBarNotification("🏡 알림 허용 완료!", "이제 새 소식을 상태표시줄에서도 받을 수 있어요.", "perm-ok");
-                          showToast(sent ? "📲 상태표시줄 알림이 켜졌습니다!" : "🔔 알림 권한은 허용됐으나 모바일 상태바 출력(sw.js)이 지원되지 않는 환경입니다.");
+                          showToast(sent ? "📲 상태표시줄 알림이 켜졌습니다!" : `🔔 권한은 허용됐으나 상태바 출력 실패: ${lastNotifErrorRef.current || "sw.js 확인 필요"}`);
                         } else if (perm === "denied") {
                           showToast("🚫 알림 권한이 차단되어 있습니다. 브라우저 사이트 설정에서 허용해 주세요.");
                         } else {

@@ -1181,7 +1181,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v13.97";
+export const APP_CODE_VERSION = "v13.98";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1199,7 +1199,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-24 21:18";
+export const APP_BUILD_DATE = "2026-11-24 23:35";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1268,6 +1268,17 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v13.98",
+    version: "v13.98",
+    date: "2026-11-24",
+    title: "📲 서비스 워커(/sw.js) 활성화 대기 및 상태바 알림 아이콘·진단 개선",
+    highlights: [
+      "앱 시작 시 /sw.js 사전 등록 및 showStatusBarNotification에서 reg.active 활성화 대기(최대 3.5초) 추가 — 최초 등록 직후 'No active worker' 오류로 상태바 알림이 누락되던 버그 수정",
+      "상태바 알림에 app-icon-512.png 아이콘/배지 연결(silent: true 무음 유지)",
+      "상태바 알림 실패 시 구체적 원인(sw.js 미배포, 권한 차단 등)을 토스트로 즉시 표시"
+    ]
+  },
   {
     id: "patch-v13.97",
     version: "v13.97",
