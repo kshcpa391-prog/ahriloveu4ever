@@ -54,6 +54,7 @@ import {
   createUserWithEmailAndPassword,
   updateProfile,
   sendPasswordResetEmail,
+  sendEmailVerification,
   setPersistence,
   browserLocalPersistence,
   signOut
@@ -1786,6 +1787,9 @@ function MainApp() {
   const [editingPermUid, setEditingPermUid] = useState(null);
   const [editingUserNameUid, setEditingUserNameUid] = useState(null);
   const [editingUserNameDraft, setEditingUserNameDraft] = useState("");
+  const [selectedUserUids, setSelectedUserUids] = useState([]);
+  const [bulkUserRoleVal, setBulkUserRoleVal] = useState("helper:육아지원군");
+  const [expandedUserUid, setExpandedUserUid] = useState(null);
   const DEFAULT_HELPER_ROLE_LABELS = ["육아지원군", "친정엄마", "시어머니", "이모님", "가족"];
   const [helperRoleLabels, setHelperRoleLabels] = useState(() => {
     try {
@@ -1820,6 +1824,20 @@ function MainApp() {
   const [authFormError, setAuthFormError] = useState("");
   const [authFormNotice, setAuthFormNotice] = useState("");
   const [authSubmitting, setAuthSubmitting] = useState(false);
+  const [googleNameSetupInput, setGoogleNameSetupInput] = useState("");
+  const [emailJsConfig, setEmailJsConfig] = useState(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem("kim_emailjs_config_v1") || "null");
+      if (saved && typeof saved === "object") {
+        return {
+          serviceId: String(saved.serviceId || "").trim(),
+          templateId: String(saved.templateId || "").trim(),
+          publicKey: String(saved.publicKey || "").trim()
+        };
+      }
+    } catch (e) {}
+    return { serviceId: "", templateId: "", publicKey: "" };
+  });
   const [activeTab, setActiveTab] = useState("home");
   const [scheduleSubTab, setScheduleSubTab] = useState("calendar");
   const [ddayFilter, setDdayFilter] = useState("all");
@@ -4621,6 +4639,48 @@ function MainApp() {
     }
   };
 
+  const sendSignupCompleteEmail = async ({ toEmail, toName, kind = "signup", roleLabel = "", allowMailtoFallback = false }) => {
+    const cleanEmail = String(toEmail || "").trim();
+    if (!cleanEmail) return { ok: false, reason: "no_email" };
+    const cleanName = String(toName || "가족").trim();
+    const appUrl = typeof window !== "undefined" ? window.location.origin : "";
+    const isApprovedMail = kind === "approved";
+    const subject = isApprovedMail
+      ? `[혁리나목율♡] ${cleanName}님, 회원가입 및 접근 승인이 완료되었습니다`
+      : `[혁리나목율♡] ${cleanName}님, 회원가입이 접수되었습니다`;
+    const message = isApprovedMail
+      ? `안녕하세요, ${cleanName}님!\n\n혁리나목율♡ 가족 앱 회원가입 승인이 완료되었습니다.${roleLabel ? ` (권한: ${roleLabel})` : ""}\n아래 주소로 접속하여 로그인해 주세요.\n\n접속 주소: ${appUrl}`
+      : `안녕하세요, ${cleanName}님!\n\n혁리나목율♡ 가족 앱 회원가입이 완료되었습니다.\n관리자(수혁) 승인 후 바로 이용하실 수 있습니다.\n\n접속 주소: ${appUrl}`;
+
+    const { serviceId, templateId, publicKey } = emailJsConfig || {};
+    if (serviceId && templateId && publicKey) {
+      try {
+        const res = await fetch("https://api.emailjs.com/api/v1.0/email/send", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            service_id: serviceId,
+            template_id: templateId,
+            user_id: publicKey,
+            template_params: {
+              to_email: cleanEmail,
+              to_name: cleanName,
+              subject,
+              message,
+              app_url: appUrl
+            }
+          })
+        });
+        if (res.ok) return { ok: true, method: "emailjs" };
+      } catch (err) {}
+    }
+    if (allowMailtoFallback && typeof window !== "undefined") {
+      window.location.href = `mailto:${encodeURIComponent(cleanEmail)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(message)}`;
+      return { ok: true, method: "mailto" };
+    }
+    return { ok: false, reason: "not_configured" };
+  };
+
   const handleEmailAuthSubmit = async (e) => {
     if (e && e.preventDefault) e.preventDefault();
     if (!auth) return;
@@ -4659,11 +4719,15 @@ function MainApp() {
       if (authMode === "signup") {
         const cred = await createUserWithEmailAndPassword(auth, email, password);
         const cleanName = authNameInput.trim() || email.split("@")[0];
-        if (cred.user && cleanName) {
-          await updateProfile(cred.user, { displayName: cleanName }).catch(() => {});
+        if (cred.user) {
+          if (cleanName) {
+            await updateProfile(cred.user, { displayName: cleanName }).catch(() => {});
+          }
+          await sendEmailVerification(cred.user).catch(() => {});
+          await sendSignupCompleteEmail({ toEmail: email, toName: cleanName, kind: "signup" });
         }
         setAuthPasswordConfirmInput("");
-        showToast("✅ 회원가입이 완료되었습니다. 관리자 승인을 기다려 주세요.");
+        showToast("✅ 회원가입 완료! 확인 메일을 발송했습니다.");
       } else {
         await signInWithEmailAndPassword(auth, email, password);
       }
@@ -4740,7 +4804,17 @@ function MainApp() {
       if (nextRoleLabel !== null) {
         payload.roleLabel = nextRoleLabel;
       }
+      const targetUserObj = managedUsers.find((u) => u.uid === targetUid);
+      const wasPending = !targetUserObj || targetUserObj.role === "pending";
       await setDoc(getDocRef("users", targetUid), payload, { merge: true });
+      if (wasPending && (nextRole === "admin" || nextRole === "helper") && targetUserObj?.email) {
+        sendSignupCompleteEmail({
+          toEmail: targetUserObj.email,
+          toName: nextActorName || targetUserObj.actorName || targetUserObj.displayName || "가족",
+          kind: "approved",
+          roleLabel: nextRole === "admin" ? "관리자" : (nextRoleLabel || "육아지원군")
+        });
+      }
       endWrite(true);
       showToast(
         nextRole === "admin"
@@ -4773,12 +4847,74 @@ function MainApp() {
     }
   };
 
+  const handleBulkUpdateUserRoles = async (uids, val) => {
+    if (!db || !isAdminUnlocked || !Array.isArray(uids) || uids.length === 0) return;
+    const targets = uids.filter((id) => id && id !== user?.uid);
+    if (targets.length === 0) return;
+    beginWrite();
+    try {
+      const payload = { updatedAtMs: Date.now() };
+      if (val.startsWith("admin:")) {
+        payload.role = "admin";
+        payload.actorName = val.split(":")[1];
+      } else if (val.startsWith("helper:")) {
+        payload.role = "helper";
+        payload.roleLabel = val.slice("helper:".length);
+      } else if (val === "rejected") {
+        payload.role = "rejected";
+      } else {
+        payload.role = "pending";
+      }
+      for (let i = 0; i < targets.length; i += 200) {
+        const batch = writeBatch(db);
+        targets.slice(i, i + 200).forEach((uid) => {
+          batch.set(getDocRef("users", uid), payload, { merge: true });
+        });
+        await batch.commit();
+      }
+      setSelectedUserUids([]);
+      endWrite(true);
+      showToast(`✅ 선택한 ${targets.length}명의 권한을 일괄 변경했습니다.`);
+    } catch (err) {
+      endWrite(false);
+      showToast("일괄 권한 변경 실패: " + (err?.message || "오류"));
+    }
+  };
+
+  const handleBulkDeleteUserDocs = async (uids) => {
+    if (!db || !isAdminUnlocked || !Array.isArray(uids) || uids.length === 0) return;
+    const targets = uids.filter((id) => id && id !== user?.uid);
+    if (targets.length === 0) return;
+    if (!window.confirm(`선택한 ${targets.length}명의 계정을 목록에서 일괄 삭제하시겠습니까?`)) return;
+    beginWrite();
+    try {
+      for (let i = 0; i < targets.length; i += 200) {
+        const batch = writeBatch(db);
+        targets.slice(i, i + 200).forEach((uid) => {
+          batch.delete(getDocRef("users", uid));
+        });
+        await batch.commit();
+      }
+      setSelectedUserUids([]);
+      if (expandedUserUid && targets.includes(expandedUserUid)) setExpandedUserUid(null);
+      if (editingUserNameUid && targets.includes(editingUserNameUid)) setEditingUserNameUid(null);
+      endWrite(true);
+      showToast(`🗑️ ${targets.length}명의 사용자를 일괄 삭제했습니다.`);
+    } catch (err) {
+      endWrite(false);
+      showToast("일괄 삭제 실패: " + (err?.message || "오류"));
+    }
+  };
+
   const handleDeleteUserDoc = async (targetUid, labelName = "사용자") => {
     if (!db || !isAdminUnlocked || !targetUid || targetUid === user?.uid) return;
     if (!window.confirm(`[${labelName}] 계정을 목록에서 삭제하시겠습니까?`)) return;
     beginWrite();
     try {
       await deleteDoc(getDocRef("users", targetUid));
+      setSelectedUserUids((prev) => prev.filter((id) => id !== targetUid));
+      if (expandedUserUid === targetUid) setExpandedUserUid(null);
+      if (editingUserNameUid === targetUid) setEditingUserNameUid(null);
       endWrite(true);
       showToast("🗑️ 사용자 목록에서 삭제되었습니다.");
     } catch (err) {
@@ -5352,7 +5488,7 @@ function MainApp() {
   }, []);
 
   useEffect(() => {
-    if (!user || !db) {
+    if (!user || !db || user.isAnonymous) {
       setUserProfile(null);
       setProfileLoading(false);
       return;
@@ -5363,16 +5499,20 @@ function MainApp() {
       userRef,
       async (snap) => {
         if (!snap.exists()) {
+          const isGoogleProvider = Array.isArray(user.providerData) && user.providerData.some((p) => p?.providerId === "google.com");
+          const typedName = authNameInput.trim();
           const fallbackName =
-            authNameInput.trim() ||
+            typedName ||
             user.displayName ||
             (user.email ? user.email.split("@")[0] : "새 사용자");
+          const needsNameSetup = isGoogleProvider && !typedName;
           const initDoc = {
             uid: user.uid,
             email: user.email || "",
             displayName: fallbackName,
             actorName: fallbackName,
             role: "pending",
+            ...(needsNameSetup ? { needsNameSetup: true } : {}),
             createdAtMs: Date.now(),
             updatedAtMs: Date.now()
           };
@@ -5417,6 +5557,22 @@ function MainApp() {
       setManagedUsers([]);
       return;
     }
+    const unsubEmailJs = onSnapshot(
+      getDocRef("family_meta_v4", "emailjs_config_v1"),
+      (snap) => {
+        if (snap.exists()) {
+          const d = snap.data() || {};
+          const cfg = {
+            serviceId: String(d.serviceId || "").trim(),
+            templateId: String(d.templateId || "").trim(),
+            publicKey: String(d.publicKey || "").trim()
+          };
+          setEmailJsConfig(cfg);
+          try { localStorage.setItem("kim_emailjs_config_v1", JSON.stringify(cfg)); } catch (e) {}
+        }
+      },
+      () => {}
+    );
     const unsub = onSnapshot(
       getColRef("users"),
       (snap) => {
@@ -5433,7 +5589,7 @@ function MainApp() {
       },
       () => {}
     );
-    return () => unsub();
+    return () => { unsub(); unsubEmailJs(); };
   }, [user, userProfile?.role]);
 
 
@@ -17093,6 +17249,75 @@ ${item.memo}` : `${item.title} 다녀옴!`,
     );
   }
 
+  if (userProfile?.needsNameSetup || userProfile?.displayName === "새 사용자") {
+    const suggestedName = googleNameSetupInput || (userProfile?.displayName && userProfile.displayName !== "새 사용자" ? userProfile.displayName : user.displayName || "");
+    return (
+      <div className="min-h-screen bg-[#FAF8F3] text-stone-800 max-w-md mx-auto flex items-center justify-center p-5 font-sans">
+        <div className="bg-white rounded-3xl border border-stone-200 p-6 w-full space-y-4 shadow-lg">
+          <div className="text-center space-y-1">
+            <div className="text-3xl">👤</div>
+            <h2 className="text-[16px] font-black text-stone-900">사용자 이름 입력 (필수)</h2>
+            <p className="text-[12px] text-stone-500">
+              가족과 관리자가 알아볼 수 있도록 앱에서 사용할 이름을 입력해 주세요.
+            </p>
+          </div>
+          <div className="bg-stone-50 border border-stone-200 rounded-xl px-3 py-2 text-[11.5px] text-stone-600">
+            <span className="font-bold text-stone-800">로그인 계정:</span> {user.email || user.uid}
+          </div>
+          <form
+            onSubmit={async (e) => {
+              e.preventDefault();
+              const clean = (googleNameSetupInput || suggestedName || "").trim();
+              if (!clean) {
+                showToast("⚠️ 사용자 이름을 입력해 주세요.");
+                return;
+              }
+              try {
+                await setDoc(
+                  getDocRef("users", user.uid),
+                  { displayName: clean, actorName: clean, needsNameSetup: false, updatedAtMs: Date.now() },
+                  { merge: true }
+                );
+                if (auth?.currentUser) {
+                  await updateProfile(auth.currentUser, { displayName: clean }).catch(() => {});
+                }
+                setGoogleNameSetupInput("");
+                showToast(`✅ [${clean}] 이름으로 저장되었습니다!`);
+              } catch (err) {
+                showToast("이름 저장 실패: " + (err?.message || "오류"));
+              }
+            }}
+            className="space-y-2.5"
+          >
+            <input
+              type="text"
+              required
+              value={googleNameSetupInput !== "" ? googleNameSetupInput : suggestedName}
+              onChange={(e) => setGoogleNameSetupInput(e.target.value)}
+              placeholder="사용자명 *필수 (예: 아리나, 친정엄마, 이모님)"
+              autoComplete="name"
+              autoFocus
+              className="w-full px-3 py-2.5 rounded-xl border border-stone-300 text-[13.5px] font-bold"
+            />
+            <button
+              type="submit"
+              className="w-full py-2.5 rounded-xl bg-[#3F624D] hover:bg-[#324F3E] text-white text-[13px] font-extrabold whitespace-nowrap"
+            >
+              ✅ 이름 저장하고 계속하기
+            </button>
+          </form>
+          <button
+            type="button"
+            onClick={logoutToGuest}
+            className="w-full py-2 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-600 text-[12px] font-bold whitespace-nowrap"
+          >
+            다른 계정으로 로그인
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   if (!isApprovedUser) {
     const isRejected = userProfile?.role === "rejected";
     return (
@@ -17109,10 +17334,47 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                 : "회원가입 요청이 접수되었습니다. 수혁님(관리자)이 권한을 승인하면 자동으로 화면이 열립니다."}
             </p>
           </div>
-          <div className="bg-stone-50 border border-stone-200 rounded-2xl p-3 text-left text-[12px] space-y-1 text-stone-600">
-            <div><strong className="text-stone-800">이름:</strong> {userProfile?.displayName || user.displayName || "-"}</div>
+          <div className="bg-stone-50 border border-stone-200 rounded-2xl p-3 text-left text-[12px] space-y-1.5 text-stone-600">
+            <div className="flex items-center justify-between gap-2">
+              <div><strong className="text-stone-800">이름:</strong> {userProfile?.actorName || userProfile?.displayName || user.displayName || "-"}</div>
+              {!isRejected && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setGoogleNameSetupInput(userProfile?.actorName || userProfile?.displayName || "");
+                    setDoc(getDocRef("users", user.uid), { needsNameSetup: true }, { merge: true }).catch(() => {});
+                  }}
+                  className="px-2 py-0.5 rounded-lg bg-white border border-stone-200 text-[10.5px] font-extrabold text-stone-600 hover:bg-stone-100 whitespace-nowrap"
+                >
+                  ✏️ 이름 수정
+                </button>
+              )}
+            </div>
             <div><strong className="text-stone-800">이메일:</strong> {user.email || "-"}</div>
             <div className="break-all"><strong className="text-stone-800">UID:</strong> {user.uid}</div>
+            {user.email && (
+              <div className="flex items-center justify-between gap-2 pt-1 border-t border-stone-200/80">
+                <span className="text-[11px] font-bold">
+                  {user.emailVerified ? "✅ 이메일 인증 완료" : "📧 가입 확인 메일 미인증"}
+                </span>
+                {!user.emailVerified && (
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        await sendEmailVerification(user);
+                        showToast(`📧 ${user.email}로 가입 확인 메일을 발송했습니다!`);
+                      } catch (err) {
+                        showToast("메일 발송 실패: 잠시 후 다시 시도해 주세요.");
+                      }
+                    }}
+                    className="px-2 py-0.5 rounded-lg bg-[#3F624D] text-white text-[10.5px] font-extrabold whitespace-nowrap"
+                  >
+                    확인 메일 발송
+                  </button>
+                )}
+              </div>
+            )}
           </div>
           <button
             type="button"
@@ -39241,77 +39503,58 @@ time: "", location: "",
             </div>
 
 
-            <div className="p-2 rounded-xl bg-emerald-50 border border-emerald-200 text-[10.5px] text-emerald-900 space-y-0.5">
+            <div className="p-2 rounded-xl bg-stone-50 border border-stone-200 text-[10.5px] text-stone-700 space-y-0.5">
               <div className="flex items-center justify-between gap-2">
-                <span>✅ <b>자동 스냅샷</b> 정상 가동</span>
-                <code className="text-[10px] font-bold text-emerald-700">{lastAutoBackupSlot || getTwiceDailySlotKey()}</code>
+                <span className="font-bold text-stone-800"><span className="text-[#3F624D]">●</span> 자동 스냅샷 정상</span>
+                <code className="text-[10px] font-bold text-stone-500">{lastAutoBackupSlot || getTwiceDailySlotKey()}</code>
               </div>
-              <div className="text-[10px] font-semibold text-emerald-800">
-                📦 식단 {meals.length} · 냉장고 {fridge.length} · 일정 {schedules.length} · 버킷 {bucketList.length} · 노트 {familyPages.length} · 살림 {houseItems.length}
+              <div className="text-[10px] font-medium text-stone-500">
+                식단 {meals.length} · 냉장고 {fridge.length} · 일정 {schedules.length} · 버킷 {bucketList.length} · 노트 {familyPages.length} · 살림 {houseItems.length}
               </div>
             </div>
 
-            {accessRole !== "guest" && (
+            <div className="grid grid-cols-2 gap-1.5">
+              {accessRole !== "guest" && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsSettingsOpen(false);
+                    openCategoryManager("fridge");
+                  }}
+                  className="h-7 px-2 rounded-lg bg-[#EEF3EE] hover:bg-[#DFE9E0] border border-[#C9D8CC] text-[#35503C] text-[10.5px] font-extrabold flex items-center justify-center gap-1 whitespace-nowrap"
+                >
+                  <span>⚙️ 세부 분류 관리</span>
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => {
                   setIsSettingsOpen(false);
-                  openCategoryManager("fridge");
+                  setIsPatchModalOpen(true);
                 }}
-                className="w-full py-1.5 px-2.5 rounded-xl bg-[#EEF3EE] hover:bg-[#DFE9E0] border border-[#C9D8CC] text-[#35503C] text-[11px] font-extrabold flex items-center justify-between gap-2 whitespace-nowrap"
+                className={`h-7 px-2 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-800 border border-stone-200 text-[10.5px] font-extrabold flex items-center justify-center gap-1 whitespace-nowrap ${accessRole === "guest" ? "col-span-2" : ""}`}
               >
-                <span className="truncate">⚙️ 세부 카테고리 통합 관리</span>
-                <ChevronRight className="w-4 h-4 shrink-0" />
+                <span>📝 패치노트 ({APP_CODE_VERSION})</span>
               </button>
-            )}
+            </div>
 
-            {isSuhyeokAdmin && (
-              <button
-                type="button"
-                onClick={() => {
-                  setIsSettingsOpen(false);
-                  setActiveTab("condolence");
-                }}
-                className="w-full py-1.5 px-2.5 rounded-xl bg-stone-50 hover:bg-stone-100 border border-stone-200 text-stone-700 text-[11px] font-extrabold flex items-center justify-between gap-2 whitespace-nowrap"
-              >
-                <span className="truncate">🔒 경조사비 입출금내역 (수혁 전용)</span>
-                <ChevronRight className="w-4 h-4 shrink-0" />
-              </button>
-            )}
-
-
-            <button
-              type="button"
-              onClick={() => {
-                setIsSettingsOpen(false);
-                setIsPatchModalOpen(true);
-              }}
-              className="w-full py-1.5 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-800 border border-stone-200 text-[11px] font-extrabold flex items-center justify-center gap-1.5 whitespace-nowrap"
-            >
-              <ClipboardList className="w-4 h-4 text-amber-600 shrink-0" />
-              <span>📝 패치노트 ({APP_CODE_VERSION})</span>
-            </button>
-
-
-            <div className="p-2.5 rounded-xl bg-amber-50/80 border border-amber-200 space-y-1.5">
-              <div className="text-[11.5px] font-black text-amber-900 flex items-center gap-1.5">
-                <CloudUpload className="w-3.5 h-3.5 text-amber-700 shrink-0" />
-                <span>백업 및 복원</span>
+            <div className="p-2 rounded-xl bg-stone-50 border border-stone-200 space-y-1.5">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[11px] font-black text-stone-800 flex items-center gap-1 whitespace-nowrap">
+                  <CloudUpload className="w-3.5 h-3.5 text-[#3F624D] shrink-0" />
+                  <span>백업 및 복원</span>
+                </span>
+                <input
+                  type="email"
+                  value={backupEmail}
+                  onChange={(e) => {
+                    setBackupEmail(e.target.value);
+                    try { localStorage.setItem("kim_family_backup_email", e.target.value); } catch (err) {}
+                  }}
+                  placeholder="수신 이메일 (선택)"
+                  className="flex-1 min-w-0 max-w-[190px] px-2 py-0.5 rounded-lg border border-stone-200 text-[10.5px] font-bold bg-white"
+                />
               </div>
-
-
-              <input
-                type="email"
-                value={backupEmail}
-                onChange={(e) => {
-                  setBackupEmail(e.target.value);
-                  try { localStorage.setItem("kim_family_backup_email", e.target.value); } catch (err) {}
-                }}
-                placeholder="수신 이메일 주소 (선택)"
-                className="w-full px-2.5 py-1 rounded-lg border border-amber-300 text-[11px] font-bold bg-white"
-              />
-
-
               <input
                 ref={jsonRestoreInputRef}
                 type="file"
@@ -39319,40 +39562,39 @@ time: "", location: "",
                 onChange={handleRestoreFromJsonFile}
                 className="hidden"
               />
-
-
-              <div className="grid grid-cols-2 gap-1.5">
+              <div className="grid grid-cols-4 gap-1">
                 <button
                   type="button"
                   onClick={() => handleSendBackupToGmailOrDrive(false)}
-                  className="py-2 px-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-[10.5px] font-extrabold flex items-center justify-center gap-1 whitespace-nowrap shadow-sm"
+                  className="h-7 px-1 rounded-lg bg-[#3F624D] hover:bg-[#324F3E] text-white text-[10px] font-extrabold flex items-center justify-center gap-0.5 whitespace-nowrap"
+                  title="전체 백업 메일 보내기"
                 >
-                  <Mail className="w-3.5 h-3.5 shrink-0" />
-                  <span>전체 백업메일</span>
+                  <span>✉️ 메일</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => handleSendBackupToGmailOrDrive(true)}
-                  className="py-1.5 px-2 rounded-lg bg-white hover:bg-amber-100/60 border border-amber-300 text-amber-900 text-[10.5px] font-extrabold whitespace-nowrap"
+                  className="h-7 px-1 rounded-lg bg-white hover:bg-stone-100 border border-stone-200 text-stone-700 text-[10px] font-extrabold whitespace-nowrap"
+                  title="사진 제외 경량 백업(1MB 이하)"
                 >
-                  📄 경량 백업(1MB↓)
+                  📄 경량
                 </button>
                 <button
                   type="button"
                   onClick={handleDownloadJsonBackup}
-                  className="py-2 px-2 rounded-xl bg-stone-900 hover:bg-stone-800 text-white text-[10.5px] font-extrabold flex items-center justify-center gap-1 whitespace-nowrap shadow-sm"
+                  className="h-7 px-1 rounded-lg bg-stone-800 hover:bg-stone-900 text-white text-[10px] font-extrabold whitespace-nowrap"
+                  title="JSON 파일 저장"
                 >
-                  <FileJson className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                  <span>JSON 저장</span>
+                  💾 저장
                 </button>
                 <button
                   type="button"
                   onClick={() => jsonRestoreInputRef.current?.click()}
                   disabled={isRestoringJson}
-                  className="py-2 px-2 rounded-xl bg-white hover:bg-amber-100 text-amber-900 border border-amber-300 text-[10.5px] font-extrabold flex items-center justify-center gap-1 whitespace-nowrap"
+                  className="h-7 px-1 rounded-lg bg-white hover:bg-stone-100 border border-stone-200 text-stone-700 text-[10px] font-extrabold whitespace-nowrap"
+                  title="JSON 파일에서 복원"
                 >
-                  <RotateCcw className={`w-3.5 h-3.5 shrink-0 ${isRestoringJson ? "animate-spin" : ""}`} />
-                  <span>{isRestoringJson ? "복원 중..." : "JSON 복원"}</span>
+                  {isRestoringJson ? "복원중" : "↺ 복원"}
                 </button>
               </div>
             </div>
@@ -39379,10 +39621,10 @@ time: "", location: "",
               </div>
             ) : (
               <>
-              <div className="p-2.5 rounded-xl bg-sky-50/70 border border-sky-200 space-y-2">
+              <div className="p-2.5 rounded-xl bg-stone-50 border border-stone-200 space-y-2">
                 <div className="flex items-center justify-between">
-                  <span className="text-[11.5px] font-black text-sky-950 flex items-center gap-1 whitespace-nowrap">
-                    <ShieldCheck className="w-3.5 h-3.5 text-sky-700 shrink-0" />
+                  <span className="text-[11px] font-black text-stone-800 flex items-center gap-1 whitespace-nowrap">
+                    <ShieldCheck className="w-3.5 h-3.5 text-[#3F624D] shrink-0" />
                     <span>회원 권한 · 메뉴 설정</span>
                   </span>
                   <button
@@ -39399,48 +39641,44 @@ time: "", location: "",
                       });
                       showToast("권한 및 비밀번호 설정을 기본값으로 복원했습니다.");
                     }}
-                    className="text-[10.5px] font-extrabold text-sky-700 underline whitespace-nowrap"
+                    className="text-[10px] font-extrabold text-stone-500 hover:text-stone-800 underline whitespace-nowrap"
                   >
                     기본값 복원
                   </button>
                 </div>
 
-
-                <div className="bg-white rounded-xl border border-emerald-200 p-2 space-y-1.5">
+                {/* 👥 회원 승인 및 권한 (표 형태 + 체크박스 일괄편집 + 클릭 전문보기) */}
+                <div className="bg-white rounded-xl border border-stone-200 p-2 space-y-1.5">
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-[11px] font-black text-emerald-950 whitespace-nowrap">👥 회원 승인 및 권한 ({managedUsers.length}명)</span>
-                    <div className="flex items-center gap-1.5 shrink-0">
+                    <span className="text-[11px] font-black text-stone-900 whitespace-nowrap">👥 회원 명단 ({managedUsers.length}명)</span>
+                    <div className="flex items-center gap-1 shrink-0">
                       {managedUsers.some((u) => u.role === "pending") && (
-                        <span className="px-1.5 py-0.5 rounded-full bg-amber-500 text-white text-[10px] font-black animate-pulse whitespace-nowrap">
+                        <span className="px-1.5 py-0.5 rounded-full bg-amber-500 text-white text-[9.5px] font-black whitespace-nowrap">
                           대기 {managedUsers.filter((u) => u.role === "pending").length}
                         </span>
                       )}
                       <button
                         type="button"
                         onClick={() => setShowRoleLabelManager((p) => !p)}
-                        className="px-2 py-0.5 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 text-[10.5px] font-extrabold whitespace-nowrap"
+                        className="px-2 py-0.5 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 text-[10px] font-extrabold whitespace-nowrap"
                       >
                         🏷️ 분류 {showRoleLabelManager ? "닫기" : "편집"}
                       </button>
                     </div>
                   </div>
                   {showRoleLabelManager && (
-                    <div className="bg-stone-50 border border-stone-200 rounded-xl p-2 space-y-1.5">
+                    <div className="bg-stone-50 border border-stone-200 rounded-lg p-1.5 space-y-1.5">
                       <div className="flex flex-wrap gap-1">
                         {helperRoleLabels.map((lbl) => (
                           <span
                             key={lbl}
-                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white border border-stone-200 text-[11px] font-bold text-stone-700 whitespace-nowrap"
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white border border-stone-200 text-[10.5px] font-bold text-stone-700 whitespace-nowrap"
                           >
                             <span>{lbl}</span>
                             {helperRoleLabels.length > 1 && (
                               <button
                                 type="button"
-                                onClick={() =>
-                                  saveHelperRoleLabelsToCloud(
-                                    helperRoleLabels.filter((x) => x !== lbl)
-                                  )
-                                }
+                                onClick={() => saveHelperRoleLabelsToCloud(helperRoleLabels.filter((x) => x !== lbl))}
                                 className="text-stone-400 hover:text-rose-600 font-black"
                                 aria-label={`${lbl} 삭제`}
                               >
@@ -39455,8 +39693,8 @@ time: "", location: "",
                           type="text"
                           value={newRoleLabelInput}
                           onChange={(e) => setNewRoleLabelInput(e.target.value)}
-                          placeholder="새 분류 입력 (예: 방문선생님, 외할머니)"
-                          className="flex-1 min-w-0 px-2 py-1 rounded-lg border border-stone-200 bg-white text-[11.5px] font-bold"
+                          placeholder="새 분류 (예: 방문선생님)"
+                          className="flex-1 min-w-0 px-2 py-1 rounded-lg border border-stone-200 bg-white text-[10.5px] font-bold"
                         />
                         <button
                           type="button"
@@ -39467,300 +39705,394 @@ time: "", location: "",
                             setNewRoleLabelInput("");
                             showToast(`🏷️ [${v}] 분류가 추가되었습니다.`);
                           }}
-                          className="px-2.5 py-1 rounded-lg bg-stone-900 text-white text-[11px] font-extrabold shrink-0 whitespace-nowrap"
+                          className="px-2 py-1 rounded-lg bg-[#3F624D] text-white text-[10px] font-extrabold shrink-0 whitespace-nowrap"
                         >
                           + 추가
                         </button>
                       </div>
                     </div>
                   )}
+
+                  {/* 체크박스 선택 시 일괄 편집 바 */}
+                  {selectedUserUids.length > 0 && (
+                    <div className="flex flex-wrap items-center gap-1 p-1.5 rounded-lg bg-[#EEF3EE] border border-[#C9D8CC]">
+                      <span className="text-[10px] font-black text-[#35503C] whitespace-nowrap">
+                        ☑️ {selectedUserUids.length}명
+                      </span>
+                      <select
+                        value={bulkUserRoleVal}
+                        onChange={(e) => setBulkUserRoleVal(e.target.value)}
+                        className="flex-1 min-w-0 h-6 px-1.5 rounded-md border border-[#C9D8CC] bg-white text-[10px] font-extrabold text-stone-800"
+                      >
+                        <option value="pending">⏳ 대기</option>
+                        <option value="admin:수혁">👑 수혁</option>
+                        <option value="admin:아리나">👑 아리나</option>
+                        {helperRoleLabels.map((lbl) => (
+                          <option key={lbl} value={`helper:${lbl}`}>🌿 {lbl}</option>
+                        ))}
+                        <option value="rejected">🚫 차단</option>
+                      </select>
+                      <button
+                        type="button"
+                        onClick={() => handleBulkUpdateUserRoles(selectedUserUids, bulkUserRoleVal)}
+                        className="h-6 px-2 rounded-md bg-[#3F624D] text-white text-[10px] font-extrabold whitespace-nowrap"
+                      >
+                        일괄적용
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleBulkDeleteUserDocs(selectedUserUids)}
+                        className="h-6 px-2 rounded-md bg-rose-600 text-white text-[10px] font-extrabold whitespace-nowrap"
+                      >
+                        삭제
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedUserUids([])}
+                        className="h-6 px-1.5 rounded-md bg-white border border-stone-200 text-stone-500 text-[10px] font-bold whitespace-nowrap"
+                      >
+                        해제
+                      </button>
+                    </div>
+                  )}
+
                   {managedUsers.length === 0 ? (
-                    <div className="text-[12px] text-stone-500 py-2 text-center">
+                    <div className="text-[11px] text-stone-500 py-2 text-center">
                       가입된 사용자 목록을 불러오는 중입니다.
                     </div>
                   ) : (
-                    <div className="divide-y divide-stone-100 border border-stone-200 rounded-xl overflow-hidden max-h-72 overflow-y-auto">
-                      {managedUsers.map((mu) => {
-                        const isSelf = mu.uid === user?.uid;
-                        const isPending = mu.role === "pending";
-                        const curSelectVal =
-                          mu.role === "admin"
-                            ? `admin:${mu.actorName === "아리나" ? "아리나" : "수혁"}`
-                            : mu.role === "helper"
-                            ? `helper:${mu.roleLabel || "육아지원군"}`
-                            : mu.role === "rejected"
-                            ? "rejected"
-                            : "pending";
-                        const selectCls =
-                          mu.role === "admin"
-                            ? "bg-stone-900 text-white border-stone-900"
-                            : mu.role === "helper"
-                            ? "bg-sky-700 text-white border-sky-700"
-                            : mu.role === "rejected"
-                            ? "bg-rose-100 text-rose-800 border-rose-200"
-                            : "bg-amber-500 text-white border-amber-500";
+                    <div className="border border-stone-200 rounded-lg overflow-hidden">
+                      {/* 공통 표 헤더 */}
+                      {(() => {
+                        const editableUsers = managedUsers.filter((u) => u.uid !== user?.uid);
+                        const allChecked = editableUsers.length > 0 && editableUsers.every((u) => selectedUserUids.includes(u.uid));
                         return (
-                          <div
-                            key={mu.uid}
-                            className={`${isPending ? "bg-amber-50/70" : "bg-white"}`}
-                          >
-                            <div className="px-2.5 py-2 space-y-1.5">
-                              <div className="flex items-center justify-between gap-2 min-w-0">
-                                <div className="flex items-baseline gap-1.5 min-w-0 flex-wrap">
-                                  <span className="text-[11.5px] font-black text-stone-900 whitespace-nowrap">
-                                    {mu.actorName || mu.displayName || "이름 없음"}
-                                    {isSelf ? " (나)" : ""}
-                                  </span>
-                                  <span className="text-[10px] text-stone-500 break-all">
-                                    {mu.email || mu.uid}
-                                  </span>
-                                </div>
-                                {isSelf && (
-                                  <span className="px-1.5 py-0.5 rounded-full bg-stone-900 text-white text-[9.5px] font-black shrink-0 whitespace-nowrap">
-                                    관리자
-                                  </span>
-                                )}
-                              </div>
-                              {!isSelf && (
-                                <div className="flex items-center justify-end gap-1 flex-wrap">
-                                  <select
-                                    value={curSelectVal}
-                                    onChange={(e) => {
-                                      const val = e.target.value;
-                                      if (val.startsWith("admin:")) {
-                                        const who = val.split(":")[1];
-                                        handleUpdateUserRole(mu.uid, "admin", who);
-                                      } else if (val.startsWith("helper:")) {
-                                        const lbl = val.slice("helper:".length);
-                                        handleUpdateUserRole(
-                                          mu.uid,
-                                          "helper",
-                                          mu.actorName || mu.displayName || lbl,
-                                          lbl
-                                        );
-                                      } else if (val === "rejected") {
-                                        handleUpdateUserRole(mu.uid, "rejected");
-                                      } else {
-                                        handleUpdateUserRole(mu.uid, "pending");
+                          <div className="grid grid-cols-[20px_minmax(54px,0.85fr)_minmax(68px,1.15fr)_76px_36px] items-center gap-1 bg-stone-100 px-2 py-1 text-[10px] font-black text-stone-600 border-b border-stone-200">
+                            <input
+                              type="checkbox"
+                              checked={allChecked}
+                              onChange={() => {
+                                if (allChecked) setSelectedUserUids([]);
+                                else setSelectedUserUids(editableUsers.map((u) => u.uid));
+                              }}
+                              aria-label="전체 선택"
+                              className="w-3.5 h-3.5 accent-[#3F624D]"
+                            />
+                            <span className="truncate">성명</span>
+                            <span className="truncate">비고(계정)</span>
+                            <span className="text-center whitespace-nowrap">권한</span>
+                            <span className="text-right whitespace-nowrap">관리</span>
+                          </div>
+                        );
+                      })()}
+                      <div className="divide-y divide-stone-100 max-h-64 overflow-y-auto">
+                        {managedUsers.map((mu) => {
+                          const isSelf = mu.uid === user?.uid;
+                          const isPending = mu.role === "pending";
+                          const isExpanded = expandedUserUid === mu.uid;
+                          const isChecked = selectedUserUids.includes(mu.uid);
+                          const curSelectVal =
+                            mu.role === "admin"
+                              ? `admin:${mu.actorName === "아리나" ? "아리나" : "수혁"}`
+                              : mu.role === "helper"
+                              ? `helper:${mu.roleLabel || "육아지원군"}`
+                              : mu.role === "rejected"
+                              ? "rejected"
+                              : "pending";
+                          const selectCls =
+                            mu.role === "admin"
+                              ? "bg-stone-800 text-white border-stone-800"
+                              : mu.role === "helper"
+                              ? "bg-[#3F624D] text-white border-[#3F624D]"
+                              : mu.role === "rejected"
+                              ? "bg-rose-50 text-rose-700 border-rose-200"
+                              : "bg-amber-50 text-amber-800 border-amber-300";
+                          return (
+                            <div key={mu.uid} className={isPending ? "bg-amber-50/40" : "bg-white"}>
+                              <div className="grid grid-cols-[20px_minmax(54px,0.85fr)_minmax(68px,1.15fr)_76px_36px] items-center gap-1 px-2 py-1.5 text-[10.5px]">
+                                <div className="flex items-center">
+                                  {!isSelf ? (
+                                    <input
+                                      type="checkbox"
+                                      checked={isChecked}
+                                      onChange={() =>
+                                        setSelectedUserUids((prev) =>
+                                          prev.includes(mu.uid) ? prev.filter((id) => id !== mu.uid) : [...prev, mu.uid]
+                                        )
                                       }
-                                    }}
-                                    className={`px-1.5 py-0.5 rounded-lg border text-[10.5px] font-extrabold cursor-pointer whitespace-nowrap ${selectCls}`}
-                                  >
-                                    <option value="pending" className="bg-white text-stone-900">⏳ 대기</option>
-                                    <option value="admin:수혁" className="bg-white text-stone-900">👑 수혁</option>
-                                    <option value="admin:아리나" className="bg-white text-stone-900">👑 아리나</option>
-                                    {helperRoleLabels.map((lbl) => (
-                                      <option key={lbl} value={`helper:${lbl}`} className="bg-white text-stone-900">
-                                        🌿 {lbl}
-                                      </option>
-                                    ))}
-                                    <option value="rejected" className="bg-white text-stone-900">🚫 차단</option>
-                                  </select>
-                                  {mu.role === "helper" && (
+                                      aria-label={`${mu.actorName || mu.displayName || "회원"} 선택`}
+                                      className="w-3.5 h-3.5 accent-[#3F624D]"
+                                    />
+                                  ) : (
+                                    <span className="text-[9px] text-stone-300 font-bold">-</span>
+                                  )}
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => setExpandedUserUid((prev) => (prev === mu.uid ? null : mu.uid))}
+                                  className="text-left font-black text-stone-900 truncate hover:underline"
+                                  title="클릭하여 전문·상세 보기"
+                                >
+                                  {mu.actorName || mu.displayName || "미지정"}
+                                  {isSelf ? "(나)" : ""}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setExpandedUserUid((prev) => (prev === mu.uid ? null : mu.uid))}
+                                  className="text-left text-[10px] text-stone-500 truncate hover:text-stone-800"
+                                  title="클릭하여 전체 계정/UID 보기"
+                                >
+                                  {mu.email || mu.uid}
+                                </button>
+                                <div className="flex justify-center">
+                                  {isSelf ? (
+                                    <span className="px-1.5 py-0.5 rounded bg-stone-800 text-white text-[9.5px] font-black whitespace-nowrap">
+                                      관리자
+                                    </span>
+                                  ) : (
+                                    <select
+                                      value={curSelectVal}
+                                      onChange={(e) => {
+                                        const val = e.target.value;
+                                        if (val.startsWith("admin:")) {
+                                          handleUpdateUserRole(mu.uid, "admin", val.split(":")[1]);
+                                        } else if (val.startsWith("helper:")) {
+                                          const lbl = val.slice("helper:".length);
+                                          handleUpdateUserRole(mu.uid, "helper", mu.actorName || mu.displayName || lbl, lbl);
+                                        } else if (val === "rejected") {
+                                          handleUpdateUserRole(mu.uid, "rejected");
+                                        } else {
+                                          handleUpdateUserRole(mu.uid, "pending");
+                                        }
+                                      }}
+                                      className={`w-full min-w-0 truncate h-6 px-1 rounded border text-[10px] font-extrabold cursor-pointer ${selectCls}`}
+                                    >
+                                      <option value="pending" className="bg-white text-stone-900">⏳ 대기</option>
+                                      <option value="admin:수혁" className="bg-white text-stone-900">👑 수혁</option>
+                                      <option value="admin:아리나" className="bg-white text-stone-900">👑 아리나</option>
+                                      {helperRoleLabels.map((lbl) => (
+                                        <option key={lbl} value={`helper:${lbl}`} className="bg-white text-stone-900">
+                                          🌿 {lbl}
+                                        </option>
+                                      ))}
+                                      <option value="rejected" className="bg-white text-stone-900">🚫 차단</option>
+                                    </select>
+                                  )}
+                                </div>
+                                <div className="flex items-center justify-end gap-0.5">
+                                  {!isSelf && mu.role === "helper" && (
                                     <button
                                       type="button"
-                                      onClick={() =>
-                                        setEditingPermUid((prev) => (prev === mu.uid ? null : mu.uid))
-                                      }
+                                      onClick={() => setEditingPermUid((prev) => (prev === mu.uid ? null : mu.uid))}
                                       title="개별 메뉴 권한"
-                                      className={`px-1.5 py-0.5 rounded-lg border text-[10.5px] font-extrabold whitespace-nowrap ${
+                                      className={`w-5 h-5 rounded border text-[10px] flex items-center justify-center ${
                                         mu.useCustomTabs
-                                          ? "bg-amber-50 border-amber-300 text-amber-900"
-                                          : "bg-stone-50 border-stone-200 text-stone-600"
+                                          ? "bg-[#EEF3EE] border-[#3F624D] text-[#35503C]"
+                                          : "bg-stone-50 border-stone-200 text-stone-500"
                                       }`}
                                     >
                                       ⚙️
                                     </button>
                                   )}
-                                  {editingUserNameUid === mu.uid ? (
-                                    <div className="flex items-center gap-1">
-                                      <input
-                                        type="text"
-                                        value={editingUserNameDraft}
-                                        onChange={(e) => setEditingUserNameDraft(e.target.value)}
-                                        onKeyDown={(e) => {
-                                          if (e.key === "Enter") {
-                                            const trimmed = editingUserNameDraft.trim();
-                                            const cur = mu.actorName || mu.displayName || "";
-                                            if (trimmed && trimmed !== cur) {
-                                              handleUpdateUserCustomTabs(mu.uid, { actorName: trimmed });
-                                              showToast(`✏️ 이름이 [${trimmed}]로 변경되었습니다.`);
-                                            }
-                                            setEditingUserNameUid(null);
-                                          } else if (e.key === "Escape") {
-                                            setEditingUserNameUid(null);
-                                          }
-                                        }}
-                                        placeholder="이름"
-                                        autoFocus
-                                        className="w-20 px-1.5 py-0.5 rounded-lg border border-amber-300 bg-white text-[11px] font-bold text-stone-900"
-                                      />
-                                      <button
-                                        type="button"
-                                        onClick={() => {
-                                          const trimmed = editingUserNameDraft.trim();
-                                          const cur = mu.actorName || mu.displayName || "";
-                                          if (trimmed && trimmed !== cur) {
-                                            handleUpdateUserCustomTabs(mu.uid, { actorName: trimmed });
-                                            showToast(`✏️ 이름이 [${trimmed}]로 변경되었습니다.`);
-                                          }
-                                          setEditingUserNameUid(null);
-                                        }}
-                                        className="px-1.5 py-0.5 rounded-lg bg-[#3F624D] text-white text-[10.5px] font-extrabold whitespace-nowrap"
-                                      >
-                                        저장
-                                      </button>
-                                      <button
-                                        type="button"
-                                        onClick={() => setEditingUserNameUid(null)}
-                                        className="px-1 py-0.5 rounded-lg bg-stone-100 text-stone-500 text-[10.5px] font-bold whitespace-nowrap"
-                                      >
-                                        취소
-                                      </button>
-                                    </div>
-                                  ) : (
-                                    <button
-                                      type="button"
-                                      title="이름 수정"
-                                      onClick={() => {
-                                        setEditingUserNameUid(mu.uid);
-                                        setEditingUserNameDraft(mu.actorName || mu.displayName || "");
-                                      }}
-                                      className="px-1.5 py-0.5 rounded-lg bg-stone-50 border border-stone-200 text-stone-600 hover:bg-stone-100 text-[10.5px] font-extrabold whitespace-nowrap"
-                                    >
-                                      ✏️
-                                    </button>
-                                  )}
                                   <button
                                     type="button"
-                                    title="삭제"
-                                    onClick={() =>
-                                      handleDeleteUserDoc(
-                                        mu.uid,
-                                        mu.actorName || mu.displayName || mu.email || mu.uid
-                                      )
-                                    }
-                                    className="px-1.5 py-0.5 rounded-lg bg-stone-50 border border-stone-200 text-stone-500 hover:text-rose-700 text-[10.5px] font-extrabold whitespace-nowrap"
+                                    onClick={() => setExpandedUserUid((prev) => (prev === mu.uid ? null : mu.uid))}
+                                    title="상세 · 이름수정 · 삭제"
+                                    className={`w-5 h-5 rounded border text-[9px] flex items-center justify-center ${
+                                      isExpanded ? "bg-stone-800 text-white border-stone-800" : "bg-stone-50 border-stone-200 text-stone-500"
+                                    }`}
                                   >
-                                    🗑️
+                                    {isExpanded ? "▴" : "▾"}
                                   </button>
+                                </div>
+                              </div>
+
+                              {/* 클릭 시 전문 보기 + 이름 수정 + 삭제 */}
+                              {isExpanded && (
+                                <div className="px-2.5 py-2 bg-stone-50 border-t border-stone-100 space-y-1.5 text-[10px]">
+                                  <div className="text-stone-700 break-all space-y-0.5">
+                                    <div><span className="font-bold text-stone-400">성명:</span> <span className="font-extrabold">{mu.actorName || mu.displayName || "미지정"}</span></div>
+                                    <div><span className="font-bold text-stone-400">계정/UID:</span> <span className="font-medium select-all">{mu.email ? `${mu.email} (${mu.uid})` : mu.uid}</span></div>
+                                  </div>
+                                  {!isSelf && (
+                                    <div className="flex items-center justify-between gap-1.5 pt-1 border-t border-stone-200/70">
+                                      {editingUserNameUid === mu.uid ? (
+                                        <div className="flex items-center gap-1 flex-1 min-w-0">
+                                          <input
+                                            type="text"
+                                            value={editingUserNameDraft}
+                                            onChange={(e) => setEditingUserNameDraft(e.target.value)}
+                                            onKeyDown={(e) => {
+                                              if (e.key === "Enter") {
+                                                const trimmed = editingUserNameDraft.trim();
+                                                const cur = mu.actorName || mu.displayName || "";
+                                                if (trimmed && trimmed !== cur) {
+                                                  handleUpdateUserCustomTabs(mu.uid, { actorName: trimmed });
+                                                  showToast(`✏️ 이름이 [${trimmed}]로 변경되었습니다.`);
+                                                }
+                                                setEditingUserNameUid(null);
+                                              } else if (e.key === "Escape") {
+                                                setEditingUserNameUid(null);
+                                              }
+                                            }}
+                                            placeholder="새 이름"
+                                            autoFocus
+                                            className="flex-1 min-w-0 px-2 py-0.5 rounded border border-stone-300 bg-white text-[10.5px] font-bold"
+                                          />
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              const trimmed = editingUserNameDraft.trim();
+                                              const cur = mu.actorName || mu.displayName || "";
+                                              if (trimmed && trimmed !== cur) {
+                                                handleUpdateUserCustomTabs(mu.uid, { actorName: trimmed });
+                                                showToast(`✏️ 이름이 [${trimmed}]로 변경되었습니다.`);
+                                              }
+                                              setEditingUserNameUid(null);
+                                            }}
+                                            className="px-2 py-0.5 rounded bg-[#3F624D] text-white text-[10px] font-extrabold whitespace-nowrap"
+                                          >
+                                            저장
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={() => setEditingUserNameUid(null)}
+                                            className="px-1.5 py-0.5 rounded bg-stone-200 text-stone-600 text-[10px] font-bold whitespace-nowrap"
+                                          >
+                                            취소
+                                          </button>
+                                        </div>
+                                      ) : (
+                                        <>
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              setEditingUserNameUid(mu.uid);
+                                              setEditingUserNameDraft(mu.actorName || mu.displayName || "");
+                                            }}
+                                            className="px-2 py-0.5 rounded bg-white border border-stone-200 text-stone-700 hover:bg-stone-100 font-extrabold whitespace-nowrap"
+                                          >
+                                            ✏️ 이름 수정
+                                          </button>
+                                          <div className="flex items-center gap-1">
+                                            {mu.email && (
+                                              <button
+                                                type="button"
+                                                onClick={async () => {
+                                                  const res = await sendSignupCompleteEmail({
+                                                    toEmail: mu.email,
+                                                    toName: mu.actorName || mu.displayName || "가족",
+                                                    kind: mu.role === "pending" ? "signup" : "approved",
+                                                    roleLabel: mu.role === "admin" ? "관리자" : (mu.roleLabel || "육아지원군"),
+                                                    allowMailtoFallback: true
+                                                  });
+                                                  if (res.ok && res.method === "emailjs") {
+                                                    showToast(`✉️ ${mu.email}로 완료 메일을 발송했습니다!`);
+                                                  }
+                                                }}
+                                                className="px-2 py-0.5 rounded bg-[#EEF3EE] border border-[#C9D8CC] text-[#35503C] hover:bg-[#DFE9E0] font-extrabold whitespace-nowrap"
+                                                title="가입·승인 완료 안내 메일 보내기"
+                                              >
+                                                ✉️ 완료메일
+                                              </button>
+                                            )}
+                                            <button
+                                              type="button"
+                                              onClick={() => handleDeleteUserDoc(mu.uid, mu.actorName || mu.displayName || mu.email || mu.uid)}
+                                              className="px-2 py-0.5 rounded bg-white border border-rose-200 text-rose-600 hover:bg-rose-50 font-extrabold whitespace-nowrap"
+                                            >
+                                              🗑️ 삭제
+                                            </button>
+                                          </div>
+                                        </>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+
+                              {!isSelf && mu.role === "helper" && editingPermUid === mu.uid && (
+                                <div className="px-2.5 pb-2 pt-1.5 border-t border-stone-100 bg-stone-50/80 space-y-1.5">
+                                  <div className="flex items-center justify-between gap-2">
+                                    <span className="text-[10.5px] font-black text-stone-800">
+                                      {mu.useCustomTabs ? "✨ 개별 메뉴 권한 적용 중" : "📋 공통 권한 사용 중"}
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const nextUse = !mu.useCustomTabs;
+                                        handleUpdateUserCustomTabs(mu.uid, {
+                                          useCustomTabs: nextUse,
+                                          customAllowedTabs: Array.isArray(mu.customAllowedTabs) ? mu.customAllowedTabs : helperAllowedTabs,
+                                          customEditTabs: Array.isArray(mu.customEditTabs) ? mu.customEditTabs : helperEditTabs
+                                        });
+                                      }}
+                                      className="px-2 py-0.5 rounded-md bg-stone-800 text-white text-[10px] font-extrabold whitespace-nowrap"
+                                    >
+                                      {mu.useCustomTabs ? "공통으로 되돌리기" : "개별 설정 켜기"}
+                                    </button>
+                                  </div>
+                                  {mu.useCustomTabs && (
+                                    <div className="bg-white rounded-lg border border-stone-200 overflow-hidden">
+                                      <div className="grid grid-cols-[1fr_48px_48px] items-center bg-stone-100 px-2 py-1 text-[10px] font-black text-stone-700 text-center">
+                                        <span className="text-left">메뉴</span>
+                                        <span className="whitespace-nowrap">열람</span>
+                                        <span className="whitespace-nowrap">편집</span>
+                                      </div>
+                                      <div className="divide-y divide-stone-100 max-h-44 overflow-y-auto">
+                                        {HELPER_CONFIGURABLE_TABS.map((t) => {
+                                          const uViewList = Array.isArray(mu.customAllowedTabs) ? mu.customAllowedTabs : helperAllowedTabs;
+                                          const uEditList = Array.isArray(mu.customEditTabs) ? mu.customEditTabs : helperEditTabs;
+                                          const uView = uViewList.includes(t.id);
+                                          const uEdit = uEditList.includes(t.id);
+                                          return (
+                                            <div key={t.id} className="grid grid-cols-[1fr_48px_48px] items-center px-2 py-1 text-[10.5px] font-bold text-stone-800">
+                                              <span className="truncate">{t.label}</span>
+                                              <div className="flex justify-center">
+                                                <button
+                                                  type="button"
+                                                  onClick={() => {
+                                                    const nextV = uView ? uViewList.filter((x) => x !== t.id) : [...uViewList, t.id];
+                                                    const nextE = uView ? uEditList.filter((x) => x !== t.id) : uEditList;
+                                                    handleUpdateUserCustomTabs(mu.uid, { useCustomTabs: true, customAllowedTabs: nextV, customEditTabs: nextE });
+                                                  }}
+                                                  className={`w-6 h-4 rounded text-[10px] font-black border ${uView ? "bg-stone-700 text-white border-stone-700" : "bg-stone-100 text-stone-400 border-stone-200"}`}
+                                                >
+                                                  {uView ? "O" : "-"}
+                                                </button>
+                                              </div>
+                                              <div className="flex justify-center">
+                                                <button
+                                                  type="button"
+                                                  onClick={() => {
+                                                    const nextE = uEdit ? uEditList.filter((x) => x !== t.id) : [...uEditList, t.id];
+                                                    const nextV = !uEdit && !uView ? [...uViewList, t.id] : uViewList;
+                                                    handleUpdateUserCustomTabs(mu.uid, { useCustomTabs: true, customAllowedTabs: nextV, customEditTabs: nextE });
+                                                  }}
+                                                  className={`w-6 h-4 rounded text-[10px] font-black border ${uEdit ? "bg-[#3F624D] text-white border-[#3F624D]" : "bg-stone-100 text-stone-400 border-stone-200"}`}
+                                                >
+                                                  {uEdit ? "O" : "-"}
+                                                </button>
+                                              </div>
+                                            </div>
+                                          );
+                                        })}
+                                      </div>
+                                    </div>
+                                  )}
                                 </div>
                               )}
                             </div>
-                            {!isSelf && mu.role === "helper" && editingPermUid === mu.uid && (
-                              <div className="px-2.5 pb-2.5 pt-1.5 border-t border-stone-100 bg-sky-50/40 space-y-1.5">
-                                <div className="flex items-center justify-between gap-2">
-                                  <span className="text-[11px] font-black text-sky-950">
-                                    {mu.useCustomTabs ? "✨ 개별 메뉴 권한 적용 중" : "📋 공통 권한 사용 중"}
-                                  </span>
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      const nextUse = !mu.useCustomTabs;
-                                      handleUpdateUserCustomTabs(mu.uid, {
-                                        useCustomTabs: nextUse,
-                                        customAllowedTabs: Array.isArray(mu.customAllowedTabs)
-                                          ? mu.customAllowedTabs
-                                          : helperAllowedTabs,
-                                        customEditTabs: Array.isArray(mu.customEditTabs)
-                                          ? mu.customEditTabs
-                                          : helperEditTabs
-                                      });
-                                    }}
-                                    className="px-2 py-0.5 rounded-md bg-stone-800 text-white text-[10.5px] font-extrabold whitespace-nowrap"
-                                  >
-                                    {mu.useCustomTabs ? "공통으로 되돌리기" : "개별 설정 켜기"}
-                                  </button>
-                                </div>
-                                {mu.useCustomTabs && (
-                                  <div className="bg-white rounded-lg border border-sky-200 overflow-hidden">
-                                    <div className="grid grid-cols-[1fr_48px_48px] items-center bg-sky-50 px-2 py-1 text-[10px] font-black text-sky-950 text-center">
-                                      <span className="text-left">메뉴</span>
-                                      <span className="whitespace-nowrap">열람</span>
-                                      <span className="whitespace-nowrap">편집</span>
-                                    </div>
-                                    <div className="divide-y divide-stone-100 max-h-48 overflow-y-auto">
-                                      {HELPER_CONFIGURABLE_TABS.map((t) => {
-                                        const uViewList = Array.isArray(mu.customAllowedTabs)
-                                          ? mu.customAllowedTabs
-                                          : helperAllowedTabs;
-                                        const uEditList = Array.isArray(mu.customEditTabs)
-                                          ? mu.customEditTabs
-                                          : helperEditTabs;
-                                        const uView = uViewList.includes(t.id);
-                                        const uEdit = uEditList.includes(t.id);
-                                        return (
-                                          <div
-                                            key={t.id}
-                                            className="grid grid-cols-[1fr_48px_48px] items-center px-2 py-1 text-[10.5px] font-bold text-stone-800"
-                                          >
-                                            <span className="truncate">{t.label}</span>
-                                            <div className="flex justify-center">
-                                              <button
-                                                type="button"
-                                                onClick={() => {
-                                                  const nextV = uView
-                                                    ? uViewList.filter((x) => x !== t.id)
-                                                    : [...uViewList, t.id];
-                                                  const nextE = uView
-                                                    ? uEditList.filter((x) => x !== t.id)
-                                                    : uEditList;
-                                                  handleUpdateUserCustomTabs(mu.uid, {
-                                                    useCustomTabs: true,
-                                                    customAllowedTabs: nextV,
-                                                    customEditTabs: nextE
-                                                  });
-                                                }}
-                                                className={`w-6 h-4 rounded text-[10.5px] font-black border ${
-                                                  uView
-                                                    ? "bg-sky-600 text-white border-sky-600"
-                                                    : "bg-stone-100 text-stone-400 border-stone-200"
-                                                }`}
-                                              >
-                                                {uView ? "O" : "-"}
-                                              </button>
-                                            </div>
-                                            <div className="flex justify-center">
-                                              <button
-                                                type="button"
-                                                onClick={() => {
-                                                  const nextE = uEdit
-                                                    ? uEditList.filter((x) => x !== t.id)
-                                                    : [...uEditList, t.id];
-                                                  const nextV =
-                                                    !uEdit && !uView ? [...uViewList, t.id] : uViewList;
-                                                  handleUpdateUserCustomTabs(mu.uid, {
-                                                    useCustomTabs: true,
-                                                    customAllowedTabs: nextV,
-                                                    customEditTabs: nextE
-                                                  });
-                                                }}
-                                                className={`w-6 h-4 rounded text-[10.5px] font-black border ${
-                                                  uEdit
-                                                    ? "bg-emerald-600 text-white border-emerald-600"
-                                                    : "bg-stone-100 text-stone-400 border-stone-200"
-                                                }`}
-                                              >
-                                                {uEdit ? "O" : "-"}
-                                              </button>
-                                            </div>
-                                          </div>
-                                        );
-                                      })}
-                                    </div>
-                                  </div>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
+                          );
+                        })}
+                      </div>
                     </div>
                   )}
                 </div>
 
-                <div className="bg-white rounded-xl border border-sky-200 overflow-hidden">
-                  <div className="grid grid-cols-[1fr_58px_58px] items-center bg-sky-100/70 px-2.5 py-1 text-[10px] font-black text-sky-950 text-center">
+                {/* 공통 권한 매트릭스 표 (차분한 무채색 + 세이지그린) */}
+                <div className="bg-white rounded-xl border border-stone-200 overflow-hidden">
+                  <div className="grid grid-cols-[1fr_58px_58px] items-center bg-stone-100 px-2.5 py-1 text-[10px] font-black text-stone-700 text-center border-b border-stone-200">
                     <span className="text-left">메뉴</span>
                     <span className="whitespace-nowrap">지원군열람</span>
                     <span className="whitespace-nowrap">지원군편집</span>
@@ -39779,14 +40111,12 @@ time: "", location: "",
                             <button
                               type="button"
                               onClick={async () => {
-                                const nextV = hView
-                                  ? helperAllowedTabs.filter((x) => x !== t.id)
-                                  : [...helperAllowedTabs, t.id];
+                                const nextV = hView ? helperAllowedTabs.filter((x) => x !== t.id) : [...helperAllowedTabs, t.id];
                                 const nextE = hView ? helperEditTabs.filter((x) => x !== t.id) : helperEditTabs;
                                 await saveAccessConfigToCloud({ helperViewTabs: nextV, helperEditTabs: nextE });
                               }}
                               className={`w-6 h-4 rounded text-[10px] font-black border ${
-                                hView ? "bg-sky-600 text-white border-sky-600" : "bg-stone-100 text-stone-400 border-stone-200"
+                                hView ? "bg-stone-700 text-white border-stone-700" : "bg-stone-100 text-stone-400 border-stone-200"
                               }`}
                             >
                               {hView ? "O" : "-"}
@@ -39796,14 +40126,12 @@ time: "", location: "",
                             <button
                               type="button"
                               onClick={async () => {
-                                const nextE = hEdit
-                                  ? helperEditTabs.filter((x) => x !== t.id)
-                                  : [...helperEditTabs, t.id];
+                                const nextE = hEdit ? helperEditTabs.filter((x) => x !== t.id) : [...helperEditTabs, t.id];
                                 const nextV = !hEdit && !hView ? [...helperAllowedTabs, t.id] : helperAllowedTabs;
                                 await saveAccessConfigToCloud({ helperViewTabs: nextV, helperEditTabs: nextE });
                               }}
                               className={`w-6 h-4 rounded text-[10px] font-black border ${
-                                hEdit ? "bg-emerald-600 text-white border-emerald-600" : "bg-stone-100 text-stone-400 border-stone-200"
+                                hEdit ? "bg-[#3F624D] text-white border-[#3F624D]" : "bg-stone-100 text-stone-400 border-stone-200"
                               }`}
                             >
                               {hEdit ? "O" : "-"}
@@ -39815,20 +40143,16 @@ time: "", location: "",
                   </div>
                 </div>
 
-
-                <button
-                  type="button"
-                  onClick={async () => {
-                    await copyTextSafe(window.location.origin, "🔗 앱 접속 주소가 복사되었습니다! (가입 후 관리자 승인 필요)");
-                  }}
-                  className="w-full py-1.5 rounded-xl bg-white hover:bg-sky-50 text-sky-900 border border-sky-200 text-[12px] font-extrabold whitespace-nowrap"
-                >
-                  🔗 가족 앱 접속 주소 복사 (회원가입 후 승인)
-                </button>
-                <div className="flex items-center justify-between gap-2 pt-1 border-t border-sky-200/70">
-                  <span className="text-[11px] font-extrabold text-sky-900">
-                    🇰🇷 한국 공휴일 자동 연동 ({Object.keys(krHolidays || {}).length}건 캐시)
-                  </span>
+                <div className="flex items-center justify-between gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      await copyTextSafe(window.location.origin, "🔗 앱 접속 주소가 복사되었습니다!");
+                    }}
+                    className="h-7 px-2.5 rounded-lg bg-white hover:bg-stone-100 text-stone-700 border border-stone-200 text-[10.5px] font-extrabold whitespace-nowrap"
+                  >
+                    🔗 앱 주소 복사
+                  </button>
                   <button
                     type="button"
                     onClick={async () => {
@@ -39837,12 +40161,65 @@ time: "", location: "",
                       await fetchKoreanHolidaysForYears([y - 1, y, y + 1], true);
                       showToast("🇰🇷 한국 공휴일 최신 동기화 완료!");
                     }}
-                    className="px-2 py-1 rounded-lg bg-white hover:bg-sky-100 border border-sky-200 text-sky-800 text-[11px] font-extrabold whitespace-nowrap shrink-0"
+                    className="h-7 px-2.5 rounded-lg bg-white hover:bg-stone-100 border border-stone-200 text-stone-700 text-[10.5px] font-extrabold whitespace-nowrap"
                   >
-                    🔄 지금 갱신
+                    🇰🇷 공휴일 갱신 ({Object.keys(krHolidays || {}).length}건)
                   </button>
                 </div>
               </div>
+            <div className="p-2.5 rounded-xl bg-stone-50 border border-stone-200 space-y-1.5">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[11px] font-black text-stone-800 whitespace-nowrap">
+                  📧 가입·승인 완료 메일 자동 발송 (EmailJS 선택)
+                </span>
+                <span className={`px-1.5 py-0.5 rounded text-[9.5px] font-extrabold whitespace-nowrap ${emailJsConfig.serviceId && emailJsConfig.templateId && emailJsConfig.publicKey ? "bg-[#EEF3EE] text-[#35503C]" : "bg-stone-200 text-stone-500"}`}>
+                  {emailJsConfig.serviceId && emailJsConfig.templateId && emailJsConfig.publicKey ? "자동발송 ON" : "미설정(메일앱)"}
+                </span>
+              </div>
+              <div className="grid grid-cols-3 gap-1">
+                <input
+                  type="text"
+                  value={emailJsConfig.serviceId}
+                  onChange={(e) => setEmailJsConfig((p) => ({ ...p, serviceId: e.target.value }))}
+                  placeholder="Service ID"
+                  className="min-w-0 px-2 py-1 rounded-lg border border-stone-200 bg-white text-[10.5px] font-bold"
+                />
+                <input
+                  type="text"
+                  value={emailJsConfig.templateId}
+                  onChange={(e) => setEmailJsConfig((p) => ({ ...p, templateId: e.target.value }))}
+                  placeholder="Template ID"
+                  className="min-w-0 px-2 py-1 rounded-lg border border-stone-200 bg-white text-[10.5px] font-bold"
+                />
+                <input
+                  type="text"
+                  value={emailJsConfig.publicKey}
+                  onChange={(e) => setEmailJsConfig((p) => ({ ...p, publicKey: e.target.value }))}
+                  placeholder="Public Key"
+                  className="min-w-0 px-2 py-1 rounded-lg border border-stone-200 bg-white text-[10.5px] font-bold"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={async () => {
+                  const clean = {
+                    serviceId: emailJsConfig.serviceId.trim(),
+                    templateId: emailJsConfig.templateId.trim(),
+                    publicKey: emailJsConfig.publicKey.trim()
+                  };
+                  setEmailJsConfig(clean);
+                  try { localStorage.setItem("kim_emailjs_config_v1", JSON.stringify(clean)); } catch (err) {}
+                  if (user && db) {
+                    await setDoc(getDocRef("family_meta_v4", "emailjs_config_v1"), { ...clean, updatedAtMs: Date.now() }, { merge: true }).catch(() => {});
+                  }
+                  showToast("📧 EmailJS 발송 설정이 저장되었습니다.");
+                }}
+                className="w-full py-1 rounded-lg bg-stone-800 hover:bg-stone-900 text-white text-[10.5px] font-extrabold whitespace-nowrap"
+              >
+                메일 발송 설정 저장
+              </button>
+            </div>
+
             <div className="p-2.5 rounded-xl bg-stone-50 border border-stone-200 space-y-2">
               <div className="text-[11.5px] font-black text-stone-800">
                 🤖 듀얼 AI 엔진 설정 (GPT + Gemini)
@@ -39930,7 +40307,7 @@ time: "", location: "",
                 <button
                   type="button"
                   onClick={handleRunAiDiagnostic}
-                  className="py-1.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-[11px] font-extrabold whitespace-nowrap"
+                  className="py-1.5 rounded-lg bg-[#3F624D] hover:bg-[#324F3E] text-white text-[11px] font-extrabold whitespace-nowrap"
                 >
                   AI 연결 자가진단
                 </button>

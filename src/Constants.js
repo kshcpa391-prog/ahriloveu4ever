@@ -1181,7 +1181,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v13.68";
+export const APP_CODE_VERSION = "v13.72";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1199,7 +1199,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-24 12:33";
+export const APP_BUILD_DATE = "2026-11-24 13:02";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1268,6 +1268,47 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v13.72",
+    version: "v13.72",
+    date: "2026-11-24",
+    title: "📧 회원가입 확인 메일(Firebase Auth) 자동 발송 + 가입·승인 완료 안내 메일(EmailJS 자동 / mailto 1탭) 지원",
+    highlights: [
+      "이메일 회원가입 즉시 가입 확인 메일 자동 발송: Firebase Auth sendEmailVerification을 연동해 가입 직후 가입자 이메일로 확인 메일을 즉시 발송하며, 승인 대기 화면에서도 재발송 및 인증 상태 확인 지원",
+      "가입·승인 완료 안내 메일 지원: 설정에 EmailJS(Service ID · Template ID · Public Key)를 등록하면 회원가입 직후 및 관리자 승인 시 완료 안내 메일이 백그라운드로 자동 발송되며, 미등록 시 회원 상세의 [✉️ 완료메일] 버튼으로 메일 앱(본문·앱주소 자동입력) 즉시 실행"
+    ]
+  },
+  {
+    id: "patch-v13.71",
+    version: "v13.71",
+    date: "2026-11-24",
+    title: "👤 구글 로그인 사용자 이름 필수 입력(needsNameSetup) + 익명 계정 '새 사용자' 자동 생성 차단",
+    highlights: [
+      "익명 로그인 '새 사용자' 생성 차단: 이메일 없는 익명 세션(isAnonymous)이 users 컬렉션에 '새 사용자' 문서를 자동 생성하던 문제를 차단해 실제 이메일·구글 로그인 사용자만 회원 명단에 등록되도록 개선",
+      "구글 로그인 사용자 이름 필수 입력: Google로 최초 로그인 시 앱에서 사용할 사용자 이름(호칭)을 직접 입력·확정해야 승인 대기 및 앱 이용이 진행되도록 전용 이름 설정 화면 추가 (대기 화면에서도 본인 이름 수정 가능)"
+    ]
+  },
+  {
+    id: "patch-v13.70",
+    version: "v13.70",
+    date: "2026-11-24",
+    title: "🛡️ 회원 삭제·일괄삭제 시 선택/펼침/편집 상태 자동 정리 + 전체 코드·배포 무결성 최종 점검",
+    highlights: [
+      "회원 관리 상태 정합성 보강: 개별/일괄 회원 삭제 시 selectedUserUids·expandedUserUid·editingUserNameUid에 삭제된 UID가 남지 않도록 자동 초기화 처리",
+      "전체 코드 최종 무결성 검증: button type 누락 0건, window.prompt/alert/console.log 0건, CSS 오타 0건, Babel JSX AST·미선언 식별자 0건, 리스너·타이머 누수 0건 확인 완료"
+    ]
+  },
+  {
+    id: "patch-v13.69",
+    version: "v13.69",
+    date: "2026-11-24",
+    title: "🎨 설정창 색상 통일(무채색·세이지) · 백업버튼 초슬림화 · 경조사비 제거 + 회원명단 표·체크박스 일괄편집·클릭 전문보기",
+    highlights: [
+      "회원명단 표(테이블) 개편: 공통 헤더(☑️ | 성명 | 비고 | 권한 | 관리) 기반의 1줄 표로 정리하고, 체크박스 선택 시 다수 회원의 권한 일괄 변경 및 일괄 삭제(writeBatch) 지원",
+      "긴 계정/UID 전문 보기: 표 내 긴 이메일·UID는 1줄 말줄임으로 깔끔히 유지하고 행 클릭 시 아래에 전문(이메일·UID)과 이름 수정·삭제·개별 권한 설정이 펼쳐지도록 개선",
+      "설정창 시각적 피로도 최소화: 알록달록하던 원색 배너·버튼을 앱 공통 무채색(화이트/스톤) + 세이지그린(#3F624D) 톤으로 통일하고, 백업·복원 버튼 4종을 1줄 초슬림 버튼으로 축소했으며 설정 내 중복 경조사비 메뉴를 제거"
+    ]
+  },
   {
     id: "patch-v13.68",
     version: "v13.68",
