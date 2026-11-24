@@ -1181,7 +1181,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v13.63";
+export const APP_CODE_VERSION = "v13.64";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1199,7 +1199,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-24 11:52";
+export const APP_BUILD_DATE = "2026-11-24 12:03";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1268,6 +1268,17 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v13.64",
+    version: "v13.64",
+    date: "2026-11-24",
+    title: "⚙️ 설정 모달 표·가로폭 확대 & 글씨 크기 슬림화 + 회원 리스트 2단 레이아웃(이름·이메일 잘림 완전 해소)",
+    highlights: [
+      "설정 모달 레이아웃 개편: 모달 가로폭을 max-w-sm→max-w-lg로 넓히고 다중 중첩 패딩(p-5→p-3.5)을 줄여 권한 매트릭스 표와 회원 리스트가 시원하게 표시되도록 개선",
+      "회원 승인·권한 리스트 2단 재구성: 1행에 이름(11.5px)·이메일(10px) 전체를 배치하고 2행에 권한 드롭다운·개별권한(⚙️)·이름수정(✏️)·삭제(🗑️) 버튼을 분리해 이름·이메일 잘림 현상 완전 해소",
+      "설정 전반 글씨 크기 축소(10~11.5px): 백업·AI 설정·권한 매트릭스 표·자가진단 등 설정 내 모든 텍스트와 행 높이를 컴팩트하게 축소해 한 화면 정보량과 가독성 향상"
+    ]
+  },
   {
     id: "patch-v13.63",
     version: "v13.63",

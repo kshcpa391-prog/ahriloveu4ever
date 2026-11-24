@@ -19781,7 +19781,7 @@ time: "", location: "",
                   setScanTargetMonth(selectedDate.slice(0, 7));
                   setIsDaycareModalOpen(true);
                 }}
-                className="py-2 px-1.5 rounded-xl bg-stone-50 hover:bg-stone-100 border border-stone-200 text-stone-800 text-[11.5px] font-extrabold flex items-center justify-center gap-1 whitespace-nowrap"
+                className="py-2 px-1.5 rounded-xl bg-stone-50 hover:bg-stone-100 border border-stone-200 text-stone-800 text-[10.5px] font-extrabold flex items-center justify-center gap-1 whitespace-nowrap"
               >
                 <Camera className="w-3.5 h-3.5 text-stone-700 shrink-0" />
                 <span>AI 스캔</span>
@@ -19793,7 +19793,7 @@ time: "", location: "",
                     setAiSubMode("plan3d");
                     setActiveTab("ai");
                   }}
-                  className="py-2 px-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-900 text-[11.5px] font-extrabold flex items-center justify-center gap-1 whitespace-nowrap"
+                  className="py-2 px-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-900 text-[10.5px] font-extrabold flex items-center justify-center gap-1 whitespace-nowrap"
                   title="AI 3일 식단 자동 추천으로 이동"
                 >
                   <span>✨ AI 3일식단</span>
@@ -19805,7 +19805,7 @@ time: "", location: "",
                   setExportScope("all");
                   setIsInventoryExportOpen(true);
                 }}
-                className="py-2 px-1.5 rounded-xl bg-stone-50 hover:bg-stone-100 border border-stone-200 text-stone-800 text-[11.5px] font-extrabold flex items-center justify-center gap-1 whitespace-nowrap"
+                className="py-2 px-1.5 rounded-xl bg-stone-50 hover:bg-stone-100 border border-stone-200 text-stone-800 text-[10.5px] font-extrabold flex items-center justify-center gap-1 whitespace-nowrap"
               >
                 <span>📤 식단출력</span>
               </button>
@@ -39001,32 +39001,32 @@ time: "", location: "",
 
       {isSettingsOpen && (
         <div
-          className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+          className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-2"
           onClick={() => setIsSettingsOpen(false)}
         >
           <div
-            className="bg-white rounded-3xl max-w-sm w-full p-5 space-y-3 max-h-[90vh] overflow-y-auto shadow-2xl"
+            className="bg-white rounded-2xl max-w-lg w-full p-3.5 space-y-2.5 max-h-[92vh] overflow-y-auto shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between gap-2">
-              <h3 className="text-[15.5px] font-black text-stone-900 flex items-center gap-1.5 whitespace-nowrap">
+              <h3 className="text-[13.5px] font-black text-stone-900 flex items-center gap-1.5 whitespace-nowrap">
                 <span>⚙️ 설정 · 백업 · 권한</span>
-                <span className="px-1.5 py-0.5 rounded-md bg-stone-100 text-stone-600 text-[10.5px] font-extrabold whitespace-nowrap">
+                <span className="px-1.5 py-0.5 rounded-md bg-stone-100 text-stone-600 text-[10px] font-extrabold whitespace-nowrap">
                   {APP_CODE_VERSION}
                 </span>
               </h3>
               <button type="button" onClick={() => setIsSettingsOpen(false)} className="p-1 shrink-0">
-                <X className="w-5 h-5 text-stone-400" />
+                <X className="w-4 h-4 text-stone-400" />
               </button>
             </div>
 
 
-            <div className="p-2.5 rounded-2xl bg-emerald-50 border border-emerald-200 text-[12px] text-emerald-900 space-y-0.5">
+            <div className="p-2 rounded-xl bg-emerald-50 border border-emerald-200 text-[10.5px] text-emerald-900 space-y-0.5">
               <div className="flex items-center justify-between gap-2">
                 <span>✅ <b>자동 스냅샷</b> 정상 가동</span>
-                <code className="text-[11px] font-bold text-emerald-700">{lastAutoBackupSlot || getTwiceDailySlotKey()}</code>
+                <code className="text-[10px] font-bold text-emerald-700">{lastAutoBackupSlot || getTwiceDailySlotKey()}</code>
               </div>
-              <div className="text-[11.5px] font-semibold text-emerald-800">
+              <div className="text-[10px] font-semibold text-emerald-800">
                 📦 식단 {meals.length} · 냉장고 {fridge.length} · 일정 {schedules.length} · 버킷 {bucketList.length} · 노트 {familyPages.length} · 살림 {houseItems.length}
               </div>
             </div>
@@ -39038,7 +39038,7 @@ time: "", location: "",
                   setIsSettingsOpen(false);
                   openCategoryManager("fridge");
                 }}
-                className="w-full py-2 px-3 rounded-xl bg-[#EEF3EE] hover:bg-[#DFE9E0] border border-[#C9D8CC] text-[#35503C] text-[12px] font-extrabold flex items-center justify-between gap-2 whitespace-nowrap"
+                className="w-full py-1.5 px-2.5 rounded-xl bg-[#EEF3EE] hover:bg-[#DFE9E0] border border-[#C9D8CC] text-[#35503C] text-[11px] font-extrabold flex items-center justify-between gap-2 whitespace-nowrap"
               >
                 <span className="truncate">⚙️ 세부 카테고리 통합 관리</span>
                 <ChevronRight className="w-4 h-4 shrink-0" />
@@ -39051,7 +39051,7 @@ time: "", location: "",
                 setIsSettingsOpen(false);
                 setActiveTab("condolence");
               }}
-              className="w-full py-2 px-3 rounded-xl bg-stone-50 hover:bg-stone-100 border border-stone-200 text-stone-700 text-[12px] font-extrabold flex items-center justify-between gap-2 whitespace-nowrap"
+              className="w-full py-1.5 px-2.5 rounded-xl bg-stone-50 hover:bg-stone-100 border border-stone-200 text-stone-700 text-[11px] font-extrabold flex items-center justify-between gap-2 whitespace-nowrap"
             >
               <span className="truncate">🔒 경조사비 입출금내역 (비밀메뉴)</span>
               <ChevronRight className="w-4 h-4 shrink-0" />
@@ -39064,16 +39064,16 @@ time: "", location: "",
                 setIsSettingsOpen(false);
                 setIsPatchModalOpen(true);
               }}
-              className="w-full py-2 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-800 border border-stone-200 text-[12.5px] font-extrabold flex items-center justify-center gap-1.5 whitespace-nowrap"
+              className="w-full py-1.5 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-800 border border-stone-200 text-[11px] font-extrabold flex items-center justify-center gap-1.5 whitespace-nowrap"
             >
               <ClipboardList className="w-4 h-4 text-amber-600 shrink-0" />
               <span>📝 패치노트 ({APP_CODE_VERSION})</span>
             </button>
 
 
-            <div className="p-3 rounded-2xl bg-amber-50/80 border border-amber-200 space-y-2">
-              <div className="text-[13px] font-black text-amber-900 flex items-center gap-1.5">
-                <CloudUpload className="w-4 h-4 text-amber-700 shrink-0" />
+            <div className="p-2.5 rounded-xl bg-amber-50/80 border border-amber-200 space-y-1.5">
+              <div className="text-[11.5px] font-black text-amber-900 flex items-center gap-1.5">
+                <CloudUpload className="w-3.5 h-3.5 text-amber-700 shrink-0" />
                 <span>백업 및 복원</span>
               </div>
 
@@ -39086,7 +39086,7 @@ time: "", location: "",
                   try { localStorage.setItem("kim_family_backup_email", e.target.value); } catch (err) {}
                 }}
                 placeholder="수신 이메일 주소 (선택)"
-                className="w-full px-3 py-1.5 rounded-xl border border-amber-300 text-[12.5px] font-bold bg-white"
+                className="w-full px-2.5 py-1 rounded-lg border border-amber-300 text-[11px] font-bold bg-white"
               />
 
 
@@ -39103,7 +39103,7 @@ time: "", location: "",
                 <button
                   type="button"
                   onClick={() => handleSendBackupToGmailOrDrive(false)}
-                  className="py-2 px-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-[11.5px] font-extrabold flex items-center justify-center gap-1 whitespace-nowrap shadow-sm"
+                  className="py-2 px-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-[10.5px] font-extrabold flex items-center justify-center gap-1 whitespace-nowrap shadow-sm"
                 >
                   <Mail className="w-3.5 h-3.5 shrink-0" />
                   <span>전체 백업메일</span>
@@ -39111,14 +39111,14 @@ time: "", location: "",
                 <button
                   type="button"
                   onClick={() => handleSendBackupToGmailOrDrive(true)}
-                  className="py-2 px-2 rounded-xl bg-white hover:bg-amber-100/60 border border-amber-300 text-amber-900 text-[11.5px] font-extrabold whitespace-nowrap"
+                  className="py-1.5 px-2 rounded-lg bg-white hover:bg-amber-100/60 border border-amber-300 text-amber-900 text-[10.5px] font-extrabold whitespace-nowrap"
                 >
                   📄 경량 백업(1MB↓)
                 </button>
                 <button
                   type="button"
                   onClick={handleDownloadJsonBackup}
-                  className="py-2 px-2 rounded-xl bg-stone-900 hover:bg-stone-800 text-white text-[11.5px] font-extrabold flex items-center justify-center gap-1 whitespace-nowrap shadow-sm"
+                  className="py-2 px-2 rounded-xl bg-stone-900 hover:bg-stone-800 text-white text-[10.5px] font-extrabold flex items-center justify-center gap-1 whitespace-nowrap shadow-sm"
                 >
                   <FileJson className="w-3.5 h-3.5 text-amber-400 shrink-0" />
                   <span>JSON 저장</span>
@@ -39127,7 +39127,7 @@ time: "", location: "",
                   type="button"
                   onClick={() => jsonRestoreInputRef.current?.click()}
                   disabled={isRestoringJson}
-                  className="py-2 px-2 rounded-xl bg-white hover:bg-amber-100 text-amber-900 border border-amber-300 text-[11.5px] font-extrabold flex items-center justify-center gap-1 whitespace-nowrap"
+                  className="py-2 px-2 rounded-xl bg-white hover:bg-amber-100 text-amber-900 border border-amber-300 text-[10.5px] font-extrabold flex items-center justify-center gap-1 whitespace-nowrap"
                 >
                   <RotateCcw className={`w-3.5 h-3.5 shrink-0 ${isRestoringJson ? "animate-spin" : ""}`} />
                   <span>{isRestoringJson ? "복원 중..." : "JSON 복원"}</span>
@@ -39157,10 +39157,10 @@ time: "", location: "",
               </div>
             ) : (
               <>
-              <div className="p-3 rounded-2xl bg-sky-50/70 border border-sky-200 space-y-2.5">
+              <div className="p-2.5 rounded-xl bg-sky-50/70 border border-sky-200 space-y-2">
                 <div className="flex items-center justify-between">
-                  <span className="text-[13.5px] font-black text-sky-950 flex items-center gap-1 whitespace-nowrap">
-                    <ShieldCheck className="w-4 h-4 text-sky-700 shrink-0" />
+                  <span className="text-[11.5px] font-black text-sky-950 flex items-center gap-1 whitespace-nowrap">
+                    <ShieldCheck className="w-3.5 h-3.5 text-sky-700 shrink-0" />
                     <span>회원 권한 · 메뉴 설정</span>
                   </span>
                   <button
@@ -39177,16 +39177,16 @@ time: "", location: "",
                       });
                       showToast("권한 및 비밀번호 설정을 기본값으로 복원했습니다.");
                     }}
-                    className="text-[11.5px] font-extrabold text-sky-700 underline whitespace-nowrap"
+                    className="text-[10.5px] font-extrabold text-sky-700 underline whitespace-nowrap"
                   >
                     기본값 복원
                   </button>
                 </div>
 
 
-                <div className="bg-white rounded-xl border border-emerald-200 p-2.5 space-y-2">
+                <div className="bg-white rounded-xl border border-emerald-200 p-2 space-y-1.5">
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-[12.5px] font-black text-emerald-950 whitespace-nowrap">👥 회원 승인 및 권한 ({managedUsers.length}명)</span>
+                    <span className="text-[11px] font-black text-emerald-950 whitespace-nowrap">👥 회원 승인 및 권한 ({managedUsers.length}명)</span>
                     <div className="flex items-center gap-1.5 shrink-0">
                       {managedUsers.some((u) => u.role === "pending") && (
                         <span className="px-1.5 py-0.5 rounded-full bg-amber-500 text-white text-[10px] font-black animate-pulse whitespace-nowrap">
@@ -39257,7 +39257,7 @@ time: "", location: "",
                       가입된 사용자 목록을 불러오는 중입니다.
                     </div>
                   ) : (
-                    <div className="divide-y divide-stone-100 border border-stone-200 rounded-xl overflow-hidden max-h-64 overflow-y-auto">
+                    <div className="divide-y divide-stone-100 border border-stone-200 rounded-xl overflow-hidden max-h-72 overflow-y-auto">
                       {managedUsers.map((mu) => {
                         const isSelf = mu.uid === user?.uid;
                         const isPending = mu.role === "pending";
@@ -39282,24 +39282,25 @@ time: "", location: "",
                             key={mu.uid}
                             className={`${isPending ? "bg-amber-50/70" : "bg-white"}`}
                           >
-                            <div className="flex items-center justify-between gap-2 px-2.5 py-2">
-                              <div className="min-w-0 flex-1">
-                                <div className="flex items-center gap-1.5 min-w-0">
-                                  <span className="text-[12.5px] font-black text-stone-900 truncate">
+                            <div className="px-2.5 py-2 space-y-1.5">
+                              <div className="flex items-center justify-between gap-2 min-w-0">
+                                <div className="flex items-baseline gap-1.5 min-w-0 flex-wrap">
+                                  <span className="text-[11.5px] font-black text-stone-900 whitespace-nowrap">
                                     {mu.actorName || mu.displayName || "이름 없음"}
                                     {isSelf ? " (나)" : ""}
                                   </span>
-                                  <span className="text-[10.5px] text-stone-400 truncate">
-                                    {mu.email || mu.uid.slice(0, 8)}
+                                  <span className="text-[10px] text-stone-500 break-all">
+                                    {mu.email || mu.uid}
                                   </span>
                                 </div>
+                                {isSelf && (
+                                  <span className="px-1.5 py-0.5 rounded-full bg-stone-900 text-white text-[9.5px] font-black shrink-0 whitespace-nowrap">
+                                    관리자
+                                  </span>
+                                )}
                               </div>
-                              {isSelf ? (
-                                <span className="px-2 py-0.5 rounded-full bg-stone-900 text-white text-[10.5px] font-black shrink-0 whitespace-nowrap">
-                                  관리자
-                                </span>
-                              ) : (
-                                <div className="flex items-center gap-1 shrink-0">
+                              {!isSelf && (
+                                <div className="flex items-center justify-end gap-1 flex-wrap">
                                   <select
                                     value={curSelectVal}
                                     onChange={(e) => {
@@ -39321,7 +39322,7 @@ time: "", location: "",
                                         handleUpdateUserRole(mu.uid, "pending");
                                       }
                                     }}
-                                    className={`px-1.5 py-1 rounded-lg border text-[11px] font-extrabold cursor-pointer whitespace-nowrap ${selectCls}`}
+                                    className={`px-1.5 py-0.5 rounded-lg border text-[10.5px] font-extrabold cursor-pointer whitespace-nowrap ${selectCls}`}
                                   >
                                     <option value="pending" className="bg-white text-stone-900">⏳ 대기</option>
                                     <option value="admin:수혁" className="bg-white text-stone-900">👑 수혁</option>
@@ -39340,7 +39341,7 @@ time: "", location: "",
                                         setEditingPermUid((prev) => (prev === mu.uid ? null : mu.uid))
                                       }
                                       title="개별 메뉴 권한"
-                                      className={`px-1.5 py-1 rounded-lg border text-[11px] font-extrabold whitespace-nowrap ${
+                                      className={`px-1.5 py-0.5 rounded-lg border text-[10.5px] font-extrabold whitespace-nowrap ${
                                         mu.useCustomTabs
                                           ? "bg-amber-50 border-amber-300 text-amber-900"
                                           : "bg-stone-50 border-stone-200 text-stone-600"
@@ -39403,7 +39404,7 @@ time: "", location: "",
                                         setEditingUserNameUid(mu.uid);
                                         setEditingUserNameDraft(mu.actorName || mu.displayName || "");
                                       }}
-                                      className="px-1.5 py-1 rounded-lg bg-stone-50 border border-stone-200 text-stone-600 hover:bg-stone-100 text-[11px] font-extrabold whitespace-nowrap"
+                                      className="px-1.5 py-0.5 rounded-lg bg-stone-50 border border-stone-200 text-stone-600 hover:bg-stone-100 text-[10.5px] font-extrabold whitespace-nowrap"
                                     >
                                       ✏️
                                     </button>
@@ -39417,7 +39418,7 @@ time: "", location: "",
                                         mu.actorName || mu.displayName || mu.email || mu.uid
                                       )
                                     }
-                                    className="px-1.5 py-1 rounded-lg bg-stone-50 border border-stone-200 text-stone-500 hover:text-rose-700 text-[11px] font-extrabold whitespace-nowrap"
+                                    className="px-1.5 py-0.5 rounded-lg bg-stone-50 border border-stone-200 text-stone-500 hover:text-rose-700 text-[10.5px] font-extrabold whitespace-nowrap"
                                   >
                                     🗑️
                                   </button>
@@ -39451,12 +39452,12 @@ time: "", location: "",
                                 </div>
                                 {mu.useCustomTabs && (
                                   <div className="bg-white rounded-lg border border-sky-200 overflow-hidden">
-                                    <div className="grid grid-cols-[1fr_52px_52px] items-center bg-sky-50 px-2 py-1 text-[10.5px] font-black text-sky-950 text-center">
+                                    <div className="grid grid-cols-[1fr_48px_48px] items-center bg-sky-50 px-2 py-1 text-[10px] font-black text-sky-950 text-center">
                                       <span className="text-left">메뉴</span>
                                       <span className="whitespace-nowrap">열람</span>
                                       <span className="whitespace-nowrap">편집</span>
                                     </div>
-                                    <div className="divide-y divide-stone-100 max-h-44 overflow-y-auto">
+                                    <div className="divide-y divide-stone-100 max-h-48 overflow-y-auto">
                                       {HELPER_CONFIGURABLE_TABS.map((t) => {
                                         const uViewList = Array.isArray(mu.customAllowedTabs)
                                           ? mu.customAllowedTabs
@@ -39469,7 +39470,7 @@ time: "", location: "",
                                         return (
                                           <div
                                             key={t.id}
-                                            className="grid grid-cols-[1fr_52px_52px] items-center px-2 py-1 text-[11.5px] font-bold text-stone-800"
+                                            className="grid grid-cols-[1fr_48px_48px] items-center px-2 py-1 text-[10.5px] font-bold text-stone-800"
                                           >
                                             <span className="truncate">{t.label}</span>
                                             <div className="flex justify-center">
@@ -39537,7 +39538,7 @@ time: "", location: "",
                 </div>
 
                 <div className="bg-white rounded-xl border border-sky-200 overflow-hidden">
-                  <div className="grid grid-cols-[1fr_68px_68px] items-center bg-sky-100/70 px-2.5 py-1.5 text-[11.5px] font-black text-sky-950 text-center">
+                  <div className="grid grid-cols-[1fr_58px_58px] items-center bg-sky-100/70 px-2.5 py-1 text-[10px] font-black text-sky-950 text-center">
                     <span className="text-left">메뉴</span>
                     <span className="whitespace-nowrap">지원군열람</span>
                     <span className="whitespace-nowrap">지원군편집</span>
@@ -39549,7 +39550,7 @@ time: "", location: "",
                       return (
                         <div
                           key={t.id}
-                          className="grid grid-cols-[1fr_68px_68px] items-center px-2.5 py-1.5 text-[12.5px] font-bold text-stone-800"
+                          className="grid grid-cols-[1fr_58px_58px] items-center px-2.5 py-1 text-[11px] font-bold text-stone-800"
                         >
                           <span className="truncate">{t.label}</span>
                           <div className="flex justify-center">
@@ -39562,7 +39563,7 @@ time: "", location: "",
                                 const nextE = hView ? helperEditTabs.filter((x) => x !== t.id) : helperEditTabs;
                                 await saveAccessConfigToCloud({ helperViewTabs: nextV, helperEditTabs: nextE });
                               }}
-                              className={`w-7 h-5 rounded text-[11.5px] font-black border ${
+                              className={`w-6 h-4 rounded text-[10px] font-black border ${
                                 hView ? "bg-sky-600 text-white border-sky-600" : "bg-stone-100 text-stone-400 border-stone-200"
                               }`}
                             >
@@ -39579,7 +39580,7 @@ time: "", location: "",
                                 const nextV = !hEdit && !hView ? [...helperAllowedTabs, t.id] : helperAllowedTabs;
                                 await saveAccessConfigToCloud({ helperViewTabs: nextV, helperEditTabs: nextE });
                               }}
-                              className={`w-7 h-5 rounded text-[11.5px] font-black border ${
+                              className={`w-6 h-4 rounded text-[10px] font-black border ${
                                 hEdit ? "bg-emerald-600 text-white border-emerald-600" : "bg-stone-100 text-stone-400 border-stone-200"
                               }`}
                             >
@@ -39620,8 +39621,8 @@ time: "", location: "",
                   </button>
                 </div>
               </div>
-            <div className="p-3 rounded-2xl bg-stone-50 border border-stone-200 space-y-2.5">
-              <div className="text-[13.5px] font-black text-stone-800">
+            <div className="p-2.5 rounded-xl bg-stone-50 border border-stone-200 space-y-2">
+              <div className="text-[11.5px] font-black text-stone-800">
                 🤖 듀얼 AI 엔진 설정 (GPT + Gemini)
               </div>
 
@@ -39662,7 +39663,7 @@ time: "", location: "",
                   value={tempOpenaiKeyInput}
                   onChange={(e) => setTempOpenaiKeyInput(e.target.value)}
                   placeholder="sk-proj-... 또는 sk-... 입력"
-                  className="w-full px-3 py-2 rounded-xl border border-stone-300 text-[13.5px] font-bold bg-white"
+                  className="w-full px-2.5 py-1.5 rounded-lg border border-stone-300 text-[11px] font-bold bg-white"
                 />
               </div>
 
@@ -39681,7 +39682,7 @@ time: "", location: "",
                   value={tempKeyInput}
                   onChange={(e) => setTempKeyInput(e.target.value)}
                   placeholder="Gemini API 키 입력"
-                  className="w-full px-3 py-2 rounded-xl border border-stone-300 text-[13.5px] font-bold bg-white"
+                  className="w-full px-2.5 py-1.5 rounded-lg border border-stone-300 text-[11px] font-bold bg-white"
                 />
               </div>
 
@@ -39700,14 +39701,14 @@ time: "", location: "",
                     handleSaveApiKey(tempKeyInput, tempOpenaiKeyInput, aiProvider);
                     setAiDiagStatus(`✅ 설정이 저장되었습니다! (엔진: ${aiProvider}, OpenAI: ${tempOpenaiKeyInput ? "입력됨" : "없음"}, Gemini: ${tempKeyInput ? "입력됨" : "없음"})`);
                   }}
-                  className="py-2 rounded-xl bg-stone-800 text-white text-[13.5px] font-extrabold whitespace-nowrap"
+                  className="py-1.5 rounded-lg bg-stone-800 text-white text-[11px] font-extrabold whitespace-nowrap"
                 >
                   AI 설정 저장
                 </button>
                 <button
                   type="button"
                   onClick={handleRunAiDiagnostic}
-                  className="py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-[13.5px] font-extrabold whitespace-nowrap"
+                  className="py-1.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-[11px] font-extrabold whitespace-nowrap"
                 >
                   AI 연결 자가진단
                 </button>
@@ -39750,15 +39751,15 @@ time: "", location: "",
             )}
 
 
-            <div className="p-3 rounded-2xl bg-stone-50 border border-stone-200 space-y-2">
+            <div className="p-2.5 rounded-xl bg-stone-50 border border-stone-200 space-y-1.5">
               <div className="flex items-center justify-between gap-2">
-                <span className="text-[13.5px] font-black text-stone-800">
+                <span className="text-[11px] font-black text-stone-800">
                   🧪 핵심 로직 자가진단 (단위·날짜·매칭·완성도)
                 </span>
                 <button
                   type="button"
                   onClick={runCoreLogicSelfTests}
-                  className="px-2.5 py-1 rounded-lg bg-stone-900 text-white text-[12.5px] font-extrabold shrink-0 whitespace-nowrap"
+                  className="px-2 py-1 rounded-lg bg-stone-900 text-white text-[10.5px] font-extrabold shrink-0 whitespace-nowrap"
                 >
                   테스트 실행
                 </button>
