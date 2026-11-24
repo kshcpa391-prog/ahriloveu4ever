@@ -1181,7 +1181,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v13.64";
+export const APP_CODE_VERSION = "v13.68";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1199,7 +1199,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-24 12:03";
+export const APP_BUILD_DATE = "2026-11-24 12:33";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1268,6 +1268,48 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v13.68",
+    version: "v13.68",
+    date: "2026-11-24",
+    title: "🗺️ 네이버지도 앱(nmap:// · Android intent) 바로 실행 연결 (버킷리스트·일정·달력 상세 4곳)",
+    highlights: [
+      "네이버지도 앱 직접 연결(openNaverMapApp): Android(intent:// + com.nhn.android.nmap + 미설치 시 웹 자동 폴백)와 iOS(nmap:// + 웹 폴백), PC(웹 새 창)를 자동 판별해 모바일에서 바로 네이버지도 앱이 열리도록 구현",
+      "좌표·검색 지능형 연동: 버킷리스트 등 좌표(lat/lng)가 있는 장소는 nmap://place 핀으로, 일정 장소는 nmap://search 검색으로 즉시 연결 (버킷 지도·버킷 목록·달력 하단 목록·조르테 일자 팝업 4곳 일괄 적용)"
+    ]
+  },
+  {
+    id: "patch-v13.67",
+    version: "v13.67",
+    date: "2026-11-24",
+    title: "📍 일정 [자주 가는 장소] 원탭 프리셋 & 자유 관리(schedule_places) 추가 + 전수 무결성·메모리누수 0건 최종 검증",
+    highlights: [
+      "일정 등록 편의성·자유도 확장: 통합 일정 모달(ScheduleFormModal)의 장소 입력란 아래에 원탭 [빠른장소] 칩(이진소아과·신당동어린이집·친정·시댁·마트 등)과 [⚙️ 편집] 바로가기를 추가하고, 통합 분류 관리(schedule_places)에서 자유 추가·수정·삭제·순서이동·클라우드 동기화 지원",
+      "UI 안전성·최종 전수 검증: 장소 입력란 min-w-0 보강, 이벤트 리스너(24:24)·타이머(4:4) 메모리 누수 0건, Babel JSX AST·미선언 식별자(ReferenceError)·CSS 오타 0건 최종 확인"
+    ]
+  },
+  {
+    id: "patch-v13.66",
+    version: "v13.66",
+    date: "2026-11-24",
+    title: "🔐 경조사비 메뉴 [관리자 수혁] 전용 완전 격리 (타 계정 메뉴·버튼 비노출 및 Firestore 권한 오류 해결)",
+    highlights: [
+      "Firestore 구독 오류 근본 해결: 육아지원군 등 타 계정에서 발생하던 '경조사비 동기화 오류: Missing or insufficient permissions.'를 해결하기 위해 경조사비 실시간 구독(condolence_config_v1 · family_condolence_v1)을 isSuhyeokAdmin 전용 useEffect로 분리",
+      "메뉴 및 진입점 100% 숨김: 더보기·설정·일정 D-Day·조르테 달력 팝업·가족공지·통합 카테고리 관리·백업/복원에서 경조사비 관련 모든 메뉴와 연계 버튼을 관리자 수혁(isSuhyeokAdmin) 로그인 시에만 노출",
+      "비인가 접근 차단: 수혁 외 계정 전환·로그아웃 시 경조사비 잠금·메모리 상태를 즉시 초기화하고 해당 탭 접근 시 홈으로 자동 이동"
+    ]
+  },
+  {
+    id: "patch-v13.65",
+    version: "v13.65",
+    date: "2026-11-24",
+    title: "🛡️ JSON 복원 맞춤분류 7종·트리펼침 클라우드 누락 수정 + 🩺 진료·증상 태그 자유관리 + 💌 경조사→🗂️ 공유노트 연계 + 홈 루틴필터 Firebase 이관",
+    highlights: [
+      "데이터 정합성 버그 수정: JSON 전체 복원(handleImportJson) 시 Firestore custom_categories_v1에 구 5종만 올라가고 경조사·상비약·수유태그·자주담기 등 신규 7종과 공유노트 펼침(expandedPageIds)이 누락되던 문제를 완전 수정",
+      "시스템 자유도·편의성 확장: 육아 [🩺 진료·체온] 입력 폼에 원탭 증상·진료 태그(미열·고열·콧물·기침·소아과·해열제 등)와 [⚙️ 태그] 바로가기를 추가하고 통합 분류 관리(baby_health_tags)에서 자유 추가·수정·삭제 지원",
+      "메뉴 연계·Firebase 이관: ① 경조사비 장부 상단에 [🗂️ 노트] 버튼을 추가해 현재 필터 기준 입출금 요약·내역을 공유노트 페이지로 1탭 저장 ② 홈 루틴 시간대·대상 필터(kim_home_routine_slot_v1·target_v1)를 Firestore(home_layout) 실시간 동기화로 이관"
+    ]
+  },
   {
     id: "patch-v13.64",
     version: "v13.64",
@@ -6486,3 +6528,7 @@ export const DEFAULT_SHOPPING_PRESETS = [
   "양파|1망|채소/과일",
   "바나나|1송이|채소/과일"
 ];
+
+export const DEFAULT_BABY_HEALTH_TAGS = ["미열", "고열", "콧물", "기침", "소아과", "해열제"];
+
+export const DEFAULT_SCHEDULE_PLACES = ["이진소아과", "신당동어린이집", "친정", "시댁", "마트"];

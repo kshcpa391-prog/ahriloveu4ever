@@ -174,7 +174,9 @@ import {
   CONDOLENCE_GROUPS,
   CONDOLENCE_PAY_METHODS,
   DEFAULT_BABY_MEMO_TAGS,
-  DEFAULT_SHOPPING_PRESETS
+  DEFAULT_SHOPPING_PRESETS,
+  DEFAULT_BABY_HEALTH_TAGS,
+  DEFAULT_SCHEDULE_PLACES
 } from "./Constants";
 
 
@@ -284,6 +286,52 @@ const getNaverMapUrl = (item) => {
   if (saved && (saved.includes("naver.com") || saved.includes("naver.me"))) return saved;
   const q = encodeURIComponent(String(item?.placeName || item?.title || "").trim());
   return `https://map.naver.com/p/search/${q}`;
+};
+
+const openNaverMapApp = (itemOrQuery) => {
+  const isObj = itemOrQuery && typeof itemOrQuery === "object";
+  const queryText = isObj
+    ? String(itemOrQuery.placeName || itemOrQuery.title || itemOrQuery.location || "").trim()
+    : String(itemOrQuery || "").trim();
+  const webUrl = isObj ? getNaverMapUrl(itemOrQuery) : `https://map.naver.com/p/search/${encodeURIComponent(queryText)}`;
+  if (typeof window === "undefined" || typeof navigator === "undefined") return;
+
+  const ua = navigator.userAgent || "";
+  const isAndroid = /Android/i.test(ua);
+  const isIOS = /iPhone|iPad|iPod/i.test(ua);
+
+  const hasCoords =
+    isObj &&
+    Number.isFinite(Number(itemOrQuery.lat)) &&
+    Number.isFinite(Number(itemOrQuery.lng)) &&
+    Number(itemOrQuery.lat) !== 0;
+
+  const pathPart = hasCoords
+    ? `place?lat=${Number(itemOrQuery.lat)}&lng=${Number(itemOrQuery.lng)}&name=${encodeURIComponent(queryText || "위치")}&appname=kimfamily`
+    : `search?query=${encodeURIComponent(queryText)}&appname=kimfamily`;
+
+  if (isAndroid && queryText) {
+    window.location.href = `intent://${pathPart}#Intent;scheme=nmap;action=android.intent.action.VIEW;category=android.intent.category.BROWSABLE;package=com.nhn.android.nmap;S.browser_fallback_url=${encodeURIComponent(webUrl)};end`;
+    return;
+  }
+
+  if (isIOS && queryText) {
+    let opened = false;
+    const onVis = () => {
+      if (document.hidden) opened = true;
+    };
+    document.addEventListener("visibilitychange", onVis, { once: true });
+    window.location.href = `nmap://${pathPart}`;
+    setTimeout(() => {
+      document.removeEventListener("visibilitychange", onVis);
+      if (!opened && !document.hidden) {
+        window.open(webUrl, "_blank", "noopener,noreferrer");
+      }
+    }, 900);
+    return;
+  }
+
+  window.open(webUrl, "_blank", "noopener,noreferrer");
 };
 
 const getGoogleMapUrl = (item) => {
@@ -546,7 +594,9 @@ const ScheduleFormModal = React.memo(({
   onPreviewImage,
   showToast,
   scheduleCategories = SCHEDULE_CATEGORIES,
-  onManageCategories
+  onManageCategories,
+  schedulePlaces = DEFAULT_SCHEDULE_PLACES,
+  onManagePlaces
 }) => {
   const [draft, setDraft] = useState(() => ({
     scheduleScope: "family",
@@ -757,7 +807,7 @@ const ScheduleFormModal = React.memo(({
               placeholder="예: 이진소아과"
               value={draft.location || ""}
               onChange={(e) => setDraft((p) => ({ ...p, location: e.target.value }))}
-              className="w-full px-2.5 py-2 rounded-xl border border-stone-200 text-[13px] font-bold bg-white"
+              className="w-full min-w-0 px-2.5 py-2 rounded-xl border border-stone-200 text-[13px] font-bold bg-white"
             />
           </div>
         </div>
@@ -778,6 +828,34 @@ const ScheduleFormModal = React.memo(({
             </button>
           ))}
         </div>
+        {Array.isArray(schedulePlaces) && schedulePlaces.length > 0 && (
+          <div className="flex items-center gap-1 flex-wrap -mt-1">
+            <span className="text-[10.5px] font-bold text-stone-400 whitespace-nowrap">빠른장소:</span>
+            {schedulePlaces.map((pl) => (
+              <button
+                key={pl}
+                type="button"
+                onClick={() => setDraft((p) => ({ ...p, location: p.location === pl ? "" : pl }))}
+                className={`px-2 py-0.5 rounded-lg text-[10.5px] font-extrabold border whitespace-nowrap transition ${
+                  draft.location === pl
+                    ? "bg-[#3F624D] text-white border-[#3F624D]"
+                    : "bg-stone-50 hover:bg-stone-100 text-stone-600 border-stone-200"
+                }`}
+              >
+                {pl}
+              </button>
+            ))}
+            {onManagePlaces && (
+              <button
+                type="button"
+                onClick={onManagePlaces}
+                className="px-1.5 py-0.5 rounded-lg bg-[#EEF3EE] hover:bg-[#dce8de] border border-[#C9D8CC] text-[10px] font-extrabold text-[#35503C] whitespace-nowrap"
+              >
+                ⚙️ 편집
+              </button>
+            )}
+          </div>
+        )}
 
         <div>
           <div className="flex items-center justify-between mb-0.5">
@@ -2701,7 +2779,9 @@ function MainApp() {
           condolence_pay: Array.isArray(saved.condolence_pay) && saved.condolence_pay.length > 0 ? saved.condolence_pay.map((s) => String(s || "").trim()).filter(Boolean) : [...CONDOLENCE_PAY_METHODS],
           house_med_target: Array.isArray(saved.house_med_target) && saved.house_med_target.length > 0 ? saved.house_med_target.map((s) => String(s || "").trim()).filter(Boolean) : [...HOUSE_MEDICINE_TARGETS],
           baby_memo_tags: Array.isArray(saved.baby_memo_tags) && saved.baby_memo_tags.length > 0 ? saved.baby_memo_tags.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_BABY_MEMO_TAGS],
-          shopping_presets: Array.isArray(saved.shopping_presets) && saved.shopping_presets.length > 0 ? saved.shopping_presets.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_SHOPPING_PRESETS]
+          shopping_presets: Array.isArray(saved.shopping_presets) && saved.shopping_presets.length > 0 ? saved.shopping_presets.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_SHOPPING_PRESETS],
+          baby_health_tags: Array.isArray(saved.baby_health_tags) && saved.baby_health_tags.length > 0 ? saved.baby_health_tags.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_BABY_HEALTH_TAGS],
+          schedule_places: Array.isArray(saved.schedule_places) && saved.schedule_places.length > 0 ? saved.schedule_places.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_SCHEDULE_PLACES]
         };
       }
     } catch (e) {}
@@ -2716,7 +2796,9 @@ function MainApp() {
       condolence_pay: [...CONDOLENCE_PAY_METHODS],
       house_med_target: [...HOUSE_MEDICINE_TARGETS],
       baby_memo_tags: [...DEFAULT_BABY_MEMO_TAGS],
-      shopping_presets: [...DEFAULT_SHOPPING_PRESETS]
+      shopping_presets: [...DEFAULT_SHOPPING_PRESETS],
+      baby_health_tags: [...DEFAULT_BABY_HEALTH_TAGS],
+      schedule_places: [...DEFAULT_SCHEDULE_PLACES]
     };
   });
   const fridgeCategories = customCategories.fridge;
@@ -2730,6 +2812,8 @@ function MainApp() {
   const houseMedTargets = customCategories.house_med_target || HOUSE_MEDICINE_TARGETS;
   const babyMemoTags = customCategories.baby_memo_tags || DEFAULT_BABY_MEMO_TAGS;
   const shoppingPresets = customCategories.shopping_presets || DEFAULT_SHOPPING_PRESETS;
+  const babyHealthTags = customCategories.baby_health_tags || DEFAULT_BABY_HEALTH_TAGS;
+  const schedulePlaces = customCategories.schedule_places || DEFAULT_SCHEDULE_PLACES;
 
   // === 🔒 비밀메뉴: 경조사비 입출금내역 상태 ===
   const isSuhyeokAdmin = isAdminUnlocked && (actorName === "수혁" || actorName === "김수혁");
@@ -5739,6 +5823,14 @@ function MainApp() {
             setExpandedPageIds(d.expandedPageIds);
             try { localStorage.setItem("kim_pages_expanded_v1", JSON.stringify(d.expandedPageIds)); } catch (e) {}
           }
+          if (typeof d?.homeRoutineSlot === "string" && d.homeRoutineSlot) {
+            setHomeRoutineSlotFilter(d.homeRoutineSlot);
+            try { localStorage.setItem("kim_home_routine_slot_v1", d.homeRoutineSlot); } catch (e) {}
+          }
+          if (typeof d?.homeRoutineTarget === "string" && d.homeRoutineTarget) {
+            setHomeRoutineTargetFilter(d.homeRoutineTarget);
+            try { localStorage.setItem("kim_home_routine_target_v1", d.homeRoutineTarget); } catch (e) {}
+          }
         },
         () => {}
       )
@@ -5897,7 +5989,9 @@ function MainApp() {
               condolence_pay: Array.isArray(d.condolence_pay) && d.condolence_pay.length > 0 ? d.condolence_pay.map((s) => String(s || "").trim()).filter(Boolean) : [...CONDOLENCE_PAY_METHODS],
               house_med_target: Array.isArray(d.house_med_target) && d.house_med_target.length > 0 ? d.house_med_target.map((s) => String(s || "").trim()).filter(Boolean) : [...HOUSE_MEDICINE_TARGETS],
               baby_memo_tags: Array.isArray(d.baby_memo_tags) && d.baby_memo_tags.length > 0 ? d.baby_memo_tags.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_BABY_MEMO_TAGS],
-              shopping_presets: Array.isArray(d.shopping_presets) && d.shopping_presets.length > 0 ? d.shopping_presets.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_SHOPPING_PRESETS]
+              shopping_presets: Array.isArray(d.shopping_presets) && d.shopping_presets.length > 0 ? d.shopping_presets.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_SHOPPING_PRESETS],
+              baby_health_tags: Array.isArray(d.baby_health_tags) && d.baby_health_tags.length > 0 ? d.baby_health_tags.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_BABY_HEALTH_TAGS],
+              schedule_places: Array.isArray(d.schedule_places) && d.schedule_places.length > 0 ? d.schedule_places.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_SCHEDULE_PLACES]
             };
             setCustomCategories(nextCats);
             try { localStorage.setItem("kim_custom_categories_v1", JSON.stringify(nextCats)); } catch (e) {}
@@ -5907,40 +6001,7 @@ function MainApp() {
       )
     );
 
-    // 🔒 비밀메뉴: 경조사비 비밀번호 설정 실시간 동기화
-    unsubscribers.push(
-      onSnapshot(
-        getDocRef("family_meta_v4", "condolence_config_v1"),
-        (snap) => {
-          if (snap.exists()) {
-            const p = String(snap.data()?.pin || "").trim();
-            if (p.length >= 4) {
-              setCondolencePin(p);
-              try { localStorage.setItem("kim_condolence_pin_v1", p); } catch (e) {}
-            }
-          }
-        },
-        () => {}
-      )
-    );
 
-    // 🔒 비밀메뉴: 경조사비 입출금내역 실시간 동기화
-    unsubscribers.push(
-      onSnapshot(
-        getColRef("family_condolence_v1"),
-        (snap) => {
-          const loaded = snap.docs
-            .map((d) => ({ id: d.id, ...d.data() }))
-            .filter((x) => x && x.id)
-            .sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")) || (Number(b.updatedAtMs) || 0) - (Number(a.updatedAtMs) || 0));
-          setCondolenceList(loaded);
-          try { localStorage.setItem("kim_condolence_cache_v1", JSON.stringify(loaded)); } catch (e) {}
-        },
-        (err) => {
-          setSyncErrorMsg(`경조사비 동기화 오류: ${err?.message || "권한/네트워크 확인"}`);
-        }
-      )
-    );
 
 
     unsubscribers.push(
@@ -6139,6 +6200,49 @@ function MainApp() {
       unsubscribers.forEach((u) => u && u());
     };
   }, [user, isApprovedUser]);
+
+  // 🔐 경조사비 비밀메뉴는 관리자 수혁(isSuhyeokAdmin) 전용 구독 & 비인가 접근 차단
+  useEffect(() => {
+    if (!isSuhyeokAdmin) {
+      setIsCondolenceUnlocked(false);
+      setCondolenceList([]);
+      setPendingCondolencePrefill(null);
+      if (activeTab === "condolence") setActiveTab("home");
+      return;
+    }
+    if (!user || !db || !isApprovedUser) return;
+    const unsubCfg = onSnapshot(
+      getDocRef("family_meta_v4", "condolence_config_v1"),
+      (snap) => {
+        if (snap.exists()) {
+          const p = String(snap.data()?.pin || "").trim();
+          if (p.length >= 4) {
+            setCondolencePin(p);
+            try { localStorage.setItem("kim_condolence_pin_v1", p); } catch (e) {}
+          }
+        }
+      },
+      () => {}
+    );
+    const unsubList = onSnapshot(
+      getColRef("family_condolence_v1"),
+      (snap) => {
+        const loaded = snap.docs
+          .map((d) => ({ id: d.id, ...d.data() }))
+          .filter((x) => x && x.id)
+          .sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")) || (Number(b.updatedAtMs) || 0) - (Number(a.updatedAtMs) || 0));
+        setCondolenceList(loaded);
+        try { localStorage.setItem("kim_condolence_cache_v1", JSON.stringify(loaded)); } catch (e) {}
+      },
+      (err) => {
+        setSyncErrorMsg(`경조사비 동기화 오류: ${err?.message || "권한/네트워크 확인"}`);
+      }
+    );
+    return () => {
+      unsubCfg();
+      unsubList();
+    };
+  }, [user, isApprovedUser, isSuhyeokAdmin, activeTab]);
 
 
   const meals = useMemo(() => {
@@ -6526,7 +6630,7 @@ function MainApp() {
         routineSlotDefs,
         routineViewMode,
         ...(isAdminUnlocked ? { babyDiaryEntries: safeDiaryEntries, privateSchedules } : {}),
-        ...(isAdminUnlocked || isCondolenceUnlocked ? { condolenceList } : {}),
+        ...(isSuhyeokAdmin ? { condolenceList } : {}),
         ...(isSuhyeokAdmin ? { condolencePin } : {})
       }
     };
@@ -6743,7 +6847,9 @@ function MainApp() {
           condolence_pay: Array.isArray(payload.customCategories.condolence_pay) && payload.customCategories.condolence_pay.length > 0 ? payload.customCategories.condolence_pay.map((s) => String(s || "").trim()).filter(Boolean) : [...CONDOLENCE_PAY_METHODS],
           house_med_target: Array.isArray(payload.customCategories.house_med_target) && payload.customCategories.house_med_target.length > 0 ? payload.customCategories.house_med_target.map((s) => String(s || "").trim()).filter(Boolean) : [...HOUSE_MEDICINE_TARGETS],
           baby_memo_tags: Array.isArray(payload.customCategories.baby_memo_tags) && payload.customCategories.baby_memo_tags.length > 0 ? payload.customCategories.baby_memo_tags.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_BABY_MEMO_TAGS],
-          shopping_presets: Array.isArray(payload.customCategories.shopping_presets) && payload.customCategories.shopping_presets.length > 0 ? payload.customCategories.shopping_presets.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_SHOPPING_PRESETS]
+          shopping_presets: Array.isArray(payload.customCategories.shopping_presets) && payload.customCategories.shopping_presets.length > 0 ? payload.customCategories.shopping_presets.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_SHOPPING_PRESETS],
+          baby_health_tags: Array.isArray(payload.customCategories.baby_health_tags) && payload.customCategories.baby_health_tags.length > 0 ? payload.customCategories.baby_health_tags.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_BABY_HEALTH_TAGS],
+          schedule_places: Array.isArray(payload.customCategories.schedule_places) && payload.customCategories.schedule_places.length > 0 ? payload.customCategories.schedule_places.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_SCHEDULE_PLACES]
         };
         setCustomCategories(nextCats);
         try { localStorage.setItem("kim_custom_categories_v1", JSON.stringify(nextCats)); } catch (e) {}
@@ -6810,7 +6916,7 @@ function MainApp() {
           setDoc(getDocRef("family_meta_v4", "condolence_config_v1"), { pin: rp, updatedAtMs: Date.now(), updatedBy: "김수혁" }, { merge: true }).catch(() => {});
         }
       }
-      if ((isAdminUnlocked || isCondolenceUnlocked) && Array.isArray(payload.condolenceList)) {
+      if (isSuhyeokAdmin && Array.isArray(payload.condolenceList)) {
         const cleanCond = payload.condolenceList.filter((c) => c && c.id);
         setCondolenceList(cleanCond);
         try { localStorage.setItem("kim_condolence_cache_v1", JSON.stringify(cleanCond)); } catch (e) {}
@@ -6966,13 +7072,18 @@ function MainApp() {
             )
           );
         }
-        if (typeof payload.homeShowCarryOver === "boolean" || typeof payload.activityPopupEnabled === "boolean") {
+        if (
+          typeof payload.homeShowCarryOver === "boolean" ||
+          typeof payload.activityPopupEnabled === "boolean" ||
+          (payload.expandedPageIds && typeof payload.expandedPageIds === "object" && !Array.isArray(payload.expandedPageIds))
+        ) {
           writePromises.push(
             setDoc(
               getDocRef("family_meta_v4", "home_layout"),
               {
                 ...(typeof payload.homeShowCarryOver === "boolean" ? { showCarryOver: payload.homeShowCarryOver } : {}),
                 ...(typeof payload.activityPopupEnabled === "boolean" ? { activityPopupEnabled: payload.activityPopupEnabled } : {}),
+                ...(payload.expandedPageIds && typeof payload.expandedPageIds === "object" && !Array.isArray(payload.expandedPageIds) ? { expandedPageIds: payload.expandedPageIds } : {}),
                 updatedAtMs: Date.now()
               },
               { merge: true }
@@ -6998,6 +7109,14 @@ function MainApp() {
                 notice: Array.isArray(payload.customCategories.notice) && payload.customCategories.notice.length > 0 ? payload.customCategories.notice : [...NOTICE_CATEGORIES],
                 bucket: Array.isArray(payload.customCategories.bucket) && payload.customCategories.bucket.length > 0 ? payload.customCategories.bucket : [...BUCKET_CATEGORIES],
                 schedule: Array.isArray(payload.customCategories.schedule) && payload.customCategories.schedule.length > 0 ? payload.customCategories.schedule : [...SCHEDULE_CATEGORIES],
+                condolence_cat: Array.isArray(payload.customCategories.condolence_cat) && payload.customCategories.condolence_cat.length > 0 ? payload.customCategories.condolence_cat : [...CONDOLENCE_CATEGORIES],
+                condolence_group: Array.isArray(payload.customCategories.condolence_group) && payload.customCategories.condolence_group.length > 0 ? payload.customCategories.condolence_group : [...CONDOLENCE_GROUPS],
+                condolence_pay: Array.isArray(payload.customCategories.condolence_pay) && payload.customCategories.condolence_pay.length > 0 ? payload.customCategories.condolence_pay : [...CONDOLENCE_PAY_METHODS],
+                house_med_target: Array.isArray(payload.customCategories.house_med_target) && payload.customCategories.house_med_target.length > 0 ? payload.customCategories.house_med_target : [...HOUSE_MEDICINE_TARGETS],
+                baby_memo_tags: Array.isArray(payload.customCategories.baby_memo_tags) && payload.customCategories.baby_memo_tags.length > 0 ? payload.customCategories.baby_memo_tags : [...DEFAULT_BABY_MEMO_TAGS],
+                shopping_presets: Array.isArray(payload.customCategories.shopping_presets) && payload.customCategories.shopping_presets.length > 0 ? payload.customCategories.shopping_presets : [...DEFAULT_SHOPPING_PRESETS],
+                baby_health_tags: Array.isArray(payload.customCategories.baby_health_tags) && payload.customCategories.baby_health_tags.length > 0 ? payload.customCategories.baby_health_tags : [...DEFAULT_BABY_HEALTH_TAGS],
+                schedule_places: Array.isArray(payload.customCategories.schedule_places) && payload.customCategories.schedule_places.length > 0 ? payload.customCategories.schedule_places : [...DEFAULT_SCHEDULE_PLACES],
                 updatedAtMs: Date.now()
               },
               { merge: true }
@@ -13806,7 +13925,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
   };
 
   const handleAddCustomCategory = async (kind, rawName) => {
-    const tabKey = (kind === "fridge" || kind === "shopping_presets") ? (kind === "shopping_presets" ? "shopping" : "fridge") : kind === "recipe" ? "recipes" : kind === "bucket" ? "bucket" : kind === "schedule" ? "schedule" : kind === "baby_memo_tags" ? "baby" : (kind === "house_room" || kind === "house_med_target") ? "house" : (kind === "condolence_cat" || kind === "condolence_group" || kind === "condolence_pay") ? "condolence" : "notices";
+    const tabKey = (kind === "fridge" || kind === "shopping_presets") ? (kind === "shopping_presets" ? "shopping" : "fridge") : kind === "recipe" ? "recipes" : kind === "bucket" ? "bucket" : (kind === "schedule" || kind === "schedule_places") ? "schedule" : (kind === "baby_memo_tags" || kind === "baby_health_tags") ? "baby" : (kind === "house_room" || kind === "house_med_target") ? "house" : (kind === "condolence_cat" || kind === "condolence_group" || kind === "condolence_pay") ? "condolence" : "notices";
     if (tabKey === "condolence") {
       if (!isCondolenceUnlocked) { showToast("🔒 경조사비 비밀번호 해제 후 편집할 수 있습니다."); return; }
     } else if (!requireEditorAccess(tabKey)) return;
@@ -13832,7 +13951,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
   };
 
   const handleRenameCustomCategory = async (kind, oldName, rawNext) => {
-    const tabKey = (kind === "fridge" || kind === "shopping_presets") ? (kind === "shopping_presets" ? "shopping" : "fridge") : kind === "recipe" ? "recipes" : kind === "bucket" ? "bucket" : kind === "schedule" ? "schedule" : kind === "baby_memo_tags" ? "baby" : (kind === "house_room" || kind === "house_med_target") ? "house" : (kind === "condolence_cat" || kind === "condolence_group" || kind === "condolence_pay") ? "condolence" : "notices";
+    const tabKey = (kind === "fridge" || kind === "shopping_presets") ? (kind === "shopping_presets" ? "shopping" : "fridge") : kind === "recipe" ? "recipes" : kind === "bucket" ? "bucket" : (kind === "schedule" || kind === "schedule_places") ? "schedule" : (kind === "baby_memo_tags" || kind === "baby_health_tags") ? "baby" : (kind === "house_room" || kind === "house_med_target") ? "house" : (kind === "condolence_cat" || kind === "condolence_group" || kind === "condolence_pay") ? "condolence" : "notices";
     if (tabKey === "condolence") {
       if (!isCondolenceUnlocked) { showToast("🔒 경조사비 비밀번호 해제 후 편집할 수 있습니다."); return; }
     } else if (!requireEditorAccess(tabKey)) return;
@@ -14040,7 +14159,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
   };
 
   const handleDeleteCustomCategory = async (kind, targetName) => {
-    const tabKey = (kind === "fridge" || kind === "shopping_presets") ? (kind === "shopping_presets" ? "shopping" : "fridge") : kind === "recipe" ? "recipes" : kind === "bucket" ? "bucket" : kind === "schedule" ? "schedule" : kind === "baby_memo_tags" ? "baby" : (kind === "house_room" || kind === "house_med_target") ? "house" : (kind === "condolence_cat" || kind === "condolence_group" || kind === "condolence_pay") ? "condolence" : "notices";
+    const tabKey = (kind === "fridge" || kind === "shopping_presets") ? (kind === "shopping_presets" ? "shopping" : "fridge") : kind === "recipe" ? "recipes" : kind === "bucket" ? "bucket" : (kind === "schedule" || kind === "schedule_places") ? "schedule" : (kind === "baby_memo_tags" || kind === "baby_health_tags") ? "baby" : (kind === "house_room" || kind === "house_med_target") ? "house" : (kind === "condolence_cat" || kind === "condolence_group" || kind === "condolence_pay") ? "condolence" : "notices";
     if (tabKey === "condolence") {
       if (!isCondolenceUnlocked) { showToast("🔒 경조사비 비밀번호 해제 후 편집할 수 있습니다."); return; }
     } else if (!requireEditorAccess(tabKey)) return;
@@ -14073,7 +14192,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
   };
 
   const handleMoveCustomCategory = async (kind, idx, delta) => {
-    const tabKey = (kind === "fridge" || kind === "shopping_presets") ? (kind === "shopping_presets" ? "shopping" : "fridge") : kind === "recipe" ? "recipes" : kind === "bucket" ? "bucket" : kind === "schedule" ? "schedule" : kind === "baby_memo_tags" ? "baby" : (kind === "house_room" || kind === "house_med_target") ? "house" : (kind === "condolence_cat" || kind === "condolence_group" || kind === "condolence_pay") ? "condolence" : "notices";
+    const tabKey = (kind === "fridge" || kind === "shopping_presets") ? (kind === "shopping_presets" ? "shopping" : "fridge") : kind === "recipe" ? "recipes" : kind === "bucket" ? "bucket" : (kind === "schedule" || kind === "schedule_places") ? "schedule" : (kind === "baby_memo_tags" || kind === "baby_health_tags") ? "baby" : (kind === "house_room" || kind === "house_med_target") ? "house" : (kind === "condolence_cat" || kind === "condolence_group" || kind === "condolence_pay") ? "condolence" : "notices";
     if (tabKey === "condolence") {
       if (!isCondolenceUnlocked) { showToast("🔒 경조사비 비밀번호 해제 후 편집할 수 있습니다."); return; }
     } else if (!requireEditorAccess(tabKey)) return;
@@ -14097,7 +14216,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
   };
 
   const handleResetCustomCategories = async (kind) => {
-    const tabKey = (kind === "fridge" || kind === "shopping_presets") ? (kind === "shopping_presets" ? "shopping" : "fridge") : kind === "recipe" ? "recipes" : kind === "bucket" ? "bucket" : kind === "schedule" ? "schedule" : kind === "baby_memo_tags" ? "baby" : (kind === "house_room" || kind === "house_med_target") ? "house" : (kind === "condolence_cat" || kind === "condolence_group" || kind === "condolence_pay") ? "condolence" : "notices";
+    const tabKey = (kind === "fridge" || kind === "shopping_presets") ? (kind === "shopping_presets" ? "shopping" : "fridge") : kind === "recipe" ? "recipes" : kind === "bucket" ? "bucket" : (kind === "schedule" || kind === "schedule_places") ? "schedule" : (kind === "baby_memo_tags" || kind === "baby_health_tags") ? "baby" : (kind === "house_room" || kind === "house_med_target") ? "house" : (kind === "condolence_cat" || kind === "condolence_group" || kind === "condolence_pay") ? "condolence" : "notices";
     if (tabKey === "condolence") {
       if (!isCondolenceUnlocked) { showToast("🔒 경조사비 비밀번호 해제 후 편집할 수 있습니다."); return; }
     } else if (!requireEditorAccess(tabKey)) return;
@@ -14126,6 +14245,10 @@ ${item.memo}` : `${item.title} 다녀옴!`,
         ? [...DEFAULT_BABY_MEMO_TAGS]
         : kind === "shopping_presets"
         ? [...DEFAULT_SHOPPING_PRESETS]
+        : kind === "baby_health_tags"
+        ? [...DEFAULT_BABY_HEALTH_TAGS]
+        : kind === "schedule_places"
+        ? [...DEFAULT_SCHEDULE_PLACES]
         : [...NOTICE_CATEGORIES];
     await saveCustomCategoriesToCloud({ ...customCategories, [kind]: defaults }, "↺ 기본 분류 목록으로 복원했습니다.");
   };
@@ -14341,6 +14464,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
   };
 
   const handleScheduleToCondolence = (sched) => {
+    if (!isSuhyeokAdmin) { showToast("🔒 관리자 수혁 계정 전용 메뉴입니다."); return; }
     if (!sched) return;
     const prefill = {
       date: sched.date || getTodayStr(),
@@ -18431,6 +18555,9 @@ time: "", location: "",
                               localStorage.setItem("kim_home_routine_slot_v1", "auto");
                               localStorage.setItem("kim_home_routine_target_v1", "전체");
                             } catch (e) {}
+                            if (user && db) {
+                              setDoc(getDocRef("family_meta_v4", "home_layout"), { homeRoutineSlot: "auto", homeRoutineTarget: "전체", updatedAtMs: Date.now() }, { merge: true }).catch(() => {});
+                            }
                           }}
                           className="h-7 px-2 rounded-lg text-[11.5px] font-bold text-[#2F523E] hover:bg-[#EEF3EE] whitespace-nowrap"
                         >
@@ -18486,6 +18613,9 @@ time: "", location: "",
                               onClick={() => {
                                 setHomeRoutineTargetFilter(tgt.id);
                                 try { localStorage.setItem("kim_home_routine_target_v1", tgt.id); } catch (e) {}
+                                if (user && db) {
+                                  setDoc(getDocRef("family_meta_v4", "home_layout"), { homeRoutineTarget: tgt.id, updatedAtMs: Date.now() }, { merge: true }).catch(() => {});
+                                }
                               }}
                               className={`h-7 px-2.5 rounded-lg text-[11px] font-semibold border whitespace-nowrap ${
                                 homeRoutineTargetFilter === tgt.id
@@ -18533,6 +18663,9 @@ time: "", location: "",
                               onClick={() => {
                                 setHomeRoutineSlotFilter(opt.id);
                                 try { localStorage.setItem("kim_home_routine_slot_v1", opt.id); } catch (e) {}
+                                if (user && db) {
+                                  setDoc(getDocRef("family_meta_v4", "home_layout"), { homeRoutineSlot: opt.id, updatedAtMs: Date.now() }, { merge: true }).catch(() => {});
+                                }
                               }}
                               className={`h-7 px-2.5 rounded-lg text-[11px] font-semibold border whitespace-nowrap ${
                                 effHomeSlotFilter === opt.id
@@ -22046,7 +22179,11 @@ time: "", location: "",
                                         href={`https://map.naver.com/p/search/${encodeURIComponent(ev.location)}`}
                                         target="_blank"
                                         rel="noopener noreferrer"
-                                        onClick={(e) => e.stopPropagation()}
+                                        onClick={(e) => {
+                                          e.preventDefault();
+                                          e.stopPropagation();
+                                          openNaverMapApp(ev.location);
+                                        }}
                                         className="px-1.5 py-0.5 rounded-md bg-white hover:bg-[#EEF3EE] border border-stone-200 text-stone-700 whitespace-nowrap inline-flex items-center gap-1"
                                         title="네이버지도에서 위치 보기"
                                       >
@@ -23889,7 +24026,7 @@ time: "", location: "",
                                 {isPinnedHome ? "📌 고정중" : "📌 홈"}
                               </button>
                             )}
-                            {String(item.category || "").includes("경조사") && (
+                            {isSuhyeokAdmin && String(item.category || "").includes("경조사") && (
                               <button
                                 type="button"
                                 onClick={() => handleScheduleToCondolence(item)}
@@ -25576,7 +25713,7 @@ time: "", location: "",
                         🗂️ 노트
                       </button>
                     )}
-                    {/경조사|축의|조의|결혼|장례|부고|돌잔치/.test(`${n.title || ""} ${n.content || ""} ${n.category || ""}`) && (
+                    {isSuhyeokAdmin && /경조사|축의|조의|결혼|장례|부고|돌잔치/.test(`${n.title || ""} ${n.content || ""} ${n.category || ""}`) && (
                       <button
                         type="button"
                         onClick={() => handleScheduleToCondolence({ title: n.title || "", date: getTodayStr(), location: "", memo: n.content || "" })}
@@ -26833,6 +26970,10 @@ time: "", location: "",
                             href={getNaverMapUrl(sel)}
                             target="_blank"
                             rel="noopener noreferrer"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              openNaverMapApp(sel);
+                            }}
                             className="px-2.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-extrabold whitespace-nowrap"
                           >
                             네이버지도
@@ -27004,6 +27145,10 @@ time: "", location: "",
                               href={getNaverMapUrl(item)}
                               target="_blank"
                               rel="noopener noreferrer"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                openNaverMapApp(item);
+                              }}
                               className="px-2 py-0.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-800 text-[10.5px] font-extrabold whitespace-nowrap"
                             >
                               네이버
@@ -27736,7 +27881,7 @@ time: "", location: "",
       {/* ==========================================
           🔒 비밀메뉴: 경조사비 입출금내역 (홈 화면 비노출 · 비밀번호 247233 · 김수혁 관리자 전용 비번변경)
       ========================================== */}
-      {activeTab === "condolence" && (() => {
+      {activeTab === "condolence" && isSuhyeokAdmin && (() => {
         if (!isCondolenceUnlocked) {
           return (
             <div className="bg-white rounded-3xl border border-stone-200 shadow-sm p-6 max-w-sm mx-auto mt-4 space-y-4">
@@ -27896,6 +28041,40 @@ time: "", location: "",
                   >
                     + 내역 추가
                   </button>
+                  {canEditTab("pages") && filteredList.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        const mdLines = [
+                          `### 💌 경조사비 장부 요약 (${hasActiveFilter ? "필터 적용" : "전체"} · ${filteredList.length}건)`,
+                          `- 입금: **+${subIn.toLocaleString()}원** · 출금: **-${subOut.toLocaleString()}원** · 차액: **${subNet >= 0 ? "+" : ""}${subNet.toLocaleString()}원**`,
+                          "### 📋 내역 목록",
+                          "| 날짜 | 구분 | 성명 | 분류·그룹 | 금액 | 비고 |",
+                          "| --- | --- | --- | --- | --- | --- |",
+                          ...filteredList.slice(0, 60).map((r) => `| ${r.date || ""} | ${r.type === "in" ? "입금" : "출금"} | ${r.person || ""} | ${r.category || ""}/${r.group || ""} | ${Number(r.amount || 0).toLocaleString()}원 | ${String(r.memo || "").replace(/\|/g, "/")} |`)
+                        ];
+                        if (filteredList.length > 60) mdLines.push(`- ... 외 ${filteredList.length - 60}건`);
+                        const newPage = {
+                          id: `page-cond-${Date.now().toString(36)}`,
+                          title: `경조사비 정리 (${getTodayStr()})`,
+                          icon: "💌",
+                          parentId: "",
+                          coverColor: "peach",
+                          blocks: parseNotionMarkdownToBlocks(mdLines.join("\n"), "amber"),
+                          updatedAt: new Date().toISOString(),
+                          updatedBy: actorName || "가족"
+                        };
+                        await savePageToCloud(newPage);
+                        setSelectedPageId(newPage.id);
+                        setActiveTab("pages");
+                        showToast("🗂️ 경조사비 요약 노트를 생성했습니다!");
+                      }}
+                      className="h-7 px-2 rounded-lg bg-stone-50 hover:bg-stone-100 border border-stone-200 text-stone-700 text-[11px] font-extrabold whitespace-nowrap"
+                      title="현재 필터 경조사비 내역을 공유노트에 정리"
+                    >
+                      🗂️ 노트
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => {
@@ -32509,13 +32688,42 @@ time: "", location: "",
                       </button>
                     ))}
                   </div>
-                  <input
-                    type="text"
-                    placeholder="증상·진료명 (예: 미열, 소아과)"
-                    value={medNoteForm.title}
-                    onChange={(e) => setMedNoteForm({ ...medNoteForm, title: e.target.value })}
-                    className="w-full px-3 py-2 rounded-xl border border-stone-200 text-[13.5px] font-bold"
-                  />
+                  <div className="space-y-1.5">
+                    <input
+                      type="text"
+                      placeholder="증상·진료명 (예: 미열, 소아과)"
+                      value={medNoteForm.title}
+                      onChange={(e) => setMedNoteForm({ ...medNoteForm, title: e.target.value })}
+                      className="w-full min-w-0 px-3 py-2 rounded-xl border border-stone-200 text-[13.5px] font-bold"
+                    />
+                    <div className="flex flex-wrap items-center gap-1">
+                      {babyHealthTags.map((tag) => (
+                        <button
+                          key={tag}
+                          type="button"
+                          onClick={() =>
+                            setMedNoteForm((p) => ({
+                              ...p,
+                              title: p.title ? (p.title.includes(tag) ? p.title : `${p.title} · ${tag}`) : tag
+                            }))
+                          }
+                          className="px-2 py-0.5 rounded-full bg-rose-50 hover:bg-rose-100 border border-rose-200 text-[10.5px] font-extrabold text-rose-900 whitespace-nowrap"
+                        >
+                          + {tag}
+                        </button>
+                      ))}
+                      {canEditTab("baby") && (
+                        <button
+                          type="button"
+                          onClick={() => openCategoryManager("baby_health_tags")}
+                          className="px-2 py-0.5 rounded-full bg-[#EEF3EE] hover:bg-[#dce8de] border border-[#C9D8CC] text-[10.5px] font-extrabold text-[#35503C] whitespace-nowrap"
+                          title="진료·증상 태그 편집"
+                        >
+                          ⚙️ 태그
+                        </button>
+                      )}
+                    </div>
+                  </div>
                   <input
                     type="text"
                     placeholder="처방약/해열제 복용시간 등 메모"
@@ -34446,24 +34654,26 @@ time: "", location: "",
                   </div>
                 </div>
               ))}
-              {/* 🔒 비밀메뉴 (홈 화면 비노출 · 비밀번호 보호) */}
-              <div className="pt-2 border-t border-stone-100 flex items-center justify-between gap-2">
-                <span className="text-[11px] font-bold text-stone-400">비밀 메뉴 (비밀번호 필요)</span>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setActiveTab("condolence");
-                    setIsMoreNavOpen(false);
-                  }}
-                  className={`px-2.5 py-1.5 rounded-xl border text-[11.5px] font-extrabold whitespace-nowrap transition flex items-center gap-1 ${
-                    activeTab === "condolence"
-                      ? "bg-stone-900 text-white border-stone-900"
-                      : "bg-stone-50 hover:bg-stone-100 text-stone-700 border-stone-200"
-                  }`}
-                >
-                  <span>🔒 경조사비</span>
-                </button>
-              </div>
+              {/* 🔒 비밀메뉴 (관리자 수혁 전용 · 타 계정 비노출) */}
+              {isSuhyeokAdmin && (
+                <div className="pt-2 border-t border-stone-100 flex items-center justify-between gap-2">
+                  <span className="text-[11px] font-bold text-stone-400">수혁 관리자 전용</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveTab("condolence");
+                      setIsMoreNavOpen(false);
+                    }}
+                    className={`px-2.5 py-1.5 rounded-xl border text-[11.5px] font-extrabold whitespace-nowrap transition flex items-center gap-1 ${
+                      activeTab === "condolence"
+                        ? "bg-stone-900 text-white border-stone-900"
+                        : "bg-stone-50 hover:bg-stone-100 text-stone-700 border-stone-200"
+                    }`}
+                  >
+                    <span>🔒 경조사비</span>
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -34913,6 +35123,10 @@ time: "", location: "",
                               href={`https://map.naver.com/p/search/${encodeURIComponent(activeDetail.location)}`}
                               target="_blank"
                               rel="noopener noreferrer"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                openNaverMapApp(activeDetail.location);
+                              }}
                               className="px-2 py-0.5 rounded-lg bg-[#EEF3EE] hover:bg-[#DFE9E0] border border-[#C9D8CC] text-[#2F523E] text-[11px] font-extrabold whitespace-nowrap"
                             >
                               🗺️ 네이버지도
@@ -35023,7 +35237,7 @@ time: "", location: "",
                         ⏭️ 내일로 미루기 (+1일)
                       </button>
                     )}
-                    {activeDetail._isFamily && String(activeDetail.category || "").includes("경조사") && (
+                    {isSuhyeokAdmin && activeDetail._isFamily && String(activeDetail.category || "").includes("경조사") && (
                       <button
                         type="button"
                         onClick={() => handleScheduleToCondolence(activeDetail)}
@@ -36066,6 +36280,8 @@ time: "", location: "",
           showToast={showToast}
           scheduleCategories={scheduleCategories}
           onManageCategories={canEditTab("schedule") ? () => openCategoryManager("schedule") : undefined}
+          schedulePlaces={schedulePlaces}
+          onManagePlaces={canEditTab("schedule") ? () => openCategoryManager("schedule_places") : undefined}
         />
       )}
 
@@ -38517,6 +38733,8 @@ time: "", location: "",
           house_med_target: { title: "💊 상비약 대상", placeholder: "새 복용 대상 (예: 수혁, 아리, 친정)" },
           baby_memo_tags: { title: "🍼 수유메모 태그", placeholder: "새 메모 태그 (예: 분유거부, 낮잠잘잠)" },
           shopping_presets: { title: "🛒 자주사는 품목", placeholder: "예: 식빵 또는 식빵|1봉|기타" },
+          baby_health_tags: { title: "🩺 진료·증상 태그", placeholder: "새 증상·진료 태그 (예: 중이염, 항생제)" },
+          schedule_places: { title: "📍 일정 빠른 장소", placeholder: "새 자주 가는 장소 (예: 보건소, 키즈카페)" },
           condolence_cat: { title: "💌 경조사 카테고리", placeholder: "새 경조사 분류 (예: 칠순/팔순, 집들이, 승진)" },
           condolence_group: { title: "👥 경조사 그룹", placeholder: "새 경조사 그룹 (예: 동호회, 대학동기, 거래처)" },
           condolence_pay: { title: "💳 경조사 결제수단", placeholder: "새 결제수단 (예: 카카오페이, 토스, 상품권, 화환)" }
@@ -38566,7 +38784,9 @@ time: "", location: "",
                   { id: "house_med_target", label: "💊 약대상", cnt: houseMedTargets.length },
                   { id: "baby_memo_tags", label: "🍼 수유태그", cnt: babyMemoTags.length },
                   { id: "shopping_presets", label: "🛒 자주담기", cnt: shoppingPresets.length },
-                  ...(isCondolenceUnlocked ? [
+                  { id: "baby_health_tags", label: "🩺 진료태그", cnt: babyHealthTags.length },
+                  { id: "schedule_places", label: "📍 일정장소", cnt: schedulePlaces.length },
+                  ...(isSuhyeokAdmin && isCondolenceUnlocked ? [
                     { id: "condolence_cat", label: "💌 경조분류", cnt: condolenceCategories.length },
                     { id: "condolence_group", label: "👥 경조그룹", cnt: condolenceGroups.length },
                     { id: "condolence_pay", label: "💳 결제수단", cnt: condolencePayMethods.length }
@@ -39045,17 +39265,19 @@ time: "", location: "",
               </button>
             )}
 
-            <button
-              type="button"
-              onClick={() => {
-                setIsSettingsOpen(false);
-                setActiveTab("condolence");
-              }}
-              className="w-full py-1.5 px-2.5 rounded-xl bg-stone-50 hover:bg-stone-100 border border-stone-200 text-stone-700 text-[11px] font-extrabold flex items-center justify-between gap-2 whitespace-nowrap"
-            >
-              <span className="truncate">🔒 경조사비 입출금내역 (비밀메뉴)</span>
-              <ChevronRight className="w-4 h-4 shrink-0" />
-            </button>
+            {isSuhyeokAdmin && (
+              <button
+                type="button"
+                onClick={() => {
+                  setIsSettingsOpen(false);
+                  setActiveTab("condolence");
+                }}
+                className="w-full py-1.5 px-2.5 rounded-xl bg-stone-50 hover:bg-stone-100 border border-stone-200 text-stone-700 text-[11px] font-extrabold flex items-center justify-between gap-2 whitespace-nowrap"
+              >
+                <span className="truncate">🔒 경조사비 입출금내역 (수혁 전용)</span>
+                <ChevronRight className="w-4 h-4 shrink-0" />
+              </button>
+            )}
 
 
             <button
