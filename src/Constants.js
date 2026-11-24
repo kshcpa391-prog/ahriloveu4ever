@@ -1181,7 +1181,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v13.77";
+export const APP_CODE_VERSION = "v13.78";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1199,7 +1199,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-24 13:58";
+export const APP_BUILD_DATE = "2026-11-24 14:00";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1268,6 +1268,16 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v13.78",
+    version: "v13.78",
+    date: "2026-11-24",
+    title: "🔧 최근 활동 권한 필터 즉시 반영 수정 + 관리자 쪽지함 [모두 읽음·답장·회원관리 연계] 고도화",
+    highlights: [
+      "버그 수정: visibleRecentActivities 메모이제이션 의존성에 helperRolePermissions·userProfile을 추가해 분류별/개별 메뉴 권한 변경 시 최근 활동 노출 필터가 즉시 반영되도록 개선",
+      "관리자 쪽지함 고도화 & 메뉴 연계: [모두 읽음] 일괄 처리, 보낸 사람에게 [✉️ 답장] 메일 쓰기, [👤 회원관리]로 설정창 바로 열기 연계 추가 및 전체 코드 배포 오류 점검 완료"
+    ]
+  },
   {
     id: "patch-v13.77",
     version: "v13.77",

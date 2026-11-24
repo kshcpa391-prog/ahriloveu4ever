@@ -4354,7 +4354,7 @@ function MainApp() {
       const tab = ACTIVITY_CAT_TAB_MAP[a.category];
       return !tab || canViewTab(tab);
     });
-  }, [recentActivities, isAdminUnlocked, accessRole, helperAllowedTabs, guestAllowedTabs]);
+  }, [recentActivities, isAdminUnlocked, accessRole, helperAllowedTabs, guestAllowedTabs, helperRolePermissions, userProfile]);
 
 
 
@@ -41269,19 +41269,53 @@ time: "", location: "",
               onClick={(e) => e.stopPropagation()}
               className="bg-white rounded-2xl w-full max-w-md max-h-[82vh] flex flex-col shadow-2xl border border-stone-200 overflow-hidden"
             >
-              <div className="px-4 py-3 border-b border-stone-100 flex items-center justify-between bg-stone-50">
-                <div className="flex items-center gap-1.5">
+              <div className="px-4 py-3 border-b border-stone-100 flex items-center justify-between gap-2 bg-stone-50">
+                <div className="flex items-center gap-1.5 min-w-0">
                   <span className="text-[14px]">💌</span>
-                  <h3 className="text-[13.5px] font-black text-stone-900">도착한 쪽지 ({allNotes.length}건)</h3>
+                  <h3 className="text-[13.5px] font-black text-stone-900 truncate">도착한 쪽지 ({allNotes.length}건)</h3>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setShowAdminInboxModal(false)}
-                  className="w-7 h-7 rounded-full bg-white border border-stone-200 text-stone-500 hover:text-stone-800 flex items-center justify-center text-[12px] font-black"
-                  aria-label="닫기"
-                >
-                  ✕
-                </button>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  {allNotes.some((n) => !n.read) && (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        const nextNotes = (adminInboxNotes || []).map((n) => (n.read ? n : { ...n, read: true, readAtMs: Date.now() }));
+                        setAdminInboxNotes(nextNotes);
+                        try {
+                          await setDoc(
+                            getDocRef("family_meta_v4", "admin_inbox_notes_v1"),
+                            { items: nextNotes, updatedAtMs: Date.now() },
+                            { merge: true }
+                          );
+                          const pendingSenders = managedUsers.filter((u) => u.lastAdminNote && !u.lastAdminNote.read);
+                          if (pendingSenders.length > 0) {
+                            const batch = writeBatch(db);
+                            pendingSenders.forEach((u) => {
+                              batch.set(
+                                getDocRef("users", u.uid),
+                                { lastAdminNote: { ...u.lastAdminNote, read: true, readAtMs: Date.now() } },
+                                { merge: true }
+                              );
+                            });
+                            await batch.commit();
+                          }
+                          showToast("✓ 모든 쪽지를 읽음 처리했습니다.");
+                        } catch (e) {}
+                      }}
+                      className="px-2 py-1 rounded-lg bg-[#EEF3EE] hover:bg-[#DFE9E0] border border-[#C9D8CC] text-[#35503C] text-[10.5px] font-extrabold whitespace-nowrap"
+                    >
+                      ✓ 모두 읽음
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setShowAdminInboxModal(false)}
+                    className="w-7 h-7 rounded-full bg-white border border-stone-200 text-stone-500 hover:text-stone-800 flex items-center justify-center text-[12px] font-black"
+                    aria-label="닫기"
+                  >
+                    ✕
+                  </button>
+                </div>
               </div>
               <div className="p-3 overflow-y-auto space-y-2">
                 {allNotes.length === 0 ? (
@@ -41340,23 +41374,48 @@ time: "", location: "",
                           })}
                         </div>
                       )}
-                      <div className="flex items-center justify-end gap-1.5 pt-1">
-                        {!n.read && (
+                      <div className="flex items-center justify-between gap-1.5 pt-1">
+                        <div className="flex items-center gap-1">
+                          {n.fromUid && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setShowAdminInboxModal(false);
+                                setExpandedUserUid(n.fromUid);
+                                setIsSettingsOpen(true);
+                              }}
+                              className="px-2 py-0.5 rounded-md bg-white border border-stone-200 text-stone-700 hover:bg-stone-100 text-[10px] font-extrabold whitespace-nowrap"
+                            >
+                              👤 회원관리
+                            </button>
+                          )}
+                          {n.fromEmail && (
+                            <a
+                              href={`mailto:${encodeURIComponent(n.fromEmail)}?subject=${encodeURIComponent(`[혁리나목율♡] ${n.fromName || "가족"}님 쪽지 답변`)}`}
+                              className="px-2 py-0.5 rounded-md bg-white border border-stone-200 text-stone-700 hover:bg-stone-100 text-[10px] font-extrabold whitespace-nowrap"
+                            >
+                              ✉️ 답장
+                            </a>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-1">
+                          {!n.read && (
+                            <button
+                              type="button"
+                              onClick={() => handleMarkAdminNoteRead(n.id, n.fromUid)}
+                              className="px-2 py-0.5 rounded-md bg-[#3F624D] text-white text-[10px] font-extrabold whitespace-nowrap"
+                            >
+                              ✓ 읽음
+                            </button>
+                          )}
                           <button
                             type="button"
-                            onClick={() => handleMarkAdminNoteRead(n.id, n.fromUid)}
-                            className="px-2 py-0.5 rounded-md bg-[#3F624D] text-white text-[10px] font-extrabold"
+                            onClick={() => handleDeleteAdminNote(n.id, n.fromUid)}
+                            className="px-2 py-0.5 rounded-md bg-white border border-rose-200 text-rose-600 text-[10px] font-extrabold whitespace-nowrap"
                           >
-                            ✓ 읽음
+                            삭제
                           </button>
-                        )}
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteAdminNote(n.id, n.fromUid)}
-                          className="px-2 py-0.5 rounded-md bg-white border border-rose-200 text-rose-600 text-[10px] font-extrabold"
-                        >
-                          삭제
-                        </button>
+                        </div>
                       </div>
                     </div>
                   ))
