@@ -1181,7 +1181,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v14.00";
+export const APP_CODE_VERSION = "v14.01";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1199,7 +1199,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-25 00:18";
+export const APP_BUILD_DATE = "2026-11-25 08:35";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1268,6 +1268,18 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v14.01",
+    version: "v14.01",
+    date: "2026-11-25",
+    title: "📝 공유노트 성장일기식 자유 글쓰기·편집 및 사진·파일 첨부 구현",
+    highlights: [
+      "공유노트 상세에 성장일기처럼 여러 줄을 쭉 쓰고 자유롭게 수정하는 [자유 본문(noteBody)] 에디터 및 [📅 오늘 날짜 넣기] 버튼 추가",
+      "공유노트 [📷 사진·파일 첨부] 기능 구현(이미지 자동 압축 썸네일 그리드·원본 확대 보기·문서/PDF 다운로드·목록 📎 개수 배지·검색 통합)",
+      "자유 본문 내용을 1탭으로 [🗓️ 일정·할일 등록]하거나 마크다운 복사에 포함하도록 메뉴 연계 강화",
+      "공유노트 내 이질적인 파란색(#2383E2)·검정 버튼을 앱 표준 세이지 그린(#3F624D) 톤으로 통일 및 Firestore 저장 오류 안내 추가"
+    ]
+  },
   {
     id: "patch-v14.00",
     version: "v14.00",
