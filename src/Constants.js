@@ -1181,7 +1181,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v13.72";
+export const APP_CODE_VERSION = "v13.75";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1199,7 +1199,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-24 13:02";
+export const APP_BUILD_DATE = "2026-11-24 13:50";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1268,6 +1268,36 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v13.75",
+    version: "v13.75",
+    date: "2026-11-24",
+    title: "🛡️ [분류·권한 설정] 전용 팝업 신설 + 설정창 하단 지원군 권한표 제거",
+    highlights: [
+      "설정창 슬림화: 회원명단 아래에 길게 있던 육아지원군 메뉴 권한 표를 제거해 설정창 시각적 피로도를 대폭 낮춤",
+      "[🛡️ 분류·권한 설정] 팝업 모달 신설: 분류 추가·삭제·분류명 일괄 변경(해당 회원 자동 반영)과 각 분류별 메뉴 열람·편집 권한 설정을 팝업 한 곳에서 관리하고 Firebase(access_config.helperRolePermissions)에 실시간 동기화"
+    ]
+  },
+  {
+    id: "patch-v13.74",
+    version: "v13.74",
+    date: "2026-11-24",
+    title: "👥 회원명단 표 모바일 잘림 수정 + 회원 탈퇴(Firebase Auth 삭제) 및 인라인 2탭 삭제 적용",
+    highlights: [
+      "회원명단 표 오른쪽 잘림 수정: minmax(0, ...) 유연 그리드와 단일 [▾] 관리 열로 조정해 좁은 모바일 화면에서도 5열이 잘리지 않고 깔끔하게 표시([⚙️ 메뉴권한]은 행 펼침 내부로 통합)",
+      "회원 탈퇴 처리 및 재가입/되살아남 차단: 회원 제거 시 role: withdrawn 처리 후 대상 기기에서 Firebase Auth deleteUser() 자동 실행, 인앱 브라우저에서 window.confirm 무반응 버그를 없앤 인라인 [⚠️ 탈퇴확정] 2탭 확인 도입"
+    ]
+  },
+  {
+    id: "patch-v13.73",
+    version: "v13.73",
+    date: "2026-11-24",
+    title: "🔔 모달 위 토스트 알림 가림 버그 수정 + EmailJS [내 메일로 테스트] 버튼 추가",
+    highlights: [
+      "알림 토스트(toastMsg)·진행 배너(z-[9999]/[9998]) 및 활동 팝업(z-[9990]) 최상단 레이어 적용: 설정창 등 모달(z-50~z-[70]) 위에서도 알림이 가려지지 않고 선명하게 표시되며 2줄까지 자연스럽게 노출",
+      "EmailJS 설정 카드에 [내 메일로 테스트] 버튼 추가 및 오류 상태코드·사유 토스트 안내 지원, 입력칸 글자 크기(10px) 미세 조정으로 긴 키 가독성 개선"
+    ]
+  },
   {
     id: "patch-v13.72",
     version: "v13.72",

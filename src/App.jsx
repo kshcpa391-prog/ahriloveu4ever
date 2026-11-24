@@ -55,6 +55,7 @@ import {
   updateProfile,
   sendPasswordResetEmail,
   sendEmailVerification,
+  deleteUser,
   setPersistence,
   browserLocalPersistence,
   signOut
@@ -1787,6 +1788,8 @@ function MainApp() {
   const [editingPermUid, setEditingPermUid] = useState(null);
   const [editingUserNameUid, setEditingUserNameUid] = useState(null);
   const [editingUserNameDraft, setEditingUserNameDraft] = useState("");
+  const [confirmDeleteUserUid, setConfirmDeleteUserUid] = useState(null);
+  const [confirmBulkDeleteUsers, setConfirmBulkDeleteUsers] = useState(false);
   const [selectedUserUids, setSelectedUserUids] = useState([]);
   const [bulkUserRoleVal, setBulkUserRoleVal] = useState("helper:육아지원군");
   const [expandedUserUid, setExpandedUserUid] = useState(null);
@@ -1800,7 +1803,19 @@ function MainApp() {
     }
   });
   const [newRoleLabelInput, setNewRoleLabelInput] = useState("");
-  const [showRoleLabelManager, setShowRoleLabelManager] = useState(false);
+  const [showRolePermModal, setShowRolePermModal] = useState(false);
+  const [selectedPermRoleLabel, setSelectedPermRoleLabel] = useState("");
+  const [editingRoleLabelMode, setEditingRoleLabelMode] = useState(false);
+  const [editingRoleLabelDraft, setEditingRoleLabelDraft] = useState("");
+  const [confirmDeleteRoleLabel, setConfirmDeleteRoleLabel] = useState(null);
+  const [helperRolePermissions, setHelperRolePermissions] = useState(() => {
+    try {
+      const parsed = JSON.parse(localStorage.getItem("family_helper_role_perms_v1") || "{}");
+      return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+    } catch (e) {
+      return {};
+    }
+  });
   const [authMode, setAuthMode] = useState("login");
   const [rememberEmail, setRememberEmail] = useState(() => {
     try {
@@ -4271,11 +4286,20 @@ function MainApp() {
   const [toastMsg, setToastMsg] = useState("");
 
 
+  const rolePermForCurrentHelper =
+    isHelperUnlocked &&
+    userProfile?.roleLabel &&
+    helperRolePermissions?.[userProfile.roleLabel]
+      ? helperRolePermissions[userProfile.roleLabel]
+      : null;
+
   const effectiveHelperAllowedTabs =
     isHelperUnlocked &&
     userProfile?.useCustomTabs &&
     Array.isArray(userProfile?.customAllowedTabs)
       ? userProfile.customAllowedTabs
+      : Array.isArray(rolePermForCurrentHelper?.viewTabs)
+      ? rolePermForCurrentHelper.viewTabs
       : helperAllowedTabs;
 
   const effectiveHelperEditTabs =
@@ -4283,6 +4307,8 @@ function MainApp() {
     userProfile?.useCustomTabs &&
     Array.isArray(userProfile?.customEditTabs)
       ? userProfile.customEditTabs
+      : Array.isArray(rolePermForCurrentHelper?.editTabs)
+      ? rolePermForCurrentHelper.editTabs
       : helperEditTabs;
 
   const canViewTab = (tabId) => {
@@ -4639,7 +4665,7 @@ function MainApp() {
     }
   };
 
-  const sendSignupCompleteEmail = async ({ toEmail, toName, kind = "signup", roleLabel = "", allowMailtoFallback = false }) => {
+  const sendSignupCompleteEmail = async ({ toEmail, toName, kind = "signup", roleLabel = "", allowMailtoFallback = false, configOverride = null }) => {
     const cleanEmail = String(toEmail || "").trim();
     if (!cleanEmail) return { ok: false, reason: "no_email" };
     const cleanName = String(toName || "가족").trim();
@@ -4652,7 +4678,8 @@ function MainApp() {
       ? `안녕하세요, ${cleanName}님!\n\n혁리나목율♡ 가족 앱 회원가입 승인이 완료되었습니다.${roleLabel ? ` (권한: ${roleLabel})` : ""}\n아래 주소로 접속하여 로그인해 주세요.\n\n접속 주소: ${appUrl}`
       : `안녕하세요, ${cleanName}님!\n\n혁리나목율♡ 가족 앱 회원가입이 완료되었습니다.\n관리자(수혁) 승인 후 바로 이용하실 수 있습니다.\n\n접속 주소: ${appUrl}`;
 
-    const { serviceId, templateId, publicKey } = emailJsConfig || {};
+    const { serviceId, templateId, publicKey } = configOverride || emailJsConfig || {};
+    let lastErrorDetail = "";
     if (serviceId && templateId && publicKey) {
       try {
         const res = await fetch("https://api.emailjs.com/api/v1.0/email/send", {
@@ -4672,7 +4699,14 @@ function MainApp() {
           })
         });
         if (res.ok) return { ok: true, method: "emailjs" };
-      } catch (err) {}
+        const errText = await res.text().catch(() => "");
+        lastErrorDetail = `${res.status}${errText ? ` ${errText.slice(0, 60)}` : ""}`;
+      } catch (err) {
+        lastErrorDetail = err?.message || "네트워크 오류";
+      }
+      if (!allowMailtoFallback) {
+        return { ok: false, reason: "emailjs_error", detail: lastErrorDetail };
+      }
     }
     if (allowMailtoFallback && typeof window !== "undefined") {
       window.location.href = `mailto:${encodeURIComponent(cleanEmail)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(message)}`;
@@ -4774,19 +4808,61 @@ function MainApp() {
     }
   };
 
-  const saveHelperRoleLabelsToCloud = async (nextLabels) => {
+  const saveHelperRoleLabelsToCloud = async (nextLabels, nextPerms = null) => {
     const clean = Array.from(new Set(nextLabels.map((x) => String(x || "").trim()).filter(Boolean)));
     if (clean.length === 0) return;
     setHelperRoleLabels(clean);
     try { localStorage.setItem("family_helper_role_labels_v1", JSON.stringify(clean)); } catch (e) {}
+    const payload = { helperRoleLabels: clean, updatedAtMs: Date.now() };
+    if (nextPerms && typeof nextPerms === "object") {
+      setHelperRolePermissions(nextPerms);
+      try { localStorage.setItem("family_helper_role_perms_v1", JSON.stringify(nextPerms)); } catch (e) {}
+      payload.helperRolePermissions = nextPerms;
+    }
+    if (user && db && isAdminUnlocked) {
+      try {
+        await setDoc(getDocRef("family_meta_v4", "access_config"), payload, { merge: true });
+      } catch (e) {}
+    }
+  };
+
+  const saveHelperRolePermissionsToCloud = async (nextPerms) => {
+    const cleanPerms = nextPerms && typeof nextPerms === "object" ? nextPerms : {};
+    setHelperRolePermissions(cleanPerms);
+    try { localStorage.setItem("family_helper_role_perms_v1", JSON.stringify(cleanPerms)); } catch (e) {}
     if (user && db && isAdminUnlocked) {
       try {
         await setDoc(
           getDocRef("family_meta_v4", "access_config"),
-          { helperRoleLabels: clean, updatedAtMs: Date.now() },
+          { helperRolePermissions: cleanPerms, updatedAtMs: Date.now() },
           { merge: true }
         );
       } catch (e) {}
+    }
+  };
+
+  const renameHelperRoleLabelToCloud = async (oldLabel, newLabel) => {
+    const cleanOld = String(oldLabel || "").trim();
+    const cleanNew = String(newLabel || "").trim();
+    if (!cleanOld || !cleanNew || cleanOld === cleanNew) return;
+    const nextLabels = Array.from(new Set(helperRoleLabels.map((l) => (l === cleanOld ? cleanNew : l))));
+    const nextPerms = { ...(helperRolePermissions || {}) };
+    if (nextPerms[cleanOld]) {
+      nextPerms[cleanNew] = nextPerms[cleanOld];
+      delete nextPerms[cleanOld];
+    }
+    await saveHelperRoleLabelsToCloud(nextLabels, nextPerms);
+    if (user && db && isAdminUnlocked) {
+      const affected = managedUsers.filter((u) => u.role === "helper" && u.roleLabel === cleanOld);
+      if (affected.length > 0) {
+        try {
+          const batch = writeBatch(db);
+          affected.forEach((u) => {
+            batch.set(getDocRef("users", u.uid), { roleLabel: cleanNew, updatedAtMs: Date.now() }, { merge: true });
+          });
+          await batch.commit();
+        } catch (e) {}
+      }
     }
   };
 
@@ -4885,41 +4961,51 @@ function MainApp() {
     if (!db || !isAdminUnlocked || !Array.isArray(uids) || uids.length === 0) return;
     const targets = uids.filter((id) => id && id !== user?.uid);
     if (targets.length === 0) return;
-    if (!window.confirm(`선택한 ${targets.length}명의 계정을 목록에서 일괄 삭제하시겠습니까?`)) return;
     beginWrite();
     try {
+      const nowMs = Date.now();
       for (let i = 0; i < targets.length; i += 200) {
         const batch = writeBatch(db);
         targets.slice(i, i + 200).forEach((uid) => {
-          batch.delete(getDocRef("users", uid));
+          batch.set(
+            getDocRef("users", uid),
+            { role: "withdrawn", withdrawnAtMs: nowMs, withdrawnBy: actorName || "수혁", updatedAtMs: nowMs },
+            { merge: true }
+          );
         });
         await batch.commit();
       }
       setSelectedUserUids([]);
+      setConfirmBulkDeleteUsers(false);
       if (expandedUserUid && targets.includes(expandedUserUid)) setExpandedUserUid(null);
       if (editingUserNameUid && targets.includes(editingUserNameUid)) setEditingUserNameUid(null);
       endWrite(true);
-      showToast(`🗑️ ${targets.length}명의 사용자를 일괄 삭제했습니다.`);
+      showToast(`🗑️ ${targets.length}명의 회원을 탈퇴 처리했습니다.`);
     } catch (err) {
       endWrite(false);
-      showToast("일괄 삭제 실패: " + (err?.message || "오류"));
+      showToast("일괄 탈퇴 처리 실패: " + (err?.message || "오류"));
     }
   };
 
   const handleDeleteUserDoc = async (targetUid, labelName = "사용자") => {
     if (!db || !isAdminUnlocked || !targetUid || targetUid === user?.uid) return;
-    if (!window.confirm(`[${labelName}] 계정을 목록에서 삭제하시겠습니까?`)) return;
     beginWrite();
     try {
-      await deleteDoc(getDocRef("users", targetUid));
+      const nowMs = Date.now();
+      await setDoc(
+        getDocRef("users", targetUid),
+        { role: "withdrawn", withdrawnAtMs: nowMs, withdrawnBy: actorName || "수혁", updatedAtMs: nowMs },
+        { merge: true }
+      );
       setSelectedUserUids((prev) => prev.filter((id) => id !== targetUid));
+      setConfirmDeleteUserUid(null);
       if (expandedUserUid === targetUid) setExpandedUserUid(null);
       if (editingUserNameUid === targetUid) setEditingUserNameUid(null);
       endWrite(true);
-      showToast("🗑️ 사용자 목록에서 삭제되었습니다.");
+      showToast(`🗑️ [${labelName}] 회원이 탈퇴 처리되었습니다.`);
     } catch (err) {
       endWrite(false);
-      showToast("삭제 실패: " + (err?.message || "오류"));
+      showToast("탈퇴 처리 실패: " + (err?.message || "오류"));
     }
   };
 
@@ -5527,6 +5613,19 @@ function MainApp() {
           return;
         }
         const data = { ...snap.data(), uid: snap.id };
+        if (data.role === "withdrawn") {
+          setUserProfile(data);
+          setAccessRole("guest");
+          setProfileLoading(false);
+          try {
+            await deleteUser(user);
+            await deleteDoc(userRef).catch(() => {});
+            showToast("회원 탈퇴 처리되어 계정이 삭제되었습니다.");
+          } catch (delErr) {
+            // auth/requires-recent-login 등의 경우 탈퇴 안내 화면을 유지하여 재인증 후 탈퇴 또는 로그아웃 유도
+          }
+          return;
+        }
         setUserProfile(data);
         if (data.role === "admin" || data.role === "helper") {
           setAccessRole(data.role);
@@ -5579,6 +5678,7 @@ function MainApp() {
         const order = { pending: 0, admin: 1, helper: 2, rejected: 3 };
         const list = snap.docs
           .map((d) => ({ ...d.data(), uid: d.id }))
+          .filter((u) => u.role !== "withdrawn")
           .sort((a, b) => {
             const oa = order[a.role] ?? 9;
             const ob = order[b.role] ?? 9;
@@ -5730,6 +5830,10 @@ function MainApp() {
                 const rLabels = toSafeArray(cfgData.helperRoleLabels);
                 setHelperRoleLabels(rLabels);
                 try { localStorage.setItem("family_helper_role_labels_v1", JSON.stringify(rLabels)); } catch (e) {}
+              }
+              if (cfgData.helperRolePermissions && typeof cfgData.helperRolePermissions === "object" && !Array.isArray(cfgData.helperRolePermissions)) {
+                setHelperRolePermissions(cfgData.helperRolePermissions);
+                try { localStorage.setItem("family_helper_role_perms_v1", JSON.stringify(cfgData.helperRolePermissions)); } catch (e) {}
               }
             }
             if (d.id === "recent_activity" && Array.isArray(d.data().items)) {
@@ -17319,7 +17423,46 @@ ${item.memo}` : `${item.title} 다녀옴!`,
   }
 
   if (!isApprovedUser) {
+    const isWithdrawn = userProfile?.role === "withdrawn";
     const isRejected = userProfile?.role === "rejected";
+    if (isWithdrawn) {
+      return (
+        <div className="min-h-screen bg-[#FAF8F3] text-stone-800 max-w-md mx-auto flex items-center justify-center p-5 font-sans">
+          <div className="bg-white rounded-3xl border border-stone-200 p-6 w-full text-center space-y-4 shadow-lg">
+            <div className="text-3xl">👋</div>
+            <div className="space-y-1">
+              <h2 className="text-[17px] font-black text-stone-900">탈퇴 처리된 계정입니다</h2>
+              <p className="text-[12.5px] text-stone-500 leading-relaxed">
+                관리자에 의해 회원 탈퇴 처리되었습니다. 다시 이용하려면 계정 정리를 완료한 뒤 새로 가입해 주세요.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={async () => {
+                try {
+                  await deleteUser(user);
+                  await deleteDoc(getDocRef("users", user.uid)).catch(() => {});
+                  showToast("계정이 완전히 삭제되었습니다.");
+                } catch (err) {
+                  await logoutToGuest();
+                  showToast("로그아웃되었습니다. 재로그인 후 다시 시도하거나 새 계정으로 가입해 주세요.");
+                }
+              }}
+              className="w-full py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-[13px] font-black"
+            >
+              계정 완전 삭제 및 나가기
+            </button>
+            <button
+              type="button"
+              onClick={logoutToGuest}
+              className="w-full py-2 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-[12px] font-bold"
+            >
+              로그아웃
+            </button>
+          </div>
+        </div>
+      );
+    }
     return (
       <div className="min-h-screen bg-[#FAF8F3] text-stone-800 max-w-md mx-auto flex items-center justify-center p-5 font-sans">
         <div className="bg-white rounded-3xl border border-stone-200 p-6 w-full text-center space-y-4 shadow-lg">
@@ -17391,7 +17534,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
   return (
     <div className="min-h-screen bg-[#FAF8F3] text-stone-800 pb-24 max-w-md mx-auto shadow-xl border-x border-stone-200 relative font-sans">
       {diaryUploadProgress && (
-        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 w-[88%] max-w-xs bg-stone-900/95 text-white px-4 py-2.5 rounded-2xl shadow-xl space-y-1.5">
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[9998] w-[88%] max-w-xs bg-stone-900/95 text-white px-4 py-2.5 rounded-2xl shadow-xl space-y-1.5">
           <div className="flex items-center justify-between text-[12.5px] font-extrabold">
             <span className="truncate">⏳ {diaryUploadProgress.stepText}</span>
             <span className="text-emerald-300 shrink-0 ml-2">{diaryUploadProgress.pct}%</span>
@@ -17415,10 +17558,10 @@ ${item.memo}` : `${item.title} 다녀옴!`,
             setToastUndo(null);
           }}
           title="눌러서 닫기"
-          className="fixed top-4 left-1/2 -translate-x-1/2 z-50 max-w-[92vw] bg-stone-900 text-white px-4 py-2.5 rounded-full text-[13.5px] font-bold shadow-lg flex items-center gap-2 cursor-pointer select-none"
+          className="fixed top-4 left-1/2 -translate-x-1/2 z-[9999] max-w-[92vw] bg-stone-900 text-white px-4 py-2.5 rounded-2xl text-[13px] font-bold shadow-2xl border border-stone-700/60 flex items-center gap-2 cursor-pointer select-none"
         >
           <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-          <span className="truncate">{toastMsg}</span>
+          <span className="line-clamp-2 leading-snug">{toastMsg}</span>
           {toastUndo?.fn && (
             <button
               type="button"
@@ -39659,59 +39802,20 @@ time: "", location: "",
                       )}
                       <button
                         type="button"
-                        onClick={() => setShowRoleLabelManager((p) => !p)}
-                        className="px-2 py-0.5 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 text-[10px] font-extrabold whitespace-nowrap"
+                        onClick={() => {
+                          setSelectedPermRoleLabel((prev) =>
+                            prev && helperRoleLabels.includes(prev) ? prev : (helperRoleLabels[0] || "육아지원군")
+                          );
+                          setEditingRoleLabelMode(false);
+                          setConfirmDeleteRoleLabel(null);
+                          setShowRolePermModal(true);
+                        }}
+                        className="px-2 py-0.5 rounded-lg bg-[#EEF3EE] hover:bg-[#DFE9E0] border border-[#C9D8CC] text-[#35503C] text-[10px] font-extrabold whitespace-nowrap"
                       >
-                        🏷️ 분류 {showRoleLabelManager ? "닫기" : "편집"}
+                        🛡️ 분류·권한 설정
                       </button>
                     </div>
                   </div>
-                  {showRoleLabelManager && (
-                    <div className="bg-stone-50 border border-stone-200 rounded-lg p-1.5 space-y-1.5">
-                      <div className="flex flex-wrap gap-1">
-                        {helperRoleLabels.map((lbl) => (
-                          <span
-                            key={lbl}
-                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white border border-stone-200 text-[10.5px] font-bold text-stone-700 whitespace-nowrap"
-                          >
-                            <span>{lbl}</span>
-                            {helperRoleLabels.length > 1 && (
-                              <button
-                                type="button"
-                                onClick={() => saveHelperRoleLabelsToCloud(helperRoleLabels.filter((x) => x !== lbl))}
-                                className="text-stone-400 hover:text-rose-600 font-black"
-                                aria-label={`${lbl} 삭제`}
-                              >
-                                ×
-                              </button>
-                            )}
-                          </span>
-                        ))}
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <input
-                          type="text"
-                          value={newRoleLabelInput}
-                          onChange={(e) => setNewRoleLabelInput(e.target.value)}
-                          placeholder="새 분류 (예: 방문선생님)"
-                          className="flex-1 min-w-0 px-2 py-1 rounded-lg border border-stone-200 bg-white text-[10.5px] font-bold"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const v = newRoleLabelInput.trim();
-                            if (!v) return;
-                            saveHelperRoleLabelsToCloud([...helperRoleLabels, v]);
-                            setNewRoleLabelInput("");
-                            showToast(`🏷️ [${v}] 분류가 추가되었습니다.`);
-                          }}
-                          className="px-2 py-1 rounded-lg bg-[#3F624D] text-white text-[10px] font-extrabold shrink-0 whitespace-nowrap"
-                        >
-                          + 추가
-                        </button>
-                      </div>
-                    </div>
-                  )}
 
                   {/* 체크박스 선택 시 일괄 편집 바 */}
                   {selectedUserUids.length > 0 && (
@@ -39739,20 +39843,41 @@ time: "", location: "",
                       >
                         일괄적용
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => handleBulkDeleteUserDocs(selectedUserUids)}
-                        className="h-6 px-2 rounded-md bg-rose-600 text-white text-[10px] font-extrabold whitespace-nowrap"
-                      >
-                        삭제
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setSelectedUserUids([])}
-                        className="h-6 px-1.5 rounded-md bg-white border border-stone-200 text-stone-500 text-[10px] font-bold whitespace-nowrap"
-                      >
-                        해제
-                      </button>
+                      {confirmBulkDeleteUsers ? (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => handleBulkDeleteUserDocs(selectedUserUids)}
+                            className="h-6 px-2 rounded-md bg-rose-700 text-white text-[10px] font-black whitespace-nowrap animate-pulse"
+                          >
+                            ⚠️ 탈퇴확정
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setConfirmBulkDeleteUsers(false)}
+                            className="h-6 px-1.5 rounded-md bg-white border border-stone-200 text-stone-500 text-[10px] font-bold whitespace-nowrap"
+                          >
+                            취소
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => setConfirmBulkDeleteUsers(true)}
+                            className="h-6 px-2 rounded-md bg-rose-600 text-white text-[10px] font-extrabold whitespace-nowrap"
+                          >
+                            탈퇴
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => { setSelectedUserUids([]); setConfirmBulkDeleteUsers(false); }}
+                            className="h-6 px-1.5 rounded-md bg-white border border-stone-200 text-stone-500 text-[10px] font-bold whitespace-nowrap"
+                          >
+                            해제
+                          </button>
+                        </>
+                      )}
                     </div>
                   )}
 
@@ -39767,11 +39892,12 @@ time: "", location: "",
                         const editableUsers = managedUsers.filter((u) => u.uid !== user?.uid);
                         const allChecked = editableUsers.length > 0 && editableUsers.every((u) => selectedUserUids.includes(u.uid));
                         return (
-                          <div className="grid grid-cols-[20px_minmax(54px,0.85fr)_minmax(68px,1.15fr)_76px_36px] items-center gap-1 bg-stone-100 px-2 py-1 text-[10px] font-black text-stone-600 border-b border-stone-200">
+                          <div className="grid grid-cols-[18px_minmax(0,0.9fr)_minmax(0,1.05fr)_68px_24px] items-center gap-1 bg-stone-100 px-1.5 py-1 text-[10px] font-black text-stone-600 border-b border-stone-200">
                             <input
                               type="checkbox"
                               checked={allChecked}
                               onChange={() => {
+                                setConfirmBulkDeleteUsers(false);
                                 if (allChecked) setSelectedUserUids([]);
                                 else setSelectedUserUids(editableUsers.map((u) => u.uid));
                               }}
@@ -39781,7 +39907,7 @@ time: "", location: "",
                             <span className="truncate">성명</span>
                             <span className="truncate">비고(계정)</span>
                             <span className="text-center whitespace-nowrap">권한</span>
-                            <span className="text-right whitespace-nowrap">관리</span>
+                            <span className="text-center whitespace-nowrap">관리</span>
                           </div>
                         );
                       })()}
@@ -39809,17 +39935,18 @@ time: "", location: "",
                               : "bg-amber-50 text-amber-800 border-amber-300";
                           return (
                             <div key={mu.uid} className={isPending ? "bg-amber-50/40" : "bg-white"}>
-                              <div className="grid grid-cols-[20px_minmax(54px,0.85fr)_minmax(68px,1.15fr)_76px_36px] items-center gap-1 px-2 py-1.5 text-[10.5px]">
+                              <div className="grid grid-cols-[18px_minmax(0,0.9fr)_minmax(0,1.05fr)_68px_24px] items-center gap-1 px-1.5 py-1.5 text-[10.5px]">
                                 <div className="flex items-center">
                                   {!isSelf ? (
                                     <input
                                       type="checkbox"
                                       checked={isChecked}
-                                      onChange={() =>
+                                      onChange={() => {
+                                        setConfirmBulkDeleteUsers(false);
                                         setSelectedUserUids((prev) =>
                                           prev.includes(mu.uid) ? prev.filter((id) => id !== mu.uid) : [...prev, mu.uid]
-                                        )
-                                      }
+                                        );
+                                      }}
                                       aria-label={`${mu.actorName || mu.displayName || "회원"} 선택`}
                                       className="w-3.5 h-3.5 accent-[#3F624D]"
                                     />
@@ -39829,22 +39956,23 @@ time: "", location: "",
                                 </div>
                                 <button
                                   type="button"
-                                  onClick={() => setExpandedUserUid((prev) => (prev === mu.uid ? null : mu.uid))}
-                                  className="text-left font-black text-stone-900 truncate hover:underline"
-                                  title="클릭하여 전문·상세 보기"
+                                  onClick={() => { setConfirmDeleteUserUid(null); setExpandedUserUid((prev) => (prev === mu.uid ? null : mu.uid)); }}
+                                  className="min-w-0 text-left font-black text-stone-900 truncate hover:underline"
+                                  title="클릭하여 전문·편집 열기"
                                 >
                                   {mu.actorName || mu.displayName || "미지정"}
                                   {isSelf ? "(나)" : ""}
+                                  {!isSelf && mu.role === "helper" && mu.useCustomTabs ? "✨" : ""}
                                 </button>
                                 <button
                                   type="button"
-                                  onClick={() => setExpandedUserUid((prev) => (prev === mu.uid ? null : mu.uid))}
-                                  className="text-left text-[10px] text-stone-500 truncate hover:text-stone-800"
+                                  onClick={() => { setConfirmDeleteUserUid(null); setExpandedUserUid((prev) => (prev === mu.uid ? null : mu.uid)); }}
+                                  className="min-w-0 text-left text-[10px] text-stone-500 truncate hover:text-stone-800"
                                   title="클릭하여 전체 계정/UID 보기"
                                 >
                                   {mu.email || mu.uid}
                                 </button>
-                                <div className="flex justify-center">
+                                <div className="flex justify-center min-w-0">
                                   {isSelf ? (
                                     <span className="px-1.5 py-0.5 rounded bg-stone-800 text-white text-[9.5px] font-black whitespace-nowrap">
                                       관리자
@@ -39865,7 +39993,7 @@ time: "", location: "",
                                           handleUpdateUserRole(mu.uid, "pending");
                                         }
                                       }}
-                                      className={`w-full min-w-0 truncate h-6 px-1 rounded border text-[10px] font-extrabold cursor-pointer ${selectCls}`}
+                                      className={`w-full min-w-0 truncate h-6 px-1 rounded border text-[9.5px] font-extrabold cursor-pointer ${selectCls}`}
                                     >
                                       <option value="pending" className="bg-white text-stone-900">⏳ 대기</option>
                                       <option value="admin:수혁" className="bg-white text-stone-900">👑 수혁</option>
@@ -39879,25 +40007,11 @@ time: "", location: "",
                                     </select>
                                   )}
                                 </div>
-                                <div className="flex items-center justify-end gap-0.5">
-                                  {!isSelf && mu.role === "helper" && (
-                                    <button
-                                      type="button"
-                                      onClick={() => setEditingPermUid((prev) => (prev === mu.uid ? null : mu.uid))}
-                                      title="개별 메뉴 권한"
-                                      className={`w-5 h-5 rounded border text-[10px] flex items-center justify-center ${
-                                        mu.useCustomTabs
-                                          ? "bg-[#EEF3EE] border-[#3F624D] text-[#35503C]"
-                                          : "bg-stone-50 border-stone-200 text-stone-500"
-                                      }`}
-                                    >
-                                      ⚙️
-                                    </button>
-                                  )}
+                                <div className="flex items-center justify-center">
                                   <button
                                     type="button"
-                                    onClick={() => setExpandedUserUid((prev) => (prev === mu.uid ? null : mu.uid))}
-                                    title="상세 · 이름수정 · 삭제"
+                                    onClick={() => { setConfirmDeleteUserUid(null); setExpandedUserUid((prev) => (prev === mu.uid ? null : mu.uid)); }}
+                                    title="상세 · 이름수정 · 권한 · 탈퇴"
                                     className={`w-5 h-5 rounded border text-[9px] flex items-center justify-center ${
                                       isExpanded ? "bg-stone-800 text-white border-stone-800" : "bg-stone-50 border-stone-200 text-stone-500"
                                     }`}
@@ -39964,17 +40078,30 @@ time: "", location: "",
                                         </div>
                                       ) : (
                                         <>
-                                          <button
-                                            type="button"
-                                            onClick={() => {
-                                              setEditingUserNameUid(mu.uid);
-                                              setEditingUserNameDraft(mu.actorName || mu.displayName || "");
-                                            }}
-                                            className="px-2 py-0.5 rounded bg-white border border-stone-200 text-stone-700 hover:bg-stone-100 font-extrabold whitespace-nowrap"
-                                          >
-                                            ✏️ 이름 수정
-                                          </button>
-                                          <div className="flex items-center gap-1">
+                                          <div className="flex flex-wrap items-center gap-1">
+                                            <button
+                                              type="button"
+                                              onClick={() => {
+                                                setEditingUserNameUid(mu.uid);
+                                                setEditingUserNameDraft(mu.actorName || mu.displayName || "");
+                                              }}
+                                              className="px-2 py-0.5 rounded bg-white border border-stone-200 text-stone-700 hover:bg-stone-100 font-extrabold whitespace-nowrap"
+                                            >
+                                              ✏️ 이름수정
+                                            </button>
+                                            {mu.role === "helper" && (
+                                              <button
+                                                type="button"
+                                                onClick={() => setEditingPermUid((prev) => (prev === mu.uid ? null : mu.uid))}
+                                                className={`px-2 py-0.5 rounded border font-extrabold whitespace-nowrap ${
+                                                  mu.useCustomTabs
+                                                    ? "bg-[#EEF3EE] border-[#3F624D] text-[#35503C]"
+                                                    : "bg-white border-stone-200 text-stone-600"
+                                                }`}
+                                              >
+                                                ⚙️ 메뉴권한
+                                              </button>
+                                            )}
                                             {mu.email && (
                                               <button
                                                 type="button"
@@ -39996,13 +40123,34 @@ time: "", location: "",
                                                 ✉️ 완료메일
                                               </button>
                                             )}
-                                            <button
-                                              type="button"
-                                              onClick={() => handleDeleteUserDoc(mu.uid, mu.actorName || mu.displayName || mu.email || mu.uid)}
-                                              className="px-2 py-0.5 rounded bg-white border border-rose-200 text-rose-600 hover:bg-rose-50 font-extrabold whitespace-nowrap"
-                                            >
-                                              🗑️ 삭제
-                                            </button>
+                                          </div>
+                                          <div className="flex items-center gap-1 shrink-0">
+                                            {confirmDeleteUserUid === mu.uid ? (
+                                              <>
+                                                <button
+                                                  type="button"
+                                                  onClick={() => handleDeleteUserDoc(mu.uid, mu.actorName || mu.displayName || mu.email || mu.uid)}
+                                                  className="px-2 py-0.5 rounded bg-rose-600 text-white font-black whitespace-nowrap animate-pulse"
+                                                >
+                                                  ⚠️ 탈퇴확정
+                                                </button>
+                                                <button
+                                                  type="button"
+                                                  onClick={() => setConfirmDeleteUserUid(null)}
+                                                  className="px-1.5 py-0.5 rounded bg-stone-200 text-stone-600 font-bold whitespace-nowrap"
+                                                >
+                                                  취소
+                                                </button>
+                                              </>
+                                            ) : (
+                                              <button
+                                                type="button"
+                                                onClick={() => setConfirmDeleteUserUid(mu.uid)}
+                                                className="px-2 py-0.5 rounded bg-white border border-rose-200 text-rose-600 hover:bg-rose-50 font-extrabold whitespace-nowrap"
+                                              >
+                                                🗑️ 탈퇴
+                                              </button>
+                                            )}
                                           </div>
                                         </>
                                       )}
@@ -40090,58 +40238,7 @@ time: "", location: "",
                   )}
                 </div>
 
-                {/* 공통 권한 매트릭스 표 (차분한 무채색 + 세이지그린) */}
-                <div className="bg-white rounded-xl border border-stone-200 overflow-hidden">
-                  <div className="grid grid-cols-[1fr_58px_58px] items-center bg-stone-100 px-2.5 py-1 text-[10px] font-black text-stone-700 text-center border-b border-stone-200">
-                    <span className="text-left">메뉴</span>
-                    <span className="whitespace-nowrap">지원군열람</span>
-                    <span className="whitespace-nowrap">지원군편집</span>
-                  </div>
-                  <div className="divide-y divide-stone-100">
-                    {HELPER_CONFIGURABLE_TABS.map((t) => {
-                      const hView = helperAllowedTabs.includes(t.id);
-                      const hEdit = helperEditTabs.includes(t.id);
-                      return (
-                        <div
-                          key={t.id}
-                          className="grid grid-cols-[1fr_58px_58px] items-center px-2.5 py-1 text-[11px] font-bold text-stone-800"
-                        >
-                          <span className="truncate">{t.label}</span>
-                          <div className="flex justify-center">
-                            <button
-                              type="button"
-                              onClick={async () => {
-                                const nextV = hView ? helperAllowedTabs.filter((x) => x !== t.id) : [...helperAllowedTabs, t.id];
-                                const nextE = hView ? helperEditTabs.filter((x) => x !== t.id) : helperEditTabs;
-                                await saveAccessConfigToCloud({ helperViewTabs: nextV, helperEditTabs: nextE });
-                              }}
-                              className={`w-6 h-4 rounded text-[10px] font-black border ${
-                                hView ? "bg-stone-700 text-white border-stone-700" : "bg-stone-100 text-stone-400 border-stone-200"
-                              }`}
-                            >
-                              {hView ? "O" : "-"}
-                            </button>
-                          </div>
-                          <div className="flex justify-center">
-                            <button
-                              type="button"
-                              onClick={async () => {
-                                const nextE = hEdit ? helperEditTabs.filter((x) => x !== t.id) : [...helperEditTabs, t.id];
-                                const nextV = !hEdit && !hView ? [...helperAllowedTabs, t.id] : helperAllowedTabs;
-                                await saveAccessConfigToCloud({ helperViewTabs: nextV, helperEditTabs: nextE });
-                              }}
-                              className={`w-6 h-4 rounded text-[10px] font-black border ${
-                                hEdit ? "bg-[#3F624D] text-white border-[#3F624D]" : "bg-stone-100 text-stone-400 border-stone-200"
-                              }`}
-                            >
-                              {hEdit ? "O" : "-"}
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
+
 
                 <div className="flex items-center justify-between gap-2 pt-1">
                   <button
@@ -40182,42 +40279,81 @@ time: "", location: "",
                   value={emailJsConfig.serviceId}
                   onChange={(e) => setEmailJsConfig((p) => ({ ...p, serviceId: e.target.value }))}
                   placeholder="Service ID"
-                  className="min-w-0 px-2 py-1 rounded-lg border border-stone-200 bg-white text-[10.5px] font-bold"
+                  title={emailJsConfig.serviceId || "Service ID"}
+                  className="min-w-0 px-1.5 py-1 rounded-lg border border-stone-200 bg-white text-[10px] font-bold"
                 />
                 <input
                   type="text"
                   value={emailJsConfig.templateId}
                   onChange={(e) => setEmailJsConfig((p) => ({ ...p, templateId: e.target.value }))}
                   placeholder="Template ID"
-                  className="min-w-0 px-2 py-1 rounded-lg border border-stone-200 bg-white text-[10.5px] font-bold"
+                  title={emailJsConfig.templateId || "Template ID"}
+                  className="min-w-0 px-1.5 py-1 rounded-lg border border-stone-200 bg-white text-[10px] font-bold"
                 />
                 <input
                   type="text"
                   value={emailJsConfig.publicKey}
                   onChange={(e) => setEmailJsConfig((p) => ({ ...p, publicKey: e.target.value }))}
                   placeholder="Public Key"
-                  className="min-w-0 px-2 py-1 rounded-lg border border-stone-200 bg-white text-[10.5px] font-bold"
+                  title={emailJsConfig.publicKey || "Public Key"}
+                  className="min-w-0 px-1.5 py-1 rounded-lg border border-stone-200 bg-white text-[10px] font-bold"
                 />
               </div>
-              <button
-                type="button"
-                onClick={async () => {
-                  const clean = {
-                    serviceId: emailJsConfig.serviceId.trim(),
-                    templateId: emailJsConfig.templateId.trim(),
-                    publicKey: emailJsConfig.publicKey.trim()
-                  };
-                  setEmailJsConfig(clean);
-                  try { localStorage.setItem("kim_emailjs_config_v1", JSON.stringify(clean)); } catch (err) {}
-                  if (user && db) {
-                    await setDoc(getDocRef("family_meta_v4", "emailjs_config_v1"), { ...clean, updatedAtMs: Date.now() }, { merge: true }).catch(() => {});
-                  }
-                  showToast("📧 EmailJS 발송 설정이 저장되었습니다.");
-                }}
-                className="w-full py-1 rounded-lg bg-stone-800 hover:bg-stone-900 text-white text-[10.5px] font-extrabold whitespace-nowrap"
-              >
-                메일 발송 설정 저장
-              </button>
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const clean = {
+                      serviceId: emailJsConfig.serviceId.trim(),
+                      templateId: emailJsConfig.templateId.trim(),
+                      publicKey: emailJsConfig.publicKey.trim()
+                    };
+                    setEmailJsConfig(clean);
+                    try { localStorage.setItem("kim_emailjs_config_v1", JSON.stringify(clean)); } catch (err) {}
+                    if (user && db) {
+                      await setDoc(getDocRef("family_meta_v4", "emailjs_config_v1"), { ...clean, updatedAtMs: Date.now() }, { merge: true }).catch(() => {});
+                    }
+                    showToast("📧 EmailJS 발송 설정이 저장되었습니다.");
+                  }}
+                  className="flex-1 py-1 rounded-lg bg-stone-800 hover:bg-stone-900 text-white text-[10.5px] font-extrabold whitespace-nowrap"
+                >
+                  메일 발송 설정 저장
+                </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const clean = {
+                      serviceId: emailJsConfig.serviceId.trim(),
+                      templateId: emailJsConfig.templateId.trim(),
+                      publicKey: emailJsConfig.publicKey.trim()
+                    };
+                    if (!clean.serviceId || !clean.templateId || !clean.publicKey) {
+                      showToast("Service ID, Template ID, Public Key를 모두 입력해 주세요.");
+                      return;
+                    }
+                    const testEmail = String(user?.email || backupEmail || "").trim();
+                    if (!testEmail) {
+                      showToast("테스트 메일을 받을 이메일 주소가 없습니다.");
+                      return;
+                    }
+                    const res = await sendSignupCompleteEmail({
+                      toEmail: testEmail,
+                      toName: actorName || "수혁",
+                      kind: "approved",
+                      roleLabel: "테스트",
+                      configOverride: clean
+                    });
+                    if (res.ok) {
+                      showToast(`📧 ${testEmail}로 테스트 메일을 발송했습니다!`);
+                    } else {
+                      showToast(`⚠️ 발송 실패 (${res.detail || res.reason || "설정 확인"})`);
+                    }
+                  }}
+                  className="px-2.5 py-1 rounded-lg bg-[#3F624D] hover:bg-[#33503F] text-white text-[10.5px] font-extrabold whitespace-nowrap shrink-0"
+                >
+                  내 메일로 테스트
+                </button>
+              </div>
             </div>
 
             <div className="p-2.5 rounded-xl bg-stone-50 border border-stone-200 space-y-2">
@@ -40458,8 +40594,333 @@ time: "", location: "",
       )}
 
 
+
+      {/* 분류·권한 설정 전용 팝업 모달 */}
+      {showRolePermModal && isAdminUnlocked && (
+        <div
+          className="fixed inset-0 bg-black/50 z-[70] flex items-center justify-center p-3"
+          onClick={() => setShowRolePermModal(false)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-2xl w-full max-w-md max-h-[88vh] flex flex-col shadow-2xl border border-stone-200 overflow-hidden"
+          >
+            <div className="px-4 py-3 border-b border-stone-100 flex items-center justify-between gap-2 bg-stone-50">
+              <div className="flex items-center gap-1.5 min-w-0">
+                <span className="text-[14px]">🛡️</span>
+                <h3 className="text-[13.5px] font-black text-stone-900 truncate">분류별 권한 설정</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowRolePermModal(false)}
+                className="w-7 h-7 rounded-full bg-white border border-stone-200 text-stone-500 hover:text-stone-800 flex items-center justify-center text-[13px] font-black shrink-0"
+                aria-label="닫기"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="p-3.5 overflow-y-auto space-y-3">
+              <div className="space-y-1.5">
+                <div className="text-[10.5px] font-black text-stone-500">분류 선택 (클릭하여 해당 분류 권한 편집)</div>
+                <div className="flex flex-wrap gap-1.5">
+                  {helperRoleLabels.map((lbl) => {
+                    const active = (selectedPermRoleLabel || helperRoleLabels[0]) === lbl;
+                    return (
+                      <button
+                        key={lbl}
+                        type="button"
+                        onClick={() => {
+                          setSelectedPermRoleLabel(lbl);
+                          setEditingRoleLabelMode(false);
+                          setConfirmDeleteRoleLabel(null);
+                        }}
+                        className={`px-2.5 py-1 rounded-full text-[11px] font-extrabold border transition whitespace-nowrap ${
+                          active
+                            ? "bg-[#3F624D] text-white border-[#3F624D] shadow-xs"
+                            : "bg-stone-50 text-stone-700 border-stone-200 hover:bg-stone-100"
+                        }`}
+                      >
+                        🌿 {lbl}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="flex items-center gap-1.5">
+                <input
+                  type="text"
+                  value={newRoleLabelInput}
+                  onChange={(e) => setNewRoleLabelInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      const v = newRoleLabelInput.trim();
+                      if (!v) return;
+                      if (helperRoleLabels.includes(v)) {
+                        showToast("이미 존재하는 분류명입니다.");
+                        return;
+                      }
+                      const nextPerms = {
+                        ...(helperRolePermissions || {}),
+                        [v]: { viewTabs: [...helperAllowedTabs], editTabs: [...helperEditTabs] }
+                      };
+                      saveHelperRoleLabelsToCloud([...helperRoleLabels, v], nextPerms);
+                      setSelectedPermRoleLabel(v);
+                      setNewRoleLabelInput("");
+                      showToast(`🏷️ [${v}] 분류가 추가되었습니다.`);
+                    }
+                  }}
+                  placeholder="새 분류 추가 (예: 방문선생님, 외할머니)"
+                  className="flex-1 min-w-0 h-8 px-2.5 rounded-lg border border-stone-200 bg-stone-50 text-[11px] font-bold"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    const v = newRoleLabelInput.trim();
+                    if (!v) return;
+                    if (helperRoleLabels.includes(v)) {
+                      showToast("이미 존재하는 분류명입니다.");
+                      return;
+                    }
+                    const nextPerms = {
+                      ...(helperRolePermissions || {}),
+                      [v]: { viewTabs: [...helperAllowedTabs], editTabs: [...helperEditTabs] }
+                    };
+                    saveHelperRoleLabelsToCloud([...helperRoleLabels, v], nextPerms);
+                    setSelectedPermRoleLabel(v);
+                    setNewRoleLabelInput("");
+                    showToast(`🏷️ [${v}] 분류가 추가되었습니다.`);
+                  }}
+                  className="h-8 px-3 rounded-lg bg-stone-800 hover:bg-stone-900 text-white text-[11px] font-extrabold shrink-0 whitespace-nowrap"
+                >
+                  + 추가
+                </button>
+              </div>
+
+              {(() => {
+                const targetLabel =
+                  selectedPermRoleLabel && helperRoleLabels.includes(selectedPermRoleLabel)
+                    ? selectedPermRoleLabel
+                    : (helperRoleLabels[0] || "육아지원군");
+                const roleCfg = helperRolePermissions?.[targetLabel] || {};
+                const curViewTabs = Array.isArray(roleCfg.viewTabs) ? roleCfg.viewTabs : helperAllowedTabs;
+                const curEditTabs = Array.isArray(roleCfg.editTabs) ? roleCfg.editTabs : helperEditTabs;
+
+                return (
+                  <div className="space-y-2.5 pt-1 border-t border-stone-100">
+                    <div className="flex items-center justify-between gap-2">
+                      {editingRoleLabelMode ? (
+                        <div className="flex items-center gap-1 flex-1 min-w-0">
+                          <input
+                            type="text"
+                            value={editingRoleLabelDraft}
+                            onChange={(e) => setEditingRoleLabelDraft(e.target.value)}
+                            onKeyDown={async (e) => {
+                              if (e.key === "Enter") {
+                                const trimmed = editingRoleLabelDraft.trim();
+                                if (trimmed && trimmed !== targetLabel) {
+                                  await renameHelperRoleLabelToCloud(targetLabel, trimmed);
+                                  setSelectedPermRoleLabel(trimmed);
+                                  showToast(`✏️ 분류명이 [${trimmed}]로 변경되었습니다.`);
+                                }
+                                setEditingRoleLabelMode(false);
+                              } else if (e.key === "Escape") {
+                                setEditingRoleLabelMode(false);
+                              }
+                            }}
+                            autoFocus
+                            className="flex-1 min-w-0 h-7 px-2 rounded-lg border border-stone-300 bg-white text-[11px] font-bold"
+                          />
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              const trimmed = editingRoleLabelDraft.trim();
+                              if (trimmed && trimmed !== targetLabel) {
+                                await renameHelperRoleLabelToCloud(targetLabel, trimmed);
+                                setSelectedPermRoleLabel(trimmed);
+                                showToast(`✏️ 분류명이 [${trimmed}]로 변경되었습니다.`);
+                              }
+                              setEditingRoleLabelMode(false);
+                            }}
+                            className="h-7 px-2.5 rounded-lg bg-[#3F624D] text-white text-[10.5px] font-extrabold whitespace-nowrap"
+                          >
+                            저장
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setEditingRoleLabelMode(false)}
+                            className="h-7 px-2 rounded-lg bg-stone-100 text-stone-600 text-[10.5px] font-bold whitespace-nowrap"
+                          >
+                            취소
+                          </button>
+                        </div>
+                      ) : (
+                        <>
+                          <span className="text-[11.5px] font-black text-stone-900 truncate">
+                            🌿 {targetLabel} 권한 설정
+                          </span>
+                          <div className="flex items-center gap-1 shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditingRoleLabelDraft(targetLabel);
+                                setEditingRoleLabelMode(true);
+                                setConfirmDeleteRoleLabel(null);
+                              }}
+                              className="px-2 py-0.5 rounded-md bg-stone-100 hover:bg-stone-200 text-stone-700 text-[10px] font-extrabold whitespace-nowrap"
+                            >
+                              ✏️ 분류명 수정
+                            </button>
+                            {helperRoleLabels.length > 1 && (
+                              confirmDeleteRoleLabel === targetLabel ? (
+                                <>
+                                  <button
+                                    type="button"
+                                    onClick={async () => {
+                                      const nextLabels = helperRoleLabels.filter((x) => x !== targetLabel);
+                                      const nextPerms = { ...(helperRolePermissions || {}) };
+                                      delete nextPerms[targetLabel];
+                                      await saveHelperRoleLabelsToCloud(nextLabels, nextPerms);
+                                      setSelectedPermRoleLabel(nextLabels[0] || "");
+                                      setConfirmDeleteRoleLabel(null);
+                                      showToast(`🗑️ [${targetLabel}] 분류가 삭제되었습니다.`);
+                                    }}
+                                    className="px-2 py-0.5 rounded-md bg-rose-600 text-white text-[10px] font-black whitespace-nowrap animate-pulse"
+                                  >
+                                    ⚠️ 삭제확정
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setConfirmDeleteRoleLabel(null)}
+                                    className="px-1.5 py-0.5 rounded-md bg-stone-100 text-stone-600 text-[10px] font-bold whitespace-nowrap"
+                                  >
+                                    취소
+                                  </button>
+                                </>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => setConfirmDeleteRoleLabel(targetLabel)}
+                                  className="px-2 py-0.5 rounded-md bg-white border border-rose-200 text-rose-600 hover:bg-rose-50 text-[10px] font-extrabold whitespace-nowrap"
+                                >
+                                  🗑️ 삭제
+                                </button>
+                              )
+                            )}
+                          </div>
+                        </>
+                      )}
+                    </div>
+
+                    <div className="border border-stone-200 rounded-xl overflow-hidden bg-white">
+                      <div className="grid grid-cols-[1fr_56px_56px] items-center bg-stone-100 px-2.5 py-1.5 text-[10px] font-black text-stone-700 text-center border-b border-stone-200">
+                        <span className="text-left">메뉴</span>
+                        <span className="whitespace-nowrap">열람</span>
+                        <span className="whitespace-nowrap">편집</span>
+                      </div>
+                      <div className="divide-y divide-stone-100 max-h-[38vh] overflow-y-auto">
+                        {HELPER_CONFIGURABLE_TABS.map((t) => {
+                          const hView = curViewTabs.includes(t.id);
+                          const hEdit = curEditTabs.includes(t.id);
+                          return (
+                            <div
+                              key={t.id}
+                              className="grid grid-cols-[1fr_56px_56px] items-center px-2.5 py-1.5 text-[11px] font-bold text-stone-800"
+                            >
+                              <span className="truncate">{t.label}</span>
+                              <div className="flex justify-center">
+                                <button
+                                  type="button"
+                                  onClick={async () => {
+                                    const nextV = hView ? curViewTabs.filter((x) => x !== t.id) : Array.from(new Set([...curViewTabs, t.id]));
+                                    const nextE = hView ? curEditTabs.filter((x) => x !== t.id) : curEditTabs;
+                                    const nextPerms = {
+                                      ...(helperRolePermissions || {}),
+                                      [targetLabel]: { viewTabs: nextV, editTabs: nextE }
+                                    };
+                                    await saveHelperRolePermissionsToCloud(nextPerms);
+                                  }}
+                                  className={`w-7 h-5 rounded text-[10px] font-black border ${
+                                    hView ? "bg-stone-800 text-white border-stone-800" : "bg-stone-100 text-stone-400 border-stone-200"
+                                  }`}
+                                >
+                                  {hView ? "O" : "-"}
+                                </button>
+                              </div>
+                              <div className="flex justify-center">
+                                <button
+                                  type="button"
+                                  onClick={async () => {
+                                    const nextE = hEdit ? curEditTabs.filter((x) => x !== t.id) : Array.from(new Set([...curEditTabs, t.id]));
+                                    const nextV = !hEdit && !hView ? Array.from(new Set([...curViewTabs, t.id])) : curViewTabs;
+                                    const nextPerms = {
+                                      ...(helperRolePermissions || {}),
+                                      [targetLabel]: { viewTabs: nextV, editTabs: nextE }
+                                    };
+                                    await saveHelperRolePermissionsToCloud(nextPerms);
+                                  }}
+                                  className={`w-7 h-5 rounded text-[10px] font-black border ${
+                                    hEdit ? "bg-[#3F624D] text-white border-[#3F624D]" : "bg-stone-100 text-stone-400 border-stone-200"
+                                  }`}
+                                >
+                                  {hEdit ? "O" : "-"}
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between gap-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          const allIds = HELPER_CONFIGURABLE_TABS.map((t) => t.id);
+                          const nextPerms = {
+                            ...(helperRolePermissions || {}),
+                            [targetLabel]: { viewTabs: allIds, editTabs: allIds }
+                          };
+                          await saveHelperRolePermissionsToCloud(nextPerms);
+                          showToast(`✅ [${targetLabel}] 전체 메뉴 권한을 허용했습니다.`);
+                        }}
+                        className="px-2.5 py-1 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 text-[10.5px] font-extrabold whitespace-nowrap"
+                      >
+                        전체 허용
+                      </button>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          const nextPerms = {
+                            ...(helperRolePermissions || {}),
+                            [targetLabel]: { viewTabs: [...DEFAULT_HELPER_TABS], editTabs: [...DEFAULT_HELPER_TABS] }
+                          };
+                          await saveHelperRolePermissionsToCloud(nextPerms);
+                          showToast(`↩️ [${targetLabel}] 기본 권한으로 복원했습니다.`);
+                        }}
+                        className="px-2.5 py-1 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 text-[10.5px] font-extrabold whitespace-nowrap"
+                      >
+                        이 분류 기본값
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setShowRolePermModal(false)}
+                        className="px-4 py-1 rounded-lg bg-stone-900 text-white text-[10.5px] font-extrabold whitespace-nowrap ml-auto"
+                      >
+                        완료
+                      </button>
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+          </div>
+        </div>
+      )}
+
       {liveActivityPopup && (
-        <div className="fixed top-3 left-1/2 -translate-x-1/2 z-50 w-[92%] max-w-sm bg-white border-2 border-[#5E7A65] rounded-2xl shadow-2xl p-3 space-y-2">
+        <div className="fixed top-3 left-1/2 -translate-x-1/2 z-[9990] w-[92%] max-w-sm bg-white border-2 border-[#5E7A65] rounded-2xl shadow-2xl p-3 space-y-2">
           <div className="flex items-start justify-between gap-2">
             <div className="flex items-center gap-1.5 min-w-0">
               <span className="w-6 h-6 rounded-full bg-[#EEF3EE] text-[#35503C] flex items-center justify-center shrink-0">
