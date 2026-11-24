@@ -5672,6 +5672,15 @@ function MainApp() {
       });
     }
     const unsub = onAuthStateChanged(auth, (u) => {
+      if (u && u.isAnonymous) {
+        signOut(auth).catch(() => {});
+        setUser(null);
+        setAuthLoading(false);
+        setUserProfile(null);
+        setProfileLoading(false);
+        setAccessRole("guest");
+        return;
+      }
       setUser(u);
       setAuthLoading(false);
       if (!u) {
@@ -17301,7 +17310,10 @@ ${item.memo}` : `${item.title} 다녀옴!`,
     );
   }
 
-  if (!user) {
+  if (!user || user.isAnonymous) {
+    const ua = typeof navigator !== "undefined" ? navigator.userAgent || "" : "";
+    const isInAppBrowser = /KAKAOTALK|NAVER|Instagram|FBAN|FBAV|Line/i.test(ua);
+    const isAndroidUa = /Android/i.test(ua);
     return (
       <div className="min-h-screen bg-[#FAF8F3] text-stone-800 max-w-md mx-auto flex items-center justify-center p-5 font-sans">
         <div className="bg-white rounded-3xl border border-stone-200 p-6 w-full space-y-4 shadow-lg">
@@ -17312,6 +17324,36 @@ ${item.memo}` : `${item.title} 다녀옴!`,
               회원가입 후 관리자 승인을 받아야 가족 데이터를 열람할 수 있습니다.
             </p>
           </div>
+
+          {isInAppBrowser && (
+            <div className="p-3 rounded-2xl bg-amber-50 border border-amber-200 space-y-2 text-[11.5px] text-amber-950">
+              <div className="font-black">🌐 카카오톡 등 앱 내 브라우저로 열렸습니다</div>
+              <p className="text-[11px] text-amber-900 leading-relaxed">
+                앱 내 브라우저에서는 Google 로그인이 차단될 수 있어요. 아래 버튼으로 <strong>크롬/사파리</strong>에서 열거나 이메일로 가입해 주세요.
+              </p>
+              <div className="flex items-center gap-1.5">
+                {isAndroidUa && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const cleanUrl = window.location.href.replace(/^https?:\/\//i, "");
+                      window.location.href = `intent://${cleanUrl}#Intent;scheme=https;package=com.android.chrome;end`;
+                    }}
+                    className="flex-1 py-1.5 px-2.5 rounded-xl bg-stone-900 text-white text-[11px] font-extrabold whitespace-nowrap"
+                  >
+                    크롬으로 열기
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => copyTextSafe(window.location.href, "🔗 주소가 복사되었습니다! 사파리/크롬에 붙여넣어 열어주세요.")}
+                  className="flex-1 py-1.5 px-2.5 rounded-xl bg-white border border-amber-300 text-amber-950 text-[11px] font-extrabold whitespace-nowrap"
+                >
+                  🔗 주소 복사
+                </button>
+              </div>
+            </div>
+          )}
 
           <button
             type="button"

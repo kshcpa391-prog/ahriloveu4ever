@@ -1181,7 +1181,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v13.81";
+export const APP_CODE_VERSION = "v13.82";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1199,7 +1199,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-24 14:18";
+export const APP_BUILD_DATE = "2026-11-24 14:25";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1268,6 +1268,16 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v13.82",
+    version: "v13.82",
+    date: "2026-11-24",
+    title: "🔐 익명 세션 로그인 화면 차단(이름/이메일 '-' 대기화면 갇힘 버그 수정) + 카톡 인앱 브라우저 외부 열기 안내",
+    highlights: [
+      "치명 버그 수정: 기존 익명 로그인(isAnonymous) 세션이 남은 기기에서 로그인 화면을 건너뛰고 [이름: - / 이메일: -] 승인 대기 화면에 갇히던 문제를 onAuthStateChanged 자동 로그아웃 및 로그인 게이트(!user || user.isAnonymous)로 완전 해결",
+      "카카오톡·네이버·인스타 인앱 브라우저 감지 배너 추가: Google OAuth 차단(disallowed_useragent)을 피할 수 있도록 안드로이드 크롬 즉시 열기(intent://) 및 주소 복사·외부 브라우저 안내 제공"
+    ]
+  },
   {
     id: "patch-v13.81",
     version: "v13.81",
