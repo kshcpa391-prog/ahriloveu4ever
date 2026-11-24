@@ -51,6 +51,9 @@ import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   updateProfile,
+  sendPasswordResetEmail,
+  setPersistence,
+  browserLocalPersistence,
   signOut
 } from "firebase/auth";
 import {
@@ -1697,10 +1700,27 @@ function MainApp() {
   const [profileLoading, setProfileLoading] = useState(false);
   const [managedUsers, setManagedUsers] = useState([]);
   const [authMode, setAuthMode] = useState("login");
-  const [authEmailInput, setAuthEmailInput] = useState("");
+  const [rememberEmail, setRememberEmail] = useState(() => {
+    try {
+      return localStorage.getItem("kim_remember_email_v1") !== "false";
+    } catch (e) {
+      return true;
+    }
+  });
+  const [authEmailInput, setAuthEmailInput] = useState(() => {
+    try {
+      const rem = localStorage.getItem("kim_remember_email_v1") !== "false";
+      return rem ? localStorage.getItem("kim_saved_login_email_v1") || "" : "";
+    } catch (e) {
+      return "";
+    }
+  });
   const [authPasswordInput, setAuthPasswordInput] = useState("");
+  const [authPasswordConfirmInput, setAuthPasswordConfirmInput] = useState("");
+  const [showAuthPassword, setShowAuthPassword] = useState(false);
   const [authNameInput, setAuthNameInput] = useState("");
   const [authFormError, setAuthFormError] = useState("");
+  const [authFormNotice, setAuthFormNotice] = useState("");
   const [authSubmitting, setAuthSubmitting] = useState(false);
   const [activeTab, setActiveTab] = useState("home");
   const [scheduleSubTab, setScheduleSubTab] = useState("calendar");
@@ -4526,23 +4546,39 @@ function MainApp() {
     if (!auth) return;
     const email = authEmailInput.trim();
     const password = authPasswordInput;
+    setAuthFormNotice("");
     if (!email || !password) {
       setAuthFormError("이메일과 비밀번호를 모두 입력해 주세요.");
       return;
     }
-    if (authMode === "signup" && password.length < 6) {
-      setAuthFormError("비밀번호는 6자 이상으로 입력해 주세요.");
-      return;
+    if (authMode === "signup") {
+      if (password.length < 6) {
+        setAuthFormError("비밀번호는 6자 이상으로 입력해 주세요.");
+        return;
+      }
+      if (password !== authPasswordConfirmInput) {
+        setAuthFormError("비밀번호와 비밀번호 확인이 일치하지 않습니다.");
+        return;
+      }
     }
     setAuthFormError("");
     setAuthSubmitting(true);
     try {
+      try {
+        localStorage.setItem("kim_remember_email_v1", rememberEmail ? "true" : "false");
+        if (rememberEmail) {
+          localStorage.setItem("kim_saved_login_email_v1", email);
+        } else {
+          localStorage.removeItem("kim_saved_login_email_v1");
+        }
+      } catch (storageErr) {}
       if (authMode === "signup") {
         const cred = await createUserWithEmailAndPassword(auth, email, password);
         const cleanName = authNameInput.trim() || email.split("@")[0];
         if (cred.user && cleanName) {
           await updateProfile(cred.user, { displayName: cleanName }).catch(() => {});
         }
+        setAuthPasswordConfirmInput("");
         showToast("✅ 회원가입이 완료되었습니다. 관리자 승인을 기다려 주세요.");
       } else {
         await signInWithEmailAndPassword(auth, email, password);
@@ -4557,6 +4593,33 @@ function MainApp() {
         setAuthFormError("비밀번호는 6자 이상이어야 합니다.");
       } else {
         setAuthFormError(err?.message || "인증 처리 중 오류가 발생했습니다.");
+      }
+    } finally {
+      setAuthSubmitting(false);
+    }
+  };
+
+  const handlePasswordReset = async () => {
+    if (!auth) return;
+    const email = authEmailInput.trim();
+    setAuthFormError("");
+    setAuthFormNotice("");
+    if (!email) {
+      setAuthFormError("비밀번호를 재설정할 이메일 주소를 먼저 입력해 주세요.");
+      return;
+    }
+    setAuthSubmitting(true);
+    try {
+      await sendPasswordResetEmail(auth, email);
+      setAuthFormNotice(`📧 ${email} 주소로 비밀번호 재설정 메일을 보냈습니다. 스팸함도 함께 확인해 주세요.`);
+    } catch (err) {
+      const code = err?.code || "";
+      if (code === "auth/user-not-found") {
+        setAuthFormError("가입되지 않은 이메일 주소입니다.");
+      } else if (code === "auth/invalid-email") {
+        setAuthFormError("올바른 이메일 형식을 입력해 주세요.");
+      } else {
+        setAuthFormError(err?.message || "비밀번호 재설정 메일 전송에 실패했습니다.");
       }
     } finally {
       setAuthSubmitting(false);
@@ -5132,6 +5195,7 @@ function MainApp() {
       setAuthLoading(false);
       return;
     }
+    setPersistence(auth, browserLocalPersistence).catch(() => {});
     if (typeof __initial_auth_token !== "undefined" && __initial_auth_token) {
       signInWithCustomToken(auth, __initial_auth_token).catch((err) => {
         console.error("Custom token auth error:", err);
@@ -16694,8 +16758,9 @@ ${item.memo}` : `${item.title} 다녀옴!`,
               onClick={() => {
                 setAuthMode("login");
                 setAuthFormError("");
+                setAuthFormNotice("");
               }}
-              className={`py-1.5 rounded-lg text-[12.5px] font-black transition ${
+              className={`py-1.5 rounded-lg text-[12.5px] font-black transition whitespace-nowrap ${
                 authMode === "login" ? "bg-stone-900 text-white" : "text-stone-500"
               }`}
             >
@@ -16706,8 +16771,9 @@ ${item.memo}` : `${item.title} 다녀옴!`,
               onClick={() => {
                 setAuthMode("signup");
                 setAuthFormError("");
+                setAuthFormNotice("");
               }}
-              className={`py-1.5 rounded-lg text-[12.5px] font-black transition ${
+              className={`py-1.5 rounded-lg text-[12.5px] font-black transition whitespace-nowrap ${
                 authMode === "signup" ? "bg-stone-900 text-white" : "text-stone-500"
               }`}
             >
@@ -16722,6 +16788,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                 value={authNameInput}
                 onChange={(e) => setAuthNameInput(e.target.value)}
                 placeholder="이름 또는 호칭 (예: 아리나, 이모님)"
+                autoComplete="name"
                 className="w-full px-3 py-2.5 rounded-xl border border-stone-300 text-[13.5px] font-bold"
               />
             )}
@@ -16730,26 +16797,86 @@ ${item.memo}` : `${item.title} 다녀옴!`,
               value={authEmailInput}
               onChange={(e) => setAuthEmailInput(e.target.value)}
               placeholder="이메일 주소"
-              autoComplete="email"
+              autoComplete="username"
               className="w-full px-3 py-2.5 rounded-xl border border-stone-300 text-[13.5px] font-bold"
             />
-            <input
-              type="password"
-              value={authPasswordInput}
-              onChange={(e) => setAuthPasswordInput(e.target.value)}
-              placeholder="비밀번호 (6자 이상)"
-              autoComplete={authMode === "signup" ? "new-password" : "current-password"}
-              className="w-full px-3 py-2.5 rounded-xl border border-stone-300 text-[13.5px] font-bold"
-            />
+            <div className="relative">
+              <input
+                type={showAuthPassword ? "text" : "password"}
+                value={authPasswordInput}
+                onChange={(e) => setAuthPasswordInput(e.target.value)}
+                placeholder="비밀번호 (6자 이상)"
+                autoComplete={authMode === "signup" ? "new-password" : "current-password"}
+                className="w-full pl-3 pr-14 py-2.5 rounded-xl border border-stone-300 text-[13.5px] font-bold"
+              />
+              <button
+                type="button"
+                onClick={() => setShowAuthPassword((p) => !p)}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[11.5px] font-extrabold text-stone-500 hover:text-stone-800 whitespace-nowrap"
+              >
+                {showAuthPassword ? "숨김" : "보기"}
+              </button>
+            </div>
+            {authMode === "signup" && (
+              <div className="space-y-1">
+                <input
+                  type={showAuthPassword ? "text" : "password"}
+                  value={authPasswordConfirmInput}
+                  onChange={(e) => setAuthPasswordConfirmInput(e.target.value)}
+                  placeholder="비밀번호 확인"
+                  autoComplete="new-password"
+                  className="w-full px-3 py-2.5 rounded-xl border border-stone-300 text-[13.5px] font-bold"
+                />
+                {authPasswordConfirmInput && (
+                  <div
+                    className={`text-[11.5px] font-bold px-1 ${
+                      authPasswordInput === authPasswordConfirmInput
+                        ? "text-emerald-700"
+                        : "text-rose-600"
+                    }`}
+                  >
+                    {authPasswordInput === authPasswordConfirmInput
+                      ? "✓ 비밀번호가 일치합니다."
+                      : "비밀번호가 일치하지 않습니다."}
+                  </div>
+                )}
+              </div>
+            )}
+            <div className="flex items-center justify-between gap-2 pt-0.5 text-[12px]">
+              <label className="inline-flex items-center gap-1.5 text-stone-600 font-bold cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={rememberEmail}
+                  onChange={(e) => setRememberEmail(e.target.checked)}
+                  className="rounded border-stone-300"
+                />
+                <span>이메일 저장</span>
+              </label>
+              {authMode === "login" && (
+                <button
+                  type="button"
+                  disabled={authSubmitting}
+                  onClick={handlePasswordReset}
+                  className="text-stone-500 hover:text-stone-900 font-extrabold underline underline-offset-2 whitespace-nowrap"
+                >
+                  비밀번호 찾기
+                </button>
+              )}
+            </div>
             {authFormError && (
               <div className="text-[12px] font-bold text-rose-600 bg-rose-50 border border-rose-200 rounded-xl px-3 py-2">
                 {authFormError}
               </div>
             )}
+            {authFormNotice && (
+              <div className="text-[12px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-xl px-3 py-2">
+                {authFormNotice}
+              </div>
+            )}
             <button
               type="submit"
               disabled={authSubmitting}
-              className="w-full py-2.5 rounded-xl bg-stone-900 hover:bg-stone-800 text-white text-[13.5px] font-extrabold disabled:opacity-50"
+              className="w-full py-2.5 rounded-xl bg-stone-900 hover:bg-stone-800 text-white text-[13.5px] font-extrabold disabled:opacity-50 whitespace-nowrap"
             >
               {authSubmitting
                 ? "처리 중..."
@@ -39081,14 +39208,14 @@ time: "", location: "",
                                 <button
                                   type="button"
                                   onClick={() => handleUpdateUserRole(mu.uid, "admin", "수혁")}
-                                  className="px-2 py-1 rounded-lg bg-stone-900 text-white text-[11px] font-extrabold"
+                                  className="px-2 py-1 rounded-lg bg-stone-900 text-white text-[11px] font-extrabold whitespace-nowrap"
                                 >
                                   👑 수혁(관리자)
                                 </button>
                                 <button
                                   type="button"
                                   onClick={() => handleUpdateUserRole(mu.uid, "admin", "아리나")}
-                                  className="px-2 py-1 rounded-lg bg-stone-700 text-white text-[11px] font-extrabold"
+                                  className="px-2 py-1 rounded-lg bg-stone-700 text-white text-[11px] font-extrabold whitespace-nowrap"
                                 >
                                   👑 아리나(관리자)
                                 </button>
@@ -39101,14 +39228,14 @@ time: "", location: "",
                                       mu.displayName || "육아지원군"
                                     )
                                   }
-                                  className="px-2 py-1 rounded-lg bg-sky-700 text-white text-[11px] font-extrabold"
+                                  className="px-2 py-1 rounded-lg bg-sky-700 text-white text-[11px] font-extrabold whitespace-nowrap"
                                 >
                                   🌿 육아지원군
                                 </button>
                                 <button
                                   type="button"
                                   onClick={() => handleUpdateUserRole(mu.uid, "rejected")}
-                                  className="px-2 py-1 rounded-lg bg-rose-100 text-rose-800 text-[11px] font-extrabold"
+                                  className="px-2 py-1 rounded-lg bg-rose-100 text-rose-800 text-[11px] font-extrabold whitespace-nowrap"
                                 >
                                   🚫 차단
                                 </button>
@@ -39196,38 +39323,15 @@ time: "", location: "",
                 </div>
 
 
-                <div className="grid grid-cols-3 gap-1.5">
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      const url = `${window.location.origin}/?invite=${suhyeokCode}`;
-                      await copyTextSafe(url, "🔗 수혁 관리자 접속 링크 복사 완료!");
-                    }}
-                    className="py-1.5 rounded-xl bg-white hover:bg-emerald-50 text-emerald-800 border border-emerald-200 text-[11px] font-extrabold whitespace-nowrap"
-                  >
-                    🔗 수혁 링크
-                  </button>
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      const url = `${window.location.origin}/?invite=${arinaCode}`;
-                      await copyTextSafe(url, "🔗 아리나 관리자 접속 링크 복사 완료!");
-                    }}
-                    className="py-1.5 rounded-xl bg-white hover:bg-pink-50 text-pink-800 border border-pink-200 text-[11px] font-extrabold whitespace-nowrap"
-                  >
-                    🔗 아리나 링크
-                  </button>
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      const url = `${window.location.origin}/?invite=${helperCode}`;
-                      await copyTextSafe(url, "🔗 육아지원군 링크 복사 완료!");
-                    }}
-                    className="py-1.5 rounded-xl bg-white hover:bg-sky-100 text-sky-800 border border-sky-200 text-[11px] font-extrabold whitespace-nowrap"
-                  >
-                    🔗 지원군 링크
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    await copyTextSafe(window.location.origin, "🔗 앱 접속 주소가 복사되었습니다! (가입 후 관리자 승인 필요)");
+                  }}
+                  className="w-full py-1.5 rounded-xl bg-white hover:bg-sky-50 text-sky-900 border border-sky-200 text-[12px] font-extrabold whitespace-nowrap"
+                >
+                  🔗 가족 앱 접속 주소 복사 (회원가입 후 승인)
+                </button>
                 <div className="flex items-center justify-between gap-2 pt-1 border-t border-sky-200/70">
                   <span className="text-[11px] font-extrabold text-sky-900">
                     🇰🇷 한국 공휴일 자동 연동 ({Object.keys(krHolidays || {}).length}건 캐시)
@@ -41150,52 +41254,13 @@ time: "", location: "",
                           👑 {currentAdminOwner}
                         </span>
                       </div>
-                      {(() => {
-                        const otherAdmin = currentAdminOwner === "아리나" ? "수혁" : "아리나";
-                        return (
-                          <div className="pt-2 border-t border-stone-200/80 space-y-1.5">
-                            <div className="text-[11.5px] font-extrabold text-stone-500">
-                              🔄 {otherAdmin} 계정으로 전환 (개인 일정 분리)
-                            </div>
-                            <div className="flex items-center gap-1.5">
-                              <input
-                                type="password"
-                                inputMode="numeric"
-                                autoComplete="off"
-                                value={switchAdminPinInput}
-                                onChange={(e) => setSwitchAdminPinInput(e.target.value)}
-                                onKeyDown={(e) => {
-                                  if (e.key === "Enter") applyLoginCode(switchAdminPinInput, otherAdmin);
-                                }}
-                                placeholder={`${otherAdmin} 비밀번호 입력`}
-                                className="flex-1 min-w-0 px-2.5 py-1.5 rounded-xl border border-stone-300 bg-white text-[13px] font-bold text-center tracking-widest"
-                              />
-                              <button
-                                type="button"
-                                onClick={() => applyLoginCode(switchAdminPinInput, otherAdmin)}
-                                className="px-3 py-1.5 rounded-xl bg-stone-900 hover:bg-stone-800 text-white text-[12px] font-extrabold shrink-0 whitespace-nowrap"
-                              >
-                                전환
-                              </button>
-                            </div>
-                          </div>
-                        );
-                      })()}
+                      <div className="text-[11.5px] text-stone-500 truncate">
+                        {user?.email || "이메일 정보 없음"}
+                      </div>
                     </div>
                     <p className="text-[12px] text-stone-500">
                       전체 권한 · 개인 일정은 본인 계정 전용
                     </p>
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        const myCode = currentAdminOwner === "아리나" ? arinaCode : suhyeokCode;
-                        const inviteUrl = `${window.location.origin}/?invite=${myCode}`;
-                        await copyTextSafe(inviteUrl, `🔗 ${currentAdminOwner} 관리자 접속 링크가 복사되었습니다!`);
-                      }}
-                      className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-[13px] font-extrabold"
-                    >
-                      🔗 {currentAdminOwner} 전용 접속 링크 복사
-                    </button>
                   </>
                 ) : (
                   <>
