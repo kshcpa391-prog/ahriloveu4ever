@@ -40740,7 +40740,7 @@ time: "", location: "",
 
 
               {aiDiagStatus && (
-                <div className="p-2.5 rounded-xl bg-white border-2 border-amber-300 text-[12.5px] font-bold text-stone-800 whitespace-pre-line shadow-sm">
+                <div className="p-2 rounded-lg bg-white border border-amber-300 text-[10.5px] font-bold text-stone-800 whitespace-pre-line">
                   {aiDiagStatus}
                 </div>
               )}
@@ -40771,22 +40771,22 @@ time: "", location: "",
 
 
             {aiCallLogs.length > 0 && (
-              <div className="p-3 rounded-2xl bg-stone-50 border border-stone-200 space-y-1.5">
+              <div className="p-2.5 rounded-xl bg-stone-50 border border-stone-200 space-y-1.5">
                 <div className="flex items-center justify-between">
-                  <span className="text-[13.5px] font-black text-stone-800">🩺 AI 오류센터 (최근 호출 기록)</span>
+                  <span className="text-[11px] font-black text-stone-800">🩺 AI 오류센터 (최근 호출 기록)</span>
                   <button
                     type="button"
                     onClick={() => setAiCallLogs([])}
-                    className="text-[11.5px] font-bold text-stone-400 hover:text-stone-700 whitespace-nowrap"
+                    className="text-[10px] font-bold text-stone-400 hover:text-stone-700 whitespace-nowrap"
                   >
                     지우기
                   </button>
                 </div>
-                <div className="space-y-1 max-h-32 overflow-y-auto">
+                <div className="space-y-1 max-h-28 overflow-y-auto">
                   {aiCallLogs.map((log) => (
                     <div
                       key={log.id}
-                      className={`p-2 rounded-xl text-[11.5px] border ${
+                      className={`p-1.5 rounded-lg text-[10px] border ${
                         log.ok
                           ? "bg-emerald-50 border-emerald-200 text-emerald-900"
                           : "bg-rose-50 border-rose-200 text-rose-900"
@@ -40817,12 +40817,12 @@ time: "", location: "",
                 </button>
               </div>
               {selfTestResults && (
-                <div className="space-y-1">
-                  <div className="text-[12.5px] font-black text-emerald-700">
+                <div className="space-y-0.5 pt-1 border-t border-stone-200/70">
+                  <div className="text-[10.5px] font-black text-emerald-700">
                     결과: {selfTestResults.passed}/{selfTestResults.total} 통과
                   </div>
                   {selfTestResults.cases.map((c, idx) => (
-                    <div key={idx} className="text-[12.5px] font-semibold text-stone-700">
+                    <div key={idx} className="text-[10px] font-semibold text-stone-700">
                       {c.pass ? "✅" : "❌"} {c.name}
                     </div>
                   ))}
@@ -40832,9 +40832,9 @@ time: "", location: "",
 
 
             {isAdminUnlocked && (
-              <div className="p-3 rounded-2xl bg-stone-50 border border-stone-200 space-y-2">
+              <div className="p-2.5 rounded-xl bg-stone-50 border border-stone-200 space-y-1.5">
                 <div className="flex items-center justify-between">
-                  <span className="text-[13.5px] font-black text-stone-800">
+                  <span className="text-[11px] font-black text-stone-800">
                     🗑️ 최근 삭제 로그 ({deletedLogs.length}건)
                   </span>
                   {deletedLogs.length > 0 && (
@@ -40847,24 +40847,24 @@ time: "", location: "",
                         } catch (e) {}
                         showToast("삭제 로그가 비워졌습니다.");
                       }}
-                      className="text-[12.5px] font-bold text-stone-400 hover:text-stone-700 whitespace-nowrap"
+                      className="text-[10px] font-bold text-stone-400 hover:text-stone-700 whitespace-nowrap"
                     >
                       비우기
                     </button>
                   )}
                 </div>
                 {deletedLogs.length === 0 ? (
-                  <div className="text-[12.5px] text-stone-400">최근 삭제된 기록이 없습니다.</div>
+                  <div className="text-[10.5px] text-stone-400">최근 삭제된 기록이 없습니다.</div>
                 ) : (
-                  <div className="space-y-1.5 max-h-36 overflow-y-auto">
+                  <div className="space-y-1 max-h-32 overflow-y-auto">
                     {deletedLogs.map((log) => (
                       <div
                         key={log.logId}
-                        className="p-2 rounded-xl bg-white border border-stone-200 flex items-center justify-between gap-2"
+                        className="px-2 py-1.5 rounded-lg bg-white border border-stone-200 flex items-center justify-between gap-2"
                       >
                         <div className="min-w-0">
-                          <div className="text-[13.5px] font-bold text-stone-800 truncate">{log.label}</div>
-                          <div className="text-[12.5px] text-stone-400">
+                          <div className="text-[11px] font-bold text-stone-800 truncate">{log.label}</div>
+                          <div className="text-[9.5px] text-stone-400 truncate">
                             {log.type === "meal" ? "식단" : log.type === "fridge" ? "냉장고" : "일정"} · {log.deletedAt}
                           </div>
                         </div>
@@ -40872,10 +40872,10 @@ time: "", location: "",
                           type="button"
                           onClick={() => restoreDeletedLogEntry(log)}
                           disabled={restoringLogIds.includes(log.logId)}
-                          className={`px-3 py-1.5 rounded-lg text-[13.5px] font-extrabold shrink-0 ${
+                          className={`px-2 py-1 rounded-md text-[10px] font-extrabold shrink-0 whitespace-nowrap ${
                             restoringLogIds.includes(log.logId)
                               ? "bg-stone-200 text-stone-400"
-                              : "bg-amber-100 hover:bg-amber-200 text-amber-900"
+                              : "bg-[#EEF3EE] hover:bg-[#DFE9E0] text-[#35503C]"
                           }`}
                         >
                           {restoringLogIds.includes(log.logId) ? "복구중" : "복구"}

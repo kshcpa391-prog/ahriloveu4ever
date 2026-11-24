@@ -1181,7 +1181,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v13.80";
+export const APP_CODE_VERSION = "v13.81";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1199,7 +1199,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-24 14:09";
+export const APP_BUILD_DATE = "2026-11-24 14:18";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1268,6 +1268,16 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v13.81",
+    version: "v13.81",
+    date: "2026-11-24",
+    title: "🔡 설정창 하부(삭제 로그·AI 오류센터·자가진단·상단 사진설정) 글자·여백 컴팩트 통일",
+    highlights: [
+      "설정창 내 12.5~13.5px로 크게 남아 있던 삭제 로그, AI 오류센터, 핵심 로직 자가진단 결과, AI 엔진 진단, 홈 대표사진 입력/저장 영역을 10~11px 컴팩트 규격으로 일괄 축소해 가독성과 균형 개선",
+      "전체 메뉴(홈·식단·일정·육아·냉장고·더보기) 구문·임포트·미선언 변수·배포 오류 최종 점검 완료"
+    ]
+  },
   {
     id: "patch-v13.80",
     version: "v13.80",
