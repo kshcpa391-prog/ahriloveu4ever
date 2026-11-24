@@ -22276,8 +22276,8 @@ time: "", location: "",
                 <div className="-mx-3 sm:mx-0 bg-white sm:rounded-2xl border-y sm:border border-stone-200 shadow-sm overflow-hidden">
                   {/* 상단 통합 컨트롤 바 (월 이동 · 검색 · CSV · + 추가) */}
                   <div className="px-2.5 py-2 border-b border-stone-200 space-y-2">
-                    <div className="flex items-center justify-between gap-1">
-                      <div className="flex items-center gap-0.5 min-w-0">
+                    <div className="flex flex-wrap items-center justify-between gap-1.5">
+                      <div className="flex items-center gap-0.5 shrink-0">
                         <button
                           type="button"
                           onClick={() => {
@@ -22294,9 +22294,9 @@ time: "", location: "",
                           className="relative inline-flex items-baseline leading-none whitespace-nowrap px-1 py-0.5 rounded-lg hover:bg-stone-100 cursor-pointer"
                           title="연·월 바로 이동"
                         >
-                          <span className="text-[15px] font-black text-stone-800">{uYear}</span>
-                          <span className="text-[10.5px] font-bold text-stone-500 mr-0.5">년</span>
-                          <span className="text-[19px] font-black text-stone-900">{uMonth}</span>
+                          <span className="text-[13.5px] font-black text-stone-800">{uYear}</span>
+                          <span className="text-[10px] font-bold text-stone-500 mr-0.5">년</span>
+                          <span className="text-[17px] font-black text-stone-900">{uMonth}</span>
                           <span className="text-[10.5px] font-bold text-stone-500">월</span>
                           <span className="text-[9.5px] font-bold text-stone-400 ml-0.5">▾</span>
                           <input
@@ -22331,14 +22331,14 @@ time: "", location: "",
                               setScheduleMonth(todayStr.slice(0, 7));
                               setScheduleSelectedDate(todayStr);
                             }}
-                            className="ml-0.5 px-1.5 py-0.5 rounded-md bg-rose-50 text-rose-600 text-[10px] font-extrabold whitespace-nowrap"
+                            className="ml-0.5 px-1.5 py-0.5 rounded-md bg-[#EEF3EE] border border-[#C9D8CC] text-[#35503C] text-[10px] font-extrabold whitespace-nowrap shrink-0"
                           >
                             오늘
                           </button>
                         )}
                       </div>
 
-                      <div className="flex items-center gap-1 shrink-0">
+                      <div className="flex items-center gap-1 shrink-0 ml-auto">
                         <button
                           type="button"
                           onClick={() => {
@@ -22381,10 +22381,10 @@ time: "", location: "",
                               setPrivateCalCsvPreview(null);
                               setIsPrivateCalCsvModalOpen(true);
                             }}
-                            className="px-2 py-1.5 rounded-xl border border-stone-200 bg-stone-50 hover:bg-stone-100 text-stone-700 text-[11px] font-extrabold whitespace-nowrap flex items-center gap-0.5"
+                            className="px-1.5 py-1 rounded-xl border border-stone-200 bg-stone-50 hover:bg-stone-100 text-stone-700 text-[10.5px] font-extrabold whitespace-nowrap flex items-center gap-0.5"
                             title={`${currentAdminOwner} 개인 일정 CSV 클라우드 연동`}
                           >
-                            <CloudUpload className="w-3.5 h-3.5" />
+                            <CloudUpload className="w-3 h-3" />
                             <span>CSV</span>
                           </button>
                         )}

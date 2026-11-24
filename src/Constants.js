@@ -1181,7 +1181,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v13.82";
+export const APP_CODE_VERSION = "v13.83";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1199,7 +1199,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-24 14:25";
+export const APP_BUILD_DATE = "2026-11-24 14:40";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1268,6 +1268,16 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v13.83",
+    version: "v13.83",
+    date: "2026-11-24",
+    title: "📅 달력 상단 [오늘] 버튼 겹침·잘림 수정 및 폰트·색감 통일",
+    highlights: [
+      "달력 상단 월 이동 바에서 [오늘] 버튼이 오른쪽 검색(🔍) 버튼 뒤로 겹쳐 잘리던 현상 수정: flex-wrap 안전 배치, 연·월 및 우측 액션 버튼 폭 컴팩트 조정으로 360px 모바일에서도 1줄에 겹침 없이 표시",
+      "[오늘] 버튼 색감을 앱 공통 세이지그린(#35503C / #EEF3EE) 톤으로 통일하고 전체 구문·배포 오류 점검 완료"
+    ]
+  },
   {
     id: "patch-v13.82",
     version: "v13.82",
