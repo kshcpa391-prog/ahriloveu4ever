@@ -1181,7 +1181,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v13.99";
+export const APP_CODE_VERSION = "v14.00";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1199,7 +1199,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-25 00:12";
+export const APP_BUILD_DATE = "2026-11-25 00:18";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1268,6 +1268,17 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v14.00",
+    version: "v14.00",
+    date: "2026-11-25",
+    title: "🛠️ 서비스 워커 대소문자(/sw.js·/Sw.js) 자동 호환 및 알림 권한 대기시간 개선",
+    highlights: [
+      "Vercel(Linux) 대소문자 구분으로 public/Sw.js 업로드 시 /sw.js 등록이 실패하던 문제 해결: /sw.js 등록 실패 시 /Sw.js 자동 폴백 등록",
+      "알림 권한 팝업 대기 타임아웃을 3초 → 12초로 확대하여 팝업을 읽고 허용 버튼을 누르기 전 조기 차단 안내가 뜨는 문제 방지",
+      "수정 알림 모달 내 SW 오류 진단 문구 말줄임(truncate) 제거로 전체 오류 내용 확인 가능"
+    ]
+  },
   {
     id: "patch-v13.99",
     version: "v13.99",

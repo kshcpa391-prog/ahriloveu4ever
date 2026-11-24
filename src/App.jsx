@@ -2592,10 +2592,21 @@ function MainApp() {
       setSwStatus("오류");
     }
   };
+  const registerSwWithFallback = async () => {
+    if (typeof navigator === "undefined" || !("serviceWorker" in navigator)) return null;
+    try {
+      return await navigator.serviceWorker.register("/sw.js");
+    } catch (e1) {
+      try {
+        return await navigator.serviceWorker.register("/Sw.js");
+      } catch (e2) {
+        throw e1;
+      }
+    }
+  };
   useEffect(() => {
     if (typeof navigator !== "undefined" && "serviceWorker" in navigator) {
-      navigator.serviceWorker
-        .register("/sw.js")
+      registerSwWithFallback()
         .then((reg) => {
           setSwStatus(reg?.active ? "활성" : "설치중");
           return navigator.serviceWorker.ready;
@@ -2624,7 +2635,7 @@ function MainApp() {
       if (typeof navigator !== "undefined" && "serviceWorker" in navigator) {
         let reg = await navigator.serviceWorker.getRegistration().catch(() => null);
         if (!reg) {
-          reg = await navigator.serviceWorker.register("/sw.js").catch((err) => {
+          reg = await registerSwWithFallback().catch((err) => {
             lastNotifErrorRef.current = err?.message ? `sw.js 등록 실패(${err.message})` : "sw.js 등록 실패";
             return null;
           });
@@ -43148,7 +43159,7 @@ time: "", location: "",
                         });
                         const perm = await Promise.race([
                           reqPromise,
-                          new Promise((resolve) => setTimeout(() => resolve("timeout"), 3000))
+                          new Promise((resolve) => setTimeout(() => resolve("timeout"), 12000))
                         ]);
                         if (perm === "timeout") {
                           showToast("⚠️ 이 브라우저(웹뷰)에서는 알림 권한 팝업이 차단되었습니다. 크롬·홈화면 앱에서 열어주세요.");
@@ -43230,7 +43241,7 @@ time: "", location: "",
                   </strong>
                 </span>
                 {lastNotifError && (
-                  <span className="text-rose-600 font-bold truncate max-w-full">· {lastNotifError}</span>
+                  <span className="text-rose-600 font-bold break-all leading-tight">· {lastNotifError}</span>
                 )}
               </div>
             </div>
