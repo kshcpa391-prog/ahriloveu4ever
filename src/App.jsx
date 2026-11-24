@@ -17392,10 +17392,10 @@ ${item.memo}` : `${item.title} 다녀옴!`,
         setToastUndo(null);
       }}
       title="눌러서 닫기"
-      className="fixed top-4 left-1/2 -translate-x-1/2 z-[9999] max-w-[92vw] bg-stone-900 text-white px-3.5 py-2 rounded-2xl text-[12px] font-bold shadow-2xl border border-stone-700/60 flex items-center gap-2 cursor-pointer select-none"
+      className="fixed top-4 left-1/2 -translate-x-1/2 z-[9999] w-max max-w-[min(92vw,410px)] bg-stone-900 text-white px-3.5 py-2 rounded-2xl text-[11.5px] font-bold shadow-2xl border border-stone-700/60 flex items-center gap-2 cursor-pointer select-none"
     >
       <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-      <span className="line-clamp-2 leading-snug">{toastMsg}</span>
+      <span className="min-w-0 flex-1 break-keep leading-snug">{toastMsg}</span>
       {toastUndo?.fn && (
         <button
           type="button"

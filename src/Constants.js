@@ -1181,7 +1181,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v13.95";
+export const APP_CODE_VERSION = "v13.96";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1199,7 +1199,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-24 19:55";
+export const APP_BUILD_DATE = "2026-11-24 19:58";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1268,6 +1268,15 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v13.96",
+    version: "v13.96",
+    date: "2026-11-24",
+    title: "💬 상단 토스트 알림 말줄임(...) 잘림 해결 (전문 표시)",
+    highlights: [
+      "toastBannerEl의 line-clamp-2 제한을 제거하고 w-max max-w-[min(92vw,410px)] · break-keep를 적용해 긴 안내 문구도 중간에 '...'로 잘리지 않고 전체 내용이 선명하게 표시되도록 수정"
+    ]
+  },
   {
     id: "patch-v13.95",
     version: "v13.95",
