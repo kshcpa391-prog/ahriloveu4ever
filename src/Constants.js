@@ -1279,7 +1279,7 @@ export const INITIAL_PATCH_NOTES = [
       "🐛 버그 수정 및 코드 경량화: ① 로그인 '이메일 저장' 체크 해제 시 '0'으로 저장되어 재접속 시 해제 상태가 무시되던 형식 불일치 버그('0' vs 'false') 수정 ② 미사용 데드 상태 7쌍(loginAdminTarget·editorCodeInput·tableFilterState·tableSearchOpenId·newTableColName·alarmRepeatDraft·alarmQuickMinDraft) 제거",
       "🎛️ 시스템 자유도 확장: 하드코딩되어 있던 AI 어른 식단 스타일(4종)을 통합 세부 카테고리 자유 관리(✨ AI 스타일)로 승격해 추가·수정·삭제·순서변경·기본복원 및 스타일 칩 옆 ⚙️ 원탭 편집 지원",
       "🔗 메뉴간 연계·Firebase 이관 보완: 가족공지 카드에 [🗓️ 일정] 1탭 연계 버튼 추가(제목·내용 자동 입력), 공유노트 하위페이지/샘플 생성 시 펼침 상태(expandedPageIds) Firebase 동기화 누락 2건 보완 및 AI 스타일 클라우드/백업 통합",
-      "🎨 디자인·색상·줄바꿈 통일: 잔여 이질 색상(orange-* 10곳→amber-*, slate-* 9곳→stone-*/세이지그린) 0건 달성, 전역 상시 알람 울림 배너를 플로팅 스톱워치와 동일한 차콜그린(#25332D)·민트(#6EE7B7) 톤으로 통일, AI 스타일·공지 버튼 whitespace-nowrap 보강 및 과거 패치노트 470건 100% 보존"
+      "🎨 디자인·색상·줄바꿈 통일: 잔여 이질 색상(orange-* 10곳→amber-*, slate-* 9곳→stone-*/세이지그린) 0건 달성, 전역 상시 알람 울림 배너를 플로팅 스톱워치와 동일한 차콜그린(#25332D)·민트(#6EE7B7) 톤으로 통일하고 플로팅 타이머·스톱워치(펼침 창·접힘 미니배지 모두) 터치/마우스 드래그 자유 이동·화면 경계 보정·위치 초기화 지원, AI 스타일·공지 버튼 whitespace-nowrap 보강 및 과거 패치노트 470건 100% 보존"
     ]
   },
   {

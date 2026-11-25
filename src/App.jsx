@@ -6615,6 +6615,27 @@ function MainApp() {
   const [dialStepSec, setDialStepSec] = useState(10);
   const [isTimerMoreOpen, setIsTimerMoreOpen] = useState(false);
   const [isStopwatchTimeEditOpen, setIsStopwatchTimeEditOpen] = useState(false);
+  const [timerFloatPos, setTimerFloatPos] = useState(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem("kim_timer_float_pos_v1") || "null");
+      if (saved && typeof saved.x === "number" && typeof saved.y === "number") {
+        return { x: saved.x, y: saved.y };
+      }
+    } catch (e) {}
+    return null;
+  });
+  const [timerPillPos, setTimerPillPos] = useState(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem("kim_timer_pill_pos_v1") || "null");
+      if (saved && typeof saved.x === "number" && typeof saved.y === "number") {
+        return { x: saved.x, y: saved.y };
+      }
+    } catch (e) {}
+    return null;
+  });
+  const timerFloatBoxRef = useRef(null);
+  const timerFloatDragRef = useRef({ active: false, moved: false, startX: 0, startY: 0, origX: 0, origY: 0, w: 340, h: 200 });
+  const timerPillDragRef = useRef({ active: false, moved: false, startX: 0, startY: 0, origX: 0, origY: 0, w: 180, h: 40 });
   const [timerCompletedAlert, setTimerCompletedAlert] = useState("");
   const cropCleanupRef = useRef(null);
   useEffect(() => () => { if (cropCleanupRef.current) cropCleanupRef.current(); }, []);
@@ -39310,14 +39331,73 @@ time: "", location: "",
         };
         const activeAlarmCount = Array.isArray(customAlarms) ? customAlarms.filter((a) => a && a.enabled).length : 0;
 
+        const clampFloatCoord = (x, y, boxW, boxH) => {
+          const vw = typeof window !== "undefined" ? window.innerWidth : 390;
+          const vh = typeof window !== "undefined" ? window.innerHeight : 800;
+          const pad = 8;
+          const topMin = 48;
+          const bottomSafe = 82;
+          const maxX = Math.max(pad, vw - boxW - pad);
+          const maxY = Math.max(topMin, vh - boxH - bottomSafe);
+          return {
+            x: Math.round(Math.max(pad, Math.min(maxX, x))),
+            y: Math.round(Math.max(topMin, Math.min(maxY, y)))
+          };
+        };
+
         if (!kitchenTimer.open && (kitchenTimer.running || displaySec > 0 || kitchenTimer.cookStartTimeStr)) {
+          const safePill = timerPillPos ? clampFloatCoord(timerPillPos.x, timerPillPos.y, 190, 42) : null;
+          const pillStyle = safePill
+            ? { left: `${safePill.x}px`, top: `${safePill.y}px`, touchAction: "none" }
+            : { bottom: "calc(5.25rem + env(safe-area-inset-bottom))", left: "12px", touchAction: "none" };
           return (
             <button
               type="button"
-              onClick={() => setKitchenTimer((p) => ({ ...p, open: true }))}
-              style={{ bottom: "calc(5.25rem + env(safe-area-inset-bottom))" }}
-              className="fixed left-3 z-[48] min-h-[38px] px-3 py-1.5 rounded-full bg-[#25332D] text-white border border-white/25 shadow-[0_8px_22px_rgba(16,26,22,0.34)] flex items-center gap-2 text-[12px] font-bold hover:bg-[#2C3D36] active:scale-[0.98] transition"
-              title="누르면 타이머·스톱워치 펼치기"
+              onPointerDown={(e) => {
+                const rect = e.currentTarget.getBoundingClientRect();
+                timerPillDragRef.current = {
+                  active: true,
+                  moved: false,
+                  startX: e.clientX,
+                  startY: e.clientY,
+                  origX: rect.left,
+                  origY: rect.top,
+                  w: rect.width,
+                  h: rect.height
+                };
+                try { e.currentTarget.setPointerCapture(e.pointerId); } catch (err) {}
+              }}
+              onPointerMove={(e) => {
+                const d = timerPillDragRef.current;
+                if (!d.active) return;
+                const dx = e.clientX - d.startX;
+                const dy = e.clientY - d.startY;
+                if (!d.moved && Math.hypot(dx, dy) < 6) return;
+                d.moved = true;
+                const next = clampFloatCoord(d.origX + dx, d.origY + dy, d.w, d.h);
+                setTimerPillPos(next);
+              }}
+              onPointerUp={() => {
+                const d = timerPillDragRef.current;
+                if (!d.active) return;
+                d.active = false;
+                if (d.moved && timerPillPos) {
+                  try { localStorage.setItem("kim_timer_pill_pos_v1", JSON.stringify(timerPillPos)); } catch (err) {}
+                }
+              }}
+              onPointerCancel={() => {
+                timerPillDragRef.current.active = false;
+              }}
+              onClick={() => {
+                if (timerPillDragRef.current.moved) {
+                  timerPillDragRef.current.moved = false;
+                  return;
+                }
+                setKitchenTimer((p) => ({ ...p, open: true }));
+              }}
+              style={pillStyle}
+              className="fixed z-[48] min-h-[38px] px-3 py-1.5 rounded-full bg-[#25332D] text-white border border-white/25 shadow-[0_8px_22px_rgba(16,26,22,0.34)] flex items-center gap-2 text-[12px] font-bold hover:bg-[#2C3D36] cursor-grab active:cursor-grabbing select-none"
+              title="드래그해 이동 · 누르면 펼치기"
               aria-label={`플로팅 ${kitchenTimer.mode === "stopwatch" ? "스톱워치" : "타이머"} 펼치기, 현재 ${timeText}`}
             >
               <span className={`w-2 h-2 rounded-full shrink-0 ${kitchenTimer.running ? "bg-[#6EE7B7] animate-pulse" : "bg-[#9AAFA5]"}`} />
@@ -39372,13 +39452,83 @@ time: "", location: "",
           dialDragRef.current.active = false;
         };
 
+        const safeBoxPos = timerFloatPos
+          ? clampFloatCoord(
+              timerFloatPos.x,
+              timerFloatPos.y,
+              timerFloatBoxRef.current?.offsetWidth || Math.min(376, (typeof window !== "undefined" ? window.innerWidth : 390) - 24),
+              timerFloatBoxRef.current?.offsetHeight || 220
+            )
+          : null;
+        const floatCardStyle = safeBoxPos
+          ? { left: `${safeBoxPos.x}px`, top: `${safeBoxPos.y}px` }
+          : { bottom: "calc(5.25rem + env(safe-area-inset-bottom))" };
+
+        const handleFloatDragStart = (e) => {
+          const box = timerFloatBoxRef.current;
+          if (!box) return;
+          const rect = box.getBoundingClientRect();
+          timerFloatDragRef.current = {
+            active: true,
+            moved: false,
+            startX: e.clientX,
+            startY: e.clientY,
+            origX: rect.left,
+            origY: rect.top,
+            w: rect.width,
+            h: rect.height
+          };
+          try { e.currentTarget.setPointerCapture(e.pointerId); } catch (err) {}
+        };
+        const handleFloatDragMove = (e) => {
+          const d = timerFloatDragRef.current;
+          if (!d.active) return;
+          const dx = e.clientX - d.startX;
+          const dy = e.clientY - d.startY;
+          if (!d.moved && Math.hypot(dx, dy) < 4) return;
+          d.moved = true;
+          const next = clampFloatCoord(d.origX + dx, d.origY + dy, d.w, d.h);
+          setTimerFloatPos(next);
+        };
+        const handleFloatDragEnd = () => {
+          const d = timerFloatDragRef.current;
+          if (!d.active) return;
+          d.active = false;
+          if (d.moved && timerFloatBoxRef.current) {
+            const rect = timerFloatBoxRef.current.getBoundingClientRect();
+            const saved = clampFloatCoord(rect.left, rect.top, rect.width, rect.height);
+            setTimerFloatPos(saved);
+            try { localStorage.setItem("kim_timer_float_pos_v1", JSON.stringify(saved)); } catch (err) {}
+          }
+        };
+
         return (
           <div
+            ref={timerFloatBoxRef}
             role="dialog"
             aria-label="플로팅 타이머 및 스톱워치"
-            style={{ bottom: "calc(5.25rem + env(safe-area-inset-bottom))" }}
-            className="fixed left-1/2 -translate-x-1/2 z-[48] w-[calc(100%-1.5rem)] max-w-[376px] bg-[#25332D] text-white rounded-2xl p-3 shadow-[0_12px_28px_rgba(14,24,20,0.34),0_2px_6px_rgba(14,24,20,0.2)] border border-white/20 space-y-2.5 max-h-[70vh] overflow-y-auto"
+            style={floatCardStyle}
+            className={`fixed ${safeBoxPos ? "" : "left-1/2 -translate-x-1/2"} z-[48] w-[calc(100%-1.5rem)] max-w-[376px] bg-[#25332D] text-white rounded-2xl px-3 pb-3 pt-1.5 shadow-[0_12px_28px_rgba(14,24,20,0.34),0_2px_6px_rgba(14,24,20,0.2)] border border-white/20 space-y-2 max-h-[70vh] overflow-y-auto`}
           >
+            {/* 드래그 이동 핸들 바 (터치/마우스로 화면 어디든 자유롭게 이동) */}
+            <div
+              onPointerDown={handleFloatDragStart}
+              onPointerMove={handleFloatDragMove}
+              onPointerUp={handleFloatDragEnd}
+              onPointerCancel={handleFloatDragEnd}
+              onDoubleClick={() => {
+                setTimerFloatPos(null);
+                try { localStorage.removeItem("kim_timer_float_pos_v1"); } catch (err) {}
+                showToast("📍 플로팅 창 위치를 기본 위치로 되돌렸습니다.");
+              }}
+              style={{ touchAction: "none" }}
+              className="w-full py-1 -mt-0.5 flex items-center justify-center cursor-grab active:cursor-grabbing select-none"
+              title="드래그해 위치 이동 · 더블탭 시 기본 위치"
+              aria-label="플로팅 창 드래그 이동 핸들"
+            >
+              <span className="w-10 h-1 rounded-full bg-white/30" />
+            </div>
+
             {/* 상단: [타이머 | 스톱워치] 전환 + 우측 [더보기(상태배지) · 접기] */}
             <div className="flex items-center justify-between gap-1.5 flex-wrap">
               <div
@@ -39492,6 +39642,23 @@ time: "", location: "",
                   >
                     종료·닫기
                   </button>
+                  {(timerFloatPos || timerPillPos) && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setTimerFloatPos(null);
+                        setTimerPillPos(null);
+                        try {
+                          localStorage.removeItem("kim_timer_float_pos_v1");
+                          localStorage.removeItem("kim_timer_pill_pos_v1");
+                        } catch (err) {}
+                        showToast("📍 플로팅 타이머·스톱워치 위치를 기본 위치로 초기화했습니다.");
+                      }}
+                      className="min-h-[34px] px-2.5 py-1 rounded-lg bg-[#25332D] hover:bg-[#2F413A] border border-[#3E554B] text-[#B8C6BF] hover:text-white text-[11px] font-bold whitespace-nowrap transition"
+                    >
+                      위치 초기화
+                    </button>
+                  )}
                 </div>
                 <div className="grid grid-cols-2 gap-1.5">
                   <button
