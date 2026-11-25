@@ -1181,7 +1181,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v14.04";
+export const APP_CODE_VERSION = "v14.05";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1199,7 +1199,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-25 09:05";
+export const APP_BUILD_DATE = "2026-11-25 11:28";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1268,6 +1268,17 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v14.05",
+    version: "v14.05",
+    date: "2026-11-25",
+    title: "✍️ 공유노트 모바일 WYSIWYG 에디터·개체삽입·페이지/섹션 복원 & 인수인계 카드 이미지 가독성 전면 개선",
+    highlights: [
+      "공유노트 실시간 WYSIWYG 본문 에디터(SharedNoteRichEditor) 도입: 굵게·제목·크기·글자색·배경색 즉시 반영, 클릭 가능한 체크박스(Enter/Backspace/다중줄 변환), 커서·선택 영역 유지, 한글 IME 조합 안전성 및 실행취소/다시실행 지원",
+      "공유노트 페이지·섹션 기능 복원 및 편집 집중형 화면 개편: 상단 얇은 탐색 바(현재 페이지 ▾, + 페이지, + 섹션), 페이지 목록·순서변경·이름변경·삭제 모달, 접이식 섹션 카드(접기/펼치기 Firebase 실시간 동기화·순서이동·삭제), 간결한 1줄 서식 패널 및 본문 내 사진·파일 인라인 개체 삽입(클릭 확대/다운로드) 추가",
+      "카톡 육아 인수인계 카드 이미지(handleDownloadHandoverCard) 가독성 개선: 820px 기준 16 CSS px 보통 굵기 본문(행간 1.56배), 줄바꿈·불릿·내어쓰기 보존, 시목·시율 인물 구분선 및 주제별 소제목·주의사항 박스 분리"
+    ]
+  },
   {
     id: "patch-v14.04",
     version: "v14.04",
