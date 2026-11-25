@@ -5362,6 +5362,60 @@ function MainApp() {
   }, []);
 
 
+  const handleRestoreRoutinesFromSnapshot = async () => {
+    if (!requireEditorAccess("routines")) return;
+    if (!user || !db) {
+      showToast("클라우드 연결 후 스냅샷을 조회할 수 있습니다.");
+      return;
+    }
+    try {
+      const candidates = [];
+      const bakSnap = await getDoc(getDocRef("family_meta_v4", "daily_routines_backup")).catch(() => null);
+      if (bakSnap && bakSnap.exists() && Array.isArray(bakSnap.data()?.items)) {
+        candidates.push({
+          label: "직전 자동 백업",
+          at: bakSnap.data()?.backedUpAt || "",
+          items: bakSnap.data().items
+        });
+      }
+      const snaps = await getDocs(getColRef("family_backups_v4")).catch(() => null);
+      if (snaps) {
+        snaps.forEach((d) => {
+          const raw = d.data() || {};
+          const list = raw?.data?.familyRoutines;
+          if (Array.isArray(list) && list.length > 0) {
+            candidates.push({
+              label: raw.slot || d.id,
+              at: raw.createdAt || "",
+              items: list
+            });
+          }
+        });
+      }
+      if (candidates.length === 0) {
+        showToast("복원 가능한 클라우드 루틴 스냅샷이 없습니다.");
+        return;
+      }
+      const maxLen = Math.max(...candidates.map((c) => c.items.length));
+      const bestList = candidates
+        .filter((c) => c.items.length >= Math.max(1, maxLen - 2))
+        .sort((a, b) => String(b.at || "").localeCompare(String(a.at || "")) || b.items.length - a.items.length);
+      const picked = bestList[0] || candidates[0];
+      const ok = window.confirm(
+        `[${picked.label}] 클라우드 백업에서 루틴 ${picked.items.length}건을 복원할까요?\n(현재 목록 ${familyRoutines.length}건이 교체되며, 직전 상태는 백업됩니다.)`
+      );
+      if (!ok) return;
+      const seen = new Set();
+      const restored = picked.items.filter((r) => r && r.id && !seen.has(r.id) && seen.add(r.id));
+      setFamilyRoutines(restored);
+      await syncRoutinesToCloud(restored, { type: "replace" });
+      recordActivity("루틴", "스냅샷 복원", `${picked.label} (${restored.length}건)`);
+      showToast(`✅ [${picked.label}]에서 루틴 ${restored.length}건을 복원했습니다!`);
+    } catch (e) {
+      showToast(`⚠️ 루틴 복원 오류: ${e?.message || "조회 실패"}`);
+    }
+  };
+
   const syncRoutinesToCloud = async (nextList, op = null) => {
     try {
       localStorage.setItem("kim_family_routines_v1", JSON.stringify(nextList));
@@ -5385,11 +5439,14 @@ function MainApp() {
                 : [op.item, ...serverItems];
             } else if (op.type === "delete" && op.id) {
               merged = serverItems.filter((r) => r.id !== op.id);
+            } else if (op.type === "replace") {
+              merged = nextList;
             }
           } else if (serverItems && !op) {
             const todayStr = getTodayStr();
             const serverMap = new Map(serverItems.map((s) => [s.id, s]));
-            merged = nextList.map((item) => {
+            const nextIds = new Set(nextList.map((it) => it.id));
+            const updatedNext = nextList.map((item) => {
               const srv = serverMap.get(item.id);
               if (!srv) return item;
               const resetK =
@@ -5412,6 +5469,21 @@ function MainApp() {
               }
               return item;
             });
+            const preservedServer = serverItems.filter((s) => s && s.id && !nextIds.has(s.id));
+            merged = [...updatedNext, ...preservedServer];
+          }
+          const seenRoutineIds = new Set();
+          merged = (Array.isArray(merged) ? merged : []).filter((it) => {
+            if (!it || !it.id || seenRoutineIds.has(it.id)) return false;
+            seenRoutineIds.add(it.id);
+            return true;
+          });
+          if (serverItems && serverItems.length > merged.length) {
+            tx.set(
+              getDocRef("family_meta_v4", "daily_routines_backup"),
+              { items: serverItems, backedUpAt: new Date().toISOString() },
+              { merge: true }
+            );
           }
           tx.set(
             ref,
@@ -25729,6 +25801,16 @@ time: "", location: "",
                 >
                   📋
                 </button>
+                {isAdminUnlocked && (
+                  <button
+                    type="button"
+                    onClick={handleRestoreRoutinesFromSnapshot}
+                    className="px-2 py-1.5 rounded-xl text-[11px] font-extrabold border bg-amber-50 hover:bg-amber-100 text-amber-800 border-amber-200 whitespace-nowrap"
+                    title="자동 클라우드 백업(오전/오후 스냅샷)에서 루틴 복원"
+                  >
+                    🔄 복원
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => {

@@ -1181,7 +1181,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v14.14";
+export const APP_CODE_VERSION = "v14.16";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1199,7 +1199,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-25 12:52";
+export const APP_BUILD_DATE = "2026-11-25 13:20";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1268,6 +1268,25 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v14.16",
+    version: "v14.16",
+    date: "2026-11-25",
+    title: "자동 클라우드 스냅샷(family_backups_v4) 1클릭 루틴 복원 추가",
+    changes: [
+      "하루 2회 자동 저장되는 클라우드 스냅샷(오전/오후 백업) 및 직전 백업에서 사라진 루틴을 1클릭으로 조회·복원하는 '🔄 복원' 버튼 추가"
+    ]
+  },
+  {
+    id: "patch-v14.15",
+    version: "v14.15",
+    date: "2026-11-25",
+    title: "루틴 클라우드 동기화 덮어쓰기 방지 및 자동 안전 백업 추가",
+    changes: [
+      "syncRoutinesToCloud에서 op 없이 동기화할 때 서버 기존 루틴이 유실되지 않도록 병합·중복 ID 제거 로직 보강",
+      "루틴 개수가 줄어드는 덮어쓰기 직전 family_meta_v4/daily_routines_backup 자동 스냅샷 저장 추가"
+    ]
+  },
   {
     id: "patch-v14.14",
     version: "v14.14",
