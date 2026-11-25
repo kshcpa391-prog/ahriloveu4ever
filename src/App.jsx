@@ -46413,136 +46413,346 @@ time: "", location: "",
 
         const handleDownloadHandoverCard = () => {
           try {
-            const W = 900;
-            const pad = 44;
+            const W = 820;
+            const pad = 32;
             const innerW = W - pad * 2;
-            const sectionsToDraw = [];
+            const cardPadX = 28;
+            const contentW = innerW - cardPadX * 2;
+            const FONT_FAMILY = "-apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif";
+            const BODY_FONT = `400 32px ${FONT_FAMILY}`;
+            const BODY_BOLD_FONT = `700 32px ${FONT_FAMILY}`;
+            const TOPIC_FONT = `700 28px ${FONT_FAMILY}`;
+            const PERSON_FONT = `800 34px ${FONT_FAMILY}`;
+            const CARD_TITLE_FONT = `800 36px ${FONT_FAMILY}`;
+            const CAUTION_FONT = `500 29px ${FONT_FAMILY}`;
+            const BODY_LH = 50; // 32 * 1.5625
+            const CAUTION_LH = 44;
 
+            // Split a guide paragraph into clean bullet lines, preserving explicit newlines & empty lines
+            const splitGuideTextToLines = (rawText) => {
+              const str = String(rawText || "").replace(/\r\n?/g, "\n");
+              if (!str.trim()) return [];
+              const result = [];
+              str.split("\n").forEach((rawLine) => {
+                const trimmed = rawLine.trim();
+                if (!trimmed) {
+                  if (result.length > 0 && result[result.length - 1] !== "") result.push("");
+                  return;
+                }
+                // Split inline bullets (• or ·) when multiple items are packed on one line
+                if (trimmed.includes("•")) {
+                  trimmed.split(/\s*•\s*/).map((p) => p.trim()).filter(Boolean).forEach((p) => {
+                    result.push(`• ${p}`);
+                  });
+                  return;
+                }
+                if (trimmed.includes(" · ") && trimmed.split(" · ").length >= 2) {
+                  trimmed.split(/\s+·\s+/).map((p) => p.trim()).filter(Boolean).forEach((p) => {
+                    result.push(`• ${p}`);
+                  });
+                  return;
+                }
+                result.push(trimmed);
+              });
+              return result;
+            };
+
+            // Group a child's feeding/meal guide into clean topic subheadings
+            const buildFeedingTopicsForChild = (d) => {
+              const topics = [];
+              const rawGuide = String(d.guide.formulaGuide || "").trim();
+              if (rawGuide) {
+                const rawLines = splitGuideTextToLines(rawGuide);
+                const mealTimeItems = [];
+                const milkAllergyItems = [];
+                const daycareItems = [];
+                const bottleItems = [];
+                const otherItems = [];
+
+                rawLines.forEach((ln) => {
+                  if (!ln) return;
+                  const clean = ln.replace(/^•\s*/, "").trim();
+                  // Break sentence-packed periods if they contain distinct topics
+                  const cleanSplitTime = clean.replace(/(\d{1,2}:\d{2})\s+(?=[가-힣])/g, "$1. ");
+                  const subChunks = cleanSplitTime.includes("•")
+                    ? cleanSplitTime.split(/\s*•\s*/).filter(Boolean)
+                    : /\.(?=\s+(?:우유|현재|어린이집|젖병|깨끗한|스팀소독기|수유|※))/.test(cleanSplitTime)
+                    ? cleanSplitTime.split(/\.\s+/).map((s) => s.trim().replace(/\.$/, "")).filter(Boolean)
+                    : [cleanSplitTime];
+
+                  subChunks.forEach((chunk) => {
+                    if (/^(집에서 지내는 날|식사 일정)/.test(chunk)) return;
+                    if (/^(아침|오전\s*간식|점심|오후\s*간식|저녁|간식)\s*[:\d]/.test(chunk)) {
+                      const norm = chunk.replace(/^(아침|오전\s*간식|점심|오후\s*간식|저녁|간식)\s+(\d)/, "$1: $2");
+                      mealTimeItems.push(`• ${norm}`);
+                    } else if (/우유|알레르기|모유|압타밀|혼합수유|분유를|조유/.test(chunk)) {
+                      milkAllergyItems.push(`• ${chunk}`);
+                    } else if (/어린이집/.test(chunk)) {
+                      daycareItems.push(`• ${chunk}`);
+                    } else if (/젖병|식기세척기|스팀소독기|소독/.test(chunk)) {
+                      bottleItems.push(`• ${chunk}`);
+                    } else {
+                      otherItems.push(ln.startsWith("•") ? `• ${chunk}` : chunk);
+                    }
+                  });
+                });
+
+                if (mealTimeItems.length > 0) topics.push({ subheading: "식사 시간", items: mealTimeItems });
+                if (milkAllergyItems.length > 0) {
+                  topics.push({ subheading: d.ch.id === "시율" ? "수유 방법 · 조유" : "우유 · 알레르기", items: milkAllergyItems });
+                }
+                if (daycareItems.length > 0) topics.push({ subheading: "어린이집 가는 날", items: daycareItems });
+                if (bottleItems.length > 0) topics.push({ subheading: "젖병 · 소독", items: bottleItems });
+                if (otherItems.length > 0) topics.push({ subheading: topics.length > 0 ? "참고" : "", items: otherItems });
+              }
+
+              if (d.hasFeedLogs || d.ch.id === "시율") {
+                const feedTxt = isFutureTarget
+                  ? `• 평균 ${d.avgIntervalLabel} 간격${d.avgFeedMl > 0 ? ` (1회 약 ${d.avgFeedMl}ml)` : ""}`
+                  : `• 평균 ${d.avgIntervalLabel}${d.nextFeedEst ? ` → 다음 ${d.nextFeedEst}` : ""}`;
+                const feedItems = [feedTxt];
+                if (!isFutureTarget && d.lastFeedText) feedItems.push(`• 최근: ${d.lastFeedText}`);
+                topics.push({ subheading: isFutureTarget ? "수유 패턴" : "실시간 수유", items: feedItems });
+              }
+
+              if (d.mealSummaryList.length > 0) {
+                topics.push({
+                  subheading: `${dayLabel} 식단`,
+                  items: d.mealSummaryList.map((m) => `• ${m}`)
+                });
+              }
+              return topics;
+            };
+
+            // Group a child's sleep/bath/caution guide into clean topic subheadings + caution box
+            const buildSleepTopicsForChild = (d) => {
+              const topics = [];
+              if (d.hasSleepLogs) {
+                const sleepLogs = [];
+                if (d.avgSleepTxt) sleepLogs.push(`• 평균 수면: ${d.avgSleepTxt}`);
+                if (!isFutureTarget && d.lastSleepText) sleepLogs.push(`• 최근 수면: ${d.lastSleepText}`);
+                if (sleepLogs.length > 0) topics.push({ subheading: "수면 기록", items: sleepLogs });
+              }
+
+              if (d.guide.sleepGuide) {
+                const napItems = [];
+                const nightItems = [];
+                const methodItems = [];
+                splitGuideTextToLines(d.guide.sleepGuide).forEach((ln) => {
+                  if (!ln) return;
+                  const clean = ln.replace(/^•\s*/, "").trim();
+                  const chunks = /\.(?=\s+(?:낮잠|밤잠|집에서|방에|비교적|자기 전|밤중에|수유 후|‘|'|"|등))/.test(clean)
+                    ? clean.split(/\.\s+/).map((s) => s.trim().replace(/\.$/, "")).filter(Boolean)
+                    : [clean];
+                  chunks.forEach((c) => {
+                    if (/^낮잠/.test(c)) napItems.push(`• ${c}`);
+                    else if (/^밤잠|밤중에|자기 전/.test(c)) nightItems.push(`• ${c}`);
+                    else methodItems.push(`• ${c}`);
+                  });
+                });
+                if (napItems.length > 0) topics.push({ subheading: "낮잠", items: napItems });
+                if (nightItems.length > 0) topics.push({ subheading: "밤잠", items: nightItems });
+                if (methodItems.length > 0) topics.push({ subheading: "재우는 방법", items: methodItems });
+              }
+
+              if (d.guide.bathGuide) {
+                const bathItems = [];
+                const locItems = [];
+                splitGuideTextToLines(d.guide.bathGuide).forEach((ln) => {
+                  if (!ln) return;
+                  const clean = ln.replace(/^•\s*/, "").trim();
+                  const chunks = /\.(?=\s+(?:목욕|샴푸|양치|로션))/.test(clean)
+                    ? clean.split(/\.\s+/).map((s) => s.trim().replace(/\.$/, "")).filter(Boolean)
+                    : [clean];
+                  chunks.forEach((c) => {
+                    if (/^(칫솔|치약|로션|기저귀|물품)/.test(c) || /수납함|화장실|박스/.test(c)) {
+                      locItems.push(`• ${c}`);
+                    } else {
+                      bathItems.push(`• ${c}`);
+                    }
+                  });
+                });
+                if (bathItems.length > 0) topics.push({ subheading: "목욕 · 케어", items: bathItems });
+                if (locItems.length > 0) topics.push({ subheading: "물품 위치", items: locItems });
+              }
+
+              getCustomGuideItems(d.ch.id).forEach((ci) => {
+                if (String(ci?.label || "").trim() && String(ci?.value || "").trim()) {
+                  topics.push({
+                    subheading: String(ci.label).trim(),
+                    items: splitGuideTextToLines(String(ci.value).trim()).map((l) => (l && !l.startsWith("•") ? `• ${l}` : l))
+                  });
+                }
+              });
+
+              const cautionText = String(d.guide.cautionGuide || "").trim();
+              return { topics, cautionText };
+            };
+
+            const sectionsToDraw = [];
             if (isUsingCustomText) {
-              const rawLines = finalKakaoText.split("\n").map((l) => l.trim()).filter((l) => l && !/^━+$/.test(l));
+              const rawLines = splitGuideTextToLines(finalKakaoText);
               sectionsToDraw.push({
                 title: "📝 직접 수정된 육아 인수인계서",
                 accent: "#2F6F4E",
                 bg: "#FFFFFF",
-                rows: rawLines
+                blocks: [{ type: "items", items: rawLines }]
               });
             } else {
               if (handoverSections.mealFeed) {
-                const rows = [];
+                const blocks = [];
                 childDataList.forEach((d) => {
-                  const sub = [];
-                  if (d.guide.formulaGuide) sub.push(`  가이드: ${d.guide.formulaGuide}`);
-                  if (d.hasFeedLogs || d.ch.id === "시율") {
-                    sub.push(
-                      isFutureTarget
-                        ? `  수유 패턴: 평균 ${d.avgIntervalLabel} 간격${d.avgFeedMl > 0 ? ` (1회 약 ${d.avgFeedMl}ml)` : ""}`
-                        : `  수유: 평균 ${d.avgIntervalLabel}${d.nextFeedEst ? ` → 다음 ${d.nextFeedEst}` : ""} / 최근 ${d.lastFeedText}`
-                    );
-                  }
-                  if (d.mealSummaryList.length > 0) sub.push(`  ${dayLabel} 식사: ${d.mealSummaryList.join(" / ")}`);
-                  if (sub.length > 0) {
-                    rows.push(`▸ ${d.ch.name}`, ...sub);
+                  const topics = buildFeedingTopicsForChild(d);
+                  if (topics.length > 0) {
+                    blocks.push({ type: "person", name: d.ch.name, topics });
                   }
                 });
-                if (sharedFamilyMeals.length > 0) rows.push(`▸ 산모·가족 식단: ${sharedFamilyMeals.join(" / ")}`);
-                if (rows.length > 0) sectionsToDraw.push({ title: `🍼 식사·수유 & ${dayLabel} 식단`, accent: "#2F6F4E", bg: "#F2F8F4", rows });
-              }
-              if (handoverSections.sleep && childDataList.length > 0) {
-                const rows = [];
-                childDataList.forEach((d) => {
-                  const sub = [];
-                  if (d.hasSleepLogs) {
-                    const sb = `${d.avgSleepTxt ? `평균 ${d.avgSleepTxt}` : ""}${!isFutureTarget ? `${d.avgSleepTxt ? " · " : ""}최근 ${d.lastSleepText}` : ""}`;
-                    if (sb) sub.push(`  수면: ${sb}`);
-                  }
-                  if (d.guide.sleepGuide) sub.push(`  수면방식: ${d.guide.sleepGuide}`);
-                  if (d.guide.bathGuide) sub.push(`  목욕·케어: ${d.guide.bathGuide}`);
-                  if (d.guide.cautionGuide) sub.push(`  ⚠️ 주의: ${d.guide.cautionGuide}`);
-                  getCustomGuideItems(d.ch.id).forEach((ci) => {
-                    if (String(ci?.label || "").trim() && String(ci?.value || "").trim()) {
-                      sub.push(`  ${String(ci.label).trim()}: ${String(ci.value).trim()}`);
-                    }
+                if (sharedFamilyMeals.length > 0) {
+                  blocks.push({
+                    type: "person",
+                    name: "산모 · 가족 식단",
+                    topics: [{ subheading: "", items: sharedFamilyMeals.map((m) => `• ${m}`) }]
                   });
-                  if (sub.length > 0) rows.push(`▸ ${d.ch.name}`, ...sub);
-                });
-                if (rows.length > 0) sectionsToDraw.push({ title: "😴 수면 방식 · 목욕 · 주의사항", accent: "#3B5998", bg: "#F2F5FB", rows });
+                }
+                if (blocks.length > 0) {
+                  sectionsToDraw.push({ title: `🍼 식사·수유 & ${dayLabel} 식단`, accent: "#2F6F4E", bg: "#F3F8F5", blocks });
+                }
               }
-              if (handoverSections.meds) {
-                const rows = [];
+
+              if (handoverSections.sleep && childDataList.length > 0) {
+                const blocks = [];
                 childDataList.forEach((d) => {
+                  const { topics, cautionText } = buildSleepTopicsForChild(d);
+                  if (topics.length > 0 || cautionText) {
+                    blocks.push({ type: "person", name: d.ch.name, topics, caution: cautionText });
+                  }
+                });
+                if (blocks.length > 0) {
+                  sectionsToDraw.push({ title: "😴 수면 방식 · 목욕 · 주의사항", accent: "#2E4C80", bg: "#F3F6FB", blocks });
+                }
+              }
+
+              if (handoverSections.meds) {
+                const blocks = [];
+                childDataList.forEach((d) => {
+                  const topics = [];
                   if (d.recentMeds.length > 0) {
-                    rows.push(`${d.ch.name} 진료: ${d.recentMeds.map((m) => `${m.title}${m.temp ? `(${m.temp}°C)` : ""}`).join(" / ")}`);
+                    topics.push({
+                      subheading: "최근 진료 · 체온",
+                      items: d.recentMeds.map((m) => `• ${m.title}${m.temp ? ` (${m.temp}°C)` : ""}`)
+                    });
                   }
                   if (d.selectedChildMeds.length > 0) {
-                    rows.push(`${d.ch.name} 약: ${d.selectedChildMeds.map((m) => `${m.title}${m.dosage ? `(${m.dosage})` : ""}`).join(", ")}`);
+                    topics.push({
+                      subheading: "복용 중인 약",
+                      items: d.selectedChildMeds.map((m) => `• ${m.title}${m.dosage ? ` (${m.dosage})` : ""}`)
+                    });
                   }
+                  if (topics.length > 0) blocks.push({ type: "person", name: d.ch.name, topics });
                 });
-                if (rows.length === 0) rows.push("복용 중인 약·최근 진료 특이사항 없음");
-                sectionsToDraw.push({ title: "💊 약 복용 · 최근 진료/체온", accent: "#B83B5E", bg: "#FDF3F5", rows });
+                if (blocks.length === 0) {
+                  blocks.push({ type: "items", items: ["복용 중인 약·최근 진료 특이사항 없음"] });
+                }
+                sectionsToDraw.push({ title: "💊 약 복용 · 최근 진료/체온", accent: "#9F2D4E", bg: "#FDF4F6", blocks });
               }
+
               if (handoverSections.routines) {
                 if (handoverTimetableMode && timetableEntries.length > 0) {
                   sectionsToDraw.push({
                     title: `🕒 ${dayLabel}(${targetDate.slice(5)} ${targetDow}) 시간표`,
-                    accent: "#9A6700",
+                    accent: "#8A5A00",
                     bg: "#FDF9EE",
                     isTable: true,
-                    tableRows: timetableEntries.slice(0, 14),
-                    rows: []
+                    tableRows: timetableEntries.slice(0, 16),
+                    blocks: []
                   });
                 } else {
-                  const rows = [];
+                  const topics = [];
                   if (selectedRoutines.length > 0) {
-                    rows.push(`루틴: ${selectedRoutines.map((r) => (r.scheduledTime ? `⏰${formatRoutineTimeLabel(r.scheduledTime)} ${r.title}` : r.title)).join(" · ")}`);
-                  } else {
-                    rows.push("선택된 루틴 없음");
+                    topics.push({
+                      subheading: "반복 루틴",
+                      items: selectedRoutines.map((r) => `• ${r.scheduledTime ? `${formatRoutineTimeLabel(r.scheduledTime)} · ` : ""}${r.title}`)
+                    });
                   }
                   if (selectedSchedules.length > 0) {
-                    rows.push(`일정·할일: ${selectedSchedules.map((s) => s.title).join(" · ")}`);
+                    topics.push({
+                      subheading: "일정 · 할 일",
+                      items: selectedSchedules.map((s) => `• ${s.title}${s.location ? ` (${s.location})` : ""}`)
+                    });
                   }
-                  sectionsToDraw.push({ title: `🔄 ${dayLabel} ${isFutureTarget ? "예정 " : ""}루틴 · 할 일`, accent: "#9A6700", bg: "#FDF9EE", rows });
+                  sectionsToDraw.push({
+                    title: `🔄 ${dayLabel} ${isFutureTarget ? "예정 " : ""}루틴 · 할 일`,
+                    accent: "#8A5A00",
+                    bg: "#FDF9EE",
+                    blocks: [{ type: "topics", topics: topics.length > 0 ? topics : [{ subheading: "", items: ["선택된 루틴 없음"] }] }]
+                  });
                 }
               }
+
               if (includeMomHouse && (handoverProfile.momMealGuide || handoverProfile.houseworkGuide || handoverProfile.emergencyContacts || (handoverSections.includeDoorCode && handoverProfile.doorCode) || getCustomGuideItems("공통").some((ci) => String(ci?.label || "").trim() && String(ci?.value || "").trim()))) {
-                const rows = [];
-                if (handoverProfile.momMealGuide) rows.push(`산모 식사: ${handoverProfile.momMealGuide}`);
-                if (handoverProfile.houseworkGuide) rows.push(`세탁·가사: ${handoverProfile.houseworkGuide}`);
-                if (handoverProfile.emergencyContacts) rows.push(`비상연락: ${handoverProfile.emergencyContacts}`);
-                if (handoverSections.includeDoorCode && handoverProfile.doorCode) rows.push(`출입안내: ${handoverProfile.doorCode}`);
-              getCustomGuideItems("공통").forEach((ci) => {
-                if (String(ci?.label || "").trim() && String(ci?.value || "").trim()) {
-                  rows.push(`${String(ci.label).trim()}: ${String(ci.value).trim()}`);
+                const topics = [];
+                if (handoverProfile.momMealGuide) {
+                  topics.push({ subheading: "산모 식사", items: splitGuideTextToLines(handoverProfile.momMealGuide).map((l) => (l && !l.startsWith("•") ? `• ${l}` : l)) });
                 }
-              });
-                sectionsToDraw.push({ title: "🏠 산모 식사 · 가사 · 비상연락", accent: "#0F766E", bg: "#F0FDFA", rows });
+                if (handoverProfile.houseworkGuide) {
+                  topics.push({ subheading: "세탁 · 가사", items: splitGuideTextToLines(handoverProfile.houseworkGuide).map((l) => (l && !l.startsWith("•") ? `• ${l}` : l)) });
+                }
+                if (handoverProfile.emergencyContacts) {
+                  topics.push({ subheading: "비상연락", items: splitGuideTextToLines(handoverProfile.emergencyContacts).map((l) => (l && !l.startsWith("•") ? `• ${l}` : l)) });
+                }
+                if (handoverSections.includeDoorCode && handoverProfile.doorCode) {
+                  topics.push({ subheading: "출입안내", items: splitGuideTextToLines(handoverProfile.doorCode).map((l) => (l && !l.startsWith("•") ? `• ${l}` : l)) });
+                }
+                getCustomGuideItems("공통").forEach((ci) => {
+                  if (String(ci?.label || "").trim() && String(ci?.value || "").trim()) {
+                    topics.push({
+                      subheading: String(ci.label).trim(),
+                      items: splitGuideTextToLines(String(ci.value).trim()).map((l) => (l && !l.startsWith("•") ? `• ${l}` : l))
+                    });
+                  }
+                });
+                sectionsToDraw.push({ title: "🏠 산모 식사 · 가사 · 비상연락", accent: "#0F766E", bg: "#F2FBF9", blocks: [{ type: "topics", topics }] });
               }
+
               if (handoverSections.notices && (selectedNotices.length > 0 || selectedStorage.length > 0)) {
-                const rows = [];
-                selectedNotices.forEach((n) => rows.push(`공지: ${n.title}`));
-                if (selectedStorage.length > 0) {
-                  rows.push(`위치: ${selectedStorage.map((it) => `${it.title}(${it.room}${it.detailLoc ? ` ${it.detailLoc}` : ""})`).join(" / ")}`);
+                const topics = [];
+                if (selectedNotices.length > 0) {
+                  topics.push({ subheading: "가족 공지", items: selectedNotices.map((n) => `• ${n.title}`) });
                 }
-                sectionsToDraw.push({ title: "📌 공지 · 주요 물건 위치", accent: "#7C2D12", bg: "#FFF7ED", rows });
+                if (selectedStorage.length > 0) {
+                  topics.push({
+                    subheading: "주요 물건 위치",
+                    items: selectedStorage.map((it) => `• ${it.title}: ${it.room}${it.detailLoc ? ` (${it.detailLoc})` : ""}`)
+                  });
+                }
+                sectionsToDraw.push({ title: "📌 공지 · 주요 물건 위치", accent: "#7C2D12", bg: "#FFF8F1", blocks: [{ type: "topics", topics }] });
               }
+
               if (attachedPage && attachedPageText) {
-                const noteLines = attachedPageText.split("\n").map((l) => l.trim()).filter(Boolean).slice(0, 6);
+                const noteLines = splitGuideTextToLines(attachedPageText).slice(0, 12);
                 if (noteLines.length > 0) {
                   sectionsToDraw.push({
                     title: `🗂️ 첨부 노트 · ${attachedPage.title}`,
                     accent: "#4338CA",
-                    bg: "#EEF2FF",
-                    rows: noteLines
+                    bg: "#F2F4FF",
+                    blocks: [{ type: "items", items: noteLines }]
                   });
                 }
               }
               if (handoverNote.trim()) {
-                sectionsToDraw.push({ title: "💬 교대자 전달 메모", accent: "#44403C", bg: "#F5F5F4", rows: [handoverNote.trim()] });
+                sectionsToDraw.push({
+                  title: "💬 교대자 전달 메모",
+                  accent: "#44403C",
+                  bg: "#F6F5F4",
+                  blocks: [{ type: "items", items: splitGuideTextToLines(handoverNote.trim()) }]
+                });
               }
             }
 
             const canvas = document.createElement("canvas");
             const ctx = canvas.getContext("2d");
-            const wrapLines = (text, maxW, font) => {
+
+            const wrapString = (text, maxW, font) => {
               ctx.font = font;
               const chars = String(text || "").split("");
               const out = [];
@@ -46557,104 +46767,232 @@ time: "", location: "",
                 }
               }
               if (cur) out.push(cur);
-              return out;
+              return out.length > 0 ? out : [""];
             };
 
-            const bodyFont = "600 22px -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif";
-            let totalH = 165;
+            // Layout calculator producing exact draw ops so measure & render match 100%
+            const bulletIndent = 26;
+            const buildCardOps = (sec) => {
+              const ops = [];
+              let cy = 78; // after card title
+
+              const pushWrappedItem = (rawItem, indentX = 0, font = BODY_FONT, lh = BODY_LH, color = "#1C1917") => {
+                if (rawItem === "") {
+                  cy += 16;
+                  return;
+                }
+                const isBullet = rawItem.startsWith("• ");
+                const textBody = isBullet ? rawItem.slice(2).trim() : rawItem;
+                const baseX = cardPadX + indentX;
+                const textX = isBullet ? baseX + bulletIndent : baseX;
+                const availW = contentW - indentX - (isBullet ? bulletIndent : 0);
+
+                // Check for short "Label: value" pattern to bold only the label
+                const colonIdx = textBody.indexOf(":");
+                const hasShortLabel = colonIdx > 0 && colonIdx <= 16 && !/^https?$/i.test(textBody.slice(0, colonIdx));
+                const labelPart = hasShortLabel ? textBody.slice(0, colonIdx + 1) : "";
+
+                const wrapped = wrapString(textBody, availW, font);
+                wrapped.forEach((lineTxt, lIdx) => {
+                  ops.push({
+                    kind: "line",
+                    x: textX,
+                    y: cy,
+                    text: lineTxt,
+                    bulletX: isBullet && lIdx === 0 ? baseX : null,
+                    boldPrefixLen: lIdx === 0 && hasShortLabel ? Math.min(lineTxt.length, labelPart.length) : 0,
+                    font,
+                    boldFont: BODY_BOLD_FONT,
+                    color
+                  });
+                  cy += lh;
+                });
+                cy += 6; // small gap between sibling items
+              };
+
+              const pushTopics = (topics) => {
+                topics.forEach((tp, tIdx) => {
+                  if (tIdx > 0) cy += 14; // larger gap when topic changes
+                  if (tp.subheading) {
+                    ops.push({ kind: "subheading", x: cardPadX, y: cy, text: tp.subheading, color: sec.accent });
+                    cy += 38;
+                  }
+                  (tp.items || []).forEach((it) => pushWrappedItem(it));
+                });
+              };
+
+              (sec.blocks || []).forEach((blk, bIdx) => {
+                if (blk.type === "person") {
+                  if (bIdx > 0) {
+                    cy += 12;
+                    ops.push({ kind: "divider", y: cy });
+                    cy += 24;
+                  }
+                  ops.push({ kind: "person", x: cardPadX, y: cy, text: blk.name });
+                  cy += 44;
+                  pushTopics(blk.topics || []);
+                  if (blk.caution) {
+                    cy += 10;
+                    const cLines = wrapString(`⚠️ 주의: ${blk.caution}`, contentW - 36, CAUTION_FONT);
+                    const cBoxH = 22 + cLines.length * CAUTION_LH + 14;
+                    ops.push({ kind: "caution", x: cardPadX, y: cy, w: contentW, h: cBoxH, lines: cLines });
+                    cy += cBoxH + 10;
+                  }
+                } else if (blk.type === "topics") {
+                  pushTopics(blk.topics || []);
+                } else if (blk.type === "items") {
+                  (blk.items || []).forEach((it) => pushWrappedItem(it));
+                }
+              });
+
+              return { ops, boxH: cy + 20 };
+            };
+
+            let totalH = 176;
             const prepared = sectionsToDraw.map((sec) => {
               if (sec.isTable && Array.isArray(sec.tableRows)) {
-                const boxH = 62 + sec.tableRows.length * 42 + 18;
-                totalH += boxH + 18;
-                return { ...sec, wrapped: [], boxH };
+                const timeColW = 152;
+                const textMaxW = contentW - timeColW - 32;
+                let tableH = 0;
+                const rowLayouts = sec.tableRows.map((tr) => {
+                  const lines = wrapString(String(tr.text || ""), textMaxW, BODY_FONT).slice(0, 2);
+                  const rowH = Math.max(54, 16 + lines.length * 40 + 8);
+                  tableH += rowH;
+                  return { ...tr, lines, rowH };
+                });
+                const boxH = 78 + tableH + 24;
+                totalH += boxH + 22;
+                return { ...sec, rowLayouts, timeColW, boxH };
               }
-              const wrapped = sec.rows.flatMap((r) => wrapLines(r, innerW - 44, bodyFont));
-              const boxH = 56 + wrapped.length * 32 + 22;
-              totalH += boxH + 18;
-              return { ...sec, wrapped, boxH };
+              const { ops, boxH } = buildCardOps(sec);
+              totalH += boxH + 22;
+              return { ...sec, ops, boxH };
             });
-            totalH += 44;
+            totalH += 56;
 
             canvas.width = W;
-            canvas.height = Math.max(420, totalH);
+            canvas.height = Math.max(460, totalH);
 
             ctx.fillStyle = "#FAF8F3";
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            ctx.fillStyle = "#5E7A65";
-            ctx.fillRect(0, 0, W, 128);
+            // Top banner
+            ctx.fillStyle = "#4A6652";
+            ctx.fillRect(0, 0, W, 146);
             ctx.fillStyle = "#FFFFFF";
-            ctx.font = "800 32px -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif";
+            ctx.font = `800 38px ${FONT_FAMILY}`;
             ctx.fillText(
               `${handoverPreset === "helper" ? "🤝 산후관리·육아 인수인계" : "🤝 육아 인수인계"} · ${dayLabel}(${targetDate})`,
               pad,
-              62
+              68
             );
             ctx.fillStyle = "#E6F0E8";
-            ctx.font = "600 20px -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif";
+            ctx.font = `500 24px ${FONT_FAMILY}`;
             ctx.fillText(
               `대상: ${targetSummaryText}  |  ${isFutureTarget ? "사전 안내" : "실시간 교대"}  |  작성: ${nowTimeLabel}`,
               pad,
-              102
+              114
             );
 
-            let y = 154;
+            let y = 172;
             prepared.forEach((sec) => {
               ctx.fillStyle = sec.bg;
-              ctx.strokeStyle = "#E5E2DC";
+              ctx.strokeStyle = "#E2DFD7";
               ctx.lineWidth = 2;
               ctx.beginPath();
-              if (ctx.roundRect) {
-                ctx.roundRect(pad, y, innerW, sec.boxH, 20);
-              } else {
-                ctx.rect(pad, y, innerW, sec.boxH);
-              }
+              if (ctx.roundRect) ctx.roundRect(pad, y, innerW, sec.boxH, 20);
+              else ctx.rect(pad, y, innerW, sec.boxH);
               ctx.fill();
               ctx.stroke();
 
               ctx.fillStyle = sec.accent;
-              ctx.font = "800 24px -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif";
-              ctx.fillText(sec.title, pad + 22, y + 40);
+              ctx.font = CARD_TITLE_FONT;
+              ctx.fillText(sec.title, pad + cardPadX, y + 48);
 
-              if (sec.isTable && Array.isArray(sec.tableRows)) {
-                const colW = 136;
-                const tableX = pad + 20;
-                const tableW = innerW - 40;
-                let ry = y + 54;
-                sec.tableRows.forEach((tr, rIdx) => {
+              if (sec.isTable && Array.isArray(sec.rowLayouts)) {
+                const tableX = pad + cardPadX;
+                let ry = y + 76;
+                sec.rowLayouts.forEach((tr, rIdx) => {
                   ctx.fillStyle = rIdx % 2 === 0 ? "#FFFFFF" : "#FAF5E6";
-                  ctx.fillRect(tableX, ry, tableW, 40);
+                  ctx.fillRect(tableX, ry, contentW, tr.rowH);
                   ctx.strokeStyle = "#E7DEC8";
                   ctx.lineWidth = 1.5;
-                  ctx.strokeRect(tableX, ry, tableW, 40);
+                  ctx.strokeRect(tableX, ry, contentW, tr.rowH);
                   ctx.beginPath();
-                  ctx.moveTo(tableX + colW, ry);
-                  ctx.lineTo(tableX + colW, ry + 40);
+                  ctx.moveTo(tableX + sec.timeColW, ry);
+                  ctx.lineTo(tableX + sec.timeColW, ry + tr.rowH);
                   ctx.stroke();
 
-                  ctx.fillStyle = "#9A6700";
-                  ctx.font = "800 20px -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif";
-                  ctx.fillText(String(tr.timeLabel || ""), tableX + 14, ry + 27);
+                  ctx.fillStyle = "#8A5A00";
+                  ctx.font = `700 26px ${FONT_FAMILY}`;
+                  ctx.fillText(String(tr.timeLabel || ""), tableX + 14, ry + 36);
 
-                  ctx.fillStyle = "#292524";
-                  ctx.font = "700 20px -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif";
-                  const txt = String(tr.text || "").slice(0, 34);
-                  ctx.fillText(txt, tableX + colW + 16, ry + 27);
-                  ry += 40;
+                  ctx.fillStyle = "#1C1917";
+                  ctx.font = BODY_FONT;
+                  tr.lines.forEach((ln, lIdx) => {
+                    ctx.fillText(ln, tableX + sec.timeColW + 16, ry + 36 + lIdx * 40);
+                  });
+                  ry += tr.rowH;
                 });
               } else {
-                ctx.fillStyle = "#292524";
-                ctx.font = bodyFont;
-                sec.wrapped.forEach((ln, idx) => {
-                  ctx.fillText(ln, pad + 22, y + 76 + idx * 32);
+                sec.ops.forEach((op) => {
+                  if (op.kind === "divider") {
+                    ctx.strokeStyle = "#DDD8CE";
+                    ctx.lineWidth = 1.5;
+                    ctx.beginPath();
+                    ctx.moveTo(pad + cardPadX, y + op.y);
+                    ctx.lineTo(pad + innerW - cardPadX, y + op.y);
+                    ctx.stroke();
+                  } else if (op.kind === "person") {
+                    ctx.fillStyle = "#1C1917";
+                    ctx.font = PERSON_FONT;
+                    ctx.fillText(op.text, pad + op.x, y + op.y + 30);
+                  } else if (op.kind === "subheading") {
+                    ctx.fillStyle = op.color || "#44403C";
+                    ctx.font = TOPIC_FONT;
+                    ctx.fillText(op.text, pad + op.x, y + op.y + 26);
+                  } else if (op.kind === "caution") {
+                    ctx.fillStyle = "#FFFBEB";
+                    ctx.beginPath();
+                    if (ctx.roundRect) ctx.roundRect(pad + op.x, y + op.y, op.w, op.h, 12);
+                    else ctx.rect(pad + op.x, y + op.y, op.w, op.h);
+                    ctx.fill();
+                    ctx.fillStyle = "#D97706";
+                    ctx.fillRect(pad + op.x, y + op.y + 4, 6, op.h - 8);
+                    ctx.fillStyle = "#78350F";
+                    ctx.font = CAUTION_FONT;
+                    op.lines.forEach((cln, cIdx) => {
+                      ctx.fillText(cln, pad + op.x + 18, y + op.y + 36 + cIdx * CAUTION_LH);
+                    });
+                  } else if (op.kind === "line") {
+                    if (op.bulletX !== null) {
+                      ctx.fillStyle = "#57534E";
+                      ctx.font = BODY_FONT;
+                      ctx.fillText("•", pad + op.bulletX, y + op.y + 32);
+                    }
+                    if (op.boldPrefixLen > 0) {
+                      const bPart = op.text.slice(0, op.boldPrefixLen);
+                      const rPart = op.text.slice(op.boldPrefixLen);
+                      ctx.fillStyle = op.color;
+                      ctx.font = op.boldFont;
+                      ctx.fillText(bPart, pad + op.x, y + op.y + 32);
+                      const bW = ctx.measureText(bPart).width;
+                      ctx.font = op.font;
+                      ctx.fillText(rPart, pad + op.x + bW, y + op.y + 32);
+                    } else {
+                      ctx.fillStyle = op.color;
+                      ctx.font = op.font;
+                      ctx.fillText(op.text, pad + op.x, y + op.y + 32);
+                    }
+                  }
                 });
               }
-              y += sec.boxH + 18;
+              y += sec.boxH + 22;
             });
 
             ctx.fillStyle = "#A8A29E";
-            ctx.font = "600 18px -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif";
-            ctx.fillText("혁리나목율♡ 우리 가족 앱 자동 생성 인수인계서", pad, canvas.height - 18);
+            ctx.font = `500 22px ${FONT_FAMILY}`;
+            ctx.fillText("혁리나목율♡ 우리 가족 앱 자동 생성 인수인계서", pad, canvas.height - 20);
 
             const url = canvas.toDataURL("image/png");
             const a = document.createElement("a");
