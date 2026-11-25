@@ -61,6 +61,8 @@ import {
   signOut
 } from "firebase/auth";
 import {
+  getDoc,
+  getDocs,
   setDoc,
   deleteDoc,
   onSnapshot,
@@ -180,7 +182,8 @@ import {
   DEFAULT_SHOPPING_PRESETS,
   DEFAULT_BABY_HEALTH_TAGS,
   DEFAULT_SCHEDULE_PLACES,
-  DEFAULT_HOUSE_WARRANTY_BRANDS
+  DEFAULT_HOUSE_WARRANTY_BRANDS,
+  DEFAULT_TIMER_PRESETS
 } from "./Constants";
 
 
@@ -1875,7 +1878,7 @@ const SharedNoteRichEditor = React.memo(({
                   <button
                     type="button"
                     onClick={closePanelsAndRestoreFocus}
-                    className="px-2 py-1 rounded-lg bg-stone-200 text-stone-700 text-[11px] font-extrabold shrink-0"
+                    className="px-2 py-1 rounded-lg bg-stone-200 text-stone-700 text-[11px] font-extrabold whitespace-nowrap shrink-0"
                     title="서식 패널 닫기"
                   >
                     ✕
@@ -4981,7 +4984,8 @@ function MainApp() {
           shopping_presets: Array.isArray(saved.shopping_presets) && saved.shopping_presets.length > 0 ? saved.shopping_presets.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_SHOPPING_PRESETS],
           baby_health_tags: Array.isArray(saved.baby_health_tags) && saved.baby_health_tags.length > 0 ? saved.baby_health_tags.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_BABY_HEALTH_TAGS],
           schedule_places: Array.isArray(saved.schedule_places) && saved.schedule_places.length > 0 ? saved.schedule_places.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_SCHEDULE_PLACES],
-          house_warranty_brands: Array.isArray(saved.house_warranty_brands) && saved.house_warranty_brands.length > 0 ? saved.house_warranty_brands.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_HOUSE_WARRANTY_BRANDS]
+          house_warranty_brands: Array.isArray(saved.house_warranty_brands) && saved.house_warranty_brands.length > 0 ? saved.house_warranty_brands.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_HOUSE_WARRANTY_BRANDS],
+          timer_presets: Array.isArray(saved.timer_presets) && saved.timer_presets.length > 0 ? saved.timer_presets.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_TIMER_PRESETS]
         };
       }
     } catch (e) {}
@@ -4999,7 +5003,8 @@ function MainApp() {
       shopping_presets: [...DEFAULT_SHOPPING_PRESETS],
       baby_health_tags: [...DEFAULT_BABY_HEALTH_TAGS],
       schedule_places: [...DEFAULT_SCHEDULE_PLACES],
-      house_warranty_brands: [...DEFAULT_HOUSE_WARRANTY_BRANDS]
+      house_warranty_brands: [...DEFAULT_HOUSE_WARRANTY_BRANDS],
+      timer_presets: [...DEFAULT_TIMER_PRESETS]
     };
   });
   const fridgeCategories = customCategories.fridge;
@@ -5016,6 +5021,7 @@ function MainApp() {
   const babyHealthTags = customCategories.baby_health_tags || DEFAULT_BABY_HEALTH_TAGS;
   const schedulePlaces = customCategories.schedule_places || DEFAULT_SCHEDULE_PLACES;
   const houseWarrantyBrands = customCategories.house_warranty_brands || DEFAULT_HOUSE_WARRANTY_BRANDS;
+  const timerPresets = customCategories.timer_presets || DEFAULT_TIMER_PRESETS;
 
   // === 🔒 비밀메뉴: 경조사비 입출금내역 상태 ===
   const isSuhyeokAdmin = isAdminUnlocked && (actorName === "수혁" || actorName === "김수혁");
@@ -6962,6 +6968,7 @@ function MainApp() {
     const nowMs = Date.now();
     setLastSeenActivityMs(nowMs);
     try { localStorage.setItem("kim_last_seen_activity_ms_v1", String(nowMs)); } catch (e) {}
+                if (user && db) { setDoc(getDocRef("family_meta_v4", "activity_read_v1"), { lastSeenMs: nowMs, updatedAtMs: nowMs }, { merge: true }).catch(() => {}); }
     setIsActivityModalOpen(false);
     setLiveActivityPopup(null);
     if (act.category === "쪽지" && isAdminUnlocked) {
@@ -8963,10 +8970,56 @@ function MainApp() {
               shopping_presets: Array.isArray(d.shopping_presets) && d.shopping_presets.length > 0 ? d.shopping_presets.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_SHOPPING_PRESETS],
               baby_health_tags: Array.isArray(d.baby_health_tags) && d.baby_health_tags.length > 0 ? d.baby_health_tags.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_BABY_HEALTH_TAGS],
               schedule_places: Array.isArray(d.schedule_places) && d.schedule_places.length > 0 ? d.schedule_places.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_SCHEDULE_PLACES],
-              house_warranty_brands: Array.isArray(d.house_warranty_brands) && d.house_warranty_brands.length > 0 ? d.house_warranty_brands.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_HOUSE_WARRANTY_BRANDS]
+              house_warranty_brands: Array.isArray(d.house_warranty_brands) && d.house_warranty_brands.length > 0 ? d.house_warranty_brands.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_HOUSE_WARRANTY_BRANDS],
+              timer_presets: Array.isArray(d.timer_presets) && d.timer_presets.length > 0 ? d.timer_presets.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_TIMER_PRESETS]
             };
             setCustomCategories(nextCats);
             try { localStorage.setItem("kim_custom_categories_v1", JSON.stringify(nextCats)); } catch (e) {}
+          }
+        },
+        () => {}
+      )
+    );
+
+    unsubscribers.push(
+      onSnapshot(
+        getDocRef("family_meta_v4", "activity_read_v1"),
+        (snap) => {
+          if (snap.exists()) {
+            const ms = Number(snap.data()?.lastSeenMs || 0);
+            if (ms > 0) {
+              setLastSeenActivityMs((prev) => {
+                const next = Math.max(Number(prev || 0), ms);
+                try { localStorage.setItem("kim_last_seen_activity_ms_v1", String(next)); } catch (e) {}
+                return next;
+              });
+            }
+          }
+        },
+        () => {}
+      )
+    );
+
+    unsubscribers.push(
+      onSnapshot(
+        getDocRef("family_meta_v4", "smart_notif_sent_v1"),
+        (snap) => {
+          if (snap.exists()) {
+            const cloudMap = snap.data()?.map;
+            if (cloudMap && typeof cloudMap === "object") {
+              try {
+                const localRaw = JSON.parse(localStorage.getItem("kim_smart_notif_sent_v1") || "{}") || {};
+                const merged = { ...localRaw };
+                Object.keys(cloudMap).forEach((k) => {
+                  const cv = cloudMap[k];
+                  const lv = merged[k];
+                  const cMs = typeof cv === "number" ? cv : Number(cv?.lastSentMs || 0);
+                  const lMs = typeof lv === "number" ? lv : Number(lv?.lastSentMs || 0);
+                  if (cMs >= lMs) merged[k] = cv;
+                });
+                localStorage.setItem("kim_smart_notif_sent_v1", JSON.stringify(merged));
+              } catch (e) {}
+            }
           }
         },
         () => {}
@@ -9945,7 +9998,8 @@ function MainApp() {
           shopping_presets: Array.isArray(payload.customCategories.shopping_presets) && payload.customCategories.shopping_presets.length > 0 ? payload.customCategories.shopping_presets.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_SHOPPING_PRESETS],
           baby_health_tags: Array.isArray(payload.customCategories.baby_health_tags) && payload.customCategories.baby_health_tags.length > 0 ? payload.customCategories.baby_health_tags.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_BABY_HEALTH_TAGS],
           schedule_places: Array.isArray(payload.customCategories.schedule_places) && payload.customCategories.schedule_places.length > 0 ? payload.customCategories.schedule_places.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_SCHEDULE_PLACES],
-          house_warranty_brands: Array.isArray(payload.customCategories.house_warranty_brands) && payload.customCategories.house_warranty_brands.length > 0 ? payload.customCategories.house_warranty_brands.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_HOUSE_WARRANTY_BRANDS]
+          house_warranty_brands: Array.isArray(payload.customCategories.house_warranty_brands) && payload.customCategories.house_warranty_brands.length > 0 ? payload.customCategories.house_warranty_brands.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_HOUSE_WARRANTY_BRANDS],
+          timer_presets: Array.isArray(payload.customCategories.timer_presets) && payload.customCategories.timer_presets.length > 0 ? payload.customCategories.timer_presets.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_TIMER_PRESETS]
         };
         setCustomCategories(nextCats);
         try { localStorage.setItem("kim_custom_categories_v1", JSON.stringify(nextCats)); } catch (e) {}
@@ -10240,6 +10294,7 @@ function MainApp() {
                 baby_health_tags: Array.isArray(payload.customCategories.baby_health_tags) && payload.customCategories.baby_health_tags.length > 0 ? payload.customCategories.baby_health_tags : [...DEFAULT_BABY_HEALTH_TAGS],
                 schedule_places: Array.isArray(payload.customCategories.schedule_places) && payload.customCategories.schedule_places.length > 0 ? payload.customCategories.schedule_places : [...DEFAULT_SCHEDULE_PLACES],
                 house_warranty_brands: Array.isArray(payload.customCategories.house_warranty_brands) && payload.customCategories.house_warranty_brands.length > 0 ? payload.customCategories.house_warranty_brands : [...DEFAULT_HOUSE_WARRANTY_BRANDS],
+                timer_presets: Array.isArray(payload.customCategories.timer_presets) && payload.customCategories.timer_presets.length > 0 ? payload.customCategories.timer_presets : [...DEFAULT_TIMER_PRESETS],
                 updatedAtMs: Date.now()
               },
               { merge: true }
@@ -10390,6 +10445,9 @@ function MainApp() {
     const markSentRepeat = (sentMap, key, nextCount) => {
       sentMap[key] = { count: nextCount, lastSentMs: Date.now() };
       try { localStorage.setItem("kim_smart_notif_sent_v1", JSON.stringify(sentMap)); } catch (e) {}
+      if (user && db) {
+        setDoc(getDocRef("family_meta_v4", "smart_notif_sent_v1"), { map: sentMap, updatedAtMs: Date.now() }, { merge: true }).catch(() => {});
+      }
     };
     const applyCustomTpl = (itemKey, defTitle, defBody, vars) => {
       const custom = smartNotifPrefs?.customTemplates?.[itemKey];
@@ -10544,7 +10602,7 @@ function MainApp() {
       // 5. 시간대별 미완료 루틴 (slot.startTime 버그 수정 + 요일/기한 필터 + 반복)
       const routineWin = Math.max(15, Number(smartNotifPrefs.routineWindowMinutes) || 90);
       if (smartNotifPrefs.routineSlot && Array.isArray(routineSlotDefs)) {
-        const isWknd = isDayOffKorea(todayStr);
+        const isWknd = isHolidayOrWeekend(todayStr);
         for (const slot of routineSlotDefs) {
           if (isWknd ? !slot.weekend : !slot.weekday) continue;
           const sMin = toMin(slot.startTime || slot.time);
@@ -15816,7 +15874,7 @@ ${validText}
   };
 
 
-  const https://www.google.com/search?q=handleMoveCheckedShoppingToFridge = async () => {
+  const handleMoveCheckedShoppingToFridge = async () => {
     if (!requireEditorAccess("shopping")) return;
     const checkedItems = shoppingList.filter((s) => s.checked);
     if (checkedItems.length === 0) return;
@@ -17712,6 +17770,8 @@ ${item.memo}` : `${item.title} 다녀옴!`,
         ? [...DEFAULT_SCHEDULE_PLACES]
         : kind === "house_warranty_brands"
         ? [...DEFAULT_HOUSE_WARRANTY_BRANDS]
+        : kind === "timer_presets"
+        ? [...DEFAULT_TIMER_PRESETS]
         : [...NOTICE_CATEGORIES];
     await saveCustomCategoriesToCloud({ ...customCategories, [kind]: defaults }, "↺ 기본 분류 목록으로 복원했습니다.");
   };
@@ -20500,7 +20560,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
       const nowMs = now.getTime();
       const todayStr = getTodayStr();
       const hhmm = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
-      const isWknd = isDayOffKorea(todayStr);
+      const isWknd = isHolidayOrWeekend(todayStr);
       let changed = false;
 
       const updated = customAlarms.map((al) => {
@@ -21309,6 +21369,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                   const nowMs = Date.now();
                   setLastSeenActivityMs(nowMs);
                   try { localStorage.setItem("kim_last_seen_activity_ms_v1", String(nowMs)); } catch (e) {}
+                if (user && db) { setDoc(getDocRef("family_meta_v4", "activity_read_v1"), { lastSeenMs: nowMs, updatedAtMs: nowMs }, { merge: true }).catch(() => {}); }
                   setIsActivityModalOpen(true);
                 }}
                 className="relative w-8 h-8 rounded-full hover:bg-stone-100 text-stone-600 hover:text-stone-900 flex items-center justify-center shrink-0"
@@ -21775,7 +21836,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                 </div>
                 <div className="bg-[#FAF8F3] rounded-xl py-2 px-1 border border-stone-200/80">
                   <div className="text-[10.5px] font-bold text-stone-500 flex items-center justify-center gap-1 whitespace-nowrap">
-                    <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 shrink-0" />
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#3F624D] shrink-0" />
                     <span>마지막 수면</span>
                   </div>
                   <div className="text-[11.5px] font-black text-[#35503C] mt-0.5 whitespace-nowrap">
@@ -24673,7 +24734,7 @@ time: "", location: "",
                                 </div>
                               ))}
                               {mList.length > 3 && (
-                                <div className={`text-[8.5px] font-extrabold leading-none pl-0.5 ${isSel ? "text-stone-300" : "text-stone-400"}`}>
+                                <div className={`text-[10px] font-extrabold leading-none pl-0.5 ${isSel ? "text-stone-300" : "text-stone-400"}`}>
                                   +{mList.length - 3}
                                 </div>
                               )}
@@ -26032,7 +26093,7 @@ time: "", location: "",
                                       ? "border-l-[1.5px] border-emerald-400/70 bg-stone-100/75 text-stone-500/80"
                                       : isRangeEv
                                       ? `${isRangeCont ? "border-l-0 bg-teal-50/90 text-teal-900" : "border-l-[2px] border-teal-600 bg-teal-50/95 text-teal-950"}`
-                                      : "border-l-[1.5px] border-indigo-500 bg-indigo-50/85 text-indigo-900";
+                                      : "border-l-[1.5px] border-[#3F624D] bg-[#EEF3EE] text-[#2B4333]";
                                   return (
                                     <div
                                       key={`f-${ev.id}`}
@@ -27087,7 +27148,7 @@ time: "", location: "",
                               {isOver ? "🔔" : ""}{shortClock}
                             </span>
                             {rt.scheduledTime && (
-                              <span className="text-[8.5px] font-bold text-stone-400 leading-tight whitespace-nowrap">
+                              <span className="text-[10px] font-bold text-stone-400 leading-tight whitespace-nowrap">
                                 {rt.timeSlot || "상시"}
                               </span>
                             )}
@@ -28780,7 +28841,7 @@ time: "", location: "",
 
                     {(fridgeLocFilter === "전체" || fridgeLocFilter === "메인 냉동실" || fridgeLocFilter === "냉동실") && (
                       <div className="space-y-1.5 pt-1 border-t border-sky-200/80">
-                        <div className="text-[11.5px] font-extrabold text-indigo-800 px-0.5">🧊 하부 냉동고 (4칸)</div>
+                        <div className="text-[11.5px] font-extrabold text-sky-900 px-0.5">🧊 하부 냉동고 (4칸)</div>
                         <div className="grid grid-cols-2 gap-1.5">
                           {renderShelfBox("하부냉동 1칸", "하부 1칸", "bg-slate-50/70 border-slate-200")}
                           {renderShelfBox("하부냉동 2칸", "하부 2칸", "bg-slate-50/70 border-slate-200")}
@@ -28796,14 +28857,14 @@ time: "", location: "",
                 {/* 2. 별도 4칸짜리 전용 냉동고 */}
                 {(fridgeLocFilter === "전체" || fridgeLocFilter === "별도 냉동고" || fridgeLocFilter === "냉동실") && (
                   <div className="rounded-2xl border border-slate-200 bg-slate-50/50 p-2.5 space-y-1.5">
-                    <div className="text-[13.5px] font-black text-indigo-950 px-0.5">
+                    <div className="text-[13.5px] font-black text-sky-950 px-0.5">
                       ❄️ 별도 냉동고 (4칸)
                     </div>
                     <div className="grid grid-cols-2 gap-1.5">
-                      {renderShelfBox("전용냉동 1칸", "전용 1칸", "bg-white border-indigo-200")}
-                      {renderShelfBox("전용냉동 2칸", "전용 2칸", "bg-white border-indigo-200")}
-                      {renderShelfBox("전용냉동 3칸", "전용 3칸", "bg-white border-indigo-200")}
-                      {renderShelfBox("전용냉동 4칸", "전용 4칸", "bg-white border-indigo-200")}
+                      {renderShelfBox("전용냉동 1칸", "전용 1칸", "bg-white border-sky-200")}
+                      {renderShelfBox("전용냉동 2칸", "전용 2칸", "bg-white border-sky-200")}
+                      {renderShelfBox("전용냉동 3칸", "전용 3칸", "bg-white border-sky-200")}
+                      {renderShelfBox("전용냉동 4칸", "전용 4칸", "bg-white border-sky-200")}
                     </div>
                   </div>
                 )}
@@ -30668,7 +30729,7 @@ time: "", location: "",
               <button
                 type="button"
                 onClick={() => platingFileInputRef.current?.click()}
-                className="py-2.5 px-3 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-800 text-[13.5px] font-extrabold flex items-center justify-center gap-1.5 border border-stone-200"
+                className="py-2.5 px-3 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-800 text-[13.5px] font-extrabold flex items-center justify-center gap-1.5 border border-stone-200 whitespace-nowrap"
               >
                 <Upload className="w-3.5 h-3.5" />
                 <span>{platingPreviewUrl ? "사진 다시 선택" : "요리 사진 올리기"}</span>
@@ -31845,6 +31906,44 @@ time: "", location: "",
                                   📌 공지
                                 </button>
                               )}
+                              {canEditTab("shopping") && (
+                                <button
+                                  type="button"
+                                  onClick={async () => {
+                                    const itemName = `${String(it.title || "").trim()} 소모품`;
+                                    const exist = shoppingList.some(
+                                      (s) => !s.checked && String(s.name || "").trim().toLowerCase() === itemName.toLowerCase()
+                                    );
+                                    if (exist) {
+                                      showToast(`'${itemName}' 항목이 이미 장보기 목록에 있습니다.`);
+                                      return;
+                                    }
+                                    const sid = `sh-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+                                    const payload = {
+                                      id: sid,
+                                      name: itemName,
+                                      quantity: "1개",
+                                      category: fridgeCategories.includes("기타") ? "기타" : (fridgeCategories[0] || "기타"),
+                                      urgent: false,
+                                      checked: false,
+                                      memo: it.brand ? `[보증:${it.brand}]` : "[보증·A/S]"
+                                    };
+                                    setShoppingList((prev) => [payload, ...prev]);
+                                    if (user && db) {
+                                      try {
+                                        await setDoc(getDocRef("family_shopping_v4", sid), payload);
+                                      } catch (e) {
+                                        setSyncErrorMsg(e?.message || "보증소모품→장보기 동기화 오류");
+                                      }
+                                    }
+                                    recordActivity("장보기", "등록", payload.name);
+                                    showToast(`🛒 '${payload.name}'을(를) 장보기에 담았습니다.`);
+                                  }}
+                                  className="px-2 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-800 text-[11px] font-extrabold whitespace-nowrap"
+                                >
+                                  🛒 소모품
+                                </button>
+                              )}
                             </>
                           )}
                           {houseSubTab === "medicine" && (
@@ -31952,26 +32051,33 @@ time: "", location: "",
                             <button
                               type="button"
                               onClick={async () => {
-                                const exist = shoppingItems.some(
+                                const exist = shoppingList.some(
                                   (s) => !s.checked && String(s.name || "").trim().toLowerCase() === String(it.title || "").trim().toLowerCase()
                                 );
                                 if (exist) {
                                   showToast(`'${it.title}' 항목이 이미 장보기 목록에 있습니다.`);
                                   return;
                                 }
+                                const sid = `sh-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+                                const payload = {
+                                  id: sid,
+                                  name: String(it.title || "").trim(),
+                                  quantity: "1개",
+                                  category: fridgeCategories.includes("기타") ? "기타" : (fridgeCategories[0] || "기타"),
+                                  urgent: false,
+                                  checked: false,
+                                  memo: it.room ? `[수납:${it.room}]` : ""
+                                };
+                                setShoppingList((prev) => [payload, ...prev]);
                                 if (user && db) {
-                                  const sid = `shop-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-                                  await setDoc(getDocRef("family_shopping_v4", sid), {
-                                    id: sid,
-                                    name: it.title,
-                                    qty: "1개",
-                                    category: "생활용품",
-                                    checked: false,
-                                    memo: it.room ? `[수납:${it.room}]` : "",
-                                    createdAtMs: Date.now()
-                                  });
-                                  showToast(`🛒 '${it.title}'을(를) 장보기에 담았습니다.`);
+                                  try {
+                                    await setDoc(getDocRef("family_shopping_v4", sid), payload);
+                                  } catch (e) {
+                                    setSyncErrorMsg(e?.message || "수납→장보기 동기화 오류");
+                                  }
                                 }
+                                recordActivity("장보기", "등록", payload.name);
+                                showToast(`🛒 '${payload.name}'을(를) 장보기에 담았습니다.`);
                               }}
                               className="px-2 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-800 text-[11px] font-extrabold whitespace-nowrap"
                             >
@@ -36166,7 +36272,7 @@ time: "", location: "",
                           <div className="grid grid-cols-3 gap-1.5">
                             {ALL_PCT_OPTIONS.map((pct) => {
                               const checked = growthChartPercentiles.includes(pct);
-                              const colorCls = pct === 50 ? "text-cyan-700" : pct === 3 || pct === 97 ? "text-rose-600" : "text-stone-700";
+                              const colorCls = pct === 50 ? "text-[#3F624D]" : pct === 3 || pct === 97 ? "text-rose-600" : "text-stone-700";
                               return (
                                 <button
                                   key={pct}
@@ -36292,7 +36398,7 @@ time: "", location: "",
                       <div className="flex items-center justify-between gap-2 text-[10.5px] font-semibold text-stone-500 flex-wrap">
                         <div className="flex items-center gap-2.5 flex-wrap">
                           <span style={{ color: lineColor }} className="font-bold">━ {activeChild.name} 실측</span>
-                          <span className="text-cyan-700">╌ 표준(50%)</span>
+                          <span className="text-[#3F624D]">╌ 표준(50%)</span>
                           <span className="text-rose-600">╌ 3%·97%</span>
                         </div>
                         <span className="text-stone-400">KDCA 2017 ({gender})</span>
@@ -37907,36 +38013,52 @@ time: "", location: "",
                   </div>
                 </div>
 
-                {/* 빠른 프리셋 */}
-                <div className="flex items-center gap-1">
-                  {[
-                    { sec: 30, label: "30초" },
-                    { sec: 60, label: "1분" },
-                    { sec: 180, label: "3분" },
-                    { sec: 300, label: "5분" },
-                    { sec: 600, label: "10분" }
-                  ].map((pr) => (
+                {/* 빠른 프리셋 (자유 편집 가능) */}
+                <div className="flex items-center gap-1 flex-wrap">
+                  {timerPresets.map((rawPr, prIdx) => {
+                    const [timePart, customName] = String(rawPr || "").split("|").map((s) => s.trim());
+                    const hM = timePart.match(/(\d+)\s*시간/);
+                    const mM = timePart.match(/(\d+)\s*분/);
+                    const sM = timePart.match(/(\d+)\s*초/);
+                    let sec = (hM ? Number(hM[1]) * 3600 : 0) + (mM ? Number(mM[1]) * 60 : 0) + (sM ? Number(sM[1]) : 0);
+                    if (sec <= 0) {
+                      const numOnly = parseInt(timePart.replace(/[^0-9]/g, ""), 10);
+                      sec = numOnly > 0 ? numOnly * 60 : 60;
+                    }
+                    const btnLabel = customName ? `${timePart}·${customName}` : (timePart || `${Math.round(sec / 60)}분`);
+                    return (
+                      <button
+                        key={`${rawPr}-${prIdx}`}
+                        type="button"
+                        onClick={() => {
+                          unlockAudioContext();
+                          setTimerCompletedAlert("");
+                          setKitchenTimer((p) => ({
+                            ...p,
+                            mode: "countdown",
+                            label: customName || `타이머 (${timePart || btnLabel})`,
+                            remainingSec: sec,
+                            running: true,
+                            startedAtMs: null,
+                            targetEndMs: Date.now() + sec * 1000
+                          }));
+                        }}
+                        className="flex-1 min-w-[44px] px-1.5 py-1 rounded-lg bg-stone-800 hover:bg-stone-700 text-[10.5px] font-bold whitespace-nowrap"
+                      >
+                        {btnLabel}
+                      </button>
+                    );
+                  })}
+                  {canEditTab("notices") && (
                     <button
-                      key={pr.sec}
                       type="button"
-                      onClick={() => {
-                        unlockAudioContext();
-                        setTimerCompletedAlert("");
-                        setKitchenTimer((p) => ({
-                          ...p,
-                          mode: "countdown",
-                          label: `타이머 (${pr.label})`,
-                          remainingSec: pr.sec,
-                          running: true,
-                          startedAtMs: null,
-                          targetEndMs: Date.now() + pr.sec * 1000
-                        }));
-                      }}
-                      className="flex-1 py-1 rounded-lg bg-stone-800 hover:bg-stone-700 text-[10.5px] font-bold whitespace-nowrap"
+                      onClick={() => openCategoryManager("timer_presets")}
+                      className="px-2 py-1 rounded-lg bg-stone-800/80 hover:bg-stone-700 text-stone-300 text-[10.5px] font-bold whitespace-nowrap shrink-0"
+                      title="타이머 빠른 프리셋 추가·수정·삭제"
                     >
-                      {pr.label}
+                      ⚙️
                     </button>
-                  ))}
+                  )}
                 </div>
               </div>
             )}
@@ -38662,7 +38784,7 @@ time: "", location: "",
                     icon: "🤝",
                     label: "인수인계",
                     onClick: () => {
-                      if (!handoverDateStr || handoverDateStr < getTodayStr()) setHandoverDateStr(getTodayStr());
+                      if (!handoverDate || handoverDate < getTodayStr()) setHandoverDate(getTodayStr());
                       setHandoverModalTab("config");
                       setIsHandoverModalOpen(true);
                     }
@@ -39843,7 +39965,7 @@ time: "", location: "",
                           <div className="min-w-0 flex-1">
                             <div
                               className={`text-[14px] font-bold break-keep leading-snug ${
-                                ev._isFamily ? "text-indigo-900" : cMeta.textCls
+                                ev._isFamily ? "text-[#2B4333]" : cMeta.textCls
                               } ${ev.done ? "line-through opacity-45" : ""}`}
                             >
                               {ev._isFamily ? "🏠 " : ""}
@@ -43294,6 +43416,7 @@ time: "", location: "",
           baby_health_tags: { title: "🩺 진료·증상 태그", placeholder: "새 증상·진료 태그 (예: 중이염, 항생제)" },
           schedule_places: { title: "📍 일정 빠른 장소", placeholder: "새 자주 가는 장소 (예: 보건소, 키즈카페)" },
           house_warranty_brands: { title: "🏷️ 보증 브랜드", placeholder: "새 브랜드명 (예: 발뮤다, 브라운, 쿠쿠)" },
+          timer_presets: { title: "⏱️ 타이머 프리셋", placeholder: "예: 15분, 1분 30초, 7분|반숙계란" },
           condolence_cat: { title: "💌 경조사 카테고리", placeholder: "새 경조사 분류 (예: 칠순/팔순, 집들이, 승진)" },
           condolence_group: { title: "👥 경조사 그룹", placeholder: "새 경조사 그룹 (예: 동호회, 대학동기, 거래처)" },
           condolence_pay: { title: "💳 경조사 결제수단", placeholder: "새 결제수단 (예: 카카오페이, 토스, 상품권, 화환)" }
@@ -43845,6 +43968,12 @@ time: "", location: "",
                   onChange={(e) => {
                     setBackupEmail(e.target.value);
                     try { localStorage.setItem("kim_family_backup_email", e.target.value); } catch (err) {}
+                  }}
+                  onBlur={(e) => {
+                    const cleanEmail = String(e.target.value || "").trim();
+                    if (user && db) {
+                      setDoc(getDocRef("family_meta_v4", "backup_status"), { email: cleanEmail, updatedAtMs: Date.now() }, { merge: true }).catch(() => {});
+                    }
                   }}
                   placeholder="수신 이메일 (선택)"
                   className="flex-1 min-w-0 max-w-[190px] px-2 py-0.5 rounded-lg border border-stone-200 text-[10.5px] font-bold bg-white"
@@ -45305,6 +45434,7 @@ time: "", location: "",
                 const nowMs = Date.now();
                 setLastSeenActivityMs(nowMs);
                 try { localStorage.setItem("kim_last_seen_activity_ms_v1", String(nowMs)); } catch (e) {}
+                if (user && db) { setDoc(getDocRef("family_meta_v4", "activity_read_v1"), { lastSeenMs: nowMs, updatedAtMs: nowMs }, { merge: true }).catch(() => {}); }
                 setLiveActivityPopup(null);
               }}
               className="px-2.5 py-1 rounded-lg bg-stone-100 text-stone-700 text-[11.5px] font-extrabold whitespace-nowrap"
@@ -45324,6 +45454,7 @@ time: "", location: "",
                 const nowMs = Date.now();
                 setLastSeenActivityMs(nowMs);
                 try { localStorage.setItem("kim_last_seen_activity_ms_v1", String(nowMs)); } catch (e) {}
+                if (user && db) { setDoc(getDocRef("family_meta_v4", "activity_read_v1"), { lastSeenMs: nowMs, updatedAtMs: nowMs }, { merge: true }).catch(() => {}); }
                 setLiveActivityPopup(null);
                 setIsActivityModalOpen(true);
               }}
@@ -45888,7 +46019,7 @@ time: "", location: "",
                     <button
                       type="button"
                       onClick={handleFinishedNow}
-                      className="px-3 py-1 rounded-full border border-stone-300 bg-white hover:bg-[#EEF3EE] hover:border-[#5E7A65] text-[12.5px] font-black text-stone-800 shadow-sm active:scale-95 transition"
+                      className="px-3 py-1 rounded-full border border-stone-300 bg-white hover:bg-[#EEF3EE] hover:border-[#5E7A65] text-[12.5px] font-black text-stone-800 shadow-sm active:scale-95 transition whitespace-nowrap"
                     >
                       {isFeed ? "지금 다 먹었어요!" : "지금 끝났어요!"}
                     </button>
@@ -46981,8 +47112,8 @@ time: "", location: "",
                   defBody: "{목록}",
                   vars: ["시간대", "건수", "목록", "회차"],
                   getSample: () => {
-                    const curSlot = getCurrentRoutineTimeSlot(routineTimeRanges, null, routineSlotDefs, isDayOffKorea(todayStr));
-                    const pending = familyRoutines.filter((r) => !isRoutineDoneNow(r) && isRoutineDueTodayOrPast(r, todayStr) && (r.timeSlot || "상시") === curSlot);
+                    const curSlot = getCurrentRoutineTimeSlot(routineTimeRanges, null, routineSlotDefs, isHolidayOrWeekend(todayStrPreview));
+                    const pending = familyRoutines.filter((r) => !isRoutineDoneNow(r) && isRoutineDueTodayOrPast(r, todayStrPreview) && (r.timeSlot || "상시") === curSlot);
                     return pending.length > 0
                       ? { real: true, vars: { 시간대: curSlot, 건수: pending.length, 목록: pending.slice(0, 3).map((r) => r.title).join(" · "), 회차: (smartNotifPrefs.routineSlotRepeatCount || 1) > 1 ? `[1/${smartNotifPrefs.routineSlotRepeatCount}회]` : "" } }
                       : { real: false, vars: { 시간대: curSlot || "아침", 건수: 2, 목록: "시목이 가방 챙기기 · 유산균 먹이기", 회차: "[1/2회]" } };
@@ -47007,7 +47138,7 @@ time: "", location: "",
                   defBody: "{목록}",
                   vars: ["건수", "목록", "회차"],
                   getSample: () => {
-                    const dueTodos = schedules.filter((s) => s.category === "할일(To-Do)" && !s.done && s.notifEnabled !== false && s.date && s.date <= todayStr);
+                    const dueTodos = schedules.filter((s) => s.category === "할일(To-Do)" && !s.done && s.notifEnabled !== false && s.date && s.date <= todayStrPreview);
                     return dueTodos.length > 0
                       ? { real: true, vars: { 건수: dueTodos.length, 목록: dueTodos.slice(0, 3).map((t) => t.title).join(" · "), 회차: (smartNotifPrefs.todosDueRepeatCount || 1) > 1 ? `[1/${smartNotifPrefs.todosDueRepeatCount}회]` : "" } }
                       : { real: false, vars: { 건수: 2, 목록: "기저귀 주문하기 · 소아과 예약", 회차: "[1/2회]" } };
@@ -47162,6 +47293,9 @@ time: "", location: "",
                       type="button"
                       onClick={() => {
                         try { localStorage.removeItem("kim_smart_notif_sent_v1"); } catch (e) {}
+                        if (user && db) {
+                          setDoc(getDocRef("family_meta_v4", "smart_notif_sent_v1"), { map: {}, updatedAtMs: Date.now() }).catch(() => {});
+                        }
                         showToast("🔄 오늘 알림 발송 이력을 초기화했습니다!");
                       }}
                       className="h-6 px-2 rounded-full text-[10px] font-bold border border-stone-200 bg-white text-stone-600 hover:bg-stone-100 whitespace-nowrap"

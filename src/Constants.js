@@ -1181,7 +1181,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v14.28";
+export const APP_CODE_VERSION = "v14.29";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1199,7 +1199,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-25 16:00";
+export const APP_BUILD_DATE = "2026-11-25 18:00";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1269,10 +1269,24 @@ export const formatTime12Ko = (ms) => {
 
 export const INITIAL_PATCH_NOTES = [
   {
+    id: "patch-v14.29",
+    version: "v14.29",
+    date: "2026-11-25",
+    title: "치명적 빌드·런타임 버그 일괄 복구 · 로컬설정 Firebase 이관 · 타이머 프리셋 자유편집 · 메뉴 연계 및 디자인 정돈",
+    changes: [
+      "🐛 빌드·런타임 치명 오류 일괄 복구: 손상된 HTML 엔티티 367줄 및 잘못 삽입된 검색 URL 2곳 복원, firestore 미임포트(getDoc/getDocs) 보완, 미선언 식별자 4종(isDayOffKorea→isHolidayOrWeekend, shoppingItems→shoppingList+quantity 스키마 정규화, handoverDateStr→handoverDate, todayStr→todayStrPreview) 전면 수정",
+      "☁️ 로컬 전용 설정 Firebase 이관: 백업 수신 이메일(backup_status) 입력 즉시 클라우드 저장, 최근 활동 읽음 시각(activity_read_v1) 및 스마트 알림 오늘 발송 이력(smart_notif_sent_v1) 실시간 클라우드 동기화로 기기 간 중복 알림·읽음 불일치 해소",
+      "⚙️ 시스템 자유도 확장: 주방 타이머 빠른 프리셋(DEFAULT_TIMER_PRESETS)을 통합 카테고리 관리에 추가해 원하는 시간·라벨(예: '15분|파스타')을 자유롭게 추가·수정·삭제·순서변경 가능",
+      "🔗 메뉴 간 연계 고도화: 집안 수납 물품→장보기 담기 오류 수정 및 낙관적 상태·활동로그 반영, 보증·A/S 카드에 '🛒 소모품' 원클릭 장보기 담기 버튼 추가",
+      "🎨 디자인·폰트·줄바꿈·패치노트 정합성 점검: 잔여 indigo/cyan 이질 색상을 세이지·스톤·냉동 스카이 팔레트로 통일, 초소형 8.5px 폰트→10px 상향 및 줄바꿈 버튼 whitespace-nowrap 보강, v14.28 패치노트 id·changes 스키마 누락 보완(과거 패치노트 466건 100% 보존)"
+    ]
+  },
+  {
+    id: "patch-v14.28",
     version: "v14.28",
     date: "2026-11-25",
     title: "주방 타이머 실시간 클라우드 동기화 · 보증 브랜드 자유편집 · 메뉴 연계 및 디자인/폰트 일괄 정돈",
-    items: [
+    changes: [
       "☁️ 주방 타이머 실시간 상태(카운트다운·스톱워치 실행/일시정지·라벨)를 Firebase에 실시간 동기화해 주방 태블릿과 휴대폰 간 타이머 공유 지원",
       "⚙️ 보증·A/S 브랜드(LG, 삼성, 다이슨, 부가부 등)를 통합 카테고리 관리에서 자유롭게 추가·수정·삭제·순서변경 가능하도록 확장",
       "🔗 버킷리스트 '갈 곳' 카드에 🗓️ 일정 등록 원클릭 연계 버튼 추가 및 집안 수납 물품 카드에 🛒 장보기 원클릭 담기 연계 추가",
@@ -7161,3 +7175,4 @@ export const DEFAULT_BABY_HEALTH_TAGS = ["미열", "고열", "콧물", "기침",
 
 export const DEFAULT_SCHEDULE_PLACES = ["이진소아과", "신당동어린이집", "친정", "시댁", "마트"];
 export const DEFAULT_HOUSE_WARRANTY_BRANDS = ["LG", "삼성", "다이슨", "부가부", "스토케", "필립스", "애플", "기타"];
+export const DEFAULT_TIMER_PRESETS = ["30초", "1분", "3분", "5분", "10분"];
