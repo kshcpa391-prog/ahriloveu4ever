@@ -4211,9 +4211,7 @@ function MainApp() {
       String(user.email).trim().toLowerCase() === "kshcpa391@gmail.com"
   );
   const isApprovedUser =
-    userProfile?.role === "admin" ||
-    userProfile?.role === "helper" ||
-    (isOwnerVerifiedEmail && userProfile?.role !== "rejected" && userProfile?.role !== "withdrawn");
+    userProfile?.role === "admin" || userProfile?.role === "helper";
   const [actorName, setActorName] = useState(() => {
     try {
       return localStorage.getItem("family_actor_name_v1") || "수혁";
@@ -9048,7 +9046,7 @@ function MainApp() {
 
   // 하루 2번(오전 AM / 오후 PM) + 전체 컬렉션 내용 해시(FNV-1a) 변경 감지 자동 클라우드 스냅샷 백업 엔진
   useEffect(() => {
-    if (!isAdminUnlocked || !user || !db || meals.length === 0) return;
+    if (!isAdminUnlocked || !isApprovedUser || !user || !db || meals.length === 0 || (fridge.length === 0 && schedules.length === 0)) return;
     const currentSlot = getTwiceDailySlotKey();
     const backupDataObj = {
       meals,

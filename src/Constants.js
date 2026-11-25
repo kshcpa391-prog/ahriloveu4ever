@@ -1181,7 +1181,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v14.19";
+export const APP_CODE_VERSION = "v14.20";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1199,7 +1199,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-25 13:38";
+export const APP_BUILD_DATE = "2026-11-25 13:50";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1268,6 +1268,16 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v14.20",
+    version: "v14.20",
+    date: "2026-11-25",
+    title: "서버 권한 미승인 UID 빈 화면 진입 차단 및 클라우드 백업 덮어쓰기 방지",
+    changes: [
+      "Firestore 서버 권한(role: admin/helper)이 확인되지 않은 상태에서 클라이언트만으로 메인 화면이 열려 Missing or insufficient permissions 및 0건 표시가 뜨던 현상 차단",
+      "냉장고·일정이 모두 0건인 비정상 상태에서는 자동 클라우드 스냅샷(family_backups_v4)이 기존 정상 백업을 덮어쓰지 않도록 보호 조건 추가"
+    ]
+  },
   {
     id: "patch-v14.19",
     version: "v14.19",
