@@ -1181,7 +1181,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v14.06";
+export const APP_CODE_VERSION = "v14.07";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1199,7 +1199,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-25 11:39";
+export const APP_BUILD_DATE = "2026-11-25 11:41";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1268,6 +1268,16 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v14.07",
+    version: "v14.07",
+    date: "2026-11-25",
+    title: "🔔 상태바 알림 반복 미수신 수정(쌓인 알림 자동 정리 · renotify · 일반/무음 선택)",
+    highlights: [
+      "안드로이드/삼성 인터넷에서 상태바 알림이 1회만 오고 이후 누락되던 원인 해결: reg.getNotifications()로 이전 테스트·누적 알림을 자동 정리하고 renotify: true 적용",
+      "OneUI '무음 알림 숨기기'로 인한 누락을 막기 위해 기본값을 일반 알림으로 전환하고 수정 알림 창에 [🔔 일반 / 🔕 무음] 전환 버튼 추가"
+    ]
+  },
   {
     id: "patch-v14.06",
     version: "v14.06",

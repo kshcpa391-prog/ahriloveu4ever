@@ -4445,6 +4445,9 @@ function MainApp() {
     typeof navigator !== "undefined" && "serviceWorker" in navigator ? "확인중" : "미지원"
   );
   const [lastNotifError, setLastNotifError] = useState("");
+  const [notifSilentMode, setNotifSilentMode] = useState(() => {
+    try { return localStorage.getItem("kim_notif_silent_v1") === "true"; } catch (e) { return false; }
+  });
   const lastNotifErrorRef = useRef("");
   const refreshSwStatus = async () => {
     if (typeof navigator === "undefined" || !("serviceWorker" in navigator)) {
@@ -4535,13 +4538,28 @@ function MainApp() {
         }
         if (reg && reg.active && typeof reg.showNotification === "function") {
           setSwStatus("활성");
+          try {
+            if (typeof reg.getNotifications === "function") {
+              const existing = await reg.getNotifications();
+              existing.forEach((n) => {
+                if (String(tag).startsWith("test-notif") && String(n.tag || "").startsWith("test-notif")) {
+                  try { n.close(); } catch (err) {}
+                }
+              });
+              if (existing.length >= 4) {
+                existing.slice(0, existing.length - 3).forEach((n) => {
+                  try { n.close(); } catch (err) {}
+                });
+              }
+            }
+          } catch (err) {}
           await reg.showNotification(title, {
             body: body || "",
             tag,
             icon: "/app-icon-512.png",
             badge: "/app-icon-512.png",
-            silent: true,
-            renotify: false
+            silent: Boolean(notifSilentMode),
+            renotify: true
           });
           return true;
         }
@@ -4550,7 +4568,7 @@ function MainApp() {
       lastNotifErrorRef.current = e?.message || "서비스 워커 알림 실패";
     }
     try {
-      new Notification(title, { body: body || "", tag, icon: "/app-icon-512.png", silent: true });
+      new Notification(title, { body: body || "", tag, icon: "/app-icon-512.png", silent: Boolean(notifSilentMode) });
       return true;
     } catch (e) {
       if (!lastNotifErrorRef.current) {
@@ -44838,7 +44856,9 @@ time: "", location: "",
                         await refreshSwStatus();
                         showToast(
                           ok
-                            ? "📲 무음 상태바 알림 발송! (안 보이면 폰 설정→알림→무음 알림 숨기기 해제 확인)"
+                            ? (notifSilentMode
+                                ? "🔕 무음 상태바 알림 발송! (안 보이면 일반 알림으로 전환해 보세요)"
+                                : "📲 상태바 알림을 발송했습니다!")
                             : `⚠️ ${lastNotifErrorRef.current || "이 브라우저에서는 상태표시줄 알림이 제한됩니다."}`
                         );
                         return;
@@ -44888,6 +44908,23 @@ time: "", location: "",
                     {notifPermState === "granted" ? "📲 상태바 테스트" : "🔔 상태바 켜기"}
                   </button>
                 )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    const nextSilent = !notifSilentMode;
+                    setNotifSilentMode(nextSilent);
+                    try { localStorage.setItem("kim_notif_silent_v1", nextSilent ? "true" : "false"); } catch (e) {}
+                    showToast(nextSilent ? "🔕 상태바 알림을 무음 모드로 설정했습니다." : "🔔 상태바 알림을 일반 모드로 설정했습니다.");
+                  }}
+                  className={`h-7 px-2 rounded-lg text-[10.5px] font-extrabold border whitespace-nowrap ${
+                    notifSilentMode
+                      ? "bg-stone-100 text-stone-600 border-stone-200"
+                      : "bg-[#EEF3EE] text-[#35503C] border-[#C9D8CC]"
+                  }`}
+                  title="안드로이드에서 무음 알림이 숨겨질 경우 일반 모드를 사용하세요"
+                >
+                  {notifSilentMode ? "🔕 무음" : "🔔 일반"}
+                </button>
                 <button
                   type="button"
                   onClick={() => {
