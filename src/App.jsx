@@ -182,7 +182,8 @@ import {
   DEFAULT_HOUSE_WARRANTY_BRANDS,
   DEFAULT_TIMER_PRESETS,
   DEFAULT_QUICK_ALARM_PRESETS,
-  DEFAULT_BABY_DIARY_MOODS
+  DEFAULT_BABY_DIARY_MOODS,
+  DEFAULT_AI_MEAL_STYLES
 } from "./Constants";
 
 
@@ -3721,14 +3722,16 @@ function MainApp() {
   const [authMode, setAuthMode] = useState("login");
   const [rememberEmail, setRememberEmail] = useState(() => {
     try {
-      return localStorage.getItem("kim_remember_email_v1") !== "false";
+      const v = localStorage.getItem("kim_remember_email_v1");
+      return v !== "false" && v !== "0";
     } catch (e) {
       return true;
     }
   });
   const [authEmailInput, setAuthEmailInput] = useState(() => {
     try {
-      const rem = localStorage.getItem("kim_remember_email_v1") !== "false";
+      const rawRem = localStorage.getItem("kim_remember_email_v1");
+      const rem = rawRem !== "false" && rawRem !== "0";
       return rem ? localStorage.getItem("kim_saved_login_email_v1") || "" : "";
     } catch (e) {
       return "";
@@ -4184,7 +4187,6 @@ function MainApp() {
       return EDITOR_INVITE_CODE;
     }
   });
-  const [loginAdminTarget, setLoginAdminTarget] = useState("수혁");
   const [switchAdminPinInput, setSwitchAdminPinInput] = useState("");
   const [helperCode, setHelperCode] = useState(() => {
     try {
@@ -4249,7 +4251,6 @@ function MainApp() {
   const isHelperUnlocked = accessRole === "helper";
   const isEditorUnlocked = isAdminUnlocked || isHelperUnlocked;
   const [isEditorUnlockModalOpen, setIsEditorUnlockModalOpen] = useState(false);
-  const [editorCodeInput, setEditorCodeInput] = useState("");
   const [recentActivities, setRecentActivities] = useState(() => {
     try {
       const raw = localStorage.getItem("kim_recent_activities_v1");
@@ -4988,7 +4989,8 @@ function MainApp() {
           house_warranty_brands: Array.isArray(saved.house_warranty_brands) && saved.house_warranty_brands.length > 0 ? saved.house_warranty_brands.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_HOUSE_WARRANTY_BRANDS],
           timer_presets: Array.isArray(saved.timer_presets) && saved.timer_presets.length > 0 ? saved.timer_presets.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_TIMER_PRESETS],
           quick_alarm_presets: Array.isArray(saved.quick_alarm_presets) && saved.quick_alarm_presets.length > 0 ? saved.quick_alarm_presets.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_QUICK_ALARM_PRESETS],
-          baby_diary_moods: Array.isArray(saved.baby_diary_moods) && saved.baby_diary_moods.length > 0 ? saved.baby_diary_moods.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_BABY_DIARY_MOODS]
+          baby_diary_moods: Array.isArray(saved.baby_diary_moods) && saved.baby_diary_moods.length > 0 ? saved.baby_diary_moods.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_BABY_DIARY_MOODS],
+          ai_meal_styles: Array.isArray(saved.ai_meal_styles) && saved.ai_meal_styles.length > 0 ? saved.ai_meal_styles.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_AI_MEAL_STYLES]
         };
       }
     } catch (e) {}
@@ -5009,7 +5011,8 @@ function MainApp() {
       house_warranty_brands: [...DEFAULT_HOUSE_WARRANTY_BRANDS],
       timer_presets: [...DEFAULT_TIMER_PRESETS],
       quick_alarm_presets: [...DEFAULT_QUICK_ALARM_PRESETS],
-      baby_diary_moods: [...DEFAULT_BABY_DIARY_MOODS]
+      baby_diary_moods: [...DEFAULT_BABY_DIARY_MOODS],
+      ai_meal_styles: [...DEFAULT_AI_MEAL_STYLES]
     };
   });
   const fridgeCategories = customCategories.fridge;
@@ -5029,6 +5032,7 @@ function MainApp() {
   const timerPresets = customCategories.timer_presets || DEFAULT_TIMER_PRESETS;
   const quickAlarmPresets = customCategories.quick_alarm_presets || DEFAULT_QUICK_ALARM_PRESETS;
   const babyDiaryMoods = customCategories.baby_diary_moods || DEFAULT_BABY_DIARY_MOODS;
+  const aiMealStyles = customCategories.ai_meal_styles || DEFAULT_AI_MEAL_STYLES;
 
   // === 🔒 비밀메뉴: 경조사비 입출금내역 상태 ===
   const isSuhyeokAdmin = isAdminUnlocked && (actorName === "수혁" || actorName === "김수혁");
@@ -5354,10 +5358,7 @@ function MainApp() {
   const [noteSaveStatusTop, setNoteSaveStatusTop] = useState("idle");
   const pageAttachInputRef = useRef(null);
   const [hideCompletedPageTodos, setHideCompletedPageTodos] = useState(false);
-  const [tableFilterState, setTableFilterState] = useState({});
-  const [tableSearchOpenId, setTableSearchOpenId] = useState(null);
   const [addingColBlockId, setAddingColBlockId] = useState(null);
-  const [newTableColName, setNewTableColName] = useState("");
   const [activeTableTaskModal, setActiveTableTaskModal] = useState(null);
   const [taskModalDraft, setTaskModalDraft] = useState(null);
   const [isBudgetEditing, setIsBudgetEditing] = useState(false);
@@ -6612,6 +6613,8 @@ function MainApp() {
     try { return localStorage.getItem("kim_timer_vibrate_v1") !== "false"; } catch (e) { return true; }
   });
   const [dialStepSec, setDialStepSec] = useState(10);
+  const [isTimerMoreOpen, setIsTimerMoreOpen] = useState(false);
+  const [isStopwatchTimeEditOpen, setIsStopwatchTimeEditOpen] = useState(false);
   const [timerCompletedAlert, setTimerCompletedAlert] = useState("");
   const cropCleanupRef = useRef(null);
   useEffect(() => () => { if (cropCleanupRef.current) cropCleanupRef.current(); }, []);
@@ -6635,9 +6638,7 @@ function MainApp() {
   });
   const [alarmTimeDraft, setAlarmTimeDraft] = useState("07:00");
   const [alarmLabelDraft, setAlarmLabelDraft] = useState("");
-  const [alarmRepeatDraft, setAlarmRepeatDraft] = useState("everyday");
   const [alarmSoundIdDraft, setAlarmSoundIdDraft] = useState("morning");
-  const [alarmQuickMinDraft, setAlarmQuickMinDraft] = useState("10");
   const [alarmQuickMemoDraft, setAlarmQuickMemoDraft] = useState("");
   const [newAlarmSoundLabel, setNewAlarmSoundLabel] = useState("");
   const [newAlarmSoundUrl, setNewAlarmSoundUrl] = useState("");
@@ -9325,7 +9326,8 @@ function MainApp() {
               house_warranty_brands: Array.isArray(d.house_warranty_brands) && d.house_warranty_brands.length > 0 ? d.house_warranty_brands.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_HOUSE_WARRANTY_BRANDS],
               timer_presets: Array.isArray(d.timer_presets) && d.timer_presets.length > 0 ? d.timer_presets.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_TIMER_PRESETS],
               quick_alarm_presets: Array.isArray(d.quick_alarm_presets) && d.quick_alarm_presets.length > 0 ? d.quick_alarm_presets.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_QUICK_ALARM_PRESETS],
-              baby_diary_moods: Array.isArray(d.baby_diary_moods) && d.baby_diary_moods.length > 0 ? d.baby_diary_moods.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_BABY_DIARY_MOODS]
+              baby_diary_moods: Array.isArray(d.baby_diary_moods) && d.baby_diary_moods.length > 0 ? d.baby_diary_moods.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_BABY_DIARY_MOODS],
+              ai_meal_styles: Array.isArray(d.ai_meal_styles) && d.ai_meal_styles.length > 0 ? d.ai_meal_styles.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_AI_MEAL_STYLES]
             };
             setCustomCategories(nextCats);
             try { localStorage.setItem("kim_custom_categories_v1", JSON.stringify(nextCats)); } catch (e) {}
@@ -10361,7 +10363,8 @@ function MainApp() {
           house_warranty_brands: Array.isArray(payload.customCategories.house_warranty_brands) && payload.customCategories.house_warranty_brands.length > 0 ? payload.customCategories.house_warranty_brands.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_HOUSE_WARRANTY_BRANDS],
           timer_presets: Array.isArray(payload.customCategories.timer_presets) && payload.customCategories.timer_presets.length > 0 ? payload.customCategories.timer_presets.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_TIMER_PRESETS],
           quick_alarm_presets: Array.isArray(payload.customCategories.quick_alarm_presets) && payload.customCategories.quick_alarm_presets.length > 0 ? payload.customCategories.quick_alarm_presets.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_QUICK_ALARM_PRESETS],
-          baby_diary_moods: Array.isArray(payload.customCategories.baby_diary_moods) && payload.customCategories.baby_diary_moods.length > 0 ? payload.customCategories.baby_diary_moods.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_BABY_DIARY_MOODS]
+          baby_diary_moods: Array.isArray(payload.customCategories.baby_diary_moods) && payload.customCategories.baby_diary_moods.length > 0 ? payload.customCategories.baby_diary_moods.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_BABY_DIARY_MOODS],
+          ai_meal_styles: Array.isArray(payload.customCategories.ai_meal_styles) && payload.customCategories.ai_meal_styles.length > 0 ? payload.customCategories.ai_meal_styles.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_AI_MEAL_STYLES]
         };
         setCustomCategories(nextCats);
         try { localStorage.setItem("kim_custom_categories_v1", JSON.stringify(nextCats)); } catch (e) {}
@@ -10660,6 +10663,7 @@ function MainApp() {
                 timer_presets: Array.isArray(payload.customCategories.timer_presets) && payload.customCategories.timer_presets.length > 0 ? payload.customCategories.timer_presets : [...DEFAULT_TIMER_PRESETS],
                 quick_alarm_presets: Array.isArray(payload.customCategories.quick_alarm_presets) && payload.customCategories.quick_alarm_presets.length > 0 ? payload.customCategories.quick_alarm_presets : [...DEFAULT_QUICK_ALARM_PRESETS],
                 baby_diary_moods: Array.isArray(payload.customCategories.baby_diary_moods) && payload.customCategories.baby_diary_moods.length > 0 ? payload.customCategories.baby_diary_moods : [...DEFAULT_BABY_DIARY_MOODS],
+                ai_meal_styles: Array.isArray(payload.customCategories.ai_meal_styles) && payload.customCategories.ai_meal_styles.length > 0 ? payload.customCategories.ai_meal_styles : [...DEFAULT_AI_MEAL_STYLES],
                 updatedAtMs: Date.now()
               },
               { merge: true }
@@ -18141,6 +18145,8 @@ ${item.memo}` : `${item.title} 다녀옴!`,
         ? [...DEFAULT_QUICK_ALARM_PRESETS]
         : kind === "baby_diary_moods"
         ? [...DEFAULT_BABY_DIARY_MOODS]
+        : kind === "ai_meal_styles"
+        ? [...DEFAULT_AI_MEAL_STYLES]
         : [...NOTICE_CATEGORIES];
     await saveCustomCategoriesToCloud({ ...customCategories, [kind]: defaults }, "↺ 기본 분류 목록으로 복원했습니다.");
   };
@@ -19470,6 +19476,9 @@ ${item.memo}` : `${item.title} 다녀옴!`,
         try {
           localStorage.setItem("kim_pages_expanded_v1", JSON.stringify(next));
         } catch (err) {}
+        if (user && db && isEditorUnlocked) {
+          setDoc(getDocRef("family_meta_v4", "home_layout"), { expandedPageIds: next, updatedAt: new Date().toISOString() }, { merge: true }).catch(() => {});
+        }
         return next;
       });
     }
@@ -19771,6 +19780,9 @@ ${item.memo}` : `${item.title} 다녀옴!`,
       try {
         localStorage.setItem("kim_pages_expanded_v1", JSON.stringify(next));
       } catch (e) {}
+      if (user && db && isEditorUnlocked) {
+        setDoc(getDocRef("family_meta_v4", "home_layout"), { expandedPageIds: next, updatedAt: new Date().toISOString() }, { merge: true }).catch(() => {});
+      }
       return next;
     });
     recordActivity("노트", "샘플생성", "시목 여행준비물");
@@ -21264,7 +21276,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                     const checked = e.target.checked;
                     setRememberEmail(checked);
                     try {
-                      localStorage.setItem("kim_remember_email_v1", checked ? "1" : "0");
+                      localStorage.setItem("kim_remember_email_v1", checked ? "true" : "false");
                       if (!checked) localStorage.removeItem("kim_saved_login_email_v1");
                     } catch (err) {}
                   }}
@@ -28756,10 +28768,10 @@ time: "", location: "",
 
           {/* 임박·경과 재료 컴팩트 배너 */}
           {expiringItems.length > 0 && (
-            <div className="bg-orange-50/80 border border-orange-200/90 rounded-2xl p-2.5 space-y-1.5">
+            <div className="bg-amber-50/80 border border-amber-200/90 rounded-2xl p-2.5 space-y-1.5">
               <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-1 text-[12px] font-black text-orange-900 whitespace-nowrap">
-                  <AlertCircle className="w-3.5 h-3.5 text-orange-600 shrink-0" />
+                <div className="flex items-center gap-1 text-[12px] font-black text-amber-900 whitespace-nowrap">
+                  <AlertCircle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
                   <span>임박·경과 ({expiringItems.length})</span>
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
@@ -28772,7 +28784,7 @@ time: "", location: "",
                       ];
                       await copyTextSafe(lines.join("\n"), `📋 임박 재료 ${expiringItems.length}건을 복사했습니다!`);
                     }}
-                    className="h-6 px-1.5 rounded-lg bg-white hover:bg-orange-100 text-orange-800 border border-orange-200 text-[10.5px] font-extrabold whitespace-nowrap"
+                    className="h-6 px-1.5 rounded-lg bg-white hover:bg-amber-100 text-amber-800 border border-amber-200 text-[10.5px] font-extrabold whitespace-nowrap"
                     title="임박·경과 재료 목록 복사"
                   >
                     📋
@@ -28794,9 +28806,9 @@ time: "", location: "",
                     key={item.id}
                     type="button"
                     onClick={() => setQuickFridgeItem(item)}
-                    className="px-2 py-0.5 rounded-lg text-[10.5px] font-bold bg-white hover:bg-orange-100 text-orange-900 border border-orange-200/90 active:scale-95 transition whitespace-nowrap"
+                    className="px-2 py-0.5 rounded-lg text-[10.5px] font-bold bg-white hover:bg-amber-100 text-amber-900 border border-amber-200/90 active:scale-95 transition whitespace-nowrap"
                   >
-                    {item.name} <span className={item.diff <= 0 ? "text-rose-600 font-black" : "text-orange-700 font-extrabold"}>({item.diff < 0 ? `${Math.abs(item.diff)}일 지남` : item.diff === 0 ? "오늘" : `D-${item.diff}`})</span>
+                    {item.name} <span className={item.diff <= 0 ? "text-rose-600 font-black" : "text-amber-700 font-extrabold"}>({item.diff < 0 ? `${Math.abs(item.diff)}일 지남` : item.diff === 0 ? "오늘" : `D-${item.diff}`})</span>
                   </button>
                 ))}
               </div>
@@ -28826,7 +28838,7 @@ time: "", location: "",
                     <div className="flex items-center justify-between gap-1 text-[10.5px] font-bold">
                       <span className="whitespace-nowrap shrink-0">{zone.icon} {zone.key.replace("·팬트리", "")}</span>
                       {zExp > 0 && (
-                        <span className={`px-1 py-0.5 rounded-full text-[10px] font-black leading-none whitespace-nowrap shrink-0 ${isSel ? "bg-amber-300 text-stone-900" : "bg-orange-100 text-orange-800"}`}>
+                        <span className={`px-1 py-0.5 rounded-full text-[10px] font-black leading-none whitespace-nowrap shrink-0 ${isSel ? "bg-amber-300 text-stone-900" : "bg-amber-100 text-amber-800"}`}>
                           임박 {zExp}
                         </span>
                       )}
@@ -29015,8 +29027,8 @@ time: "", location: "",
                   onClick={() => setVisualExpiringOnly((v) => !v)}
                   className={`h-8 px-2 rounded-xl border text-[11px] font-extrabold whitespace-nowrap ${
                     visualExpiringOnly
-                      ? "bg-orange-600 text-white border-orange-600"
-                      : "bg-white text-orange-700 border-orange-200"
+                      ? "bg-amber-600 text-white border-amber-600"
+                      : "bg-white text-amber-700 border-amber-200"
                   }`}
                 >
                   ⏰ 임박만{expiringItems.length > 0 ? ` (${expiringItems.length})` : ""}
@@ -29337,10 +29349,10 @@ time: "", location: "",
                       <div className="space-y-1.5 pt-1 border-t border-sky-200/80">
                         <div className="text-[11.5px] font-extrabold text-sky-900 px-0.5">🧊 하부 냉동고 (4칸)</div>
                         <div className="grid grid-cols-2 gap-1.5">
-                          {renderShelfBox("하부냉동 1칸", "하부 1칸", "bg-slate-50/70 border-slate-200")}
-                          {renderShelfBox("하부냉동 2칸", "하부 2칸", "bg-slate-50/70 border-slate-200")}
-                          {renderShelfBox("하부냉동 3칸", "하부 3칸", "bg-slate-50/70 border-slate-200")}
-                          {renderShelfBox("하부냉동 4칸", "하부 4칸", "bg-slate-50/70 border-slate-200")}
+                          {renderShelfBox("하부냉동 1칸", "하부 1칸", "bg-stone-50/70 border-stone-200")}
+                          {renderShelfBox("하부냉동 2칸", "하부 2칸", "bg-stone-50/70 border-stone-200")}
+                          {renderShelfBox("하부냉동 3칸", "하부 3칸", "bg-stone-50/70 border-stone-200")}
+                          {renderShelfBox("하부냉동 4칸", "하부 4칸", "bg-stone-50/70 border-stone-200")}
                         </div>
                       </div>
                     )}
@@ -29350,7 +29362,7 @@ time: "", location: "",
 
                 {/* 2. 별도 4칸짜리 전용 냉동고 */}
                 {(fridgeLocFilter === "전체" || fridgeLocFilter === "별도 냉동고" || fridgeLocFilter === "냉동실") && (
-                  <div className="rounded-2xl border border-slate-200 bg-slate-50/50 p-2.5 space-y-1.5">
+                  <div className="rounded-2xl border border-stone-200 bg-stone-50/50 p-2.5 space-y-1.5">
                     <div className="text-[13.5px] font-black text-sky-950 px-0.5">
                       ❄️ 별도 냉동고 (4칸)
                     </div>
@@ -30288,7 +30300,7 @@ time: "", location: "",
                   n.done
                     ? "bg-stone-100 border-stone-200 opacity-70"
                     : n.pinned
-                    ? "bg-slate-50/70 border-slate-200 shadow-sm"
+                    ? "bg-[#EEF3EE]/60 border-[#C9D8CC] shadow-sm"
                     : "bg-white border-stone-200 shadow-sm"
                 }`}
               >
@@ -30424,10 +30436,38 @@ time: "", location: "",
                         const txt = `📌 [${n.category}] ${n.title}\n${n.content || ""}`.trim();
                         await copyTextSafe(txt, "📋 공지 내용이 복사되었습니다!");
                       }}
-                      className="px-2 py-0.5 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 text-[11.5px] font-extrabold whitespace-nowrap"
+                      className="px-2 py-0.5 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 text-[11.5px] font-extrabold whitespace-nowrap shrink-0"
                     >
                       📋 복사
                     </button>
+                    {canEditTab("schedule") && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingSchedule(null);
+                          setScheduleForm({
+                            title: String(n.title || "").trim(),
+                            date: getTodayStr(),
+                            endDate: "",
+                            time: "",
+                            location: "",
+                            category: "집안일/기타",
+                            members: ["수혁", "아리"],
+                            isAnnual: false,
+                            showDday: false,
+                            hasOriginYear: false,
+                            memo: String(n.content || "").trim(),
+                            attachments: []
+                          });
+                          setIsScheduleModalOpen(true);
+                          showToast("🗓️ 공지 내용을 일정 등록 창으로 불러왔습니다!");
+                        }}
+                        className="px-2 py-0.5 rounded-lg bg-[#EEF3EE] hover:bg-[#E2ECE4] text-[#2F523E] border border-[#C9D8CC] text-[11.5px] font-extrabold whitespace-nowrap shrink-0"
+                        title="이 공지를 가족 일정으로 바로 등록"
+                      >
+                        🗓️ 일정
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={() => handleToggleNoticeDone(n)}
@@ -30550,20 +30590,30 @@ time: "", location: "",
                   </div>
                   {planTarget === "adults" && (
                     <div className="flex items-center gap-1.5 flex-wrap pt-1">
-                      {["일반 집밥", "다이어트·저탄수", "고단백·체력보충", "간편 원플레이트"].map((st) => (
+                      {(aiMealStyles.includes(planAdultStyle) ? aiMealStyles : [planAdultStyle, ...aiMealStyles].filter(Boolean)).map((st) => (
                         <button
                           type="button"
                           key={st}
                           onClick={() => setPlanAdultStyle(st)}
-                          className={`px-2.5 py-1 rounded-full text-[12.5px] font-bold border ${
+                          className={`px-2.5 py-1 rounded-full text-[12.5px] font-bold border whitespace-nowrap transition ${
                             planAdultStyle === st
-                              ? "bg-amber-100 text-amber-900 border-amber-300"
-                              : "bg-white text-stone-600 border-stone-200"
+                              ? "bg-[#EEF3EE] text-[#2F523E] border-[#9BB6A4]"
+                              : "bg-white text-stone-600 border-stone-200 hover:bg-stone-50"
                           }`}
                         >
                           {st}
                         </button>
                       ))}
+                      {isEditorUnlocked && (
+                        <button
+                          type="button"
+                          onClick={() => openCategoryManager("ai_meal_styles")}
+                          className="h-7 px-2 rounded-full bg-stone-100 hover:bg-[#EEF3EE] text-stone-600 border border-stone-200 text-[11px] font-bold whitespace-nowrap shrink-0"
+                          title="AI 식단 스타일 자유편집"
+                        >
+                          ⚙️
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>
@@ -31022,7 +31072,7 @@ time: "", location: "",
                     >
                       {item.name}
                       {diff <= 3 && (
-                        <span className="ml-1 text-[11.5px] text-orange-400 font-black">
+                        <span className="ml-1 text-[11.5px] text-amber-400 font-black">
                           (임박)
                         </span>
                       )}
@@ -39265,12 +39315,18 @@ time: "", location: "",
             <button
               type="button"
               onClick={() => setKitchenTimer((p) => ({ ...p, open: true }))}
-              style={{ bottom: "calc(4.85rem + env(safe-area-inset-bottom))" }}
-              className="fixed left-4 z-40 px-3 py-1.5 rounded-full bg-stone-900/95 text-amber-300 border border-stone-700 shadow-lg flex items-center gap-1.5 text-[12px] font-mono font-black"
+              style={{ bottom: "calc(5.25rem + env(safe-area-inset-bottom))" }}
+              className="fixed left-3 z-[48] min-h-[38px] px-3 py-1.5 rounded-full bg-[#25332D] text-white border border-white/25 shadow-[0_8px_22px_rgba(16,26,22,0.34)] flex items-center gap-2 text-[12px] font-bold hover:bg-[#2C3D36] active:scale-[0.98] transition"
               title="누르면 타이머·스톱워치 펼치기"
+              aria-label={`플로팅 ${kitchenTimer.mode === "stopwatch" ? "스톱워치" : "타이머"} 펼치기, 현재 ${timeText}`}
             >
-              <span className={`w-2 h-2 rounded-full ${kitchenTimer.running ? "bg-emerald-400 animate-pulse" : "bg-stone-400"}`} />
-              <span>{kitchenTimer.mode === "stopwatch" ? "⏱️" : kitchenTimer.mode === "alarm" ? "⏰" : "⏲️"} {timeText}</span>
+              <span className={`w-2 h-2 rounded-full shrink-0 ${kitchenTimer.running ? "bg-[#6EE7B7] animate-pulse" : "bg-[#9AAFA5]"}`} />
+              <span className="font-mono text-[13px] font-black tracking-wide tabular-nums text-white whitespace-nowrap">
+                {timeText}
+              </span>
+              <span className="text-[10.5px] font-semibold text-[#B8C6BF] whitespace-nowrap">
+                {kitchenTimer.running ? "진행 중" : "일시정지"} · 펼치기
+              </span>
             </button>
           );
         }
@@ -39279,12 +39335,12 @@ time: "", location: "",
         // 원형 다이얼 계산 (countdown)
         const dialMaxSec = Math.max(60, dialStepSec * 60);
         const dialProgress = Math.min(1, (Number(kitchenTimer.remainingSec) || 0) / dialMaxSec);
-        const dialR = 46;
+        const dialR = 44;
         const dialCircum = 2 * Math.PI * dialR;
         const dialDashOffset = dialCircum * (1 - dialProgress);
         const knobAngle = -Math.PI / 2 + dialProgress * 2 * Math.PI;
-        const knobX = 56 + dialR * Math.cos(knobAngle);
-        const knobY = 56 + dialR * Math.sin(knobAngle);
+        const knobX = 54 + dialR * Math.cos(knobAngle);
+        const knobY = 54 + dialR * Math.sin(knobAngle);
 
         const handleDialPointerDown = (e) => {
           e.preventDefault();
@@ -39318,122 +39374,181 @@ time: "", location: "",
 
         return (
           <div
-            style={{ bottom: "calc(4.75rem + env(safe-area-inset-bottom))" }}
-            className="fixed left-1/2 -translate-x-1/2 z-[48] w-[calc(100%-2rem)] max-w-sm bg-stone-900/95 backdrop-blur text-white rounded-2xl px-3 py-2.5 shadow-2xl border border-stone-700 space-y-2 max-h-[72vh] overflow-y-auto"
+            role="dialog"
+            aria-label="플로팅 타이머 및 스톱워치"
+            style={{ bottom: "calc(5.25rem + env(safe-area-inset-bottom))" }}
+            className="fixed left-1/2 -translate-x-1/2 z-[48] w-[calc(100%-1.5rem)] max-w-[376px] bg-[#25332D] text-white rounded-2xl p-3 shadow-[0_12px_28px_rgba(14,24,20,0.34),0_2px_6px_rgba(14,24,20,0.2)] border border-white/20 space-y-2.5 max-h-[70vh] overflow-y-auto"
           >
-            {/* 상단 모드 탭 & 소리/진동/접기/닫기 */}
-            <div className="flex items-center justify-between gap-1.5">
-              <div className="flex items-center gap-1 bg-stone-800 p-0.5 rounded-xl">
+            {/* 상단: [타이머 | 스톱워치] 전환 + 우측 [더보기(상태배지) · 접기] */}
+            <div className="flex items-center justify-between gap-1.5 flex-wrap">
+              <div
+                role="tablist"
+                aria-label="타이머 모드 전환"
+                className="inline-flex items-center gap-0.5 bg-[#1B2622] p-0.5 rounded-xl border border-[#384C43] shrink-0"
+              >
                 {[
-                  { id: "countdown", label: "⏲️ 타이머" },
-                  { id: "stopwatch", label: "⏱️ 스톱워치" }
-                ].map((mTab) => (
-                  <button
-                    key={mTab.id}
-                    type="button"
-                    onClick={() =>
-                      setKitchenTimer((p) => ({
-                        ...p,
-                        mode: mTab.id,
-                        label: mTab.id === "stopwatch" ? "스톱워치" : "타이머"
-                      }))
-                    }
-                    className={`px-2 py-1 rounded-lg text-[10.5px] font-extrabold whitespace-nowrap transition ${
-                      kitchenTimer.mode === mTab.id
-                        ? "bg-[#3F624D] text-white shadow-xs"
-                        : "text-stone-300 hover:text-white"
-                    }`}
-                  >
-                    {mTab.label}
-                  </button>
-                ))}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setKitchenTimer((p) => ({ ...p, open: false }));
-                    setActiveTab("alarm");
-                  }}
-                  className="px-2 py-1 rounded-lg text-[10.5px] font-extrabold whitespace-nowrap text-amber-300 hover:bg-stone-700 transition"
-                  title="별도 모닝콜·알람 메뉴로 이동"
-                >
-                  ⏰ 모닝콜{activeAlarmCount > 0 ? `(${activeAlarmCount})` : ""} →
-                </button>
+                  { id: "countdown", label: "타이머" },
+                  { id: "stopwatch", label: "스톱워치" }
+                ].map((mTab) => {
+                  const isActive = kitchenTimer.mode === mTab.id;
+                  return (
+                    <button
+                      key={mTab.id}
+                      type="button"
+                      role="tab"
+                      aria-selected={isActive}
+                      onClick={() =>
+                        setKitchenTimer((p) => ({
+                          ...p,
+                          mode: mTab.id,
+                          label: mTab.id === "stopwatch" ? "스톱워치" : "타이머"
+                        }))
+                      }
+                      className={`min-h-[32px] px-2.5 py-1 rounded-[10px] text-[11.5px] whitespace-nowrap transition ${
+                        isActive
+                          ? "bg-[#354B41] text-white font-extrabold border border-[#6EE7B7]/65"
+                          : "text-[#B8C6BF] font-semibold border border-transparent hover:text-white"
+                      }`}
+                    >
+                      {mTab.label}
+                    </button>
+                  );
+                })}
               </div>
-              <div className="flex items-center gap-1 shrink-0">
+
+              <div className="flex items-center gap-1 shrink-0 ml-auto">
                 <button
                   type="button"
-                  onClick={() => {
-                    const next = !timerSoundEnabled;
-                    setTimerSoundEnabled(next);
-                    try { localStorage.setItem("kim_timer_sound_v1", String(next)); } catch (e) {}
-                    if (user && db) {
-                      setDoc(getDocRef("family_meta_v4", "timer_alarms_v1"), { soundEnabled: next, updatedAtMs: Date.now() }, { merge: true }).catch(() => {});
-                    }
-                    if (!next) stopAlarmAudio();
-                    if (next) unlockAudioContext();
-                    showToast(next ? "🔊 타이머·알람 소리가 켜졌습니다." : "🔇 타이머·알람 소리가 꺼졌습니다.");
-                  }}
-                  className={`px-1.5 py-0.5 rounded-lg text-[10.5px] font-bold whitespace-nowrap ${
-                    timerSoundEnabled ? "bg-stone-700 text-amber-300" : "bg-stone-800 text-stone-500"
+                  onClick={() => setIsTimerMoreOpen((v) => !v)}
+                  aria-expanded={isTimerMoreOpen}
+                  className={`min-h-[32px] px-2 py-1 rounded-xl text-[11px] font-bold whitespace-nowrap inline-flex items-center gap-1 border transition ${
+                    isTimerMoreOpen
+                      ? "bg-[#354B41] text-[#6EE7B7] border-[#6EE7B7]/60"
+                      : "bg-[#1B2622] text-[#D7E3DD] border-[#384C43] hover:bg-[#2E3F38]"
                   }`}
-                  title="완료 소리 켜기/끄기"
+                  title="모닝콜 · 소리 · 진동 설정 열기"
                 >
-                  {timerSoundEnabled ? "🔊" : "🔇"}
+                  <span>더보기</span>
+                  <span className="inline-flex items-center gap-0.5 text-[10px] text-[#B8C6BF]" aria-hidden="true">
+                    {activeAlarmCount > 0 && (
+                      <span className="px-1 rounded-full bg-[#354B41] text-[#6EE7B7] font-extrabold leading-tight">
+                        ⏰{activeAlarmCount}
+                      </span>
+                    )}
+                    <span>{timerSoundEnabled ? "🔊" : "🔇"}</span>
+                    {timerVibrateEnabled && <span>📳</span>}
+                  </span>
                 </button>
                 <button
                   type="button"
                   onClick={() => {
-                    const next = !timerVibrateEnabled;
-                    setTimerVibrateEnabled(next);
-                    try { localStorage.setItem("kim_timer_vibrate_v1", String(next)); } catch (e) {}
-                    if (user && db) {
-                      setDoc(getDocRef("family_meta_v4", "timer_alarms_v1"), { vibrateEnabled: next, updatedAtMs: Date.now() }, { merge: true }).catch(() => {});
-                    }
-                    if (next) triggerTimerVibration([80]);
-                    showToast(next ? "📳 진동 알림이 켜졌습니다." : "진동 알림이 꺼졌습니다.");
+                    setIsTimerMoreOpen(false);
+                    setKitchenTimer((p) => ({ ...p, open: false }));
                   }}
-                  className={`px-1.5 py-0.5 rounded-lg text-[10.5px] font-bold whitespace-nowrap ${
-                    timerVibrateEnabled ? "bg-stone-700 text-emerald-300" : "bg-stone-800 text-stone-500"
-                  }`}
-                  title="완료 진동 켜기/끄기"
-                >
-                  📳
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setKitchenTimer((p) => ({ ...p, open: false }))}
-                  className="px-1.5 py-0.5 rounded-lg bg-stone-800 hover:bg-stone-700 text-stone-300 text-[10.5px] font-bold whitespace-nowrap"
+                  className="min-h-[32px] px-2.5 py-1 rounded-xl bg-[#1B2622] hover:bg-[#2E3F38] text-[#D7E3DD] border border-[#384C43] text-[11px] font-bold whitespace-nowrap transition"
                 >
                   접기
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    stopAlarmAudio();
-                    closeStopwatchStatusNotif();
-                    setTimerCompletedAlert("");
-                    setKitchenTimer((p) => ({
-                      ...p,
-                      open: false,
-                      running: false,
-                      remainingSec: 0,
-                      elapsedSec: 0,
-                      startedAtMs: null,
-                      targetEndMs: null,
-                      cookStartTimeStr: "",
-                      cookEndTimeStr: ""
-                    }));
-                  }}
-                  className="p-0.5 text-stone-400 hover:text-white"
-                  aria-label="닫기"
-                >
-                  <X className="w-4 h-4" />
                 </button>
               </div>
             </div>
 
+            {/* 더보기 보조 메뉴 (모닝콜 · 소리 · 진동 · 완전 닫기) — 플로팅 창 내부에 깔끔하게 펼쳐져 잘림 방지 */}
+            {isTimerMoreOpen && (
+              <div className="bg-[#1B2622] border border-[#3B5047] rounded-xl p-2 space-y-1.5">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsTimerMoreOpen(false);
+                      setKitchenTimer((p) => ({ ...p, open: false }));
+                      setActiveTab("alarm");
+                    }}
+                    className="flex-1 min-w-[130px] min-h-[34px] px-2.5 py-1 rounded-lg bg-[#25332D] hover:bg-[#2F413A] border border-[#3E554B] text-white text-[11px] font-bold flex items-center justify-between gap-1.5 whitespace-nowrap transition"
+                  >
+                    <span>⏰ 모닝콜{activeAlarmCount > 0 ? ` (${activeAlarmCount}개)` : ""}</span>
+                    <span className="text-[#6EE7B7] text-[10.5px] font-extrabold">열기 →</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      stopAlarmAudio();
+                      closeStopwatchStatusNotif();
+                      setTimerCompletedAlert("");
+                      setIsTimerMoreOpen(false);
+                      setIsStopwatchTimeEditOpen(false);
+                      setKitchenTimer((p) => ({
+                        ...p,
+                        open: false,
+                        running: false,
+                        remainingSec: 0,
+                        elapsedSec: 0,
+                        startedAtMs: null,
+                        targetEndMs: null,
+                        cookStartTimeStr: "",
+                        cookEndTimeStr: ""
+                      }));
+                    }}
+                    className="min-h-[34px] px-2.5 py-1 rounded-lg bg-[#25332D] hover:bg-rose-950/60 border border-[#3E554B] text-[#D7E3DD] hover:text-rose-200 text-[11px] font-bold whitespace-nowrap transition"
+                  >
+                    종료·닫기
+                  </button>
+                </div>
+                <div className="grid grid-cols-2 gap-1.5">
+                  <button
+                    type="button"
+                    aria-pressed={timerSoundEnabled}
+                    onClick={() => {
+                      const next = !timerSoundEnabled;
+                      setTimerSoundEnabled(next);
+                      try { localStorage.setItem("kim_timer_sound_v1", String(next)); } catch (e) {}
+                      if (user && db) {
+                        setDoc(getDocRef("family_meta_v4", "timer_alarms_v1"), { soundEnabled: next, updatedAtMs: Date.now() }, { merge: true }).catch(() => {});
+                      }
+                      if (!next) stopAlarmAudio();
+                      if (next) unlockAudioContext();
+                      showToast(next ? "🔊 타이머·알람 소리가 켜졌습니다." : "🔇 타이머·알람 소리가 꺼졌습니다.");
+                    }}
+                    className={`min-h-[34px] px-2.5 py-1 rounded-lg text-[11px] font-bold border flex items-center justify-between gap-1 whitespace-nowrap transition ${
+                      timerSoundEnabled
+                        ? "bg-[#2C4239] text-white border-[#6EE7B7]/60"
+                        : "bg-[#25332D] text-[#9AAFA5] border-[#384C43]"
+                    }`}
+                  >
+                    <span>{timerSoundEnabled ? "🔊 소리" : "🔇 소리"}</span>
+                    <span className={`text-[10.5px] font-extrabold ${timerSoundEnabled ? "text-[#6EE7B7]" : "text-[#8FA39A]"}`}>
+                      {timerSoundEnabled ? "켜짐" : "꺼짐"}
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    aria-pressed={timerVibrateEnabled}
+                    onClick={() => {
+                      const next = !timerVibrateEnabled;
+                      setTimerVibrateEnabled(next);
+                      try { localStorage.setItem("kim_timer_vibrate_v1", String(next)); } catch (e) {}
+                      if (user && db) {
+                        setDoc(getDocRef("family_meta_v4", "timer_alarms_v1"), { vibrateEnabled: next, updatedAtMs: Date.now() }, { merge: true }).catch(() => {});
+                      }
+                      if (next) triggerTimerVibration([80]);
+                      showToast(next ? "📳 진동 알림이 켜졌습니다." : "진동 알림이 꺼졌습니다.");
+                    }}
+                    className={`min-h-[34px] px-2.5 py-1 rounded-lg text-[11px] font-bold border flex items-center justify-between gap-1 whitespace-nowrap transition ${
+                      timerVibrateEnabled
+                        ? "bg-[#2C4239] text-white border-[#6EE7B7]/60"
+                        : "bg-[#25332D] text-[#9AAFA5] border-[#384C43]"
+                    }`}
+                  >
+                    <span>📳 진동</span>
+                    <span className={`text-[10.5px] font-extrabold ${timerVibrateEnabled ? "text-[#6EE7B7]" : "text-[#8FA39A]"}`}>
+                      {timerVibrateEnabled ? "켜짐" : "꺼짐"}
+                    </span>
+                  </button>
+                </div>
+              </div>
+            )}
+
             {timerCompletedAlert && (
-              <div className="flex items-center justify-between gap-1.5 px-2.5 py-1.5 rounded-xl bg-amber-500 text-stone-950">
+              <div className="flex items-center justify-between gap-1.5 px-2.5 py-1.5 rounded-xl bg-[#6EE7B7] text-[#15241E]">
                 <span className="text-[11.5px] font-black truncate min-w-0">🔔 [{timerCompletedAlert}] 완료!</span>
                 <div className="flex items-center gap-1 shrink-0">
                   {completedAlertUrl && (
@@ -39441,7 +39556,7 @@ time: "", location: "",
                       href={normalizeDreamUrl(completedAlertUrl)}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="px-2 py-0.5 rounded-lg bg-white text-stone-900 text-[10.5px] font-black whitespace-nowrap"
+                      className="px-2 py-0.5 rounded-lg bg-white text-[#15241E] text-[10.5px] font-black whitespace-nowrap"
                     >
                       🎵 음악열기
                     </a>
@@ -39453,7 +39568,7 @@ time: "", location: "",
                       setCompletedAlertUrl("");
                       setTimerCompletedAlert("");
                     }}
-                    className="px-2 py-0.5 rounded-lg bg-stone-900 text-white text-[10.5px] font-black whitespace-nowrap"
+                    className="px-2 py-0.5 rounded-lg bg-[#25332D] text-white text-[10.5px] font-black whitespace-nowrap"
                   >
                     확인
                   </button>
@@ -39464,13 +39579,13 @@ time: "", location: "",
             {/* 모드 1: 전자레인지식 원형 다이얼 타이머 */}
             {kitchenTimer.mode === "countdown" && (
               <div className="space-y-2">
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2.5 flex-wrap">
                   {/* 원형 조그 다이얼 */}
-                  <div className="relative shrink-0 select-none">
+                  <div className="relative shrink-0 select-none mx-auto">
                     <svg
-                      width="112"
-                      height="112"
-                      viewBox="0 0 112 112"
+                      width="108"
+                      height="108"
+                      viewBox="0 0 108 108"
                       onPointerDown={handleDialPointerDown}
                       onPointerMove={handleDialPointerMove}
                       onPointerUp={handleDialPointerUp}
@@ -39478,33 +39593,34 @@ time: "", location: "",
                       style={{ touchAction: "none" }}
                       className="cursor-grab active:cursor-grabbing"
                     >
-                      <circle cx="56" cy="56" r={dialR} fill="none" stroke="#292524" strokeWidth="10" />
+                      <circle cx="54" cy="54" r={dialR} fill="none" stroke="#1B2622" strokeWidth="9" />
                       <circle
-                        cx="56"
-                        cy="56"
+                        cx="54"
+                        cy="54"
                         r={dialR}
                         fill="none"
-                        stroke={kitchenTimer.running ? "#34d399" : "#fbbf24"}
-                        strokeWidth="10"
+                        stroke="#6EE7B7"
+                        strokeWidth="9"
                         strokeLinecap="round"
                         strokeDasharray={dialCircum}
                         strokeDashoffset={dialDashOffset}
-                        transform="rotate(-90 56 56)"
+                        transform="rotate(-90 54 54)"
                       />
-                      <circle cx={knobX} cy={knobY} r="7" fill="#ffffff" stroke="#3F624D" strokeWidth="2.5" />
+                      <circle cx={knobX} cy={knobY} r="6.5" fill="#ffffff" stroke="#25332D" strokeWidth="2.5" />
                     </svg>
                     <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                      <span className="font-mono text-[18px] font-black tracking-tight tabular-nums text-amber-300 leading-none">
+                      <span className="font-mono text-[18px] font-black tracking-tight tabular-nums text-white leading-none">
                         {timeText}
                       </span>
-                      <span className="text-[10px] text-stone-400 font-bold mt-1 whitespace-nowrap">돌려서 {dialStepSec === 60 ? "1분" : `${dialStepSec}초`}씩</span>
+                      <span className="text-[10px] text-[#B8C6BF] font-semibold mt-1 whitespace-nowrap">
+                        {dialStepSec === 60 ? "1분" : `${dialStepSec}초`} 단위
+                      </span>
                     </div>
                   </div>
 
                   {/* 우측 정밀도·분초 스테퍼·시작/리셋 */}
-                  <div className="flex-1 min-w-0 space-y-1.5">
+                  <div className="flex-1 min-w-[155px] space-y-1.5">
                     <div className="flex items-center gap-1">
-                      <span className="text-[10px] text-stone-400 font-bold whitespace-nowrap">다이얼:</span>
                       {[
                         { sec: 1, label: "1초" },
                         { sec: 10, label: "10초" },
@@ -39513,11 +39629,12 @@ time: "", location: "",
                         <button
                           key={u.sec}
                           type="button"
+                          aria-pressed={dialStepSec === u.sec}
                           onClick={() => setDialStepSec(u.sec)}
-                          className={`flex-1 py-0.5 rounded-lg text-[10px] font-extrabold border whitespace-nowrap ${
+                          className={`flex-1 min-h-[28px] py-0.5 rounded-lg text-[10.5px] font-bold border whitespace-nowrap transition ${
                             dialStepSec === u.sec
-                              ? "bg-amber-400 text-stone-950 border-amber-400"
-                              : "bg-stone-800 text-stone-300 border-stone-700"
+                              ? "bg-[#354B41] text-white border-[#6EE7B7]/65 font-extrabold"
+                              : "bg-[#1B2622] text-[#B8C6BF] border-[#384C43]"
                           }`}
                         >
                           {u.label}
@@ -39527,8 +39644,8 @@ time: "", location: "",
 
                     {/* 분 / 초 직접 입력 및 미세 조정 */}
                     <div className="grid grid-cols-2 gap-1.5">
-                      <div className="bg-stone-800 rounded-xl px-2 py-1 flex items-center justify-between gap-1">
-                        <button type="button" onClick={() => adjustCountdownSec(-60)} className="text-stone-400 hover:text-white font-black text-[13px] px-1">−</button>
+                      <div className="bg-[#1B2622] border border-[#384C43] rounded-xl px-1.5 py-1 flex items-center justify-between gap-0.5">
+                        <button type="button" onClick={() => adjustCountdownSec(-60)} className="text-[#B8C6BF] hover:text-white font-black text-[13px] px-1">−</button>
                         <div className="flex items-center gap-0.5 min-w-0">
                           <input
                             type="number"
@@ -39541,14 +39658,14 @@ time: "", location: "",
                               const sVal = (Number(kitchenTimer.remainingSec) || 0) % 60;
                               setCountdownExactSec(mVal * 60 + sVal);
                             }}
-                            className="w-8 bg-transparent text-center font-mono text-[13px] font-black text-white focus:outline-none"
+                            className="w-7 bg-transparent text-center font-mono text-[13px] font-black text-white focus:outline-none"
                           />
-                          <span className="text-[10px] text-stone-400 font-bold">분</span>
+                          <span className="text-[10px] text-[#B8C6BF] font-bold">분</span>
                         </div>
-                        <button type="button" onClick={() => adjustCountdownSec(60)} className="text-amber-300 hover:text-amber-200 font-black text-[13px] px-1">+</button>
+                        <button type="button" onClick={() => adjustCountdownSec(60)} className="text-[#6EE7B7] hover:text-white font-black text-[13px] px-1">+</button>
                       </div>
-                      <div className="bg-stone-800 rounded-xl px-2 py-1 flex items-center justify-between gap-1">
-                        <button type="button" onClick={() => adjustCountdownSec(-1)} className="text-stone-400 hover:text-white font-black text-[13px] px-1">−</button>
+                      <div className="bg-[#1B2622] border border-[#384C43] rounded-xl px-1.5 py-1 flex items-center justify-between gap-0.5">
+                        <button type="button" onClick={() => adjustCountdownSec(-1)} className="text-[#B8C6BF] hover:text-white font-black text-[13px] px-1">−</button>
                         <div className="flex items-center gap-0.5 min-w-0">
                           <input
                             type="number"
@@ -39561,15 +39678,15 @@ time: "", location: "",
                               const mVal = Math.floor((Number(kitchenTimer.remainingSec) || 0) / 60);
                               setCountdownExactSec(mVal * 60 + sVal);
                             }}
-                            className="w-7 bg-transparent text-center font-mono text-[13px] font-black text-amber-300 focus:outline-none"
+                            className="w-6 bg-transparent text-center font-mono text-[13px] font-black text-white focus:outline-none"
                           />
-                          <span className="text-[10px] text-stone-400 font-bold">초</span>
+                          <span className="text-[10px] text-[#B8C6BF] font-bold">초</span>
                         </div>
-                        <button type="button" onClick={() => adjustCountdownSec(1)} className="text-amber-300 hover:text-amber-200 font-black text-[13px] px-1">+</button>
+                        <button type="button" onClick={() => adjustCountdownSec(1)} className="text-[#6EE7B7] hover:text-white font-black text-[13px] px-1">+</button>
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-1">
+                    <div className="flex items-center gap-1.5">
                       <button
                         type="button"
                         onClick={() => {
@@ -39584,11 +39701,13 @@ time: "", location: "",
                             return { ...p, running: true, remainingSec: rem, startedAtMs: null, targetEndMs: now + rem * 1000 };
                           });
                         }}
-                        className={`flex-1 py-1.5 rounded-xl text-[11.5px] font-extrabold whitespace-nowrap ${
-                          kitchenTimer.running ? "bg-amber-500 text-stone-950" : "bg-emerald-500 text-stone-950"
+                        className={`flex-1 min-h-[36px] px-2.5 py-1.5 rounded-xl text-[12px] font-extrabold whitespace-nowrap transition ${
+                          kitchenTimer.running
+                            ? "bg-[#2C4239] text-[#6EE7B7] border border-[#6EE7B7]"
+                            : "bg-[#6EE7B7] hover:bg-[#5EEAD4] text-[#15241E] border border-transparent"
                         }`}
                       >
-                        {kitchenTimer.running ? "일시정지" : "▶ 시작"}
+                        {kitchenTimer.running ? "⏸ 일시정지" : "▶ 시작"}
                       </button>
                       <button
                         type="button"
@@ -39596,7 +39715,7 @@ time: "", location: "",
                           setTimerCompletedAlert("");
                           setKitchenTimer((p) => ({ ...p, running: false, remainingSec: 0, targetEndMs: null }));
                         }}
-                        className="px-2.5 py-1.5 rounded-xl bg-stone-700 hover:bg-stone-600 text-[11px] font-bold whitespace-nowrap"
+                        className="min-h-[36px] px-3 py-1.5 rounded-xl bg-[#31433B] hover:bg-[#3B5047] border border-[#455C52] text-[#E6EFEA] text-[11.5px] font-bold whitespace-nowrap transition"
                       >
                         리셋
                       </button>
@@ -39634,7 +39753,7 @@ time: "", location: "",
                             targetEndMs: Date.now() + sec * 1000
                           }));
                         }}
-                        className="flex-1 min-w-[44px] px-1.5 py-1 rounded-lg bg-stone-800 hover:bg-stone-700 text-[10.5px] font-bold whitespace-nowrap"
+                        className="flex-1 min-w-[46px] min-h-[30px] px-2 py-1 rounded-lg bg-[#1B2622] hover:bg-[#2F413A] border border-[#384C43] text-[#E6EFEA] text-[11px] font-bold whitespace-nowrap transition"
                       >
                         {btnLabel}
                       </button>
@@ -39644,7 +39763,7 @@ time: "", location: "",
                     <button
                       type="button"
                       onClick={() => openCategoryManager("timer_presets")}
-                      className="px-2 py-1 rounded-lg bg-stone-800/80 hover:bg-stone-700 text-stone-300 text-[10.5px] font-bold whitespace-nowrap shrink-0"
+                      className="min-h-[30px] px-2 py-1 rounded-lg bg-[#1B2622] hover:bg-[#2F413A] border border-[#384C43] text-[#B8C6BF] text-[11px] font-bold whitespace-nowrap shrink-0"
                       title="타이머 빠른 프리셋 추가·수정·삭제"
                     >
                       ⚙️
@@ -39654,14 +39773,34 @@ time: "", location: "",
               </div>
             )}
 
-            {/* 모드 2: 범용 스톱워치 (초단위 기록 저장) */}
+            {/* 모드 2: 범용 스톱워치 (초단위 기록 저장 · 컴팩트 플로팅 구성) */}
             {kitchenTimer.mode === "stopwatch" && (
-              <div className="space-y-2">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="font-mono text-[24px] font-black tracking-wider tabular-nums text-amber-300">
-                    {timeText}
+              <div className="space-y-2.5">
+                {/* 중앙: 큰 흰색 경과 시간 + 시작/일시정지 + 리셋 (좁은 화면에서는 조작 버튼만 자연스럽게 줄바꿈) */}
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <div className="flex flex-col min-w-[116px]">
+                    <div className="font-mono text-[28px] font-black tracking-wider tabular-nums text-white leading-none">
+                      {timeText}
+                    </div>
+                    <div className="mt-1 flex items-center gap-1.5 text-[10.5px] font-semibold text-[#B8C6BF]">
+                      <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${kitchenTimer.running ? "bg-[#6EE7B7] animate-pulse" : "bg-[#7F968C]"}`} />
+                      <span className="whitespace-nowrap">
+                        {kitchenTimer.running
+                          ? "측정 중"
+                          : displaySec > 0
+                          ? "일시정지"
+                          : "대기 중"}
+                      </span>
+                      {kitchenTimer.cookStartTimeStr && (
+                        <span className="font-mono text-[10px] text-[#9EB2A8] whitespace-nowrap">
+                          · {kitchenTimer.cookStartTimeStr}
+                          {kitchenTimer.cookEndTimeStr ? `~${kitchenTimer.cookEndTimeStr}` : "~"}
+                        </span>
+                      )}
+                    </div>
                   </div>
-                  <div className="flex items-center gap-1">
+
+                  <div className="flex items-center gap-1.5 shrink-0">
                     <button
                       type="button"
                       onClick={() =>
@@ -39686,11 +39825,13 @@ time: "", location: "",
                           };
                         })
                       }
-                      className={`px-3 py-1.5 rounded-xl text-[11.5px] font-extrabold whitespace-nowrap ${
-                        kitchenTimer.running ? "bg-amber-500 text-stone-950" : "bg-emerald-500 text-stone-950"
+                      className={`min-h-[38px] px-3.5 py-1.5 rounded-xl text-[12px] font-extrabold whitespace-nowrap transition ${
+                        kitchenTimer.running
+                          ? "bg-[#2C4239] text-[#6EE7B7] border border-[#6EE7B7]"
+                          : "bg-[#6EE7B7] hover:bg-[#5EEAD4] text-[#15241E] border border-transparent"
                       }`}
                     >
-                      {kitchenTimer.running ? "일시정지" : "▶ 시작"}
+                      {kitchenTimer.running ? "⏸ 일시정지" : "▶ 시작"}
                     </button>
                     <button
                       type="button"
@@ -39705,59 +39846,15 @@ time: "", location: "",
                           cookEndTimeStr: ""
                         }));
                       }}
-                      className="px-2.5 py-1.5 rounded-xl bg-stone-700 hover:bg-stone-600 text-[11px] font-bold whitespace-nowrap"
+                      className="min-h-[38px] px-3 py-1.5 rounded-xl bg-[#31433B] hover:bg-[#3B5047] border border-[#455C52] text-[#E6EFEA] text-[12px] font-bold whitespace-nowrap transition"
                     >
                       리셋
                     </button>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-1.5">
-                  <div className="bg-stone-800/90 rounded-xl px-2.5 py-1.5 flex flex-col gap-0.5 min-w-0">
-                    <span className="text-[10px] font-bold text-stone-400 leading-none">시작 시간 (초단위)</span>
-                    <input
-                      type="time"
-                      step="1"
-                      value={kitchenTimer.cookStartTimeStr || ""}
-                      onChange={(e) => {
-                        const nextStart = e.target.value;
-                        setKitchenTimer((p) => {
-                          const diffSec = computeHHMMSSDiffSec(nextStart, p.cookEndTimeStr);
-                          return {
-                            ...p,
-                            cookStartTimeStr: nextStart,
-                            ...(diffSec !== null ? { elapsedSec: diffSec, running: false, startedAtMs: null } : {})
-                          };
-                        });
-                      }}
-                      className="bg-transparent text-white font-mono text-[11.5px] font-extrabold focus:outline-none w-full min-w-0"
-                    />
-                  </div>
-                  <div className="bg-stone-800/90 rounded-xl px-2.5 py-1.5 flex flex-col gap-0.5 min-w-0">
-                    <span className="text-[10px] font-bold text-stone-400 leading-none">완료 시간 (초단위)</span>
-                    <input
-                      type="time"
-                      step="1"
-                      value={kitchenTimer.cookEndTimeStr || ""}
-                      onChange={(e) => {
-                        const nextEnd = e.target.value;
-                        setKitchenTimer((p) => {
-                          const baseStart = p.cookStartTimeStr || toNowHHMMSS();
-                          const diffSec = computeHHMMSSDiffSec(baseStart, nextEnd);
-                          return {
-                            ...p,
-                            cookStartTimeStr: baseStart,
-                            cookEndTimeStr: nextEnd,
-                            ...(diffSec !== null ? { elapsedSec: diffSec, running: false, startedAtMs: null } : {})
-                          };
-                        });
-                      }}
-                      className="bg-transparent text-amber-300 font-mono text-[11.5px] font-extrabold focus:outline-none w-full min-w-0"
-                    />
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between gap-1 flex-wrap">
+                {/* 하단: 완료·기록저장 + 시간 수정 토글 (+ 경과시 복사/레시피) */}
+                <div className="flex items-center gap-1.5 flex-wrap">
                   <button
                     type="button"
                     onClick={() => {
@@ -39789,9 +39886,21 @@ time: "", location: "",
                       });
                       showToast("🏁 초단위 경과 시간이 기록 목록에 저장되었습니다!");
                     }}
-                    className="flex-1 py-1 px-2 rounded-lg bg-emerald-600/90 hover:bg-emerald-500 text-white text-[11px] font-extrabold whitespace-nowrap"
+                    className="flex-1 min-w-[128px] min-h-[38px] px-3 py-1.5 rounded-xl bg-[#314A40] hover:bg-[#3A574C] border border-[#6EE7B7]/45 text-[#D1FAE5] text-[12px] font-extrabold whitespace-nowrap transition"
                   >
-                    🏁 완료·기록저장
+                    완료 · 기록저장
+                  </button>
+                  <button
+                    type="button"
+                    aria-expanded={isStopwatchTimeEditOpen}
+                    onClick={() => setIsStopwatchTimeEditOpen((v) => !v)}
+                    className={`min-h-[38px] px-2.5 py-1.5 rounded-xl text-[11.5px] font-bold border whitespace-nowrap transition ${
+                      isStopwatchTimeEditOpen
+                        ? "bg-[#354B41] text-[#6EE7B7] border-[#6EE7B7]/60"
+                        : "bg-[#1B2622] text-[#C8D6CF] border-[#384C43] hover:bg-[#2E3F38]"
+                    }`}
+                  >
+                    시간 수정 {isStopwatchTimeEditOpen ? "▴" : "▾"}
                   </button>
                   {displaySec > 0 && (
                     <>
@@ -39805,9 +39914,9 @@ time: "", location: "",
                               : "";
                           await copyTextSafe(`⏱️ 소요시간: ${durTxt}${rangeTxt}`, `📋 소요시간(${durTxt})이 복사되었습니다!`);
                         }}
-                        className="px-2 py-1 rounded-lg bg-stone-700 hover:bg-stone-600 text-[11px] font-extrabold whitespace-nowrap"
+                        className="min-h-[34px] px-2.5 py-1 rounded-xl bg-[#1B2622] hover:bg-[#2F413A] border border-[#384C43] text-[#E6EFEA] text-[11px] font-bold whitespace-nowrap transition"
                       >
-                        📋 {formatDurationSecKo(displaySec)} 복사
+                        📋 복사
                       </button>
                       {canEditTab("recipes") && (
                         <button
@@ -39817,7 +39926,7 @@ time: "", location: "",
                             openNewRecipeModal({ cookTime: durTxt });
                             showToast(`📖 레시피북 조리시간에 '${durTxt}'이 자동 입력되었습니다!`);
                           }}
-                          className="px-2 py-1 rounded-lg bg-amber-500/90 hover:bg-amber-400 text-stone-950 text-[11px] font-black whitespace-nowrap"
+                          className="min-h-[34px] px-2.5 py-1 rounded-xl bg-[#1B2622] hover:bg-[#2F413A] border border-[#384C43] text-[#6EE7B7] text-[11px] font-bold whitespace-nowrap transition"
                         >
                           📖 레시피
                         </button>
@@ -39826,10 +39935,58 @@ time: "", location: "",
                   )}
                 </div>
 
+                {/* 접힘/펼침 상세 시간 수정 (시작·완료 초단위 입력) */}
+                {isStopwatchTimeEditOpen && (
+                  <div className="bg-[#1B2622] border border-[#3B5047] rounded-xl p-2 grid grid-cols-1 min-[350px]:grid-cols-2 gap-2">
+                    <label className="bg-[#25332D] border border-[#384C43] rounded-lg px-2.5 py-1.5 flex flex-col gap-0.5 min-w-0">
+                      <span className="text-[10.5px] font-semibold text-[#B8C6BF] leading-none">시작 시간 (초단위)</span>
+                      <input
+                        type="time"
+                        step="1"
+                        value={kitchenTimer.cookStartTimeStr || ""}
+                        onChange={(e) => {
+                          const nextStart = e.target.value;
+                          setKitchenTimer((p) => {
+                            const diffSec = computeHHMMSSDiffSec(nextStart, p.cookEndTimeStr);
+                            return {
+                              ...p,
+                              cookStartTimeStr: nextStart,
+                              ...(diffSec !== null ? { elapsedSec: diffSec, running: false, startedAtMs: null } : {})
+                            };
+                          });
+                        }}
+                        className="bg-transparent text-white font-mono text-[12px] font-bold focus:outline-none w-full min-w-0 mt-0.5"
+                      />
+                    </label>
+                    <label className="bg-[#25332D] border border-[#384C43] rounded-lg px-2.5 py-1.5 flex flex-col gap-0.5 min-w-0">
+                      <span className="text-[10.5px] font-semibold text-[#B8C6BF] leading-none">완료 시간 (초단위)</span>
+                      <input
+                        type="time"
+                        step="1"
+                        value={kitchenTimer.cookEndTimeStr || ""}
+                        onChange={(e) => {
+                          const nextEnd = e.target.value;
+                          setKitchenTimer((p) => {
+                            const baseStart = p.cookStartTimeStr || toNowHHMMSS();
+                            const diffSec = computeHHMMSSDiffSec(baseStart, nextEnd);
+                            return {
+                              ...p,
+                              cookStartTimeStr: baseStart,
+                              cookEndTimeStr: nextEnd,
+                              ...(diffSec !== null ? { elapsedSec: diffSec, running: false, startedAtMs: null } : {})
+                            };
+                          });
+                        }}
+                        className="bg-transparent text-[#6EE7B7] font-mono text-[12px] font-bold focus:outline-none w-full min-w-0 mt-0.5"
+                      />
+                    </label>
+                  </div>
+                )}
+
                 {Array.isArray(kitchenTimer.records) && kitchenTimer.records.length > 0 && (
-                  <div className="pt-1.5 border-t border-stone-800 space-y-1 max-h-24 overflow-y-auto">
-                    <div className="flex items-center justify-between text-[10px] text-stone-400 font-bold">
-                      <span>📌 최근 스톱워치 기록 ({kitchenTimer.records.length})</span>
+                  <div className="pt-2 border-t border-[#384C43] space-y-1 max-h-24 overflow-y-auto">
+                    <div className="flex items-center justify-between text-[10.5px] text-[#B8C6BF] font-semibold">
+                      <span>최근 기록 ({kitchenTimer.records.length})</span>
                       <button
                         type="button"
                         onClick={() => {
@@ -39838,19 +39995,19 @@ time: "", location: "",
                             setDoc(getDocRef("family_meta_v4", "timer_alarms_v1"), { stopwatchRecords: [], updatedAtMs: Date.now() }, { merge: true }).catch(() => {});
                           }
                         }}
-                        className="text-stone-500 hover:text-rose-400"
+                        className="text-[#9AAFA5] hover:text-rose-300 font-bold"
                       >
                         비우기
                       </button>
                     </div>
                     {kitchenTimer.records.map((rec) => (
-                      <div key={rec.id} className="flex items-center justify-between gap-1.5 text-[10.5px] bg-stone-800/70 rounded-lg px-2 py-1">
-                        <span className="font-bold text-amber-300 whitespace-nowrap">{rec.text}</span>
-                        <span className="text-stone-400 font-mono truncate">{rec.range}</span>
+                      <div key={rec.id} className="flex items-center justify-between gap-1.5 text-[11px] bg-[#1B2622] border border-[#34463E] rounded-lg px-2 py-1">
+                        <span className="font-bold text-white whitespace-nowrap">{rec.text}</span>
+                        <span className="text-[#B8C6BF] font-mono text-[10.5px] truncate">{rec.range}</span>
                         <button
                           type="button"
                           onClick={() => copyTextSafe(`⏱️ ${rec.text} (${rec.range})`, `📋 '${rec.text}' 복사 완료!`)}
-                          className="text-stone-300 hover:text-white text-[10px] font-bold shrink-0"
+                          className="text-[#6EE7B7] hover:text-white text-[10.5px] font-bold shrink-0 whitespace-nowrap"
                         >
                           복사
                         </button>
@@ -39868,11 +40025,11 @@ time: "", location: "",
 
       {/* 전역 상시 알람·타이머 완료 울림 배너 (타이머 팝업 닫혀 있어도 항상 노출 · 5분 다시울림 지원) */}
       {timerCompletedAlert && (
-        <div className="fixed top-14 left-1/2 -translate-x-1/2 z-[9995] w-[calc(100%-1.5rem)] max-w-md bg-stone-900 text-white rounded-2xl px-3.5 py-3 shadow-2xl border border-amber-400/70 space-y-2">
+        <div className="fixed top-14 left-1/2 -translate-x-1/2 z-[9995] w-[calc(100%-1.5rem)] max-w-md bg-[#25332D] text-white rounded-2xl px-3.5 py-3 shadow-[0_12px_28px_rgba(14,24,20,0.36)] border border-[#6EE7B7]/60 space-y-2">
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2 min-w-0">
-              <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping shrink-0" />
-              <span className="text-[13px] font-black text-amber-300 truncate min-w-0">🔔 {timerCompletedAlert}</span>
+              <span className="w-2.5 h-2.5 rounded-full bg-[#6EE7B7] animate-ping shrink-0" />
+              <span className="text-[13px] font-black text-white truncate min-w-0">🔔 {timerCompletedAlert}</span>
             </div>
             <span className="text-[10px] font-bold text-stone-400 whitespace-nowrap shrink-0">알람 울림</span>
           </div>
@@ -44731,6 +44888,7 @@ time: "", location: "",
           timer_presets: { title: "⏱️ 타이머 프리셋", placeholder: "예: 15분, 1분 30초, 7분|반숙계란" },
           quick_alarm_presets: { title: "⚡ 퀵알람 프리셋", placeholder: "예: 1분, 5분, 15분, 1시간" },
           baby_diary_moods: { title: "😊 육아일기 기분", placeholder: "새 기분 (예: 🌟 뿌듯함, 🎵 신남)" },
+          ai_meal_styles: { title: "✨ AI 식단 스타일", placeholder: "새 식단 스타일 (예: 냉털 15분, 저염·산모식)" },
           condolence_cat: { title: "💌 경조사 카테고리", placeholder: "새 경조사 분류 (예: 칠순/팔순, 집들이, 승진)" },
           condolence_group: { title: "👥 경조사 그룹", placeholder: "새 경조사 그룹 (예: 동호회, 대학동기, 거래처)" },
           condolence_pay: { title: "💳 경조사 결제수단", placeholder: "새 결제수단 (예: 카카오페이, 토스, 상품권, 화환)" }
@@ -44786,6 +44944,7 @@ time: "", location: "",
                   { id: "timer_presets", label: "⏱️ 타이머", cnt: timerPresets.length },
                   { id: "quick_alarm_presets", label: "⚡ 퀵알람", cnt: quickAlarmPresets.length },
                   { id: "baby_diary_moods", label: "😊 일기기분", cnt: babyDiaryMoods.length },
+                  { id: "ai_meal_styles", label: "✨ AI스타일", cnt: aiMealStyles.length },
                   ...(isSuhyeokAdmin && isCondolenceUnlocked ? [
                     { id: "condolence_cat", label: "💌 경조분류", cnt: condolenceCategories.length },
                     { id: "condolence_group", label: "👥 경조그룹", cnt: condolenceGroups.length },
@@ -51850,7 +52009,7 @@ time: "", location: "",
                     {/* 실시간 연동 카톡 미리보기 말풍선 (위 선택과 즉각 동기화!) */}
                     <div className="bg-[#BACEE0] rounded-2xl p-2.5 space-y-1.5">
                       <div className="flex items-center justify-between gap-2 px-0.5">
-                        <span className="text-[10.5px] font-extrabold text-slate-800 whitespace-nowrap">
+                        <span className="text-[10.5px] font-extrabold text-stone-800 whitespace-nowrap">
                           {isUsingCustomText ? "✏️ 직접 수정본 적용 중" : "💬 실시간 카톡 미리보기"}
                         </span>
                         <div className="flex items-center gap-1">
@@ -51863,7 +52022,7 @@ time: "", location: "",
                             className={`px-2 py-0.5 rounded-lg text-[10px] font-extrabold whitespace-nowrap ${
                               handoverTimetableMode
                                 ? "bg-amber-100 text-amber-950"
-                                : "bg-white/80 text-slate-700"
+                                : "bg-white/80 text-stone-700"
                             }`}
                             title="시간표형 / 목록형 전환"
                           >
@@ -51877,7 +52036,7 @@ time: "", location: "",
                                 setIsHandoverEditingPreview(false);
                                 showToast("🔄 자동 연동 원본으로 복원했습니다.");
                               }}
-                              className="px-2 py-0.5 rounded-lg bg-white/85 hover:bg-white text-slate-700 text-[10px] font-extrabold whitespace-nowrap"
+                              className="px-2 py-0.5 rounded-lg bg-white/85 hover:bg-white text-stone-700 text-[10px] font-extrabold whitespace-nowrap"
                             >
                               🔄 원본복원
                             </button>

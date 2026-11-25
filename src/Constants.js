@@ -1182,7 +1182,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v14.32";
+export const APP_CODE_VERSION = "v14.33";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1200,7 +1200,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-25 20:00";
+export const APP_BUILD_DATE = "2026-11-25 20:40";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1271,6 +1271,18 @@ export const formatTime12Ko = (ms) => {
 
 export const INITIAL_PATCH_NOTES = [
   {
+    id: "patch-v14.33",
+    version: "v14.33",
+    date: "2026-11-25",
+    title: "이메일 저장 해제 버그 및 미사용 상태 7종 정리 · AI 식단스타일 자유편집 승격 · 가족공지→일정 연계 · Firebase/색상/배너 통일",
+    changes: [
+      "🐛 버그 수정 및 코드 경량화: ① 로그인 '이메일 저장' 체크 해제 시 '0'으로 저장되어 재접속 시 해제 상태가 무시되던 형식 불일치 버그('0' vs 'false') 수정 ② 미사용 데드 상태 7쌍(loginAdminTarget·editorCodeInput·tableFilterState·tableSearchOpenId·newTableColName·alarmRepeatDraft·alarmQuickMinDraft) 제거",
+      "🎛️ 시스템 자유도 확장: 하드코딩되어 있던 AI 어른 식단 스타일(4종)을 통합 세부 카테고리 자유 관리(✨ AI 스타일)로 승격해 추가·수정·삭제·순서변경·기본복원 및 스타일 칩 옆 ⚙️ 원탭 편집 지원",
+      "🔗 메뉴간 연계·Firebase 이관 보완: 가족공지 카드에 [🗓️ 일정] 1탭 연계 버튼 추가(제목·내용 자동 입력), 공유노트 하위페이지/샘플 생성 시 펼침 상태(expandedPageIds) Firebase 동기화 누락 2건 보완 및 AI 스타일 클라우드/백업 통합",
+      "🎨 디자인·색상·줄바꿈 통일: 잔여 이질 색상(orange-* 10곳→amber-*, slate-* 9곳→stone-*/세이지그린) 0건 달성, 전역 상시 알람 울림 배너를 플로팅 스톱워치와 동일한 차콜그린(#25332D)·민트(#6EE7B7) 톤으로 통일, AI 스타일·공지 버튼 whitespace-nowrap 보강 및 과거 패치노트 470건 100% 보존"
+    ]
+  },
+  {
     id: "patch-v14.32",
     version: "v14.32",
     date: "2026-11-25",
@@ -1279,7 +1291,7 @@ export const INITIAL_PATCH_NOTES = [
       "🐛 핵심 기능 버그 5종 수정: ① 공유노트 표 상세 모달(복사/할일/장보기)이 잘못된 속성(.cells)을 읽어 컬럼 값이 누락되던 버그를 .values로 수정 ② 모닝콜 [루틴 알람] 이동 시 오타('routines'→'routine')로 빈 화면이 뜨던 버그 수정 ③ 모닝콜 탭 진입 시 하단 '더보기' 활성 강조 누락 수정 ④ 알람 체크 훅의 기본 볼륨(alarmDefaultVolume) 의존성 누락 수정 ⑤ 역할권한·쪽지함·수납관리·알림설정·페이지스위처 등 8개 모달의 뒤로가기/ESC 닫기 일괄 등록 및 미사용 데드 상태 제거 ⑥ 앱 실행 시 과거 로컬/Firebase 스톱워치 상태가 좀비 재실행되던 자동 실행 오류 수정",
       "🎛️ 시스템 자유도 확장: 하드코딩되어 있던 육아일기 기분(6종)을 통합 세부 카테고리 자유 관리(😊 일기기분)로 승격해 추가·수정·삭제·순서변경·기본복원 및 기분 선택바 옆 ⚙️ 바로가기 지원",
       "🔗 메뉴간 연계·Firebase 이관 보완: 시간이 지정된 가족 일정 카드에 [⏰] 1탭 모닝콜 알람 등록 버튼 추가, 공유노트 삭제 시 최근 열람 목록(recentPageIds) Firebase 동기화 누락 보완 및 일기기분 카테고리 클라우드/백업 통합",
-      "🎨 디자인·폰트·줄바꿈 정돈: 잔여 이질 색상(pink/purple 배지)을 앱 표준 로즈/세이지그린(#3F624D)으로 통일, 버튼·배지 극소 폰트(9px→10px) 상향, 일정 [완료체크] 및 더보기 4열 타일 whitespace-nowrap 보강 및 과거 패치노트 469건 100% 보존"
+      "🎨 디자인·폰트·줄바꿈·플로팅 스톱워치 고도화: 플로팅 타이머·스톱워치를 불투명 짙은 차콜그린(#25332D)·밝은 얇은 테두리·흰색 시간·단일 민트 조작 버튼으로 개편하고, 모닝콜/소리/진동은 [더보기]·초단위 시간입력은 [시간 수정]으로 접힘 정리해 320~390px 무잘림·최소 높이 구현, 잔여 이질 색상(pink/purple) 통일 및 과거 패치노트 469건 100% 보존"
     ]
   },
   {
@@ -7216,3 +7228,4 @@ export const DEFAULT_HOUSE_WARRANTY_BRANDS = ["LG", "삼성", "다이슨", "부�
 export const DEFAULT_TIMER_PRESETS = ["30초", "1분", "3분", "5분", "10분"];
 export const DEFAULT_QUICK_ALARM_PRESETS = ["1분", "5분", "10분", "15분", "30분", "1시간"];
 export const DEFAULT_BABY_DIARY_MOODS = ["😊 행복", "🥰 감동", "😴 잘잠", "🍼 잘먹음", "🤒 컨디션관리", "🎉 첫성공"];
+export const DEFAULT_AI_MEAL_STYLES = ["일반 집밥", "다이어트·저탄수", "고단백·체력보충", "간편 원플레이트"];
