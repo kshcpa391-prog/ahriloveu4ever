@@ -4578,11 +4578,18 @@ function MainApp() {
             silent: isSilent
           };
           if (!isSilent) {
-            notifOpts.renotify = true;
             notifOpts.vibrate = [120, 60, 120];
           }
           await reg.showNotification(title, notifOpts);
-          setLastNotifError(`최근 발송 성공 (${new Date().toTimeString().slice(0, 8)}, ${isSilent ? "무음" : "일반"})`);
+          let activeCount = null;
+          try {
+            if (typeof reg.getNotifications === "function") {
+              const afterList = await reg.getNotifications();
+              activeCount = Array.isArray(afterList) ? afterList.length : null;
+            }
+          } catch (err) {}
+          const countTxt = activeCount !== null ? ` · SW등록 ${activeCount}건` : "";
+          setLastNotifError(`최근 발송 성공 (${new Date().toTimeString().slice(0, 8)}, ${isSilent ? "무음" : "일반"}${countTxt})`);
           return true;
         }
       }
@@ -44951,6 +44958,26 @@ time: "", location: "",
                     }`}
                   >
                     {notifPermState === "granted" ? "📲 상태바 테스트" : "🔔 상태바 켜기"}
+                  </button>
+                )}
+                {notifPermState === "granted" && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      showToast("⏱️ 3초 뒤 알림을 보냅니다. 홈 화면으로 나가서 확인해 보세요!");
+                      setTimeout(async () => {
+                        await showStatusBarNotification(
+                          "🏡 혁리나목율♡ 백그라운드 알림 테스트",
+                          "백그라운드 상태에서 상태표시줄 알림이 정상 수신되었습니다.",
+                          `test-bg-${Date.now()}`
+                        );
+                        await refreshSwStatus();
+                      }, 3000);
+                    }}
+                    className="h-7 px-2 rounded-lg text-[10.5px] font-extrabold border whitespace-nowrap bg-stone-100 text-stone-700 border-stone-200 hover:bg-stone-200"
+                    title="앱을 내린 상태에서 알림이 오는지 테스트합니다"
+                  >
+                    ⏱️ 3초 뒤 테스트
                   </button>
                 )}
                 <button

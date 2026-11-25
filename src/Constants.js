@@ -1181,7 +1181,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v14.09";
+export const APP_CODE_VERSION = "v14.10";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1199,7 +1199,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-25 11:44";
+export const APP_BUILD_DATE = "2026-11-25 11:50";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1268,6 +1268,16 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v14.10",
+    version: "v14.10",
+    date: "2026-11-25",
+    title: "상태바 알림 SW 등록 건수 진단 및 3초 뒤 백그라운드 테스트 추가",
+    changes: [
+      "상태바 알림 발송 직후 getNotifications()로 실제 서비스 워커 등록 건수(SW등록 N건)를 진단 표시",
+      "고유 태그 사용 시 불필요한 renotify 옵션 제거 및 ⏱️ 3초 뒤 테스트 버튼 추가"
+    ]
+  },
   {
     id: "patch-v14.09",
     version: "v14.09",
