@@ -2619,6 +2619,18 @@ function MainApp() {
           setLastNotifError(msg);
         });
     }
+    const syncPermAndSw = () => {
+      if (typeof Notification !== "undefined") {
+        setNotifPermState(Notification.permission);
+      }
+      refreshSwStatus();
+    };
+    window.addEventListener("focus", syncPermAndSw);
+    document.addEventListener("visibilitychange", syncPermAndSw);
+    return () => {
+      window.removeEventListener("focus", syncPermAndSw);
+      document.removeEventListener("visibilitychange", syncPermAndSw);
+    };
   }, []);
   const showStatusBarNotification = async (title, body, tag = "family-app") => {
     lastNotifErrorRef.current = "";
@@ -3257,8 +3269,9 @@ function MainApp() {
   const [pagePasteColor, setPagePasteColor] = useState("amber");
   const [pagePasteMode, setPagePasteMode] = useState("append");
   const [isPageVisualEditMode, setIsPageVisualEditMode] = useState(false);
-  const [isEditingPageNote, setIsEditingPageNote] = useState(false);
+  const [isNoteBodyFocused, setIsNoteBodyFocused] = useState(false);
   const [pageNoteDraft, setPageNoteDraft] = useState("");
+  const pageNoteTextareaRef = useRef(null);
   const [isPageMultiSelectMode, setIsPageMultiSelectMode] = useState(false);
   const [babyDreamLinks, setBabyDreamLinks] = useState(() => {
     try {
@@ -14167,12 +14180,20 @@ ${validText}
     };
   }, []);
 
+  useEffect(() => {
+    const cur = familyPages.find((p) => p.id === selectedPageId);
+    if (!isNoteBodyFocused) {
+      setPageNoteDraft(String(cur?.noteBody || ""));
+    }
+  }, [selectedPageId, familyPages, isNoteBodyFocused]);
+
   const openFamilyPage = (pageId) => {
     setSelectedPageId(pageId);
     setEditingBlockId(null);
     setIsEditingPageTitle(false);
-    setIsEditingPageNote(false);
-    setPageNoteDraft("");
+    setIsNoteBodyFocused(false);
+    const targetPg = familyPages.find((p) => p.id === pageId);
+    setPageNoteDraft(String(targetPg?.noteBody || ""));
     setIsPageEmojiPickerOpen(false);
     setIsPageVisualEditMode(false);
     setIsPageMultiSelectMode(false);
@@ -16157,6 +16178,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
       id: newId,
       title: `${page.title} (사본)`,
       blocks: clonedBlocks,
+      attachments: Array.isArray(page.attachments) ? page.attachments.map((a) => ({ ...a })) : [],
       createdAt: getTodayStr(),
       updatedAtMs: nowMs
     };
@@ -17436,22 +17458,15 @@ ${item.memo}` : `${item.title} 다녀옴!`,
         const targetEnd = Number(prev.targetEndMs) || (now + (Number(prev.remainingSec) || 0) * 1000);
         const rem = Math.max(0, Math.ceil((targetEnd - now) / 1000));
         if (rem <= 0) {
-          try {
-            const Ctx = window.AudioContext || window.webkitAudioContext;
-            if (Ctx) {
-              const ctx = new Ctx();
-              const osc = ctx.createOscillator();
-              const gain = ctx.createGain();
-              osc.type = "sine";
-              osc.frequency.value = 880;
-              gain.gain.value = 0.15;
-              osc.connect(gain);
-              gain.connect(ctx.destination);
-              osc.start();
-              setTimeout(() => { try { osc.stop(); ctx.close(); } catch (e) {} }, 600);
-            }
-          } catch (e) {}
-          showToast(`🔔 [${prev.label}] 조리 타이머가 완료되었습니다!`);
+          const completedLabel = prev.label || "조리 타이머";
+          setTimeout(() => {
+            showToast(`🔔 [${completedLabel}] 조리 타이머가 완료되었습니다!`);
+            showStatusBarNotification(
+              `⏱️ [${completedLabel}] 완료`,
+              "설정한 조리 타이머가 끝났습니다.",
+              `timer-${Date.now()}`
+            );
+          }, 0);
           return { ...prev, running: false, remainingSec: 0, targetEndMs: null };
         }
         if (rem === prev.remainingSec && prev.targetEndMs) return prev;
@@ -30032,11 +30047,19 @@ time: "", location: "",
                                   className="w-[136px] shrink-0 rounded-2xl border border-stone-200/90 bg-white hover:border-stone-300 shadow-sm overflow-hidden text-left transition active:scale-[0.98]"
                                 >
                                   <div className={`h-11 relative ${cov?.bg || "bg-stone-100/90"}`}>
-                                    {pgTodos.length > 0 && (
+                                    {pgTodos.length > 0 ? (
                                       <span className="absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded-full bg-white/90 text-[10px] font-extrabold text-[#3F624D] shadow-2xs whitespace-nowrap">
                                         {pgDone}/{pgTodos.length}
                                       </span>
-                                    )}
+                                    ) : (Array.isArray(pg.attachments) && pg.attachments.length > 0) ? (
+                                      <span className="absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded-full bg-white/90 text-[10px] font-extrabold text-stone-600 shadow-2xs whitespace-nowrap">
+                                        📎 {pg.attachments.length}
+                                      </span>
+                                    ) : String(pg.noteBody || "").trim() ? (
+                                      <span className="absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded-full bg-white/90 text-[10px] font-extrabold text-[#3F624D] shadow-2xs whitespace-nowrap">
+                                        📝
+                                      </span>
+                                    ) : null}
                                   </div>
                                   <div className="relative z-10 px-3 pb-3 -mt-4 space-y-1.5">
                                     <div className="w-9 h-9 rounded-xl bg-white border border-stone-200/80 shadow-xs flex items-center justify-center text-[19px] leading-none">
@@ -30145,31 +30168,7 @@ time: "", location: "",
                         </button>
                       ) : (
                         <>
-                          {canEditTab("pages") && (
-                            <>
-                              <button
-                                type="button"
-                                onClick={() => setIsPageVisualEditMode(true)}
-                                className="px-2 py-1 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-800 text-[11px] font-extrabold whitespace-nowrap"
-                                title="상단 고정 툴바로 추가·서식·편집"
-                              >
-                                ✏️ 편집
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setPagePasteText("");
-                                  setPagePasteColor("amber");
-                                  setPagePasteMode("append");
-                                  setIsPagePasteModalOpen(true);
-                                }}
-                                className="px-2 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-900 text-[11px] font-extrabold whitespace-nowrap"
-                                title="노션 마크다운 통째로 붙여넣기"
-                              >
-                                📥 붙여넣기
-                              </button>
-                            </>
-                          )}
+
                           {todoBlocks.length > 0 && (
                             <button
                               type="button"
@@ -30428,7 +30427,7 @@ time: "", location: "",
                           <div className="max-w-lg mx-auto space-y-1.5">
                             {/* 1행: 항목 즉시 추가 + 다중선택 + 완료 */}
                             <div className="flex items-center justify-between gap-1.5">
-                              <div className="flex items-center gap-1 overflow-x-auto min-w-0">
+                              <div className="flex flex-wrap items-center gap-1 min-w-0">
                                 <button
                                   type="button"
                                   onClick={() => {
@@ -30667,9 +30666,10 @@ time: "", location: "",
                       );
                     })()}
 
-                    {/* 성장일기식 자유 글쓰기 / 본문 에디터 (v14.01) */}
+                    {/* 공유노트 상시 자유 작성 본문 & 커서 툴바 + 사진·파일 첨부 (v14.02) */}
                     {(() => {
                       const noteBodyVal = String(currentPage.noteBody || "");
+                      const isNoteDirty = pageNoteDraft.replace(/\s+$/, "") !== noteBodyVal.replace(/\s+$/, "");
                       const pageAttachments = Array.isArray(currentPage.attachments) ? currentPage.attachments : [];
                       const imgAttachments = pageAttachments.filter(
                         (att) => String(att?.mimeType || "").startsWith("image/") || /^data:image\//.test(String(att?.dataUrl || ""))
@@ -30677,13 +30677,53 @@ time: "", location: "",
                       const fileAttachments = pageAttachments.filter(
                         (att) => !(String(att?.mimeType || "").startsWith("image/") || /^data:image\//.test(String(att?.dataUrl || "")))
                       );
-                      const handleSavePageNote = async () => {
-                        if (!requireEditorAccess("pages")) return;
+                      const handleSavePageNote = async (silent = false) => {
+                        if (!canEditTab("pages")) return;
                         const nextBody = String(pageNoteDraft || "").replace(/\s+$/, "");
+                        if (nextBody === noteBodyVal.replace(/\s+$/, "")) return;
                         await savePageToCloud({ ...currentPage, noteBody: nextBody, updatedAtMs: Date.now() });
-                        setIsEditingPageNote(false);
                         recordActivity("노트", "수정", currentPage.title);
-                        showToast("📝 공유노트 본문을 저장했습니다!");
+                        if (!silent) showToast("📝 공유노트를 저장했습니다!");
+                      };
+                      const applyLinePrefixAtCursor = (prefix) => {
+                        const el = pageNoteTextareaRef.current;
+                        const val = String(pageNoteDraft || "");
+                        if (!el) {
+                          setPageNoteDraft(val ? `${val}\n${prefix}` : prefix);
+                          return;
+                        }
+                        const start = el.selectionStart ?? val.length;
+                        const lineStart = val.lastIndexOf("\n", Math.max(0, start - 1)) + 1;
+                        const lineEndRaw = val.indexOf("\n", start);
+                        const lineEnd = lineEndRaw === -1 ? val.length : lineEndRaw;
+                        const curLine = val.slice(lineStart, lineEnd);
+                        const hasPrefix = curLine.startsWith(prefix);
+                        const nextLine = hasPrefix ? curLine.slice(prefix.length) : `${prefix}${curLine}`;
+                        const nextVal = val.slice(0, lineStart) + nextLine + val.slice(lineEnd);
+                        setPageNoteDraft(nextVal);
+                        requestAnimationFrame(() => {
+                          try {
+                            el.focus();
+                            const nextPos = Math.max(lineStart, start + (hasPrefix ? -prefix.length : prefix.length));
+                            el.setSelectionRange(nextPos, nextPos);
+                          } catch (e) {}
+                        });
+                      };
+                      const wrapSelectionInNote = (wrapper = "**") => {
+                        const el = pageNoteTextareaRef.current;
+                        const val = String(pageNoteDraft || "");
+                        if (!el) return;
+                        const s = el.selectionStart ?? val.length;
+                        const e = el.selectionEnd ?? val.length;
+                        const sel = val.slice(s, e) || "강조";
+                        const nextVal = val.slice(0, s) + wrapper + sel + wrapper + val.slice(e);
+                        setPageNoteDraft(nextVal);
+                        requestAnimationFrame(() => {
+                          try {
+                            el.focus();
+                            el.setSelectionRange(s + wrapper.length, s + wrapper.length + sel.length);
+                          } catch (err) {}
+                        });
                       };
                       const handlePageAttachFiles = async (fileList) => {
                         if (!requireEditorAccess("pages") || !fileList || fileList.length === 0) return;
@@ -30701,112 +30741,162 @@ time: "", location: "",
                       };
                       return (
                         <div className="space-y-3">
-                          {isEditingPageNote ? (
-                            <div className="rounded-2xl border border-[#C9D8CC] bg-[#FAF8F3] p-3 space-y-2.5">
-                              <div className="flex items-center justify-between gap-2">
-                                <span className="text-[11.5px] font-extrabold text-[#35503C] whitespace-nowrap">
-                                  📝 자유 글쓰기 · 일기 편집
-                                </span>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    const stamp = `[${getTodayStr()}] `;
-                                    setPageNoteDraft((prev) => (prev ? `${prev.replace(/\n+$/, "")}\n\n${stamp}` : stamp));
-                                  }}
-                                  className="px-2 py-0.5 rounded-lg bg-white hover:bg-[#EEF3EE] border border-[#C9D8CC] text-[#35503C] text-[10.5px] font-extrabold whitespace-nowrap"
+                          {canEditTab("pages") ? (
+                            <div
+                              className={`rounded-2xl border transition ${
+                                isNoteBodyFocused
+                                  ? "border-[#3F624D] bg-white shadow-sm"
+                                  : "border-stone-200/90 bg-[#FAF8F3]/65 hover:border-stone-300"
+                              }`}
+                            >
+                              {isNoteBodyFocused && (
+                                <div
+                                  onMouseDown={(e) => e.preventDefault()}
+                                  className="px-2.5 py-2 border-b border-stone-100 bg-stone-50/90 rounded-t-2xl flex flex-wrap items-center gap-1"
                                 >
-                                  📅 오늘 날짜 넣기
-                                </button>
-                              </div>
-                              <textarea
-                                autoFocus
-                                rows={7}
-                                value={pageNoteDraft}
-                                onChange={(e) => setPageNoteDraft(e.target.value)}
-                                placeholder="성장일기나 메모를 여러 줄로 자유롭게 적어보세요..."
-                                className="w-full min-h-[170px] p-3 rounded-xl border border-stone-200 bg-white text-[14px] leading-relaxed text-stone-800 font-medium focus:outline-none focus:ring-2 focus:ring-[#3F624D]/30 resize-y"
-                              />
-                              <div className="flex items-center justify-between gap-2">
-                                <span className="text-[10.5px] font-bold text-stone-400">
-                                  {pageNoteDraft.length.toLocaleString()}자
-                                </span>
-                                <div className="flex items-center gap-1.5">
+                                  <button
+                                    type="button"
+                                    onClick={() => applyLinePrefixAtCursor("# ")}
+                                    className="px-2 py-1 rounded-lg bg-white hover:bg-stone-100 border border-stone-200 text-stone-800 text-[11px] font-extrabold whitespace-nowrap"
+                                    title="현재 줄 제목(#) 서식"
+                                  >
+                                    # 제목
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => applyLinePrefixAtCursor("☐ ")}
+                                    className="px-2 py-1 rounded-lg bg-white hover:bg-stone-100 border border-stone-200 text-stone-800 text-[11px] font-extrabold whitespace-nowrap"
+                                    title="현재 줄 체크박스(☐) 서식"
+                                  >
+                                    ☐ 체크
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => wrapSelectionInNote("**")}
+                                    className="px-2 py-1 rounded-lg bg-white hover:bg-stone-100 border border-stone-200 text-stone-800 text-[11px] font-black whitespace-nowrap"
+                                    title="선택 텍스트 굵게"
+                                  >
+                                    B
+                                  </button>
+                                  <span className="text-stone-300 text-[10px] px-0.5">|</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleInsertPageBlockAt(currentPage, "todo", null)}
+                                    className="px-2 py-1 rounded-lg bg-[#3F624D] hover:bg-[#35503C] text-white text-[11px] font-extrabold whitespace-nowrap"
+                                  >
+                                    + 체크블록
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleInsertPageBlockAt(currentPage, "heading", null)}
+                                    className="px-2 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-900 text-[11px] font-extrabold whitespace-nowrap"
+                                  >
+                                    + 섹션
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleAddTableBlock(currentPage)}
+                                    className="px-2 py-1 rounded-lg bg-white hover:bg-stone-100 border border-stone-200 text-stone-700 text-[11px] font-extrabold whitespace-nowrap"
+                                  >
+                                    + 표
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => openCreatePageModal(currentPage.id)}
+                                    className="px-2 py-1 rounded-lg bg-[#EEF3EE] hover:bg-[#DFE9E0] border border-[#C9D8CC] text-[#35503C] text-[11px] font-extrabold whitespace-nowrap"
+                                  >
+                                    + 페이지
+                                  </button>
                                   <button
                                     type="button"
                                     onClick={() => {
-                                      setIsEditingPageNote(false);
-                                      setPageNoteDraft("");
+                                      setPagePasteText("");
+                                      setPagePasteColor("amber");
+                                      setPagePasteMode("append");
+                                      setIsPagePasteModalOpen(true);
                                     }}
-                                    className="px-3 py-1.5 rounded-xl bg-white hover:bg-stone-100 border border-stone-200 text-stone-600 text-[12px] font-extrabold whitespace-nowrap"
+                                    className="px-2 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-900 text-[11px] font-extrabold whitespace-nowrap"
                                   >
-                                    취소
+                                    📥 붙여넣기
                                   </button>
-                                  <button
-                                    type="button"
-                                    onClick={handleSavePageNote}
-                                    className="px-3.5 py-1.5 rounded-xl bg-[#3F624D] hover:bg-[#35503C] text-white text-[12px] font-extrabold whitespace-nowrap"
-                                  >
-                                    💾 저장
-                                  </button>
+                                  {blocks.length > 0 && (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setIsPageVisualEditMode(true);
+                                        setIsPageMultiSelectMode(true);
+                                        setSelectedPageBlockIds([]);
+                                      }}
+                                      className="px-2 py-1 rounded-lg bg-[#EEF3EE] hover:bg-[#DFE9E0] border border-[#C9D8CC] text-[#35503C] text-[11px] font-extrabold whitespace-nowrap"
+                                    >
+                                      ☑️ 여러개
+                                    </button>
+                                  )}
                                 </div>
-                              </div>
+                              )}
+                              <textarea
+                                ref={pageNoteTextareaRef}
+                                rows={8}
+                                value={pageNoteDraft}
+                                onFocus={() => setIsNoteBodyFocused(true)}
+                                onBlur={async () => {
+                                  setIsNoteBodyFocused(false);
+                                  await handleSavePageNote(true);
+                                }}
+                                onChange={(e) => setPageNoteDraft(e.target.value)}
+                                placeholder="공유노트 내용을 자유롭게 쭉 작성하세요..."
+                                className="w-full min-h-[220px] p-3.5 bg-transparent text-[14.5px] leading-relaxed text-stone-800 font-normal placeholder:text-stone-400 focus:outline-none resize-y"
+                              />
+                              {(isNoteDirty || (isNoteBodyFocused && (pageNoteDraft.trim() || canEditTab("schedule")))) && (
+                                <div className="px-3 pb-2.5 flex items-center justify-between gap-2">
+                                  <span className="text-[10.5px] font-bold text-stone-400">
+                                    {pageNoteDraft.length.toLocaleString()}자 {isNoteDirty ? "· 수정됨" : ""}
+                                  </span>
+                                  <div className="flex items-center gap-1.5">
+                                    {canEditTab("schedule") && pageNoteDraft.trim() && (
+                                      <button
+                                        type="button"
+                                        onMouseDown={(e) => e.preventDefault()}
+                                        onClick={() => {
+                                          setEditingSchedule(null);
+                                          setScheduleForm({
+                                            title: currentPage.title || "공유노트 일정",
+                                            date: getTodayStr(),
+                                            endDate: "",
+                                            time: "",
+                                            location: "",
+                                            category: "할일(To-Do)",
+                                            members: ["수혁", "아리나"],
+                                            isAnnual: false,
+                                            showDday: false,
+                                            hasOriginYear: false,
+                                            memo: pageNoteDraft.slice(0, 600),
+                                            attachments: []
+                                          });
+                                          setIsScheduleModalOpen(true);
+                                        }}
+                                        className="px-2.5 py-1 rounded-lg bg-[#EEF3EE] hover:bg-[#DFE9E0] border border-[#C9D8CC] text-[#35503C] text-[11px] font-extrabold whitespace-nowrap"
+                                      >
+                                        🗓️ 일정 등록
+                                      </button>
+                                    )}
+                                    {isNoteDirty && (
+                                      <button
+                                        type="button"
+                                        onMouseDown={(e) => e.preventDefault()}
+                                        onClick={() => handleSavePageNote(false)}
+                                        className="px-3 py-1 rounded-lg bg-[#3F624D] hover:bg-[#35503C] text-white text-[11.5px] font-extrabold whitespace-nowrap"
+                                      >
+                                        💾 저장
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
                             </div>
                           ) : noteBodyVal.trim() ? (
-                            <div className="rounded-2xl border border-stone-200/90 bg-[#FAF8F3]/75 p-3.5 space-y-2">
-                              <div className="flex items-center justify-between gap-2">
-                                <span className="text-[11px] font-extrabold text-[#35503C]">📝 본문 · 기록</span>
-                                <div className="flex items-center gap-1.5">
-                                  {canEditTab("schedule") && (
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        setEditingSchedule(null);
-                                        setScheduleForm({
-                                          title: currentPage.title || "공유노트 일정",
-                                          date: getTodayStr(),
-                                          endDate: "",
-                                          time: "",
-                                          location: "",
-                                          category: "할일(To-Do)",
-                                          members: ["수혁", "아리나"],
-                                          isAnnual: false,
-                                          showDday: false,
-                                          hasOriginYear: false,
-                                          memo: noteBodyVal.slice(0, 600),
-                                          attachments: []
-                                        });
-                                        setIsScheduleModalOpen(true);
-                                      }}
-                                      className="px-2 py-0.5 rounded-lg bg-[#EEF3EE] hover:bg-[#DFE9E0] border border-[#C9D8CC] text-[#35503C] text-[10.5px] font-extrabold whitespace-nowrap"
-                                    >
-                                      🗓️ 일정 등록
-                                    </button>
-                                  )}
-                                  {canEditTab("pages") && (
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        setPageNoteDraft(noteBodyVal);
-                                        setIsEditingPageNote(true);
-                                      }}
-                                      className="px-2 py-0.5 rounded-lg bg-white hover:bg-stone-100 border border-stone-200 text-stone-700 text-[10.5px] font-extrabold whitespace-nowrap"
-                                    >
-                                      ✏️ 수정
-                                    </button>
-                                  )}
-                                </div>
-                              </div>
-                              <div
-                                onClick={() => {
-                                  if (!canEditTab("pages")) return;
-                                  setPageNoteDraft(noteBodyVal);
-                                  setIsEditingPageNote(true);
-                                }}
-                                className="text-[14px] leading-relaxed text-stone-800 whitespace-pre-wrap break-keep cursor-pointer"
-                                title={canEditTab("pages") ? "눌러서 자유롭게 수정" : undefined}
-                              >
-                                {noteBodyVal}
-                              </div>
+                            <div className="rounded-2xl border border-stone-200/90 bg-[#FAF8F3]/75 p-3.5 text-[14.5px] leading-relaxed text-stone-800 whitespace-pre-wrap break-keep">
+                              {noteBodyVal}
                             </div>
                           ) : null}
 
@@ -30817,36 +30907,22 @@ time: "", location: "",
                                 <span className="text-[11.5px] font-extrabold text-stone-600 whitespace-nowrap">
                                   📎 사진 · 파일 ({pageAttachments.length}/5)
                                 </span>
-                                <div className="flex items-center gap-1.5">
-                                  {canEditTab("pages") && !isEditingPageNote && !noteBodyVal.trim() && (
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        setPageNoteDraft("");
-                                        setIsEditingPageNote(true);
+                                {canEditTab("pages") && pageAttachments.length < 5 && (
+                                  <label className="px-2.5 py-1 rounded-lg bg-white hover:bg-stone-100 border border-stone-200 text-stone-700 text-[11px] font-extrabold cursor-pointer whitespace-nowrap">
+                                    📷 사진·파일 추가
+                                    <input
+                                      type="file"
+                                      multiple
+                                      accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt,.hwp"
+                                      className="hidden"
+                                      onChange={async (e) => {
+                                        const f = e.target.files;
+                                        await handlePageAttachFiles(f);
+                                        e.target.value = "";
                                       }}
-                                      className="px-2.5 py-1 rounded-lg bg-[#EEF3EE] hover:bg-[#DFE9E0] border border-[#C9D8CC] text-[#35503C] text-[11px] font-extrabold whitespace-nowrap"
-                                    >
-                                      📝 일기·글쓰기
-                                    </button>
-                                  )}
-                                  {canEditTab("pages") && pageAttachments.length < 5 && (
-                                    <label className="px-2.5 py-1 rounded-lg bg-white hover:bg-stone-100 border border-stone-200 text-stone-700 text-[11px] font-extrabold cursor-pointer whitespace-nowrap">
-                                      📷 사진·파일 추가
-                                      <input
-                                        type="file"
-                                        multiple
-                                        accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt,.hwp"
-                                        className="hidden"
-                                        onChange={async (e) => {
-                                          const f = e.target.files;
-                                          await handlePageAttachFiles(f);
-                                          e.target.value = "";
-                                        }}
-                                      />
-                                    </label>
-                                  )}
-                                </div>
+                                    />
+                                  </label>
+                                )}
                               </div>
 
                               {imgAttachments.length > 0 && (
@@ -30930,18 +31006,10 @@ time: "", location: "",
 
                     {/* 노션 스타일 블록 리스트 */}
                     <div className="space-y-2">
-                      {blocks.length === 0 && childPages.length === 0 && !String(currentPage.noteBody || "").trim() && !isEditingPageNote && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (!canEditTab("pages")) return;
-                            setPageNoteDraft("");
-                            setIsEditingPageNote(true);
-                          }}
-                          className="w-full py-5 px-4 text-center text-[12.5px] font-semibold text-stone-500 hover:text-[#35503C] bg-stone-50/70 hover:bg-[#EEF3EE]/50 rounded-2xl border border-dashed border-stone-300 transition"
-                        >
-                          여기를 눌러 성장일기나 메모를 자유롭게 쭉 작성해 보세요 ✏️
-                        </button>
+                      {blocks.length === 0 && childPages.length === 0 && !String(currentPage.noteBody || "").trim() && !canEditTab("pages") && (
+                        <div className="py-5 text-center text-[12.5px] font-semibold text-stone-400 bg-stone-50/70 rounded-2xl border border-dashed border-stone-200">
+                          아직 작성된 내용이 없습니다.
+                        </div>
                       )}
                       {blocks.map((blk, bIdx) => {
                         if (hideCompletedPageTodos && blk.type === "todo" && blk.checked) return null;
@@ -39895,7 +39963,7 @@ time: "", location: "",
             className="bg-white rounded-3xl max-w-xs w-full p-5 space-y-3 shadow-2xl"
           >
             <div className="flex items-center justify-between gap-2">
-              <h3 className="text-[14.5px] font-black text-stone-900">🔑 경조사비 비밀번호 변경</h3>
+              <h3 className="text-[13.5px] font-black text-stone-900">🔑 경조사비 비밀번호 변경</h3>
               <button
                 type="button"
                 onClick={() => setIsCondolencePinModalOpen(false)}
@@ -39945,7 +40013,7 @@ time: "", location: "",
               </button>
               <button
                 type="submit"
-                className="flex-[2] h-9 rounded-xl bg-stone-900 text-white text-[12.5px] font-black whitespace-nowrap"
+                className="flex-[2] h-9 rounded-xl bg-[#3F624D] hover:bg-[#35503C] text-white text-[12.5px] font-black whitespace-nowrap"
               >
                 변경 저장
               </button>
@@ -39983,7 +40051,7 @@ time: "", location: "",
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex items-center justify-between gap-2">
-                <h3 className="text-[13px] font-black text-stone-900 truncate min-w-0">
+                <h3 className="text-[13.5px] font-black text-stone-900 truncate min-w-0">
                   ⚙️ {kindMeta.title} 관리
                 </h3>
                 <div className="flex items-center gap-1 shrink-0">
@@ -41958,7 +42026,7 @@ time: "", location: "",
                   [{liveActivityPopup.actor === "아리나" ? "아리" : liveActivityPopup.actor}] {liveActivityPopup.category} {liveActivityPopup.action}
                 </div>
                 {liveActivityPopup.detail && (
-                  <div className="text-[12.5px] text-stone-700 truncate">{liveActivityPopup.detail}</div>
+                  <div className="text-[12.5px] text-stone-700 line-clamp-2 break-keep leading-snug">{liveActivityPopup.detail}</div>
                 )}
               </div>
             </div>
@@ -41999,7 +42067,7 @@ time: "", location: "",
                 setLiveActivityPopup(null);
                 setIsActivityModalOpen(true);
               }}
-              className="px-2.5 py-1 rounded-lg bg-stone-800 text-white text-[11.5px] font-extrabold whitespace-nowrap"
+              className="px-2.5 py-1 rounded-lg bg-[#EEF3EE] hover:bg-[#DFE9E0] border border-[#C9D8CC] text-[#35503C] text-[11.5px] font-extrabold whitespace-nowrap"
             >
               내역
             </button>
@@ -43569,7 +43637,7 @@ time: "", location: "",
                     onClick={() => setActivityActorFilter(ac)}
                     className={`h-6 px-2 rounded-full text-[11px] font-semibold border whitespace-nowrap shrink-0 transition ${
                       activityActorFilter === ac
-                        ? "bg-stone-800 text-white border-stone-800"
+                        ? "bg-[#3F624D] text-white border-[#3F624D]"
                         : "bg-white text-stone-600 border-stone-200 hover:bg-stone-50"
                     }`}
                   >
@@ -46701,7 +46769,7 @@ time: "", location: "",
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex items-center justify-between gap-2 pb-2 border-b border-stone-200 shrink-0">
-                <h3 className="text-[14.5px] font-black text-stone-900 truncate min-w-0">📌 홈 D-Day · 순서 설정</h3>
+                <h3 className="text-[13.5px] font-black text-stone-900 truncate min-w-0">📌 홈 D-Day · 순서 설정</h3>
                 <div className="flex items-center gap-1 shrink-0">
                   {homeMiniDdayIds.length > 0 && (
                     <button

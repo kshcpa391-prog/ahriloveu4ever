@@ -1181,7 +1181,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v14.01";
+export const APP_CODE_VERSION = "v14.04";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1199,7 +1199,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-25 08:35";
+export const APP_BUILD_DATE = "2026-11-25 09:05";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1268,6 +1268,39 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v14.04",
+    version: "v14.04",
+    date: "2026-11-25",
+    title: "🔔 알람·알림 종합 점검(타이머 상태바 연동·권한 자동 동기화·팝업 통일)",
+    highlights: [
+      "조리 타이머 완료 시 상태표시줄 무음 알림(showStatusBarNotification) 자동 발송 연동 및 React 업데이터 내부 중복 알림 버그 수정",
+      "브라우저/OS 설정에서 알림 권한 변경 후 앱으로 복귀 시 권한·SW 상태 즉시 자동 동기화(focus/visibilitychange)",
+      "실시간 알림 팝업(liveActivityPopup) 상세 내용 1줄 잘림(truncate) → 2줄 표시 개선 및 버튼·수정자 필터 색상 세이지 그린(#3F624D) 통일"
+    ]
+  },
+  {
+    id: "patch-v14.03",
+    version: "v14.03",
+    date: "2026-11-25",
+    title: "🧹 전체 모달 폰트·버튼 색상 통일 및 공유노트 복제·최근카드 고도화",
+    highlights: [
+      "경조사 비밀번호 변경·홈 D-Day 순서·세부 카테고리 관리 모달 제목 폰트 크기를 표준(13.5px)으로 통일 및 저장 버튼 세이지 그린(#3F624D) 적용",
+      "공유노트 최근 항목 카드에도 본문(📝)·첨부(📎) 배지 표시 및 페이지 복제 시 첨부파일 배열 안전 복사",
+      "전체 코드 구문·미선언 변수·CSS 오타·중복 UI 및 localStorage/Firebase 동기화 상태 최종 점검 완료"
+    ]
+  },
+  {
+    id: "patch-v14.02",
+    version: "v14.02",
+    date: "2026-11-25",
+    title: "✍️ 공유노트 상시 자유편집·커서 툴바 통합 및 불필요한 편집 버튼 제거",
+    highlights: [
+      "공유노트 상단 [✏️ 편집] 버튼 제거 및 일기 관련 문구 모두 정리 — 페이지에 들어오자마자 넓은 본문 입력칸에서 바로 작성·수정 가능(포커스 해제 시 자동 저장)",
+      "본문 입력칸에 커서를 올리면(# 제목, ☑️ 체크, B 굵게, + 체크블록, + 섹션, + 표, + 페이지, 📥 붙여넣기, ☑️ 여러개) 툴바가 줄바꿈(flex-wrap)으로 잘림 없이 즉시 표시",
+      "상단 고정 블록 편집 툴바 역시 flex-wrap 적용으로 '+ 페이지' 버튼 잘림 현상 해결"
+    ]
+  },
   {
     id: "patch-v14.01",
     version: "v14.01",
