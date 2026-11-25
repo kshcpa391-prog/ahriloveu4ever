@@ -1181,7 +1181,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v14.10";
+export const APP_CODE_VERSION = "v14.12";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1199,7 +1199,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-25 11:50";
+export const APP_BUILD_DATE = "2026-11-25 12:41";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1268,6 +1268,27 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v14.12",
+    version: "v14.12",
+    date: "2026-11-25",
+    title: "스마트 알림 항목별 발송 시간·기준·방해금지 시간 자유 설정",
+    changes: [
+      "시간 일정(5분~2시간 전), 오늘·내일 요약(시각 지정), 유통기한(D-1~D-7·시각 지정), 루틴(유효 창 30분~2시간), 수유 간격(2~4시간), 마감 할 일(시각 지정) 개별 커스터마이징 지원",
+      "야간 방해금지 시작·종료 시각을 사용자가 자유롭게 조정할 수 있도록 time 입력기 추가 및 Firebase 동기화"
+    ]
+  },
+  {
+    id: "patch-v14.11",
+    version: "v14.11",
+    date: "2026-11-25",
+    title: "일정·유통기한·루틴·수유 스마트 리마인더 및 설정 Firebase 동기화",
+    changes: [
+      "일정 임박(10/30/60분 전)·오늘/내일 요약·냉장고 유통기한 D-3·시간대 루틴·아기 수유 간격·마감 할 일 스마트 알림 스케줄러 추가",
+      "수정 알림 모달 내 '⚙️ 알림 항목' 접이식 설정 패널 및 야간 방해금지(22:00~07:30) 지원",
+      "스마트 알림 설정·무음 모드·상단 바 틀고정 상태 Firebase(family_meta_v4) 동기화 및 매거진 월 이동 버튼 줄바꿈 방지"
+    ]
+  },
   {
     id: "patch-v14.10",
     version: "v14.10",

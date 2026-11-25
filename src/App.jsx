@@ -4448,6 +4448,33 @@ function MainApp() {
   const [notifSilentMode, setNotifSilentMode] = useState(() => {
     try { return localStorage.getItem("kim_notif_silent_v1") === "true"; } catch (e) { return false; }
   });
+  const DEFAULT_SMART_NOTIF_PREFS = {
+    enabled: true,
+    scheduleTimed: true,
+    scheduleLeadMinutes: 30,
+    scheduleDaily: true,
+    scheduleDailyTime: "08:00",
+    fridgeExpiry: true,
+    fridgeExpiryDays: 3,
+    fridgeExpiryTime: "08:30",
+    routineSlot: true,
+    routineWindowMinutes: 90,
+    babyFeeding: false,
+    babyFeedingIntervalHours: 3,
+    todosDue: true,
+    todosDueTime: "09:00",
+    quietHoursEnabled: true,
+    quietStart: "22:00",
+    quietEnd: "07:30"
+  };
+  const [smartNotifPrefs, setSmartNotifPrefs] = useState(() => {
+    try {
+      const raw = JSON.parse(localStorage.getItem("kim_smart_notif_prefs_v1") || "null");
+      if (raw && typeof raw === "object") return { ...DEFAULT_SMART_NOTIF_PREFS, ...raw };
+    } catch (e) {}
+    return DEFAULT_SMART_NOTIF_PREFS;
+  });
+  const [isNotifSettingsOpen, setIsNotifSettingsOpen] = useState(false);
   const lastNotifErrorRef = useRef("");
   const refreshSwStatus = async () => {
     if (typeof navigator === "undefined" || !("serviceWorker" in navigator)) {
@@ -4558,7 +4585,10 @@ function MainApp() {
             if (typeof reg.getNotifications === "function") {
               const existing = await reg.getNotifications();
               existing.forEach((n) => {
-                if (String(tag).startsWith("test-notif") && String(n.tag || "").startsWith("test-notif")) {
+                if (
+                  (String(tag).startsWith("test-notif") && String(n.tag || "").startsWith("test-notif")) ||
+                  (String(tag).startsWith("test-bg") && String(n.tag || "").startsWith("test-bg"))
+                ) {
                   try { n.close(); } catch (err) {}
                 }
               });
@@ -8329,6 +8359,10 @@ function MainApp() {
             setActivityPopupEnabled(d.activityPopupEnabled);
             try { localStorage.setItem("kim_activity_popup_enabled_v1", String(d.activityPopupEnabled)); } catch (e) {}
           }
+          if (typeof d?.headerPinned === "boolean") {
+            setIsHeaderPinned(d.headerPinned);
+            try { localStorage.setItem("kim_header_pinned", String(d.headerPinned)); } catch (e) {}
+          }
           if (d?.routineViewMode === "card" || d?.routineViewMode === "timetable") {
             setRoutineViewMode(d.routineViewMode);
             try { localStorage.setItem("kim_routine_view_mode_v1", d.routineViewMode); } catch (e) {}
@@ -8522,6 +8556,28 @@ function MainApp() {
 
 
 
+
+    unsubscribers.push(
+      onSnapshot(
+        getDocRef("family_meta_v4", "notif_prefs_v1"),
+        (snap) => {
+          if (!snap.exists()) return;
+          const d = snap.data() || {};
+          if (typeof d.silentMode === "boolean") {
+            setNotifSilentMode(d.silentMode);
+            try { localStorage.setItem("kim_notif_silent_v1", d.silentMode ? "true" : "false"); } catch (e) {}
+          }
+          if (d.smartPrefs && typeof d.smartPrefs === "object") {
+            setSmartNotifPrefs((prev) => {
+              const merged = { ...DEFAULT_SMART_NOTIF_PREFS, ...prev, ...d.smartPrefs };
+              try { localStorage.setItem("kim_smart_notif_prefs_v1", JSON.stringify(merged)); } catch (e) {}
+              return merged;
+            });
+          }
+        },
+        () => {}
+      )
+    );
 
     unsubscribers.push(
       onSnapshot(
@@ -8962,6 +9018,9 @@ function MainApp() {
     const next = !isHeaderPinned;
     setIsHeaderPinned(next);
     try { localStorage.setItem("kim_header_pinned", String(next)); } catch (e) {}
+    if (user && db) {
+      setDoc(getDocRef("family_meta_v4", "home_layout"), { headerPinned: next, updatedAtMs: Date.now() }, { merge: true }).catch(() => {});
+    }
     showToast(
       next
         ? "상단 바 틀고정이 설정되었습니다 (스크롤 시 따라옴)"
@@ -9730,6 +9789,199 @@ function MainApp() {
 
     return [...famList, ...privList].sort((a, b) => (a.calc.daysUntil - b.calc.daysUntil) || String(a.time || "99:99").localeCompare(String(b.time || "99:99")));
   }, [schedules, privateSchedules, isAdminUnlocked, currentAdminOwner, currentDayKey]);
+
+  const saveSmartNotifPrefs = (patchOrFn) => {
+    setSmartNotifPrefs((prev) => {
+      const next = typeof patchOrFn === "function" ? patchOrFn(prev) : { ...prev, ...patchOrFn };
+      try { localStorage.setItem("kim_smart_notif_prefs_v1", JSON.stringify(next)); } catch (e) {}
+      if (user && db) {
+        setDoc(getDocRef("family_meta_v4", "notif_prefs_v1"), { smartPrefs: next, updatedAtMs: Date.now() }, { merge: true }).catch(() => {});
+      }
+      return next;
+    });
+  };
+
+  useEffect(() => {
+    if (!user || !isApprovedUser || accessRole === "guest" || !smartNotifPrefs?.enabled) return;
+    if (typeof Notification === "undefined" || Notification.permission !== "granted") return;
+
+    const toMin = (hhmm) => {
+      const m = String(hhmm || "").trim().match(/^(\d{1,2}):(\d{2})$/);
+      if (!m) return null;
+      return Number(m[1]) * 60 + Number(m[2]);
+    };
+    const isQuietNow = (nowMin) => {
+      if (!smartNotifPrefs.quietHoursEnabled) return false;
+      const qs = toMin(smartNotifPrefs.quietStart || "22:00");
+      const qe = toMin(smartNotifPrefs.quietEnd || "07:30");
+      if (qs === null || qe === null) return false;
+      return qs > qe ? (nowMin >= qs || nowMin < qe) : (nowMin >= qs && nowMin < qe);
+    };
+    const readSentMap = () => {
+      try {
+        const raw = JSON.parse(localStorage.getItem("kim_smart_notif_sent_v1") || "{}") || {};
+        const cutoff = Date.now() - 48 * 3600 * 1000;
+        const cleaned = {};
+        Object.keys(raw).forEach((k) => { if (Number(raw[k]) > cutoff) cleaned[k] = raw[k]; });
+        return cleaned;
+      } catch (e) { return {}; }
+    };
+    const markSent = (sentMap, key) => {
+      sentMap[key] = Date.now();
+      try { localStorage.setItem("kim_smart_notif_sent_v1", JSON.stringify(sentMap)); } catch (e) {}
+    };
+
+    const runSmartCheck = async () => {
+      const now = new Date();
+      const nowMin = now.getHours() * 60 + now.getMinutes();
+      if (isQuietNow(nowMin)) return;
+      const todayStr = getTodayStr();
+      const sentMap = readSentMap();
+      const leadMin = Number(smartNotifPrefs.scheduleLeadMinutes) || 30;
+
+      // 1. 시간 지정 일정 임박 알림
+      if (smartNotifPrefs.scheduleTimed) {
+        const timedPool = [
+          ...schedules.filter((s) => !s.done && s.date === todayStr && s.time),
+          ...(isAdminUnlocked ? privateSchedules.filter((p) => !p.done && (p.owner || "수혁") === currentAdminOwner && p.date === todayStr && p.time) : [])
+        ];
+        for (const ev of timedPool) {
+          const evMin = toMin(ev.time);
+          if (evMin === null) continue;
+          const diff = evMin - nowMin;
+          if (diff >= 0 && diff <= leadMin) {
+            const key = `sched-timed-${todayStr}-${ev.id || ev.title}-${ev.time}`;
+            if (!sentMap[key]) {
+              markSent(sentMap, key);
+              const whenTxt = diff <= 1 ? "지금 시작" : `${diff}분 후`;
+              await showStatusBarNotification(
+                `⏰ [${ev.time}] ${ev.title || "예정된 일정"}`,
+                `${whenTxt} 예정된 일정이 있습니다.`,
+                key
+              );
+            }
+          }
+        }
+      }
+
+      // 2. 오늘·내일 종일 일정·기념일 요약
+      const dailyAtMin = toMin(smartNotifPrefs.scheduleDailyTime || "08:00") ?? 480;
+      if (smartNotifPrefs.scheduleDaily && nowMin >= dailyAtMin) {
+        const key = `sched-daily-${todayStr}`;
+        if (!sentMap[key]) {
+          const soon = imminentSchedulesWithin3Days.filter((s) => s.calc && s.calc.daysUntil <= 1);
+          if (soon.length > 0) {
+            markSent(sentMap, key);
+            const preview = soon.slice(0, 3).map((s) => `${s.calc.dDayText || "오늘"} ${s.title}`).join(" · ");
+            await showStatusBarNotification(
+              `📅 오늘·내일 일정 ${soon.length}건`,
+              preview,
+              key
+            );
+          }
+        }
+      }
+
+      // 3. 냉장고 유통기한 임박
+      const fridgeAtMin = toMin(smartNotifPrefs.fridgeExpiryTime || "08:30") ?? 510;
+      const fridgeDays = Math.max(0, Number(smartNotifPrefs.fridgeExpiryDays ?? 3));
+      if (smartNotifPrefs.fridgeExpiry && nowMin >= fridgeAtMin) {
+        const key = `fridge-exp-${todayStr}-d${fridgeDays}`;
+        if (!sentMap[key]) {
+          const expList = fridge.filter((f) => Number(f.quantity || 0) > 0 && f.expiryDate && getDaysDiff(f.expiryDate) >= 0 && getDaysDiff(f.expiryDate) <= fridgeDays);
+          if (expList.length > 0) {
+            markSent(sentMap, key);
+            const names = expList.slice(0, 3).map((f) => `${f.name}(D-${getDaysDiff(f.expiryDate)})`).join(", ");
+            await showStatusBarNotification(
+              `🥬 냉장고 유통기한 임박 ${expList.length}건`,
+              `${names}${expList.length > 3 ? ` 외 ${expList.length - 3}건` : ""}`,
+              key
+            );
+          }
+        }
+      }
+
+      // 4. 시간대별 미완료 루틴
+      const routineWin = Math.max(15, Number(smartNotifPrefs.routineWindowMinutes) || 90);
+      if (smartNotifPrefs.routineSlot && Array.isArray(routineSlotDefs)) {
+        const isWknd = now.getDay() === 0 || now.getDay() === 6;
+        for (const slot of routineSlotDefs) {
+          const sMin = toMin(slot.time);
+          if (sMin === null) continue;
+          if (nowMin >= sMin && nowMin <= sMin + routineWin) {
+            const key = `routine-${todayStr}-${slot.label}`;
+            if (!sentMap[key]) {
+              const pending = familyRoutines.filter((r) => {
+                if (isRoutineDoneNow(r)) return false;
+                const ts = r.timeSlot || "공통";
+                if (ts !== slot.label) return false;
+                if (r.dayType === "weekday" && isWknd) return false;
+                if (r.dayType === "weekend" && !isWknd) return false;
+                return true;
+              });
+              if (pending.length > 0) {
+                markSent(sentMap, key);
+                await showStatusBarNotification(
+                  `✅ [${slot.label}] 미완료 루틴 ${pending.length}건`,
+                  pending.slice(0, 3).map((r) => r.title).join(" · "),
+                  key
+                );
+              }
+            }
+          }
+        }
+      }
+
+      // 5. 아기 수유 간격 알림
+      if (smartNotifPrefs.babyFeeding) {
+        const targetChild = selectedChildId || "시율";
+        const feeds = babyActivities.filter((a) => a.childId === targetChild && !a.inProgress && ["모유", "분유", "유축수유"].includes(a.type));
+        if (feeds.length > 0) {
+          const latest = feeds[0];
+          const elapsedHrs = (Date.now() - Number(latest.startMs || 0)) / 3600000;
+          const threshold = Number(smartNotifPrefs.babyFeedingIntervalHours) || 3;
+          if (elapsedHrs >= threshold && elapsedHrs < 12) {
+            const key = `feed-${targetChild}-${latest.id || latest.startMs}-${threshold}`;
+            if (!sentMap[key]) {
+              markSent(sentMap, key);
+              await showStatusBarNotification(
+                `🍼 [${targetChild}] 수유 시간 안내`,
+                `마지막 수유 후 ${Math.floor(elapsedHrs)}시간 ${Math.round((elapsedHrs % 1) * 60)}분이 지났습니다.`,
+                key
+              );
+            }
+          }
+        }
+      }
+
+      // 6. 오늘 마감 미완료 할 일
+      const todosAtMin = toMin(smartNotifPrefs.todosDueTime || "09:00") ?? 540;
+      if (smartNotifPrefs.todosDue && nowMin >= todosAtMin) {
+        const key = `todos-due-${todayStr}`;
+        if (!sentMap[key]) {
+          const dueTodos = schedules.filter((s) => s.category === "할일(To-Do)" && !s.done && s.date && s.date <= todayStr);
+          if (dueTodos.length > 0) {
+            markSent(sentMap, key);
+            await showStatusBarNotification(
+              `📝 마감 임박 할 일 ${dueTodos.length}건`,
+              dueTodos.slice(0, 3).map((t) => t.title).join(" · "),
+              key
+            );
+          }
+        }
+      }
+    };
+
+    const initTid = setTimeout(runSmartCheck, 4000);
+    const intervalTid = setInterval(runSmartCheck, 60000);
+    const onVis = () => { if (document.visibilityState === "visible") runSmartCheck(); };
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      clearTimeout(initTid);
+      clearInterval(intervalTid);
+      document.removeEventListener("visibilitychange", onVis);
+    };
+  }, [user, isApprovedUser, accessRole, smartNotifPrefs, schedules, privateSchedules, isAdminUnlocked, currentAdminOwner, imminentSchedulesWithin3Days, fridge, routineSlotDefs, familyRoutines, babyActivities, selectedChildId, notifSilentMode]);
 
   // 1,800+건 개인일정 O(1) 날짜 인덱싱 (달력 렌더링·스와이프 초고속화)
   const myPrivateScheduleIndex = useMemo(() => {
@@ -44670,7 +44922,7 @@ time: "", location: "",
                   <div className="text-[15.5px] font-black truncate">📰 {yearNum}년 {monthNum}월 성장 매거진</div>
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
-                  <button type="button" onClick={() => shiftMagazineMonth(-1)} className="px-2 py-1 rounded-lg bg-white/15 hover:bg-white/25 text-[12px] font-bold">◀</button>
+                  <button type="button" onClick={() => shiftMagazineMonth(-1)} className="px-2 py-1 rounded-lg bg-white whitespace-nowrap shrink-0/15 hover:bg-white/25 text-[12px] font-bold">◀</button>
                   <button
                     type="button"
                     disabled={ym >= getTodayStr().slice(0, 7)}
@@ -44986,6 +45238,9 @@ time: "", location: "",
                     const nextSilent = !notifSilentMode;
                     setNotifSilentMode(nextSilent);
                     try { localStorage.setItem("kim_notif_silent_v1", nextSilent ? "true" : "false"); } catch (e) {}
+                    if (user && db) {
+                      setDoc(getDocRef("family_meta_v4", "notif_prefs_v1"), { silentMode: nextSilent, updatedAtMs: Date.now() }, { merge: true }).catch(() => {});
+                    }
                     showToast(nextSilent ? "🔕 상태바 알림을 무음 모드로 설정했습니다." : "🔔 상태바 알림을 일반 모드로 설정했습니다.");
                   }}
                   className={`h-7 px-2 rounded-lg text-[10.5px] font-extrabold border whitespace-nowrap ${
@@ -45018,6 +45273,17 @@ time: "", location: "",
                   }`}
                 >
                   {activityPopupEnabled ? "🔔 팝업 ON" : "🔕 팝업 OFF"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsNotifSettingsOpen((v) => !v)}
+                  className={`h-7 px-2 rounded-lg text-[10.5px] font-extrabold border whitespace-nowrap ${
+                    isNotifSettingsOpen
+                      ? "bg-[#3F624D] text-white border-[#3F624D]"
+                      : "bg-stone-100 text-stone-700 border-stone-200 hover:bg-stone-200"
+                  }`}
+                >
+                  ⚙️ 알림 항목
                 </button>
                 {isAdminUnlocked && recentActivities.length > 0 && (
                   <button
@@ -45057,6 +45323,202 @@ time: "", location: "",
                 )}
               </div>
             </div>
+
+            {isNotifSettingsOpen && (
+              <div className="rounded-xl border border-stone-200 bg-stone-50/95 p-2.5 space-y-1.5 shrink-0 text-[11px] max-h-[38vh] overflow-y-auto">
+                <div className="flex items-center justify-between gap-2 pb-1 border-b border-stone-200/80">
+                  <span className="font-black text-stone-800 whitespace-nowrap">⏰ 항목별 알림·시간 설정</span>
+                  <button
+                    type="button"
+                    onClick={() => saveSmartNotifPrefs((p) => ({ ...p, enabled: !p.enabled }))}
+                    className={`h-6 px-2.5 rounded-full text-[10.5px] font-extrabold border whitespace-nowrap shrink-0 ${
+                      smartNotifPrefs.enabled ? "bg-[#3F624D] text-white border-[#3F624D]" : "bg-white text-stone-500 border-stone-200"
+                    }`}
+                  >
+                    {smartNotifPrefs.enabled ? "전체 ON" : "전체 OFF"}
+                  </button>
+                </div>
+                {smartNotifPrefs.enabled && (
+                  <div className="space-y-1.5">
+                    {/* 1. 시간 지정 일정 */}
+                    <div className="flex items-center justify-between gap-1.5 bg-white rounded-lg border border-stone-200/80 px-2 py-1">
+                      <button
+                        type="button"
+                        onClick={() => saveSmartNotifPrefs((p) => ({ ...p, scheduleTimed: !p.scheduleTimed }))}
+                        className="flex items-center gap-1.5 font-bold text-stone-700 whitespace-nowrap min-w-0"
+                      >
+                        <span className={`w-2 h-2 rounded-full shrink-0 ${smartNotifPrefs.scheduleTimed ? "bg-[#3F624D]" : "bg-stone-300"}`} />
+                        <span>⏰ 시간 일정</span>
+                      </button>
+                      {smartNotifPrefs.scheduleTimed && (
+                        <select
+                          value={Number(smartNotifPrefs.scheduleLeadMinutes) || 30}
+                          onChange={(e) => saveSmartNotifPrefs({ scheduleLeadMinutes: Number(e.target.value) })}
+                          className="h-6 px-1.5 rounded border border-stone-200 bg-stone-50 text-[10.5px] font-bold text-stone-700 shrink-0"
+                        >
+                          <option value={5}>5분 전</option>
+                          <option value={10}>10분 전</option>
+                          <option value={15}>15분 전</option>
+                          <option value={30}>30분 전</option>
+                          <option value={60}>1시간 전</option>
+                          <option value={120}>2시간 전</option>
+                        </select>
+                      )}
+                    </div>
+
+                    {/* 2. 오늘·내일 요약 */}
+                    <div className="flex items-center justify-between gap-1.5 bg-white rounded-lg border border-stone-200/80 px-2 py-1">
+                      <button
+                        type="button"
+                        onClick={() => saveSmartNotifPrefs((p) => ({ ...p, scheduleDaily: !p.scheduleDaily }))}
+                        className="flex items-center gap-1.5 font-bold text-stone-700 whitespace-nowrap min-w-0"
+                      >
+                        <span className={`w-2 h-2 rounded-full shrink-0 ${smartNotifPrefs.scheduleDaily ? "bg-[#3F624D]" : "bg-stone-300"}`} />
+                        <span>📅 오늘·내일 요약</span>
+                      </button>
+                      {smartNotifPrefs.scheduleDaily && (
+                        <input
+                          type="time"
+                          value={smartNotifPrefs.scheduleDailyTime || "08:00"}
+                          onChange={(e) => saveSmartNotifPrefs({ scheduleDailyTime: e.target.value || "08:00" })}
+                          className="h-6 px-1.5 rounded border border-stone-200 bg-stone-50 text-[10.5px] font-bold text-stone-700 shrink-0"
+                        />
+                      )}
+                    </div>
+
+                    {/* 3. 냉장고 유통기한 */}
+                    <div className="flex items-center justify-between gap-1.5 bg-white rounded-lg border border-stone-200/80 px-2 py-1">
+                      <button
+                        type="button"
+                        onClick={() => saveSmartNotifPrefs((p) => ({ ...p, fridgeExpiry: !p.fridgeExpiry }))}
+                        className="flex items-center gap-1.5 font-bold text-stone-700 whitespace-nowrap min-w-0"
+                      >
+                        <span className={`w-2 h-2 rounded-full shrink-0 ${smartNotifPrefs.fridgeExpiry ? "bg-[#3F624D]" : "bg-stone-300"}`} />
+                        <span>🥬 유통기한</span>
+                      </button>
+                      {smartNotifPrefs.fridgeExpiry && (
+                        <div className="flex items-center gap-1 shrink-0">
+                          <select
+                            value={Number(smartNotifPrefs.fridgeExpiryDays ?? 3)}
+                            onChange={(e) => saveSmartNotifPrefs({ fridgeExpiryDays: Number(e.target.value) })}
+                            className="h-6 px-1 rounded border border-stone-200 bg-stone-50 text-[10.5px] font-bold text-stone-700"
+                          >
+                            <option value={1}>D-1</option>
+                            <option value={3}>D-3</option>
+                            <option value={5}>D-5</option>
+                            <option value={7}>D-7</option>
+                          </select>
+                          <input
+                            type="time"
+                            value={smartNotifPrefs.fridgeExpiryTime || "08:30"}
+                            onChange={(e) => saveSmartNotifPrefs({ fridgeExpiryTime: e.target.value || "08:30" })}
+                            className="h-6 px-1 rounded border border-stone-200 bg-stone-50 text-[10.5px] font-bold text-stone-700"
+                          />
+                        </div>
+                      )}
+                    </div>
+
+                    {/* 4. 시간대 루틴 */}
+                    <div className="flex items-center justify-between gap-1.5 bg-white rounded-lg border border-stone-200/80 px-2 py-1">
+                      <button
+                        type="button"
+                        onClick={() => saveSmartNotifPrefs((p) => ({ ...p, routineSlot: !p.routineSlot }))}
+                        className="flex items-center gap-1.5 font-bold text-stone-700 whitespace-nowrap min-w-0"
+                      >
+                        <span className={`w-2 h-2 rounded-full shrink-0 ${smartNotifPrefs.routineSlot ? "bg-[#3F624D]" : "bg-stone-300"}`} />
+                        <span>✅ 시간대 루틴</span>
+                      </button>
+                      {smartNotifPrefs.routineSlot && (
+                        <select
+                          value={Number(smartNotifPrefs.routineWindowMinutes) || 90}
+                          onChange={(e) => saveSmartNotifPrefs({ routineWindowMinutes: Number(e.target.value) })}
+                          className="h-6 px-1.5 rounded border border-stone-200 bg-stone-50 text-[10.5px] font-bold text-stone-700 shrink-0"
+                        >
+                          <option value={30}>시작+30분</option>
+                          <option value={60}>시작+1시간</option>
+                          <option value={90}>시작+1.5시간</option>
+                          <option value={120}>시작+2시간</option>
+                        </select>
+                      )}
+                    </div>
+
+                    {/* 5. 아기 수유 간격 */}
+                    <div className="flex items-center justify-between gap-1.5 bg-white rounded-lg border border-stone-200/80 px-2 py-1">
+                      <button
+                        type="button"
+                        onClick={() => saveSmartNotifPrefs((p) => ({ ...p, babyFeeding: !p.babyFeeding }))}
+                        className="flex items-center gap-1.5 font-bold text-stone-700 whitespace-nowrap min-w-0"
+                      >
+                        <span className={`w-2 h-2 rounded-full shrink-0 ${smartNotifPrefs.babyFeeding ? "bg-[#3F624D]" : "bg-stone-300"}`} />
+                        <span>🍼 수유 간격</span>
+                      </button>
+                      {smartNotifPrefs.babyFeeding && (
+                        <select
+                          value={Number(smartNotifPrefs.babyFeedingIntervalHours) || 3}
+                          onChange={(e) => saveSmartNotifPrefs({ babyFeedingIntervalHours: Number(e.target.value) })}
+                          className="h-6 px-1.5 rounded border border-stone-200 bg-stone-50 text-[10.5px] font-bold text-stone-700 shrink-0"
+                        >
+                          <option value={2}>2시간마다</option>
+                          <option value={2.5}>2시간 30분</option>
+                          <option value={3}>3시간마다</option>
+                          <option value={3.5}>3시간 30분</option>
+                          <option value={4}>4시간마다</option>
+                        </select>
+                      )}
+                    </div>
+
+                    {/* 6. 마감 할 일 */}
+                    <div className="flex items-center justify-between gap-1.5 bg-white rounded-lg border border-stone-200/80 px-2 py-1">
+                      <button
+                        type="button"
+                        onClick={() => saveSmartNotifPrefs((p) => ({ ...p, todosDue: !p.todosDue }))}
+                        className="flex items-center gap-1.5 font-bold text-stone-700 whitespace-nowrap min-w-0"
+                      >
+                        <span className={`w-2 h-2 rounded-full shrink-0 ${smartNotifPrefs.todosDue ? "bg-[#3F624D]" : "bg-stone-300"}`} />
+                        <span>📝 마감 할 일</span>
+                      </button>
+                      {smartNotifPrefs.todosDue && (
+                        <input
+                          type="time"
+                          value={smartNotifPrefs.todosDueTime || "09:00"}
+                          onChange={(e) => saveSmartNotifPrefs({ todosDueTime: e.target.value || "09:00" })}
+                          className="h-6 px-1.5 rounded border border-stone-200 bg-stone-50 text-[10.5px] font-bold text-stone-700 shrink-0"
+                        />
+                      )}
+                    </div>
+
+                    {/* 7. 야간 방해금지 시간대 */}
+                    <div className="flex items-center justify-between gap-1.5 bg-white rounded-lg border border-stone-200/80 px-2 py-1 flex-wrap">
+                      <button
+                        type="button"
+                        onClick={() => saveSmartNotifPrefs((p) => ({ ...p, quietHoursEnabled: !p.quietHoursEnabled }))}
+                        className="flex items-center gap-1.5 font-bold text-stone-700 whitespace-nowrap"
+                      >
+                        <span className={`w-2 h-2 rounded-full shrink-0 ${smartNotifPrefs.quietHoursEnabled ? "bg-[#3F624D]" : "bg-stone-300"}`} />
+                        <span>🌙 방해금지</span>
+                      </button>
+                      {smartNotifPrefs.quietHoursEnabled && (
+                        <div className="flex items-center gap-1 shrink-0">
+                          <input
+                            type="time"
+                            value={smartNotifPrefs.quietStart || "22:00"}
+                            onChange={(e) => saveSmartNotifPrefs({ quietStart: e.target.value || "22:00" })}
+                            className="h-6 px-1 rounded border border-stone-200 bg-stone-50 text-[10.5px] font-bold text-stone-700"
+                          />
+                          <span className="text-stone-400">~</span>
+                          <input
+                            type="time"
+                            value={smartNotifPrefs.quietEnd || "07:30"}
+                            onChange={(e) => saveSmartNotifPrefs({ quietEnd: e.target.value || "07:30" })}
+                            className="h-6 px-1 rounded border border-stone-200 bg-stone-50 text-[10.5px] font-bold text-stone-700"
+                          />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
             <div className="flex items-center gap-1 overflow-x-auto no-scrollbar py-0.5 shrink-0">
               {allCats.map((cat) => {
