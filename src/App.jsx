@@ -221,6 +221,20 @@ const isDiaryTextStyleCustom = (ts) => {
 };
 
 const DIARY_SIZE_PX = { sm: "12.5px", base: "14.5px", lg: "17px", xl: "20px" };
+const FINE_FONT_PRESETS = [12, 14.5, 17, 20, 24];
+const resolveFontSizePx = (sizeVal, fallbackPx = 14.5) => {
+  if (sizeVal === undefined || sizeVal === null || sizeVal === "") return fallbackPx;
+  if (typeof sizeVal === "string" && DIARY_SIZE_PX[sizeVal]) {
+    return parseFloat(DIARY_SIZE_PX[sizeVal]);
+  }
+  const num = parseFloat(String(sizeVal).replace(/px$/i, ""));
+  if (!Number.isFinite(num)) return fallbackPx;
+  return Math.max(11, Math.min(28, Math.round(num * 10) / 10));
+};
+const getDiaryTextStyleObj = (ts) => {
+  if (!ts || !ts.size || ts.size === "base") return undefined;
+  return { fontSize: `${resolveFontSizePx(ts.size)}px` };
+};
 
 const plainTextToDiaryHtml = (txt) =>
   String(txt || "")
@@ -315,7 +329,7 @@ const sanitizeSharedNoteHtml = (rawHtml) => {
     const doc = new DOMParser().parseFromString(`<div>${str}</div>`, "text/html");
     const root = doc.body.firstChild;
     const ALLOWED_TAGS = new Set([
-      "DIV", "P", "BR", "STRONG", "B", "EM", "I", "U", "SPAN",
+      "DIV", "P", "BR", "STRONG", "B", "EM", "I", "U", "SPAN", "IMG",
       "TABLE", "THEAD", "TBODY", "TR", "TH", "TD", "H1", "H2", "H3", "H4"
     ]);
     const walk = (node) => {
@@ -329,6 +343,22 @@ const sanitizeSharedNoteHtml = (rawHtml) => {
       const inner = Array.from(node.childNodes).map(walk).join("");
       if (!ALLOWED_TAGS.has(tag)) return inner;
 
+      if (tag === "IMG") {
+        const rawSrc = String(node.getAttribute("src") || "");
+        if (!/^data:image\//i.test(rawSrc) && !/^https:\/\//i.test(rawSrc)) return "";
+        const alt = escSnHtml(node.getAttribute("alt") || "첨부 사진");
+        return `<img src="${escSnHtml(rawSrc)}" alt="${alt}" />`;
+      }
+      if (tag === "SPAN" && (node.getAttribute("data-sn-embed") === "image" || node.getAttribute("data-sn-embed") === "file")) {
+        const kind = node.getAttribute("data-sn-embed");
+        const attId = escSnHtml(node.getAttribute("data-att-id") || "");
+        const attName = escSnHtml(node.getAttribute("data-name") || (kind === "image" ? "사진" : "파일"));
+        const attSize = escSnHtml(node.getAttribute("data-size") || "0");
+        if (kind === "image") {
+          return `<span class="sn-embed-card sn-embed-img" data-sn-embed="image" data-att-id="${attId}" data-name="${attName}" contenteditable="false">${inner}</span>`;
+        }
+        return `<span class="sn-embed-card sn-embed-file" data-sn-embed="file" data-att-id="${attId}" data-name="${attName}" data-size="${attSize}" contenteditable="false">📄 ${attName}</span>`;
+      }
       if (tag === "SPAN") {
         const st = node.style;
         const safeParts = [];
@@ -440,6 +470,14 @@ const noteHtmlToPlainMarkdown = (rawHtml) => {
       if (node.nodeType !== 1) return "";
       const tag = node.tagName.toUpperCase();
       if (tag === "BR") return "\n";
+      if (tag === "SPAN" && node.getAttribute("data-sn-embed") === "image") {
+        const nm = node.getAttribute("data-name") || "사진";
+        return ` [📷 ${nm}] `;
+      }
+      if (tag === "SPAN" && node.getAttribute("data-sn-embed") === "file") {
+        const nm = node.getAttribute("data-name") || "파일";
+        return ` [📎 ${nm}] `;
+      }
       const txt = Array.from(node.childNodes).map(inlineText).join("");
       if (tag === "STRONG" || tag === "B") return txt.trim() ? `**${txt}**` : "";
       if (tag === "EM" || tag === "I") return txt.trim() ? `*${txt}*` : "";
@@ -653,6 +691,42 @@ const SHARED_NOTE_EDITOR_CSS = `
   background: #FAF8F3;
   box-shadow: inset 0 0 0 1.5px #3F624D;
 }
+.sn-editor .sn-embed-card {
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
+  margin: 3px 5px 3px 0;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.sn-editor .sn-embed-img {
+  width: 68px;
+  height: 68px;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1.5px solid #d6d3d1;
+  background: #fafaf9;
+}
+.sn-editor .sn-embed-img img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.sn-editor .sn-embed-file {
+  padding: 4px 9px;
+  border-radius: 8px;
+  border: 1px solid #c9d8cc;
+  background: #eef3ee;
+  color: #35503c;
+  font-size: 12px;
+  font-weight: 700;
+  max-width: 230px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 `;
 
 const SharedNoteRichEditor = React.memo(({
@@ -674,6 +748,9 @@ const SharedNoteRichEditor = React.memo(({
   onRegisterSchedule,
   onCopyMarkdown,
   onAttachTrigger,
+  onInlineAttachFiles,
+  onOpenImageLightbox,
+  inlineEmbedInsertRef,
   showToast,
   canEditSchedule
 }) => {
@@ -687,6 +764,8 @@ const SharedNoteRichEditor = React.memo(({
   const historyRef = useRef({ stack: [], index: -1 });
   const isFocusedRef = useRef(false);
   const activeTableCellRef = useRef(null);
+  const inlineImgInputRef = useRef(null);
+  const inlineFileInputRef = useRef(null);
 
   const [isEditing, setIsEditing] = useState(false);
   const [activePanel, setActivePanel] = useState(""); // "" | "format" | "insert" | "more"
@@ -701,6 +780,7 @@ const SharedNoteRichEditor = React.memo(({
     heading: false,
     todo: false,
     size: "base",
+    sizePx: 14.5,
     textColor: "default",
     bgColor: "none"
   });
@@ -776,7 +856,7 @@ const SharedNoteRichEditor = React.memo(({
       const cs = window.getComputedStyle(cur);
       const fw = cs.fontWeight;
       isBold = fw === "bold" || Number(fw) >= 600 || Boolean(cur.closest("strong, b"));
-      const px = parseFloat(cs.fontSize || "14.5");
+      const px = resolveFontSizePx(parseFloat(cs.fontSize || "14.5"), 14.5);
       if (px <= 13) sizeKey = "sm";
       else if (px >= 19) sizeKey = "xl";
       else if (px >= 16) sizeKey = "lg";
@@ -807,11 +887,14 @@ const SharedNoteRichEditor = React.memo(({
       });
     } catch (e) {}
 
+    let computedPx = 14.5;
+    try { computedPx = resolveFontSizePx(window.getComputedStyle(cur).fontSize, 14.5); } catch (e) {}
     setActiveFmt({
       bold: isBold,
       heading: isHeading,
       todo: isTodo,
       size: sizeKey,
+      sizePx: computedPx,
       textColor: textColorKey,
       bgColor: bgColorKey
     });
@@ -1068,7 +1151,11 @@ const SharedNoteRichEditor = React.memo(({
 
     const buildSpan = () => {
       const span = document.createElement("span");
-      if (patch.size && SN_SIZE_PX[patch.size]) span.style.fontSize = SN_SIZE_PX[patch.size];
+      if (patch.sizePx !== undefined) {
+        span.style.fontSize = `${resolveFontSizePx(patch.sizePx)}px`;
+      } else if (patch.size && SN_SIZE_PX[patch.size]) {
+        span.style.fontSize = SN_SIZE_PX[patch.size];
+      }
       if (patch.textColor) span.style.color = SN_TEXT_HEX[patch.textColor] || SN_TEXT_HEX.default;
       if (patch.bgColor !== undefined) {
         const bgHex = SN_BG_HEX[patch.bgColor] || "";
@@ -1291,6 +1378,52 @@ const SharedNoteRichEditor = React.memo(({
     persistEditorContent(false);
   };
 
+  const insertInlineEmbedAtCursor = (att) => {
+    const el = editorRef.current;
+    if (!el || !att) return;
+    const range = restoreSelection();
+    if (!range) return;
+    const isImg = String(att.mimeType || "").startsWith("image/") || /^data:image\//.test(String(att.dataUrl || ""));
+    const span = document.createElement("span");
+    span.className = isImg ? "sn-embed-card sn-embed-img" : "sn-embed-card sn-embed-file";
+    span.setAttribute("data-sn-embed", isImg ? "image" : "file");
+    span.setAttribute("data-att-id", String(att.id || ""));
+    span.setAttribute("data-name", String(att.name || (isImg ? "사진" : "파일")));
+    if (!isImg) span.setAttribute("data-size", String(att.size || 0));
+    span.setAttribute("contenteditable", "false");
+    if (isImg) {
+      const img = document.createElement("img");
+      img.src = att.dataUrl || "";
+      img.alt = att.name || "첨부 사진";
+      span.appendChild(img);
+    } else {
+      span.textContent = `📄 ${att.name || "첨부파일"}`;
+    }
+    if (!range.collapsed) range.deleteContents();
+    range.insertNode(span);
+    const spaceNode = document.createTextNode(" ");
+    span.parentNode?.insertBefore(spaceNode, span.nextSibling);
+    const nr = document.createRange();
+    nr.setStart(spaceNode, 1);
+    nr.collapse(true);
+    const sel = window.getSelection?.();
+    sel?.removeAllRanges();
+    sel?.addRange(nr);
+    savedRangeRef.current = nr.cloneRange();
+    pushHistory(el.innerHTML, true);
+    persistEditorContent(true);
+    ensureCursorVisible();
+  };
+
+  useEffect(() => {
+    if (inlineEmbedInsertRef) {
+      inlineEmbedInsertRef.current = insertInlineEmbedAtCursor;
+    }
+    return () => {
+      if (inlineEmbedInsertRef) inlineEmbedInsertRef.current = null;
+    };
+  });
+
   const handleUndo = () => {
     const el = editorRef.current;
     const h = historyRef.current;
@@ -1394,6 +1527,30 @@ const SharedNoteRichEditor = React.memo(({
   const handleEditorClick = (e) => {
     const el = editorRef.current;
     if (!el) return;
+    const embedCard = e.target?.closest ? e.target.closest('[data-sn-embed]') : null;
+    if (embedCard && el.contains(embedCard)) {
+      e.preventDefault();
+      e.stopPropagation();
+      const kind = embedCard.getAttribute("data-sn-embed");
+      const attId = embedCard.getAttribute("data-att-id");
+      const attObj = (Array.isArray(page?.attachments) ? page.attachments : []).find((a) => a.id === attId);
+      if (kind === "image") {
+        const imgUrl = attObj?.dataUrl || embedCard.querySelector("img")?.getAttribute("src") || "";
+        if (imgUrl && onOpenImageLightbox) onOpenImageLightbox(imgUrl);
+      } else if (kind === "file") {
+        if (attObj?.dataUrl) {
+          const dl = document.createElement("a");
+          dl.href = attObj.dataUrl;
+          dl.download = attObj.name || "첨부파일";
+          document.body.appendChild(dl);
+          dl.click();
+          document.body.removeChild(dl);
+        } else {
+          showToast("첨부 파일 데이터를 찾을 수 없습니다.");
+        }
+      }
+      return;
+    }
     const todoLine = e.target?.closest ? e.target.closest('[data-sn-todo="1"]') : null;
     if (todoLine && el.contains(todoLine)) {
       const rect = todoLine.getBoundingClientRect();
@@ -1555,31 +1712,64 @@ const SharedNoteRichEditor = React.memo(({
             {activePanel === "format" && (
               <div className="px-2.5 py-2 bg-stone-50 border-b border-stone-200 space-y-2">
                 {formatSubTab === "size" && (
-                  <div className="flex items-center justify-between gap-1 flex-wrap pb-1.5 border-b border-stone-200/80">
-                    <div className="flex items-center gap-1 flex-wrap">
-                      {PAGE_TEXT_SIZES.map((sz) => (
+                  <div className="space-y-1.5 pb-1.5 border-b border-stone-200/80">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-1">
                         <button
-                          key={sz.id}
                           type="button"
-                          onClick={() => {
-                            applyInlineStyle({ size: sz.id });
-                            setFormatSubTab("");
-                          }}
-                          className={`px-2.5 py-1 rounded-lg text-[11.5px] font-extrabold whitespace-nowrap ${
-                            activeFmt.size === sz.id ? "bg-[#3F624D] text-white" : "bg-white border border-stone-200 text-stone-700"
+                          onClick={() => applyInlineStyle({ sizePx: Math.max(11, Math.round(activeFmt.sizePx) - 1) })}
+                          className="w-7 h-7 rounded-lg bg-white border border-stone-200 text-stone-800 text-[14px] font-black flex items-center justify-center"
+                          title="1px 작게"
+                        >
+                          −
+                        </button>
+                        <span className="min-w-[44px] text-center text-[12px] font-black text-[#35503C]">
+                          {activeFmt.sizePx}px
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => applyInlineStyle({ sizePx: Math.min(28, Math.round(activeFmt.sizePx) + 1) })}
+                          className="w-7 h-7 rounded-lg bg-white border border-stone-200 text-stone-800 text-[14px] font-black flex items-center justify-center"
+                          title="1px 크게"
+                        >
+                          +
+                        </button>
+                      </div>
+                      <input
+                        type="range"
+                        min={11}
+                        max={28}
+                        step={0.5}
+                        value={activeFmt.sizePx}
+                        onMouseDown={(e) => e.stopPropagation()}
+                        onChange={(e) => applyInlineStyle({ sizePx: Number(e.target.value) })}
+                        className="flex-1 min-w-0 accent-[#3F624D] h-1.5 cursor-pointer"
+                        aria-label="글자 크기 세밀 조절"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => applyInlineStyle({ reset: true })}
+                        className="px-2 py-1 rounded-lg bg-white border border-stone-200 text-[10.5px] font-extrabold text-stone-500 whitespace-nowrap shrink-0"
+                      >
+                        초기화
+                      </button>
+                    </div>
+                    <div className="flex items-center gap-1 flex-wrap">
+                      {FINE_FONT_PRESETS.map((pxVal) => (
+                        <button
+                          key={pxVal}
+                          type="button"
+                          onClick={() => applyInlineStyle({ sizePx: pxVal })}
+                          className={`px-2 py-0.5 rounded-md text-[10.5px] font-extrabold whitespace-nowrap ${
+                            Math.abs(activeFmt.sizePx - pxVal) < 0.4
+                              ? "bg-[#3F624D] text-white"
+                              : "bg-white border border-stone-200 text-stone-600"
                           }`}
                         >
-                          {sz.label}
+                          {pxVal}px
                         </button>
                       ))}
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => applyInlineStyle({ reset: true })}
-                      className="px-2 py-1 rounded-lg bg-white border border-stone-200 text-[10.5px] font-extrabold text-stone-500 whitespace-nowrap"
-                    >
-                      서식 지우기
-                    </button>
                   </div>
                 )}
 
@@ -1657,7 +1847,7 @@ const SharedNoteRichEditor = React.memo(({
                         formatSubTab === "size" ? "bg-stone-900 text-white border-stone-900" : "bg-white text-stone-700 border-stone-200"
                       }`}
                     >
-                      크기 ▾
+                      {activeFmt.sizePx}px ▾
                     </button>
                     <button
                       type="button"
@@ -1736,11 +1926,50 @@ const SharedNoteRichEditor = React.memo(({
                   </button>
                   <button
                     type="button"
-                    onClick={() => { setActivePanel(""); onAttachTrigger(); }}
-                    className="col-span-2 px-2.5 py-2 rounded-xl bg-white hover:bg-stone-100 border border-stone-200 text-stone-800 text-[12px] font-extrabold text-left"
+                    onClick={() => inlineImgInputRef.current?.click()}
+                    className="px-2.5 py-2 rounded-xl bg-white hover:bg-stone-100 border border-stone-200 text-stone-800 text-[12px] font-extrabold text-left"
                   >
-                    📷 사진 · 파일 첨부
+                    📷 본문에 사진 넣기
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => inlineFileInputRef.current?.click()}
+                    className="px-2.5 py-2 rounded-xl bg-white hover:bg-stone-100 border border-stone-200 text-stone-800 text-[12px] font-extrabold text-left"
+                  >
+                    📎 본문에 파일 넣기
+                  </button>
+                  <input
+                    ref={inlineImgInputRef}
+                    type="file"
+                    multiple
+                    accept="image/*"
+                    className="hidden"
+                    onChange={async (e) => {
+                      const files = e.target.files;
+                      setActivePanel("");
+                      if (files && files.length > 0 && onInlineAttachFiles) {
+                        const added = await onInlineAttachFiles(files);
+                        if (Array.isArray(added)) added.forEach((att) => insertInlineEmbedAtCursor(att));
+                      }
+                      e.target.value = "";
+                    }}
+                  />
+                  <input
+                    ref={inlineFileInputRef}
+                    type="file"
+                    multiple
+                    accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.hwp,image/*"
+                    className="hidden"
+                    onChange={async (e) => {
+                      const files = e.target.files;
+                      setActivePanel("");
+                      if (files && files.length > 0 && onInlineAttachFiles) {
+                        const added = await onInlineAttachFiles(files);
+                        if (Array.isArray(added)) added.forEach((att) => insertInlineEmbedAtCursor(att));
+                      }
+                      e.target.value = "";
+                    }}
+                  />
                 </div>
               </div>
             )}
@@ -4109,7 +4338,11 @@ function MainApp() {
       } else {
         const frag = activeRange.extractContents();
         const span = document.createElement("span");
-        if (patch.size && DIARY_SIZE_PX[patch.size]) span.style.fontSize = DIARY_SIZE_PX[patch.size];
+        if (patch.sizePx !== undefined) {
+          span.style.fontSize = `${resolveFontSizePx(patch.sizePx)}px`;
+        } else if (patch.size) {
+          span.style.fontSize = DIARY_SIZE_PX[patch.size] || `${resolveFontSizePx(patch.size)}px`;
+        }
         if (patch.color) span.style.color = DIARY_STYLE_HEX_COLOR[patch.color] || DIARY_STYLE_HEX_COLOR.default;
         if (patch.bg !== undefined) {
           const bgHex = DIARY_STYLE_HEX_BG[patch.bg] || "";
@@ -4150,7 +4383,8 @@ function MainApp() {
     setDiaryForm((p) => {
       const cur = p.textStyle || DEFAULT_DIARY_TEXT_STYLE;
       const next = { ...cur };
-      if (patch.size) next.size = patch.size;
+      if (patch.sizePx !== undefined) next.size = `${resolveFontSizePx(patch.sizePx)}px`;
+      else if (patch.size) next.size = patch.size;
       if (patch.color) next.color = patch.color;
       if (patch.bg !== undefined) next.bg = patch.bg;
       if (patch.toggleBold) next.bold = !cur.bold;
@@ -4927,7 +5161,14 @@ function MainApp() {
   const [isPageSwitcherOpen, setIsPageSwitcherOpen] = useState(false);
   const [pageSwitcherRenameId, setPageSwitcherRenameId] = useState(null);
   const [pageSwitcherRenameDraft, setPageSwitcherRenameDraft] = useState("");
-  const [collapsedSectionIds, setCollapsedSectionIds] = useState({});
+  const [collapsedSectionIds, setCollapsedSectionIds] = useState(() => {
+    try {
+      const saved = localStorage.getItem("kim_pages_collapsed_v1");
+      const parsed = saved ? JSON.parse(saved) : {};
+      return parsed && typeof parsed === "object" ? parsed : {};
+    } catch (e) { return {}; }
+  });
+  const inlineEmbedInsertRef = useRef(null);
   const [sectionQuickDrafts, setSectionQuickDrafts] = useState({});
   const [noteSaveStatusTop, setNoteSaveStatusTop] = useState("idle");
   const pageAttachInputRef = useRef(null);
@@ -18671,6 +18912,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
       !isHeroPhotoModalOpen &&
       !isPageModalOpen &&
       !pageMenuTargetId &&
+      !isPageSwitcherOpen &&
       !isPagePasteModalOpen &&
       !activeTableTaskModal &&
       !isDreamLinksModalOpen &&
@@ -18721,6 +18963,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
         setIsHeroPhotoModalOpen(false);
         setIsPageModalOpen(false);
         setPageMenuTargetId(null);
+        setIsPageSwitcherOpen(false);
         setIsPagePasteModalOpen(false);
         setActiveTableTaskModal(null);
         setTaskModalDraft(null);
@@ -18757,7 +19000,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
     };
     window.addEventListener("keydown", onEsc);
     return () => window.removeEventListener("keydown", onEsc);
-  }, [isMoreNavOpen, isHomeEditMode, isQuickShoppingOpen, isGrowthPctPickerOpen, isHomeRoutineFilterOpen, isRoutineRangeEditOpen, isQuickFabOpen, isRoutineModalOpen, isActivityModalOpen, isEditorUnlockModalOpen, isMealCopyModalOpen, diaryExportPreviewUrl, diaryLightboxUrl, diaryImportModal, cropModal, isWeatherModalOpen, liveActivityPopup, activityEditModal, zipImportPicker, magazineMonth, isSettingsOpen, isHeroPhotoModalOpen, isPageModalOpen, pageMenuTargetId, isPagePasteModalOpen, activeTableTaskModal, isDreamLinksModalOpen, isPatchModalOpen, isBucketModalOpen, isHouseModalOpen, isHandoverModalOpen, isHomeDdayPickerOpen, categoryManageKind, isPrivateCalModalOpen, isPrivateCalCsvModalOpen, isCondolenceFormOpen, isCondolenceExcelModalOpen, isCondolencePinModalOpen, calDayPopupDate, isScheduleModalOpen, isMealModalOpen, isFridgeModalOpen, isNoticeModalOpen, isRecipeModalOpen, isDaycareModalOpen, isReceiptModalOpen, isShoppingPhotoModalOpen, zoomedRecipePhoto, isInventoryExportOpen, stockInItem, quickLogRecipe, cookingConfirmModal, quickFridgeItem]);
+  }, [isMoreNavOpen, isHomeEditMode, isQuickShoppingOpen, isGrowthPctPickerOpen, isHomeRoutineFilterOpen, isRoutineRangeEditOpen, isQuickFabOpen, isRoutineModalOpen, isActivityModalOpen, isEditorUnlockModalOpen, isMealCopyModalOpen, diaryExportPreviewUrl, diaryLightboxUrl, diaryImportModal, cropModal, isWeatherModalOpen, liveActivityPopup, activityEditModal, zipImportPicker, magazineMonth, isSettingsOpen, isHeroPhotoModalOpen, isPageModalOpen, pageMenuTargetId, isPageSwitcherOpen, isPagePasteModalOpen, activeTableTaskModal, isDreamLinksModalOpen, isPatchModalOpen, isBucketModalOpen, isHouseModalOpen, isHandoverModalOpen, isHomeDdayPickerOpen, categoryManageKind, isPrivateCalModalOpen, isPrivateCalCsvModalOpen, isCondolenceFormOpen, isCondolenceExcelModalOpen, isCondolencePinModalOpen, calDayPopupDate, isScheduleModalOpen, isMealModalOpen, isFridgeModalOpen, isNoticeModalOpen, isRecipeModalOpen, isDaycareModalOpen, isReceiptModalOpen, isShoppingPhotoModalOpen, zoomedRecipePhoto, isInventoryExportOpen, stockInItem, quickLogRecipe, cookingConfirmModal, quickFridgeItem]);
 
   // ==========================================
   // 모바일·브라우저 뒤로가기 이전 화면 이동 (Chrome User-Gesture History API + URL 해시)
@@ -18837,6 +19080,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
     isHeroPhotoModalOpen ||
     isPageModalOpen ||
     pageMenuTargetId ||
+    isPageSwitcherOpen ||
     isPagePasteModalOpen ||
     activeTableTaskModal ||
     stockInItem ||
@@ -31437,9 +31681,10 @@ time: "", location: "",
               .map((pg) => {
                 const titleHit = String(pg.title || "").toLowerCase().includes(sq);
                 let matchedSnippet = "";
-                if (String(pg.noteBody || "").toLowerCase().includes(sq)) {
-                  const idxHit = String(pg.noteBody || "").toLowerCase().indexOf(sq);
-                  matchedSnippet = String(pg.noteBody || "").slice(Math.max(0, idxHit - 12), idxHit + 48).replace(/\n+/g, " ");
+                const searchableBody = String(pg.noteBody || "") || noteHtmlToPlainMarkdown(pg.noteHtml || "");
+                if (searchableBody.toLowerCase().includes(sq)) {
+                  const idxHit = searchableBody.toLowerCase().indexOf(sq);
+                  matchedSnippet = searchableBody.slice(Math.max(0, idxHit - 12), idxHit + 48).replace(/\n+/g, " ");
                 }
                 if (!matchedSnippet && Array.isArray(pg.attachments)) {
                   const attHit = pg.attachments.find((a) => String(a?.name || "").toLowerCase().includes(sq));
@@ -32117,7 +32362,8 @@ time: "", location: "",
                         (att) => !(String(att?.mimeType || "").startsWith("image/") || /^data:image\//.test(String(att?.dataUrl || "")))
                       );
                       const handlePageAttachFiles = async (fileList) => {
-                        if (!requireEditorAccess("pages") || !fileList || fileList.length === 0) return;
+                        if (!requireEditorAccess("pages") || !fileList || fileList.length === 0) return [];
+                        const prevIds = new Set(pageAttachments.map((a) => a.id));
                         const res = await readAttachmentsFromFiles(fileList, pageAttachments, 350000);
                         if (res.skippedLarge > 0) {
                           showToast("⚠️ 350KB 초과 일반 파일은 제외되었습니다. (사진은 자동 압축)");
@@ -32126,9 +32372,11 @@ time: "", location: "",
                           await savePageToCloud({ ...currentPage, attachments: res.nextList, updatedAtMs: Date.now() });
                           recordActivity("노트", "첨부", `${currentPage.title} (${res.addedCount}건)`);
                           showToast(`📎 ${res.addedCount}개 파일·사진을 첨부했습니다!`);
+                          return res.nextList.filter((a) => !prevIds.has(a.id));
                         } else if (pageAttachments.length >= 5) {
                           showToast("⚠️ 한 페이지에 최대 5개까지 첨부할 수 있습니다.");
                         }
+                        return [];
                       };
                       return (
                         <>
@@ -32182,6 +32430,9 @@ time: "", location: "",
                                 await copyTextSafe(full, "📋 노션 마크다운 형식으로 복사했습니다!");
                               }}
                               onAttachTrigger={() => pageAttachInputRef.current?.click()}
+                              onInlineAttachFiles={handlePageAttachFiles}
+                              onOpenImageLightbox={(url) => setDiaryLightboxUrl(url)}
+                              inlineEmbedInsertRef={inlineEmbedInsertRef}
                               showToast={showToast}
                               canEditSchedule={canEditTab("schedule")}
                             />
@@ -32281,7 +32532,16 @@ time: "", location: "",
                                       <div className="flex items-center gap-1.5 min-w-0 flex-1">
                                         <button
                                           type="button"
-                                          onClick={() => setCollapsedSectionIds((prev) => ({ ...prev, [hBlk.id]: !prev[hBlk.id] }))}
+                                          onClick={() => {
+                                            setCollapsedSectionIds((prev) => {
+                                              const next = { ...prev, [hBlk.id]: !prev[hBlk.id] };
+                                              try { localStorage.setItem("kim_pages_collapsed_v1", JSON.stringify(next)); } catch (err) {}
+                                              if (user && db && isEditorUnlocked) {
+                                                setDoc(getDocRef("family_meta_v4", "home_layout"), { collapsedSectionIds: next, updatedAt: new Date().toISOString() }, { merge: true }).catch(() => {});
+                                              }
+                                              return next;
+                                            });
+                                          }}
                                           className="w-6 h-6 rounded-md hover:bg-stone-200/80 flex items-center justify-center text-stone-500 shrink-0"
                                           title={isCollapsed ? "섹션 펼치기" : "섹션 접기"}
                                         >
@@ -32645,17 +32905,32 @@ time: "", location: "",
                                         <img src={att.dataUrl} alt={att.name || "첨부 사진"} className="w-full h-full object-cover" />
                                       </button>
                                       {canEditTab("pages") && (
-                                        <button
-                                          type="button"
-                                          onClick={async () => {
-                                            const nextAtts = pageAttachments.filter((x) => x.id !== att.id);
-                                            await savePageToCloud({ ...currentPage, attachments: nextAtts, updatedAtMs: Date.now() });
-                                            showToast("첨부 사진을 삭제했습니다.");
-                                          }}
-                                          className="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/60 text-white text-[11px] font-bold flex items-center justify-center"
-                                        >
-                                          ×
-                                        </button>
+                                        <>
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              if (inlineEmbedInsertRef.current) {
+                                                inlineEmbedInsertRef.current(att);
+                                                showToast("📷 본문에 사진을 삽입했습니다.");
+                                              }
+                                            }}
+                                            className="absolute bottom-1 left-1 px-1.5 py-0.5 rounded bg-black/65 text-white text-[9.5px] font-extrabold"
+                                            title="본문 커서 위치에 삽입"
+                                          >
+                                            본문삽입
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={async () => {
+                                              const nextAtts = pageAttachments.filter((x) => x.id !== att.id);
+                                              await savePageToCloud({ ...currentPage, attachments: nextAtts, updatedAtMs: Date.now() });
+                                              showToast("첨부 사진을 삭제했습니다.");
+                                            }}
+                                            className="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/60 text-white text-[11px] font-bold flex items-center justify-center"
+                                          >
+                                            ×
+                                          </button>
+                                        </>
                                       )}
                                     </div>
                                   ))}
@@ -35332,27 +35607,43 @@ time: "", location: "",
                           className="p-2 rounded-xl bg-stone-50 border border-stone-200/90 space-y-1.5"
                         >
                           <div className="flex items-center justify-between gap-1.5 flex-wrap">
-                            <div className="flex items-center gap-1">
-                              {PAGE_TEXT_SIZES.map((sz) => (
-                                <button
-                                  key={sz.id}
-                                  type="button"
-                                  onClick={() => applyDiaryFormat({ size: sz.id })}
-                                  className={`px-2 py-0.5 rounded-md text-[11px] font-extrabold border whitespace-nowrap transition ${
-                                    !hasDiarySelection && (curTs.size || "base") === sz.id
-                                      ? "bg-stone-900 text-white border-stone-900"
-                                      : "bg-white text-stone-600 border-stone-200 hover:bg-stone-100"
-                                  }`}
-                                >
-                                  {sz.label}
-                                </button>
-                              ))}
+                            <div className="flex items-center gap-1 flex-wrap min-w-0 flex-1">
+                              <button
+                                type="button"
+                                onClick={() => applyDiaryFormat({ sizePx: Math.max(11, Math.round(resolveFontSizePx(curTs.size)) - 1) })}
+                                className="w-6 h-6 rounded-md bg-white border border-stone-200 text-stone-800 text-[13px] font-black flex items-center justify-center"
+                                title="1px 작게"
+                              >
+                                −
+                              </button>
+                              <span className="min-w-[40px] text-center text-[11px] font-black text-[#35503C]">
+                                {resolveFontSizePx(curTs.size)}px
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => applyDiaryFormat({ sizePx: Math.min(28, Math.round(resolveFontSizePx(curTs.size)) + 1) })}
+                                className="w-6 h-6 rounded-md bg-white border border-stone-200 text-stone-800 text-[13px] font-black flex items-center justify-center"
+                                title="1px 크게"
+                              >
+                                +
+                              </button>
+                              <input
+                                type="range"
+                                min={11}
+                                max={28}
+                                step={0.5}
+                                value={resolveFontSizePx(curTs.size)}
+                                onMouseDown={(e) => e.stopPropagation()}
+                                onChange={(e) => applyDiaryFormat({ sizePx: Number(e.target.value) })}
+                                className="w-20 sm:w-24 accent-[#3F624D] h-1.5 cursor-pointer"
+                                aria-label="육아일기 글자 크기 세밀 조절"
+                              />
                               <button
                                 type="button"
                                 onClick={() => applyDiaryFormat({ toggleBold: true })}
                                 className={`px-2 py-0.5 rounded-md text-[11px] font-black border whitespace-nowrap transition ${
                                   !hasDiarySelection && curTs.bold
-                                    ? "bg-stone-900 text-white border-stone-900"
+                                    ? "bg-[#3F624D] text-white border-[#3F624D]"
                                     : "bg-white text-stone-600 border-stone-200 hover:bg-stone-100"
                                 }`}
                               >
@@ -35452,6 +35743,7 @@ time: "", location: "",
                             handleSaveBabyDiary();
                           }
                         }}
+                        style={getDiaryTextStyleObj(diaryForm.textStyle)}
                         className={`w-full min-h-[260px] px-3.5 py-3 pb-7 rounded-xl border border-stone-200 leading-relaxed whitespace-pre-wrap break-words resize-y focus:outline-none focus:ring-2 focus:ring-[#5E7A65]/30 ${getDiaryTextStyleClasses(diaryForm.textStyle)}`}
                       />
                       <span className="absolute right-2.5 bottom-2 text-[11px] font-bold text-stone-400 bg-white/85 px-1.5 rounded pointer-events-none">
@@ -35932,11 +36224,13 @@ time: "", location: "",
                             {(entry.contentHtml || entry.content) && (
                               entry.contentHtml ? (
                                 <div
+                                  style={getDiaryTextStyleObj(entry.textStyle)}
                                   className={`whitespace-pre-wrap leading-relaxed break-words ${entry.textStyle ? getDiaryTextStyleClasses(entry.textStyle) : "text-[13.5px] text-stone-700"}`}
                                   dangerouslySetInnerHTML={{ __html: sanitizeDiaryHtml(entry.contentHtml) }}
                                 />
                               ) : (
-                                <div className={`whitespace-pre-wrap leading-relaxed ${entry.textStyle ? getDiaryTextStyleClasses(entry.textStyle) : "text-[13.5px] text-stone-700"}`}>{entry.content}</div>
+                                <div style={getDiaryTextStyleObj(entry.textStyle)}
+                                  className={`whitespace-pre-wrap leading-relaxed ${entry.textStyle ? getDiaryTextStyleClasses(entry.textStyle) : "text-[13.5px] text-stone-700"}`}>{entry.content}</div>
                               )
                             )}
                             {getDiaryEntryPhotos(entry).length > 0 && (
@@ -44410,11 +44704,13 @@ time: "", location: "",
                           {d.title && <div className="text-[13.5px] font-black text-stone-900">{d.title}</div>}
                           {d.contentHtml ? (
                             <div
-                              className={`whitespace-pre-wrap leading-relaxed break-words ${d.textStyle ? getDiaryTextStyleClasses(d.textStyle) : "text-[12.5px] text-stone-700"}`}
+                              style={getDiaryTextStyleObj(d.textStyle)}
+                                  className={`whitespace-pre-wrap leading-relaxed break-words ${d.textStyle ? getDiaryTextStyleClasses(d.textStyle) : "text-[12.5px] text-stone-700"}`}
                               dangerouslySetInnerHTML={{ __html: sanitizeDiaryHtml(d.contentHtml) }}
                             />
                           ) : (
-                            <div className={`whitespace-pre-wrap leading-relaxed ${d.textStyle ? getDiaryTextStyleClasses(d.textStyle) : "text-[12.5px] text-stone-700"}`}>{d.content}</div>
+                            <div style={getDiaryTextStyleObj(d.textStyle)}
+                                  className={`whitespace-pre-wrap leading-relaxed ${d.textStyle ? getDiaryTextStyleClasses(d.textStyle) : "text-[12.5px] text-stone-700"}`}>{d.content}</div>
                           )}
                           {photos.length > 0 && (
                             <div className={photos.length === 1 ? "pt-1" : "grid grid-cols-2 gap-1.5 pt-1"}>
@@ -49034,7 +49330,7 @@ time: "", location: "",
                 <button
                   type="button"
                   onClick={() => {
-                    const summaryBody = blocksToNotionMarkdown(targetPg.blocks || []).slice(0, 400);
+                    const summaryBody = [String(targetPg.noteBody || noteHtmlToPlainMarkdown(targetPg.noteHtml || "")).trim(), blocksToNotionMarkdown(targetPg.blocks || [])].filter(Boolean).join("\n\n").slice(0, 500);
                     setEditingNotice(null);
                     setNoticeForm({
                       title: `${targetPg.icon || "📄"} ${targetPg.title || ""}`.trim(),

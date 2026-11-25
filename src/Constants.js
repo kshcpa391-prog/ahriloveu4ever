@@ -1181,7 +1181,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v14.05";
+export const APP_CODE_VERSION = "v14.06";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1199,7 +1199,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-25 11:28";
+export const APP_BUILD_DATE = "2026-11-25 11:39";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1268,6 +1268,16 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v14.06",
+    version: "v14.06",
+    date: "2026-11-25",
+    title: "🔡 공유노트 · 육아일기 글자 크기 세밀 조절(11~28px 스테퍼·슬라이더·프리셋) 도입",
+    highlights: [
+      "공유노트(Aa → 크기)와 육아일기(Aa 서식) 모두에서 기존 4단계(작게/보통/크게/특대) 외에 11px~28px까지 1px 단위 −/+ 버튼 및 슬라이더·빠른 프리셋(12/14.5/17/20/24px)으로 세밀하게 조절 가능",
+      "기존 저장된 크기(sm/base/lg/xl)와 100% 호환되며 육아일기 카드·월간 매거진에서도 지정한 px 크기가 그대로 반영되도록 보완"
+    ]
+  },
   {
     id: "patch-v14.05",
     version: "v14.05",
