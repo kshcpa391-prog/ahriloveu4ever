@@ -226,6 +226,7 @@ export const getAutoHomeTimeMode = (ranges = DEFAULT_HOME_TIME_RANGES, hourOverr
 export const DEFAULT_HOME_MENU_ORDER = [
   "daily",
   "routine_tab",
+  "alarm",
   "fridge",
   "shopping",
   "monthly_cal",
@@ -256,7 +257,7 @@ export const DEFAULT_HOME_LAYOUT = {
     hiddenMenus: [],
     blockSizes: {},
     menuSizes: {},
-    menuOrder: ["daily", "fridge", "shopping", "ai", "routine_tab", "monthly_cal", "monthly_exp", "baby", "recipes", "notices", "pages", "bucket", "handover", "house"]
+    menuOrder: ["daily", "fridge", "shopping", "ai", "routine_tab", "alarm", "monthly_cal", "monthly_exp", "baby", "recipes", "notices", "pages", "bucket", "handover", "house"]
   },
   night: {
     blocks: ["action_feed", "menu_grid"],
@@ -264,7 +265,7 @@ export const DEFAULT_HOME_LAYOUT = {
     hiddenMenus: [],
     blockSizes: {},
     menuSizes: {},
-    menuOrder: ["daily", "monthly_exp", "routine_tab", "fridge", "shopping", "monthly_cal", "baby", "recipes", "notices", "pages", "bucket", "handover", "house", "ai"]
+    menuOrder: ["daily", "monthly_exp", "routine_tab", "alarm", "fridge", "shopping", "monthly_cal", "baby", "recipes", "notices", "pages", "bucket", "handover", "house", "ai"]
   }
 };
 
@@ -1181,7 +1182,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v14.29";
+export const APP_CODE_VERSION = "v14.30";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1199,7 +1200,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-25 18:00";
+export const APP_BUILD_DATE = "2026-11-25 18:30";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1222,6 +1223,7 @@ export const HELPER_CONFIGURABLE_TABS = [
   { id: "baby", label: "👶 육아수첩" },
   { id: "schedule", label: "🗓️ 일정" },
   { id: "routines", label: "🔄 루틴" },
+  { id: "alarm", label: "⏰ 모닝콜·알람" },
   { id: "pages", label: "🗂️ 공유노트" },
   { id: "ai", label: "✨ AI추천" },
   { id: "monthly", label: "💰 월간·식비" },
@@ -1268,6 +1270,19 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v14.30",
+    version: "v14.30",
+    date: "2026-11-25",
+    title: "모닝콜·알람 독립 메뉴 신설(알라미 UX · 7요일 반복 · 누적 퀵알람 · 취침대기/폰시계연동) · 스톱워치 상태바 실시간 경과 표시 · 상시 울림 배너 버그 수정",
+    changes: [
+      "⏰ 모닝콜·알람 별개 메뉴 신설: 플로팅 타이머에 묶여 있던 알람을 독립 메뉴(홈·더보기·빠른실행·권한설정 통합)로 분리하고, 다음 알람 카운트다운('N시간 N분 후에 울려요'), 요일별(일~토) 기상 알람, 누적 합산 퀵 알람(+1/5/10/15/30분/1시간), 알람별 볼륨·진동·음원 설정을 앱 공통 세이지그린(#3F624D) 톤으로 구현",
+      "🌙 앱 백그라운드·종료 대비 보강: 화면 꺼짐 방지 [취침 대기 모드(Wake Lock API)] 토글과 앱이 완전히 꺼져도 OS에서 확실히 울리도록 [📱 폰 시계 / 캘린더(.ics) 등록] 1탭 연동 추가",
+      "⏱️ 스톱워치 상태표시줄 실시간 경과 표시: 스톱워치 실행 중 상태바 알림에 시작 시각과 현재 경과 시간('⏱️ 스톱워치 경과 N분 N초 (MM:SS)') 및 OS timestamp를 무음으로 실시간 갱신하고 정지 시 자동 제거",
+      "🐛 치명 버그 일괄 수정: ① 타이머 팝업이 닫혀 있으면 알람 울림 배너와 끄기 버튼이 보이지 않던 문제를 전역 상시 울림 배너(5분 다시울림 스누즈·음원열기·끄기)로 수정 ② 알람별 진동 OFF·볼륨(0~100%)·개별 요일 반복 적용 ③ 카테고리 관리 모달에서 누락됐던 '⏱️ 타이머' 탭 복구 및 '⚡ 퀵알람' 프리셋 자유편집 추가",
+      "🧹 중복 제거·Firebase 이관·디자인 통일: 플로팅 타이머 중복 알람 탭을 [⏰ 모닝콜 →] 바로가기로 통합, 육아 [⏰ 수유알람]→퀵알람(180분) 및 알람(+)→[🔄 루틴 알람] 연계, 기본 알람 볼륨(kim_alarm_volume_v1) Firebase/백업 이관, 달력 잔여 이질 색상(teal) 세이지그린 통일 및 과거 패치노트 467건 100% 보존"
+    ]
+  },
   {
     id: "patch-v14.29",
     version: "v14.29",
@@ -7176,3 +7191,4 @@ export const DEFAULT_BABY_HEALTH_TAGS = ["미열", "고열", "콧물", "기침",
 export const DEFAULT_SCHEDULE_PLACES = ["이진소아과", "신당동어린이집", "친정", "시댁", "마트"];
 export const DEFAULT_HOUSE_WARRANTY_BRANDS = ["LG", "삼성", "다이슨", "부가부", "스토케", "필립스", "애플", "기타"];
 export const DEFAULT_TIMER_PRESETS = ["30초", "1분", "3분", "5분", "10분"];
+export const DEFAULT_QUICK_ALARM_PRESETS = ["1분", "5분", "10분", "15분", "30분", "1시간"];

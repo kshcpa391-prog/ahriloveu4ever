@@ -180,7 +180,8 @@ import {
   DEFAULT_BABY_HEALTH_TAGS,
   DEFAULT_SCHEDULE_PLACES,
   DEFAULT_HOUSE_WARRANTY_BRANDS,
-  DEFAULT_TIMER_PRESETS
+  DEFAULT_TIMER_PRESETS,
+  DEFAULT_QUICK_ALARM_PRESETS
 } from "./Constants";
 
 
@@ -4661,6 +4662,7 @@ function MainApp() {
             : tStr.startsWith("fridge-") ? "#tab=fridge"
             : tStr.startsWith("feed-") ? "#tab=baby"
             : tStr.startsWith("routine-") ? "#tab=home"
+            : tStr.startsWith("morning-alarm-") || tStr.startsWith("custom-alarm-") ? "#tab=alarm"
             : "#tab=home";
           const notifOpts = {
             body: body || "",
@@ -4668,6 +4670,7 @@ function MainApp() {
             icon: "/app-icon-512.png",
             badge: "/app-icon-512.png",
             silent: isSilent,
+            ...(Number.isFinite(opts?.timestamp) ? { timestamp: opts.timestamp } : {}),
             data: { url: `/${targetHash}` }
           };
           if (Array.isArray(opts?.vibrate)) {
@@ -4982,7 +4985,8 @@ function MainApp() {
           baby_health_tags: Array.isArray(saved.baby_health_tags) && saved.baby_health_tags.length > 0 ? saved.baby_health_tags.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_BABY_HEALTH_TAGS],
           schedule_places: Array.isArray(saved.schedule_places) && saved.schedule_places.length > 0 ? saved.schedule_places.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_SCHEDULE_PLACES],
           house_warranty_brands: Array.isArray(saved.house_warranty_brands) && saved.house_warranty_brands.length > 0 ? saved.house_warranty_brands.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_HOUSE_WARRANTY_BRANDS],
-          timer_presets: Array.isArray(saved.timer_presets) && saved.timer_presets.length > 0 ? saved.timer_presets.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_TIMER_PRESETS]
+          timer_presets: Array.isArray(saved.timer_presets) && saved.timer_presets.length > 0 ? saved.timer_presets.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_TIMER_PRESETS],
+          quick_alarm_presets: Array.isArray(saved.quick_alarm_presets) && saved.quick_alarm_presets.length > 0 ? saved.quick_alarm_presets.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_QUICK_ALARM_PRESETS]
         };
       }
     } catch (e) {}
@@ -5001,7 +5005,8 @@ function MainApp() {
       baby_health_tags: [...DEFAULT_BABY_HEALTH_TAGS],
       schedule_places: [...DEFAULT_SCHEDULE_PLACES],
       house_warranty_brands: [...DEFAULT_HOUSE_WARRANTY_BRANDS],
-      timer_presets: [...DEFAULT_TIMER_PRESETS]
+      timer_presets: [...DEFAULT_TIMER_PRESETS],
+      quick_alarm_presets: [...DEFAULT_QUICK_ALARM_PRESETS]
     };
   });
   const fridgeCategories = customCategories.fridge;
@@ -5019,6 +5024,7 @@ function MainApp() {
   const schedulePlaces = customCategories.schedule_places || DEFAULT_SCHEDULE_PLACES;
   const houseWarrantyBrands = customCategories.house_warranty_brands || DEFAULT_HOUSE_WARRANTY_BRANDS;
   const timerPresets = customCategories.timer_presets || DEFAULT_TIMER_PRESETS;
+  const quickAlarmPresets = customCategories.quick_alarm_presets || DEFAULT_QUICK_ALARM_PRESETS;
 
   // === 🔒 비밀메뉴: 경조사비 입출금내역 상태 ===
   const isSuhyeokAdmin = isAdminUnlocked && (actorName === "수혁" || actorName === "김수혁");
@@ -6637,8 +6643,351 @@ function MainApp() {
   const [newAlarmSoundUrl, setNewAlarmSoundUrl] = useState("");
   const [previewingSoundId, setPreviewingSoundId] = useState(null);
   const [completedAlertUrl, setCompletedAlertUrl] = useState("");
+  const [completedAlertAlarmMeta, setCompletedAlertAlarmMeta] = useState(null);
+  const [alarmDefaultVolume, setAlarmDefaultVolume] = useState(() => {
+    try {
+      const v = Number(localStorage.getItem("kim_alarm_volume_v1"));
+      return Number.isFinite(v) ? Math.max(0, Math.min(100, v)) : 85;
+    } catch (e) { return 85; }
+  });
+  const [alarmSheetMode, setAlarmSheetMode] = useState("");
+  const [editingAlarmId, setEditingAlarmId] = useState(null);
+  const [alarmDaysDraft, setAlarmDaysDraft] = useState([0, 1, 2, 3, 4, 5, 6]);
+  const [alarmAmPmDraft, setAlarmAmPmDraft] = useState("AM");
+  const [alarmHourDraft, setAlarmHourDraft] = useState(7);
+  const [alarmMinDraft, setAlarmMinDraft] = useState(0);
+  const [alarmVolDraft, setAlarmVolDraft] = useState(85);
+  const [alarmVibDraft, setAlarmVibDraft] = useState(true);
+  const [quickAlarmAddMin, setQuickAlarmAddMin] = useState(0);
+  const [alarmMenuOpenId, setAlarmMenuOpenId] = useState(null);
+  const [alarmFilterTab, setAlarmFilterTab] = useState("all");
+  const [alarmWakeLockEnabled, setAlarmWakeLockEnabled] = useState(false);
+  const wakeLockSentinelRef = useRef(null);
+  const lastStatusNotifSecRef = useRef(-1);
   const alarmAudioRef = useRef(null);
   const alarmSoundFileInputRef = useRef(null);
+
+  const toggleAlarmWakeLock = async () => {
+    if (alarmWakeLockEnabled) {
+      try { await wakeLockSentinelRef.current?.release(); } catch (e) {}
+      wakeLockSentinelRef.current = null;
+      setAlarmWakeLockEnabled(false);
+      showToast("취침 대기 모드(화면 꺼짐 방지)를 해제했습니다.");
+      return;
+    }
+    if (typeof navigator === "undefined" || !("wakeLock" in navigator)) {
+      showToast("이 브라우저는 화면 꺼짐 방지(Wake Lock)를 지원하지 않습니다. 폰 시계 연동을 이용해 주세요.");
+      return;
+    }
+    try {
+      const sentinel = await navigator.wakeLock.request("screen");
+      wakeLockSentinelRef.current = sentinel;
+      setAlarmWakeLockEnabled(true);
+      sentinel.addEventListener("release", () => {
+        if (!document.hidden) setAlarmWakeLockEnabled(false);
+      });
+      showToast("🌙 취침 대기 모드 ON — 충전 중 화면을 켜두면 정각에 알람이 울립니다.");
+    } catch (e) {
+      showToast("화면 꺼짐 방지를 활성화하지 못했습니다. (배터리 절약 모드 확인)");
+    }
+  };
+
+  useEffect(() => {
+    if (!alarmWakeLockEnabled) return;
+    const reacquire = async () => {
+      if (document.visibilityState === "visible" && navigator?.wakeLock) {
+        try {
+          wakeLockSentinelRef.current = await navigator.wakeLock.request("screen");
+        } catch (e) {}
+      }
+    };
+    document.addEventListener("visibilitychange", reacquire);
+    return () => {
+      document.removeEventListener("visibilitychange", reacquire);
+    };
+  }, [alarmWakeLockEnabled]);
+
+  useEffect(() => () => {
+    try { wakeLockSentinelRef.current?.release(); } catch (e) {}
+  }, []);
+
+  const exportAlarmToPhoneClockOrIcs = (al) => {
+    if (!al) return;
+    const [hRaw, mRaw] = String(al.time || "07:00").split(":").map(Number);
+    const hh = Number.isFinite(hRaw) ? hRaw : 7;
+    const mm = Number.isFinite(mRaw) ? mRaw : 0;
+    const title = String(al.label || "모닝콜").trim();
+    const ua = typeof navigator !== "undefined" ? navigator.userAgent || "" : "";
+    const isAndroid = /Android/i.test(ua);
+    if (isAndroid) {
+      try {
+        const intentUrl = `intent:#Intent;action=android.intent.action.SET_ALARM;i.android.intent.extra.alarm.HOUR=${hh};i.android.intent.extra.alarm.MINUTES=${mm};S.android.intent.extra.alarm.MESSAGE=${encodeURIComponent(title)};B.android.intent.extra.alarm.SKIP_UI=false;end`;
+        window.location.href = intentUrl;
+        showToast(`📱 안드로이드 기본 시계 앱에 [${al.time}] '${title}' 알람 등록을 요청했습니다!`);
+        return;
+      } catch (e) {}
+    }
+    const targetMs = getNextAlarmTargetMs({ ...al, enabled: true }, Date.now()) || Date.now() + 60000;
+    const d = new Date(targetMs);
+    const pad = (n) => String(n).padStart(2, "0");
+    const dtStart = `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}T${pad(d.getHours())}${pad(d.getMinutes())}00`;
+    const dEnd = new Date(targetMs + 10 * 60000);
+    const dtEnd = `${dEnd.getFullYear()}${pad(dEnd.getMonth() + 1)}${pad(dEnd.getDate())}T${pad(dEnd.getHours())}${pad(dEnd.getMinutes())}00`;
+    const ics = [
+      "BEGIN:VCALENDAR",
+      "VERSION:2.0",
+      "PRODID:-//FamilyTable//Alarm//KO",
+      "BEGIN:VEVENT",
+      `UID:alarm-${al.id || Date.now()}@familyapp`,
+      `DTSTART:${dtStart}`,
+      `DTEND:${dtEnd}`,
+      `SUMMARY:⏰ ${title}`,
+      "BEGIN:VALARM",
+      "TRIGGER:PT0M",
+      "ACTION:DISPLAY",
+      `DESCRIPTION:${title}`,
+      "END:VALARM",
+      "END:VEVENT",
+      "END:VCALENDAR"
+    ].join("\r\n");
+    const blob = new Blob([ics], { type: "text/calendar;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `모닝콜_${String(al.time || "0700").replace(":", "")}.ics`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => { try { URL.revokeObjectURL(url); } catch (e) {} }, 1000);
+    showToast("📅 캘린더 알람(.ics) 파일을 저장했습니다! 열어서 등록하면 앱이 꺼져도 울립니다.");
+  };
+
+  const saveAlarmDefaultVolume = (volVal) => {
+    const clean = Math.max(0, Math.min(100, Math.round(Number(volVal) || 0)));
+    setAlarmDefaultVolume(clean);
+    try { localStorage.setItem("kim_alarm_volume_v1", String(clean)); } catch (e) {}
+    if (user && db) {
+      setDoc(getDocRef("family_meta_v4", "timer_alarms_v1"), { defaultVolume: clean, updatedAtMs: Date.now() }, { merge: true }).catch(() => {});
+    }
+  };
+
+  const resolveAlarmDays = (al) => {
+    if (Array.isArray(al?.days)) return al.days.map(Number).filter((d) => d >= 0 && d <= 6);
+    if (al?.repeat === "weekday") return [1, 2, 3, 4, 5];
+    if (al?.repeat === "weekend") return [0, 6];
+    if (al?.repeat === "once") return [];
+    return [0, 1, 2, 3, 4, 5, 6];
+  };
+
+  const formatAlarm12h = (hhmm) => {
+    const [hRaw, mRaw] = String(hhmm || "07:00").split(":").map(Number);
+    const h = Number.isFinite(hRaw) ? hRaw : 7;
+    const m = Number.isFinite(mRaw) ? mRaw : 0;
+    const ampm = h < 12 ? "오전" : "오후";
+    const h12 = h % 12 === 0 ? 12 : h % 12;
+    return { ampm, timeText: `${h12}:${String(m).padStart(2, "0")}` };
+  };
+
+  const formatCountdownKo = (diffMs) => {
+    if (!Number.isFinite(diffMs) || diffMs <= 0) return "곧 울려요";
+    const totalMin = Math.ceil(diffMs / 60000);
+    if (totalMin <= 1) return "1분 이내에 울려요";
+    const d = Math.floor(totalMin / 1440);
+    const h = Math.floor((totalMin % 1440) / 60);
+    const m = totalMin % 60;
+    const parts = [];
+    if (d > 0) parts.push(`${d}일`);
+    if (h > 0) parts.push(`${h}시간`);
+    if (m > 0) parts.push(`${m}분`);
+    return `${parts.join(" ")} 후에 울려요`;
+  };
+
+  const getNextAlarmTargetMs = (al, nowMs = Date.now()) => {
+    if (!al || !al.enabled) return null;
+    if (al.type === "once") {
+      const t = Number(al.targetMs) || 0;
+      return t > nowMs ? t : null;
+    }
+    const [hh, mm] = String(al.time || "07:00").split(":").map(Number);
+    if (!Number.isFinite(hh) || !Number.isFinite(mm)) return null;
+    const days = resolveAlarmDays(al);
+    const base = new Date(nowMs);
+    for (let offset = 0; offset <= 7; offset++) {
+      const cand = new Date(base.getFullYear(), base.getMonth(), base.getDate() + offset, hh, mm, 0, 0);
+      if (cand.getTime() <= nowMs) continue;
+      if (days.length === 0 || days.includes(cand.getDay())) {
+        return cand.getTime();
+      }
+    }
+    return null;
+  };
+
+  const parseQuickAlarmPresetMin = (raw) => {
+    const s = String(raw || "").trim();
+    const hM = s.match(/(\d+)\s*시간/);
+    const mM = s.match(/(\d+)\s*분/);
+    let total = (hM ? Number(hM[1]) * 60 : 0) + (mM ? Number(mM[1]) : 0);
+    if (total <= 0) {
+      const n = Number(s.replace(/[^\d]/g, ""));
+      total = Number.isFinite(n) && n > 0 ? n : 5;
+    }
+    return total;
+  };
+
+  const openWakeupAlarmModal = (existing = null) => {
+    unlockAudioContext();
+    if (existing) {
+      const [hRaw, mRaw] = String(existing.time || "07:00").split(":").map(Number);
+      const h = Number.isFinite(hRaw) ? hRaw : 7;
+      const m = Number.isFinite(mRaw) ? mRaw : 0;
+      setEditingAlarmId(existing.id);
+      setAlarmAmPmDraft(h < 12 ? "AM" : "PM");
+      setAlarmHourDraft(h % 12 === 0 ? 12 : h % 12);
+      setAlarmMinDraft(m);
+      setAlarmTimeDraft(existing.time || "07:00");
+      setAlarmLabelDraft(existing.label || "");
+      setAlarmDaysDraft(resolveAlarmDays(existing));
+      setAlarmSoundIdDraft(existing.soundId || "morning");
+      setAlarmVolDraft(typeof existing.volume === "number" ? existing.volume : alarmDefaultVolume);
+      setAlarmVibDraft(existing.vibrate !== false);
+    } else {
+      const now = new Date();
+      const next = new Date(now.getTime() + 60000);
+      const h = next.getHours();
+      const m = next.getMinutes();
+      setEditingAlarmId(null);
+      setAlarmAmPmDraft(h < 12 ? "AM" : "PM");
+      setAlarmHourDraft(h % 12 === 0 ? 12 : h % 12);
+      setAlarmMinDraft(m);
+      setAlarmTimeDraft(`${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`);
+      setAlarmLabelDraft("");
+      setAlarmDaysDraft([0, 1, 2, 3, 4, 5, 6]);
+      setAlarmSoundIdDraft("morning");
+      setAlarmVolDraft(alarmDefaultVolume);
+      setAlarmVibDraft(timerVibrateEnabled);
+    }
+    setAlarmMenuOpenId(null);
+    setAlarmSheetMode("wakeup");
+  };
+
+  const openQuickAlarmModal = ({ presetMin = 0, memo = "" } = {}) => {
+    unlockAudioContext();
+    setQuickAlarmAddMin(Math.max(0, Number(presetMin) || 0));
+    setAlarmQuickMemoDraft(String(memo || ""));
+    setAlarmSoundIdDraft("morning");
+    setAlarmVolDraft(alarmDefaultVolume);
+    setAlarmVibDraft(timerVibrateEnabled);
+    setAlarmMenuOpenId(null);
+    setAlarmSheetMode("quick");
+  };
+
+  const handleSaveWakeupAlarm = () => {
+    unlockAudioContext();
+    const h24 =
+      alarmAmPmDraft === "AM"
+        ? alarmHourDraft === 12 ? 0 : alarmHourDraft
+        : alarmHourDraft === 12 ? 12 : alarmHourDraft + 12;
+    const hhmm = `${String(h24).padStart(2, "0")}:${String(alarmMinDraft).padStart(2, "0")}`;
+    const cleanDays = [...new Set(alarmDaysDraft)].sort((a, b) => a - b);
+    const rep =
+      cleanDays.length === 0
+        ? "once"
+        : cleanDays.length === 7
+        ? "everyday"
+        : cleanDays.join(",") === "1,2,3,4,5"
+        ? "weekday"
+        : cleanDays.join(",") === "0,6"
+        ? "weekend"
+        : "custom";
+    const lbl = alarmLabelDraft.trim() || "모닝콜";
+    const payload = {
+      type: "daily",
+      time: hhmm,
+      repeat: rep,
+      days: cleanDays,
+      label: lbl,
+      soundId: alarmSoundIdDraft || "morning",
+      volume: Math.max(0, Math.min(100, Number(alarmVolDraft) || 0)),
+      vibrate: Boolean(alarmVibDraft),
+      enabled: true,
+      lastFiredKey: ""
+    };
+    saveAlarmDefaultVolume(payload.volume);
+    if (editingAlarmId) {
+      saveCustomAlarms((prev) => prev.map((x) => (x.id === editingAlarmId ? { ...x, ...payload } : x)));
+      showToast(`☀️ '${lbl}' (${hhmm}) 알람이 수정되었습니다!`);
+    } else {
+      saveCustomAlarms((prev) => [{ id: `al-${Date.now()}`, ...payload }, ...prev]);
+      showToast(`☀️ '${lbl}' (${hhmm}) 기상 알람이 저장되었습니다!`);
+    }
+    setEditingAlarmId(null);
+    setAlarmSheetMode("");
+  };
+
+  const handleSaveQuickAlarm = () => {
+    unlockAudioContext();
+    const m = Math.max(1, Math.min(1440, Number(quickAlarmAddMin) || 0));
+    if (m <= 0) {
+      showToast("1분 이상 시간을 선택해 주세요.");
+      return;
+    }
+    const tMs = Date.now() + m * 60000;
+    const d = new Date(tMs);
+    const hhmmStr = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+    const lbl = alarmQuickMemoDraft.trim() || `${m >= 60 && m % 60 === 0 ? `${m / 60}시간` : `${m}분`} 후 알람`;
+    const vol = Math.max(0, Math.min(100, Number(alarmVolDraft) || 0));
+    saveAlarmDefaultVolume(vol);
+    saveCustomAlarms((prev) => [
+      {
+        id: `al-${Date.now()}`,
+        type: "once",
+        time: hhmmStr,
+        targetMs: tMs,
+        repeat: "once",
+        days: [],
+        label: lbl,
+        soundId: alarmSoundIdDraft || "morning",
+        volume: vol,
+        vibrate: Boolean(alarmVibDraft),
+        enabled: true,
+        lastFiredKey: ""
+      },
+      ...prev
+    ]);
+    setAlarmQuickMemoDraft("");
+    setQuickAlarmAddMin(0);
+    setAlarmSheetMode("");
+    showToast(`⚡ ${m}분 후 (${hhmmStr}) '${lbl}' 퀵 알람이 저장되었습니다!`);
+  };
+
+  const handleSnoozeRingingAlarm = (snoozeMinutes = 5) => {
+    stopAlarmAudio();
+    const tMs = Date.now() + snoozeMinutes * 60000;
+    const d = new Date(tMs);
+    const hhmmStr = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+    const baseLabel = completedAlertAlarmMeta?.label || timerCompletedAlert || "알람";
+    saveCustomAlarms((prev) => [
+      {
+        id: `al-snz-${Date.now()}`,
+        type: "once",
+        time: hhmmStr,
+        targetMs: tMs,
+        repeat: "once",
+        days: [],
+        label: `${baseLabel} (다시울림)`,
+        soundId: completedAlertAlarmMeta?.soundId || "morning",
+        volume: typeof completedAlertAlarmMeta?.volume === "number" ? completedAlertAlarmMeta.volume : alarmDefaultVolume,
+        vibrate: completedAlertAlarmMeta?.vibrate !== false,
+        enabled: true,
+        lastFiredKey: ""
+      },
+      ...prev
+    ]);
+    setCompletedAlertUrl("");
+    setCompletedAlertAlarmMeta(null);
+    setTimerCompletedAlert("");
+    showToast(`💤 ${snoozeMinutes}분 후 (${hhmmStr})에 다시 울립니다!`);
+  };
 
   const formatDurationSecKo = (sec) => {
     const s = Math.max(0, Math.round(Number(sec) || 0));
@@ -6687,8 +7036,10 @@ function MainApp() {
     } catch (e) {}
   };
 
-  const playAlarmSoundById = (soundId = "morning", forcePlay = false) => {
-    if (!forcePlay && !timerSoundEnabled) return null;
+  const playAlarmSoundById = (soundId = "morning", forcePlay = false, volumePct = null) => {
+    const volRatio = Math.max(0, Math.min(1, (typeof volumePct === "number" ? volumePct : alarmDefaultVolume) / 100));
+    if (!forcePlay && (!timerSoundEnabled || volRatio <= 0)) return null;
+    if (volRatio <= 0) return null;
     stopAlarmAudio();
     const sid = String(soundId || "morning");
     const cloudMatch = customAlarmSounds.find((s) => s.id === sid);
@@ -6698,13 +7049,13 @@ function MainApp() {
     if (targetUrl && (targetUrl.startsWith("data:audio/") || /\.(mp3|wav|ogg|m4a|aac)(\?|$)/i.test(targetUrl))) {
       try {
         const audio = new Audio(targetUrl);
-        audio.volume = 0.85;
+        audio.volume = volRatio;
         alarmAudioRef.current = audio;
         setPreviewingSoundId(sid);
         audio.onended = () => setPreviewingSoundId(null);
         audio.play().catch(() => {
           setPreviewingSoundId(null);
-          playBuiltinMelody("morning");
+          playBuiltinMelody("morning", volRatio);
         });
         return { externalUrl: "" };
       } catch (e) {}
@@ -6715,12 +7066,13 @@ function MainApp() {
       : dreamMatch
       ? "lullaby"
       : "morning";
-    playBuiltinMelody(melodyKey);
+    playBuiltinMelody(melodyKey, volRatio);
     return { externalUrl: targetUrl && !targetUrl.startsWith("data:") ? targetUrl : "" };
   };
 
-  const playBuiltinMelody = (melodyKey = "chime") => {
+  const playBuiltinMelody = (melodyKey = "chime", volRatio = 0.85) => {
     try {
+      const safeVol = Math.max(0.01, Math.min(1, Number(volRatio) || 0.85));
       const ctx = unlockAudioContext();
       if (!ctx) return;
       const now = ctx.currentTime;
@@ -6732,6 +7084,7 @@ function MainApp() {
         digital: { type: "square", step: 0.13, notes: [987.77, 987.77, 0, 987.77, 987.77, 0, 1174.66] }
       };
       const cfg = MELODIES[melodyKey] || MELODIES.chime;
+      const peakGain = Math.max(0.01, (cfg.type === "square" ? 0.16 : 0.3) * safeVol);
       cfg.notes.forEach((freq, idx) => {
         if (!freq) return;
         const osc = ctx.createOscillator();
@@ -6739,7 +7092,7 @@ function MainApp() {
         osc.type = cfg.type;
         osc.frequency.setValueAtTime(freq, now + idx * cfg.step);
         gain.gain.setValueAtTime(0.001, now + idx * cfg.step);
-        gain.gain.exponentialRampToValueAtTime(cfg.type === "square" ? 0.14 : 0.26, now + idx * cfg.step + 0.02);
+        gain.gain.exponentialRampToValueAtTime(peakGain, now + idx * cfg.step + 0.02);
         gain.gain.exponentialRampToValueAtTime(0.001, now + idx * cfg.step + cfg.step - 0.02);
         osc.connect(gain);
         gain.connect(ctx.destination);
@@ -6749,10 +7102,12 @@ function MainApp() {
     } catch (e) {}
   };
 
-  const playTimerAlarmSound = (kind = "timer", soundId = null) => {
+  const playTimerAlarmSound = (kind = "timer", soundId = null, volumePct = null) => {
     if (!timerSoundEnabled) return null;
-    if (soundId) return playAlarmSoundById(soundId, false);
-    playBuiltinMelody(kind === "alarm" ? "morning" : "chime");
+    if (soundId) return playAlarmSoundById(soundId, false, volumePct);
+    const vRatio = Math.max(0, Math.min(1, (typeof volumePct === "number" ? volumePct : alarmDefaultVolume) / 100));
+    if (vRatio <= 0) return null;
+    playBuiltinMelody(kind === "alarm" ? "morning" : "chime", vRatio);
     return null;
   };
 
@@ -8968,7 +9323,8 @@ function MainApp() {
               baby_health_tags: Array.isArray(d.baby_health_tags) && d.baby_health_tags.length > 0 ? d.baby_health_tags.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_BABY_HEALTH_TAGS],
               schedule_places: Array.isArray(d.schedule_places) && d.schedule_places.length > 0 ? d.schedule_places.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_SCHEDULE_PLACES],
               house_warranty_brands: Array.isArray(d.house_warranty_brands) && d.house_warranty_brands.length > 0 ? d.house_warranty_brands.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_HOUSE_WARRANTY_BRANDS],
-              timer_presets: Array.isArray(d.timer_presets) && d.timer_presets.length > 0 ? d.timer_presets.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_TIMER_PRESETS]
+              timer_presets: Array.isArray(d.timer_presets) && d.timer_presets.length > 0 ? d.timer_presets.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_TIMER_PRESETS],
+              quick_alarm_presets: Array.isArray(d.quick_alarm_presets) && d.quick_alarm_presets.length > 0 ? d.quick_alarm_presets.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_QUICK_ALARM_PRESETS]
             };
             setCustomCategories(nextCats);
             try { localStorage.setItem("kim_custom_categories_v1", JSON.stringify(nextCats)); } catch (e) {}
@@ -9047,6 +9403,11 @@ function MainApp() {
           if (typeof d.vibrateEnabled === "boolean") {
             setTimerVibrateEnabled(d.vibrateEnabled);
             try { localStorage.setItem("kim_timer_vibrate_v1", String(d.vibrateEnabled)); } catch (e) {}
+          }
+          if (typeof d.defaultVolume === "number" && Number.isFinite(d.defaultVolume)) {
+            const vClean = Math.max(0, Math.min(100, Math.round(d.defaultVolume)));
+            setAlarmDefaultVolume(vClean);
+            try { localStorage.setItem("kim_alarm_volume_v1", String(vClean)); } catch (e) {}
           }
           if (Array.isArray(d.stopwatchRecords)) {
             setKitchenTimer((prev) => ({ ...prev, records: d.stopwatchRecords.slice(0, 10) }));
@@ -9757,6 +10118,7 @@ function MainApp() {
         notifSilentMode,
         customAlarms,
         customAlarmSounds,
+        alarmDefaultVolume,
         ...(isAdminUnlocked ? { babyDiaryEntries: safeDiaryEntries, privateSchedules } : {}),
         ...(isSuhyeokAdmin ? { condolenceList } : {}),
         ...(isSuhyeokAdmin ? { condolencePin } : {})
@@ -9996,7 +10358,8 @@ function MainApp() {
           baby_health_tags: Array.isArray(payload.customCategories.baby_health_tags) && payload.customCategories.baby_health_tags.length > 0 ? payload.customCategories.baby_health_tags.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_BABY_HEALTH_TAGS],
           schedule_places: Array.isArray(payload.customCategories.schedule_places) && payload.customCategories.schedule_places.length > 0 ? payload.customCategories.schedule_places.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_SCHEDULE_PLACES],
           house_warranty_brands: Array.isArray(payload.customCategories.house_warranty_brands) && payload.customCategories.house_warranty_brands.length > 0 ? payload.customCategories.house_warranty_brands.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_HOUSE_WARRANTY_BRANDS],
-          timer_presets: Array.isArray(payload.customCategories.timer_presets) && payload.customCategories.timer_presets.length > 0 ? payload.customCategories.timer_presets.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_TIMER_PRESETS]
+          timer_presets: Array.isArray(payload.customCategories.timer_presets) && payload.customCategories.timer_presets.length > 0 ? payload.customCategories.timer_presets.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_TIMER_PRESETS],
+          quick_alarm_presets: Array.isArray(payload.customCategories.quick_alarm_presets) && payload.customCategories.quick_alarm_presets.length > 0 ? payload.customCategories.quick_alarm_presets.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_QUICK_ALARM_PRESETS]
         };
         setCustomCategories(nextCats);
         try { localStorage.setItem("kim_custom_categories_v1", JSON.stringify(nextCats)); } catch (e) {}
@@ -10226,6 +10589,7 @@ function MainApp() {
               {
                 ...(Array.isArray(payload.customAlarms) ? { alarms: payload.customAlarms } : {}),
                 ...(Array.isArray(payload.customAlarmSounds) ? { sounds: payload.customAlarmSounds } : {}),
+                ...(typeof payload.alarmDefaultVolume === "number" ? { defaultVolume: payload.alarmDefaultVolume } : {}),
                 updatedAtMs: Date.now()
               },
               { merge: true }
@@ -10292,6 +10656,7 @@ function MainApp() {
                 schedule_places: Array.isArray(payload.customCategories.schedule_places) && payload.customCategories.schedule_places.length > 0 ? payload.customCategories.schedule_places : [...DEFAULT_SCHEDULE_PLACES],
                 house_warranty_brands: Array.isArray(payload.customCategories.house_warranty_brands) && payload.customCategories.house_warranty_brands.length > 0 ? payload.customCategories.house_warranty_brands : [...DEFAULT_HOUSE_WARRANTY_BRANDS],
                 timer_presets: Array.isArray(payload.customCategories.timer_presets) && payload.customCategories.timer_presets.length > 0 ? payload.customCategories.timer_presets : [...DEFAULT_TIMER_PRESETS],
+                quick_alarm_presets: Array.isArray(payload.customCategories.quick_alarm_presets) && payload.customCategories.quick_alarm_presets.length > 0 ? payload.customCategories.quick_alarm_presets : [...DEFAULT_QUICK_ALARM_PRESETS],
                 updatedAtMs: Date.now()
               },
               { merge: true }
@@ -17769,6 +18134,8 @@ ${item.memo}` : `${item.title} 다녀옴!`,
         ? [...DEFAULT_HOUSE_WARRANTY_BRANDS]
         : kind === "timer_presets"
         ? [...DEFAULT_TIMER_PRESETS]
+        : kind === "quick_alarm_presets"
+        ? [...DEFAULT_QUICK_ALARM_PRESETS]
         : [...NOTICE_CATEGORIES];
     await saveCustomCategoriesToCloud({ ...customCategories, [kind]: defaults }, "↺ 기본 분류 목록으로 복원했습니다.");
   };
@@ -20104,6 +20471,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
     isHandoverModalOpen ||
     isHomeDdayPickerOpen ||
     Boolean(categoryManageKind) ||
+    Boolean(alarmSheetMode) ||
     isPrivateCalModalOpen ||
     isPrivateCalCsvModalOpen ||
     isCondolenceFormOpen ||
@@ -20196,6 +20564,8 @@ ${item.memo}` : `${item.title} 다녀옴!`,
       setIsHandoverModalOpen(false);
       setIsHomeDdayPickerOpen(false);
       setCategoryManageKind("");
+      setAlarmSheetMode("");
+      setAlarmMenuOpenId(null);
       setQuickFridgeItem(null);
       setLiveActivityPopup(null);
       setActivityEditModal(null);
@@ -20320,6 +20690,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
       recipes: "레시피",
       baby: "육아",
       house: "살림수첩",
+      alarm: "모닝콜·알람",
       condolence: "경조사비"
     };
     if (typeof document !== "undefined") {
@@ -20512,36 +20883,51 @@ ${item.memo}` : `${item.title} 다녀옴!`,
         return { ...prev, targetEndMs: targetEnd, remainingSec: rem };
       });
     };
+    const pushRunningStatusBar = (forceNow = false) => {
+      setKitchenTimer((cur) => {
+        if (!cur.running) return cur;
+        const nowMs = Date.now();
+        const sec = cur.mode === "stopwatch"
+          ? Math.max(0, Math.floor((nowMs - (Number(cur.startedAtMs) || nowMs)) / 1000))
+          : Math.max(0, Math.ceil(((Number(cur.targetEndMs) || nowMs) - nowMs) / 1000));
+        if (!forceNow && Math.abs(sec - lastStatusNotifSecRef.current) < 5) return cur;
+        lastStatusNotifSecRef.current = sec;
+        const h = Math.floor(sec / 3600);
+        const m = String(Math.floor((sec % 3600) / 60)).padStart(2, "0");
+        const s = String(sec % 60).padStart(2, "0");
+        const tStr = h > 0 ? `${h}:${m}:${s}` : `${m}:${s}`;
+        const durKo = formatDurationSecKo(sec);
+        const startPart = cur.mode === "stopwatch" && cur.cookStartTimeStr ? `시작 ${cur.cookStartTimeStr} · ` : "";
+        const titleTxt = cur.mode === "stopwatch"
+          ? `⏱️ 스톱워치 경과 ${durKo} (${tStr})`
+          : `⏲️ 타이머 남은시간 ${durKo} (${tStr})`;
+        const bodyTxt = cur.mode === "stopwatch"
+          ? `${startPart}현재 ${durKo} 경과 중 · 탭하여 확인`
+          : `${cur.label || "타이머"} 진행 중 · ${durKo} 남음`;
+        const tsVal = cur.mode === "stopwatch" ? (Number(cur.startedAtMs) || nowMs) : nowMs;
+        setTimeout(() => {
+          showStatusBarNotification(titleTxt, bodyTxt, "app-stopwatch-running", { forceSilent: true, timestamp: tsVal });
+        }, 0);
+        return cur;
+      });
+    };
     tick();
-    const tid = setInterval(tick, 500);
+    pushRunningStatusBar(true);
+    const tid = setInterval(() => {
+      tick();
+      pushRunningStatusBar(false);
+    }, 500);
     const handleVisForStatusBar = () => {
       tick();
       if (document.visibilityState === "hidden") {
-        setKitchenTimer((cur) => {
-          if (cur.running) {
-            const nowMs = Date.now();
-            const sec = cur.mode === "stopwatch"
-              ? Math.max(0, Math.floor((nowMs - (Number(cur.startedAtMs) || nowMs)) / 1000))
-              : Math.max(0, Math.ceil(((Number(cur.targetEndMs) || nowMs) - nowMs) / 1000));
-            const h = Math.floor(sec / 3600);
-            const m = String(Math.floor((sec % 3600) / 60)).padStart(2, "0");
-            const s = String(sec % 60).padStart(2, "0");
-            const tStr = h > 0 ? `${h}:${m}:${s}` : `${m}:${s}`;
-            const startPart = cur.mode === "stopwatch" && cur.cookStartTimeStr ? `시작 ${cur.cookStartTimeStr} · ` : "";
-            const titleTxt = cur.mode === "stopwatch" ? `⏱️ 스톱워치 실행 중 (${tStr})` : `⏲️ 타이머 실행 중 (${tStr})`;
-            const bodyTxt = `${startPart}앱으로 돌아와 확인하세요.`;
-            setTimeout(() => {
-              showStatusBarNotification(titleTxt, bodyTxt, "app-stopwatch-running");
-            }, 0);
-          }
-          return cur;
-        });
+        pushRunningStatusBar(true);
       }
     };
     document.addEventListener("visibilitychange", handleVisForStatusBar);
     window.addEventListener("focus", tick);
     return () => {
       clearInterval(tid);
+      lastStatusNotifSecRef.current = -1;
       document.removeEventListener("visibilitychange", handleVisForStatusBar);
       window.removeEventListener("focus", tick);
     };
@@ -20560,23 +20946,27 @@ ${item.memo}` : `${item.title} 다녀옴!`,
       const isWknd = isHolidayOrWeekend(todayStr);
       let changed = false;
 
+      const curDow = now.getDay();
       const updated = customAlarms.map((al) => {
         if (!al || !al.enabled) return al;
+        const shouldVib = al.vibrate !== false && timerVibrateEnabled;
+        const alVol = typeof al.volume === "number" ? al.volume : alarmDefaultVolume;
         if (al.type === "once" && Number(al.targetMs) > 0) {
           if (nowMs >= Number(al.targetMs)) {
             changed = true;
-            const titleTxt = al.label || "예약 알람";
+            const titleTxt = al.label || "퀵 알람";
             setTimeout(() => {
-              const res = playTimerAlarmSound("alarm", al.soundId || "morning");
+              const res = playTimerAlarmSound("alarm", al.soundId || "morning", alVol);
               setCompletedAlertUrl(res?.externalUrl || "");
-              triggerTimerVibration([400, 150, 400, 150, 500]);
+              setCompletedAlertAlarmMeta({ label: titleTxt, soundId: al.soundId || "morning", volume: alVol, vibrate: al.vibrate !== false });
+              if (shouldVib) triggerTimerVibration([400, 150, 400, 150, 500]);
               setTimerCompletedAlert(titleTxt);
               showToast(`⏰ [${titleTxt}] 알람 시간입니다!`);
               showStatusBarNotification(
                 `⏰ ${titleTxt}`,
                 "설정하신 알림 시간이 되었습니다.",
                 `custom-alarm-${al.id}-${Date.now()}`,
-                { forceSound: timerSoundEnabled, vibrate: timerVibrateEnabled ? [400, 150, 400, 150, 500] : undefined }
+                { forceSound: timerSoundEnabled && alVol > 0, vibrate: shouldVib ? [400, 150, 400, 150, 500] : undefined }
               );
             }, 0);
             return { ...al, enabled: false, lastFiredKey: todayStr };
@@ -20584,27 +20974,33 @@ ${item.memo}` : `${item.title} 다녀옴!`,
           return al;
         }
         if (al.type === "daily" && al.time === hhmm && al.lastFiredKey !== todayStr) {
-          if (al.repeat === "weekday" && isWknd) return al;
-          if (al.repeat === "weekend" && !isWknd) return al;
+          if (Array.isArray(al.days)) {
+            if (al.days.length > 0 && !al.days.includes(curDow)) return al;
+          } else {
+            if (al.repeat === "weekday" && isWknd) return al;
+            if (al.repeat === "weekend" && !isWknd) return al;
+          }
           changed = true;
           const titleTxt = al.label || "모닝콜";
           setTimeout(() => {
-            const res = playTimerAlarmSound("alarm", al.soundId || "morning");
+            const res = playTimerAlarmSound("alarm", al.soundId || "morning", alVol);
             setCompletedAlertUrl(res?.externalUrl || "");
-            triggerTimerVibration([400, 150, 400, 150, 500]);
+            setCompletedAlertAlarmMeta({ label: titleTxt, soundId: al.soundId || "morning", volume: alVol, vibrate: al.vibrate !== false });
+            if (shouldVib) triggerTimerVibration([400, 150, 400, 150, 500]);
             setTimerCompletedAlert(`${titleTxt} (${al.time})`);
             showToast(`☀️ [${al.time}] ${titleTxt} 울림!`);
             showStatusBarNotification(
               `☀️ [${al.time}] ${titleTxt}`,
               "좋은 하루 시작하세요! 모닝콜 알람입니다.",
               `morning-alarm-${al.id}-${todayStr}`,
-              { forceSound: timerSoundEnabled, vibrate: timerVibrateEnabled ? [400, 150, 400, 150, 500] : undefined }
+              { forceSound: timerSoundEnabled && alVol > 0, vibrate: shouldVib ? [400, 150, 400, 150, 500] : undefined }
             );
           }, 0);
+          const isOnceOnly = al.repeat === "once" || (Array.isArray(al.days) && al.days.length === 0);
           return {
             ...al,
             lastFiredKey: todayStr,
-            ...(al.repeat === "once" ? { enabled: false } : {})
+            ...(isOnceOnly ? { enabled: false } : {})
           };
         }
         return al;
@@ -21641,6 +22037,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
               recipes: "보글보글 가족 레시피북 📖",
               bucket: "설레는 가족 버킷리스트 🌟",
               house: "든든한 우리집 살림수첩 🏠",
+              alarm: "상쾌한 모닝콜 · 알람 ⏰",
               pages: "공유노트 🗂️",
               ai: "똑똑한 AI 식단·요리 ✨",
               condolence: "경조사비 입출금내역 💌"
@@ -22304,6 +22701,34 @@ ${item.memo}` : `${item.title} 다녀옴!`,
               );
             })(),
             onClick: () => setActiveTab("house")
+          },
+          alarm: {
+            title: "⏰ 모닝콜·알람",
+            actionLabel: "열기 >",
+            actionColor: customAlarms.some((a) => a && a.enabled) ? "text-[#35503C]" : "text-stone-500",
+            borderHover: "hover:border-stone-400",
+            sub: (() => {
+              const nowMs = Date.now();
+              let nearest = null;
+              let nearestMs = Infinity;
+              customAlarms.forEach((al) => {
+                const t = getNextAlarmTargetMs(al, nowMs);
+                if (t && t < nearestMs) {
+                  nearestMs = t;
+                  nearest = al;
+                }
+              });
+              if (nearest) {
+                const { ampm, timeText } = formatAlarm12h(nearest.time);
+                return (
+                  <span className="text-[#35503C] font-black">
+                    {ampm} {timeText} · {formatCountdownKo(nearestMs - nowMs).replace(" 후에 울려요", " 후")}
+                  </span>
+                );
+              }
+              return <span className="text-stone-400">기상 · 퀵 알람 설정</span>;
+            })(),
+            onClick: () => setActiveTab("alarm")
           },
           ai: {
             title: "✨ AI추천",
@@ -23233,7 +23658,7 @@ time: "", location: "",
             });
             const HOME_MENU_GROUPS = [
               { id: "meal", label: "🍽️ 식단 · 살림", ids: ["daily", "fridge", "shopping", "house", "monthly_cal", "monthly_exp", "recipes", "ai"] },
-              { id: "family", label: "👶 육아 · 일정", ids: ["baby", "routine_tab"] },
+              { id: "family", label: "👶 육아 · 일정", ids: ["baby", "routine_tab", "alarm"] },
               { id: "notes", label: "🗂️ 가족 기록 · 소통", ids: ["pages", "notices", "bucket", "handover"] }
             ];
             const assigned = new Set(HOME_MENU_GROUPS.flatMap((g) => g.ids));
@@ -26089,7 +26514,7 @@ time: "", location: "",
                                       : ev.done
                                       ? "border-l-[1.5px] border-emerald-400/70 bg-stone-100/75 text-stone-500/80"
                                       : isRangeEv
-                                      ? `${isRangeCont ? "border-l-0 bg-teal-50/90 text-teal-900" : "border-l-[2px] border-teal-600 bg-teal-50/95 text-teal-950"}`
+                                      ? `${isRangeCont ? "border-l-0 bg-[#EEF3EE] text-[#2B4333]" : "border-l-[2px] border-[#3F624D] bg-[#EEF3EE] text-[#2B4333]"}`
                                       : "border-l-[1.5px] border-[#3F624D] bg-[#EEF3EE] text-[#2B4333]";
                                   return (
                                     <div
@@ -32114,6 +32539,1083 @@ time: "", location: "",
 
 
       {/* ==========================================
+          ⏰ 독립 메뉴: 모닝콜 · 알람 (알라미 UX · 세이지그린 톤 · 7요일 반복 · 누적 퀵알람 · 취침대기/폰시계연동)
+      ========================================== */}
+      {activeTab === "alarm" && (!canViewTab("alarm") ? renderLockedTabScreen("⏰ 모닝콜·알람") : (() => {
+        const nowMs = Date.now();
+        let nextTargetMs = Infinity;
+        let nextAlarmObj = null;
+        customAlarms.forEach((al) => {
+          const t = getNextAlarmTargetMs(al, nowMs);
+          if (t && t < nextTargetMs) {
+            nextTargetMs = t;
+            nextAlarmObj = al;
+          }
+        });
+        const nextCountdownText = nextAlarmObj ? formatCountdownKo(nextTargetMs - nowMs) : "활성화된 알람이 없어요";
+        const filteredAlarms = customAlarms
+          .filter((al) => {
+            if (!al) return false;
+            if (alarmFilterTab === "daily") return al.type !== "once";
+            if (alarmFilterTab === "once") return al.type === "once";
+            return true;
+          })
+          .sort((a, b) => {
+            if (Boolean(a.enabled) !== Boolean(b.enabled)) return a.enabled ? -1 : 1;
+            return String(a.time || "").localeCompare(String(b.time || ""));
+          });
+        const allSoundOptions = [
+          ...ALARM_MELODY_PRESETS.map((m) => ({ id: m.id, label: m.label, group: "기본 멜로디" })),
+          ...customAlarmSounds.map((cs) => ({ id: cs.id, label: `☁️ ${cs.label}`, group: "내 클라우드 음원" })),
+          ...babyDreamLinks.map((dl) => ({ id: dl.id, label: `🌙 ${dl.label}`, group: "아기꿈나라" }))
+        ];
+        const getSoundDisplayName = (sid) =>
+          allSoundOptions.find((o) => o.id === sid)?.label || "☀️ 상쾌한 모닝 멜로디";
+
+        const previewH24 =
+          alarmAmPmDraft === "AM"
+            ? alarmHourDraft === 12 ? 0 : alarmHourDraft
+            : alarmHourDraft === 12 ? 12 : alarmHourDraft + 12;
+        const previewHHMM = `${String(previewH24).padStart(2, "0")}:${String(alarmMinDraft).padStart(2, "0")}`;
+        const previewTargetMs = getNextAlarmTargetMs(
+          { type: "daily", time: previewHHMM, days: alarmDaysDraft, enabled: true },
+          nowMs
+        );
+        const previewWakeupCountdown = previewTargetMs ? formatCountdownKo(previewTargetMs - nowMs) : "1분 이내에 울려요";
+
+        const quickTargetDate = new Date(nowMs + Math.max(0, quickAlarmAddMin) * 60000);
+        const quickTarget12 = formatAlarm12h(
+          `${String(quickTargetDate.getHours()).padStart(2, "0")}:${String(quickTargetDate.getMinutes()).padStart(2, "0")}`
+        );
+
+        const canEditAlarm = canEditTab("alarm");
+        const timedRoutines = (familyRoutines || []).filter((r) => r && r.scheduledTime && /^\d{2}:\d{2}$/.test(r.scheduledTime));
+
+        return (
+          <div className="space-y-3 pb-28">
+            {/* 상단 카운트다운 히어로 & 제어 바 */}
+            <div className="bg-white rounded-2xl border border-stone-200 shadow-sm p-4 space-y-2.5">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <div className="text-[11px] font-extrabold text-stone-400">
+                    {nextAlarmObj ? `다음 알람 · ${formatAlarm12h(nextAlarmObj.time).ampm} ${formatAlarm12h(nextAlarmObj.time).timeText} (${nextAlarmObj.label || "모닝콜"})` : "알람 대기 중"}
+                  </div>
+                  <h2 className="text-[18px] font-black text-stone-900 tracking-tight mt-0.5 leading-snug">
+                    {nextCountdownText}
+                  </h2>
+                </div>
+                <div className="flex items-center gap-1 shrink-0">
+                  <button
+                    type="button"
+                    onClick={toggleAlarmWakeLock}
+                    className={`h-8 px-2 rounded-xl border text-[11px] font-extrabold whitespace-nowrap transition ${
+                      alarmWakeLockEnabled ? "bg-[#3F624D] border-[#3F624D] text-white" : "bg-stone-100 border-stone-200 text-stone-600 hover:bg-stone-200"
+                    }`}
+                    title="충전 중 화면 꺼짐 방지(취침 대기 모드)"
+                  >
+                    {alarmWakeLockEnabled ? "🌙 대기중" : "🌙 취침대기"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const next = !timerSoundEnabled;
+                      setTimerSoundEnabled(next);
+                      try { localStorage.setItem("kim_timer_sound_v1", String(next)); } catch (e) {}
+                      if (user && db) setDoc(getDocRef("family_meta_v4", "timer_alarms_v1"), { soundEnabled: next, updatedAtMs: Date.now() }, { merge: true }).catch(() => {});
+                      if (!next) stopAlarmAudio();
+                      else unlockAudioContext();
+                      showToast(next ? "🔊 알람 소리가 켜졌습니다." : "🔇 알람 소리가 꺼졌습니다.");
+                    }}
+                    className={`h-8 px-2 rounded-xl border text-[11px] font-extrabold whitespace-nowrap transition ${
+                      timerSoundEnabled ? "bg-[#EEF3EE] border-[#C9D8CC] text-[#35503C]" : "bg-stone-100 border-stone-200 text-stone-400"
+                    }`}
+                    title="알람 소리 켜기/끄기"
+                  >
+                    {timerSoundEnabled ? "🔊" : "🔇"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const next = !timerVibrateEnabled;
+                      setTimerVibrateEnabled(next);
+                      try { localStorage.setItem("kim_timer_vibrate_v1", String(next)); } catch (e) {}
+                      if (user && db) setDoc(getDocRef("family_meta_v4", "timer_alarms_v1"), { vibrateEnabled: next, updatedAtMs: Date.now() }, { merge: true }).catch(() => {});
+                      if (next) triggerTimerVibration([80]);
+                      showToast(next ? "📳 진동 알림이 켜졌습니다." : "진동 알림이 꺼졌습니다.");
+                    }}
+                    className={`h-8 px-2 rounded-xl border text-[11px] font-extrabold whitespace-nowrap transition ${
+                      timerVibrateEnabled ? "bg-[#EEF3EE] border-[#C9D8CC] text-[#35503C]" : "bg-stone-100 border-stone-200 text-stone-400"
+                    }`}
+                    title="진동 켜기/끄기"
+                  >
+                    📳
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between gap-1.5 flex-wrap pt-1 border-t border-stone-100">
+                <div className="flex items-center gap-1">
+                  {[
+                    { id: "all", label: `전체 (${customAlarms.length})` },
+                    { id: "daily", label: `☀️ 기상 (${customAlarms.filter((a) => a && a.type !== "once").length})` },
+                    { id: "once", label: `⚡ 퀵 (${customAlarms.filter((a) => a && a.type === "once").length})` }
+                  ].map((ft) => (
+                    <button
+                      key={ft.id}
+                      type="button"
+                      onClick={() => setAlarmFilterTab(ft.id)}
+                      className={`h-7 px-2.5 rounded-lg text-[11px] font-extrabold whitespace-nowrap transition ${
+                        alarmFilterTab === ft.id
+                          ? "bg-[#3F624D] text-white"
+                          : "bg-stone-100 text-stone-600 hover:bg-stone-200"
+                      }`}
+                    >
+                      {ft.label}
+                    </button>
+                  ))}
+                </div>
+                <div className="flex items-center gap-1 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setAlarmSheetMode("music")}
+                    className="h-7 px-2 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 text-[11px] font-extrabold whitespace-nowrap"
+                  >
+                    🎵 음원
+                  </button>
+                  {canEditAlarm && (
+                    <button
+                      type="button"
+                      onClick={() => openCategoryManager("quick_alarm_presets")}
+                      className="h-7 px-2 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 text-[11px] font-extrabold whitespace-nowrap"
+                    >
+                      ⚙️ 프리셋
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* 알람 카드 리스트 (알라미 카드 레이아웃 · 세이지그린 톤) */}
+            {filteredAlarms.length === 0 ? (
+              <div className="bg-white rounded-2xl border border-stone-200 p-8 text-center space-y-3">
+                <div className="text-3xl">⏰</div>
+                <div className="text-[13.5px] font-black text-stone-800">등록된 알람이 없습니다</div>
+                <p className="text-[11.5px] text-stone-500">우측 하단 + 버튼으로 기상 알람이나 퀵 알람을 추가해 보세요.</p>
+                {canEditAlarm && (
+                  <div className="flex items-center justify-center gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => openWakeupAlarmModal(null)}
+                      className="h-9 px-3.5 rounded-xl bg-[#3F624D] hover:bg-[#35503C] text-white text-[12px] font-extrabold whitespace-nowrap"
+                    >
+                      ☀️ 기상 알람 추가
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => openQuickAlarmModal()}
+                      className="h-9 px-3.5 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-800 text-[12px] font-extrabold whitespace-nowrap"
+                    >
+                      ⚡ 퀵 알람
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-2.5">
+                {filteredAlarms.map((al) => {
+                  const { ampm, timeText } = formatAlarm12h(al.time);
+                  const days = resolveAlarmDays(al);
+                  const isQuick = al.type === "once";
+                  const remMs = isQuick && al.enabled && Number(al.targetMs) > nowMs ? Number(al.targetMs) - nowMs : null;
+                  const alVol = typeof al.volume === "number" ? al.volume : alarmDefaultVolume;
+                  const sndName = getSoundDisplayName(al.soundId || "morning").replace(/^[^\w가-힣]+\s*/, "");
+                  const isMenuOpen = alarmMenuOpenId === al.id;
+
+                  return (
+                    <div
+                      key={al.id}
+                      className={`relative bg-white rounded-2xl border p-4 shadow-sm transition ${
+                        al.enabled ? "border-stone-200" : "border-stone-200/70 opacity-65"
+                      }`}
+                    >
+                      {/* 상단: 요일 스트립(일~토) 또는 퀵알람 배지 + 토글 스위치 */}
+                      <div className="flex items-center justify-between gap-2 mb-1.5">
+                        {isQuick ? (
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <span className="px-2 py-0.5 rounded-md bg-amber-50 border border-amber-200 text-amber-800 text-[10.5px] font-extrabold whitespace-nowrap">
+                              ⚡ 퀵 알람
+                            </span>
+                            {remMs !== null && (
+                              <span className="text-[11px] font-extrabold text-[#35503C] whitespace-nowrap">
+                                {formatCountdownKo(remMs).replace(" 울려요", "")}
+                              </span>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-1.5 text-[11px] font-extrabold">
+                            {WEEKDAY_KO.map((wk, dIdx) => {
+                              const active = days.length === 0 ? false : days.includes(dIdx);
+                              return (
+                                <span
+                                  key={wk}
+                                  className={
+                                    active
+                                      ? al.enabled
+                                        ? "text-[#35503C] font-black"
+                                        : "text-stone-600"
+                                      : "text-stone-300 font-semibold"
+                                  }
+                                >
+                                  {wk}
+                                </span>
+                              );
+                            })}
+                            {days.length === 0 && (
+                              <span className="text-[10.5px] text-stone-400 font-bold ml-1">1회</span>
+                            )}
+                          </div>
+                        )}
+
+                        <button
+                          type="button"
+                          role="switch"
+                          aria-checked={Boolean(al.enabled)}
+                          disabled={!canEditAlarm}
+                          onClick={() => {
+                            if (!canEditAlarm) return;
+                            unlockAudioContext();
+                            saveCustomAlarms((prev) =>
+                              prev.map((x) => {
+                                if (x.id !== al.id) return x;
+                                const nextOn = !x.enabled;
+                                if (x.type === "once" && nextOn && (!x.targetMs || Number(x.targetMs) <= Date.now())) {
+                                  const [hh, mm] = String(x.time || "07:00").split(":").map(Number);
+                                  const cand = new Date();
+                                  cand.setHours(hh || 0, mm || 0, 0, 0);
+                                  if (cand.getTime() <= Date.now()) cand.setDate(cand.getDate() + 1);
+                                  return { ...x, enabled: true, targetMs: cand.getTime(), lastFiredKey: "" };
+                                }
+                                return { ...x, enabled: nextOn, ...(nextOn ? { lastFiredKey: "" } : {}) };
+                              })
+                            );
+                          }}
+                          className={`relative w-12 h-7 rounded-full transition-colors shrink-0 ${
+                            al.enabled ? "bg-[#3F624D]" : "bg-stone-300"
+                          }`}
+                          aria-label="알람 켜기/끄기"
+                        >
+                          <span
+                            className={`absolute top-0.5 left-0.5 w-6 h-6 rounded-full bg-white shadow transition-transform ${
+                              al.enabled ? "translate-x-5" : "translate-x-0"
+                            }`}
+                          />
+                        </button>
+                      </div>
+
+                      {/* 중단: 큰 시간 표시 + 라벨/음원 + ⋮ 메뉴 */}
+                      <div className="flex items-end justify-between gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (!canEditAlarm) return;
+                            if (isQuick) {
+                              const remMin = remMs ? Math.max(1, Math.ceil(remMs / 60000)) : 10;
+                              openQuickAlarmModal({ presetMin: remMin, memo: al.label || "" });
+                            } else {
+                              openWakeupAlarmModal(al);
+                            }
+                          }}
+                          className="text-left min-w-0 flex-1"
+                        >
+                          <div className="flex items-baseline gap-1.5">
+                            <span className={`text-[14px] font-bold ${al.enabled ? "text-stone-700" : "text-stone-400"}`}>
+                              {ampm}
+                            </span>
+                            <span className={`text-[30px] leading-none font-black tabular-nums tracking-tight ${al.enabled ? "text-stone-900" : "text-stone-400"}`}>
+                              {timeText}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-1.5 flex-wrap mt-2">
+                            {al.label && (
+                              <span className="text-[12px] font-extrabold text-stone-700 truncate max-w-[160px]">
+                                {al.label}
+                              </span>
+                            )}
+                            <span className="text-[10.5px] font-bold text-stone-400 truncate max-w-[120px]">
+                              🎵 {sndName}
+                            </span>
+                            {alVol === 0 && (
+                              <span className="px-1.5 py-0.5 rounded bg-rose-50 text-rose-600 text-[10px] font-extrabold whitespace-nowrap">
+                                🔇 볼륨 0%
+                              </span>
+                            )}
+                            {al.vibrate === false && (
+                              <span className="text-[10px] text-stone-400 font-bold whitespace-nowrap">진동끔</span>
+                            )}
+                          </div>
+                        </button>
+
+                        <div className="relative shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => setAlarmMenuOpenId(isMenuOpen ? null : al.id)}
+                            className="w-8 h-8 rounded-xl hover:bg-stone-100 text-stone-500 flex items-center justify-center text-[17px] font-black"
+                            aria-label="알람 더보기"
+                          >
+                            ⋮
+                          </button>
+                          {isMenuOpen && (
+                            <div className="absolute right-0 bottom-9 z-30 w-40 bg-white rounded-xl border border-stone-200 shadow-xl py-1 text-[11.5px] font-extrabold">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  playAlarmSoundById(al.soundId || "morning", true, alVol);
+                                  setAlarmMenuOpenId(null);
+                                  showToast(`🎵 '${sndName}' 미리듣기`);
+                                }}
+                                className="w-full text-left px-3 py-1.5 hover:bg-stone-50 text-stone-700 whitespace-nowrap"
+                              >
+                                ▶ 미리듣기
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setAlarmMenuOpenId(null);
+                                  exportAlarmToPhoneClockOrIcs(al);
+                                }}
+                                className="w-full text-left px-3 py-1.5 hover:bg-[#EEF3EE] text-[#35503C] whitespace-nowrap"
+                              >
+                                📱 폰 시계·캘린더 등록
+                              </button>
+                              {canEditAlarm && !isQuick && (
+                                <button
+                                  type="button"
+                                  onClick={() => openWakeupAlarmModal(al)}
+                                  className="w-full text-left px-3 py-1.5 hover:bg-stone-50 text-stone-700 whitespace-nowrap"
+                                >
+                                  ✏️ 수정
+                                </button>
+                              )}
+                              {canEditAlarm && !isQuick && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    saveCustomAlarms((prev) => [
+                                      { ...al, id: `al-${Date.now()}`, label: `${al.label || "모닝콜"} 복사`, lastFiredKey: "" },
+                                      ...prev
+                                    ]);
+                                    setAlarmMenuOpenId(null);
+                                    showToast("📋 알람을 복제했습니다.");
+                                  }}
+                                  className="w-full text-left px-3 py-1.5 hover:bg-stone-50 text-stone-700 whitespace-nowrap"
+                                >
+                                  📋 복제
+                                </button>
+                              )}
+                              {canEditAlarm && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    saveCustomAlarms((prev) => prev.filter((x) => x.id !== al.id));
+                                    setAlarmMenuOpenId(null);
+                                    showToast("🗑️ 알람을 삭제했습니다.");
+                                  }}
+                                  className="w-full text-left px-3 py-1.5 hover:bg-rose-50 text-rose-600 whitespace-nowrap"
+                                >
+                                  🗑️ 삭제
+                                </button>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* 알람 메뉴 전용 우측 하단 + 버튼 (알라미 UX) */}
+            {canEditAlarm && (
+              <button
+                type="button"
+                onClick={() => setAlarmSheetMode(alarmSheetMode === "picker" ? "" : "picker")}
+                style={{ bottom: "calc(4.75rem + env(safe-area-inset-bottom))" }}
+                className={`fixed right-4 z-40 w-12 h-12 rounded-full text-white shadow-xl flex items-center justify-center transition active:scale-95 ${
+                  alarmSheetMode === "picker" ? "bg-stone-800 rotate-45" : "bg-[#3F624D] hover:bg-[#35503C]"
+                }`}
+                aria-label="새 알람 추가"
+              >
+                <Plus className="w-6 h-6" />
+              </button>
+            )}
+
+            {/* + 액션 시트 (루틴 알람 · 퀵 알람 · 기상 알람) */}
+            {alarmSheetMode === "picker" && (
+              <>
+                <div
+                  className="fixed inset-0 bg-black/30 z-30"
+                  onClick={() => setAlarmSheetMode("")}
+                />
+                <div
+                  style={{ bottom: "calc(8.3rem + env(safe-area-inset-bottom))" }}
+                  className="fixed right-4 z-40 w-52 space-y-2"
+                >
+                  <div className="bg-white rounded-2xl border border-stone-200 shadow-2xl overflow-hidden divide-y divide-stone-100">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (timedRoutines.length > 0) {
+                          setAlarmSheetMode("routine");
+                        } else {
+                          setAlarmSheetMode("");
+                          setScheduleSubTab("routines");
+                          setActiveTab("schedule");
+                          showToast("시간이 지정된 루틴이 없어 반복 루틴 화면으로 이동합니다.");
+                        }
+                      }}
+                      className="w-full flex items-center gap-2.5 px-4 py-3 hover:bg-[#EEF3EE] text-stone-900 text-[13px] font-extrabold text-left"
+                    >
+                      <span className="text-base">🔄</span>
+                      <span>루틴 알람</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => openQuickAlarmModal()}
+                      className="w-full flex items-center gap-2.5 px-4 py-3 hover:bg-[#EEF3EE] text-stone-900 text-[13px] font-extrabold text-left"
+                    >
+                      <span className="text-base">⚡</span>
+                      <span>퀵 알람</span>
+                    </button>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => openWakeupAlarmModal(null)}
+                    className="w-full flex items-center gap-2.5 px-4 py-3 bg-white rounded-2xl border border-stone-200 shadow-2xl hover:bg-[#EEF3EE] text-stone-900 text-[13px] font-black text-left"
+                  >
+                    <span className="text-base">⏰</span>
+                    <span>기상 알람</span>
+                  </button>
+                </div>
+              </>
+            )}
+
+            {/* 루틴 알람 연계 선택 모달 */}
+            {alarmSheetMode === "routine" && (
+              <div
+                className="fixed inset-0 bg-black/50 z-[65] flex items-end sm:items-center justify-center p-3"
+                onClick={() => setAlarmSheetMode("")}
+              >
+                <div
+                  className="bg-white rounded-3xl max-w-sm w-full p-4 space-y-3 shadow-2xl border border-stone-200 max-h-[80vh] flex flex-col"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <h3 className="text-[13.5px] font-black text-stone-900">🔄 루틴에서 알람 가져오기</h3>
+                    <button
+                      type="button"
+                      onClick={() => setAlarmSheetMode("")}
+                      className="w-7 h-7 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-600 flex items-center justify-center"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                  <div className="space-y-1.5 overflow-y-auto">
+                    {timedRoutines.map((rt) => (
+                      <button
+                        key={rt.id}
+                        type="button"
+                        onClick={() => {
+                          const [hRaw, mRaw] = String(rt.scheduledTime || "08:00").split(":").map(Number);
+                          const h = Number.isFinite(hRaw) ? hRaw : 8;
+                          const m = Number.isFinite(mRaw) ? mRaw : 0;
+                          setEditingAlarmId(null);
+                          setAlarmAmPmDraft(h < 12 ? "AM" : "PM");
+                          setAlarmHourDraft(h % 12 === 0 ? 12 : h % 12);
+                          setAlarmMinDraft(m);
+                          setAlarmLabelDraft(rt.title || "루틴 알람");
+                          setAlarmDaysDraft(
+                            rt.cycle === "weekday" ? [1, 2, 3, 4, 5]
+                            : rt.cycle === "weekend" ? [0, 6]
+                            : [0, 1, 2, 3, 4, 5, 6]
+                          );
+                          setAlarmSoundIdDraft("gentle");
+                          setAlarmVolDraft(alarmDefaultVolume);
+                          setAlarmVibDraft(timerVibrateEnabled);
+                          setAlarmSheetMode("wakeup");
+                        }}
+                        className="w-full flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl bg-stone-50 hover:bg-[#EEF3EE] border border-stone-200 text-left"
+                      >
+                        <div className="min-w-0">
+                          <div className="text-[12.5px] font-extrabold text-stone-900 truncate">{rt.title}</div>
+                          <div className="text-[10.5px] text-stone-500">{rt.timeSlot || "상시"} · {rt.assignee || "공통"}</div>
+                        </div>
+                        <span className="text-[12px] font-mono font-black text-[#35503C] whitespace-nowrap shrink-0">
+                          {rt.scheduledTime} →
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ⚡ 퀵 알람 모달 */}
+            {alarmSheetMode === "quick" && (
+              <div
+                className="fixed inset-0 bg-black/50 z-[65] flex items-end sm:items-center justify-center p-3"
+                onClick={() => setAlarmSheetMode("")}
+              >
+                <div
+                  className="bg-white rounded-3xl max-w-sm w-full p-4 space-y-3.5 shadow-2xl border border-stone-200"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="w-7" />
+                    <h3 className="text-[13.5px] font-black text-stone-900">⚡ 퀵 알람</h3>
+                    <button
+                      type="button"
+                      onClick={() => setAlarmSheetMode("")}
+                      className="w-7 h-7 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-600 flex items-center justify-center"
+                      aria-label="닫기"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  <div className="text-center py-2 space-y-1">
+                    <div className="flex items-center justify-center gap-2.5">
+                      <span className="text-[20px] font-bold text-stone-400">+</span>
+                      <span className="text-[36px] leading-none font-black tabular-nums text-stone-900">
+                        {quickAlarmAddMin}
+                        <span className="text-[18px] font-extrabold text-stone-600 ml-0.5">분</span>
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setQuickAlarmAddMin(0)}
+                        className="w-7 h-7 rounded-full bg-stone-100 hover:bg-stone-200 text-stone-500 text-[13px] font-black flex items-center justify-center"
+                        title="0분으로 초기화"
+                      >
+                        ↺
+                      </button>
+                    </div>
+                    <div className="text-[12px] font-bold text-[#35503C]">
+                      {quickAlarmAddMin > 0
+                        ? `${quickTarget12.ampm} ${quickTarget12.timeText}에 울림`
+                        : "아래 버튼을 눌러 시간을 더해 주세요"}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-2">
+                    {quickAlarmPresets.map((presetLabel, idx) => {
+                      const addM = parseQuickAlarmPresetMin(presetLabel);
+                      return (
+                        <button
+                          key={`${presetLabel}-${idx}`}
+                          type="button"
+                          onClick={() => setQuickAlarmAddMin((prev) => Math.min(1440, prev + addM))}
+                          className="h-11 rounded-2xl bg-stone-100 hover:bg-[#EEF3EE] hover:border-[#C9D8CC] border border-stone-200 text-stone-900 text-[13px] font-extrabold whitespace-nowrap active:scale-95 transition"
+                        >
+                          {presetLabel}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <input
+                    type="text"
+                    value={alarmQuickMemoDraft}
+                    onChange={(e) => setAlarmQuickMemoDraft(e.target.value)}
+                    placeholder="알람 이름 (선택 · 예: 시율이 수유, 빨래)"
+                    className="w-full h-9 px-3 rounded-xl bg-stone-50 border border-stone-200 text-[12px] font-bold text-stone-800 focus:outline-none focus:border-[#3F624D]"
+                  />
+
+                  <div className="flex items-center justify-between gap-2 bg-stone-50 rounded-xl px-3 py-2 border border-stone-200">
+                    <span className="text-[12px] font-extrabold text-stone-700 whitespace-nowrap">알람 소리</span>
+                    <div className="flex items-center gap-1 min-w-0">
+                      <select
+                        value={alarmSoundIdDraft}
+                        onChange={(e) => setAlarmSoundIdDraft(e.target.value)}
+                        className="bg-transparent text-[12px] font-extrabold text-[#35503C] focus:outline-none truncate max-w-[160px]"
+                      >
+                        {allSoundOptions.map((o) => (
+                          <option key={o.id} value={o.id}>{o.label}</option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (previewingSoundId === alarmSoundIdDraft) stopAlarmAudio();
+                          else playAlarmSoundById(alarmSoundIdDraft, true, alarmVolDraft);
+                        }}
+                        className="px-1.5 py-0.5 rounded-md bg-white border border-stone-200 text-[10.5px] font-extrabold text-stone-700 whitespace-nowrap"
+                      >
+                        {previewingSoundId === alarmSoundIdDraft ? "■" : "▶"}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2.5 bg-stone-50 rounded-xl px-3 py-2 border border-stone-200">
+                    <span className="text-[14px] shrink-0">{alarmVolDraft === 0 ? "🔇" : "🔊"}</span>
+                    <input
+                      type="range"
+                      min="0"
+                      max="100"
+                      step="5"
+                      value={alarmVolDraft}
+                      onChange={(e) => setAlarmVolDraft(Number(e.target.value))}
+                      className="flex-1 min-w-0 accent-[#3F624D]"
+                    />
+                    <span className="text-[10.5px] font-mono font-bold text-stone-500 w-7 text-right">{alarmVolDraft}%</span>
+                    <span className="text-stone-300">|</span>
+                    <button
+                      type="button"
+                      onClick={() => setAlarmVibDraft((v) => !v)}
+                      className={`px-2 py-1 rounded-lg text-[11px] font-extrabold whitespace-nowrap transition ${
+                        alarmVibDraft ? "bg-[#3F624D] text-white" : "bg-stone-200 text-stone-500"
+                      }`}
+                    >
+                      📳 {alarmVibDraft ? "ON" : "OFF"}
+                    </button>
+                  </div>
+
+                  {alarmVolDraft === 0 && (
+                    <div className="text-center text-[11px] font-extrabold text-rose-600 bg-rose-50 border border-rose-200 rounded-xl py-1.5">
+                      🔇 볼륨이 0으로 설정되어 있어요
+                    </div>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={handleSaveQuickAlarm}
+                    disabled={quickAlarmAddMin <= 0}
+                    className={`w-full h-11 rounded-2xl text-[13.5px] font-black transition ${
+                      quickAlarmAddMin > 0
+                        ? "bg-[#3F624D] hover:bg-[#35503C] text-white shadow-sm"
+                        : "bg-stone-200 text-stone-400 cursor-not-allowed"
+                    }`}
+                  >
+                    저장
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* ☀️ 기상 알람 생성/수정 모달 */}
+            {alarmSheetMode === "wakeup" && (
+              <div
+                className="fixed inset-0 bg-black/50 z-[65] flex items-end sm:items-center justify-center p-3"
+                onClick={() => setAlarmSheetMode("")}
+              >
+                <div
+                  className="bg-white rounded-3xl max-w-sm w-full p-4 space-y-3 shadow-2xl border border-stone-200 max-h-[88vh] overflow-y-auto"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="flex items-center justify-between">
+                    <button
+                      type="button"
+                      onClick={() => setAlarmSheetMode("")}
+                      className="w-7 h-7 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-600 flex items-center justify-center"
+                      aria-label="닫기"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                    <h3 className="text-[13.5px] font-black text-stone-900">
+                      {editingAlarmId ? "☀️ 기상 알람 수정" : "☀️ 기상 알람"}
+                    </h3>
+                    <div className="w-7" />
+                  </div>
+
+                  <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-stone-50 border border-stone-200">
+                    <span className="text-base shrink-0">☀️</span>
+                    <input
+                      type="text"
+                      value={alarmLabelDraft}
+                      onChange={(e) => setAlarmLabelDraft(e.target.value)}
+                      placeholder="알람 이름을 입력해주세요"
+                      className="flex-1 min-w-0 bg-transparent text-[12.5px] font-bold text-stone-900 focus:outline-none"
+                    />
+                  </div>
+
+                  <div className="text-center text-[12px] font-extrabold text-[#35503C]">
+                    {previewWakeupCountdown}
+                  </div>
+
+                  <div className="bg-[#FAF8F3] rounded-2xl border border-stone-200 p-3 flex items-center justify-center gap-2">
+                    <div className="flex flex-col gap-1">
+                      {["AM", "PM"].map((ap) => (
+                        <button
+                          key={ap}
+                          type="button"
+                          onClick={() => setAlarmAmPmDraft(ap)}
+                          className={`px-3 py-1.5 rounded-xl text-[12.5px] font-black whitespace-nowrap transition ${
+                            alarmAmPmDraft === ap
+                              ? "bg-[#3F624D] text-white shadow-xs"
+                              : "bg-white text-stone-500 border border-stone-200"
+                          }`}
+                        >
+                          {ap === "AM" ? "오전" : "오후"}
+                        </button>
+                      ))}
+                    </div>
+
+                    <div className="flex flex-col items-center gap-0.5">
+                      <button
+                        type="button"
+                        onClick={() => setAlarmHourDraft((h) => (h >= 12 ? 1 : h + 1))}
+                        className="w-14 h-6 rounded-lg bg-white border border-stone-200 text-stone-500 hover:bg-stone-100 text-[11px] font-black"
+                      >
+                        ▲
+                      </button>
+                      <select
+                        value={alarmHourDraft}
+                        onChange={(e) => setAlarmHourDraft(Number(e.target.value))}
+                        className="w-16 h-12 text-center bg-white rounded-xl border border-stone-200 text-[24px] font-black tabular-nums text-stone-900 focus:outline-none focus:border-[#3F624D]"
+                      >
+                        {Array.from({ length: 12 }, (_, i) => i + 1).map((h) => (
+                          <option key={h} value={h}>{String(h).padStart(2, "0")}</option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        onClick={() => setAlarmHourDraft((h) => (h <= 1 ? 12 : h - 1))}
+                        className="w-14 h-6 rounded-lg bg-white border border-stone-200 text-stone-500 hover:bg-stone-100 text-[11px] font-black"
+                      >
+                        ▼
+                      </button>
+                    </div>
+
+                    <span className="text-[24px] font-black text-stone-400">:</span>
+
+                    <div className="flex flex-col items-center gap-0.5">
+                      <button
+                        type="button"
+                        onClick={() => setAlarmMinDraft((m) => (m + 1) % 60)}
+                        className="w-14 h-6 rounded-lg bg-white border border-stone-200 text-stone-500 hover:bg-stone-100 text-[11px] font-black"
+                      >
+                        ▲
+                      </button>
+                      <select
+                        value={alarmMinDraft}
+                        onChange={(e) => setAlarmMinDraft(Number(e.target.value))}
+                        className="w-16 h-12 text-center bg-white rounded-xl border border-stone-200 text-[24px] font-black tabular-nums text-stone-900 focus:outline-none focus:border-[#3F624D]"
+                      >
+                        {Array.from({ length: 60 }, (_, i) => i).map((m) => (
+                          <option key={m} value={m}>{String(m).padStart(2, "0")}</option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        onClick={() => setAlarmMinDraft((m) => (m + 59) % 60)}
+                        className="w-14 h-6 rounded-lg bg-white border border-stone-200 text-stone-500 hover:bg-stone-100 text-[11px] font-black"
+                      >
+                        ▼
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[12px] font-extrabold text-stone-700">
+                        {alarmDaysDraft.length === 7
+                          ? "매일"
+                          : alarmDaysDraft.length === 0
+                          ? "1회만 울림"
+                          : alarmDaysDraft.join(",") === "1,2,3,4,5"
+                          ? "평일 (월~금)"
+                          : alarmDaysDraft.join(",") === "0,6"
+                          ? "주말 (토·일)"
+                          : alarmDaysDraft.map((d) => WEEKDAY_KO[d]).join(" · ")}
+                      </span>
+                      <div className="flex items-center gap-1">
+                        {[
+                          { lbl: "평일", days: [1, 2, 3, 4, 5] },
+                          { lbl: "주말", days: [0, 6] },
+                          { lbl: "매일", days: [0, 1, 2, 3, 4, 5, 6] }
+                        ].map((p) => {
+                          const isSame = alarmDaysDraft.join(",") === p.days.join(",");
+                          return (
+                            <button
+                              key={p.lbl}
+                              type="button"
+                              onClick={() => setAlarmDaysDraft(isSame ? [] : p.days)}
+                              className={`px-2 py-0.5 rounded-md text-[10.5px] font-extrabold whitespace-nowrap border ${
+                                isSame
+                                  ? "bg-[#3F624D] text-white border-[#3F624D]"
+                                  : "bg-stone-50 text-stone-600 border-stone-200"
+                              }`}
+                            >
+                              {p.lbl}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-7 gap-1.5">
+                      {WEEKDAY_KO.map((wk, dIdx) => {
+                        const sel = alarmDaysDraft.includes(dIdx);
+                        return (
+                          <button
+                            key={wk}
+                            type="button"
+                            onClick={() =>
+                              setAlarmDaysDraft((prev) =>
+                                prev.includes(dIdx)
+                                  ? prev.filter((x) => x !== dIdx)
+                                  : [...prev, dIdx].sort((a, b) => a - b)
+                              )
+                            }
+                            className={`h-9 rounded-xl text-[12px] font-black transition border ${
+                              sel
+                                ? "bg-[#EEF3EE] border-[#3F624D] text-[#35503C]"
+                                : "bg-stone-50 border-stone-200 text-stone-400"
+                            }`}
+                          >
+                            {wk}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between gap-2 bg-stone-50 rounded-xl px-3 py-2 border border-stone-200">
+                    <span className="text-[12px] font-extrabold text-stone-700 whitespace-nowrap">알람 소리</span>
+                    <div className="flex items-center gap-1 min-w-0">
+                      <select
+                        value={alarmSoundIdDraft}
+                        onChange={(e) => setAlarmSoundIdDraft(e.target.value)}
+                        className="bg-transparent text-[12px] font-extrabold text-[#35503C] focus:outline-none truncate max-w-[155px]"
+                      >
+                        {allSoundOptions.map((o) => (
+                          <option key={o.id} value={o.id}>{o.label}</option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (previewingSoundId === alarmSoundIdDraft) stopAlarmAudio();
+                          else playAlarmSoundById(alarmSoundIdDraft, true, alarmVolDraft);
+                        }}
+                        className="px-1.5 py-0.5 rounded-md bg-white border border-stone-200 text-[10.5px] font-extrabold text-stone-700 whitespace-nowrap"
+                      >
+                        {previewingSoundId === alarmSoundIdDraft ? "■" : "▶"}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2.5 bg-stone-50 rounded-xl px-3 py-2 border border-stone-200">
+                    <span className="text-[14px] shrink-0">{alarmVolDraft === 0 ? "🔇" : "🔊"}</span>
+                    <input
+                      type="range"
+                      min="0"
+                      max="100"
+                      step="5"
+                      value={alarmVolDraft}
+                      onChange={(e) => setAlarmVolDraft(Number(e.target.value))}
+                      className="flex-1 min-w-0 accent-[#3F624D]"
+                    />
+                    <span className="text-[10.5px] font-mono font-bold text-stone-500 w-7 text-right">{alarmVolDraft}%</span>
+                    <span className="text-stone-300">|</span>
+                    <button
+                      type="button"
+                      onClick={() => setAlarmVibDraft((v) => !v)}
+                      className={`px-2 py-1 rounded-lg text-[11px] font-extrabold whitespace-nowrap transition ${
+                        alarmVibDraft ? "bg-[#3F624D] text-white" : "bg-stone-200 text-stone-500"
+                      }`}
+                    >
+                      📳 {alarmVibDraft ? "ON" : "OFF"}
+                    </button>
+                  </div>
+
+                  {alarmVolDraft === 0 && (
+                    <div className="text-center text-[11px] font-extrabold text-rose-600 bg-rose-50 border border-rose-200 rounded-xl py-1.5">
+                      🔇 볼륨이 0으로 설정되어 있어요
+                    </div>
+                  )}
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        exportAlarmToPhoneClockOrIcs({
+                          id: editingAlarmId || `draft-${Date.now()}`,
+                          type: "daily",
+                          time: previewHHMM,
+                          days: alarmDaysDraft,
+                          label: alarmLabelDraft.trim() || "모닝콜"
+                        })
+                      }
+                      className="h-11 px-3 rounded-2xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-[12px] font-extrabold whitespace-nowrap shrink-0"
+                      title="앱 종료 시에도 울리도록 폰 시계/캘린더에 등록"
+                    >
+                      📱 폰시계
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleSaveWakeupAlarm}
+                      className="flex-1 h-11 rounded-2xl bg-[#3F624D] hover:bg-[#35503C] text-white text-[13.5px] font-black shadow-sm transition"
+                    >
+                      저장
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* 🎵 클라우드 알람 음원 관리 모달 */}
+            {alarmSheetMode === "music" && (
+              <div
+                className="fixed inset-0 bg-black/50 z-[65] flex items-end sm:items-center justify-center p-3"
+                onClick={() => setAlarmSheetMode("")}
+              >
+                <div
+                  className="bg-white rounded-3xl max-w-sm w-full p-4 space-y-3 shadow-2xl border border-stone-200 max-h-[82vh] flex flex-col"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <h3 className="text-[13.5px] font-black text-stone-900">🎵 클라우드 알람 음원 관리</h3>
+                    <button
+                      type="button"
+                      onClick={() => setAlarmSheetMode("")}
+                      className="w-7 h-7 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-600 flex items-center justify-center"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  {canEditAlarm && (
+                    <div className="bg-stone-50 rounded-2xl p-3 border border-stone-200 space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-[11px] font-extrabold text-stone-600">오디오 파일 (550KB 이하) 또는 링크</span>
+                        <input
+                          ref={alarmSoundFileInputRef}
+                          type="file"
+                          accept="audio/*"
+                          className="hidden"
+                          onChange={(e) => {
+                            const f = e.target.files?.[0];
+                            e.target.value = "";
+                            if (!f) return;
+                            if (f.size > 550 * 1024) {
+                              showToast("오디오 파일은 550KB 이하만 클라우드에 저장할 수 있습니다.");
+                              return;
+                            }
+                            const reader = new FileReader();
+                            reader.onload = () => {
+                              const dataUrl = String(reader.result || "");
+                              if (!dataUrl.startsWith("data:audio/")) {
+                                showToast("지원되는 오디오 파일이 아닙니다.");
+                                return;
+                              }
+                              const lbl = f.name.replace(/\.[^.]+$/, "").slice(0, 24) || "내 음원";
+                              const newId = `cloud-${Date.now()}`;
+                              saveCustomAlarmSounds((prev) => [{ id: newId, label: lbl, url: dataUrl, isFile: true }, ...prev]);
+                              showToast(`☁️ '${lbl}' 음원을 클라우드에 저장했습니다!`);
+                            };
+                            reader.readAsDataURL(f);
+                          }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => alarmSoundFileInputRef.current?.click()}
+                          className="px-2.5 py-1 rounded-lg bg-[#3F624D] hover:bg-[#35503C] text-white text-[10.5px] font-extrabold whitespace-nowrap shrink-0"
+                        >
+                          📁 파일올리기
+                        </button>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <input
+                          type="text"
+                          value={newAlarmSoundLabel}
+                          onChange={(e) => setNewAlarmSoundLabel(e.target.value)}
+                          placeholder="음악 이름"
+                          className="w-24 h-8 px-2 rounded-lg bg-white border border-stone-200 text-[11px] font-bold text-stone-800"
+                        />
+                        <input
+                          type="url"
+                          value={newAlarmSoundUrl}
+                          onChange={(e) => setNewAlarmSoundUrl(e.target.value)}
+                          placeholder="오디오/유튜브 URL"
+                          className="flex-1 min-w-0 h-8 px-2 rounded-lg bg-white border border-stone-200 text-[11px] text-stone-800"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const lbl = newAlarmSoundLabel.trim();
+                            const u = newAlarmSoundUrl.trim();
+                            if (!lbl || !u) {
+                              showToast("음악 이름과 URL을 모두 입력해 주세요.");
+                              return;
+                            }
+                            const newId = `cloud-${Date.now()}`;
+                            saveCustomAlarmSounds((prev) => [{ id: newId, label: lbl, url: u, isFile: false }, ...prev]);
+                            setNewAlarmSoundLabel("");
+                            setNewAlarmSoundUrl("");
+                            showToast(`☁️ '${lbl}' 링크를 클라우드에 저장했습니다!`);
+                          }}
+                          className="h-8 px-2.5 rounded-lg bg-[#3F624D] text-white text-[11px] font-extrabold whitespace-nowrap shrink-0"
+                        >
+                          저장
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="space-y-1.5 overflow-y-auto">
+                    <div className="text-[10.5px] font-extrabold text-stone-400">기본 멜로디</div>
+                    {ALARM_MELODY_PRESETS.map((m) => (
+                      <div key={m.id} className="flex items-center justify-between gap-2 px-3 py-1.5 rounded-xl bg-stone-50 border border-stone-200/80 text-[11.5px]">
+                        <span className="font-bold text-stone-800 truncate">{m.label}</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (previewingSoundId === m.id) stopAlarmAudio();
+                            else playAlarmSoundById(m.id, true, alarmDefaultVolume);
+                          }}
+                          className="px-2 py-0.5 rounded-lg bg-white border border-stone-200 text-[#35503C] text-[10.5px] font-extrabold whitespace-nowrap shrink-0"
+                        >
+                          {previewingSoundId === m.id ? "■ 정지" : "▶ 듣기"}
+                        </button>
+                      </div>
+                    ))}
+                    {customAlarmSounds.length > 0 && (
+                      <>
+                        <div className="text-[10.5px] font-extrabold text-stone-400 pt-1">내 클라우드 음원 ({customAlarmSounds.length})</div>
+                        {customAlarmSounds.map((cs) => (
+                          <div key={cs.id} className="flex items-center justify-between gap-2 px-3 py-1.5 rounded-xl bg-[#EEF3EE]/60 border border-[#C9D8CC] text-[11.5px]">
+                            <span className="font-bold text-stone-800 truncate">☁️ {cs.label}</span>
+                            <div className="flex items-center gap-1 shrink-0">
+                              <button
+                                type="button"
+                                onClick={() => playAlarmSoundById(cs.id, true, alarmDefaultVolume)}
+                                className="px-2 py-0.5 rounded-lg bg-white border border-stone-200 text-[#35503C] text-[10.5px] font-extrabold"
+                              >
+                                ▶
+                              </button>
+                              {canEditAlarm && (
+                                <button
+                                  type="button"
+                                  onClick={() => saveCustomAlarmSounds((prev) => prev.filter((x) => x.id !== cs.id))}
+                                  className="px-2 py-0.5 rounded-lg bg-white border border-stone-200 text-rose-600 text-[10.5px] font-extrabold"
+                                >
+                                  삭제
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })())}
+
+
+      {/* ==========================================
           🔒 비밀메뉴: 경조사비 입출금내역 (홈 화면 비노출 · 비밀번호 247233 · 김수혁 관리자 전용 비번변경)
       ========================================== */}
       {activeTab === "condolence" && isSuhyeokAdmin && (() => {
@@ -35279,9 +36781,8 @@ time: "", location: "",
                             <button
                               type="button"
                               onClick={() => {
-                                setAlarmQuickMinDraft("180");
-                                setAlarmQuickMemoDraft(`${activeChild.name} 수유 시간`);
-                                setKitchenTimer((p) => ({ ...p, open: true, mode: "alarm", label: "모닝콜·알람" }));
+                                setActiveTab("alarm");
+                                openQuickAlarmModal({ presetMin: 180, memo: `${activeChild.name} 수유 시간` });
                               }}
                               className="px-1.5 py-0.5 rounded-md bg-[#EEF3EE] hover:bg-[#dce8de] border border-[#C9D8CC] text-[#35503C] text-[10px] font-extrabold whitespace-nowrap"
                             >
@@ -37742,8 +39243,7 @@ time: "", location: "",
               <div className="flex items-center gap-1 bg-stone-800 p-0.5 rounded-xl">
                 {[
                   { id: "countdown", label: "⏲️ 타이머" },
-                  { id: "stopwatch", label: "⏱️ 스톱워치" },
-                  { id: "alarm", label: `⏰ 알람${activeAlarmCount > 0 ? `(${activeAlarmCount})` : ""}` }
+                  { id: "stopwatch", label: "⏱️ 스톱워치" }
                 ].map((mTab) => (
                   <button
                     key={mTab.id}
@@ -37752,7 +39252,7 @@ time: "", location: "",
                       setKitchenTimer((p) => ({
                         ...p,
                         mode: mTab.id,
-                        label: mTab.id === "stopwatch" ? "스톱워치" : mTab.id === "alarm" ? "모닝콜·알람" : "타이머"
+                        label: mTab.id === "stopwatch" ? "스톱워치" : "타이머"
                       }))
                     }
                     className={`px-2 py-1 rounded-lg text-[10.5px] font-extrabold whitespace-nowrap transition ${
@@ -37764,6 +39264,17 @@ time: "", location: "",
                     {mTab.label}
                   </button>
                 ))}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setKitchenTimer((p) => ({ ...p, open: false }));
+                    setActiveTab("alarm");
+                  }}
+                  className="px-2 py-1 rounded-lg text-[10.5px] font-extrabold whitespace-nowrap text-amber-300 hover:bg-stone-700 transition"
+                  title="별도 모닝콜·알람 메뉴로 이동"
+                >
+                  ⏰ 모닝콜{activeAlarmCount > 0 ? `(${activeAlarmCount})` : ""} →
+                </button>
               </div>
               <div className="flex items-center gap-1 shrink-0">
                 <button
@@ -38267,333 +39778,54 @@ time: "", location: "",
               </div>
             )}
 
-            {/* 모드 3: 모닝콜 · N분 후 알람 */}
-            {kitchenTimer.mode === "alarm" && (
-              <div className="space-y-2">
-                {/* 원탭 몇 분 후 알람 */}
-                <div className="bg-stone-800/80 rounded-xl p-2 space-y-1.5">
-                  <div className="text-[10.5px] font-black text-amber-300">⚡ 몇 분 후 알람</div>
-                  <div className="flex items-center gap-1 flex-wrap">
-                    {[5, 10, 15, 30, 60].map((m) => (
-                      <button
-                        key={m}
-                        type="button"
-                        onClick={() => {
-                          unlockAudioContext();
-                          const tMs = Date.now() + m * 60000;
-                          const d = new Date(tMs);
-                          const hhmmStr = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
-                          const memoTxt = alarmQuickMemoDraft.trim() || `${m}분 후 알림`;
-                          saveCustomAlarms((prev) => [
-                            { id: `al-${Date.now()}`, type: "once", time: hhmmStr, targetMs: tMs, repeat: "once", label: memoTxt, enabled: true, lastFiredKey: "" },
-                            ...prev
-                          ]);
-                          setAlarmQuickMemoDraft("");
-                          showToast(`⏰ ${m}분 후 (${hhmmStr}) '${memoTxt}' 알람을 예약했습니다!`);
-                        }}
-                        className="px-2 py-1 rounded-lg bg-stone-700 hover:bg-[#3F624D] text-[10.5px] font-extrabold whitespace-nowrap"
-                      >
-                        +{m}분
-                      </button>
-                    ))}
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <input
-                      type="number"
-                      inputMode="numeric"
-                      min={1}
-                      max={720}
-                      value={alarmQuickMinDraft}
-                      onChange={(e) => setAlarmQuickMinDraft(e.target.value)}
-                      className="w-12 h-7 px-1.5 rounded-lg bg-stone-900 border border-stone-700 text-center text-[11px] font-bold text-white"
-                    />
-                    <span className="text-[10.5px] text-stone-400 font-bold whitespace-nowrap">분 후</span>
-                    <input
-                      type="text"
-                      value={alarmQuickMemoDraft}
-                      onChange={(e) => setAlarmQuickMemoDraft(e.target.value)}
-                      placeholder="내용 (예: 세탁기, 약)"
-                      className="flex-1 min-w-0 h-7 px-2 rounded-lg bg-stone-900 border border-stone-700 text-[11px] font-bold text-white"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => {
-                        unlockAudioContext();
-                        const mins = Math.max(1, Math.min(720, Number(alarmQuickMinDraft) || 10));
-                        const tMs = Date.now() + mins * 60000;
-                        const d = new Date(tMs);
-                        const hhmmStr = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
-                        const memoTxt = alarmQuickMemoDraft.trim() || `${mins}분 후 알림`;
-                        saveCustomAlarms((prev) => [
-                          { id: `al-${Date.now()}`, type: "once", time: hhmmStr, targetMs: tMs, repeat: "once", label: memoTxt, enabled: true, lastFiredKey: "" },
-                          ...prev
-                        ]);
-                        setAlarmQuickMemoDraft("");
-                        showToast(`⏰ ${mins}분 후 (${hhmmStr}) 알람 예약 완료!`);
-                      }}
-                      className="h-7 px-2.5 rounded-lg bg-[#3F624D] hover:bg-[#35503C] text-white text-[10.5px] font-extrabold whitespace-nowrap shrink-0"
-                    >
-                      예약
-                    </button>
-                  </div>
-                </div>
-
-                {/* 모닝콜 · 정시 알람 등록 + 클라우드 음악 선택 */}
-                <div className="bg-stone-800/80 rounded-xl p-2 space-y-1.5">
-                  <div className="flex items-center justify-between gap-1">
-                    <span className="text-[10.5px] font-black text-emerald-300">☀️ 모닝콜 · 지정 시각 알람</span>
-                    <button
-                      type="button"
-                      onClick={() => setIsAlarmMusicManageOpen((v) => !v)}
-                      className={`px-2 py-0.5 rounded-lg text-[10px] font-bold border whitespace-nowrap ${
-                        isAlarmMusicManageOpen
-                          ? "bg-[#3F624D] text-white border-[#3F624D]"
-                          : "bg-stone-900 text-stone-300 border-stone-700 hover:text-white"
-                      }`}
-                    >
-                      ☁️ 클라우드 음악({customAlarmSounds.length})
-                    </button>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <input
-                      type="time"
-                      value={alarmTimeDraft}
-                      onChange={(e) => setAlarmTimeDraft(e.target.value || "07:00")}
-                      className="h-7 px-1.5 rounded-lg bg-stone-900 border border-stone-700 text-[11px] font-bold text-white shrink-0"
-                    />
-                    <select
-                      value={alarmRepeatDraft}
-                      onChange={(e) => setAlarmRepeatDraft(e.target.value)}
-                      className="h-7 px-1 rounded-lg bg-stone-900 border border-stone-700 text-[10.5px] font-bold text-stone-200 shrink-0"
-                    >
-                      <option value="everyday">매일</option>
-                      <option value="weekday">평일</option>
-                      <option value="weekend">주말</option>
-                      <option value="once">한번만</option>
-                    </select>
-                    <input
-                      type="text"
-                      value={alarmLabelDraft}
-                      onChange={(e) => setAlarmLabelDraft(e.target.value)}
-                      placeholder="모닝콜"
-                      className="flex-1 min-w-0 h-7 px-2 rounded-lg bg-stone-900 border border-stone-700 text-[11px] font-bold text-white"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => {
-                        unlockAudioContext();
-                        const tm = alarmTimeDraft || "07:00";
-                        const lbl = alarmLabelDraft.trim() || "모닝콜";
-                        saveCustomAlarms((prev) => [
-                          { id: `mc-${Date.now()}`, type: "daily", time: tm, targetMs: null, repeat: alarmRepeatDraft, label: lbl, soundId: alarmSoundIdDraft || "morning", enabled: true, lastFiredKey: "" },
-                          ...prev
-                        ]);
-                        setAlarmLabelDraft("");
-                        showToast(`☀️ [${tm}] '${lbl}' 알람이 등록되었습니다!`);
-                      }}
-                      className="h-7 px-2.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-stone-950 text-[10.5px] font-black whitespace-nowrap shrink-0"
-                    >
-                      + 추가
-                    </button>
-                  </div>
-
-                  {/* 음악 선택 드롭다운 & 미리듣기 */}
-                  <div className="flex items-center gap-1">
-                    <span className="text-[10px] text-stone-400 font-bold whitespace-nowrap">🎵 음악:</span>
-                    <select
-                      value={alarmSoundIdDraft}
-                      onChange={(e) => setAlarmSoundIdDraft(e.target.value)}
-                      className="flex-1 min-w-0 h-6 px-1.5 rounded-lg bg-stone-900 border border-stone-700 text-[10.5px] font-bold text-amber-200 truncate"
-                    >
-                      <optgroup label="기본 멜로디">
-                        {ALARM_MELODY_PRESETS.map((p) => (
-                          <option key={p.id} value={p.id}>{p.label}</option>
-                        ))}
-                      </optgroup>
-                      {customAlarmSounds.length > 0 && (
-                        <optgroup label="☁️ 클라우드 저장 음악">
-                          {customAlarmSounds.map((cs) => (
-                            <option key={cs.id} value={cs.id}>☁️ {cs.label}</option>
-                          ))}
-                        </optgroup>
-                      )}
-                      {babyDreamLinks.length > 0 && (
-                        <optgroup label="🌙 클라우드 아기꿈나라">
-                          {babyDreamLinks.map((dl) => (
-                            <option key={dl.id} value={dl.id}>{dl.icon || "🎵"} {dl.label}</option>
-                          ))}
-                        </optgroup>
-                      )}
-                    </select>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (previewingSoundId === alarmSoundIdDraft) {
-                          stopAlarmAudio();
-                        } else {
-                          playAlarmSoundById(alarmSoundIdDraft, true);
-                        }
-                      }}
-                      className="h-6 px-2 rounded-lg bg-stone-700 hover:bg-stone-600 text-[10px] font-bold whitespace-nowrap shrink-0"
-                      title="선택한 음악 미리듣기/정지"
-                    >
-                      {previewingSoundId === alarmSoundIdDraft ? "⏹ 정지" : "▶ 듣기"}
-                    </button>
-                  </div>
-
-                  {/* 클라우드 음악 등록·관리 */}
-                  {isAlarmMusicManageOpen && (
-                    <div className="pt-1.5 border-t border-stone-700/80 space-y-1.5">
-                      <div className="flex items-center justify-between gap-1">
-                        <span className="text-[10px] font-bold text-stone-300">☁️ 클라우드 음악 추가 (MP3·음원파일 또는 링크)</span>
-                        <input
-                          ref={alarmSoundFileInputRef}
-                          type="file"
-                          accept="audio/*"
-                          className="hidden"
-                          onChange={(e) => {
-                            const file = e.target.files?.[0];
-                            e.target.value = "";
-                            if (!file) return;
-                            if (file.size > 550 * 1024) {
-                              showToast("⚠️ 클라우드 저장용 오디오는 550KB 이하 파일만 업로드 가능합니다. 긴 음악은 링크로 등록해 주세요.");
-                              return;
-                            }
-                            const reader = new FileReader();
-                            reader.onload = () => {
-                              const dataUrl = String(reader.result || "");
-                              if (!dataUrl.startsWith("data:audio/")) {
-                                showToast("⚠️ 올바른 오디오 파일이 아닙니다.");
-                                return;
-                              }
-                              const cleanTitle = file.name.replace(/\.[^.]+$/, "").slice(0, 28) || "내 알람음";
-                              const newId = `cloud-${Date.now()}`;
-                              saveCustomAlarmSounds((prev) => [{ id: newId, label: cleanTitle, url: dataUrl, isFile: true }, ...prev]);
-                              setAlarmSoundIdDraft(newId);
-                              showToast(`☁️ '${cleanTitle}' 음원을 클라우드에 저장했습니다!`);
-                            };
-                            reader.readAsDataURL(file);
-                          }}
-                        />
-                        <button
-                          type="button"
-                          onClick={() => alarmSoundFileInputRef.current?.click()}
-                          className="px-2 py-0.5 rounded bg-[#3F624D] hover:bg-[#35503C] text-white text-[10px] font-extrabold whitespace-nowrap shrink-0"
-                        >
-                          📁 파일올리기
-                        </button>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <input
-                          type="text"
-                          value={newAlarmSoundLabel}
-                          onChange={(e) => setNewAlarmSoundLabel(e.target.value)}
-                          placeholder="음악 이름"
-                          className="w-24 h-6 px-1.5 rounded bg-stone-900 border border-stone-700 text-[10.5px] font-bold text-white"
-                        />
-                        <input
-                          type="url"
-                          value={newAlarmSoundUrl}
-                          onChange={(e) => setNewAlarmSoundUrl(e.target.value)}
-                          placeholder="오디오/유튜브 URL"
-                          className="flex-1 min-w-0 h-6 px-1.5 rounded bg-stone-900 border border-stone-700 text-[10.5px] text-white"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const lbl = newAlarmSoundLabel.trim();
-                            const u = newAlarmSoundUrl.trim();
-                            if (!lbl || !u) {
-                              showToast("음악 이름과 URL을 모두 입력해 주세요.");
-                              return;
-                            }
-                            const newId = `cloud-${Date.now()}`;
-                            saveCustomAlarmSounds((prev) => [{ id: newId, label: lbl, url: u, isFile: false }, ...prev]);
-                            setAlarmSoundIdDraft(newId);
-                            setNewAlarmSoundLabel("");
-                            setNewAlarmSoundUrl("");
-                            showToast(`☁️ '${lbl}' 링크를 클라우드에 저장했습니다!`);
-                          }}
-                          className="h-6 px-2 rounded bg-amber-500 text-stone-950 text-[10px] font-black whitespace-nowrap shrink-0"
-                        >
-                          저장
-                        </button>
-                      </div>
-                      {customAlarmSounds.length > 0 && (
-                        <div className="space-y-1 max-h-20 overflow-y-auto">
-                          {customAlarmSounds.map((cs) => (
-                            <div key={cs.id} className="flex items-center justify-between gap-1 bg-stone-900/80 rounded px-2 py-0.5 text-[10px]">
-                              <span className="truncate font-bold text-stone-200">☁️ {cs.label}</span>
-                              <div className="flex items-center gap-1 shrink-0">
-                                <button
-                                  type="button"
-                                  onClick={() => playAlarmSoundById(cs.id, true)}
-                                  className="text-amber-300 hover:text-amber-200 font-bold"
-                                >
-                                  ▶
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => saveCustomAlarmSounds((prev) => prev.filter((x) => x.id !== cs.id))}
-                                  className="text-stone-400 hover:text-rose-400 font-bold"
-                                >
-                                  삭제
-                                </button>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-
-                {/* 등록된 알람 목록 */}
-                {customAlarms.length > 0 && (
-                  <div className="space-y-1 max-h-28 overflow-y-auto">
-                    {customAlarms.map((al) => {
-                      const remMin = al.type === "once" && al.enabled && Number(al.targetMs) > Date.now()
-                        ? Math.max(1, Math.ceil((Number(al.targetMs) - Date.now()) / 60000))
-                        : null;
-                      const repLabel = al.type === "once" ? "1회" : al.repeat === "weekday" ? "평일" : al.repeat === "weekend" ? "주말" : al.repeat === "once" ? "1회" : "매일";
-                      const sndLabel =
-                        ALARM_MELODY_PRESETS.find((p) => p.id === al.soundId)?.label ||
-                        customAlarmSounds.find((c) => c.id === al.soundId)?.label ||
-                        babyDreamLinks.find((d) => d.id === al.soundId)?.label ||
-                        "";
-                      return (
-                        <div key={al.id} className="flex items-center justify-between gap-1.5 bg-stone-800/70 rounded-lg px-2 py-1 text-[11px]">
-                          <button
-                            type="button"
-                            onClick={() => saveCustomAlarms((prev) => prev.map((x) => (x.id === al.id ? { ...x, enabled: !x.enabled } : x)))}
-                            className="flex items-center gap-1.5 min-w-0 flex-1 text-left"
-                          >
-                            <span className={`w-2 h-2 rounded-full shrink-0 ${al.enabled ? "bg-emerald-400" : "bg-stone-500"}`} />
-                            <span className={`font-mono font-black whitespace-nowrap ${al.enabled ? "text-amber-300" : "text-stone-500 line-through"}`}>{al.time}</span>
-                            <span className="text-[10px] px-1 rounded bg-stone-700 text-stone-300 whitespace-nowrap">{repLabel}</span>
-                            <span className={`truncate font-bold ${al.enabled ? "text-white" : "text-stone-500"}`}>{al.label}</span>
-                            {sndLabel && <span className="text-[9px] text-amber-200/80 truncate max-w-[70px]">🎵{sndLabel.replace(/^[^\w가-힣]+/, "")}</span>}
-                            {remMin !== null && <span className="text-[10px] text-emerald-300 whitespace-nowrap">({remMin}분후)</span>}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => saveCustomAlarms((prev) => prev.filter((x) => x.id !== al.id))}
-                            className="text-stone-400 hover:text-rose-400 px-1 font-bold"
-                            aria-label="알람 삭제"
-                          >
-                            ×
-                          </button>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            )}
           </div>
         );
       })()}
 
+
+      {/* 전역 상시 알람·타이머 완료 울림 배너 (타이머 팝업 닫혀 있어도 항상 노출 · 5분 다시울림 지원) */}
+      {timerCompletedAlert && (
+        <div className="fixed top-14 left-1/2 -translate-x-1/2 z-[9995] w-[calc(100%-1.5rem)] max-w-md bg-stone-900 text-white rounded-2xl px-3.5 py-3 shadow-2xl border border-amber-400/70 space-y-2">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping shrink-0" />
+              <span className="text-[13px] font-black text-amber-300 truncate min-w-0">🔔 {timerCompletedAlert}</span>
+            </div>
+            <span className="text-[10px] font-bold text-stone-400 whitespace-nowrap shrink-0">알람 울림</span>
+          </div>
+          <div className="flex items-center justify-end gap-1.5 flex-wrap">
+            {completedAlertUrl && (
+              <a
+                href={normalizeDreamUrl(completedAlertUrl)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-2.5 py-1.5 rounded-xl bg-stone-800 hover:bg-stone-700 text-amber-300 text-[11px] font-extrabold whitespace-nowrap"
+              >
+                🎵 음악열기
+              </a>
+            )}
+            <button
+              type="button"
+              onClick={() => handleSnoozeRingingAlarm(5)}
+              className="px-2.5 py-1.5 rounded-xl bg-stone-800 hover:bg-stone-700 text-white text-[11px] font-extrabold whitespace-nowrap"
+            >
+              💤 5분 다시울림
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                stopAlarmAudio();
+                setCompletedAlertUrl("");
+                setCompletedAlertAlarmMeta(null);
+                setTimerCompletedAlert("");
+              }}
+              className="px-3.5 py-1.5 rounded-xl bg-[#3F624D] hover:bg-[#35503C] text-white text-[11.5px] font-black whitespace-nowrap"
+            >
+              ✓ 끄기
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* 스마트 빠른 등록 플로팅 메뉴 & FAB */}
       {isQuickFabOpen && (
@@ -38659,16 +39891,13 @@ time: "", location: "",
                       }))
                   },
                   {
-                    tab: "home",
+                    tab: "alarm",
                     icon: "⏰",
                     label: "모닝콜·알람",
-                    onClick: () =>
-                      setKitchenTimer((p) => ({
-                        ...p,
-                        open: true,
-                        mode: "alarm",
-                        label: "모닝콜·알람"
-                      }))
+                    onClick: () => {
+                      setActiveTab("alarm");
+                      setAlarmSheetMode("picker");
+                    }
                   }
                 ]
               },
@@ -38904,7 +40133,7 @@ time: "", location: "",
         </button>
       )}
 
-      {isEditorUnlocked && !isPageVisualEditMode && !isNoteBodyFocused && !isPagePasteModalOpen && !activeTableTaskModal && !editingBlockId && !(activeTab === "bucket" && bucketViewMode === "map") && activeTab !== "condolence" && (
+      {isEditorUnlocked && !isPageVisualEditMode && !isNoteBodyFocused && !isPagePasteModalOpen && !activeTableTaskModal && !editingBlockId && !(activeTab === "bucket" && bucketViewMode === "map") && activeTab !== "condolence" && activeTab !== "alarm" && (
         <button
           type="button"
           onClick={() => setIsQuickFabOpen((v) => !v)}
@@ -39221,6 +40450,7 @@ time: "", location: "",
                     { id: "notices", label: "가족공지", icon: "📌" },
                     { id: "bucket", label: "버킷리스트", icon: "🌟" },
                     { id: "house", label: "살림수첩", icon: "🏠" },
+                    { id: "alarm", label: "모닝콜", icon: "⏰" },
                     { id: "kitchen_timer", label: "스톱워치", icon: "⏱️" },
                     { id: "baby_dream", label: "아기꿈나라", icon: "🌙" },
                     { id: "handover", label: "인수인계", icon: "🤝" }
@@ -39240,6 +40470,8 @@ time: "", location: "",
                           ? bucketList.filter((b) => !b.done).length
                           : m.id === "house"
                           ? houseItems.filter((it) => (it.kind === "medicine" && it.expiryDate && getDaysDiff(it.expiryDate) <= 30) || (it.kind === "warranty" && it.warrantyEnd && getDaysDiff(it.warrantyEnd) <= 30)).length
+                          : m.id === "alarm"
+                          ? customAlarms.filter((a) => a && a.enabled).length
                           : 0;
                       return (
                       <button
@@ -43414,6 +44646,7 @@ time: "", location: "",
           schedule_places: { title: "📍 일정 빠른 장소", placeholder: "새 자주 가는 장소 (예: 보건소, 키즈카페)" },
           house_warranty_brands: { title: "🏷️ 보증 브랜드", placeholder: "새 브랜드명 (예: 발뮤다, 브라운, 쿠쿠)" },
           timer_presets: { title: "⏱️ 타이머 프리셋", placeholder: "예: 15분, 1분 30초, 7분|반숙계란" },
+          quick_alarm_presets: { title: "⚡ 퀵알람 프리셋", placeholder: "예: 1분, 5분, 15분, 1시간" },
           condolence_cat: { title: "💌 경조사 카테고리", placeholder: "새 경조사 분류 (예: 칠순/팔순, 집들이, 승진)" },
           condolence_group: { title: "👥 경조사 그룹", placeholder: "새 경조사 그룹 (예: 동호회, 대학동기, 거래처)" },
           condolence_pay: { title: "💳 경조사 결제수단", placeholder: "새 결제수단 (예: 카카오페이, 토스, 상품권, 화환)" }
@@ -43466,6 +44699,8 @@ time: "", location: "",
                   { id: "shopping_presets", label: "🛒 자주담기", cnt: shoppingPresets.length },
                   { id: "baby_health_tags", label: "🩺 진료태그", cnt: babyHealthTags.length },
                   { id: "schedule_places", label: "📍 일정장소", cnt: schedulePlaces.length },
+                  { id: "timer_presets", label: "⏱️ 타이머", cnt: timerPresets.length },
+                  { id: "quick_alarm_presets", label: "⚡ 퀵알람", cnt: quickAlarmPresets.length },
                   ...(isSuhyeokAdmin && isCondolenceUnlocked ? [
                     { id: "condolence_cat", label: "💌 경조분류", cnt: condolenceCategories.length },
                     { id: "condolence_group", label: "👥 경조그룹", cnt: condolenceGroups.length },
