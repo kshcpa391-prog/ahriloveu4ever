@@ -1181,7 +1181,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v14.07";
+export const APP_CODE_VERSION = "v14.08";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1199,7 +1199,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-25 11:41";
+export const APP_BUILD_DATE = "2026-11-25 11:43";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1268,6 +1268,16 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v14.08",
+    version: "v14.08",
+    date: "2026-11-25",
+    title: "✨ 앱 버전업 자동 알림(새 버전 적용 완료 · 서비스 워커 새 배포 감지)",
+    highlights: [
+      "직전 접속 버전(kim_last_seen_version_v1)과 현재 APP_CODE_VERSION이 달라지면 업데이트 완료 토스트와 상태표시줄 알림을 자동 발송",
+      "앱 사용 중 서비스 워커(updatefound)로 새 배포가 감지되면 새로고침 안내 토스트와 상태바 알림을 즉시 표시"
+    ]
+  },
   {
     id: "patch-v14.07",
     version: "v14.07",

@@ -4480,6 +4480,22 @@ function MainApp() {
       registerSwWithFallback()
         .then((reg) => {
           setSwStatus(reg?.active ? "활성" : "설치중");
+          if (reg && typeof reg.addEventListener === "function") {
+            reg.addEventListener("updatefound", () => {
+              const nw = reg.installing;
+              if (!nw) return;
+              nw.addEventListener("statechange", () => {
+                if (nw.state === "installed" && navigator.serviceWorker.controller) {
+                  showToast("🔄 새 버전이 배포되었습니다! 새로고침하면 적용됩니다.");
+                  showStatusBarNotification(
+                    "🔄 혁리나목율♡ 새 버전 배포",
+                    "새 기능이 준비되었어요. 앱을 새로고침해 주세요.",
+                    "app-sw-update"
+                  );
+                }
+              });
+            });
+          }
           return navigator.serviceWorker.ready;
         })
         .then(() => setSwStatus("활성"))
@@ -4578,6 +4594,29 @@ function MainApp() {
       return false;
     }
   };
+  useEffect(() => {
+    try {
+      const prevVer = localStorage.getItem("kim_last_seen_version_v1");
+      if (!prevVer) {
+        localStorage.setItem("kim_last_seen_version_v1", APP_CODE_VERSION);
+        return;
+      }
+      if (prevVer !== APP_CODE_VERSION) {
+        localStorage.setItem("kim_last_seen_version_v1", APP_CODE_VERSION);
+        const latestNote = Array.isArray(INITIAL_PATCH_NOTES) ? INITIAL_PATCH_NOTES[0] : null;
+        const patchTitle = latestNote?.title ? String(latestNote.title).trim() : "새로운 기능이 반영되었습니다.";
+        const timer = setTimeout(() => {
+          showToast(`✨ ${APP_CODE_VERSION} 업데이트 완료! (${prevVer} → ${APP_CODE_VERSION})`);
+          showStatusBarNotification(
+            `✨ ${APP_CODE_VERSION} 업데이트 완료!`,
+            patchTitle,
+            `app-ver-${APP_CODE_VERSION}`
+          );
+        }, 1200);
+        return () => clearTimeout(timer);
+      }
+    } catch (e) {}
+  }, []);
   const activitySnapshotInitRef = useRef(false);
   const inboxSnapshotInitRef = useRef(false);
   const lastInboxNotifIdRef = useRef("");
