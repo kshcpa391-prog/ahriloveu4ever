@@ -3669,6 +3669,12 @@ function MainApp() {
   const [newRoleLabelInput, setNewRoleLabelInput] = useState("");
   const [showRolePermModal, setShowRolePermModal] = useState(false);
   const [adminInboxNotes, setAdminInboxNotes] = useState([]);
+  const [adminDeletedNoteIds, setAdminDeletedNoteIds] = useState(() => {
+    try {
+      const parsed = JSON.parse(localStorage.getItem("kim_admin_deleted_note_ids_v1") || "[]");
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (e) { return []; }
+  });
   const [showSendAdminNoteModal, setShowSendAdminNoteModal] = useState(false);
   const [adminNoteText, setAdminNoteText] = useState("");
   const [adminNoteAttachments, setAdminNoteAttachments] = useState([]);
@@ -7218,26 +7224,32 @@ function MainApp() {
   };
 
   const handleDeleteAdminNote = async (noteId, fromUid = null) => {
-    if (!db || !isAdminUnlocked) return;
+    if (!isAdminUnlocked || !noteId) return;
     const nextNotes = (adminInboxNotes || []).filter((n) => n.id !== noteId);
     setAdminInboxNotes(nextNotes);
+    setAdminDeletedNoteIds((prev) => {
+      const next = Array.from(new Set([...(prev || []), noteId])).slice(-100);
+      try { localStorage.setItem("kim_admin_deleted_note_ids_v1", JSON.stringify(next)); } catch (e) {}
+      return next;
+    });
+    setManagedUsers((prev) =>
+      (prev || []).map((u) => (u?.lastAdminNote?.id === noteId ? { ...u, lastAdminNote: null } : u))
+    );
+    showToast("🗑️ 쪽지를 삭제했습니다.");
+    if (!db) return;
     try {
       await setDoc(
         getDocRef("family_meta_v4", "admin_inbox_notes_v1"),
-        { items: nextNotes, updatedAtMs: Date.now() },
+        { items: nextNotes, deletedIds: arrayUnion(noteId), updatedAtMs: Date.now() },
         { merge: true }
-      );
+      ).catch(() => {});
       if (fromUid) {
-        const sender = managedUsers.find((u) => u.uid === fromUid);
-        if (sender?.lastAdminNote?.id === noteId) {
-          await setDoc(
-            getDocRef("users", fromUid),
-            { lastAdminNote: null },
-            { merge: true }
-          ).catch(() => {});
-        }
+        await setDoc(
+          getDocRef("users", fromUid),
+          { lastAdminNote: null },
+          { merge: true }
+        ).catch(() => {});
       }
-      showToast("🗑️ 쪽지를 삭제했습니다.");
     } catch (e) {}
   };
 
@@ -8207,6 +8219,16 @@ function MainApp() {
                 try { localStorage.setItem("family_helper_role_perms_v1", JSON.stringify(cfgData.helperRolePermissions)); } catch (e) {}
               }
             }
+            if (d.id === "admin_inbox_notes_v1") {
+              if (Array.isArray(d.data()?.deletedIds)) {
+                const delList = toSafeArray(d.data().deletedIds);
+                setAdminDeletedNoteIds((prev) => {
+                  const mergedDel = Array.from(new Set([...(prev || []), ...delList])).slice(-100);
+                  try { localStorage.setItem("kim_admin_deleted_note_ids_v1", JSON.stringify(mergedDel)); } catch (e) {}
+                  return mergedDel;
+                });
+              }
+            }
             if (d.id === "admin_inbox_notes_v1" && Array.isArray(d.data().items)) {
               const incomingNotes = toSafeArray(d.data().items);
               setAdminInboxNotes(incomingNotes);
@@ -8913,7 +8935,10 @@ function MainApp() {
         try { localStorage.setItem("kim_condolence_cache_v1", JSON.stringify(loaded)); } catch (e) {}
       },
       (err) => {
-        setSyncErrorMsg(`경조사비 동기화 오류: ${err?.message || "권한/네트워크 확인"}`);
+        const isPerm = err?.code === "permission-denied" || /permission/i.test(err?.message || "");
+        if (!isPerm || activeTab === "condolence") {
+          setSyncErrorMsg(`경조사비 동기화 오류: ${err?.message || "권한/네트워크 확인"}`);
+        }
       }
     );
     return () => {
@@ -20637,11 +20662,13 @@ ${item.memo}` : `${item.title} 다녀옴!`,
         )}
 
         {isAdminUnlocked && (() => {
-          const mergedIds = new Set((adminInboxNotes || []).map((n) => n.id));
+          const delSet = new Set(adminDeletedNoteIds || []);
+          const visibleInbox = (adminInboxNotes || []).filter((n) => n && n.id && !delSet.has(n.id));
+          const mergedIds = new Set(visibleInbox.map((n) => n.id));
           const extraUserNotes = managedUsers
             .map((u) => u.lastAdminNote)
-            .filter((n) => n && n.id && !mergedIds.has(n.id));
-          const allNotes = [...(adminInboxNotes || []), ...extraUserNotes];
+            .filter((n) => n && n.id && !delSet.has(n.id) && !mergedIds.has(n.id));
+          const allNotes = [...visibleInbox, ...extraUserNotes];
           const unreadCnt = allNotes.filter((n) => !n.read).length;
           if (unreadCnt === 0) return null;
           return (
@@ -37712,11 +37739,13 @@ time: "", location: "",
 
               {/* 💌 관리자 전용: 도착한 쪽지함 바로가기 */}
               {isAdminUnlocked && (() => {
-                const mergedIds = new Set((adminInboxNotes || []).map((n) => n.id));
+                const delSet = new Set(adminDeletedNoteIds || []);
+                const visibleInbox = (adminInboxNotes || []).filter((n) => n && n.id && !delSet.has(n.id));
+                const mergedIds = new Set(visibleInbox.map((n) => n.id));
                 const extraUserNotes = managedUsers
                   .map((u) => u.lastAdminNote)
-                  .filter((n) => n && n.id && !mergedIds.has(n.id));
-                const allNotes = [...(adminInboxNotes || []), ...extraUserNotes];
+                  .filter((n) => n && n.id && !delSet.has(n.id) && !mergedIds.has(n.id));
+                const allNotes = [...visibleInbox, ...extraUserNotes];
                 const unreadCnt = allNotes.filter((n) => !n.read).length;
                 return (
                   <div className="pt-2 border-t border-stone-100 flex items-center justify-between gap-2">
@@ -43614,11 +43643,13 @@ time: "", location: "",
 
       {/* 관리자용: 도착한 쪽지함 모달 */}
       {showAdminInboxModal && isAdminUnlocked && (() => {
-        const mergedIds = new Set((adminInboxNotes || []).map((n) => n.id));
+        const delSet = new Set(adminDeletedNoteIds || []);
+        const visibleInbox = (adminInboxNotes || []).filter((n) => n && n.id && !delSet.has(n.id));
+        const mergedIds = new Set(visibleInbox.map((n) => n.id));
         const extraUserNotes = managedUsers
           .map((u) => u.lastAdminNote)
-          .filter((n) => n && n.id && !mergedIds.has(n.id));
-        const allNotes = [...(adminInboxNotes || []), ...extraUserNotes].sort(
+          .filter((n) => n && n.id && !delSet.has(n.id) && !mergedIds.has(n.id));
+        const allNotes = [...visibleInbox, ...extraUserNotes].sort(
           (a, b) => (Number(b.createdAtMs) || 0) - (Number(a.createdAtMs) || 0)
         );
         return (

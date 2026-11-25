@@ -1181,7 +1181,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v14.18";
+export const APP_CODE_VERSION = "v14.19";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1199,7 +1199,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-25 13:30";
+export const APP_BUILD_DATE = "2026-11-25 13:38";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1268,6 +1268,16 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v14.19",
+    version: "v14.19",
+    date: "2026-11-25",
+    title: "관리자 쪽지 삭제 불가 오류 및 경조사비 권한 배너 오표시 수정",
+    changes: [
+      "users/{uid}.lastAdminNote에서 올라온 쪽지를 삭제할 때 admin_inbox_notes_v1.deletedIds 및 로컬 캐시로 영구 제외해 즉시·영구 삭제되도록 수정",
+      "보조 UID 등에서 경조사비 컬렉션 permission-denied 발생 시 홈 화면 전체가 빨간 오류 배너로 바뀌지 않도록 격리 처리"
+    ]
+  },
   {
     id: "patch-v14.18",
     version: "v14.18",
