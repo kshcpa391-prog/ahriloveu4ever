@@ -4569,14 +4569,20 @@ function MainApp() {
               }
             }
           } catch (err) {}
-          await reg.showNotification(title, {
+          const isSilent = Boolean(notifSilentMode);
+          const notifOpts = {
             body: body || "",
             tag,
             icon: "/app-icon-512.png",
             badge: "/app-icon-512.png",
-            silent: Boolean(notifSilentMode),
-            renotify: true
-          });
+            silent: isSilent
+          };
+          if (!isSilent) {
+            notifOpts.renotify = true;
+            notifOpts.vibrate = [120, 60, 120];
+          }
+          await reg.showNotification(title, notifOpts);
+          setLastNotifError(`최근 발송 성공 (${new Date().toTimeString().slice(0, 8)}, ${isSilent ? "무음" : "일반"})`);
           return true;
         }
       }
@@ -45018,7 +45024,9 @@ time: "", location: "",
                   </strong>
                 </span>
                 {lastNotifError && (
-                  <span className="text-rose-600 font-bold break-all leading-tight">· {lastNotifError}</span>
+                  <span className={`font-bold break-all leading-tight ${lastNotifError.includes("성공") ? "text-[#3F624D]" : "text-rose-600"}`}>
+                    · {lastNotifError}
+                  </span>
                 )}
               </div>
             </div>

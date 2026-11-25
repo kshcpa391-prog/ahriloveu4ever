@@ -1181,7 +1181,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v14.08";
+export const APP_CODE_VERSION = "v14.09";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1199,7 +1199,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-25 11:43";
+export const APP_BUILD_DATE = "2026-11-25 11:44";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1268,6 +1268,16 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v14.09",
+    version: "v14.09",
+    date: "2026-11-25",
+    title: "🔔 상태바 알림 silent+renotify 충돌(TypeError) 수정 및 진동·발송 진단 추가",
+    highlights: [
+      "웹 알림 표준상 silent: true와 renotify: true 동시 사용 시 Chromium/삼성 인터넷에서 TypeError가 발생하던 문제 수정",
+      "일반 알림 모드 시 진동(vibrate) 추가 및 수정 알림 창 상단에 최근 발송 성공 시각/모드 표시"
+    ]
+  },
   {
     id: "patch-v14.08",
     version: "v14.08",
