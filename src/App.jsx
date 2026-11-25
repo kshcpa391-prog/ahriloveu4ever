@@ -181,7 +181,8 @@ import {
   DEFAULT_SCHEDULE_PLACES,
   DEFAULT_HOUSE_WARRANTY_BRANDS,
   DEFAULT_TIMER_PRESETS,
-  DEFAULT_QUICK_ALARM_PRESETS
+  DEFAULT_QUICK_ALARM_PRESETS,
+  DEFAULT_BABY_DIARY_MOODS
 } from "./Constants";
 
 
@@ -318,8 +319,8 @@ const escSnHtml = (s) =>
 const inlineMarkdownToNoteHtml = (rawText) => {
   const escaped = escSnHtml(rawText);
   return escaped
-    .replace(/\*\*([^*]+?)\*\*/g, "<strong>$1</strong>")
-    .replace(/\*([^*]+?)\*/g, "<em>$1</em>");
+    .replace(/\*\*([^*]+?)\*\*/g, "&lt;strong&gt;$1&lt;/strong&gt;")
+    .replace(/\*([^*]+?)\*/g, "&lt;em&gt;$1&lt;/em&gt;");
 };
 
 const sanitizeSharedNoteHtml = (rawHtml) => {
@@ -425,7 +426,7 @@ const plainOrMarkdownToNoteHtml = (rawText) => {
       const leadingSpaces = (expanded.match(/^ */)?.[0] || "").length;
       const indent = Math.min(3, leadingSpaces >= 4 ? Math.floor(leadingSpaces / 4) : 0);
       const trimmed = expanded.trim();
-      if (!trimmed) return "<div><br></div>";
+      if (!trimmed) return "&lt;div&gt;<br>&lt;/div&gt;";
       const hMatch = trimmed.match(/^#{1,6}\s+(.+)$/);
       if (hMatch) {
         return `<div data-sn-heading="1" data-color="amber">${inlineMarkdownToNoteHtml(hMatch[1].trim())}</div>`;
@@ -1602,8 +1603,8 @@ const SharedNoteRichEditor = React.memo(({
   const activeBgHex = SN_BG_HEX[activeFmt.bgColor] || "transparent";
 
   return (
-    <div className="space-y-1.5">
-      <style>{SHARED_NOTE_EDITOR_CSS}</style>
+    &lt;div className=&quot;space-y-1.5&quot;&gt;
+      &lt;style&gt;{SHARED_NOTE_EDITOR_CSS}&lt;/style&gt;
       {/* 군더더기 없는 넓은 본문 작성 영역 */}
       <div
         ref={editorRef}
@@ -2144,7 +2145,7 @@ const parseCoordsFromMapUrl = (rawUrl) => {
   if (m1) return { lat: Number(m1[1]), lng: Number(m1[2]) };
   const m2 = s.match(/!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)/);
   if (m2) return { lat: Number(m2[1]), lng: Number(m2[2]) };
-  const m3 = s.match(/[?&](?:q|query|ll)=(-?\d+\.\d+),(-?\d+\.\d+)/);
+  const m3 = s.match(/[?\&](https://www.google.com/search?q=%3F:q%7Cquery%7Cll)=(-?\d+\.\d+),(-?\d+\.\d+)/);
   if (m3) return { lat: Number(m3[1]), lng: Number(m3[2]) };
   return null;
 };
@@ -2290,27 +2291,27 @@ const PrivateCalFormModal = React.memo(({
   };
 
   return (
-    <div
-      className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+    &lt;div
+      className=&quot;fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4&quot;
       onClick={onClose}
-    >
+    &gt;
       <div
         className="bg-white rounded-3xl max-w-sm w-full p-5 space-y-3.5 max-h-[88vh] overflow-y-auto shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between">
-          <h3 className="text-[13.5px] font-black text-stone-900">
+        &lt;div className=&quot;flex items-center justify-between&quot;&gt;
+          &lt;h3 className=&quot;text-[13.5px] font-black text-stone-900&quot;&gt;
             {isEditing ? "✏️ 개인 일정 수정" : "🔒 개인 일정 추가"}
-          </h3>
-          <button
-            type="button"
+          &lt;/h3&gt;
+          &lt;button
+            type=&quot;button&quot;
             onClick={onClose}
-            className="p-1 text-stone-400 hover:text-stone-700"
-            aria-label="닫기"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
+            className=&quot;p-1 text-stone-400 hover:text-stone-700&quot;
+            aria-label=&quot;닫기&quot;
+          &gt;
+            &lt;X className=&quot;w-5 h-5&quot; /&gt;
+          &lt;/button&gt;
+        &lt;/div&gt;
 
         <form onSubmit={handleSubmit} className="space-y-3">
           <div className="flex items-center justify-between gap-2 px-3 py-2 rounded-xl bg-stone-100 text-[12px] font-extrabold text-stone-700">
@@ -2485,24 +2486,24 @@ const ScheduleFormModal = React.memo(({
   const isPrivateMode = isAdminUnlocked && draft.scheduleScope === "private";
 
   return (
-    <div
-      className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+    &lt;div
+      className=&quot;fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4&quot;
       onClick={onClose}
-    >
+    &gt;
       <div
         className="bg-white rounded-3xl max-w-sm w-full p-5 space-y-3.5 max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between gap-2">
-          <h3 className="text-[13.5px] font-black truncate min-w-0">
+        &lt;div className=&quot;flex items-center justify-between gap-2&quot;&gt;
+          &lt;h3 className=&quot;text-[13.5px] font-black truncate min-w-0&quot;&gt;
             {isPrivateMode
               ? (isEditing ? "🔒 내 개인일정 수정" : "🔒 새 개인일정 추가")
               : (isEditing ? "🏠 가족 일정 수정" : "🏠 새 가족 일정 추가")}
-          </h3>
-          <button type="button" onClick={onClose} aria-label="닫기" className="shrink-0">
-            <X className="w-5 h-5 text-stone-400" />
-          </button>
-        </div>
+          &lt;/h3&gt;
+          &lt;button type=&quot;button&quot; onClick={onClose} aria-label=&quot;닫기&quot; className=&quot;shrink-0&quot;&gt;
+            &lt;X className=&quot;w-5 h-5 text-stone-400&quot; /&gt;
+          &lt;/button&gt;
+        &lt;/div&gt;
 
         {isAdminUnlocked && (
           <div className="flex items-center gap-1.5 bg-stone-100 p-1 rounded-xl">
@@ -3064,22 +3065,22 @@ const NoticeFormModal = React.memo(({
   }, [initialForm]);
 
   return (
-    <div
-      className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+    &lt;div
+      className=&quot;fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4&quot;
       onClick={onClose}
-    >
+    &gt;
       <div
         className="bg-white rounded-3xl max-w-sm w-full p-5 space-y-3 shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between">
-          <h3 className="text-[13.5px] font-black">
+        &lt;div className=&quot;flex items-center justify-between&quot;&gt;
+          &lt;h3 className=&quot;text-[13.5px] font-black&quot;&gt;
             {isEditing ? "가족 공지 수정" : "새 가족 공지사항 작성"}
-          </h3>
-          <button type="button" onClick={onClose} aria-label="닫기">
-            <X className="w-5 h-5 text-stone-400" />
-          </button>
-        </div>
+          &lt;/h3&gt;
+          &lt;button type=&quot;button&quot; onClick={onClose} aria-label=&quot;닫기&quot;&gt;
+            &lt;X className=&quot;w-5 h-5 text-stone-400&quot; /&gt;
+          &lt;/button&gt;
+        &lt;/div&gt;
 
         <input
           type="text"
@@ -3166,11 +3167,11 @@ const RoutineTitleField = React.memo(({ initialValue, onSyncValue, onSubmitEnter
     .filter(Boolean);
 
   return (
-    <div>
-      <label className="text-[11.5px] font-extrabold text-stone-500 block mb-1">
+    &lt;div&gt;
+      &lt;label className=&quot;text-[11.5px] font-extrabold text-stone-500 block mb-1&quot;&gt;
         루틴 내용 (쉼표 , 로 여러 단계 구분 가능)
-      </label>
-      <div className="relative">
+      &lt;/label&gt;
+      &lt;div className=&quot;relative&quot;&gt;
         <input
           type="text"
           autoFocus
@@ -3201,26 +3202,26 @@ const RoutineTitleField = React.memo(({ initialValue, onSyncValue, onSubmitEnter
             className="absolute right-2.5 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-700"
             aria-label="입력 지우기"
           >
-            <X className="w-4 h-4" />
-          </button>
+            &lt;X className=&quot;w-4 h-4&quot; /&gt;
+          &lt;/button&gt;
         )}
-      </div>
+      &lt;/div&gt;
       {steps.length >= 2 && (
-        <div className="mt-1.5 flex flex-col gap-1 bg-stone-50 border border-stone-200 rounded-xl p-2">
+        &lt;div className=&quot;mt-1.5 flex flex-col gap-1 bg-stone-50 border border-stone-200 rounded-xl p-2&quot;&gt;
           {steps.map((st, idx) => (
-            <div
+            &lt;div
               key={idx}
-              className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-white border border-stone-200 text-[11.5px] font-extrabold text-stone-800"
-            >
-              <span className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full border border-stone-400 text-[9px] font-black shrink-0">
+              className=&quot;flex items-center gap-1.5 px-2 py-1 rounded-lg bg-white border border-stone-200 text-[11.5px] font-extrabold text-stone-800&quot;
+            &gt;
+              &lt;span className=&quot;inline-flex items-center justify-center w-3.5 h-3.5 rounded-full border border-stone-400 text-[9px] font-black shrink-0&quot;&gt;
                 {idx + 1}
-              </span>
-              <span className="min-w-0 flex-1 break-keep">{st}</span>
-            </div>
+              &lt;/span&gt;
+              &lt;span className=&quot;min-w-0 flex-1 break-keep&quot;&gt;{st}&lt;/span&gt;
+            &lt;/div&gt;
           ))}
-        </div>
+        &lt;/div&gt;
       )}
-    </div>
+    &lt;/div&gt;
   );
 });
 
@@ -3235,7 +3236,7 @@ const QuickCalDayInput = React.memo(({ placeholder, onQuickAdd }) => {
     onQuickAdd(trimmed);
   };
   return (
-    <div className="px-2.5 py-2 border-t border-stone-200 bg-stone-50 flex items-center gap-1.5 shrink-0">
+    &lt;div className=&quot;px-2.5 py-2 border-t border-stone-200 bg-stone-50 flex items-center gap-1.5 shrink-0&quot;&gt;
       <input
         type="text"
         enterKeyHint="done"
@@ -3250,14 +3251,14 @@ const QuickCalDayInput = React.memo(({ placeholder, onQuickAdd }) => {
         placeholder={placeholder}
         className="flex-1 min-w-0 px-2.5 py-1.5 rounded-lg border border-stone-300 bg-white text-[12.5px] font-bold text-stone-800 focus:outline-none focus:ring-2 focus:ring-stone-400"
       />
-      <button
-        type="button"
+      &lt;button
+        type=&quot;button&quot;
         onClick={submit}
-        className="px-2.5 py-1.5 rounded-lg bg-stone-800 hover:bg-stone-900 text-white text-[11.5px] font-extrabold whitespace-nowrap shrink-0"
-      >
+        className=&quot;px-2.5 py-1.5 rounded-lg bg-stone-800 hover:bg-stone-900 text-white text-[11.5px] font-extrabold whitespace-nowrap shrink-0&quot;
+      &gt;
         등록
-      </button>
-    </div>
+      &lt;/button&gt;
+    &lt;/div&gt;
   );
 });
 
@@ -3371,23 +3372,23 @@ const BucketMapView = ({ items, selectedId, onSelectItem, onPickCoords }) => {
 
   if (mapErr) {
     return (
-      <div className="h-[280px] rounded-2xl border border-stone-200 bg-stone-50 flex items-center justify-center text-[12.5px] font-bold text-stone-500 p-4 text-center">
+      &lt;div className=&quot;h-[280px] rounded-2xl border border-stone-200 bg-stone-50 flex items-center justify-center text-[12.5px] font-bold text-stone-500 p-4 text-center&quot;&gt;
         {mapErr}
-      </div>
+      &lt;/div&gt;
     );
   }
   return (
-    <div className="relative rounded-2xl overflow-hidden border border-stone-200 shadow-sm bg-stone-100">
-      <div ref={mapElRef} className="w-full h-[310px] z-0" />
+    &lt;div className=&quot;relative rounded-2xl overflow-hidden border border-stone-200 shadow-sm bg-stone-100&quot;&gt;
+      &lt;div ref={mapElRef} className=&quot;w-full h-[310px] z-0&quot; /&gt;
       {mapReady && (
-        <div className="absolute top-2.5 right-2.5 z-[400] flex items-center gap-1">
+        &lt;div className=&quot;absolute top-2.5 right-2.5 z-[400] flex items-center gap-1&quot;&gt;
           <button
             type="button"
             onClick={() => setMapTileMode((m) => (m === "osm" ? "satellite" : "osm"))}
             className="px-2 py-1 rounded-lg bg-white/95 hover:bg-white border border-stone-300 shadow-sm text-[11px] font-extrabold text-stone-800 whitespace-nowrap"
           >
             {mapTileMode === "osm" ? "🛰️ 위성" : "🗺️ 기본"}
-          </button>
+          &lt;/button&gt;
           <button
             type="button"
             onClick={() => {
@@ -3403,15 +3404,15 @@ const BucketMapView = ({ items, selectedId, onSelectItem, onPickCoords }) => {
             title="내 현재 위치로 이동"
           >
             📍 내 위치
-          </button>
-        </div>
+          &lt;/button&gt;
+        &lt;/div&gt;
       )}
       {!mapReady && (
-        <div className="absolute inset-0 bg-stone-50/90 flex items-center justify-center text-[12.5px] font-bold text-stone-500">
+        &lt;div className=&quot;absolute inset-0 bg-stone-50/90 flex items-center justify-center text-[12.5px] font-bold text-stone-500&quot;&gt;
           🗺️ 가족 지도 불러오는 중...
-        </div>
+        &lt;/div&gt;
       )}
-    </div>
+    &lt;/div&gt;
   );
 };
 
@@ -3489,17 +3490,17 @@ const BucketLocationPreviewMap = ({ lat, lng, label, onPickCoords }) => {
   }, [ready, lat, lng, label]);
 
   return (
-    <div className="relative rounded-2xl overflow-hidden border border-stone-200 bg-stone-100">
-      <div ref={mapElRef} className="w-full h-[190px] z-0" />
-      <div className="absolute bottom-2 left-2 z-[400] px-2 py-0.5 rounded-lg bg-white/90 text-[10.5px] font-bold text-stone-600 shadow-xs pointer-events-none">
+    &lt;div className=&quot;relative rounded-2xl overflow-hidden border border-stone-200 bg-stone-100&quot;&gt;
+      &lt;div ref={mapElRef} className=&quot;w-full h-[190px] z-0&quot; /&gt;
+      &lt;div className=&quot;absolute bottom-2 left-2 z-[400] px-2 py-0.5 rounded-lg bg-white/90 text-[10.5px] font-bold text-stone-600 shadow-xs pointer-events-none&quot;&gt;
         지도를 눌러 핀 위치를 직접 미세조정할 수 있어요
-      </div>
+      &lt;/div&gt;
       {!ready && (
-        <div className="absolute inset-0 bg-stone-50/90 flex items-center justify-center text-[12px] font-bold text-stone-500">
+        &lt;div className=&quot;absolute inset-0 bg-stone-50/90 flex items-center justify-center text-[12px] font-bold text-stone-500&quot;&gt;
           🗺️ 미리보기 지도 로딩 중...
-        </div>
+        &lt;/div&gt;
       )}
-    </div>
+    &lt;/div&gt;
   );
 };
 
@@ -3522,7 +3523,7 @@ const MemberAvatar = ({ member, id, size = "sm", className = "" }) => {
       />
     );
   }
-  return <span className={className}>{resolved?.emoji || "👤"}</span>;
+  return &lt;span className={className}&gt;{resolved?.emoji || "👤"}&lt;/span&gt;;
 };
 
 
@@ -3540,20 +3541,20 @@ class ErrorBoundary extends React.Component {
   render() {
     if (this.state.hasError) {
       return (
-        <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-stone-50 text-center">
-          <div className="bg-white p-6 rounded-3xl shadow-lg border border-red-200 max-w-sm w-full space-y-3">
-            <div className="text-2xl">⚠️</div>
-            <h2 className="text-[15px] font-black text-stone-900">화면 자동 복구</h2>
-            <p className="text-[13.5px] text-stone-600 break-all">{this.state.errorMsg}</p>
+        &lt;div className=&quot;min-h-screen flex flex-col items-center justify-center p-6 bg-stone-50 text-center&quot;&gt;
+          &lt;div className=&quot;bg-white p-6 rounded-3xl shadow-lg border border-red-200 max-w-sm w-full space-y-3&quot;&gt;
+            &lt;div className=&quot;text-2xl&quot;&gt;⚠️&lt;/div&gt;
+            &lt;h2 className=&quot;text-[15px] font-black text-stone-900&quot;&gt;화면 자동 복구&lt;/h2&gt;
+            &lt;p className=&quot;text-[13.5px] text-stone-600 break-all&quot;&gt;{this.state.errorMsg}&lt;/p&gt;
             <button
               type="button"
               onClick={async () => { try { if ("caches" in window && window.caches) { const ks = await window.caches.keys(); await Promise.all(ks.map((k) => window.caches.delete(k))); } } catch (e) {} window.location.reload(); }}
               className="w-full py-2.5 rounded-xl bg-stone-900 text-white text-[13.5px] font-extrabold"
             >
               새로고침
-            </button>
-          </div>
-        </div>
+            &lt;/button&gt;
+          &lt;/div&gt;
+        &lt;/div&gt;
       );
     }
     return this.props.children;
@@ -4986,7 +4987,8 @@ function MainApp() {
           schedule_places: Array.isArray(saved.schedule_places) && saved.schedule_places.length > 0 ? saved.schedule_places.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_SCHEDULE_PLACES],
           house_warranty_brands: Array.isArray(saved.house_warranty_brands) && saved.house_warranty_brands.length > 0 ? saved.house_warranty_brands.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_HOUSE_WARRANTY_BRANDS],
           timer_presets: Array.isArray(saved.timer_presets) && saved.timer_presets.length > 0 ? saved.timer_presets.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_TIMER_PRESETS],
-          quick_alarm_presets: Array.isArray(saved.quick_alarm_presets) && saved.quick_alarm_presets.length > 0 ? saved.quick_alarm_presets.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_QUICK_ALARM_PRESETS]
+          quick_alarm_presets: Array.isArray(saved.quick_alarm_presets) && saved.quick_alarm_presets.length > 0 ? saved.quick_alarm_presets.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_QUICK_ALARM_PRESETS],
+          baby_diary_moods: Array.isArray(saved.baby_diary_moods) && saved.baby_diary_moods.length > 0 ? saved.baby_diary_moods.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_BABY_DIARY_MOODS]
         };
       }
     } catch (e) {}
@@ -5006,7 +5008,8 @@ function MainApp() {
       schedule_places: [...DEFAULT_SCHEDULE_PLACES],
       house_warranty_brands: [...DEFAULT_HOUSE_WARRANTY_BRANDS],
       timer_presets: [...DEFAULT_TIMER_PRESETS],
-      quick_alarm_presets: [...DEFAULT_QUICK_ALARM_PRESETS]
+      quick_alarm_presets: [...DEFAULT_QUICK_ALARM_PRESETS],
+      baby_diary_moods: [...DEFAULT_BABY_DIARY_MOODS]
     };
   });
   const fridgeCategories = customCategories.fridge;
@@ -5025,6 +5028,7 @@ function MainApp() {
   const houseWarrantyBrands = customCategories.house_warranty_brands || DEFAULT_HOUSE_WARRANTY_BRANDS;
   const timerPresets = customCategories.timer_presets || DEFAULT_TIMER_PRESETS;
   const quickAlarmPresets = customCategories.quick_alarm_presets || DEFAULT_QUICK_ALARM_PRESETS;
+  const babyDiaryMoods = customCategories.baby_diary_moods || DEFAULT_BABY_DIARY_MOODS;
 
   // === 🔒 비밀메뉴: 경조사비 입출금내역 상태 ===
   const isSuhyeokAdmin = isAdminUnlocked && (actorName === "수혁" || actorName === "김수혁");
@@ -6638,7 +6642,6 @@ function MainApp() {
   const [alarmSoundIdDraft, setAlarmSoundIdDraft] = useState("morning");
   const [alarmQuickMinDraft, setAlarmQuickMinDraft] = useState("10");
   const [alarmQuickMemoDraft, setAlarmQuickMemoDraft] = useState("");
-  const [isAlarmMusicManageOpen, setIsAlarmMusicManageOpen] = useState(false);
   const [newAlarmSoundLabel, setNewAlarmSoundLabel] = useState("");
   const [newAlarmSoundUrl, setNewAlarmSoundUrl] = useState("");
   const [previewingSoundId, setPreviewingSoundId] = useState(null);
@@ -8028,53 +8031,53 @@ function MainApp() {
     const icon = type === "error" ? "⚠️" : type === "loading" ? "⏳" : "📭";
     return (
       <div className={`rounded-2xl border p-5 text-center space-y-2 ${tone}`}>
-        <div className="text-xl">{icon}</div>
-        <div className="text-[13.5px] font-black">{title}</div>
-        {description && <div className="text-[12.5px] opacity-85 leading-relaxed">{description}</div>}
+        &lt;div className=&quot;text-xl&quot;&gt;{icon}&lt;/div&gt;
+        &lt;div className=&quot;text-[13.5px] font-black&quot;&gt;{title}&lt;/div&gt;
+        {description && &lt;div className=&quot;text-[12.5px] opacity-85 leading-relaxed&quot;&gt;{description}&lt;/div&gt;}
         {actionLabel && onAction && (
-          <button
-            type="button"
+          &lt;button
+            type=&quot;button&quot;
             onClick={onAction}
-            className="mt-1 px-3.5 py-1.5 rounded-xl bg-stone-900 text-white text-[12.5px] font-extrabold whitespace-nowrap"
-          >
+            className=&quot;mt-1 px-3.5 py-1.5 rounded-xl bg-stone-900 text-white text-[12.5px] font-extrabold whitespace-nowrap&quot;
+          &gt;
             {actionLabel}
-          </button>
+          &lt;/button&gt;
         )}
-      </div>
+      &lt;/div&gt;
     );
   };
 
 
   const renderLockedTabScreen = (tabLabel) => (
-    <div className="p-4">
-      <div className="bg-white rounded-3xl border border-stone-200 p-6 text-center space-y-3 shadow-sm">
-        <div className="w-12 h-12 rounded-2xl bg-amber-50 border border-amber-200 text-amber-700 flex items-center justify-center mx-auto">
-          <Lock className="w-6 h-6" />
-        </div>
-        <div className="space-y-1">
-          <h3 className="text-[13.5px] font-black text-stone-900">{tabLabel} 메뉴는 잠겨 있습니다</h3>
-          <p className="text-[13.5px] text-stone-500 leading-relaxed">
+    &lt;div className=&quot;p-4&quot;&gt;
+      &lt;div className=&quot;bg-white rounded-3xl border border-stone-200 p-6 text-center space-y-3 shadow-sm&quot;&gt;
+        &lt;div className=&quot;w-12 h-12 rounded-2xl bg-amber-50 border border-amber-200 text-amber-700 flex items-center justify-center mx-auto&quot;&gt;
+          &lt;Lock className=&quot;w-6 h-6&quot; /&gt;
+        &lt;/div&gt;
+        &lt;div className=&quot;space-y-1&quot;&gt;
+          &lt;h3 className=&quot;text-[13.5px] font-black text-stone-900&quot;&gt;{tabLabel} 메뉴는 잠겨 있습니다&lt;/h3&gt;
+          &lt;p className=&quot;text-[13.5px] text-stone-500 leading-relaxed&quot;&gt;
             현재 계정에서는 접근이 제한된 메뉴입니다. 관리자(수혁)에게 해당 메뉴의 열람 권한을 요청해 주세요.
-          </p>
-        </div>
-        <div className="flex items-center justify-center gap-2 pt-1">
+          &lt;/p&gt;
+        &lt;/div&gt;
+        &lt;div className=&quot;flex items-center justify-center gap-2 pt-1&quot;&gt;
           <button
             type="button"
             onClick={() => setIsEditorUnlockModalOpen(true)}
             className="px-4 py-2 rounded-xl bg-stone-900 hover:bg-stone-800 text-white text-[13.5px] font-extrabold whitespace-nowrap"
           >
             👤 내 계정 정보
-          </button>
+          &lt;/button&gt;
           <button
             type="button"
             onClick={() => setActiveTab("home")}
             className="px-3.5 py-2 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-[13.5px] font-bold whitespace-nowrap"
           >
             🏠 홈으로
-          </button>
-        </div>
-      </div>
-    </div>
+          &lt;/button&gt;
+        &lt;/div&gt;
+      &lt;/div&gt;
+    &lt;/div&gt;
   );
 
 
@@ -9324,7 +9327,8 @@ function MainApp() {
               schedule_places: Array.isArray(d.schedule_places) && d.schedule_places.length > 0 ? d.schedule_places.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_SCHEDULE_PLACES],
               house_warranty_brands: Array.isArray(d.house_warranty_brands) && d.house_warranty_brands.length > 0 ? d.house_warranty_brands.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_HOUSE_WARRANTY_BRANDS],
               timer_presets: Array.isArray(d.timer_presets) && d.timer_presets.length > 0 ? d.timer_presets.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_TIMER_PRESETS],
-              quick_alarm_presets: Array.isArray(d.quick_alarm_presets) && d.quick_alarm_presets.length > 0 ? d.quick_alarm_presets.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_QUICK_ALARM_PRESETS]
+              quick_alarm_presets: Array.isArray(d.quick_alarm_presets) && d.quick_alarm_presets.length > 0 ? d.quick_alarm_presets.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_QUICK_ALARM_PRESETS],
+              baby_diary_moods: Array.isArray(d.baby_diary_moods) && d.baby_diary_moods.length > 0 ? d.baby_diary_moods.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_BABY_DIARY_MOODS]
             };
             setCustomCategories(nextCats);
             try { localStorage.setItem("kim_custom_categories_v1", JSON.stringify(nextCats)); } catch (e) {}
@@ -10359,7 +10363,8 @@ function MainApp() {
           schedule_places: Array.isArray(payload.customCategories.schedule_places) && payload.customCategories.schedule_places.length > 0 ? payload.customCategories.schedule_places.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_SCHEDULE_PLACES],
           house_warranty_brands: Array.isArray(payload.customCategories.house_warranty_brands) && payload.customCategories.house_warranty_brands.length > 0 ? payload.customCategories.house_warranty_brands.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_HOUSE_WARRANTY_BRANDS],
           timer_presets: Array.isArray(payload.customCategories.timer_presets) && payload.customCategories.timer_presets.length > 0 ? payload.customCategories.timer_presets.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_TIMER_PRESETS],
-          quick_alarm_presets: Array.isArray(payload.customCategories.quick_alarm_presets) && payload.customCategories.quick_alarm_presets.length > 0 ? payload.customCategories.quick_alarm_presets.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_QUICK_ALARM_PRESETS]
+          quick_alarm_presets: Array.isArray(payload.customCategories.quick_alarm_presets) && payload.customCategories.quick_alarm_presets.length > 0 ? payload.customCategories.quick_alarm_presets.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_QUICK_ALARM_PRESETS],
+          baby_diary_moods: Array.isArray(payload.customCategories.baby_diary_moods) && payload.customCategories.baby_diary_moods.length > 0 ? payload.customCategories.baby_diary_moods.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_BABY_DIARY_MOODS]
         };
         setCustomCategories(nextCats);
         try { localStorage.setItem("kim_custom_categories_v1", JSON.stringify(nextCats)); } catch (e) {}
@@ -10657,6 +10662,7 @@ function MainApp() {
                 house_warranty_brands: Array.isArray(payload.customCategories.house_warranty_brands) && payload.customCategories.house_warranty_brands.length > 0 ? payload.customCategories.house_warranty_brands : [...DEFAULT_HOUSE_WARRANTY_BRANDS],
                 timer_presets: Array.isArray(payload.customCategories.timer_presets) && payload.customCategories.timer_presets.length > 0 ? payload.customCategories.timer_presets : [...DEFAULT_TIMER_PRESETS],
                 quick_alarm_presets: Array.isArray(payload.customCategories.quick_alarm_presets) && payload.customCategories.quick_alarm_presets.length > 0 ? payload.customCategories.quick_alarm_presets : [...DEFAULT_QUICK_ALARM_PRESETS],
+                baby_diary_moods: Array.isArray(payload.customCategories.baby_diary_moods) && payload.customCategories.baby_diary_moods.length > 0 ? payload.customCategories.baby_diary_moods : [...DEFAULT_BABY_DIARY_MOODS],
                 updatedAtMs: Date.now()
               },
               { merge: true }
@@ -18136,6 +18142,8 @@ ${item.memo}` : `${item.title} 다녀옴!`,
         ? [...DEFAULT_TIMER_PRESETS]
         : kind === "quick_alarm_presets"
         ? [...DEFAULT_QUICK_ALARM_PRESETS]
+        : kind === "baby_diary_moods"
+        ? [...DEFAULT_BABY_DIARY_MOODS]
         : [...NOTICE_CATEGORIES];
     await saveCustomCategoriesToCloud({ ...customCategories, [kind]: defaults }, "↺ 기본 분류 목록으로 복원했습니다.");
   };
@@ -18431,53 +18439,53 @@ ${item.memo}` : `${item.title} 다녀옴!`,
     }).join("");
 
     const xml = `<?xml version="1.0" encoding="UTF-8"?>
-<?mso-application progid="Excel.Sheet"?>
-<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
- xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
- <Styles>
-  <Style ss:ID="Header"><Font ss:Bold="1" ss:Color="#FFFFFF"/><Interior ss:Color="#35503C" ss:Pattern="Solid"/></Style>
-  <Style ss:ID="Section"><Font ss:Bold="1" ss:Size="12" ss:Color="#35503C"/></Style>
-  <Style ss:ID="Num"><NumberFormat ss:Format="#,##0"/></Style>
-  <Style ss:ID="Total"><Font ss:Bold="1"/><Interior ss:Color="#EEF3EE" ss:Pattern="Solid"/></Style>
-  <Style ss:ID="TotalNum"><Font ss:Bold="1"/><Interior ss:Color="#EEF3EE" ss:Pattern="Solid"/><NumberFormat ss:Format="#,##0"/></Style>
- </Styles>
- <Worksheet ss:Name="경조사비 내역">
-  <Table>
-   <Row>
-    <Cell ss:StyleID="Header"><Data ss:Type="String">번호</Data></Cell>
-    <Cell ss:StyleID="Header"><Data ss:Type="String">날짜</Data></Cell>
-    <Cell ss:StyleID="Header"><Data ss:Type="String">구분</Data></Cell>
-    <Cell ss:StyleID="Header"><Data ss:Type="String">카테고리</Data></Cell>
-    <Cell ss:StyleID="Header"><Data ss:Type="String">그룹</Data></Cell>
-    <Cell ss:StyleID="Header"><Data ss:Type="String">성명</Data></Cell>
-    <Cell ss:StyleID="Header"><Data ss:Type="String">당사자</Data></Cell>
-    <Cell ss:StyleID="Header"><Data ss:Type="String">금액</Data></Cell>
-    <Cell ss:StyleID="Header"><Data ss:Type="String">입금액</Data></Cell>
-    <Cell ss:StyleID="Header"><Data ss:Type="String">출금액</Data></Cell>
-    <Cell ss:StyleID="Header"><Data ss:Type="String">결제수단</Data></Cell>
-    <Cell ss:StyleID="Header"><Data ss:Type="String">메모</Data></Cell>
-   </Row>
+&lt;?mso-application progid=&quot;Excel.Sheet&quot;?&gt;
+&lt;Workbook xmlns=&quot;urn:schemas-microsoft-com:office:spreadsheet&quot;
+ xmlns:ss=&quot;urn:schemas-microsoft-com:office:spreadsheet&quot;&gt;
+ &lt;Styles&gt;
+  &lt;Style ss:ID=&quot;Header&quot;&gt;&lt;Font ss:Bold=&quot;1&quot; ss:Color=&quot;#FFFFFF&quot;/&gt;&lt;Interior ss:Color=&quot;#35503C&quot; ss:Pattern=&quot;Solid&quot;/&gt;&lt;/Style&gt;
+  &lt;Style ss:ID=&quot;Section&quot;&gt;&lt;Font ss:Bold=&quot;1&quot; ss:Size=&quot;12&quot; ss:Color=&quot;#35503C&quot;/&gt;&lt;/Style&gt;
+  &lt;Style ss:ID=&quot;Num&quot;&gt;&lt;NumberFormat ss:Format=&quot;#,##0&quot;/&gt;&lt;/Style&gt;
+  &lt;Style ss:ID=&quot;Total&quot;&gt;&lt;Font ss:Bold=&quot;1&quot;/&gt;&lt;Interior ss:Color=&quot;#EEF3EE&quot; ss:Pattern=&quot;Solid&quot;/&gt;&lt;/Style&gt;
+  &lt;Style ss:ID=&quot;TotalNum&quot;&gt;&lt;Font ss:Bold=&quot;1&quot;/&gt;&lt;Interior ss:Color=&quot;#EEF3EE&quot; ss:Pattern=&quot;Solid&quot;/&gt;&lt;NumberFormat ss:Format=&quot;#,##0&quot;/&gt;&lt;/Style&gt;
+ &lt;/Styles&gt;
+ &lt;Worksheet ss:Name=&quot;경조사비 내역&quot;&gt;
+  &lt;Table&gt;
+   &lt;Row&gt;
+    &lt;Cell ss:StyleID=&quot;Header&quot;&gt;&lt;Data ss:Type=&quot;String&quot;&gt;번호&lt;/Data&gt;&lt;/Cell&gt;
+    &lt;Cell ss:StyleID=&quot;Header&quot;&gt;&lt;Data ss:Type=&quot;String&quot;&gt;날짜&lt;/Data&gt;&lt;/Cell&gt;
+    &lt;Cell ss:StyleID=&quot;Header&quot;&gt;&lt;Data ss:Type=&quot;String&quot;&gt;구분&lt;/Data&gt;&lt;/Cell&gt;
+    &lt;Cell ss:StyleID=&quot;Header&quot;&gt;&lt;Data ss:Type=&quot;String&quot;&gt;카테고리&lt;/Data&gt;&lt;/Cell&gt;
+    &lt;Cell ss:StyleID=&quot;Header&quot;&gt;&lt;Data ss:Type=&quot;String&quot;&gt;그룹&lt;/Data&gt;&lt;/Cell&gt;
+    &lt;Cell ss:StyleID=&quot;Header&quot;&gt;&lt;Data ss:Type=&quot;String&quot;&gt;성명&lt;/Data&gt;&lt;/Cell&gt;
+    &lt;Cell ss:StyleID=&quot;Header&quot;&gt;&lt;Data ss:Type=&quot;String&quot;&gt;당사자&lt;/Data&gt;&lt;/Cell&gt;
+    &lt;Cell ss:StyleID=&quot;Header&quot;&gt;&lt;Data ss:Type=&quot;String&quot;&gt;금액&lt;/Data&gt;&lt;/Cell&gt;
+    &lt;Cell ss:StyleID=&quot;Header&quot;&gt;&lt;Data ss:Type=&quot;String&quot;&gt;입금액&lt;/Data&gt;&lt;/Cell&gt;
+    &lt;Cell ss:StyleID=&quot;Header&quot;&gt;&lt;Data ss:Type=&quot;String&quot;&gt;출금액&lt;/Data&gt;&lt;/Cell&gt;
+    &lt;Cell ss:StyleID=&quot;Header&quot;&gt;&lt;Data ss:Type=&quot;String&quot;&gt;결제수단&lt;/Data&gt;&lt;/Cell&gt;
+    &lt;Cell ss:StyleID=&quot;Header&quot;&gt;&lt;Data ss:Type=&quot;String&quot;&gt;메모&lt;/Data&gt;&lt;/Cell&gt;
+   &lt;/Row&gt;
    ${detailRowsXml}
-   <Row>
-    <Cell ss:StyleID="Total"><Data ss:Type="String">총계</Data></Cell>
-    <Cell ss:StyleID="Total"><Data ss:Type="String">${rows.length}건</Data></Cell>
-    <Cell ss:StyleID="Total"><Data ss:Type="String">순액</Data></Cell>
-    <Cell ss:StyleID="Total"/><Cell ss:StyleID="Total"/><Cell ss:StyleID="Total"/><Cell ss:StyleID="Total"/>
-    <Cell ss:StyleID="TotalNum"><Data ss:Type="Number">${netTotal}</Data></Cell>
-    <Cell ss:StyleID="TotalNum"><Data ss:Type="Number">${totalIn}</Data></Cell>
-    <Cell ss:StyleID="TotalNum"><Data ss:Type="Number">${totalOut}</Data></Cell>
-    <Cell ss:StyleID="Total"/><Cell ss:StyleID="Total"/>
-   </Row>
-  </Table>
- </Worksheet>
- <Worksheet ss:Name="부분합 요약">
-  <Table>
-   ${buildSubtotalRows("category", "1. 카테고리별 부분합")}
-   ${buildSubtotalRows("group", "2. 그룹별 부분합")}
-   ${buildSubtotalRows("person", "3. 인별 부분합")}
-  </Table>
- </Worksheet>
-</Workbook>`;
+   &lt;Row&gt;
+    &lt;Cell ss:StyleID=&quot;Total&quot;&gt;&lt;Data ss:Type=&quot;String&quot;&gt;총계&lt;/Data&gt;&lt;/Cell&gt;
+    &lt;Cell ss:StyleID=&quot;Total&quot;&gt;&lt;Data ss:Type=&quot;String&quot;&gt;${rows.length}건&lt;/Data&gt;&lt;/Cell&gt;
+    &lt;Cell ss:StyleID=&quot;Total&quot;&gt;&lt;Data ss:Type=&quot;String&quot;&gt;순액&lt;/Data&gt;&lt;/Cell&gt;
+    &lt;Cell ss:StyleID=&quot;Total&quot;/&gt;&lt;Cell ss:StyleID=&quot;Total&quot;/&gt;&lt;Cell ss:StyleID=&quot;Total&quot;/&gt;&lt;Cell ss:StyleID=&quot;Total&quot;/&gt;
+    &lt;Cell ss:StyleID=&quot;TotalNum&quot;&gt;&lt;Data ss:Type=&quot;Number&quot;&gt;${netTotal}&lt;/Data&gt;&lt;/Cell&gt;
+    &lt;Cell ss:StyleID=&quot;TotalNum&quot;&gt;&lt;Data ss:Type=&quot;Number&quot;&gt;${totalIn}&lt;/Data&gt;&lt;/Cell&gt;
+    &lt;Cell ss:StyleID=&quot;TotalNum&quot;&gt;&lt;Data ss:Type=&quot;Number&quot;&gt;${totalOut}&lt;/Data&gt;&lt;/Cell&gt;
+    &lt;Cell ss:StyleID=&quot;Total&quot;/&gt;&lt;Cell ss:StyleID=&quot;Total&quot;/&gt;
+   &lt;/Row&gt;
+  &lt;/Table&gt;
+ &lt;/Worksheet&gt;
+ &lt;Worksheet ss:Name=&quot;부분합 요약&quot;&gt;
+  &lt;Table&gt;
+   ${buildSubtotalRows(&quot;category&quot;, &quot;1. 카테고리별 부분합&quot;)}
+   ${buildSubtotalRows(&quot;group&quot;, &quot;2. 그룹별 부분합&quot;)}
+   ${buildSubtotalRows(&quot;person&quot;, &quot;3. 인별 부분합&quot;)}
+  &lt;/Table&gt;
+ &lt;/Worksheet&gt;
+&lt;/Workbook&gt;`;
 
     const blob = new Blob([xml], { type: "application/vnd.ms-excel;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
@@ -19545,6 +19553,9 @@ ${item.memo}` : `${item.title} 다녀옴!`,
       try {
         localStorage.setItem("kim_pages_recent_v1", JSON.stringify(next));
       } catch (e) {}
+      if (user && db && isEditorUnlocked) {
+        setDoc(getDocRef("family_meta_v4", "home_layout"), { recentPageIds: next, updatedAt: new Date().toISOString() }, { merge: true }).catch(() => {});
+      }
       return next;
     });
     if (delSet.has(selectedPageId)) setSelectedPageId(target.parentId || null);
@@ -20352,7 +20363,14 @@ ${item.memo}` : `${item.title} 다녀옴!`,
       !stockInItem &&
       !quickLogRecipe &&
       !cookingConfirmModal &&
-      !quickFridgeItem
+      !quickFridgeItem &&
+      !isDiaryFormatOpen &&
+      !isHouseRoomManageOpen &&
+      !isNotifSettingsOpen &&
+      !isPageEmojiPickerOpen &&
+      !showAdminInboxModal &&
+      !showRolePermModal &&
+      !showSendAdminNoteModal
     ) return;
     const onEsc = (e) => {
       if (e.key === "Escape") {
@@ -20388,6 +20406,13 @@ ${item.memo}` : `${item.title} 다녀옴!`,
         setIsPatchModalOpen(false);
         setIsBucketModalOpen(false);
         setIsHouseModalOpen(false);
+        setIsDiaryFormatOpen(false);
+        setIsHouseRoomManageOpen(false);
+        setIsNotifSettingsOpen(false);
+        setIsPageEmojiPickerOpen(false);
+        setShowAdminInboxModal(false);
+        setShowRolePermModal(false);
+        setShowSendAdminNoteModal(false);
         setIsHandoverModalOpen(false);
         setReturnToHandoverPending(false);
         setIsHomeDdayPickerOpen(false);
@@ -20513,7 +20538,14 @@ ${item.memo}` : `${item.title} 다녀옴!`,
     diaryLightboxUrl ||
     Boolean(diaryImportModal) ||
     Boolean(zoomedRecipePhoto) ||
-    Boolean(cropModal)
+    Boolean(cropModal) ||
+    isDiaryFormatOpen ||
+    isHouseRoomManageOpen ||
+    isNotifSettingsOpen ||
+    isPageEmojiPickerOpen ||
+    showAdminInboxModal ||
+    showRolePermModal ||
+    showSendAdminNoteModal
   );
 
   backCloseHandlerRef.current = () => {
@@ -20554,6 +20586,8 @@ ${item.memo}` : `${item.title} 다녀옴!`,
       setIsHeroPhotoModalOpen(false);
       setIsPageModalOpen(false);
       setPageMenuTargetId(null);
+      setIsPageSwitcherOpen(false);
+      setIsPageEmojiPickerOpen(false);
       setIsPagePasteModalOpen(false);
       setActiveTableTaskModal(null);
       setTaskModalDraft(null);
@@ -20575,6 +20609,12 @@ ${item.memo}` : `${item.title} 다녀옴!`,
       setDiaryLightboxUrl("");
       setDiaryImportModal(null);
       setCropModal(null);
+      setIsDiaryFormatOpen(false);
+      setIsHouseRoomManageOpen(false);
+      setIsNotifSettingsOpen(false);
+      setShowAdminInboxModal(false);
+      setShowRolePermModal(false);
+      setShowSendAdminNoteModal(false);
       return "modal_closed";
     }
     if (returnToHandoverPending) {
@@ -21018,7 +21058,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
       clearInterval(tid);
       document.removeEventListener("visibilitychange", checkAlarms);
     };
-  }, [customAlarms, timerSoundEnabled, timerVibrateEnabled]);
+  }, [customAlarms, timerSoundEnabled, timerVibrateEnabled, alarmDefaultVolume]);
 
 
   const toastBannerEl = toastMsg ? (
@@ -21032,8 +21072,8 @@ ${item.memo}` : `${item.title} 다녀옴!`,
       title="눌러서 닫기"
       className="fixed top-4 left-1/2 -translate-x-1/2 z-[9999] w-max max-w-[min(92vw,410px)] bg-stone-900 text-white px-3.5 py-2 rounded-2xl text-[11.5px] font-bold shadow-2xl border border-stone-700/60 flex items-center gap-2 cursor-pointer select-none"
     >
-      <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-      <span className="min-w-0 flex-1 break-keep leading-snug">{toastMsg}</span>
+      &lt;CheckCircle2 className=&quot;w-4 h-4 text-emerald-400 shrink-0&quot; /&gt;
+      &lt;span className=&quot;min-w-0 flex-1 break-keep leading-snug&quot;&gt;{toastMsg}&lt;/span&gt;
       {toastUndo?.fn && (
         <button
           type="button"
@@ -21048,20 +21088,20 @@ ${item.memo}` : `${item.title} 다녀옴!`,
           className="ml-1 px-2 py-0.5 rounded-full bg-amber-500 hover:bg-amber-400 text-stone-950 text-[11px] font-black shrink-0 whitespace-nowrap"
         >
           ↩️ 되돌리기
-        </button>
+        &lt;/button&gt;
       )}
-    </div>
+    &lt;/div&gt;
   ) : null;
 
   if (authLoading || (user && profileLoading && !userProfile)) {
     return (
-      <div className="min-h-screen bg-[#FAF8F3] text-stone-800 max-w-md mx-auto flex items-center justify-center p-6 font-sans">
-        <div className="bg-white rounded-3xl border border-stone-200 p-6 w-full text-center space-y-2 shadow-sm">
-          <div className="text-2xl animate-pulse">🔐</div>
-          <div className="text-[15px] font-black text-stone-900">인증 상태 확인 중...</div>
-          <div className="text-[12.5px] text-stone-500">잠시만 기다려 주세요.</div>
-        </div>
-      </div>
+      &lt;div className=&quot;min-h-screen bg-[#FAF8F3] text-stone-800 max-w-md mx-auto flex items-center justify-center p-6 font-sans&quot;&gt;
+        &lt;div className=&quot;bg-white rounded-3xl border border-stone-200 p-6 w-full text-center space-y-2 shadow-sm&quot;&gt;
+          &lt;div className=&quot;text-2xl animate-pulse&quot;&gt;🔐&lt;/div&gt;
+          &lt;div className=&quot;text-[15px] font-black text-stone-900&quot;&gt;인증 상태 확인 중...&lt;/div&gt;
+          &lt;div className=&quot;text-[12.5px] text-stone-500&quot;&gt;잠시만 기다려 주세요.&lt;/div&gt;
+        &lt;/div&gt;
+      &lt;/div&gt;
     );
   }
 
@@ -21070,16 +21110,16 @@ ${item.memo}` : `${item.title} 다녀옴!`,
     const isInAppBrowser = /KAKAOTALK|NAVER|Instagram|FBAN|FBAV|Line/i.test(ua);
     const isAndroidUa = /Android/i.test(ua);
     return (
-      <div className="min-h-screen bg-[#FAF8F3] text-stone-800 max-w-md mx-auto flex items-center justify-center p-4 font-sans">
+      &lt;div className=&quot;min-h-screen bg-[#FAF8F3] text-stone-800 max-w-md mx-auto flex items-center justify-center p-4 font-sans&quot;&gt;
         {toastBannerEl}
-        <div className="bg-white rounded-2xl border border-stone-200 p-5 w-full space-y-3 shadow-lg">
-          <div className="text-center space-y-0.5">
-            <div className="text-xl">🏡</div>
-            <h1 className="text-[15px] font-black text-stone-900">혁리나목율♡ 가족 앱</h1>
-            <p className="text-[11px] text-stone-500">
+        &lt;div className=&quot;bg-white rounded-2xl border border-stone-200 p-5 w-full space-y-3 shadow-lg&quot;&gt;
+          &lt;div className=&quot;text-center space-y-0.5&quot;&gt;
+            &lt;div className=&quot;text-xl&quot;&gt;🏡&lt;/div&gt;
+            &lt;h1 className=&quot;text-[15px] font-black text-stone-900&quot;&gt;혁리나목율♡ 가족 앱&lt;/h1&gt;
+            &lt;p className=&quot;text-[11px] text-stone-500&quot;&gt;
               로그인 · 가입 후 관리자 승인 시 이용할 수 있어요.
-            </p>
-          </div>
+            &lt;/p&gt;
+          &lt;/div&gt;
 
           {isInAppBrowser && (
             <div className="p-2.5 rounded-xl bg-stone-50 border border-stone-200 space-y-1.5 text-[11px] text-stone-800">
@@ -21280,19 +21320,19 @@ ${item.memo}` : `${item.title} 다녀옴!`,
   if (userProfile?.needsNameSetup || userProfile?.displayName === "새 사용자") {
     const suggestedName = googleNameSetupInput || (userProfile?.displayName && userProfile.displayName !== "새 사용자" ? userProfile.displayName : user.displayName || "");
     return (
-      <div className="min-h-screen bg-[#FAF8F3] text-stone-800 max-w-md mx-auto flex items-center justify-center p-4 font-sans">
+      &lt;div className=&quot;min-h-screen bg-[#FAF8F3] text-stone-800 max-w-md mx-auto flex items-center justify-center p-4 font-sans&quot;&gt;
         {toastBannerEl}
-        <div className="bg-white rounded-2xl border border-stone-200 p-5 w-full space-y-3 shadow-lg">
-          <div className="text-center space-y-0.5">
-            <div className="text-2xl">👤</div>
-            <h2 className="text-[14px] font-black text-stone-900">사용자 이름 입력 (필수)</h2>
-            <p className="text-[11px] text-stone-500">
+        &lt;div className=&quot;bg-white rounded-2xl border border-stone-200 p-5 w-full space-y-3 shadow-lg&quot;&gt;
+          &lt;div className=&quot;text-center space-y-0.5&quot;&gt;
+            &lt;div className=&quot;text-2xl&quot;&gt;👤&lt;/div&gt;
+            &lt;h2 className=&quot;text-[14px] font-black text-stone-900&quot;&gt;사용자 이름 입력 (필수)&lt;/h2&gt;
+            &lt;p className=&quot;text-[11px] text-stone-500&quot;&gt;
               가족과 관리자가 구분할 수 있도록 이름을 입력해 주세요.
-            </p>
-          </div>
-          <div className="bg-stone-50 border border-stone-200 rounded-xl px-2.5 py-1.5 text-[11px] text-stone-600 truncate">
-            <span className="font-bold text-stone-800">계정:</span> {user.email || user.uid}
-          </div>
+            &lt;/p&gt;
+          &lt;/div&gt;
+          &lt;div className=&quot;bg-stone-50 border border-stone-200 rounded-xl px-2.5 py-1.5 text-[11px] text-stone-600 truncate&quot;&gt;
+            &lt;span className=&quot;font-bold text-stone-800&quot;&gt;계정:&lt;/span&gt; {user.email || user.uid}
+          &lt;/div&gt;
           <form
             onSubmit={async (e) => {
               e.preventDefault();
@@ -21328,22 +21368,22 @@ ${item.memo}` : `${item.title} 다녀옴!`,
               autoFocus
               className="w-full h-9 px-3 rounded-xl border border-stone-200 bg-stone-50 focus:bg-white text-[12px] font-bold"
             />
-            <button
-              type="submit"
-              className="w-full h-9 rounded-xl bg-[#3F624D] hover:bg-[#324F3E] text-white text-[12px] font-extrabold whitespace-nowrap"
-            >
+            &lt;button
+              type=&quot;submit&quot;
+              className=&quot;w-full h-9 rounded-xl bg-[#3F624D] hover:bg-[#324F3E] text-white text-[12px] font-extrabold whitespace-nowrap&quot;
+            &gt;
               ✅ 이름 저장하고 계속하기
-            </button>
-          </form>
-          <button
-            type="button"
+            &lt;/button&gt;
+          &lt;/form&gt;
+          &lt;button
+            type=&quot;button&quot;
             onClick={logoutToGuest}
-            className="w-full h-8 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-600 text-[11px] font-bold whitespace-nowrap"
-          >
+            className=&quot;w-full h-8 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-600 text-[11px] font-bold whitespace-nowrap&quot;
+          &gt;
             다른 계정으로 로그인
-          </button>
-        </div>
-      </div>
+          &lt;/button&gt;
+        &lt;/div&gt;
+      &lt;/div&gt;
     );
   }
 
@@ -21356,11 +21396,11 @@ ${item.memo}` : `${item.title} 다녀옴!`,
         onClick={(e) => e.stopPropagation()}
         className="bg-white rounded-2xl w-full max-w-sm shadow-2xl border border-stone-200 overflow-hidden"
       >
-        <div className="px-4 py-3 border-b border-stone-100 flex items-center justify-between bg-stone-50">
-          <div className="flex items-center gap-1.5">
-            <span className="text-[14px]">💌</span>
-            <h3 className="text-[13.5px] font-black text-stone-900">관리자에게 쪽지남기기</h3>
-          </div>
+        &lt;div className=&quot;px-4 py-3 border-b border-stone-100 flex items-center justify-between bg-stone-50&quot;&gt;
+          &lt;div className=&quot;flex items-center gap-1.5&quot;&gt;
+            &lt;span className=&quot;text-[14px]&quot;&gt;💌&lt;/span&gt;
+            &lt;h3 className=&quot;text-[13.5px] font-black text-stone-900&quot;&gt;관리자에게 쪽지남기기&lt;/h3&gt;
+          &lt;/div&gt;
           <button
             type="button"
             onClick={() => setShowSendAdminNoteModal(false)}
@@ -21368,18 +21408,18 @@ ${item.memo}` : `${item.title} 다녀옴!`,
             aria-label="닫기"
           >
             ✕
-          </button>
-        </div>
-        <div className="p-3.5 space-y-2.5">
+          &lt;/button&gt;
+        &lt;/div&gt;
+        &lt;div className=&quot;p-3.5 space-y-2.5&quot;&gt;
           {userProfile?.lastAdminNote && (
-            <div className="px-2.5 py-1.5 rounded-xl bg-stone-50 border border-stone-200 text-[10.5px] flex items-center justify-between gap-2">
-              <span className="truncate text-stone-600 font-bold">
+            &lt;div className=&quot;px-2.5 py-1.5 rounded-xl bg-stone-50 border border-stone-200 text-[10.5px] flex items-center justify-between gap-2&quot;&gt;
+              &lt;span className=&quot;truncate text-stone-600 font-bold&quot;&gt;
                 최근: {userProfile.lastAdminNote.text || "첨부파일"}
-              </span>
+              &lt;/span&gt;
               <span className={`shrink-0 font-black whitespace-nowrap ${userProfile.lastAdminNote.read ? "text-[#3F624D]" : "text-amber-600"}`}>
                 {userProfile.lastAdminNote.read ? "✅ 확인됨" : "⏳ 확인 대기"}
-              </span>
-            </div>
+              &lt;/span&gt;
+            &lt;/div&gt;
           )}
           <textarea
             rows={4}
@@ -21388,9 +21428,9 @@ ${item.memo}` : `${item.title} 다녀옴!`,
             placeholder="관리자에게 전할 말이나 요청사항을 편하게 남겨주세요."
             className="w-full p-2.5 rounded-xl border border-stone-200 bg-stone-50 text-[12px] font-medium resize-none focus:outline-none focus:border-[#3F624D]"
           />
-          <div className="space-y-1.5">
-            <label className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-stone-100 hover:bg-stone-200 border border-stone-200 text-stone-700 text-[11px] font-extrabold cursor-pointer">
-              <span>📎 사진·파일 첨부 ({adminNoteAttachments.length}/3)</span>
+          &lt;div className=&quot;space-y-1.5&quot;&gt;
+            &lt;label className=&quot;inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-stone-100 hover:bg-stone-200 border border-stone-200 text-stone-700 text-[11px] font-extrabold cursor-pointer&quot;&gt;
+              &lt;span&gt;📎 사진·파일 첨부 ({adminNoteAttachments.length}/3)&lt;/span&gt;
               <input
                 type="file"
                 multiple
@@ -21414,22 +21454,22 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                   }
                 }}
               />
-            </label>
+            &lt;/label&gt;
             {adminNoteAttachments.length > 0 && (
-              <div className="flex flex-wrap gap-1.5">
+              &lt;div className=&quot;flex flex-wrap gap-1.5&quot;&gt;
                 {adminNoteAttachments.map((att) => {
                   const isImg = String(att.mimeType || "").startsWith("image/");
                   return (
-                    <div
+                    &lt;div
                       key={att.id}
-                      className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg bg-stone-50 border border-stone-200 text-[10.5px] font-bold text-stone-700 max-w-full"
-                    >
+                      className=&quot;inline-flex items-center gap-1.5 px-2 py-1 rounded-lg bg-stone-50 border border-stone-200 text-[10.5px] font-bold text-stone-700 max-w-full&quot;
+                    &gt;
                       {isImg && att.dataUrl ? (
-                        <img src={att.dataUrl} alt={att.name} className="w-5 h-5 rounded object-cover shrink-0" />
+                        &lt;img src={att.dataUrl} alt={att.name} className=&quot;w-5 h-5 rounded object-cover shrink-0&quot; /&gt;
                       ) : (
-                        <span>📄</span>
+                        &lt;span&gt;📄&lt;/span&gt;
                       )}
-                      <span className="truncate max-w-[140px]">{att.name}</span>
+                      &lt;span className=&quot;truncate max-w-[140px]&quot;&gt;{att.name}&lt;/span&gt;
                       <button
                         type="button"
                         onClick={() => setAdminNoteAttachments((prev) => prev.filter((x) => x.id !== att.id))}
@@ -21437,30 +21477,30 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                         aria-label="첨부 삭제"
                       >
                         ×
-                      </button>
-                    </div>
+                      &lt;/button&gt;
+                    &lt;/div&gt;
                   );
                 })}
-              </div>
+              &lt;/div&gt;
             )}
-          </div>
-          <button
-            type="button"
+          &lt;/div&gt;
+          &lt;button
+            type=&quot;button&quot;
             disabled={adminNoteSending}
             onClick={handleSendAdminNote}
-            className="w-full py-2.5 rounded-xl bg-stone-900 hover:bg-stone-800 disabled:opacity-50 text-white text-[12.5px] font-black"
-          >
+            className=&quot;w-full py-2.5 rounded-xl bg-stone-900 hover:bg-stone-800 disabled:opacity-50 text-white text-[12.5px] font-black&quot;
+          &gt;
             {adminNoteSending ? "전송 중..." : "쪽지 보내기"}
-          </button>
-          <div className="pt-1.5 border-t border-stone-100 text-center text-[10.5px] text-stone-400 font-bold leading-relaxed">
-            <div>관리자 연락처</div>
-            <div className="flex items-center justify-center mt-0.5 text-stone-500">
-              <a href="tel:01059147933" className="underline hover:text-stone-800">관리자 : 01059147933</a>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
+          &lt;/button&gt;
+          &lt;div className=&quot;pt-1.5 border-t border-stone-100 text-center text-[10.5px] text-stone-400 font-bold leading-relaxed&quot;&gt;
+            &lt;div&gt;관리자 연락처&lt;/div&gt;
+            &lt;div className=&quot;flex items-center justify-center mt-0.5 text-stone-500&quot;&gt;
+              &lt;a href=&quot;tel:01059147933&quot; className=&quot;underline hover:text-stone-800&quot;&gt;관리자 : 01059147933&lt;/a&gt;
+            &lt;/div&gt;
+          &lt;/div&gt;
+        &lt;/div&gt;
+      &lt;/div&gt;
+    &lt;/div&gt;
   ) : null;
 
   if (!isApprovedUser) {
@@ -21468,16 +21508,16 @@ ${item.memo}` : `${item.title} 다녀옴!`,
     const isRejected = userProfile?.role === "rejected";
     if (isWithdrawn) {
       return (
-        <div className="min-h-screen bg-[#FAF8F3] text-stone-800 max-w-md mx-auto flex items-center justify-center p-4 font-sans">
+        &lt;div className=&quot;min-h-screen bg-[#FAF8F3] text-stone-800 max-w-md mx-auto flex items-center justify-center p-4 font-sans&quot;&gt;
           {toastBannerEl}
-          <div className="bg-white rounded-2xl border border-stone-200 p-5 w-full text-center space-y-3 shadow-lg">
-            <div className="text-3xl">👋</div>
-            <div className="space-y-1">
-              <h2 className="text-[17px] font-black text-stone-900">탈퇴 처리된 계정입니다</h2>
-              <p className="text-[12.5px] text-stone-500 leading-relaxed">
+          &lt;div className=&quot;bg-white rounded-2xl border border-stone-200 p-5 w-full text-center space-y-3 shadow-lg&quot;&gt;
+            &lt;div className=&quot;text-3xl&quot;&gt;👋&lt;/div&gt;
+            &lt;div className=&quot;space-y-1&quot;&gt;
+              &lt;h2 className=&quot;text-[17px] font-black text-stone-900&quot;&gt;탈퇴 처리된 계정입니다&lt;/h2&gt;
+              &lt;p className=&quot;text-[12.5px] text-stone-500 leading-relaxed&quot;&gt;
                 관리자에 의해 회원 탈퇴 처리되었습니다. 다시 이용하려면 계정 정리를 완료한 뒤 새로 가입해 주세요.
-              </p>
-            </div>
+              &lt;/p&gt;
+            &lt;/div&gt;
             <button
               type="button"
               onClick={async () => {
@@ -21493,36 +21533,36 @@ ${item.memo}` : `${item.title} 다녀옴!`,
               className="w-full py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-[13px] font-black"
             >
               계정 완전 삭제 및 나가기
-            </button>
-            <button
-              type="button"
+            &lt;/button&gt;
+            &lt;button
+              type=&quot;button&quot;
               onClick={logoutToGuest}
-              className="w-full py-2 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-[12px] font-bold"
-            >
+              className=&quot;w-full py-2 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-[12px] font-bold&quot;
+            &gt;
               로그아웃
-            </button>
-          </div>
-        </div>
+            &lt;/button&gt;
+          &lt;/div&gt;
+        &lt;/div&gt;
       );
     }
     return (
-      <div className="min-h-screen bg-[#FAF8F3] text-stone-800 max-w-md mx-auto flex items-center justify-center p-4 font-sans">
+      &lt;div className=&quot;min-h-screen bg-[#FAF8F3] text-stone-800 max-w-md mx-auto flex items-center justify-center p-4 font-sans&quot;&gt;
         {toastBannerEl}
-        <div className="bg-white rounded-2xl border border-stone-200 p-5 w-full text-center space-y-3 shadow-lg">
-          <div className="text-2xl">{isRejected ? "🚫" : "⏳"}</div>
-          <div className="space-y-0.5">
-            <h2 className="text-[14px] font-black text-stone-900">
+        &lt;div className=&quot;bg-white rounded-2xl border border-stone-200 p-5 w-full text-center space-y-3 shadow-lg&quot;&gt;
+          &lt;div className=&quot;text-2xl&quot;&gt;{isRejected ? "🚫" : "⏳"}&lt;/div&gt;
+          &lt;div className=&quot;space-y-0.5&quot;&gt;
+            &lt;h2 className=&quot;text-[14px] font-black text-stone-900&quot;&gt;
               {isRejected ? "접근이 제한된 계정입니다" : "관리자 승인 대기 중입니다"}
-            </h2>
-            <p className="text-[11px] text-stone-500 leading-snug">
+            &lt;/h2&gt;
+            &lt;p className=&quot;text-[11px] text-stone-500 leading-snug&quot;&gt;
               {isRejected
                 ? "관리자에게 문의해 주세요."
                 : "관리자 승인 후 자동으로 화면이 열립니다."}
-            </p>
-          </div>
-          <div className="bg-stone-50 border border-stone-200 rounded-2xl p-3 text-left text-[12px] space-y-1.5 text-stone-600">
-            <div className="flex items-center justify-between gap-2">
-              <div><strong className="text-stone-800">이름:</strong> {userProfile?.actorName || userProfile?.displayName || user.displayName || "-"}</div>
+            &lt;/p&gt;
+          &lt;/div&gt;
+          &lt;div className=&quot;bg-stone-50 border border-stone-200 rounded-2xl p-3 text-left text-[12px] space-y-1.5 text-stone-600&quot;&gt;
+            &lt;div className=&quot;flex items-center justify-between gap-2&quot;&gt;
+              &lt;div&gt;&lt;strong className=&quot;text-stone-800&quot;&gt;이름:&lt;/strong&gt; {userProfile?.actorName || userProfile?.displayName || user.displayName || "-"}&lt;/div&gt;
               {!isRejected && (
                 <button
                   type="button"
@@ -21533,16 +21573,16 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                   className="px-2 py-0.5 rounded-lg bg-white border border-stone-200 text-[10.5px] font-extrabold text-stone-600 hover:bg-stone-100 whitespace-nowrap"
                 >
                   ✏️ 이름 수정
-                </button>
+                &lt;/button&gt;
               )}
-            </div>
-            <div><strong className="text-stone-800">이메일:</strong> {user.email || "-"}</div>
-            <div className="break-all"><strong className="text-stone-800">UID:</strong> {user.uid}</div>
+            &lt;/div&gt;
+            &lt;div&gt;&lt;strong className=&quot;text-stone-800&quot;&gt;이메일:&lt;/strong&gt; {user.email || "-"}&lt;/div&gt;
+            &lt;div className=&quot;break-all&quot;&gt;&lt;strong className=&quot;text-stone-800&quot;&gt;UID:&lt;/strong&gt; {user.uid}&lt;/div&gt;
             {user.email && (
-              <div className="flex items-center justify-between gap-2 pt-1 border-t border-stone-200/80">
-                <span className="text-[11px] font-bold">
+              &lt;div className=&quot;flex items-center justify-between gap-2 pt-1 border-t border-stone-200/80&quot;&gt;
+                &lt;span className=&quot;text-[11px] font-bold&quot;&gt;
                   {user.emailVerified ? "✅ 이메일 인증 완료" : "📧 가입 확인 메일 미인증"}
-                </span>
+                &lt;/span&gt;
                 {!user.emailVerified && (
                   <button
                     type="button"
@@ -21557,52 +21597,52 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                     className="px-2 py-0.5 rounded-lg bg-[#3F624D] text-white text-[10.5px] font-extrabold whitespace-nowrap"
                   >
                     확인 메일 발송
-                  </button>
+                  &lt;/button&gt;
                 )}
-              </div>
+              &lt;/div&gt;
             )}
-          </div>
-          <div className="space-y-2 pt-1">
+          &lt;/div&gt;
+          &lt;div className=&quot;space-y-2 pt-1&quot;&gt;
             <button
               type="button"
               onClick={() => setShowSendAdminNoteModal(true)}
               className="w-full py-2.5 rounded-xl bg-[#EEF3EE] hover:bg-[#DFE9E0] border border-[#C9D8CC] text-[#35503C] text-[13px] font-black"
             >
               💌 관리자에게 쪽지남기기
-            </button>
-            <div className="text-[10.5px] text-stone-400 font-bold leading-relaxed">
+            &lt;/button&gt;
+            &lt;div className=&quot;text-[10.5px] text-stone-400 font-bold leading-relaxed&quot;&gt;
               관리자 연락처 ·{" "}
-              <a href="tel:01059147933" className="underline hover:text-stone-700">관리자 : 01059147933</a>
-            </div>
-            <button
-              type="button"
+              &lt;a href=&quot;tel:01059147933&quot; className=&quot;underline hover:text-stone-700&quot;&gt;관리자 : 01059147933&lt;/a&gt;
+            &lt;/div&gt;
+            &lt;button
+              type=&quot;button&quot;
               onClick={logoutToGuest}
-              className="w-full py-2.5 rounded-xl bg-stone-900 hover:bg-stone-800 text-white text-[13px] font-extrabold"
-            >
+              className=&quot;w-full py-2.5 rounded-xl bg-stone-900 hover:bg-stone-800 text-white text-[13px] font-extrabold&quot;
+            &gt;
               로그아웃 / 다른 계정으로 로그인
-            </button>
-          </div>
-        </div>
+            &lt;/button&gt;
+          &lt;/div&gt;
+        &lt;/div&gt;
         {sendAdminNoteModalEl}
-      </div>
+      &lt;/div&gt;
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#FAF8F3] text-stone-800 pb-24 max-w-md mx-auto shadow-xl border-x border-stone-200 relative font-sans">
+    &lt;div className=&quot;min-h-screen bg-[#FAF8F3] text-stone-800 pb-24 max-w-md mx-auto shadow-xl border-x border-stone-200 relative font-sans&quot;&gt;
       {diaryUploadProgress && (
-        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[9998] w-[88%] max-w-xs bg-stone-900/95 text-white px-4 py-2.5 rounded-2xl shadow-xl space-y-1.5">
-          <div className="flex items-center justify-between text-[12.5px] font-extrabold">
-            <span className="truncate">⏳ {diaryUploadProgress.stepText}</span>
-            <span className="text-emerald-300 shrink-0 ml-2">{diaryUploadProgress.pct}%</span>
-          </div>
-          <div className="w-full h-1.5 rounded-full bg-stone-700 overflow-hidden">
+        &lt;div className=&quot;fixed top-4 left-1/2 -translate-x-1/2 z-[9998] w-[88%] max-w-xs bg-stone-900/95 text-white px-4 py-2.5 rounded-2xl shadow-xl space-y-1.5&quot;&gt;
+          &lt;div className=&quot;flex items-center justify-between text-[12.5px] font-extrabold&quot;&gt;
+            &lt;span className=&quot;truncate&quot;&gt;⏳ {diaryUploadProgress.stepText}&lt;/span&gt;
+            &lt;span className=&quot;text-emerald-300 shrink-0 ml-2&quot;&gt;{diaryUploadProgress.pct}%&lt;/span&gt;
+          &lt;/div&gt;
+          &lt;div className=&quot;w-full h-1.5 rounded-full bg-stone-700 overflow-hidden&quot;&gt;
             <div
               className="h-full bg-emerald-400 transition-all duration-300"
               style={{ width: `${diaryUploadProgress.pct}%` }}
             />
-          </div>
-        </div>
+          &lt;/div&gt;
+        &lt;/div&gt;
       )}
 
 
@@ -22870,7 +22910,7 @@ time: "", location: "",
                         className="h-7 px-2 rounded-lg bg-[#EEF3EE] hover:bg-[#DFE9E0] text-[#35503C] text-[11px] font-semibold whitespace-nowrap"
                       >
                         + 추가
-                      </button>
+                      &lt;/button&gt;
                       <button
                         type="button"
                         onClick={() => {
@@ -22880,9 +22920,9 @@ time: "", location: "",
                         className="h-7 px-2 rounded-lg text-stone-700 hover:bg-stone-100 text-[11.5px] font-bold whitespace-nowrap"
                       >
                         전체
-                      </button>
-                    </div>
-                  </div>
+                      &lt;/button&gt;
+                    &lt;/div&gt;
+                  &lt;/div&gt;
 
                   {imminentSchedulesWithin3Days.length === 0 ? (
                     <div className="text-[12px] font-medium text-stone-600 py-1">
@@ -23510,7 +23550,7 @@ time: "", location: "",
                         className="h-7 px-2 rounded-lg bg-[#EEF3EE] hover:bg-[#DFE9E0] text-[#35503C] text-[11px] font-semibold whitespace-nowrap"
                       >
                         + 추가
-                      </button>
+                      &lt;/button&gt;
                       <button
                         type="button"
                         onClick={() => {
@@ -23520,9 +23560,9 @@ time: "", location: "",
                         className="h-7 px-2 rounded-lg text-stone-700 hover:bg-stone-100 text-[11.5px] font-bold whitespace-nowrap"
                       >
                         전체
-                      </button>
-                    </div>
-                  </div>
+                      &lt;/button&gt;
+                    &lt;/div&gt;
+                  &lt;/div&gt;
 
                   {previewTodos.length === 0 ? (
                     <div className="text-[12px] font-medium text-stone-600 py-1">
@@ -26510,7 +26550,7 @@ time: "", location: "",
                                 if (ev._isFamily) {
                                   const famCls =
                                     ev.category === "기념일/생일"
-                                      ? "border-l-[1.5px] border-pink-500 bg-pink-50/90 text-pink-900"
+                                      ? "border-l-[1.5px] border-rose-500 bg-rose-50/90 text-rose-900"
                                       : ev.done
                                       ? "border-l-[1.5px] border-emerald-400/70 bg-stone-100/75 text-stone-500/80"
                                       : isRangeEv
@@ -26580,7 +26620,7 @@ time: "", location: "",
                         className="px-2.5 py-1 rounded-xl bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-800 text-[11.5px] font-extrabold whitespace-nowrap"
                       >
                         + 🏠 가족
-                      </button>
+                      &lt;/button&gt;
                       {isAdminUnlocked && (
                         <button
                           type="button"
@@ -26588,10 +26628,10 @@ time: "", location: "",
                           className="px-2.5 py-1 rounded-xl bg-stone-900 hover:bg-stone-800 text-white text-[11.5px] font-extrabold whitespace-nowrap"
                         >
                           + 🔒 내 일정·다이어리
-                        </button>
+                        &lt;/button&gt;
                       )}
-                    </div>
-                  </div>
+                    &lt;/div&gt;
+                  &lt;/div&gt;
 
                   {selectedFamilyEvents.length === 0 && selectedPrivateEvents.length === 0 ? (
                     <div className="text-[12px] text-stone-400 py-2.5 text-center bg-stone-50/80 rounded-xl border border-dashed border-stone-200">
@@ -26615,7 +26655,7 @@ time: "", location: "",
                                 key={ev.id}
                                 className={`p-3 rounded-xl border flex flex-col gap-1.5 ${
                                   ev.category === "기념일/생일"
-                                    ? "bg-pink-50/60 border-pink-200"
+                                    ? "bg-rose-50/60 border-rose-200"
                                     : ev.done
                                     ? "bg-stone-100 border-stone-200 opacity-70"
                                     : "bg-stone-50 border-stone-200"
@@ -26653,11 +26693,46 @@ time: "", location: "",
                                   </div>
 
                                   <div className="flex items-center gap-1 shrink-0">
+                                    {ev.time && /^\d{1,2}:\d{2}/.test(String(ev.time).trim()) && (
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          const m = String(ev.time).trim().match(/^(\d{1,2}):(\d{2})/);
+                                          if (!m) return;
+                                          const hhmm = `${String(Number(m[1])).padStart(2, "0")}:${m[2]}`;
+                                          const labelTxt = String(ev.title || "일정 알람").trim().slice(0, 24);
+                                          const exists = customAlarms.some((a) => a && a.type === "daily" && a.time === hhmm && a.label === labelTxt);
+                                          if (exists) {
+                                            setActiveTab("alarm");
+                                            showToast(`⏰ [${hhmm}] '${labelTxt}' 알람이 이미 등록되어 있어 모닝콜로 이동했습니다.`);
+                                            return;
+                                          }
+                                          const newAl = {
+                                            id: `al-sch-${Date.now()}`,
+                                            type: "daily",
+                                            time: hhmm,
+                                            label: labelTxt,
+                                            repeat: "once",
+                                            days: [],
+                                            enabled: true,
+                                            soundId: "morning",
+                                            volume: alarmDefaultVolume,
+                                            vibrate: true
+                                          };
+                                          saveCustomAlarms([newAl, ...customAlarms]);
+                                          showToast(`⏰ [${hhmm}] '${labelTxt}' 모닝콜 알람이 등록되었습니다!`);
+                                        }}
+                                        className="px-1.5 py-0.5 rounded-lg text-[10.5px] font-extrabold border border-[#C9D8CC] bg-[#EEF3EE] text-[#2F523E] hover:bg-[#E2ECE4] whitespace-nowrap shrink-0"
+                                        title="이 일정 시각으로 모닝콜 알람 등록"
+                                      >
+                                        ⏰ 알람
+                                      </button>
+                                    )}
                                     {ev.category !== "기념일/생일" && (
                                       <button
                                         type="button"
                                         onClick={() => handleToggleScheduleDone(ev)}
-                                        className={`px-2 py-0.5 rounded-lg text-[11px] font-extrabold border ${
+                                        className={`px-2 py-0.5 rounded-lg text-[11px] font-extrabold border whitespace-nowrap shrink-0 ${
                                           ev.done
                                             ? "bg-emerald-600 text-white border-emerald-600"
                                             : "bg-white text-stone-600 border-stone-300"
@@ -28073,10 +28148,10 @@ time: "", location: "",
                       title="메모·첨부파일 포함 상세 등록"
                     >
                       상세
-                    </button>
-                  </div>
-                </div>
-              </div>
+                    &lt;/button&gt;
+                  &lt;/div&gt;
+                &lt;/div&gt;
+              &lt;/div&gt;
             )}
 
             {/* 상태 탭 + 완료 비우기 + 검색 */}
@@ -28391,10 +28466,10 @@ time: "", location: "",
                           className="h-7 px-2 rounded-lg bg-[#3F624D] hover:bg-[#324E3D] text-white text-[11px] font-extrabold whitespace-nowrap"
                         >
                           + 추가
-                        </button>
+                        &lt;/button&gt;
                       )}
-                    </div>
-                  </div>
+                    &lt;/div&gt;
+                  &lt;/div&gt;
 
                   {/* 다가오는 D-Day 하이라이트 + 아이 생후 경과일 바로가기 */}
                   <div className="grid grid-cols-3 gap-1.5">
@@ -28508,11 +28583,11 @@ time: "", location: "",
                         className="h-8 px-3 rounded-xl bg-[#3F624D] text-white text-[12px] font-extrabold whitespace-nowrap"
                       >
                         + 첫 D-Day 등록
-                      </button>
+                      &lt;/button&gt;
                     )}
-                  </div>
+                  &lt;/div&gt;
                 ) : (
-                  <div className="space-y-2">
+                  &lt;div className=&quot;space-y-2&quot;&gt;
                     {filteredDdays.map((item) => {
                       const isPinnedHome = homeMiniDdayIds.includes(item.id);
                       const isSoon = item.calc.daysUntil >= 0 && item.calc.daysUntil <= 7;
@@ -28535,36 +28610,36 @@ time: "", location: "",
                               : "border-stone-200 hover:border-stone-300"
                           }`}
                         >
-                          <button
-                            type="button"
+                          &lt;button
+                            type=&quot;button&quot;
                             onClick={jumpToCalendar}
-                            className="min-w-0 flex-1 text-left"
-                            title="달력에서 해당 날짜 보기"
-                          >
-                            <div className="flex items-center gap-1.5 min-w-0">
-                              <span className="text-[13.5px] font-black text-stone-900 truncate">
+                            className=&quot;min-w-0 flex-1 text-left&quot;
+                            title=&quot;달력에서 해당 날짜 보기&quot;
+                          &gt;
+                            &lt;div className=&quot;flex items-center gap-1.5 min-w-0&quot;&gt;
+                              &lt;span className=&quot;text-[13.5px] font-black text-stone-900 truncate&quot;&gt;
                                 {item.title}
-                              </span>
+                              &lt;/span&gt;
                               {item.isAnnual && (
-                                <span className="px-1.5 py-0.5 rounded bg-stone-100 text-stone-600 text-[10px] font-extrabold whitespace-nowrap shrink-0">
+                                &lt;span className=&quot;px-1.5 py-0.5 rounded bg-stone-100 text-stone-600 text-[10px] font-extrabold whitespace-nowrap shrink-0&quot;&gt;
                                   매년
-                                </span>
+                                &lt;/span&gt;
                               )}
-                            </div>
-                            <div className="text-[11.5px] font-semibold text-stone-600 mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                              <span className="whitespace-nowrap">
+                            &lt;/div&gt;
+                            &lt;div className=&quot;text-[11.5px] font-semibold text-stone-600 mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5&quot;&gt;
+                              &lt;span className=&quot;whitespace-nowrap&quot;&gt;
                                 📅 {item.isAnnual ? `매년 ${String(item.date).slice(5).replace("-", "월 ")}일` : item.date}
-                              </span>
+                              &lt;/span&gt;
                               {item.calc.elapsedDays !== null && (
-                                <span className="text-[#35503C] font-extrabold whitespace-nowrap">
+                                &lt;span className=&quot;text-[#35503C] font-extrabold whitespace-nowrap&quot;&gt;
                                   · {item.id.includes("bday") ? "생후" : "함께한 지"} D+{item.calc.elapsedDays.toLocaleString()}일
-                                </span>
+                                &lt;/span&gt;
                               )}
-                            </div>
+                            &lt;/div&gt;
                             {item.memo && (
-                              <div className="text-[11px] text-stone-500 mt-0.5 truncate">{item.memo}</div>
+                              &lt;div className=&quot;text-[11px] text-stone-500 mt-0.5 truncate&quot;&gt;{item.memo}&lt;/div&gt;
                             )}
-                          </button>
+                          &lt;/button&gt;
 
                           <div className="flex items-center gap-1 shrink-0">
                             {accessRole !== "guest" && (
@@ -32969,7 +33044,7 @@ time: "", location: "",
                           setAlarmSheetMode("routine");
                         } else {
                           setAlarmSheetMode("");
-                          setScheduleSubTab("routines");
+                          setScheduleSubTab("routine");
                           setActiveTab("schedule");
                           showToast("시간이 지정된 루틴이 없어 반복 루틴 화면으로 이동합니다.");
                         }
@@ -38426,12 +38501,23 @@ time: "", location: "",
                         value={diaryForm.mood}
                         onChange={(e) => setDiaryForm((p) => ({ ...p, mood: e.target.value }))}
                         aria-label="오늘의 기분"
-                        className="h-8 w-[88px] px-1 rounded-lg border border-stone-200 bg-stone-50 text-[11px] font-bold shrink-0"
+                        className="h-8 w-[82px] px-1 rounded-lg border border-stone-200 bg-stone-50 text-[11px] font-bold shrink-0 min-w-0"
                       >
-                        {["😊 행복", "🥰 감동", "😴 잘잠", "🍼 잘먹음", "🤒 컨디션관리", "🎉 첫성공"].map((md) => (
+                        {(babyDiaryMoods.includes(diaryForm.mood) ? babyDiaryMoods : [diaryForm.mood, ...babyDiaryMoods].filter(Boolean)).map((md) => (
                           <option key={md} value={md}>{md}</option>
                         ))}
                       </select>
+                      {isEditorUnlocked && (
+                        <button
+                          type="button"
+                          onClick={() => openCategoryManager("baby_diary_moods")}
+                          className="h-8 w-7 rounded-lg bg-stone-100 hover:bg-[#EEF3EE] text-stone-600 border border-stone-200 text-[11px] flex items-center justify-center shrink-0"
+                          title="기분 프리셋 자유편집"
+                          aria-label="기분 프리셋 자유편집"
+                        >
+                          ⚙️
+                        </button>
+                      )}
                     </div>
 
                     {/* 한 줄 제목 + 글씨 서식 토글 */}
@@ -39414,7 +39500,7 @@ time: "", location: "",
                       <span className="font-mono text-[18px] font-black tracking-tight tabular-nums text-amber-300 leading-none">
                         {timeText}
                       </span>
-                      <span className="text-[9px] text-stone-400 font-bold mt-1">돌려서 {dialStepSec === 60 ? "1분" : `${dialStepSec}초`}씩</span>
+                      <span className="text-[10px] text-stone-400 font-bold mt-1 whitespace-nowrap">돌려서 {dialStepSec === 60 ? "1분" : `${dialStepSec}초`}씩</span>
                     </div>
                   </div>
 
@@ -39836,8 +39922,8 @@ time: "", location: "",
             aria-hidden="true"
           />
           <div
-            style={{ bottom: "calc(8.15rem + env(safe-area-inset-bottom))" }}
-            className="fixed right-3 z-40 w-[336px] max-w-[94vw] max-h-[75vh] overflow-y-auto bg-white/95 backdrop-blur border border-stone-200 rounded-3xl shadow-2xl p-3 space-y-2"
+            style={{ bottom: "calc(7.9rem + env(safe-area-inset-bottom))" }}
+            className="fixed right-3 z-40 w-[348px] max-w-[95vw] max-h-[85vh] overflow-y-auto bg-white/95 backdrop-blur border border-stone-200 rounded-3xl shadow-2xl p-2.5 space-y-1.5"
           >
             {[
               {
@@ -40060,9 +40146,9 @@ time: "", location: "",
               }))
               .filter((g) => g.items.length > 0)
               .map((g) => (
-                <div key={g.group} className="space-y-1">
-                  <div className="text-[11px] font-extrabold text-stone-400 px-0.5">{g.group}</div>
-                  <div className="grid grid-cols-3 gap-1.5">
+                <div key={g.group} className="space-y-0.5">
+                  <div className="text-[10px] font-extrabold text-stone-400 px-0.5">{g.group}</div>
+                  <div className="grid grid-cols-4 gap-1">
                     {g.items.map((act) => (
                       <button
                         key={act.label}
@@ -40071,19 +40157,19 @@ time: "", location: "",
                           setIsQuickFabOpen(false);
                           act.onClick();
                         }}
-                        className="h-[46px] px-1.5 rounded-xl bg-[#FAF8F3] hover:bg-[#EEF3EE] border border-stone-200/90 text-stone-900 flex flex-col items-center justify-center gap-0.5 transition active:scale-95"
+                        className="h-[38px] px-1 rounded-xl bg-[#FAF8F3] hover:bg-[#EEF3EE] border border-stone-200/90 text-stone-900 flex flex-col items-center justify-center gap-0.5 transition active:scale-95 min-w-0"
                       >
-                        <span className="text-[15px] leading-none">{act.icon}</span>
-                        <span className="text-[11px] font-extrabold whitespace-nowrap">{act.label}</span>
+                        <span className="text-[13.5px] leading-none">{act.icon}</span>
+                        <span className="text-[10px] font-extrabold whitespace-nowrap truncate max-w-full leading-none">{act.label}</span>
                       </button>
                     ))}
                   </div>
                 </div>
               ))}
             {/* 🌙 아기꿈나라 유튜브 바로 실행 */}
-            <div className="space-y-1 pt-1 border-t border-stone-100">
+            <div className="space-y-0.5 pt-1 border-t border-stone-100">
               <div className="flex items-center justify-between px-0.5">
-                <span className="text-[11px] font-extrabold text-stone-400">🌙 아기꿈나라</span>
+                <span className="text-[10px] font-extrabold text-stone-400">🌙 아기꿈나라</span>
                 {canEditTab("baby") && (
                   <button
                     type="button"
@@ -40099,7 +40185,7 @@ time: "", location: "",
                   </button>
                 )}
               </div>
-              <div className="grid grid-cols-4 gap-1.5">
+              <div className="grid grid-cols-4 gap-1">
                 {babyDreamLinks.map((dl) => (
                   <a
                     key={dl.id}
@@ -40107,10 +40193,10 @@ time: "", location: "",
                     target="_blank"
                     rel="noopener noreferrer"
                     onClick={() => setIsQuickFabOpen(false)}
-                    className="h-[46px] px-1 rounded-xl bg-[#FAF8F3] hover:bg-[#EEF3EE] border border-stone-200/90 text-stone-900 flex flex-col items-center justify-center gap-0.5 transition active:scale-95"
+                    className="h-[38px] px-1 rounded-xl bg-[#FAF8F3] hover:bg-[#EEF3EE] border border-stone-200/90 text-stone-900 flex flex-col items-center justify-center gap-0.5 transition active:scale-95 min-w-0"
                   >
-                    <span className="text-[15px] leading-none">{dl.icon || "🎵"}</span>
-                    <span className="text-[10.5px] font-extrabold whitespace-nowrap truncate max-w-full">{dl.label}</span>
+                    <span className="text-[13.5px] leading-none">{dl.icon || "🎵"}</span>
+                    <span className="text-[10px] font-extrabold whitespace-nowrap truncate max-w-full leading-none">{dl.label}</span>
                   </a>
                 ))}
               </div>
@@ -40499,7 +40585,7 @@ time: "", location: "",
                             setIsMoreNavOpen(false);
                           }
                         }}
-                        className={`relative py-2 px-1 rounded-xl border text-[11px] font-extrabold flex flex-col items-center gap-1 transition ${
+                        className={`relative py-2 px-1 rounded-xl border text-[11px] font-extrabold flex flex-col items-center gap-1 whitespace-nowrap transition ${
                           activeTab === m.id
                             ? "bg-stone-900 text-white border-stone-900"
                             : "bg-stone-50 text-stone-800 border-stone-200 hover:bg-[#EEF3EE]"
@@ -40660,14 +40746,14 @@ time: "", location: "",
           ref={moreNavBtnRef}
           onClick={() => setIsMoreNavOpen((v) => !v)}
           className={`flex flex-col items-center justify-center py-1.5 rounded-xl transition ${
-            ["monthly", "shopping", "notices", "ai", "recipes", "bucket", "pages", "house", "condolence"].includes(activeTab) || isMoreNavOpen
+            ["monthly", "shopping", "notices", "ai", "recipes", "bucket", "pages", "house", "condolence", "alarm"].includes(activeTab) || isMoreNavOpen
               ? "text-[#2F523E] font-black bg-[#EEF3EE]"
               : "text-stone-600 font-semibold"
           }`}
         >
           <LayoutGrid
             className={`w-4 h-4 ${
-              ["monthly", "shopping", "notices", "ai", "recipes", "bucket", "pages", "house", "condolence"].includes(activeTab) || isMoreNavOpen
+              ["monthly", "shopping", "notices", "ai", "recipes", "bucket", "pages", "house", "condolence", "alarm"].includes(activeTab) || isMoreNavOpen
                 ? "text-amber-600"
                 : ""
             }`}
@@ -41349,7 +41435,7 @@ time: "", location: "",
                     className="flex-1 py-2 rounded-md bg-[#727272] hover:bg-[#828282] text-white text-[13px] font-bold transition"
                   >
                     새로운 일정
-                  </button>
+                  &lt;/button&gt;
                   <button
                     type="button"
                     onClick={() => shiftPopupDay(1)}
@@ -41357,11 +41443,11 @@ time: "", location: "",
                     aria-label="다음 날"
                   >
                     &gt;&gt;
-                  </button>
-                </div>
+                  &lt;/button&gt;
+                &lt;/div&gt;
               )}
-            </div>
-          </div>
+            &lt;/div&gt;
+          &lt;/div&gt;
         );
       })()}
 
@@ -44629,7 +44715,7 @@ time: "", location: "",
         </div>
       )}
 
-      {/* ⚙️ 통합 세부 카테고리 자유 관리 모달 (재료 · 레시피 · 가족공지 · 경조사) */}
+      {/* ⚙️ 통합 세부 카테고리·프리셋 자유 관리 모달 (전 메뉴 통합) */}
       {categoryManageKind && (() => {
         const curList = categoryManageKind === "house_room" ? houseStorageRooms : (customCategories[categoryManageKind] || []);
         const kindMeta = {
@@ -44647,6 +44733,7 @@ time: "", location: "",
           house_warranty_brands: { title: "🏷️ 보증 브랜드", placeholder: "새 브랜드명 (예: 발뮤다, 브라운, 쿠쿠)" },
           timer_presets: { title: "⏱️ 타이머 프리셋", placeholder: "예: 15분, 1분 30초, 7분|반숙계란" },
           quick_alarm_presets: { title: "⚡ 퀵알람 프리셋", placeholder: "예: 1분, 5분, 15분, 1시간" },
+          baby_diary_moods: { title: "😊 육아일기 기분", placeholder: "새 기분 (예: 🌟 뿌듯함, 🎵 신남)" },
           condolence_cat: { title: "💌 경조사 카테고리", placeholder: "새 경조사 분류 (예: 칠순/팔순, 집들이, 승진)" },
           condolence_group: { title: "👥 경조사 그룹", placeholder: "새 경조사 그룹 (예: 동호회, 대학동기, 거래처)" },
           condolence_pay: { title: "💳 경조사 결제수단", placeholder: "새 결제수단 (예: 카카오페이, 토스, 상품권, 화환)" }
@@ -44701,6 +44788,7 @@ time: "", location: "",
                   { id: "schedule_places", label: "📍 일정장소", cnt: schedulePlaces.length },
                   { id: "timer_presets", label: "⏱️ 타이머", cnt: timerPresets.length },
                   { id: "quick_alarm_presets", label: "⚡ 퀵알람", cnt: quickAlarmPresets.length },
+                  { id: "baby_diary_moods", label: "😊 일기기분", cnt: babyDiaryMoods.length },
                   ...(isSuhyeokAdmin && isCondolenceUnlocked ? [
                     { id: "condolence_cat", label: "💌 경조분류", cnt: condolenceCategories.length },
                     { id: "condolence_group", label: "👥 경조그룹", cnt: condolenceGroups.length },
@@ -44790,7 +44878,7 @@ time: "", location: "",
                               type="button"
                               disabled={idx === 0}
                               onClick={() => handleMoveCustomCategory(categoryManageKind, idx, -1)}
-                              className="h-5 w-5 rounded bg-white hover:bg-stone-100 disabled:opacity-30 border border-stone-200 text-[9px] font-black text-stone-600 flex items-center justify-center"
+                              className="h-5 w-5 rounded bg-white hover:bg-stone-100 disabled:opacity-30 border border-stone-200 text-[10px] font-black text-stone-600 flex items-center justify-center"
                               title="위로 이동"
                             >
                               ▲
@@ -44799,7 +44887,7 @@ time: "", location: "",
                               type="button"
                               disabled={idx === curList.length - 1}
                               onClick={() => handleMoveCustomCategory(categoryManageKind, idx, 1)}
-                              className="h-5 w-5 rounded bg-white hover:bg-stone-100 disabled:opacity-30 border border-stone-200 text-[9px] font-black text-stone-600 flex items-center justify-center"
+                              className="h-5 w-5 rounded bg-white hover:bg-stone-100 disabled:opacity-30 border border-stone-200 text-[10px] font-black text-stone-600 flex items-center justify-center"
                               title="아래로 이동"
                             >
                               ▼
@@ -45484,7 +45572,7 @@ time: "", location: "",
                                       className="w-3.5 h-3.5 accent-[#3F624D]"
                                     />
                                   ) : (
-                                    <span className="text-[9px] text-stone-300 font-bold">-</span>
+                                    <span className="text-[10px] text-stone-300 font-bold">-</span>
                                   )}
                                 </div>
                                 <button
@@ -45545,7 +45633,7 @@ time: "", location: "",
                                     type="button"
                                     onClick={() => { setConfirmDeleteUserUid(null); setExpandedUserUid((prev) => (prev === mu.uid ? null : mu.uid)); }}
                                     title="상세 · 이름수정 · 권한 · 탈퇴"
-                                    className={`w-5 h-5 rounded border text-[9px] flex items-center justify-center ${
+                                    className={`w-5 h-5 rounded border text-[10px] flex items-center justify-center ${
                                       isExpanded ? "bg-stone-800 text-white border-stone-800" : "bg-stone-50 border-stone-200 text-stone-500"
                                     }`}
                                   >
@@ -46541,7 +46629,7 @@ time: "", location: "",
                     >
                       <div className="flex items-center justify-between gap-2 text-[10.5px]">
                         <div className="flex items-center gap-1.5 min-w-0">
-                          {!n.read && <span className="px-1.5 py-0.5 rounded bg-[#3F624D] text-white text-[9px] font-black">NEW</span>}
+                          {!n.read && <span className="px-1.5 py-0.5 rounded bg-[#3F624D] text-white text-[10px] font-black whitespace-nowrap">NEW</span>}
                           <span className="font-black text-stone-900 truncate">{n.fromName}</span>
                           <span className="text-stone-400 font-bold shrink-0">({n.fromRoleLabel || "회원"} → {n.target === "아빠" || n.target === "전체" || !n.target ? "관리자" : n.target})</span>
                         </div>
@@ -48704,91 +48792,87 @@ time: "", location: "",
                     </div>
 
                     {/* 3. 디데이(D-Day) 일정 */}
-                    <div className="bg-white rounded-lg border border-stone-200/80 px-2 py-1.5 space-y-1">
-                      <div className="flex items-center justify-between gap-1.5">
+                    <div className="bg-white rounded-lg border border-stone-200/80 px-2.5 py-1.5 space-y-1.5">
+                      <div className="flex items-center justify-between gap-2">
                         <button
                           type="button"
                           onClick={() => saveSmartNotifPrefs((p) => ({ ...p, ddayAlert: !p.ddayAlert }))}
-                          className="flex items-center gap-1.5 font-bold text-stone-700 whitespace-nowrap min-w-0"
+                          className="flex items-center gap-1.5 font-bold text-stone-700 whitespace-nowrap shrink-0"
                         >
                           <span className={`w-2 h-2 rounded-full shrink-0 ${smartNotifPrefs.ddayAlert ? "bg-[#3F624D]" : "bg-stone-300"}`} />
                           <span>⭐ 디데이 일정</span>
                         </button>
-                        <div className="flex items-center gap-1 shrink-0">
-                          {smartNotifPrefs.ddayAlert && (
-                            <>
-                              <select
-                                value={Number(smartNotifPrefs.ddayAlertDays ?? 3)}
-                                onChange={(e) => saveSmartNotifPrefs({ ddayAlertDays: Number(e.target.value) })}
-                                className="h-6 px-1 rounded border border-stone-200 bg-stone-50 text-[10.5px] font-bold text-stone-700"
-                              >
-                                <option value={0}>당일</option>
-                                <option value={1}>D-1</option>
-                                <option value={3}>D-3</option>
-                                <option value={7}>D-7</option>
-                              </select>
-                              <input
-                                type="time"
-                                value={smartNotifPrefs.ddayAlertTime || "08:30"}
-                                onChange={(e) => saveSmartNotifPrefs({ ddayAlertTime: e.target.value || "08:30" })}
-                                className="h-6 px-1 rounded border border-stone-200 bg-stone-50 text-[10.5px] font-bold text-stone-700"
-                              />
-                            </>
-                          )}
-                          <button
-                            type="button"
-                            onClick={() => setExpandedNotifPreviewKey((k) => (k === "ddayAlert" ? null : "ddayAlert"))}
-                            className="px-1.5 py-0.5 rounded bg-stone-100 hover:bg-stone-200 text-[10px] font-bold text-stone-600 whitespace-nowrap"
-                          >
-                            {expandedNotifPreviewKey === "ddayAlert" ? "접기" : "👁️ 편집"}
-                          </button>
-                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setExpandedNotifPreviewKey((k) => (k === "ddayAlert" ? null : "ddayAlert"))}
+                          className="px-1.5 py-0.5 rounded bg-stone-100 hover:bg-stone-200 text-[10px] font-bold text-stone-600 whitespace-nowrap shrink-0"
+                        >
+                          {expandedNotifPreviewKey === "ddayAlert" ? "접기" : "👁️ 편집"}
+                        </button>
                       </div>
+                      {smartNotifPrefs.ddayAlert && (
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <select
+                            value={Number(smartNotifPrefs.ddayAlertDays ?? 3)}
+                            onChange={(e) => saveSmartNotifPrefs({ ddayAlertDays: Number(e.target.value) })}
+                            className="h-6 px-1.5 rounded border border-stone-200 bg-stone-50 text-[10.5px] font-bold text-stone-700"
+                          >
+                            <option value={0}>당일</option>
+                            <option value={1}>D-1</option>
+                            <option value={3}>D-3</option>
+                            <option value={7}>D-7</option>
+                          </select>
+                          <input
+                            type="time"
+                            value={smartNotifPrefs.ddayAlertTime || "08:30"}
+                            onChange={(e) => saveSmartNotifPrefs({ ddayAlertTime: e.target.value || "08:30" })}
+                            className="h-6 px-1.5 rounded border border-stone-200 bg-stone-50 text-[10.5px] font-bold text-stone-700"
+                          />
+                        </div>
+                      )}
                       {smartNotifPrefs.ddayAlert && renderRepeatControls("ddayRepeatCount", "ddayRepeatInterval", 1, 60)}
                       {renderPreviewCard("ddayAlert")}
                     </div>
 
                     {/* 4. 냉장고 유통기한 */}
-                    <div className="bg-white rounded-lg border border-stone-200/80 px-2 py-1.5 space-y-1">
-                      <div className="flex items-center justify-between gap-1.5">
+                    <div className="bg-white rounded-lg border border-stone-200/80 px-2.5 py-1.5 space-y-1.5">
+                      <div className="flex items-center justify-between gap-2">
                         <button
                           type="button"
                           onClick={() => saveSmartNotifPrefs((p) => ({ ...p, fridgeExpiry: !p.fridgeExpiry }))}
-                          className="flex items-center gap-1.5 font-bold text-stone-700 whitespace-nowrap min-w-0"
+                          className="flex items-center gap-1.5 font-bold text-stone-700 whitespace-nowrap shrink-0"
                         >
                           <span className={`w-2 h-2 rounded-full shrink-0 ${smartNotifPrefs.fridgeExpiry ? "bg-[#3F624D]" : "bg-stone-300"}`} />
-                          <span>🥬 유통기한</span>
+                          <span>🥬 냉장고 유통기한</span>
                         </button>
-                        <div className="flex items-center gap-1 shrink-0">
-                          {smartNotifPrefs.fridgeExpiry && (
-                            <>
-                              <select
-                                value={Number(smartNotifPrefs.fridgeExpiryDays ?? 3)}
-                                onChange={(e) => saveSmartNotifPrefs({ fridgeExpiryDays: Number(e.target.value) })}
-                                className="h-6 px-1 rounded border border-stone-200 bg-stone-50 text-[10.5px] font-bold text-stone-700"
-                              >
-                                <option value={1}>D-1</option>
-                                <option value={3}>D-3</option>
-                                <option value={5}>D-5</option>
-                                <option value={7}>D-7</option>
-                              </select>
-                              <input
-                                type="time"
-                                value={smartNotifPrefs.fridgeExpiryTime || "08:30"}
-                                onChange={(e) => saveSmartNotifPrefs({ fridgeExpiryTime: e.target.value || "08:30" })}
-                                className="h-6 px-1 rounded border border-stone-200 bg-stone-50 text-[10.5px] font-bold text-stone-700"
-                              />
-                            </>
-                          )}
-                          <button
-                            type="button"
-                            onClick={() => setExpandedNotifPreviewKey((k) => (k === "fridgeExpiry" ? null : "fridgeExpiry"))}
-                            className="px-1.5 py-0.5 rounded bg-stone-100 hover:bg-stone-200 text-[10px] font-bold text-stone-600 whitespace-nowrap"
-                          >
-                            {expandedNotifPreviewKey === "fridgeExpiry" ? "접기" : "👁️ 편집"}
-                          </button>
-                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setExpandedNotifPreviewKey((k) => (k === "fridgeExpiry" ? null : "fridgeExpiry"))}
+                          className="px-1.5 py-0.5 rounded bg-stone-100 hover:bg-stone-200 text-[10px] font-bold text-stone-600 whitespace-nowrap shrink-0"
+                        >
+                          {expandedNotifPreviewKey === "fridgeExpiry" ? "접기" : "👁️ 편집"}
+                        </button>
                       </div>
+                      {smartNotifPrefs.fridgeExpiry && (
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <select
+                            value={Number(smartNotifPrefs.fridgeExpiryDays ?? 3)}
+                            onChange={(e) => saveSmartNotifPrefs({ fridgeExpiryDays: Number(e.target.value) })}
+                            className="h-6 px-1.5 rounded border border-stone-200 bg-stone-50 text-[10.5px] font-bold text-stone-700"
+                          >
+                            <option value={1}>D-1</option>
+                            <option value={3}>D-3</option>
+                            <option value={5}>D-5</option>
+                            <option value={7}>D-7</option>
+                          </select>
+                          <input
+                            type="time"
+                            value={smartNotifPrefs.fridgeExpiryTime || "08:30"}
+                            onChange={(e) => saveSmartNotifPrefs({ fridgeExpiryTime: e.target.value || "08:30" })}
+                            className="h-6 px-1.5 rounded border border-stone-200 bg-stone-50 text-[10.5px] font-bold text-stone-700"
+                          />
+                        </div>
+                      )}
                       {smartNotifPrefs.fridgeExpiry && renderRepeatControls("fridgeExpiryRepeatCount", "fridgeExpiryRepeatInterval", 1, 120)}
                       {renderPreviewCard("fridgeExpiry")}
                     </div>
@@ -48901,6 +48985,21 @@ time: "", location: "",
                       {renderPreviewCard("todosDue")}
                     </div>
 
+                    {/* 모닝콜·알람 별도 메뉴 바로가기 연계 */}
+                    <div className="flex items-center justify-between gap-2 bg-[#EEF3EE]/70 rounded-lg border border-[#C9D8CC] px-2.5 py-1.5">
+                      <span className="text-[10.5px] font-extrabold text-[#35503C]">⏰ 기상 모닝콜 · 퀵 알람</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsActivityModalOpen(false);
+                          setActiveTab("alarm");
+                        }}
+                        className="px-2 py-0.5 rounded-md bg-[#3F624D] hover:bg-[#35503C] text-white text-[10px] font-extrabold whitespace-nowrap shrink-0"
+                      >
+                        모닝콜 열기 →
+                      </button>
+                    </div>
+
                     {/* 8. 야간 방해금지 시간대 */}
                     <div className="flex items-center justify-between gap-1.5 bg-white rounded-lg border border-stone-200/80 px-2 py-1 flex-wrap">
                       <button
@@ -48935,7 +49034,7 @@ time: "", location: "",
               );
             })()}
 
-            <div className="flex items-center gap-1 overflow-x-auto no-scrollbar py-0.5 shrink-0">
+            <div className="flex items-center gap-1 flex-wrap py-0.5 shrink-0">
               {allCats.map((cat) => {
                 const cnt = cat === "전체" ? visibleRecentActivities.length : (catCounts[cat] || 0);
                 return (
@@ -52672,9 +52771,9 @@ time: "", location: "",
                     className="px-2.5 py-2 rounded-xl bg-white border border-stone-200 text-stone-700 text-[11.5px] font-extrabold whitespace-nowrap"
                   >
                     + 추가
-                  </button>
-                </div>
-                <div className="flex items-center gap-1.5">
+                  &lt;/button&gt;
+                &lt;/div&gt;
+                &lt;div className=&quot;flex items-center gap-1.5&quot;&gt;
                   {homeMiniDdayIds.length > 0 && (
                     <button
                       type="button"
@@ -52691,7 +52790,7 @@ time: "", location: "",
                       className="px-2.5 py-2 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-600 text-[11.5px] font-extrabold whitespace-nowrap"
                     >
                       초기화
-                    </button>
+                    &lt;/button&gt;
                   )}
                   <button
                     type="button"
@@ -52699,11 +52798,11 @@ time: "", location: "",
                     className="px-4 py-2 rounded-xl bg-stone-900 text-white text-[12px] font-black whitespace-nowrap"
                   >
                     완료
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
+                  &lt;/button&gt;
+                &lt;/div&gt;
+              &lt;/div&gt;
+            &lt;/div&gt;
+          &lt;/div&gt;
         );
       })()}
 
@@ -53697,7 +53796,7 @@ time: "", location: "",
                   onClick={() => {
                     const descLines = cols
                       .map((c) => {
-                        const v = String(taskModalDraft.cells?.[c.id] || "").trim();
+                        const v = String(taskModalDraft.values?.[c.id] || "").trim();
                         return v ? `${c.name}: ${v}` : "";
                       })
                       .filter(Boolean);
@@ -53718,7 +53817,7 @@ time: "", location: "",
                     onClick={() => {
                       if (!requireEditorAccess("schedule")) return;
                       const descMemo = [
-                        ...cols.map((c) => (taskModalDraft.cells?.[c.id] ? `${c.name}: ${taskModalDraft.cells[c.id]}` : "")).filter(Boolean),
+                        ...cols.map((c) => (taskModalDraft.values?.[c.id] ? `${c.name}: ${taskModalDraft.values[c.id]}` : "")).filter(Boolean),
                         taskModalDraft.memo || ""
                       ].filter(Boolean).join("\n");
                       setEditingSchedule(null);
@@ -53742,7 +53841,7 @@ time: "", location: "",
                     className="px-2.5 py-1.5 rounded-xl bg-[#EEF3EE] hover:bg-[#DFE9E0] text-[#35503C] text-[11.5px] font-extrabold whitespace-nowrap"
                   >
                     ✅ 할 일 등록
-                  </button>
+                  &lt;/button&gt;
                 )}
                 {canEditTab("shopping") && (
                   <button
@@ -53762,7 +53861,7 @@ time: "", location: "",
                         category: "기타",
                         urgent: taskModalDraft.priority === "High",
                         checked: false,
-                        memo: String(taskModalDraft.memo || taskModalDraft.cells?.desc || "").trim()
+                        memo: String(taskModalDraft.memo || taskModalDraft.values?.desc || "").trim()
                       };
                       setShoppingList((prev) => [payload, ...prev]);
                       if (user && db) {
@@ -53778,9 +53877,9 @@ time: "", location: "",
                     className="px-2.5 py-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 text-[11.5px] font-extrabold whitespace-nowrap"
                   >
                     🛒 장보기 담기
-                  </button>
+                  &lt;/button&gt;
                 )}
-              </div>
+              &lt;/div&gt;
 
               {/* 하단 액션 버튼 */}
               <div className="flex items-center justify-between gap-2 pt-1">
@@ -53837,8 +53936,8 @@ time: "", location: "",
 
 export default function App() {
   return (
-    <ErrorBoundary>
-      <MainApp />
-    </ErrorBoundary>
+    &lt;ErrorBoundary&gt;
+      &lt;MainApp /&gt;
+    &lt;/ErrorBoundary&gt;
   );
 }
