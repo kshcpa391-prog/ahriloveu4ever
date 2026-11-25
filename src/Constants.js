@@ -1181,7 +1181,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v14.16";
+export const APP_CODE_VERSION = "v14.18";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1199,7 +1199,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-25 13:20";
+export const APP_BUILD_DATE = "2026-11-25 13:30";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1268,6 +1268,25 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v14.18",
+    version: "v14.18",
+    date: "2026-11-25",
+    title: "루틴 시간대 관리 패널 색상 통일 및 전체 최종 점검",
+    changes: [
+      "루틴 시간대 추가·수정 패널에 남아 있던 이질적인 인디고(indigo) 계열 배경·테두리를 앱 기본 세이지 그린(#3F624D/#EEF3EE/#C9D8CC) 톤으로 통일",
+      "전체 코드 users 권한 병합, JSON.parse 안전성, Constants-App export/import 정합성 최종 점검 완료"
+    ]
+  },
+  {
+    id: "patch-v14.17",
+    version: "v14.17",
+    date: "2026-11-25",
+    title: "이메일 인증된 소유자 관리자 계정 승인 대기 잠금 오류 수정",
+    changes: [
+      "이메일 인증이 완료된 소유자 관리자 이메일(kshcpa391@gmail.com)이 다른 로그인 방식/새 UID로 접속해도 '관리자 승인 대기' 화면에 갇히지 않고 즉시 admin 권한으로 복구되도록 수정"
+    ]
+  },
   {
     id: "patch-v14.16",
     version: "v14.16",

@@ -4199,8 +4199,15 @@ function MainApp() {
     }
   });
   const [accessRole, setAccessRole] = useState("guest");
+  const isOwnerVerifiedEmail = Boolean(
+    user?.email &&
+      user?.emailVerified &&
+      String(user.email).trim().toLowerCase() === "kshcpa391@gmail.com"
+  );
   const isApprovedUser =
-    userProfile?.role === "admin" || userProfile?.role === "helper";
+    userProfile?.role === "admin" ||
+    userProfile?.role === "helper" ||
+    (isOwnerVerifiedEmail && userProfile?.role !== "rejected" && userProfile?.role !== "withdrawn");
   const [actorName, setActorName] = useState(() => {
     try {
       return localStorage.getItem("family_actor_name_v1") || "수혁";
@@ -7925,13 +7932,16 @@ function MainApp() {
             user.displayName ||
             (user.email ? user.email.split("@")[0] : "새 사용자");
           const needsNameSetup = isGoogleProvider && !typedName;
+          const isOwnerEmail = Boolean(
+            user.email && user.emailVerified && String(user.email).trim().toLowerCase() === "kshcpa391@gmail.com"
+          );
           const initDoc = {
             uid: user.uid,
             email: user.email || "",
             displayName: fallbackName,
-            actorName: fallbackName,
-            role: "pending",
-            ...(needsNameSetup ? { needsNameSetup: true } : {}),
+            actorName: isOwnerEmail ? "수혁" : fallbackName,
+            role: isOwnerEmail ? "admin" : "pending",
+            ...(needsNameSetup && !isOwnerEmail ? { needsNameSetup: true } : {}),
             createdAtMs: Date.now(),
             updatedAtMs: Date.now()
           };
@@ -7941,11 +7951,24 @@ function MainApp() {
             console.error("Profile init error:", e);
           }
           setUserProfile(initDoc);
-          setAccessRole("guest");
+          setAccessRole(initDoc.role === "admin" ? "admin" : "guest");
+          if (initDoc.role === "admin") setActorName("수혁");
           setProfileLoading(false);
           return;
         }
-        const data = { ...snap.data(), uid: snap.id };
+        const rawSnapData = { ...snap.data(), uid: snap.id };
+        const isOwnerPending = Boolean(
+          user.email &&
+            user.emailVerified &&
+            String(user.email).trim().toLowerCase() === "kshcpa391@gmail.com" &&
+            (!rawSnapData.role || rawSnapData.role === "pending")
+        );
+        const data = isOwnerPending
+          ? { ...rawSnapData, role: "admin", actorName: rawSnapData.actorName || "수혁" }
+          : rawSnapData;
+        if (isOwnerPending) {
+          setDoc(userRef, { role: "admin", actorName: data.actorName, updatedAtMs: Date.now() }, { merge: true }).catch(() => {});
+        }
         if (data.role === "withdrawn") {
           setUserProfile(data);
           setAccessRole("guest");
@@ -25870,9 +25893,9 @@ time: "", location: "",
 
 
               return (
-                <div className="bg-indigo-50/70 border border-indigo-200 rounded-xl p-2.5 space-y-2.5">
+                <div className="bg-[#EEF3EE]/70 border border-[#C9D8CC] rounded-xl p-2.5 space-y-2.5">
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-[11.5px] font-extrabold text-indigo-950">
+                    <span className="text-[11.5px] font-extrabold text-[#2D4433]">
                       루틴 시간대 추가·수정·삭제 및 평일/주말·공휴일 설정
                     </span>
                     <button
@@ -25882,17 +25905,17 @@ time: "", location: "",
                         persistSlots(DEFAULT_ROUTINE_SLOT_DEFS);
                         showToast("루틴 시간대를 기본값으로 초기화했습니다.");
                       }}
-                      className="text-[11.5px] font-extrabold text-indigo-700 underline shrink-0 whitespace-nowrap"
+                      className="text-[11.5px] font-extrabold text-[#3F624D] underline shrink-0 whitespace-nowrap"
                     >
                       기본값 초기화
                     </button>
                   </div>
 
 
-                  <div className="text-[11.5px] text-indigo-900 space-y-0.5 bg-white/80 border border-indigo-100 rounded-lg px-2 py-1.5">
+                  <div className="text-[11.5px] text-[#35503C] space-y-0.5 bg-white/80 border border-[#D8E3DA] rounded-lg px-2 py-1.5">
                     <div>
                       <span className="font-black">평일:</span>{" "}
-                      <span className="font-semibold text-indigo-700">
+                      <span className="font-semibold text-[#3F624D]">
                         {wdList.length > 0
                           ? wdList.map((s, idx) => `${s.label} ${s.startTime}~${wdList[(idx + 1) % wdList.length].startTime}`).join(" · ")
                           : "지정된 시간대 없음"}
@@ -25913,7 +25936,7 @@ time: "", location: "",
                     {sortedSlots.map((slot) => (
                       <div
                         key={slot.id}
-                        className="bg-white border border-indigo-100 rounded-xl p-2 space-y-1.5"
+                        className="bg-white border border-[#D8E3DA] rounded-xl p-2 space-y-1.5"
                       >
                         <div className="flex items-center gap-1.5">
                           <input
@@ -25959,7 +25982,7 @@ time: "", location: "",
                                 routineSlotDefs.map((x) => (x.id === slot.id ? { ...x, startTime: val } : x))
                               );
                             }}
-                            className="flex-1 min-w-0 px-2 py-1 rounded-lg border border-indigo-200 bg-white text-[12.5px] font-black text-stone-800"
+                            className="flex-1 min-w-0 px-2 py-1 rounded-lg border border-[#C9D8CC] bg-white text-[12.5px] font-black text-stone-800"
                           />
                           {routineSlotDefs.length > 1 && (
                             <button
@@ -26027,7 +26050,7 @@ time: "", location: "",
                   </div>
 
 
-                  <div className="flex flex-wrap items-center gap-1.5 pt-1 border-t border-indigo-200">
+                  <div className="flex flex-wrap items-center gap-1.5 pt-1 border-t border-[#C9D8CC]">
                     <input
                       type="text"
                       value={newSlotLabelInput}
@@ -26062,13 +26085,13 @@ time: "", location: "",
                         }
                       }}
                       placeholder="새 시간대 (예: 새벽·오전)"
-                      className="flex-1 min-w-[110px] px-2.5 py-1.5 rounded-lg border border-indigo-200 bg-white text-[12.5px] font-bold"
+                      className="flex-1 min-w-[110px] px-2.5 py-1.5 rounded-lg border border-[#C9D8CC] bg-white text-[12.5px] font-bold"
                     />
                     <input
                       type="time"
                       value={newSlotTimeInput}
                       onChange={(e) => setNewSlotTimeInput(e.target.value)}
-                      className="px-2 py-1.5 rounded-lg border border-indigo-200 bg-white text-[12.5px] font-black"
+                      className="px-2 py-1.5 rounded-lg border border-[#C9D8CC] bg-white text-[12.5px] font-black"
                     />
                     <div className="flex items-center gap-1 flex-nowrap shrink-0">
                       <button
