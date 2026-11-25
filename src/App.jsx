@@ -26,9 +26,6 @@ import {
   Upload,
   CalendarDays,
   Star,
-  FileJson,
-  RotateCcw,
-  Mail,
   CloudUpload,
   ClipboardList,
   ListTodo,
@@ -3549,7 +3546,7 @@ class ErrorBoundary extends React.Component {
             &lt;p className=&quot;text-[13.5px] text-stone-600 break-all&quot;&gt;{this.state.errorMsg}&lt;/p&gt;
             <button
               type="button"
-              onClick={async () => { try { if ("caches" in window) { const ks = await caches.keys(); await Promise.all(ks.map((k) => caches.delete(k))); } } catch (e) {} window.location.reload(); }}
+              onClick={async () => { try { if ("caches" in window && window.caches) { const ks = await window.caches.keys(); await Promise.all(ks.map((k) => window.caches.delete(k))); } } catch (e) {} window.location.reload(); }}
               className="w-full py-2.5 rounded-xl bg-stone-900 text-white text-[13.5px] font-extrabold"
             >
               새로고침
@@ -8193,8 +8190,8 @@ function MainApp() {
         setAuthFormError(`Google 로그인 오류 (${err.code}): ${err.message || ""}`);
       }
     });
-    if (typeof __initial_auth_token !== "undefined" && __initial_auth_token) {
-      signInWithCustomToken(auth, __initial_auth_token).catch((err) => {
+    if (typeof window !== "undefined" && window.__initial_auth_token) {
+          signInWithCustomToken(auth, window.__initial_auth_token).catch((err) => {
         console.error("Custom token auth error:", err);
       });
     }
@@ -14157,8 +14154,8 @@ ${validText}
       let rawBytes = null;
       if (compMethod === 0) {
         rawBytes = compData;
-      } else if (compMethod === 8 && typeof DecompressionStream !== "undefined") {
-        const ds = new DecompressionStream("deflate-raw");
+      } else if (compMethod === 8 && typeof window !== "undefined" && typeof window.DecompressionStream !== "undefined") {
+            const ds = new window.DecompressionStream("deflate-raw");
         const writer = ds.writable.getWriter();
         writer.write(compData);
         writer.close();
@@ -40410,8 +40407,8 @@ time: "", location: "",
                   onClick={async () => {
                     try {
                       if ("caches" in window) {
-                        const keys = await caches.keys();
-                        await Promise.all(keys.map((k) => caches.delete(k)));
+                        const keys = await window.caches.keys();
+                      await Promise.all(keys.map((k) => window.caches.delete(k)));
                       }
                     } catch (e) {}
                     const url = new URL(window.location.href);
