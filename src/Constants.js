@@ -1181,7 +1181,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v14.12";
+export const APP_CODE_VERSION = "v14.14";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1199,7 +1199,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-25 12:41";
+export const APP_BUILD_DATE = "2026-11-25 12:52";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1268,6 +1268,26 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v14.14",
+    version: "v14.14",
+    date: "2026-11-25",
+    title: "전체 코드 최종 점검: 버튼 줄바꿈·폰트 일관성·알림 탭 딥링크 보완",
+    changes: [
+      "공유노트 표/서식 닫기 버튼에 whitespace-nowrap shrink-0 적용으로 모바일 줄바꿈 방지",
+      "공유노트 붙여넣기 입력창 폰트를 font-sans로 통일해 전체 UI 타이포그래피 일관성 개선",
+      "상태바 알림(일정·냉장고·루틴·육아)에 해당 탭 딥링크(data.url) 메타데이터 연결"
+    ]
+  },
+  {
+    id: "patch-v14.13",
+    version: "v14.13",
+    date: "2026-11-25",
+    title: "시간 지정 일정 사전 알림 자유 입력(1~1,440분 전) 지원",
+    changes: [
+      "시간 지정 일정 알림 선택지에 '직접입력' 옵션 추가 (1분~1,440분 전까지 원하는 분 단위 자유 입력 및 Firebase 동기화)"
+    ]
+  },
   {
     id: "patch-v14.12",
     version: "v14.12",

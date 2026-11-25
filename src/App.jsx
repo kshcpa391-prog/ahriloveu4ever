@@ -1890,7 +1890,7 @@ const SharedNoteRichEditor = React.memo(({
                   <button
                     type="button"
                     onClick={closePanelsAndRestoreFocus}
-                    className="px-2 py-0.5 rounded-md bg-stone-200 text-stone-700 text-[10.5px] font-extrabold"
+                    className="px-2 py-0.5 rounded-md bg-stone-200 text-stone-700 text-[10.5px] font-extrabold whitespace-nowrap shrink-0"
                   >
                     ✕ 닫기
                   </button>
@@ -1982,7 +1982,7 @@ const SharedNoteRichEditor = React.memo(({
                   <button
                     type="button"
                     onClick={closePanelsAndRestoreFocus}
-                    className="px-2 py-0.5 rounded-md bg-stone-200 text-stone-700 text-[10.5px] font-extrabold"
+                    className="px-2 py-0.5 rounded-md bg-stone-200 text-stone-700 text-[10.5px] font-extrabold whitespace-nowrap shrink-0"
                   >
                     ✕ 닫기
                   </button>
@@ -4600,12 +4600,20 @@ function MainApp() {
             }
           } catch (err) {}
           const isSilent = Boolean(notifSilentMode);
+          const tStr = String(tag || "");
+          const targetHash =
+            tStr.startsWith("sched-") || tStr.startsWith("todos-") ? "#tab=schedule"
+            : tStr.startsWith("fridge-") ? "#tab=fridge"
+            : tStr.startsWith("feed-") ? "#tab=baby"
+            : tStr.startsWith("routine-") ? "#tab=home"
+            : "#tab=home";
           const notifOpts = {
             body: body || "",
             tag,
             icon: "/app-icon-512.png",
             badge: "/app-icon-512.png",
-            silent: isSilent
+            silent: isSilent,
+            data: { url: `/${targetHash}` }
           };
           if (!isSilent) {
             notifOpts.vibrate = [120, 60, 120];
@@ -45350,20 +45358,50 @@ time: "", location: "",
                         <span className={`w-2 h-2 rounded-full shrink-0 ${smartNotifPrefs.scheduleTimed ? "bg-[#3F624D]" : "bg-stone-300"}`} />
                         <span>⏰ 시간 일정</span>
                       </button>
-                      {smartNotifPrefs.scheduleTimed && (
-                        <select
-                          value={Number(smartNotifPrefs.scheduleLeadMinutes) || 30}
-                          onChange={(e) => saveSmartNotifPrefs({ scheduleLeadMinutes: Number(e.target.value) })}
-                          className="h-6 px-1.5 rounded border border-stone-200 bg-stone-50 text-[10.5px] font-bold text-stone-700 shrink-0"
-                        >
-                          <option value={5}>5분 전</option>
-                          <option value={10}>10분 전</option>
-                          <option value={15}>15분 전</option>
-                          <option value={30}>30분 전</option>
-                          <option value={60}>1시간 전</option>
-                          <option value={120}>2시간 전</option>
-                        </select>
-                      )}
+                      {smartNotifPrefs.scheduleTimed && (() => {
+                        const curLead = Math.max(1, Number(smartNotifPrefs.scheduleLeadMinutes) || 30);
+                        const isPreset = [5, 10, 15, 30, 60, 120].includes(curLead);
+                        const showCustom = Boolean(smartNotifPrefs.scheduleLeadCustom) || !isPreset;
+                        return (
+                          <div className="flex items-center gap-1 shrink-0">
+                            <select
+                              value={showCustom ? "custom" : curLead}
+                              onChange={(e) => {
+                                if (e.target.value === "custom") {
+                                  saveSmartNotifPrefs({ scheduleLeadCustom: true, scheduleLeadMinutes: curLead });
+                                } else {
+                                  saveSmartNotifPrefs({ scheduleLeadCustom: false, scheduleLeadMinutes: Number(e.target.value) });
+                                }
+                              }}
+                              className="h-6 px-1.5 rounded border border-stone-200 bg-stone-50 text-[10.5px] font-bold text-stone-700"
+                            >
+                              <option value={5}>5분 전</option>
+                              <option value={10}>10분 전</option>
+                              <option value={15}>15분 전</option>
+                              <option value={30}>30분 전</option>
+                              <option value={60}>1시간 전</option>
+                              <option value={120}>2시간 전</option>
+                              <option value="custom">직접입력</option>
+                            </select>
+                            {showCustom && (
+                              <div className="flex items-center gap-0.5">
+                                <input
+                                  type="number"
+                                  min={1}
+                                  max={1440}
+                                  value={curLead}
+                                  onChange={(e) => {
+                                    const v = Math.max(1, Math.min(1440, Number(e.target.value) || 1));
+                                    saveSmartNotifPrefs({ scheduleLeadCustom: true, scheduleLeadMinutes: v });
+                                  }}
+                                  className="w-12 h-6 px-1 rounded border border-stone-200 bg-white text-[10.5px] font-bold text-stone-800 text-center"
+                                />
+                                <span className="text-[10px] font-bold text-stone-500 whitespace-nowrap">분 전</span>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
                     </div>
 
                     {/* 2. 오늘·내일 요약 */}
@@ -49994,7 +50032,7 @@ time: "", location: "",
                 value={pagePasteText}
                 onChange={(e) => setPagePasteText(e.target.value)}
                 placeholder={"여기에 노션이나 메모장 내용을 그대로 붙여넣으세요!\n\n예시:\n### 세면용품 파우치 -> 캐리어\n- [x] 칫솔\n- [ ] 치약\n    - [ ] 휴대용 칫솔캡"}
-                className="w-full p-3 rounded-2xl border border-stone-200 bg-stone-50 focus:bg-white text-[13px] font-mono leading-relaxed resize-none flex-1"
+                className="w-full p-3 rounded-2xl border border-stone-200 bg-stone-50 focus:bg-white text-[13px] font-sans leading-relaxed resize-none flex-1"
               />
 
               <div className="space-y-2 shrink-0">
