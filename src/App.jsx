@@ -21881,7 +21881,41 @@ time: "", location: "",
                       </span>
                     </div>
                     <div className="flex items-center gap-1 shrink-0">
-                      {isNonDefaultFilter && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setHomeRoutineSlotFilter("auto");
+                          try { localStorage.setItem("kim_home_routine_slot_v1", "auto"); } catch (e) {}
+                          if (user && db) {
+                            setDoc(getDocRef("family_meta_v4", "home_layout"), { homeRoutineSlot: "auto", updatedAtMs: Date.now() }, { merge: true }).catch(() => {});
+                          }
+                        }}
+                        className={`h-6 px-2 rounded-lg text-[11px] font-extrabold border whitespace-nowrap shrink-0 transition ${
+                          effHomeSlotFilter === "auto"
+                            ? "bg-[#3F624D] text-white border-[#3F624D]"
+                            : "bg-white text-stone-600 border-stone-200 hover:bg-stone-100"
+                        }`}
+                      >
+                        자동
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setHomeRoutineSlotFilter("전체");
+                          try { localStorage.setItem("kim_home_routine_slot_v1", "전체"); } catch (e) {}
+                          if (user && db) {
+                            setDoc(getDocRef("family_meta_v4", "home_layout"), { homeRoutineSlot: "전체", updatedAtMs: Date.now() }, { merge: true }).catch(() => {});
+                          }
+                        }}
+                        className={`h-6 px-2 rounded-lg text-[11px] font-extrabold border whitespace-nowrap shrink-0 transition ${
+                          effHomeSlotFilter === "전체"
+                            ? "bg-[#3F624D] text-white border-[#3F624D]"
+                            : "bg-white text-stone-600 border-stone-200 hover:bg-stone-100"
+                        }`}
+                      >
+                        전체
+                      </button>
+                      {(homeRoutineDayOffset !== 0 || homeRoutineTargetFilter !== "전체") && (
                         <button
                           type="button"
                           onClick={() => {
@@ -21896,7 +21930,7 @@ time: "", location: "",
                               setDoc(getDocRef("family_meta_v4", "home_layout"), { homeRoutineSlot: "auto", homeRoutineTarget: "전체", updatedAtMs: Date.now() }, { merge: true }).catch(() => {});
                             }
                           }}
-                          className="h-7 px-2 rounded-lg text-[11.5px] font-bold text-[#2F523E] hover:bg-[#EEF3EE] whitespace-nowrap"
+                          className="h-6 px-1.5 rounded-lg text-[11px] font-bold text-[#2F523E] hover:bg-[#EEF3EE] whitespace-nowrap shrink-0"
                         >
                           기본값
                         </button>
@@ -21904,7 +21938,7 @@ time: "", location: "",
                       <button
                         type="button"
                         onClick={() => setIsHomeRoutineFilterOpen((v) => !v)}
-                        className="h-7 px-2 rounded-lg bg-white border border-stone-200 text-[11.5px] font-bold text-stone-800 hover:bg-stone-100 whitespace-nowrap"
+                        className="h-6 px-2 rounded-lg bg-white border border-stone-200 text-[11px] font-bold text-stone-800 hover:bg-stone-100 whitespace-nowrap shrink-0"
                       >
                         {isHomeRoutineFilterOpen ? "닫기 ▴" : "필터 ▾"}
                       </button>
@@ -23041,8 +23075,8 @@ time: "", location: "",
                     <span className="text-[13px] font-extrabold text-stone-900 whitespace-nowrap">🌆 오후 브리핑</span>
                     <span className="text-[11px] font-semibold text-stone-600 whitespace-nowrap shrink-0">{modeMeta.rangeLabel}</span>
                   </div>
-                  <div className="flex items-center justify-between gap-1.5 min-w-0">
-                    <div className="flex items-center gap-1 overflow-x-auto no-scrollbar min-w-0 flex-1">
+                  <div className="flex items-start justify-between gap-1.5 min-w-0">
+                    <div className="flex flex-wrap items-center gap-1 min-w-0 flex-1">
                       {expiringItems.length > 0 ? (
                         expiringItems.slice(0, 3).map((it) => (
                           <button

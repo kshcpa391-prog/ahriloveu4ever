@@ -1181,7 +1181,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v14.20";
+export const APP_CODE_VERSION = "v14.22";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1199,7 +1199,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-25 13:50";
+export const APP_BUILD_DATE = "2026-11-25 14:25";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1268,6 +1268,25 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v14.22",
+    version: "v14.22",
+    date: "2026-11-25",
+    title: "홈 오후 브리핑 임박 재료 칩 잘림 방지 및 최종 점검",
+    changes: [
+      "홈 오후 브리핑 카드에서 유통기한 임박 재료 칩이 '대파(D'처럼 가로로 잘리지 않고 자연스럽게 줄바꿈(flex-wrap)되도록 개선",
+      "전체 코드 정적·문법·동기화·UI 일관성 최종 점검 완료"
+    ]
+  },
+  {
+    id: "patch-v14.21",
+    version: "v14.21",
+    date: "2026-11-25",
+    title: "홈 루틴 필터 바 '자동 / 전체' 1탭 전환 버튼 추가",
+    changes: [
+      "홈 루틴 요약 바의 '필터 ▾' 옆에 '자동'·'전체' 소형 토글 버튼 2개를 배치해 필터 패널을 열지 않고도 바로 전환 및 클라우드 동기화되도록 개선"
+    ]
+  },
   {
     id: "patch-v14.20",
     version: "v14.20",
