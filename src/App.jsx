@@ -40045,8 +40045,8 @@ time: "", location: "",
             aria-hidden="true"
           />
           <div
-            style={{ bottom: "calc(7.9rem + env(safe-area-inset-bottom))" }}
-            className="fixed right-3 z-40 w-[348px] max-w-[95vw] max-h-[85vh] overflow-y-auto bg-white/95 backdrop-blur border border-stone-200 rounded-3xl shadow-2xl p-2.5 space-y-1.5"
+            style={{ bottom: "calc(7.7rem + env(safe-area-inset-bottom))" }}
+            className="fixed inset-x-2 mx-auto z-40 w-[calc(100vw-16px)] max-w-[460px] max-h-[86vh] overflow-y-auto bg-white/95 backdrop-blur border border-stone-200 rounded-3xl shadow-2xl p-3.5 space-y-3"
           >
             {[
               {
@@ -40269,9 +40269,9 @@ time: "", location: "",
               }))
               .filter((g) => g.items.length > 0)
               .map((g) => (
-                <div key={g.group} className="space-y-0.5">
-                  <div className="text-[10px] font-extrabold text-stone-400 px-0.5">{g.group}</div>
-                  <div className="grid grid-cols-4 gap-1">
+                <div key={g.group} className="space-y-1.5">
+                  <div className="text-[12.5px] font-extrabold text-stone-600 px-0.5">{g.group}</div>
+                  <div className="grid grid-cols-4 gap-2">
                     {g.items.map((act) => (
                       <button
                         key={act.label}
@@ -40280,19 +40280,19 @@ time: "", location: "",
                           setIsQuickFabOpen(false);
                           act.onClick();
                         }}
-                        className="h-[38px] px-1 rounded-xl bg-[#FAF8F3] hover:bg-[#EEF3EE] border border-stone-200/90 text-stone-900 flex flex-col items-center justify-center gap-0.5 transition active:scale-95 min-w-0"
+                        className="min-h-[64px] py-2 px-1.5 rounded-2xl bg-[#FAF8F3] hover:bg-[#EEF3EE] border border-stone-200/90 text-stone-900 flex flex-col items-center justify-center gap-1.5 transition active:scale-95 min-w-0 shadow-sm"
                       >
-                        <span className="text-[13.5px] leading-none">{act.icon}</span>
-                        <span className="text-[10px] font-extrabold whitespace-nowrap truncate max-w-full leading-none">{act.label}</span>
+                        <span className="text-[24px] leading-none">{act.icon}</span>
+                        <span className="text-[11.5px] font-extrabold whitespace-nowrap truncate max-w-full leading-tight">{act.label}</span>
                       </button>
                     ))}
                   </div>
                 </div>
               ))}
             {/* 🌙 아기꿈나라 유튜브 바로 실행 */}
-            <div className="space-y-0.5 pt-1 border-t border-stone-100">
+            <div className="space-y-1.5 pt-2.5 border-t border-stone-100">
               <div className="flex items-center justify-between px-0.5">
-                <span className="text-[10px] font-extrabold text-stone-400">🌙 아기꿈나라</span>
+                <span className="text-[12.5px] font-extrabold text-stone-600">🌙 아기꿈나라</span>
                 {canEditTab("baby") && (
                   <button
                     type="button"
@@ -40302,13 +40302,13 @@ time: "", location: "",
                       setDreamLinkDraft({ label: "", icon: "🎵", url: "" });
                       setIsDreamLinksModalOpen(true);
                     }}
-                    className="text-[10.5px] font-extrabold text-stone-400 hover:text-stone-700 whitespace-nowrap"
+                    className="text-[11.5px] font-extrabold text-stone-500 hover:text-stone-800 whitespace-nowrap"
                   >
                     ⚙️ 링크관리
                   </button>
                 )}
               </div>
-              <div className="grid grid-cols-4 gap-1">
+              <div className="grid grid-cols-4 gap-2">
                 {babyDreamLinks.map((dl) => (
                   <a
                     key={dl.id}
@@ -40316,10 +40316,10 @@ time: "", location: "",
                     target="_blank"
                     rel="noopener noreferrer"
                     onClick={() => setIsQuickFabOpen(false)}
-                    className="h-[38px] px-1 rounded-xl bg-[#FAF8F3] hover:bg-[#EEF3EE] border border-stone-200/90 text-stone-900 flex flex-col items-center justify-center gap-0.5 transition active:scale-95 min-w-0"
+                    className="min-h-[64px] py-2 px-1.5 rounded-2xl bg-[#FAF8F3] hover:bg-[#EEF3EE] border border-stone-200/90 text-stone-900 flex flex-col items-center justify-center gap-1.5 transition active:scale-95 min-w-0 shadow-sm"
                   >
-                    <span className="text-[13.5px] leading-none">{dl.icon || "🎵"}</span>
-                    <span className="text-[10px] font-extrabold whitespace-nowrap truncate max-w-full leading-none">{dl.label}</span>
+                    <span className="text-[24px] leading-none">{dl.icon || "🎵"}</span>
+                    <span className="text-[11.5px] font-extrabold whitespace-nowrap truncate max-w-full leading-tight">{dl.label}</span>
                   </a>
                 ))}
               </div>

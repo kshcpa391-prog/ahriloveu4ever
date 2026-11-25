@@ -1182,7 +1182,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v14.34";
+export const APP_CODE_VERSION = "v14.35";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1200,7 +1200,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-25 22:50";
+export const APP_BUILD_DATE = "2026-11-25 23:12";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1270,6 +1270,16 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v14.35",
+    version: "v14.35",
+    date: "2026-11-25",
+    title: "빠른실행(+) 팝업 화면 확대 및 아이콘·버튼 시인성 대폭 강화",
+    changes: [
+      "🔍 빠른실행(+) 팝업 화면 크기 확대: 고정 348px 우측 정렬 박스를 모바일 화면 너비에 맞춰 여유롭게 펼쳐지는 중앙 정렬 대형 팝업(max-w-[460px] · max-h-[86vh] · p-3.5)으로 확장",
+      "✨ 아이콘 및 타일 버튼 확대: 식단·살림, 일정·육아·공지, 노트·버킷·소통, 아기꿈나라 전체 아이콘을 13.5px → 24px로, 버튼 높이를 38px → 64px로, 라벨·그룹 제목을 11.5~12.5px로 키워 한눈에 잘 보이고 누르기 편하게 개선 (과거 패치노트 472건 100% 보존)"
+    ]
+  },
   {
     id: "patch-v14.34",
     version: "v14.34",
