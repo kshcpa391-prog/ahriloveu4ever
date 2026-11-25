@@ -183,7 +183,9 @@ import {
   DEFAULT_TIMER_PRESETS,
   DEFAULT_QUICK_ALARM_PRESETS,
   DEFAULT_BABY_DIARY_MOODS,
-  DEFAULT_AI_MEAL_STYLES
+  DEFAULT_AI_MEAL_STYLES,
+  DEFAULT_AI_MEAL_TARGETS,
+  DEFAULT_ROUTINE_TIME_PRESETS
 } from "./Constants";
 
 
@@ -2270,185 +2272,6 @@ const getLunarDateLabel = (dateObj) => {
   }
 };
 
-// 입력 렉 완전 제거용 독립 메모이즈드 개인일정·다이어리 모달
-const PrivateCalFormModal = React.memo(({
-  initialForm,
-  isEditing,
-  currentAdminOwner,
-  onClose,
-  onSubmitForm,
-  onSwitchToFamilyNew,
-  onConvertToFamily
-}) => {
-  const [draft, setDraft] = useState(initialForm);
-
-  useEffect(() => {
-    setDraft(initialForm);
-  }, [initialForm]);
-
-  const handleSubmit = (e) => {
-    e?.preventDefault?.();
-    onSubmitForm(draft);
-  };
-
-  return (
-    <div
-      className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
-      onClick={onClose}
-    >
-      <div
-        className="bg-white rounded-3xl max-w-sm w-full p-5 space-y-3.5 max-h-[88vh] overflow-y-auto shadow-xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between">
-          <h3 className="text-[13.5px] font-black text-stone-900">
-            {isEditing ? "✏️ 개인 일정 수정" : "🔒 개인 일정 추가"}
-          </h3>
-          <button
-            type="button"
-            onClick={onClose}
-            className="p-1 text-stone-400 hover:text-stone-700"
-            aria-label="닫기"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        <form onSubmit={handleSubmit} className="space-y-3">
-          <div className="flex items-center justify-between gap-2 px-3 py-2 rounded-xl bg-stone-100 text-[12px] font-extrabold text-stone-700">
-            <span className="truncate">🔒 {currentAdminOwner} 개인 일정 · 다이어리</span>
-            {isEditing ? (
-              <button
-                type="button"
-                onClick={() => onConvertToFamily(draft)}
-                className="px-2 py-0.5 rounded-lg bg-[#3F624D] hover:bg-[#324F3E] text-white text-[10.5px] font-black whitespace-nowrap shrink-0"
-              >
-                🏠 가족일정으로 이동
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={() => onSwitchToFamilyNew(draft)}
-                className="px-2 py-0.5 rounded-lg bg-[#EEF3EE] border border-[#C9D8CC] text-[#35503C] text-[10.5px] font-black whitespace-nowrap shrink-0"
-              >
-                🏠 가족 일정으로
-              </button>
-            )}
-          </div>
-
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="text-[11px] font-extrabold text-stone-500 block mb-1">시작일</label>
-              <input
-                type="date"
-                value={draft.date || ""}
-                onChange={(e) => setDraft((p) => ({ ...p, date: e.target.value }))}
-                className="w-full px-2.5 py-2 rounded-xl border border-stone-200 text-[12.5px] font-bold bg-stone-50"
-              />
-            </div>
-            <div>
-              <label className="text-[11px] font-extrabold text-stone-500 block mb-1">종료일 (선택)</label>
-              <input
-                type="date"
-                value={draft.endDate || ""}
-                min={draft.date || undefined}
-                onChange={(e) => setDraft((p) => ({ ...p, endDate: e.target.value }))}
-                className="w-full px-2.5 py-2 rounded-xl border border-stone-200 text-[12.5px] font-bold bg-stone-50"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="text-[11px] font-extrabold text-stone-500 block mb-1">시간 (선택)</label>
-            <input
-              type="text"
-              value={draft.time || ""}
-              onChange={(e) => setDraft((p) => ({ ...p, time: e.target.value }))}
-              placeholder="예: 2시, 10시반, 09:00~12:00"
-              className="w-full px-2.5 py-2 rounded-xl border border-stone-200 text-[12.5px] font-bold bg-stone-50"
-            />
-          </div>
-
-          <div>
-            <label className="text-[11px] font-extrabold text-stone-500 block mb-1">일정 내용</label>
-            <input
-              type="text"
-              autoFocus
-              value={draft.title || ""}
-              onChange={(e) => setDraft((p) => ({ ...p, title: e.target.value }))}
-              placeholder="예: 진오비, 입소서류, PC교체"
-              className="w-full px-3 py-2.5 rounded-xl border border-stone-200 text-[13.5px] font-bold bg-white focus:outline-none focus:ring-2 focus:ring-stone-400"
-            />
-          </div>
-
-          <div className="space-y-1.5">
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] font-extrabold text-stone-500">글자 색상</span>
-              <label className="inline-flex items-center gap-1.5 text-[11px] font-bold text-stone-600 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={Boolean(draft.highlight)}
-                  onChange={(e) => setDraft((p) => ({ ...p, highlight: e.target.checked }))}
-                  className="rounded"
-                />
-                <span>배경 강조</span>
-              </label>
-            </div>
-            <div className="grid grid-cols-6 gap-1.5">
-              {PRIVATE_CAL_COLORS.map((c) => (
-                <button
-                  key={c.id}
-                  type="button"
-                  onClick={() => setDraft((p) => ({ ...p, color: c.id }))}
-                  className={`py-1.5 rounded-xl border flex flex-col items-center gap-1 text-[10px] font-extrabold transition ${
-                    draft.color === c.id ? "border-stone-900 bg-stone-100" : "border-stone-200 bg-white"
-                  }`}
-                >
-                  <span className={`w-3.5 h-3.5 rounded-full ${c.dotCls}`} />
-                  <span>{c.label}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <label className="flex items-center gap-2 text-[12px] font-bold text-stone-700 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={Boolean(draft.isAnnual)}
-              onChange={(e) => setDraft((p) => ({ ...p, isAnnual: e.target.checked }))}
-              className="rounded"
-            />
-            <span>매년 같은 날 반복 표시</span>
-          </label>
-
-          <textarea
-            rows={2}
-            value={draft.memo || ""}
-            onChange={(e) => setDraft((p) => ({ ...p, memo: e.target.value }))}
-            placeholder="오늘의 다이어리 · 상세 메모 (선택)"
-            className="w-full px-3 py-2 rounded-xl border border-stone-200 text-[12.5px] font-medium bg-stone-50 focus:bg-white"
-          />
-
-          <div className="flex items-center gap-2 pt-1">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 py-2.5 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-[13px] font-extrabold whitespace-nowrap"
-            >
-              취소
-            </button>
-            <button
-              type="submit"
-              className="flex-[2] py-2.5 rounded-xl bg-stone-900 hover:bg-stone-800 text-white text-[13px] font-extrabold"
-            >
-              {isEditing ? "수정 저장" : "저장"}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-});
 
 // 입력 렉 완전 제거용 독립 메모이즈드 가족일정 모달
 const ScheduleFormModal = React.memo(({
@@ -3493,7 +3316,7 @@ const BucketLocationPreviewMap = ({ lat, lng, label, onPickCoords }) => {
   return (
     <div className="relative rounded-2xl overflow-hidden border border-stone-200 bg-stone-100">
       <div ref={mapElRef} className="w-full h-[190px] z-0" />
-      <div className="absolute bottom-2 left-2 z-[400] px-2 py-0.5 rounded-lg bg-white/90 text-[10.5px] font-bold text-stone-600 shadow-xs pointer-events-none">
+      <div className="absolute bottom-2 left-2 z-[400] px-2 py-0.5 rounded-lg bg-white/90 text-[10.5px] font-bold text-stone-600 shadow-sm pointer-events-none">
         지도를 눌러 핀 위치를 직접 미세조정할 수 있어요
       </div>
       {!ready && (
@@ -4154,17 +3977,6 @@ function MainApp() {
       return EDITOR_INVITE_CODE;
     }
   });
-  const [suhyeokCodeDraft, setSuhyeokCodeDraft] = useState(() => {
-    try {
-      return (
-        localStorage.getItem("family_suhyeok_code_v1") ||
-        localStorage.getItem("family_admin_code_v1") ||
-        EDITOR_INVITE_CODE
-      );
-    } catch (e) {
-      return EDITOR_INVITE_CODE;
-    }
-  });
   const [arinaCode, setArinaCode] = useState(() => {
     try {
       return (
@@ -4176,18 +3988,6 @@ function MainApp() {
       return EDITOR_INVITE_CODE;
     }
   });
-  const [arinaCodeDraft, setArinaCodeDraft] = useState(() => {
-    try {
-      return (
-        localStorage.getItem("family_arina_code_v1") ||
-        localStorage.getItem("family_admin_code_v1") ||
-        EDITOR_INVITE_CODE
-      );
-    } catch (e) {
-      return EDITOR_INVITE_CODE;
-    }
-  });
-  const [switchAdminPinInput, setSwitchAdminPinInput] = useState("");
   const [helperCode, setHelperCode] = useState(() => {
     try {
       return localStorage.getItem("family_helper_code_v1") || DEFAULT_HELPER_CODE;
@@ -4223,13 +4023,6 @@ function MainApp() {
       return Array.isArray(parsedView) && parsedView.length > 0 ? parsedView : DEFAULT_HELPER_TABS;
     } catch (e) {
       return DEFAULT_HELPER_TABS;
-    }
-  });
-  const [helperCodeDraft, setHelperCodeDraft] = useState(() => {
-    try {
-      return localStorage.getItem("family_helper_code_v1") || DEFAULT_HELPER_CODE;
-    } catch (e) {
-      return DEFAULT_HELPER_CODE;
     }
   });
   const [accessRole, setAccessRole] = useState("guest");
@@ -4990,7 +4783,9 @@ function MainApp() {
           timer_presets: Array.isArray(saved.timer_presets) && saved.timer_presets.length > 0 ? saved.timer_presets.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_TIMER_PRESETS],
           quick_alarm_presets: Array.isArray(saved.quick_alarm_presets) && saved.quick_alarm_presets.length > 0 ? saved.quick_alarm_presets.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_QUICK_ALARM_PRESETS],
           baby_diary_moods: Array.isArray(saved.baby_diary_moods) && saved.baby_diary_moods.length > 0 ? saved.baby_diary_moods.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_BABY_DIARY_MOODS],
-          ai_meal_styles: Array.isArray(saved.ai_meal_styles) && saved.ai_meal_styles.length > 0 ? saved.ai_meal_styles.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_AI_MEAL_STYLES]
+          ai_meal_styles: Array.isArray(saved.ai_meal_styles) && saved.ai_meal_styles.length > 0 ? saved.ai_meal_styles.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_AI_MEAL_STYLES],
+          ai_meal_targets: Array.isArray(saved.ai_meal_targets) && saved.ai_meal_targets.length > 0 ? saved.ai_meal_targets.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_AI_MEAL_TARGETS],
+          routine_time_presets: Array.isArray(saved.routine_time_presets) && saved.routine_time_presets.length > 0 ? saved.routine_time_presets.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_ROUTINE_TIME_PRESETS]
         };
       }
     } catch (e) {}
@@ -5012,7 +4807,9 @@ function MainApp() {
       timer_presets: [...DEFAULT_TIMER_PRESETS],
       quick_alarm_presets: [...DEFAULT_QUICK_ALARM_PRESETS],
       baby_diary_moods: [...DEFAULT_BABY_DIARY_MOODS],
-      ai_meal_styles: [...DEFAULT_AI_MEAL_STYLES]
+      ai_meal_styles: [...DEFAULT_AI_MEAL_STYLES],
+      ai_meal_targets: [...DEFAULT_AI_MEAL_TARGETS],
+      routine_time_presets: [...DEFAULT_ROUTINE_TIME_PRESETS]
     };
   });
   const fridgeCategories = customCategories.fridge;
@@ -5033,6 +4830,8 @@ function MainApp() {
   const quickAlarmPresets = customCategories.quick_alarm_presets || DEFAULT_QUICK_ALARM_PRESETS;
   const babyDiaryMoods = customCategories.baby_diary_moods || DEFAULT_BABY_DIARY_MOODS;
   const aiMealStyles = customCategories.ai_meal_styles || DEFAULT_AI_MEAL_STYLES;
+  const aiMealTargets = customCategories.ai_meal_targets || DEFAULT_AI_MEAL_TARGETS;
+  const routineTimePresets = customCategories.routine_time_presets || DEFAULT_ROUTINE_TIME_PRESETS;
 
   // === 🔒 비밀메뉴: 경조사비 입출금내역 상태 ===
   const isSuhyeokAdmin = isAdminUnlocked && (actorName === "수혁" || actorName === "김수혁");
@@ -5268,19 +5067,7 @@ function MainApp() {
   const monthlyTouchStartRef = useRef(null);
   const routineTitleLiveRef = useRef("");
   const currentAdminOwner = actorName === "아리나" ? "아리나" : "수혁";
-  const [isPrivateCalModalOpen, setIsPrivateCalModalOpen] = useState(false);
   const [editingPrivateCalId, setEditingPrivateCalId] = useState(null);
-  const [privateCalForm, setPrivateCalForm] = useState({
-    title: "",
-    date: getTodayStr(),
-    endDate: "",
-    time: "",
-    color: "default",
-    highlight: false,
-    isAnnual: false,
-    memo: "",
-    owner: "수혁"
-  });
   const [isPrivateCalCsvModalOpen, setIsPrivateCalCsvModalOpen] = useState(false);
   const [privateCalCsvPreview, setPrivateCalCsvPreview] = useState(null);
   const [privateCalCsvBusy, setPrivateCalCsvBusy] = useState(false);
@@ -5323,7 +5110,6 @@ function MainApp() {
   const [pagePasteMode, setPagePasteMode] = useState("append");
   const [isPageVisualEditMode, setIsPageVisualEditMode] = useState(false);
   const [isNoteBodyFocused, setIsNoteBodyFocused] = useState(false);
-  const [pageNoteDraft, setPageNoteDraft] = useState("");
   const pageNoteTextareaRef = useRef(null);
   const [isPageMultiSelectMode, setIsPageMultiSelectMode] = useState(false);
   const [babyDreamLinks, setBabyDreamLinks] = useState(() => {
@@ -5357,8 +5143,6 @@ function MainApp() {
   const [sectionQuickDrafts, setSectionQuickDrafts] = useState({});
   const [noteSaveStatusTop, setNoteSaveStatusTop] = useState("idle");
   const pageAttachInputRef = useRef(null);
-  const [hideCompletedPageTodos, setHideCompletedPageTodos] = useState(false);
-  const [addingColBlockId, setAddingColBlockId] = useState(null);
   const [activeTableTaskModal, setActiveTableTaskModal] = useState(null);
   const [taskModalDraft, setTaskModalDraft] = useState(null);
   const [isBudgetEditing, setIsBudgetEditing] = useState(false);
@@ -6657,7 +6441,6 @@ function MainApp() {
       return Array.isArray(raw) ? raw : [];
     } catch (e) { return []; }
   });
-  const [alarmTimeDraft, setAlarmTimeDraft] = useState("07:00");
   const [alarmLabelDraft, setAlarmLabelDraft] = useState("");
   const [alarmSoundIdDraft, setAlarmSoundIdDraft] = useState("morning");
   const [alarmQuickMemoDraft, setAlarmQuickMemoDraft] = useState("");
@@ -6866,7 +6649,6 @@ function MainApp() {
       setAlarmAmPmDraft(h < 12 ? "AM" : "PM");
       setAlarmHourDraft(h % 12 === 0 ? 12 : h % 12);
       setAlarmMinDraft(m);
-      setAlarmTimeDraft(existing.time || "07:00");
       setAlarmLabelDraft(existing.label || "");
       setAlarmDaysDraft(resolveAlarmDays(existing));
       setAlarmSoundIdDraft(existing.soundId || "morning");
@@ -6881,7 +6663,6 @@ function MainApp() {
       setAlarmAmPmDraft(h < 12 ? "AM" : "PM");
       setAlarmHourDraft(h % 12 === 0 ? 12 : h % 12);
       setAlarmMinDraft(m);
-      setAlarmTimeDraft(`${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`);
       setAlarmLabelDraft("");
       setAlarmDaysDraft([0, 1, 2, 3, 4, 5, 6]);
       setAlarmSoundIdDraft("morning");
@@ -7468,11 +7249,8 @@ function MainApp() {
 
     setAdminCode(nextAdmin);
     setSuhyeokCode(nextSuhyeok);
-    setSuhyeokCodeDraft(nextSuhyeok);
     setArinaCode(nextArina);
-    setArinaCodeDraft(nextArina);
     setHelperCode(nextHelper);
-    setHelperCodeDraft(nextHelper);
     setGuestAllowedTabs(nextGuest);
     setHelperAllowedTabs(nextView);
     setHelperEditTabs(nextEdit);
@@ -8805,6 +8583,9 @@ function MainApp() {
                 setLastAutoBackupSlot(d.data().lastSlot);
                 try { localStorage.setItem("kim_twice_daily_backup_slot", d.data().lastSlot); } catch (e) {}
               }
+              if (d.data().dataHash) {
+                try { localStorage.setItem("kim_last_backup_sig_v1", String(d.data().dataHash)); } catch (e) {}
+              }
               if (d.data().email) {
                 setBackupEmail(d.data().email);
                 try { localStorage.setItem("kim_family_backup_email", d.data().email); } catch (e) {}
@@ -8837,31 +8618,26 @@ function MainApp() {
                 try { localStorage.setItem("family_admin_code_v1", ac); } catch (e) {}
                 if (!cfgData.suhyeokCode) {
                   setSuhyeokCode(ac);
-                  setSuhyeokCodeDraft(ac);
                   try { localStorage.setItem("family_suhyeok_code_v1", ac); } catch (e) {}
                 }
                 if (!cfgData.arinaCode) {
                   setArinaCode(ac);
-                  setArinaCodeDraft(ac);
                   try { localStorage.setItem("family_arina_code_v1", ac); } catch (e) {}
                 }
               }
               if (cfgData.suhyeokCode) {
                 const sc = String(cfgData.suhyeokCode).trim();
                 setSuhyeokCode(sc);
-                setSuhyeokCodeDraft(sc);
                 try { localStorage.setItem("family_suhyeok_code_v1", sc); } catch (e) {}
               }
               if (cfgData.arinaCode) {
                 const arc = String(cfgData.arinaCode).trim();
                 setArinaCode(arc);
-                setArinaCodeDraft(arc);
                 try { localStorage.setItem("family_arina_code_v1", arc); } catch (e) {}
               }
               if (d.data().helperCode) {
                 const c = String(d.data().helperCode).trim();
                 setHelperCode(c);
-                setHelperCodeDraft(c);
                 try { localStorage.setItem("family_helper_code_v1", c); } catch (e) {}
               }
               if (Array.isArray(d.data().guestAllowedTabs)) {
@@ -9348,7 +9124,9 @@ function MainApp() {
               timer_presets: Array.isArray(d.timer_presets) && d.timer_presets.length > 0 ? d.timer_presets.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_TIMER_PRESETS],
               quick_alarm_presets: Array.isArray(d.quick_alarm_presets) && d.quick_alarm_presets.length > 0 ? d.quick_alarm_presets.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_QUICK_ALARM_PRESETS],
               baby_diary_moods: Array.isArray(d.baby_diary_moods) && d.baby_diary_moods.length > 0 ? d.baby_diary_moods.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_BABY_DIARY_MOODS],
-              ai_meal_styles: Array.isArray(d.ai_meal_styles) && d.ai_meal_styles.length > 0 ? d.ai_meal_styles.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_AI_MEAL_STYLES]
+              ai_meal_styles: Array.isArray(d.ai_meal_styles) && d.ai_meal_styles.length > 0 ? d.ai_meal_styles.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_AI_MEAL_STYLES],
+              ai_meal_targets: Array.isArray(d.ai_meal_targets) && d.ai_meal_targets.length > 0 ? d.ai_meal_targets.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_AI_MEAL_TARGETS],
+              routine_time_presets: Array.isArray(d.routine_time_presets) && d.routine_time_presets.length > 0 ? d.routine_time_presets.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_ROUTINE_TIME_PRESETS]
             };
             setCustomCategories(nextCats);
             try { localStorage.setItem("kim_custom_categories_v1", JSON.stringify(nextCats)); } catch (e) {}
@@ -10385,7 +10163,9 @@ function MainApp() {
           timer_presets: Array.isArray(payload.customCategories.timer_presets) && payload.customCategories.timer_presets.length > 0 ? payload.customCategories.timer_presets.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_TIMER_PRESETS],
           quick_alarm_presets: Array.isArray(payload.customCategories.quick_alarm_presets) && payload.customCategories.quick_alarm_presets.length > 0 ? payload.customCategories.quick_alarm_presets.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_QUICK_ALARM_PRESETS],
           baby_diary_moods: Array.isArray(payload.customCategories.baby_diary_moods) && payload.customCategories.baby_diary_moods.length > 0 ? payload.customCategories.baby_diary_moods.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_BABY_DIARY_MOODS],
-          ai_meal_styles: Array.isArray(payload.customCategories.ai_meal_styles) && payload.customCategories.ai_meal_styles.length > 0 ? payload.customCategories.ai_meal_styles.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_AI_MEAL_STYLES]
+          ai_meal_styles: Array.isArray(payload.customCategories.ai_meal_styles) && payload.customCategories.ai_meal_styles.length > 0 ? payload.customCategories.ai_meal_styles.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_AI_MEAL_STYLES],
+          ai_meal_targets: Array.isArray(payload.customCategories.ai_meal_targets) && payload.customCategories.ai_meal_targets.length > 0 ? payload.customCategories.ai_meal_targets.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_AI_MEAL_TARGETS],
+          routine_time_presets: Array.isArray(payload.customCategories.routine_time_presets) && payload.customCategories.routine_time_presets.length > 0 ? payload.customCategories.routine_time_presets.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_ROUTINE_TIME_PRESETS]
         };
         setCustomCategories(nextCats);
         try { localStorage.setItem("kim_custom_categories_v1", JSON.stringify(nextCats)); } catch (e) {}
@@ -10685,6 +10465,8 @@ function MainApp() {
                 quick_alarm_presets: Array.isArray(payload.customCategories.quick_alarm_presets) && payload.customCategories.quick_alarm_presets.length > 0 ? payload.customCategories.quick_alarm_presets : [...DEFAULT_QUICK_ALARM_PRESETS],
                 baby_diary_moods: Array.isArray(payload.customCategories.baby_diary_moods) && payload.customCategories.baby_diary_moods.length > 0 ? payload.customCategories.baby_diary_moods : [...DEFAULT_BABY_DIARY_MOODS],
                 ai_meal_styles: Array.isArray(payload.customCategories.ai_meal_styles) && payload.customCategories.ai_meal_styles.length > 0 ? payload.customCategories.ai_meal_styles : [...DEFAULT_AI_MEAL_STYLES],
+                ai_meal_targets: Array.isArray(payload.customCategories.ai_meal_targets) && payload.customCategories.ai_meal_targets.length > 0 ? payload.customCategories.ai_meal_targets : [...DEFAULT_AI_MEAL_TARGETS],
+                routine_time_presets: Array.isArray(payload.customCategories.routine_time_presets) && payload.customCategories.routine_time_presets.length > 0 ? payload.customCategories.routine_time_presets : [...DEFAULT_ROUTINE_TIME_PRESETS],
                 updatedAtMs: Date.now()
               },
               { merge: true }
@@ -15376,20 +15158,28 @@ ${validText}
     const loadImg = async (src) => {
       if (!src) return null;
       let targetSrc = src;
+      let objectUrlToRevoke = null;
       if (src.startsWith("http")) {
         try {
           const resp = await fetch(src);
           if (resp.ok) {
             const blob = await resp.blob();
-            targetSrc = URL.createObjectURL(blob);
+            objectUrlToRevoke = URL.createObjectURL(blob);
+            targetSrc = objectUrlToRevoke;
           }
         } catch (e) {}
       }
       return new Promise((resolve) => {
         const im = new Image();
         im.crossOrigin = "anonymous";
-        im.onload = () => resolve(im);
-        im.onerror = () => resolve(null);
+        const cleanup = () => {
+          if (objectUrlToRevoke) {
+            try { URL.revokeObjectURL(objectUrlToRevoke); } catch (e) {}
+            objectUrlToRevoke = null;
+          }
+        };
+        im.onload = () => { cleanup(); resolve(im); };
+        im.onerror = () => { cleanup(); resolve(null); };
         im.src = targetSrc;
       });
     };
@@ -16801,7 +16591,7 @@ ${validText}
 
   const handleSavePrivateSchedule = async (draftOrEvent) => {
     if (draftOrEvent?.preventDefault) draftOrEvent.preventDefault();
-    const srcForm = draftOrEvent && typeof draftOrEvent === "object" && !draftOrEvent.preventDefault ? draftOrEvent : privateCalForm;
+    const srcForm = draftOrEvent && typeof draftOrEvent === "object" && !draftOrEvent.preventDefault ? draftOrEvent : {};
     if (!isAdminUnlocked) {
       showToast("🔒 관리자 전용 기능입니다.");
       return;
@@ -16846,7 +16636,6 @@ ${validText}
     try { localStorage.setItem("kim_private_schedules_cache_v1", JSON.stringify(nextAll)); } catch (e) {}
     setScheduleSelectedDate(dateVal);
     setScheduleMonth(dateVal.slice(0, 7));
-    setIsPrivateCalModalOpen(false);
     setIsScheduleModalOpen(false);
     setEditingPrivateCalId(null);
     if (user && db) {
@@ -16904,7 +16693,6 @@ ${validText}
       localStorage.setItem("kim_private_schedules_cache_v1", JSON.stringify(nextPrivAll));
     } catch (e) {}
 
-    setIsPrivateCalModalOpen(false);
     setIsScheduleModalOpen(false);
     setEditingPrivateCalId(null);
     setScheduleSelectedDate(dateVal);
@@ -17507,7 +17295,6 @@ ${validText}
   useEffect(() => {
     const cur = familyPages.find((p) => p.id === selectedPageId);
     if (!isNoteBodyFocused) {
-      setPageNoteDraft(String(cur?.noteBody || ""));
     }
   }, [selectedPageId, familyPages, isNoteBodyFocused]);
 
@@ -17517,12 +17304,10 @@ ${validText}
     setIsEditingPageTitle(false);
     setIsNoteBodyFocused(false);
     const targetPg = familyPages.find((p) => p.id === pageId);
-    setPageNoteDraft(String(targetPg?.noteBody || ""));
     setIsPageEmojiPickerOpen(false);
     setIsPageVisualEditMode(false);
     setIsPageMultiSelectMode(false);
     setSelectedPageBlockIds([]);
-    setAddingColBlockId(null);
     setPageSearchQuery("");
     if (!pageId) return;
     setRecentPageIds((prev) => {
@@ -18168,6 +17953,10 @@ ${item.memo}` : `${item.title} 다녀옴!`,
         ? [...DEFAULT_BABY_DIARY_MOODS]
         : kind === "ai_meal_styles"
         ? [...DEFAULT_AI_MEAL_STYLES]
+        : kind === "ai_meal_targets"
+        ? [...DEFAULT_AI_MEAL_TARGETS]
+        : kind === "routine_time_presets"
+        ? [...DEFAULT_ROUTINE_TIME_PRESETS]
         : [...NOTICE_CATEGORIES];
     await saveCustomCategoriesToCloud({ ...customCategories, [kind]: defaults }, "↺ 기본 분류 목록으로 복원했습니다.");
   };
@@ -20379,7 +20168,6 @@ ${item.memo}` : `${item.title} 다녀옴!`,
       !isHouseModalOpen &&
       !isHandoverModalOpen &&
       !isHomeDdayPickerOpen &&
-      !isPrivateCalModalOpen &&
       !isPrivateCalCsvModalOpen &&
       !calDayPopupDate &&
       !isScheduleModalOpen &&
@@ -20447,7 +20235,6 @@ ${item.memo}` : `${item.title} 다녀옴!`,
         setReturnToHandoverPending(false);
         setIsHomeDdayPickerOpen(false);
         setCategoryManageKind("");
-        setIsPrivateCalModalOpen(false);
         setIsPrivateCalCsvModalOpen(false);
         setIsCondolenceFormOpen(false);
         setIsCondolenceExcelModalOpen(false);
@@ -20472,7 +20259,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
     };
     window.addEventListener("keydown", onEsc);
     return () => window.removeEventListener("keydown", onEsc);
-  }, [isMoreNavOpen, isHomeEditMode, isQuickShoppingOpen, isGrowthPctPickerOpen, isHomeRoutineFilterOpen, isRoutineRangeEditOpen, isQuickFabOpen, isRoutineModalOpen, isActivityModalOpen, isEditorUnlockModalOpen, isMealCopyModalOpen, diaryExportPreviewUrl, diaryLightboxUrl, diaryImportModal, cropModal, isWeatherModalOpen, liveActivityPopup, activityEditModal, zipImportPicker, magazineMonth, isSettingsOpen, isHeroPhotoModalOpen, isPageModalOpen, pageMenuTargetId, isPageSwitcherOpen, isPagePasteModalOpen, activeTableTaskModal, isDreamLinksModalOpen, isPatchModalOpen, isBucketModalOpen, isHouseModalOpen, isHandoverModalOpen, isHomeDdayPickerOpen, categoryManageKind, isPrivateCalModalOpen, isPrivateCalCsvModalOpen, isCondolenceFormOpen, isCondolenceExcelModalOpen, isCondolencePinModalOpen, calDayPopupDate, isScheduleModalOpen, isMealModalOpen, isFridgeModalOpen, isNoticeModalOpen, isRecipeModalOpen, isDaycareModalOpen, isReceiptModalOpen, isShoppingPhotoModalOpen, zoomedRecipePhoto, isInventoryExportOpen, stockInItem, quickLogRecipe, cookingConfirmModal, quickFridgeItem, isDiaryFormatOpen, isHouseRoomManageOpen, isNotifSettingsOpen, isPageEmojiPickerOpen, showAdminInboxModal, showRolePermModal, showSendAdminNoteModal]);
+  }, [isMoreNavOpen, isHomeEditMode, isQuickShoppingOpen, isGrowthPctPickerOpen, isHomeRoutineFilterOpen, isRoutineRangeEditOpen, isQuickFabOpen, isRoutineModalOpen, isActivityModalOpen, isEditorUnlockModalOpen, isMealCopyModalOpen, diaryExportPreviewUrl, diaryLightboxUrl, diaryImportModal, cropModal, isWeatherModalOpen, liveActivityPopup, activityEditModal, zipImportPicker, magazineMonth, isSettingsOpen, isHeroPhotoModalOpen, isPageModalOpen, pageMenuTargetId, isPageSwitcherOpen, isPagePasteModalOpen, activeTableTaskModal, isDreamLinksModalOpen, isPatchModalOpen, isBucketModalOpen, isHouseModalOpen, isHandoverModalOpen, isHomeDdayPickerOpen, categoryManageKind, isPrivateCalCsvModalOpen, isCondolenceFormOpen, isCondolenceExcelModalOpen, isCondolencePinModalOpen, calDayPopupDate, isScheduleModalOpen, isMealModalOpen, isFridgeModalOpen, isNoticeModalOpen, isRecipeModalOpen, isDaycareModalOpen, isReceiptModalOpen, isShoppingPhotoModalOpen, zoomedRecipePhoto, isInventoryExportOpen, stockInItem, quickLogRecipe, cookingConfirmModal, quickFridgeItem, isDiaryFormatOpen, isHouseRoomManageOpen, isNotifSettingsOpen, isPageEmojiPickerOpen, showAdminInboxModal, showRolePermModal, showSendAdminNoteModal]);
 
   // ==========================================
   // 모바일·브라우저 뒤로가기 이전 화면 이동 (Chrome User-Gesture History API + URL 해시)
@@ -20527,7 +20314,6 @@ ${item.memo}` : `${item.title} 다녀옴!`,
     isHomeDdayPickerOpen ||
     Boolean(categoryManageKind) ||
     Boolean(alarmSheetMode) ||
-    isPrivateCalModalOpen ||
     isPrivateCalCsvModalOpen ||
     isCondolenceFormOpen ||
     isCondolenceExcelModalOpen ||
@@ -20588,7 +20374,6 @@ ${item.memo}` : `${item.title} 다녀옴!`,
       setIsRoutineRangeEditOpen(false);
       setIsQuickFabOpen(false);
       setIsBucketModalOpen(false);
-      setIsPrivateCalModalOpen(false);
       setIsPrivateCalCsvModalOpen(false);
       setIsCondolenceFormOpen(false);
       setIsCondolenceExcelModalOpen(false);
@@ -20827,7 +20612,6 @@ ${item.memo}` : `${item.title} 다녀옴!`,
     if (typeof document === "undefined") return;
     const shouldLock = Boolean(
       isBucketModalOpen ||
-      isPrivateCalModalOpen ||
       isPrivateCalCsvModalOpen ||
       Boolean(calDayPopupDate) ||
       isPatchModalOpen ||
@@ -20850,7 +20634,6 @@ ${item.memo}` : `${item.title} 다녀옴!`,
     };
   }, [
     isBucketModalOpen,
-    isPrivateCalModalOpen,
     isPrivateCalCsvModalOpen,
     calDayPopupDate,
     isPatchModalOpen,
@@ -21185,7 +20968,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
             type="button"
             disabled={authSubmitting}
             onClick={handleGoogleLogin}
-            className="w-full h-9 px-3 rounded-xl border border-stone-200 bg-white hover:bg-stone-50 text-stone-900 text-[12px] font-extrabold flex items-center justify-center gap-2 shadow-xs disabled:opacity-50 whitespace-nowrap"
+            className="w-full h-9 px-3 rounded-xl border border-stone-200 bg-white hover:bg-stone-50 text-stone-900 text-[12px] font-extrabold flex items-center justify-center gap-2 shadow-sm disabled:opacity-50 whitespace-nowrap"
           >
             <span className="w-4 h-4 rounded-full bg-stone-100 border border-stone-200 text-[10px] font-black flex items-center justify-center">G</span>
             <span>Google 계정으로 계속하기</span>
@@ -21865,7 +21648,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
             <button
               type="button"
               onClick={() => setIsSettingsOpen(true)}
-              className="w-full px-3 py-2 rounded-xl bg-amber-50 hover:bg-amber-100 border border-amber-300 text-amber-950 text-[12px] font-black flex items-center justify-between gap-2 shadow-xs transition"
+              className="w-full px-3 py-2 rounded-xl bg-amber-50 hover:bg-amber-100 border border-amber-300 text-amber-950 text-[12px] font-black flex items-center justify-between gap-2 shadow-sm transition"
             >
               <span className="truncate">
                 ⏳ 새 회원 승인 요청 {managedUsers.filter((u) => u.role === "pending").length}건이 대기 중입니다
@@ -21892,7 +21675,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
               <button
                 type="button"
                 onClick={() => setShowAdminInboxModal(true)}
-                className="w-full px-3 py-2 rounded-xl bg-[#EEF3EE] hover:bg-[#DFE9E0] border border-[#C9D8CC] text-[#2F4A37] text-[12px] font-black flex items-center justify-between gap-2 shadow-xs transition"
+                className="w-full px-3 py-2 rounded-xl bg-[#EEF3EE] hover:bg-[#DFE9E0] border border-[#C9D8CC] text-[#2F4A37] text-[12px] font-black flex items-center justify-between gap-2 shadow-sm transition"
               >
                 <span className="truncate">
                   💌 관리자에게 도착한 새 쪽지 {unreadCnt}건이 있습니다
@@ -25087,7 +24870,7 @@ time: "", location: "",
                       onClick={() => setMonthlyMember(m.id)}
                       className={`py-1.5 px-1 rounded-xl border flex items-center justify-center gap-1 text-[12px] font-extrabold whitespace-nowrap transition ${
                         monthlyMember === m.id
-                          ? "bg-stone-900 text-white border-stone-900 shadow-xs"
+                          ? "bg-stone-900 text-white border-stone-900 shadow-sm"
                           : "bg-white text-stone-700 border-stone-200 hover:bg-stone-50"
                       }`}
                     >
@@ -25125,7 +24908,7 @@ time: "", location: "",
                         type="button"
                         onClick={() => setMonthlyCalViewMode(vm.id)}
                         className={`px-2 py-1 rounded-lg text-[11px] font-extrabold whitespace-nowrap transition ${
-                          monthlyCalViewMode === vm.id ? "bg-white text-stone-900 shadow-2xs" : "text-stone-500"
+                          monthlyCalViewMode === vm.id ? "bg-white text-stone-900 shadow-sm" : "text-stone-500"
                         }`}
                       >
                         {vm.label}
@@ -25197,7 +24980,7 @@ time: "", location: "",
                               onClick={() => setSelectedDate(dateStr)}
                               className={`p-1 rounded-xl border text-left min-h-[68px] transition flex flex-col justify-start gap-0.5 overflow-hidden ${
                                 isSel
-                                  ? "bg-stone-900 text-white border-stone-900 shadow-xs"
+                                  ? "bg-stone-900 text-white border-stone-900 shadow-sm"
                                   : isToday
                                   ? "bg-amber-50/40 text-stone-800 border-amber-300"
                                   : "bg-stone-50/70 text-stone-700 border-stone-200/80 hover:border-stone-300"
@@ -26315,7 +26098,7 @@ time: "", location: "",
                               setIsScheduleModalOpen(true);
                             }
                           }}
-                          className="px-2.5 py-1.5 rounded-xl bg-stone-900 hover:bg-stone-800 text-white text-[11.5px] font-extrabold whitespace-nowrap flex items-center gap-0.5 shadow-2xs"
+                          className="px-2.5 py-1.5 rounded-xl bg-stone-900 hover:bg-stone-800 text-white text-[11.5px] font-extrabold whitespace-nowrap flex items-center gap-0.5 shadow-sm"
                         >
                           <Plus className="w-3.5 h-3.5" />
                           <span>추가</span>
@@ -26337,7 +26120,7 @@ time: "", location: "",
                               type="button"
                               onClick={() => setScheduleCalScope(sc.id)}
                               className={`px-2.5 py-1 rounded-lg text-[11px] font-extrabold whitespace-nowrap transition ${
-                                scheduleCalScope === sc.id ? "bg-stone-900 text-white shadow-2xs" : "text-stone-500"
+                                scheduleCalScope === sc.id ? "bg-stone-900 text-white shadow-sm" : "text-stone-500"
                               }`}
                             >
                               {sc.label}
@@ -26347,7 +26130,6 @@ time: "", location: "",
                         <button
                           type="button"
                           onClick={() => {
-                            setSwitchAdminPinInput("");
                             setIsEditorUnlockModalOpen(true);
                           }}
                           className="text-[10.5px] font-extrabold text-stone-400 hover:text-stone-700 whitespace-nowrap"
@@ -28285,7 +28067,7 @@ time: "", location: "",
                       className="flex items-center gap-2 cursor-pointer flex-1 min-w-0"
                     >
                       <div
-                        className={`w-4.5 h-4.5 w-[18px] h-[18px] rounded-md border flex items-center justify-center shrink-0 transition ${
+                        className={`w-[18px] h-[18px] rounded-md border flex items-center justify-center shrink-0 transition ${
                           todo.done
                             ? "bg-[#3F624D] border-[#3F624D] text-white"
                             : "border-stone-300 bg-white hover:border-[#3F624D]"
@@ -31105,24 +30887,31 @@ time: "", location: "",
 
 
             <div>
-              <div className="text-[13.5px] font-extrabold text-stone-700 mb-1.5">
-                Step 2. 누구를 위한 식단인가요?
+              <div className="flex items-center justify-between gap-2 mb-1.5">
+                <div className="text-[13.5px] font-extrabold text-stone-700">
+                  Step 2. 누구를 위한 식단인가요?
+                </div>
+                {isEditorUnlocked && (
+                  <button
+                    type="button"
+                    onClick={() => openCategoryManager("ai_meal_targets")}
+                    className="h-6 px-2 rounded-full bg-stone-100 hover:bg-[#EEF3EE] text-stone-600 border border-stone-200 text-[11px] font-extrabold whitespace-nowrap shrink-0 transition"
+                    title="AI 식단 대상 자유편집"
+                  >
+                    ⚙️ 편집
+                  </button>
+                )}
               </div>
               <div className="grid grid-cols-2 gap-1.5">
-                {[
-                  "온가족 한끼",
-                  "부부 (수혁 & 아리나)",
-                  "시목이 유아식",
-                  "시율이 이유식/유아식"
-                ].map((tg) => (
+                {(aiMealTargets.includes(aiTargetGroup) ? aiMealTargets : [aiTargetGroup, ...aiMealTargets].filter(Boolean)).map((tg) => (
                   <button
                     type="button"
                     key={tg}
                     onClick={() => setAiTargetGroup(tg)}
-                    className={`py-2 px-3 rounded-xl text-[13.5px] font-extrabold border transition ${
+                    className={`py-2 px-2.5 rounded-xl text-[12.5px] font-extrabold border whitespace-nowrap truncate transition ${
                       aiTargetGroup === tg
-                        ? "bg-amber-500 text-white border-amber-500"
-                        : "bg-stone-50 text-stone-600 border-stone-200"
+                        ? "bg-[#3F624D] text-white border-[#3F624D] shadow-sm"
+                        : "bg-stone-50 text-stone-600 border-stone-200 hover:bg-stone-100"
                     }`}
                   >
                     {tg}
@@ -31493,7 +31282,7 @@ time: "", location: "",
                         type="button"
                         onClick={() => setBucketViewMode(vm.id)}
                         className={`px-2.5 py-1 rounded-lg text-[11.5px] font-extrabold whitespace-nowrap transition ${
-                          bucketViewMode === vm.id ? "bg-white text-stone-900 shadow-2xs" : "text-stone-500"
+                          bucketViewMode === vm.id ? "bg-white text-stone-900 shadow-sm" : "text-stone-500"
                         }`}
                       >
                         {vm.label}
@@ -31524,7 +31313,7 @@ time: "", location: "",
                 <button
                   type="button"
                   onClick={() => openBucketAddModal(null)}
-                  className="px-3 py-1.5 rounded-xl bg-stone-900 hover:bg-stone-800 text-white text-[12px] font-extrabold whitespace-nowrap shrink-0 flex items-center gap-1 shadow-xs"
+                  className="px-3 py-1.5 rounded-xl bg-stone-900 hover:bg-stone-800 text-white text-[12px] font-extrabold whitespace-nowrap shrink-0 flex items-center gap-1 shadow-sm"
                 >
                   <Plus className="w-3.5 h-3.5" />
                   <span>장소 추가</span>
@@ -32551,11 +32340,25 @@ time: "", location: "",
                                   🏥 복용기록
                                 </button>
                               )}
+                              {canEditTab("alarm") && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const medMemo = `💊 ${it.title} 복용${it.dosage ? ` (${it.dosage})` : ""}`;
+                                    setActiveTab("alarm");
+                                    openQuickAlarmModal({ presetMin: 240, memo: medMemo });
+                                    showToast(`⏰ '${it.title}' 4시간 뒤 복용 알람을 준비했습니다.`);
+                                  }}
+                                  className="px-2 py-1 rounded-lg bg-[#EEF3EE] hover:bg-[#DFE9E0] text-[#35503C] text-[11px] font-extrabold whitespace-nowrap shrink-0"
+                                >
+                                  ⏰ 복용알람
+                                </button>
+                              )}
                               {canEditTab("shopping") && (
                                 <button
                                   type="button"
                                   onClick={() => handleMedicineToShopping(it)}
-                                  className="px-2 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-900 text-[11px] font-extrabold whitespace-nowrap"
+                                  className="px-2 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-900 text-[11px] font-extrabold whitespace-nowrap shrink-0"
                                 >
                                   🛒 재구매
                                 </button>
@@ -33393,7 +33196,7 @@ time: "", location: "",
                           onClick={() => setAlarmAmPmDraft(ap)}
                           className={`px-3 py-1.5 rounded-xl text-[12.5px] font-black whitespace-nowrap transition ${
                             alarmAmPmDraft === ap
-                              ? "bg-[#3F624D] text-white shadow-xs"
+                              ? "bg-[#3F624D] text-white shadow-sm"
                               : "bg-white text-stone-500 border border-stone-200"
                           }`}
                         >
@@ -35011,21 +34814,21 @@ time: "", location: "",
                                 >
                                   <div className={`h-11 relative ${cov?.bg || "bg-stone-100/90"}`}>
                                     {pgTodoTotal > 0 ? (
-                                      <span className="absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded-full bg-white/90 text-[10px] font-extrabold text-[#3F624D] shadow-2xs whitespace-nowrap">
+                                      <span className="absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded-full bg-white/90 text-[10px] font-extrabold text-[#3F624D] shadow-sm whitespace-nowrap">
                                         {pgDone}/{pgTodoTotal}
                                       </span>
                                     ) : (Array.isArray(pg.attachments) && pg.attachments.length > 0) ? (
-                                      <span className="absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded-full bg-white/90 text-[10px] font-extrabold text-stone-600 shadow-2xs whitespace-nowrap">
+                                      <span className="absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded-full bg-white/90 text-[10px] font-extrabold text-stone-600 shadow-sm whitespace-nowrap">
                                         📎 {pg.attachments.length}
                                       </span>
                                     ) : String(pg.noteBody || "").trim() ? (
-                                      <span className="absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded-full bg-white/90 text-[10px] font-extrabold text-[#3F624D] shadow-2xs whitespace-nowrap">
+                                      <span className="absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded-full bg-white/90 text-[10px] font-extrabold text-[#3F624D] shadow-sm whitespace-nowrap">
                                         📝
                                       </span>
                                     ) : null}
                                   </div>
                                   <div className="relative z-10 px-3 pb-3 -mt-4 space-y-1.5">
-                                    <div className="w-9 h-9 rounded-xl bg-white border border-stone-200/80 shadow-xs flex items-center justify-center text-[18px] leading-none">
+                                    <div className="w-9 h-9 rounded-xl bg-white border border-stone-200/80 shadow-sm flex items-center justify-center text-[18px] leading-none">
                                       {pg.icon || "📄"}
                                     </div>
                                     <div className="text-[13px] font-extrabold text-stone-900 truncate">
@@ -35112,7 +34915,7 @@ time: "", location: "",
               const { unsectioned, sections } = groupPageBlocksIntoSections(blocks);
 
               return (
-                <div className="bg-white -mx-1 sm:mx-0 rounded-2xl border border-stone-200/90 shadow-xs overflow-hidden">
+                <div className="bg-white -mx-1 sm:mx-0 rounded-2xl border border-stone-200/90 shadow-sm overflow-hidden">
                   {/* 1. 간결한 상단 바: 뒤로가기 · 편집 가능한 제목 · 상태 · 더보기 */}
                   <div className="px-2.5 py-2 border-b border-stone-100 flex items-center justify-between gap-1.5 bg-white sticky top-0 z-20">
                     <button
@@ -35629,7 +35432,6 @@ time: "", location: "",
                                           </div>
                                         )}
                                         {sec.items.map(({ blk }) => {
-                                          if (hideCompletedPageTodos && blk.type === "todo" && blk.checked) return null;
                                           if (blk.type === "md_table" || blk.type === "table") {
                                             const isTblSel = selectedLegacyTableId === blk.id;
                                             if (blk.type === "md_table") {
@@ -37928,7 +37730,7 @@ time: "", location: "",
                                   }}
                                   className={`h-7 px-2 rounded-lg border text-[11.5px] font-bold flex items-center justify-center gap-1 whitespace-nowrap transition ${
                                     checked
-                                      ? "bg-white border-[#3F624D] shadow-xs"
+                                      ? "bg-white border-[#3F624D] shadow-sm"
                                       : "bg-stone-100/60 border-stone-200 opacity-60"
                                   } ${colorCls}`}
                                 >
@@ -40600,7 +40402,7 @@ time: "", location: "",
               {babyDreamLinks.map((dl, idx) => {
                 const isEd = editingDreamLinkId === dl.id;
                 return (
-                  <div key={dl.id} className="bg-white rounded-2xl border border-stone-200 p-3 space-y-2 shadow-2xs">
+                  <div key={dl.id} className="bg-white rounded-2xl border border-stone-200 p-3 space-y-2 shadow-sm">
                     {isEd ? (
                       <div className="space-y-2">
                         <div className="flex items-center gap-1 flex-wrap">
@@ -41087,42 +40889,6 @@ time: "", location: "",
       {/* ==========================================
           모달: 패치노트 (업데이트 히스토리 열람 및 새 기록 작성)
       ========================================== */}
-      {/* ==========================================
-          모달: 관리자 전용 개인 일정 추가·수정
-      ========================================== */}
-      {isPrivateCalModalOpen && (
-        <PrivateCalFormModal
-          initialForm={privateCalForm}
-          isEditing={Boolean(editingPrivateCalId)}
-          currentAdminOwner={currentAdminOwner}
-          onClose={() => setIsPrivateCalModalOpen(false)}
-          onSubmitForm={(draft) => handleSavePrivateSchedule(draft)}
-          onConvertToFamily={(draft) => handleConvertPrivateToFamily(draft)}
-          onSwitchToFamilyNew={(draft) => {
-            const d = draft?.date || scheduleSelectedDate || getTodayStr();
-            const t = draft?.title || "";
-            const m = draft?.memo || "";
-            setIsPrivateCalModalOpen(false);
-            setEditingSchedule(null);
-            setScheduleForm({
-              title: t,
-              date: d,
-              endDate: "",
-              time: "",
-              location: "",
-              category: scheduleCategories.includes("할일(To-Do)") ? "할일(To-Do)" : (scheduleCategories[0] || "할일(To-Do)"),
-              members: ["수혁", "아리나"],
-              isAnnual: Boolean(draft?.isAnnual),
-              showDday: false,
-              hasOriginYear: false,
-              memo: m,
-                            attachments: []
-                          });
-            setIsScheduleModalOpen(true);
-          }}
-        />
-      )}
-
       {/* ==========================================
           모달: 개인 일정 클라우드 CSV 가져오기 · 내보내기
       ========================================== */}
@@ -41958,7 +41724,7 @@ time: "", location: "",
                       type="button"
                       onClick={() => setBucketForm((p) => ({ ...p, done: opt.val }))}
                       className={`px-2 py-1 rounded-md text-[11px] font-extrabold whitespace-nowrap ${
-                        bucketForm.done === opt.val ? "bg-white text-stone-900 shadow-2xs" : "text-stone-500"
+                        bucketForm.done === opt.val ? "bg-white text-stone-900 shadow-sm" : "text-stone-500"
                       }`}
                     >
                       {opt.label}
@@ -42367,21 +42133,31 @@ time: "", location: "",
                   </span>
                 )}
               </div>
-              <div className="flex flex-wrap gap-1 mt-1.5">
-                {["07:30", "09:00", "12:00", "17:30", "20:00", "21:30"].map((preset) => (
+              <div className="flex flex-wrap items-center gap-1 mt-1.5">
+                {routineTimePresets.map((preset) => (
                   <button
                     key={preset}
                     type="button"
                     onClick={() => setNewRoutineScheduledTime(preset)}
                     className={`px-2 py-0.5 rounded-lg text-[11.5px] font-extrabold border whitespace-nowrap transition ${
                       newRoutineScheduledTime === preset
-                        ? "bg-sky-700 text-white border-sky-700"
+                        ? "bg-[#3F624D] text-white border-[#3F624D] shadow-sm"
                         : "bg-stone-50 text-stone-600 border-stone-200 hover:bg-stone-100"
                     }`}
                   >
-                    {formatRoutineTimeLabel(preset)}
+                    {formatRoutineTimeLabel(preset) || preset}
                   </button>
                 ))}
+                {isEditorUnlocked && (
+                  <button
+                    type="button"
+                    onClick={() => openCategoryManager("routine_time_presets")}
+                    className="px-2 py-0.5 rounded-lg bg-stone-100 hover:bg-[#EEF3EE] text-stone-600 border border-stone-200 text-[11px] font-extrabold whitespace-nowrap transition"
+                    title="루틴 빠른 시간 프리셋 자유편집"
+                  >
+                    ⚙️
+                  </button>
+                )}
               </div>
             </div>
 
@@ -45056,6 +44832,8 @@ time: "", location: "",
           quick_alarm_presets: { title: "⚡ 퀵알람 프리셋", placeholder: "예: 1분, 5분, 15분, 1시간" },
           baby_diary_moods: { title: "😊 육아일기 기분", placeholder: "새 기분 (예: 🌟 뿌듯함, 🎵 신남)" },
           ai_meal_styles: { title: "✨ AI 식단 스타일", placeholder: "새 식단 스타일 (예: 냉털 15분, 저염·산모식)" },
+          ai_meal_targets: { title: "🍽️ AI 식단 대상", placeholder: "새 식단 대상 (예: 손님 초대, 주말 브런치)" },
+          routine_time_presets: { title: "⏰ 루틴 시간 프리셋", placeholder: "HH:MM 형식 (예: 06:30, 14:00, 22:30)" },
           condolence_cat: { title: "💌 경조사 카테고리", placeholder: "새 경조사 분류 (예: 칠순/팔순, 집들이, 승진)" },
           condolence_group: { title: "👥 경조사 그룹", placeholder: "새 경조사 그룹 (예: 동호회, 대학동기, 거래처)" },
           condolence_pay: { title: "💳 경조사 결제수단", placeholder: "새 결제수단 (예: 카카오페이, 토스, 상품권, 화환)" }
@@ -45112,6 +44890,8 @@ time: "", location: "",
                   { id: "quick_alarm_presets", label: "⚡ 퀵알람", cnt: quickAlarmPresets.length },
                   { id: "baby_diary_moods", label: "😊 일기기분", cnt: babyDiaryMoods.length },
                   { id: "ai_meal_styles", label: "✨ AI스타일", cnt: aiMealStyles.length },
+                  { id: "ai_meal_targets", label: "🍽️ AI대상", cnt: aiMealTargets.length },
+                  { id: "routine_time_presets", label: "⏰ 루틴시간", cnt: routineTimePresets.length },
                   ...(isSuhyeokAdmin && isCondolenceUnlocked ? [
                     { id: "condolence_cat", label: "💌 경조분류", cnt: condolenceCategories.length },
                     { id: "condolence_group", label: "👥 경조그룹", cnt: condolenceGroups.length },
@@ -45124,7 +44904,7 @@ time: "", location: "",
                     onClick={() => openCategoryManager(t.id)}
                     className={`py-0.5 px-1.5 rounded-md text-[10px] font-extrabold whitespace-nowrap transition ${
                       categoryManageKind === t.id
-                        ? "bg-white text-stone-900 shadow-xs"
+                        ? "bg-white text-stone-900 shadow-sm"
                         : "text-stone-500 hover:text-stone-800"
                     }`}
                   >
@@ -46585,7 +46365,7 @@ time: "", location: "",
                         }}
                         className={`px-2.5 py-1 rounded-full text-[11px] font-extrabold border transition whitespace-nowrap ${
                           active
-                            ? "bg-[#3F624D] text-white border-[#3F624D] shadow-xs"
+                            ? "bg-[#3F624D] text-white border-[#3F624D] shadow-sm"
                             : "bg-stone-50 text-stone-700 border-stone-200 hover:bg-stone-100"
                         }`}
                       >
@@ -48823,7 +48603,7 @@ time: "", location: "",
                 };
                 return (
                   <div className="mt-1.5 pt-1.5 border-t border-stone-200/80 space-y-1.5">
-                    <div className="rounded-lg bg-stone-900 text-white px-2.5 py-2 space-y-0.5 shadow-xs">
+                    <div className="rounded-lg bg-stone-900 text-white px-2.5 py-2 space-y-0.5 shadow-sm">
                       <div className="flex items-center justify-between gap-1 text-[10px] text-stone-400">
                         <span>📲 상태바 미리보기 ({sample.real ? "실제 데이터" : "예시 데이터"})</span>
                         <button

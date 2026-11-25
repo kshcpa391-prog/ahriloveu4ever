@@ -1182,7 +1182,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v14.33";
+export const APP_CODE_VERSION = "v14.34";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1200,7 +1200,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-25 20:40";
+export const APP_BUILD_DATE = "2026-11-25 22:50";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1270,6 +1270,18 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v14.34",
+    version: "v14.34",
+    date: "2026-11-25",
+    title: "이미지 Blob 누수·데드모달·미사용상태 10종 정리 · AI 식단대상/루틴시간 자유편집 승격 · 상비약→복용알람 연계 · 백업해시 Firebase 동기화",
+    changes: [
+      "🐛 버그 수정 및 코드 경량화: ① 육아일기 사진 콜라주/내보내기(loadImg)의 URL.createObjectURL 미해제 메모리 누수 수정 ② v13.60 통합 이후 미도달 데드 모달(PrivateCalFormModal 약 220줄) 및 미사용 상태 10쌍(isPrivateCalModalOpen·privateCalForm·suhyeokCodeDraft·arinaCodeDraft·switchAdminPinInput·helperCodeDraft·pageNoteDraft·hideCompletedPageTodos·addingColBlockId·alarmTimeDraft) 완전 제거 ③ Tailwind v3 무효 클래스(w-4.5/h-4.5, shadow-2xs 9곳, shadow-xs 14곳)를 표준 유틸리티(shadow-sm)로 일괄 교정",
+      "🎛️ 시스템 자유도 확장: 하드코딩되어 있던 AI 식단 대상(4종)과 루틴 빠른 시간 프리셋(6종)을 통합 세부 카테고리 자유 관리(🍽️ AI대상 · ⏰ 루틴시간)로 승격해 추가·수정·삭제·순서변경·기본복원 및 각 선택영역 옆 ⚙️ 원탭 편집 지원",
+      "🔗 메뉴간 연계·Firebase 이관 보완: 살림수첩 [상비약] 카드에 [⏰ 복용알람] 1탭 연계 버튼 추가(모닝콜 4시간 퀵알람 자동 세팅), 자동백업 중복방지 해시(kim_last_backup_sig_v1)의 family_meta_v4/backup_status 실시간 Firebase 수신 동기화 누락 보완 및 신규 카테고리 2종 클라우드/JSON 백업 통합",
+      "🎨 디자인·색상·줄바꿈 통일: AI 식단 대상 버튼(whitespace-nowrap·truncate) 줄바꿈 높이 팽창 방지 및 선택 강조색을 앱 메인 세이지그린(#3F624D) 톤으로 통일(루틴 시간 프리셋 포함), 과거 패치노트 471건 100% 보존"
+    ]
+  },
   {
     id: "patch-v14.33",
     version: "v14.33",
@@ -7229,3 +7241,5 @@ export const DEFAULT_TIMER_PRESETS = ["30초", "1분", "3분", "5분", "10분"];
 export const DEFAULT_QUICK_ALARM_PRESETS = ["1분", "5분", "10분", "15분", "30분", "1시간"];
 export const DEFAULT_BABY_DIARY_MOODS = ["😊 행복", "🥰 감동", "😴 잘잠", "🍼 잘먹음", "🤒 컨디션관리", "🎉 첫성공"];
 export const DEFAULT_AI_MEAL_STYLES = ["일반 집밥", "다이어트·저탄수", "고단백·체력보충", "간편 원플레이트"];
+export const DEFAULT_AI_MEAL_TARGETS = ["온가족 한끼", "부부 (수혁 & 아리나)", "시목이 유아식", "시율이 이유식/유아식"];
+export const DEFAULT_ROUTINE_TIME_PRESETS = ["07:30", "09:00", "12:00", "17:30", "20:00", "21:30"];
