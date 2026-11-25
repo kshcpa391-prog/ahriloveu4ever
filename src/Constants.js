@@ -1181,7 +1181,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v14.22";
+export const APP_CODE_VERSION = "v14.28";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1199,7 +1199,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-25 14:25";
+export const APP_BUILD_DATE = "2026-11-25 16:00";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1268,6 +1268,80 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    version: "v14.28",
+    date: "2026-11-25",
+    title: "주방 타이머 실시간 클라우드 동기화 · 보증 브랜드 자유편집 · 메뉴 연계 및 디자인/폰트 일괄 정돈",
+    items: [
+      "☁️ 주방 타이머 실시간 상태(카운트다운·스톱워치 실행/일시정지·라벨)를 Firebase에 실시간 동기화해 주방 태블릿과 휴대폰 간 타이머 공유 지원",
+      "⚙️ 보증·A/S 브랜드(LG, 삼성, 다이슨, 부가부 등)를 통합 카테고리 관리에서 자유롭게 추가·수정·삭제·순서변경 가능하도록 확장",
+      "🔗 버킷리스트 '갈 곳' 카드에 🗓️ 일정 등록 원클릭 연계 버튼 추가 및 집안 수납 물품 카드에 🛒 장보기 원클릭 담기 연계 추가",
+      "🐛 사진 크롭 드래그 리스너 언마운트 누수 방어 및 flex-1 truncate 영역 min-w-0 보강으로 모바일 텍스트 잘림·겹침 해소",
+      "🎨 이질적인 강조 색상(indigo/teal/purple/pink)을 세이지·스톤 메인 팔레트로 통일하고, 비규격 소수점 폰트 크기와 버튼·표 헤더 줄바꿈(whitespace-nowrap) 일괄 정돈"
+    ]
+  },
+  {
+    id: "patch-v14.27",
+    version: "v14.27",
+    date: "2026-11-25",
+    title: "레시피 타이머 초단위 파싱·스톱워치 기록 보존 · 스톱워치/알람 클라우드·백업 통합 · 육아→수유알람 연계",
+    changes: [
+      "버그 수정: 레시피북에서 타이머 시작 시 기존 스톱워치 기록(records)이 초기화되던 현상을 수정하고 '3분 30초' 같은 초단위 조리시간도 정확히 초단위로 파싱해 시작하도록 개선",
+      "Firebase 이관 및 백업 완성: 스톱워치 최근 기록(stopwatchRecords)을 family_meta_v4/timer_alarms_v1에 실시간 동기화하고, 전체 JSON 백업·복원에 스마트 알림 설정(smartNotifPrefs)·무음모드·모닝콜 알람·클라우드 음원 목록을 완전 포함",
+      "메뉴 간 연계: 육아수첩 [🍼 수유·생활] 오늘 요약 바에 [⏰ 수유알람] 1탭 버튼을 추가해 다음 수유 알림(기본 180분·아이 이름)을 바로 예약할 수 있도록 연결",
+      "폰트 규격 통일: 육아 활동 모달 저장 버튼 및 라벨의 불규칙한 15.5px 폰트를 표준 13.5px로 통일 및 최종 배포 검증 완료"
+    ]
+  },
+  {
+    id: "patch-v14.26",
+    version: "v14.26",
+    date: "2026-11-25",
+    title: "식단 상단 가족 필터 1줄(5열 균등) 정렬 + 스톱워치/알람 오디오 정리 보완",
+    changes: [
+      "식단 메뉴 상단 고정 가족 필터 바(전체·수혁·아리·시목·시율)를 5열 균등 그리드(grid-cols-5)로 개선해 '시율'이 2번째 줄로 떨어지지 않고 항상 1줄에 깔끔하게 표시되도록 수정",
+      "스톱워치 종료·리셋 시 상태표시줄의 실행 중 알림(app-stopwatch-running) 자동 정리 및 언마운트 시 오디오 리소스 정리 추가",
+      "전체 코드 구문·임포트·중복 상태·배포 무결성 최종 점검 완료"
+    ]
+  },
+  {
+    id: "patch-v14.25",
+    version: "v14.25",
+    date: "2026-11-25",
+    title: "클라우드 기반 모닝콜 음악 선택·음원 업로드·아기꿈나라 연동 + 전체 디자인/동기화 점검",
+    changes: [
+      "클라우드 기반 모닝콜 음악 선택: 내장 멜로디 5종(모닝 멜로디·차임벨·오르골·세이지 벨·전자 알람), 클라우드(family_meta_v4/timer_alarms_v1)에 직접 업로드한 오디오/URL 음악, 클라우드 아기꿈나라 음원 링크를 알람별로 자유롭게 선택·미리듣기 지원",
+      "모닝콜 알람 완료 시 선택한 음악 자동 재생 및 완료 배너 [확인] 클릭 시 즉시 정지·외부 링크 바로 열기 지원",
+      "타이머 소리·진동 설정 및 선택 음원 Firebase 실시간 동기화 이관",
+      "달력 일자 팝업·루틴 추가·공유노트 공지공유 버튼의 잔여 indigo 색상을 세이지 그린(#3F624D/#EEF3EE)으로 통일 및 구문·배포 무결성 검증 완료"
+    ]
+  },
+  {
+    id: "patch-v14.24",
+    version: "v14.24",
+    date: "2026-11-25",
+    title: "스톱워치 초단위 저장 · 전자레인지식 원형 다이얼 타이머 · 완료 소리/진동 · 모닝콜/N분후 알람 추가",
+    changes: [
+      "스톱워치 소요시간 초단위 저장: 시작·완료 시각(HH:MM:SS) 및 경과시간(분·초)을 초단위까지 기록·복사·레시피 반영하며, 최근 스톱워치 기록(최대 10건) 저장 지원",
+      "직관적 초단위 타이머 UI: 전자레인지 다이얼처럼 손가락/마우스로 돌려서 초단위(1초·10초·1분 단위 선택)로 조절하는 원형 조그 다이얼과 분/초 스테퍼·직접입력 추가",
+      "타이머 완료 소리·진동 알림: Web Audio 다중 차임벨 알람음과 진동 패턴, 소리/진동 개별 ON/OFF 및 완료 확인 배너 추가",
+      "모닝콜 · N분 후 알람 신설: [⏰ 알람·모닝콜] 탭 및 빠른실행(+)에서 기상 모닝콜(매일·평일·주말)과 원탭 N분 후 리마인더(5·10·15·30·60분·직접입력)를 등록하고 Firebase 실시간 동기화 지원",
+      "전체 코드 디자인/색상(indigo→세이지그린) 통일 및 구문·임포트·배포 오류 최종 검증 완료"
+    ]
+  },
+  {
+    id: "patch-v14.23",
+    version: "v14.23",
+    date: "2026-11-25",
+    title: "스마트 알림 다중 반복·미리보기·문구편집·디데이·일정별 ON/OFF + 스톱워치 상태바·빠른실행 인수인계 추가",
+    changes: [
+      "스마트 알림 전면 고도화: 같은 항목 여러 번 반복 울림(1~5회 · 5분~2시간 간격), 시간 일정 다중 사전 알림(1시간·30분·15분·10분·5분·정시 복수 선택), 실제 데이터 기반 상태바 미리보기 및 치환 변수(+제목·목록·시간 등) 문구 편집, 1시간 쉼(스누즈), 원탭 프리셋, 오늘 이력 리셋 지원",
+      "디데이(D-Day) 일정 스마트 알림 항목 추가 및 일정·할일별 개별 알림 수신 여부(🔔 알림 받기 / 🔕 끔) 토글 추가",
+      "루틴 시간대 알림이 slot.startTime 대신 존재하지 않는 slot.time을 참조해 울리지 않던 버그 수정 및 요일·기한 정합성 보완",
+      "빠른실행도구(+)에 [🤝 인수인계] 바로가기 추가",
+      "스톱워치 명칭 범용화('요리 스톱워치'→'스톱워치') 및 실행 중 홈 화면 이동 시 상단 상태바·OS 상태표시줄에 스톱워치 실시간 표시",
+      "공유노트 접힌 섹션(collapsedSectionIds) Firebase 수신 누락 수정 및 아기꿈나라 모달·성장매거진 등 디자인·폰트·CSS 오타 통일"
+    ]
+  },
   {
     id: "patch-v14.22",
     version: "v14.22",
@@ -7032,6 +7106,14 @@ export const PAGE_TEXT_BG_COLORS = [
   { id: "rose", label: "분홍", cls: "bg-rose-100/85 px-1.5 py-0.5 rounded-md", dot: "bg-rose-200" }
 ];
 
+export const ALARM_MELODY_PRESETS = [
+  { id: "morning", label: "☀️ 상쾌한 모닝 멜로디" },
+  { id: "chime", label: "🔔 맑은 차임벨" },
+  { id: "lullaby", label: "🎵 포근한 오르골" },
+  { id: "gentle", label: "🌿 세이지 벨" },
+  { id: "digital", label: "⏰ 또렷한 전자 알람" }
+];
+
 export const INITIAL_BABY_DREAM_LINKS = [
   { id: "dream-1", label: "아소리", icon: "🗣️", url: "https://youtu.be/hdT6CodrB8w?si=T81I1wKCV8L7_iOV" },
   { id: "dream-2", label: "종이소리", icon: "📄", url: "https://youtu.be/itxHiMlWeBU?si=FWrEhrz74zYNGypW" },
@@ -7078,3 +7160,4 @@ export const DEFAULT_SHOPPING_PRESETS = [
 export const DEFAULT_BABY_HEALTH_TAGS = ["미열", "고열", "콧물", "기침", "소아과", "해열제"];
 
 export const DEFAULT_SCHEDULE_PLACES = ["이진소아과", "신당동어린이집", "친정", "시댁", "마트"];
+export const DEFAULT_HOUSE_WARRANTY_BRANDS = ["LG", "삼성", "다이슨", "부가부", "스토케", "필립스", "애플", "기타"];

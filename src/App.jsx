@@ -167,6 +167,7 @@ import {
   PAGE_TEXT_BG_COLORS,
   parseNotionMarkdownToBlocks,
   blocksToNotionMarkdown,
+  ALARM_MELODY_PRESETS,
   INITIAL_BABY_DREAM_LINKS,
   BABY_DREAM_ICON_PRESETS,
   HOUSE_STORAGE_ROOMS,
@@ -178,7 +179,8 @@ import {
   DEFAULT_BABY_MEMO_TAGS,
   DEFAULT_SHOPPING_PRESETS,
   DEFAULT_BABY_HEALTH_TAGS,
-  DEFAULT_SCHEDULE_PLACES
+  DEFAULT_SCHEDULE_PLACES,
+  DEFAULT_HOUSE_WARRANTY_BRANDS
 } from "./Constants";
 
 
@@ -315,8 +317,8 @@ const escSnHtml = (s) =>
 const inlineMarkdownToNoteHtml = (rawText) => {
   const escaped = escSnHtml(rawText);
   return escaped
-    .replace(/\*\*([^*]+?)\*\*/g, "<strong>$1</strong>")
-    .replace(/\*([^*]+?)\*/g, "<em>$1</em>");
+    .replace(/\*\*([^*]+?)\*\*/g, "&lt;strong&gt;$1&lt;/strong&gt;")
+    .replace(/\*([^*]+?)\*/g, "&lt;em&gt;$1&lt;/em&gt;");
 };
 
 const sanitizeSharedNoteHtml = (rawHtml) => {
@@ -422,7 +424,7 @@ const plainOrMarkdownToNoteHtml = (rawText) => {
       const leadingSpaces = (expanded.match(/^ */)?.[0] || "").length;
       const indent = Math.min(3, leadingSpaces >= 4 ? Math.floor(leadingSpaces / 4) : 0);
       const trimmed = expanded.trim();
-      if (!trimmed) return "<div><br></div>";
+      if (!trimmed) return "&lt;div&gt;<br>&lt;/div&gt;";
       const hMatch = trimmed.match(/^#{1,6}\s+(.+)$/);
       if (hMatch) {
         return `<div data-sn-heading="1" data-color="amber">${inlineMarkdownToNoteHtml(hMatch[1].trim())}</div>`;
@@ -1599,8 +1601,8 @@ const SharedNoteRichEditor = React.memo(({
   const activeBgHex = SN_BG_HEX[activeFmt.bgColor] || "transparent";
 
   return (
-    <div className="space-y-1.5">
-      <style>{SHARED_NOTE_EDITOR_CSS}</style>
+    &lt;div className=&quot;space-y-1.5&quot;&gt;
+      &lt;style&gt;{SHARED_NOTE_EDITOR_CSS}&lt;/style&gt;
       {/* 군더더기 없는 넓은 본문 작성 영역 */}
       <div
         ref={editorRef}
@@ -2141,7 +2143,7 @@ const parseCoordsFromMapUrl = (rawUrl) => {
   if (m1) return { lat: Number(m1[1]), lng: Number(m1[2]) };
   const m2 = s.match(/!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)/);
   if (m2) return { lat: Number(m2[1]), lng: Number(m2[2]) };
-  const m3 = s.match(/[?&](?:q|query|ll)=(-?\d+\.\d+),(-?\d+\.\d+)/);
+  const m3 = s.match(/[?\&](https://www.google.com/search?q=%3F:q%7Cquery%7Cll)=(-?\d+\.\d+),(-?\d+\.\d+)/);
   if (m3) return { lat: Number(m3[1]), lng: Number(m3[2]) };
   return null;
 };
@@ -2287,27 +2289,27 @@ const PrivateCalFormModal = React.memo(({
   };
 
   return (
-    <div
-      className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+    &lt;div
+      className=&quot;fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4&quot;
       onClick={onClose}
-    >
+    &gt;
       <div
         className="bg-white rounded-3xl max-w-sm w-full p-5 space-y-3.5 max-h-[88vh] overflow-y-auto shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between">
-          <h3 className="text-[13.5px] font-black text-stone-900">
+        &lt;div className=&quot;flex items-center justify-between&quot;&gt;
+          &lt;h3 className=&quot;text-[13.5px] font-black text-stone-900&quot;&gt;
             {isEditing ? "✏️ 개인 일정 수정" : "🔒 개인 일정 추가"}
-          </h3>
-          <button
-            type="button"
+          &lt;/h3&gt;
+          &lt;button
+            type=&quot;button&quot;
             onClick={onClose}
-            className="p-1 text-stone-400 hover:text-stone-700"
-            aria-label="닫기"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
+            className=&quot;p-1 text-stone-400 hover:text-stone-700&quot;
+            aria-label=&quot;닫기&quot;
+          &gt;
+            &lt;X className=&quot;w-5 h-5&quot; /&gt;
+          &lt;/button&gt;
+        &lt;/div&gt;
 
         <form onSubmit={handleSubmit} className="space-y-3">
           <div className="flex items-center justify-between gap-2 px-3 py-2 rounded-xl bg-stone-100 text-[12px] font-extrabold text-stone-700">
@@ -2324,7 +2326,7 @@ const PrivateCalFormModal = React.memo(({
               <button
                 type="button"
                 onClick={() => onSwitchToFamilyNew(draft)}
-                className="px-2 py-0.5 rounded-lg bg-white border border-stone-200 text-indigo-700 text-[10.5px] font-black whitespace-nowrap shrink-0"
+                className="px-2 py-0.5 rounded-lg bg-[#EEF3EE] border border-[#C9D8CC] text-[#35503C] text-[10.5px] font-black whitespace-nowrap shrink-0"
               >
                 🏠 가족 일정으로
               </button>
@@ -2482,24 +2484,24 @@ const ScheduleFormModal = React.memo(({
   const isPrivateMode = isAdminUnlocked && draft.scheduleScope === "private";
 
   return (
-    <div
-      className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+    &lt;div
+      className=&quot;fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4&quot;
       onClick={onClose}
-    >
+    &gt;
       <div
         className="bg-white rounded-3xl max-w-sm w-full p-5 space-y-3.5 max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between gap-2">
-          <h3 className="text-[13.5px] font-black truncate min-w-0">
+        &lt;div className=&quot;flex items-center justify-between gap-2&quot;&gt;
+          &lt;h3 className=&quot;text-[13.5px] font-black truncate min-w-0&quot;&gt;
             {isPrivateMode
               ? (isEditing ? "🔒 내 개인일정 수정" : "🔒 새 개인일정 추가")
               : (isEditing ? "🏠 가족 일정 수정" : "🏠 새 가족 일정 추가")}
-          </h3>
-          <button type="button" onClick={onClose} aria-label="닫기" className="shrink-0">
-            <X className="w-5 h-5 text-stone-400" />
-          </button>
-        </div>
+          &lt;/h3&gt;
+          &lt;button type=&quot;button&quot; onClick={onClose} aria-label=&quot;닫기&quot; className=&quot;shrink-0&quot;&gt;
+            &lt;X className=&quot;w-5 h-5 text-stone-400&quot; /&gt;
+          &lt;/button&gt;
+        &lt;/div&gt;
 
         {isAdminUnlocked && (
           <div className="flex items-center gap-1.5 bg-stone-100 p-1 rounded-xl">
@@ -2837,6 +2839,17 @@ const ScheduleFormModal = React.memo(({
             >
               📅 D+경과일
             </button>
+            <button
+              type="button"
+              onClick={() => setDraft((p) => ({ ...p, notifEnabled: p.notifEnabled === false ? true : false }))}
+              className={`px-2 py-1 rounded-lg text-[11px] font-extrabold border whitespace-nowrap transition ${
+                draft.notifEnabled !== false
+                  ? "bg-[#3F624D] text-white border-[#3F624D]"
+                  : "bg-stone-100 text-stone-500 border-stone-200"
+              }`}
+            >
+              {draft.notifEnabled !== false ? "🔔 알림 받기" : "🔕 알림 끔"}
+            </button>
           </div>
         </div>
           </>
@@ -2862,6 +2875,17 @@ const ScheduleFormModal = React.memo(({
                   }`}
                 >
                   🔄 매년반복
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDraft((p) => ({ ...p, notifEnabled: p.notifEnabled === false ? true : false }))}
+                  className={`px-2 py-0.5 rounded-lg text-[11px] font-extrabold border whitespace-nowrap transition ${
+                    draft.notifEnabled !== false
+                      ? "bg-[#3F624D] text-white border-[#3F624D]"
+                      : "bg-stone-100 text-stone-500 border-stone-200"
+                  }`}
+                >
+                  {draft.notifEnabled !== false ? "🔔 알림" : "🔕 끔"}
                 </button>
               </div>
             </div>
@@ -3039,22 +3063,22 @@ const NoticeFormModal = React.memo(({
   }, [initialForm]);
 
   return (
-    <div
-      className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+    &lt;div
+      className=&quot;fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4&quot;
       onClick={onClose}
-    >
+    &gt;
       <div
         className="bg-white rounded-3xl max-w-sm w-full p-5 space-y-3 shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between">
-          <h3 className="text-[13.5px] font-black">
+        &lt;div className=&quot;flex items-center justify-between&quot;&gt;
+          &lt;h3 className=&quot;text-[13.5px] font-black&quot;&gt;
             {isEditing ? "가족 공지 수정" : "새 가족 공지사항 작성"}
-          </h3>
-          <button type="button" onClick={onClose} aria-label="닫기">
-            <X className="w-5 h-5 text-stone-400" />
-          </button>
-        </div>
+          &lt;/h3&gt;
+          &lt;button type=&quot;button&quot; onClick={onClose} aria-label=&quot;닫기&quot;&gt;
+            &lt;X className=&quot;w-5 h-5 text-stone-400&quot; /&gt;
+          &lt;/button&gt;
+        &lt;/div&gt;
 
         <input
           type="text"
@@ -3141,11 +3165,11 @@ const RoutineTitleField = React.memo(({ initialValue, onSyncValue, onSubmitEnter
     .filter(Boolean);
 
   return (
-    <div>
-      <label className="text-[11.5px] font-extrabold text-stone-500 block mb-1">
+    &lt;div&gt;
+      &lt;label className=&quot;text-[11.5px] font-extrabold text-stone-500 block mb-1&quot;&gt;
         루틴 내용 (쉼표 , 로 여러 단계 구분 가능)
-      </label>
-      <div className="relative">
+      &lt;/label&gt;
+      &lt;div className=&quot;relative&quot;&gt;
         <input
           type="text"
           autoFocus
@@ -3176,26 +3200,26 @@ const RoutineTitleField = React.memo(({ initialValue, onSyncValue, onSubmitEnter
             className="absolute right-2.5 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-700"
             aria-label="입력 지우기"
           >
-            <X className="w-4 h-4" />
-          </button>
+            &lt;X className=&quot;w-4 h-4&quot; /&gt;
+          &lt;/button&gt;
         )}
-      </div>
+      &lt;/div&gt;
       {steps.length >= 2 && (
-        <div className="mt-1.5 flex flex-col gap-1 bg-stone-50 border border-stone-200 rounded-xl p-2">
+        &lt;div className=&quot;mt-1.5 flex flex-col gap-1 bg-stone-50 border border-stone-200 rounded-xl p-2&quot;&gt;
           {steps.map((st, idx) => (
-            <div
+            &lt;div
               key={idx}
-              className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-white border border-stone-200 text-[11.5px] font-extrabold text-stone-800"
-            >
-              <span className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full border border-stone-400 text-[8px] font-black shrink-0">
+              className=&quot;flex items-center gap-1.5 px-2 py-1 rounded-lg bg-white border border-stone-200 text-[11.5px] font-extrabold text-stone-800&quot;
+            &gt;
+              &lt;span className=&quot;inline-flex items-center justify-center w-3.5 h-3.5 rounded-full border border-stone-400 text-[9px] font-black shrink-0&quot;&gt;
                 {idx + 1}
-              </span>
-              <span className="min-w-0 flex-1 break-keep">{st}</span>
-            </div>
+              &lt;/span&gt;
+              &lt;span className=&quot;min-w-0 flex-1 break-keep&quot;&gt;{st}&lt;/span&gt;
+            &lt;/div&gt;
           ))}
-        </div>
+        &lt;/div&gt;
       )}
-    </div>
+    &lt;/div&gt;
   );
 });
 
@@ -3210,7 +3234,7 @@ const QuickCalDayInput = React.memo(({ placeholder, onQuickAdd }) => {
     onQuickAdd(trimmed);
   };
   return (
-    <div className="px-2.5 py-2 border-t border-stone-200 bg-stone-50 flex items-center gap-1.5 shrink-0">
+    &lt;div className=&quot;px-2.5 py-2 border-t border-stone-200 bg-stone-50 flex items-center gap-1.5 shrink-0&quot;&gt;
       <input
         type="text"
         enterKeyHint="done"
@@ -3225,14 +3249,14 @@ const QuickCalDayInput = React.memo(({ placeholder, onQuickAdd }) => {
         placeholder={placeholder}
         className="flex-1 min-w-0 px-2.5 py-1.5 rounded-lg border border-stone-300 bg-white text-[12.5px] font-bold text-stone-800 focus:outline-none focus:ring-2 focus:ring-stone-400"
       />
-      <button
-        type="button"
+      &lt;button
+        type=&quot;button&quot;
         onClick={submit}
-        className="px-2.5 py-1.5 rounded-lg bg-stone-800 hover:bg-stone-900 text-white text-[11.5px] font-extrabold whitespace-nowrap shrink-0"
-      >
+        className=&quot;px-2.5 py-1.5 rounded-lg bg-stone-800 hover:bg-stone-900 text-white text-[11.5px] font-extrabold whitespace-nowrap shrink-0&quot;
+      &gt;
         등록
-      </button>
-    </div>
+      &lt;/button&gt;
+    &lt;/div&gt;
   );
 });
 
@@ -3346,23 +3370,23 @@ const BucketMapView = ({ items, selectedId, onSelectItem, onPickCoords }) => {
 
   if (mapErr) {
     return (
-      <div className="h-[280px] rounded-2xl border border-stone-200 bg-stone-50 flex items-center justify-center text-[12.5px] font-bold text-stone-500 p-4 text-center">
+      &lt;div className=&quot;h-[280px] rounded-2xl border border-stone-200 bg-stone-50 flex items-center justify-center text-[12.5px] font-bold text-stone-500 p-4 text-center&quot;&gt;
         {mapErr}
-      </div>
+      &lt;/div&gt;
     );
   }
   return (
-    <div className="relative rounded-2xl overflow-hidden border border-stone-200 shadow-sm bg-stone-100">
-      <div ref={mapElRef} className="w-full h-[310px] z-0" />
+    &lt;div className=&quot;relative rounded-2xl overflow-hidden border border-stone-200 shadow-sm bg-stone-100&quot;&gt;
+      &lt;div ref={mapElRef} className=&quot;w-full h-[310px] z-0&quot; /&gt;
       {mapReady && (
-        <div className="absolute top-2.5 right-2.5 z-[400] flex items-center gap-1">
+        &lt;div className=&quot;absolute top-2.5 right-2.5 z-[400] flex items-center gap-1&quot;&gt;
           <button
             type="button"
             onClick={() => setMapTileMode((m) => (m === "osm" ? "satellite" : "osm"))}
             className="px-2 py-1 rounded-lg bg-white/95 hover:bg-white border border-stone-300 shadow-sm text-[11px] font-extrabold text-stone-800 whitespace-nowrap"
           >
             {mapTileMode === "osm" ? "🛰️ 위성" : "🗺️ 기본"}
-          </button>
+          &lt;/button&gt;
           <button
             type="button"
             onClick={() => {
@@ -3378,15 +3402,15 @@ const BucketMapView = ({ items, selectedId, onSelectItem, onPickCoords }) => {
             title="내 현재 위치로 이동"
           >
             📍 내 위치
-          </button>
-        </div>
+          &lt;/button&gt;
+        &lt;/div&gt;
       )}
       {!mapReady && (
-        <div className="absolute inset-0 bg-stone-50/90 flex items-center justify-center text-[12.5px] font-bold text-stone-500">
+        &lt;div className=&quot;absolute inset-0 bg-stone-50/90 flex items-center justify-center text-[12.5px] font-bold text-stone-500&quot;&gt;
           🗺️ 가족 지도 불러오는 중...
-        </div>
+        &lt;/div&gt;
       )}
-    </div>
+    &lt;/div&gt;
   );
 };
 
@@ -3464,17 +3488,17 @@ const BucketLocationPreviewMap = ({ lat, lng, label, onPickCoords }) => {
   }, [ready, lat, lng, label]);
 
   return (
-    <div className="relative rounded-2xl overflow-hidden border border-stone-200 bg-stone-100">
-      <div ref={mapElRef} className="w-full h-[190px] z-0" />
-      <div className="absolute bottom-2 left-2 z-[400] px-2 py-0.5 rounded-lg bg-white/90 text-[10.5px] font-bold text-stone-600 shadow-xs pointer-events-none">
+    &lt;div className=&quot;relative rounded-2xl overflow-hidden border border-stone-200 bg-stone-100&quot;&gt;
+      &lt;div ref={mapElRef} className=&quot;w-full h-[190px] z-0&quot; /&gt;
+      &lt;div className=&quot;absolute bottom-2 left-2 z-[400] px-2 py-0.5 rounded-lg bg-white/90 text-[10.5px] font-bold text-stone-600 shadow-xs pointer-events-none&quot;&gt;
         지도를 눌러 핀 위치를 직접 미세조정할 수 있어요
-      </div>
+      &lt;/div&gt;
       {!ready && (
-        <div className="absolute inset-0 bg-stone-50/90 flex items-center justify-center text-[12px] font-bold text-stone-500">
+        &lt;div className=&quot;absolute inset-0 bg-stone-50/90 flex items-center justify-center text-[12px] font-bold text-stone-500&quot;&gt;
           🗺️ 미리보기 지도 로딩 중...
-        </div>
+        &lt;/div&gt;
       )}
-    </div>
+    &lt;/div&gt;
   );
 };
 
@@ -3497,7 +3521,7 @@ const MemberAvatar = ({ member, id, size = "sm", className = "" }) => {
       />
     );
   }
-  return <span className={className}>{resolved?.emoji || "👤"}</span>;
+  return &lt;span className={className}&gt;{resolved?.emoji || "👤"}&lt;/span&gt;;
 };
 
 
@@ -3515,20 +3539,20 @@ class ErrorBoundary extends React.Component {
   render() {
     if (this.state.hasError) {
       return (
-        <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-stone-50 text-center">
-          <div className="bg-white p-6 rounded-3xl shadow-lg border border-red-200 max-w-sm w-full space-y-3">
-            <div className="text-2xl">⚠️</div>
-            <h2 className="text-[15.5px] font-black text-stone-900">화면 자동 복구</h2>
-            <p className="text-[13.5px] text-stone-600 break-all">{this.state.errorMsg}</p>
+        &lt;div className=&quot;min-h-screen flex flex-col items-center justify-center p-6 bg-stone-50 text-center&quot;&gt;
+          &lt;div className=&quot;bg-white p-6 rounded-3xl shadow-lg border border-red-200 max-w-sm w-full space-y-3&quot;&gt;
+            &lt;div className=&quot;text-2xl&quot;&gt;⚠️&lt;/div&gt;
+            &lt;h2 className=&quot;text-[15px] font-black text-stone-900&quot;&gt;화면 자동 복구&lt;/h2&gt;
+            &lt;p className=&quot;text-[13.5px] text-stone-600 break-all&quot;&gt;{this.state.errorMsg}&lt;/p&gt;
             <button
               type="button"
               onClick={async () => { try { if ("caches" in window) { const ks = await caches.keys(); await Promise.all(ks.map((k) => caches.delete(k))); } } catch (e) {} window.location.reload(); }}
               className="w-full py-2.5 rounded-xl bg-stone-900 text-white text-[13.5px] font-extrabold"
             >
               새로고침
-            </button>
-          </div>
-        </div>
+            &lt;/button&gt;
+          &lt;/div&gt;
+        &lt;/div&gt;
       );
     }
     return this.props.children;
@@ -4463,20 +4487,39 @@ function MainApp() {
     enabled: true,
     scheduleTimed: true,
     scheduleLeadMinutes: 30,
+    scheduleLeadList: [30],
     scheduleDaily: true,
     scheduleDailyTime: "08:00",
+    scheduleDailyRepeatCount: 1,
+    scheduleDailyRepeatInterval: 60,
+    ddayAlert: true,
+    ddayAlertDays: 3,
+    ddayAlertTime: "08:30",
+    ddayRepeatCount: 1,
+    ddayRepeatInterval: 60,
     fridgeExpiry: true,
     fridgeExpiryDays: 3,
     fridgeExpiryTime: "08:30",
+    fridgeExpiryRepeatCount: 1,
+    fridgeExpiryRepeatInterval: 120,
     routineSlot: true,
     routineWindowMinutes: 90,
+    routineSlotRepeatCount: 2,
+    routineSlotRepeatInterval: 30,
     babyFeeding: false,
     babyFeedingIntervalHours: 3,
+    babyFeedingRepeatCount: 2,
+    babyFeedingRepeatInterval: 15,
     todosDue: true,
     todosDueTime: "09:00",
+    todosDueRepeatCount: 2,
+    todosDueRepeatInterval: 60,
     quietHoursEnabled: true,
     quietStart: "22:00",
-    quietEnd: "07:30"
+    quietEnd: "07:30",
+    showRepeatBadge: true,
+    snoozeUntilMs: 0,
+    customTemplates: {}
   };
   const [smartNotifPrefs, setSmartNotifPrefs] = useState(() => {
     try {
@@ -4486,6 +4529,7 @@ function MainApp() {
     return DEFAULT_SMART_NOTIF_PREFS;
   });
   const [isNotifSettingsOpen, setIsNotifSettingsOpen] = useState(false);
+  const [expandedNotifPreviewKey, setExpandedNotifPreviewKey] = useState(null);
   const lastNotifErrorRef = useRef("");
   const refreshSwStatus = async () => {
     if (typeof navigator === "undefined" || !("serviceWorker" in navigator)) {
@@ -4557,7 +4601,7 @@ function MainApp() {
       document.removeEventListener("visibilitychange", syncPermAndSw);
     };
   }, []);
-  const showStatusBarNotification = async (title, body, tag = "family-app") => {
+  const showStatusBarNotification = async (title, body, tag = "family-app", opts = {}) => {
     lastNotifErrorRef.current = "";
     setLastNotifError("");
     if (typeof Notification === "undefined") {
@@ -4610,10 +4654,10 @@ function MainApp() {
               }
             }
           } catch (err) {}
-          const isSilent = Boolean(notifSilentMode);
+          const isSilent = opts?.forceSound ? false : (opts?.forceSilent ? true : Boolean(notifSilentMode));
           const tStr = String(tag || "");
           const targetHash =
-            tStr.startsWith("sched-") || tStr.startsWith("todos-") ? "#tab=schedule"
+            tStr.startsWith("sched-") || tStr.startsWith("todos-") || tStr.startsWith("dday-") ? "#tab=schedule"
             : tStr.startsWith("fridge-") ? "#tab=fridge"
             : tStr.startsWith("feed-") ? "#tab=baby"
             : tStr.startsWith("routine-") ? "#tab=home"
@@ -4626,7 +4670,9 @@ function MainApp() {
             silent: isSilent,
             data: { url: `/${targetHash}` }
           };
-          if (!isSilent) {
+          if (Array.isArray(opts?.vibrate)) {
+            notifOpts.vibrate = opts.vibrate;
+          } else if (!isSilent) {
             notifOpts.vibrate = [120, 60, 120];
           }
           await reg.showNotification(title, notifOpts);
@@ -4934,7 +4980,8 @@ function MainApp() {
           baby_memo_tags: Array.isArray(saved.baby_memo_tags) && saved.baby_memo_tags.length > 0 ? saved.baby_memo_tags.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_BABY_MEMO_TAGS],
           shopping_presets: Array.isArray(saved.shopping_presets) && saved.shopping_presets.length > 0 ? saved.shopping_presets.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_SHOPPING_PRESETS],
           baby_health_tags: Array.isArray(saved.baby_health_tags) && saved.baby_health_tags.length > 0 ? saved.baby_health_tags.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_BABY_HEALTH_TAGS],
-          schedule_places: Array.isArray(saved.schedule_places) && saved.schedule_places.length > 0 ? saved.schedule_places.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_SCHEDULE_PLACES]
+          schedule_places: Array.isArray(saved.schedule_places) && saved.schedule_places.length > 0 ? saved.schedule_places.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_SCHEDULE_PLACES],
+          house_warranty_brands: Array.isArray(saved.house_warranty_brands) && saved.house_warranty_brands.length > 0 ? saved.house_warranty_brands.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_HOUSE_WARRANTY_BRANDS]
         };
       }
     } catch (e) {}
@@ -4951,7 +4998,8 @@ function MainApp() {
       baby_memo_tags: [...DEFAULT_BABY_MEMO_TAGS],
       shopping_presets: [...DEFAULT_SHOPPING_PRESETS],
       baby_health_tags: [...DEFAULT_BABY_HEALTH_TAGS],
-      schedule_places: [...DEFAULT_SCHEDULE_PLACES]
+      schedule_places: [...DEFAULT_SCHEDULE_PLACES],
+      house_warranty_brands: [...DEFAULT_HOUSE_WARRANTY_BRANDS]
     };
   });
   const fridgeCategories = customCategories.fridge;
@@ -4967,6 +5015,7 @@ function MainApp() {
   const shoppingPresets = customCategories.shopping_presets || DEFAULT_SHOPPING_PRESETS;
   const babyHealthTags = customCategories.baby_health_tags || DEFAULT_BABY_HEALTH_TAGS;
   const schedulePlaces = customCategories.schedule_places || DEFAULT_SCHEDULE_PLACES;
+  const houseWarrantyBrands = customCategories.house_warranty_brands || DEFAULT_HOUSE_WARRANTY_BRANDS;
 
   // === 🔒 비밀메뉴: 경조사비 입출금내역 상태 ===
   const isSuhyeokAdmin = isAdminUnlocked && (actorName === "수혁" || actorName === "김수혁");
@@ -6463,15 +6512,16 @@ function MainApp() {
           }
           return {
             open: Boolean(p.open),
-            mode: p.mode === "stopwatch" ? "stopwatch" : "countdown",
-            label: p.label || "조리 타이머",
+            mode: p.mode === "stopwatch" ? "stopwatch" : p.mode === "alarm" ? "alarm" : "countdown",
+            label: p.label || "타이머",
             running: false,
             remainingSec: Number(p.remainingSec) || 0,
             elapsedSec: Number(p.elapsedSec) || 0,
             startedAtMs: null,
             targetEndMs: null,
             cookStartTimeStr: p.cookStartTimeStr || "",
-            cookEndTimeStr: p.cookEndTimeStr || ""
+            cookEndTimeStr: p.cookEndTimeStr || "",
+            records: Array.isArray(p.records) ? p.records.slice(0, 10) : []
           };
         }
       }
@@ -6479,21 +6529,262 @@ function MainApp() {
     return {
       open: false,
       mode: "countdown",
-      label: "조리 타이머",
+      label: "타이머",
       running: false,
       remainingSec: 0,
       elapsedSec: 0,
       startedAtMs: null,
       targetEndMs: null,
       cookStartTimeStr: "",
-      cookEndTimeStr: ""
+      cookEndTimeStr: "",
+      records: []
     };
   });
   useEffect(() => {
     try {
       localStorage.setItem("kim_kitchen_timer_v1", JSON.stringify(kitchenTimer));
     } catch (e) {}
-  }, [kitchenTimer]);
+    if (!user || !db) return;
+    const syncSig = JSON.stringify({
+      mode: kitchenTimer.mode,
+      label: kitchenTimer.label,
+      running: kitchenTimer.running,
+      startedAtMs: kitchenTimer.startedAtMs || null,
+      targetEndMs: kitchenTimer.targetEndMs || null,
+      cookStartTimeStr: kitchenTimer.cookStartTimeStr || "",
+      cookEndTimeStr: kitchenTimer.cookEndTimeStr || "",
+      remSnapshot: kitchenTimer.running ? null : Number(kitchenTimer.remainingSec) || 0,
+      elSnapshot: kitchenTimer.running ? null : Number(kitchenTimer.elapsedSec) || 0
+    });
+    if (syncSig === lastSyncedLiveTimerSigRef.current) return;
+    lastSyncedLiveTimerSigRef.current = syncSig;
+    const tId = setTimeout(() => {
+      setDoc(
+        getDocRef("family_meta_v4", "timer_alarms_v1"),
+        {
+          liveTimer: {
+            mode: kitchenTimer.mode,
+            label: kitchenTimer.label || "타이머",
+            running: Boolean(kitchenTimer.running),
+            remainingSec: Number(kitchenTimer.remainingSec) || 0,
+            elapsedSec: Number(kitchenTimer.elapsedSec) || 0,
+            startedAtMs: kitchenTimer.startedAtMs || null,
+            targetEndMs: kitchenTimer.targetEndMs || null,
+            cookStartTimeStr: kitchenTimer.cookStartTimeStr || "",
+            cookEndTimeStr: kitchenTimer.cookEndTimeStr || "",
+            updatedAtMs: Date.now(),
+            clientSig: timerClientSigRef.current
+          },
+          updatedAtMs: Date.now()
+        },
+        { merge: true }
+      ).catch(() => {});
+    }, 250);
+    return () => clearTimeout(tId);
+  }, [
+    kitchenTimer.mode,
+    kitchenTimer.label,
+    kitchenTimer.running,
+    kitchenTimer.startedAtMs,
+    kitchenTimer.targetEndMs,
+    kitchenTimer.cookStartTimeStr,
+    kitchenTimer.cookEndTimeStr,
+    kitchenTimer.remainingSec,
+    kitchenTimer.elapsedSec,
+    user,
+    db
+  ]);
+
+  const [timerSoundEnabled, setTimerSoundEnabled] = useState(() => {
+    try { return localStorage.getItem("kim_timer_sound_v1") !== "false"; } catch (e) { return true; }
+  });
+  const [timerVibrateEnabled, setTimerVibrateEnabled] = useState(() => {
+    try { return localStorage.getItem("kim_timer_vibrate_v1") !== "false"; } catch (e) { return true; }
+  });
+  const [dialStepSec, setDialStepSec] = useState(10);
+  const [timerCompletedAlert, setTimerCompletedAlert] = useState("");
+  const cropCleanupRef = useRef(null);
+  useEffect(() => () => { if (cropCleanupRef.current) cropCleanupRef.current(); }, []);
+  const dialDragRef = useRef({ active: false, lastAngle: 0, accumRad: 0 });
+  const audioCtxRef = useRef(null);
+  const timerClientSigRef = useRef(`tm-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`);
+  const lastSyncedLiveTimerSigRef = useRef("");
+  const lastAppliedRemoteTimerMsRef = useRef(0);
+
+  const [customAlarms, setCustomAlarms] = useState(() => {
+    try {
+      const raw = JSON.parse(localStorage.getItem("kim_custom_alarms_v1") || "[]");
+      return Array.isArray(raw) ? raw : [];
+    } catch (e) { return []; }
+  });
+  const [customAlarmSounds, setCustomAlarmSounds] = useState(() => {
+    try {
+      const raw = JSON.parse(localStorage.getItem("kim_custom_alarm_sounds_v1") || "[]");
+      return Array.isArray(raw) ? raw : [];
+    } catch (e) { return []; }
+  });
+  const [alarmTimeDraft, setAlarmTimeDraft] = useState("07:00");
+  const [alarmLabelDraft, setAlarmLabelDraft] = useState("");
+  const [alarmRepeatDraft, setAlarmRepeatDraft] = useState("everyday");
+  const [alarmSoundIdDraft, setAlarmSoundIdDraft] = useState("morning");
+  const [alarmQuickMinDraft, setAlarmQuickMinDraft] = useState("10");
+  const [alarmQuickMemoDraft, setAlarmQuickMemoDraft] = useState("");
+  const [isAlarmMusicManageOpen, setIsAlarmMusicManageOpen] = useState(false);
+  const [newAlarmSoundLabel, setNewAlarmSoundLabel] = useState("");
+  const [newAlarmSoundUrl, setNewAlarmSoundUrl] = useState("");
+  const [previewingSoundId, setPreviewingSoundId] = useState(null);
+  const [completedAlertUrl, setCompletedAlertUrl] = useState("");
+  const alarmAudioRef = useRef(null);
+  const alarmSoundFileInputRef = useRef(null);
+
+  const formatDurationSecKo = (sec) => {
+    const s = Math.max(0, Math.round(Number(sec) || 0));
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    const r = s % 60;
+    if (h > 0) return `${h}시간 ${m}분 ${r}초`;
+    if (m > 0) return r > 0 ? `${m}분 ${r}초` : `${m}분`;
+    return `${r}초`;
+  };
+
+  const unlockAudioContext = () => {
+    try {
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!Ctx) return null;
+      if (!audioCtxRef.current) audioCtxRef.current = new Ctx();
+      if (audioCtxRef.current.state === "suspended") {
+        audioCtxRef.current.resume().catch(() => {});
+      }
+      return audioCtxRef.current;
+    } catch (e) { return null; }
+  };
+
+  const stopAlarmAudio = () => {
+    try {
+      if (alarmAudioRef.current) {
+        alarmAudioRef.current.pause();
+        alarmAudioRef.current.currentTime = 0;
+        alarmAudioRef.current = null;
+      }
+    } catch (e) {}
+    setPreviewingSoundId(null);
+  };
+  useEffect(() => () => stopAlarmAudio(), []);
+  const closeStopwatchStatusNotif = () => {
+    try {
+      if (typeof navigator !== "undefined" && "serviceWorker" in navigator) {
+        navigator.serviceWorker.getRegistration().then((r) => {
+          if (r && typeof r.getNotifications === "function") {
+            r.getNotifications({ tag: "app-stopwatch-running" }).then((list) => {
+              list.forEach((n) => { try { n.close(); } catch (e) {} });
+            }).catch(() => {});
+          }
+        }).catch(() => {});
+      }
+    } catch (e) {}
+  };
+
+  const playAlarmSoundById = (soundId = "morning", forcePlay = false) => {
+    if (!forcePlay && !timerSoundEnabled) return null;
+    stopAlarmAudio();
+    const sid = String(soundId || "morning");
+    const cloudMatch = customAlarmSounds.find((s) => s.id === sid);
+    const dreamMatch = babyDreamLinks.find((d) => d.id === sid);
+    const targetUrl = cloudMatch?.url || dreamMatch?.url || "";
+
+    if (targetUrl && (targetUrl.startsWith("data:audio/") || /\.(mp3|wav|ogg|m4a|aac)(\?|$)/i.test(targetUrl))) {
+      try {
+        const audio = new Audio(targetUrl);
+        audio.volume = 0.85;
+        alarmAudioRef.current = audio;
+        setPreviewingSoundId(sid);
+        audio.onended = () => setPreviewingSoundId(null);
+        audio.play().catch(() => {
+          setPreviewingSoundId(null);
+          playBuiltinMelody("morning");
+        });
+        return { externalUrl: "" };
+      } catch (e) {}
+    }
+
+    const melodyKey = ["chime", "morning", "lullaby", "gentle", "digital"].includes(sid)
+      ? sid
+      : dreamMatch
+      ? "lullaby"
+      : "morning";
+    playBuiltinMelody(melodyKey);
+    return { externalUrl: targetUrl && !targetUrl.startsWith("data:") ? targetUrl : "" };
+  };
+
+  const playBuiltinMelody = (melodyKey = "chime") => {
+    try {
+      const ctx = unlockAudioContext();
+      if (!ctx) return;
+      const now = ctx.currentTime;
+      const MELODIES = {
+        morning: { type: "triangle", step: 0.18, notes: [523.25, 659.25, 783.99, 1046.5, 783.99, 1046.5, 1318.5] },
+        chime: { type: "sine", step: 0.17, notes: [880, 1046.5, 880, 1318.5, 880, 1046.5, 1318.5] },
+        lullaby: { type: "sine", step: 0.24, notes: [659.25, 523.25, 587.33, 659.25, 783.99, 659.25] },
+        gentle: { type: "sine", step: 0.22, notes: [587.33, 739.99, 880, 1174.66, 880] },
+        digital: { type: "square", step: 0.13, notes: [987.77, 987.77, 0, 987.77, 987.77, 0, 1174.66] }
+      };
+      const cfg = MELODIES[melodyKey] || MELODIES.chime;
+      cfg.notes.forEach((freq, idx) => {
+        if (!freq) return;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = cfg.type;
+        osc.frequency.setValueAtTime(freq, now + idx * cfg.step);
+        gain.gain.setValueAtTime(0.001, now + idx * cfg.step);
+        gain.gain.exponentialRampToValueAtTime(cfg.type === "square" ? 0.14 : 0.26, now + idx * cfg.step + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + idx * cfg.step + cfg.step - 0.02);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now + idx * cfg.step);
+        osc.stop(now + idx * cfg.step + cfg.step);
+      });
+    } catch (e) {}
+  };
+
+  const playTimerAlarmSound = (kind = "timer", soundId = null) => {
+    if (!timerSoundEnabled) return null;
+    if (soundId) return playAlarmSoundById(soundId, false);
+    playBuiltinMelody(kind === "alarm" ? "morning" : "chime");
+    return null;
+  };
+
+  const saveCustomAlarmSounds = (updater) => {
+    setCustomAlarmSounds((prev) => {
+      const next = typeof updater === "function" ? updater(prev) : updater;
+      const clean = Array.isArray(next) ? next : [];
+      try { localStorage.setItem("kim_custom_alarm_sounds_v1", JSON.stringify(clean)); } catch (e) {}
+      if (user && db) {
+        setDoc(getDocRef("family_meta_v4", "timer_alarms_v1"), { sounds: clean, updatedAtMs: Date.now() }, { merge: true }).catch(() => {});
+      }
+      return clean;
+    });
+  };
+
+  const triggerTimerVibration = (pattern = [300, 120, 300, 120, 450]) => {
+    if (!timerVibrateEnabled) return;
+    try {
+      if (typeof navigator !== "undefined" && typeof navigator.vibrate === "function") {
+        navigator.vibrate(pattern);
+      }
+    } catch (e) {}
+  };
+
+  const saveCustomAlarms = (updater) => {
+    setCustomAlarms((prev) => {
+      const next = typeof updater === "function" ? updater(prev) : updater;
+      const clean = Array.isArray(next) ? next : [];
+      try { localStorage.setItem("kim_custom_alarms_v1", JSON.stringify(clean)); } catch (e) {}
+      if (user && db) {
+        setDoc(getDocRef("family_meta_v4", "timer_alarms_v1"), { alarms: clean, updatedAtMs: Date.now() }, { merge: true }).catch(() => {});
+      }
+      return clean;
+    });
+  };
   const [toastMsg, setToastMsg] = useState("");
 
 
@@ -7378,53 +7669,53 @@ function MainApp() {
     const icon = type === "error" ? "⚠️" : type === "loading" ? "⏳" : "📭";
     return (
       <div className={`rounded-2xl border p-5 text-center space-y-2 ${tone}`}>
-        <div className="text-xl">{icon}</div>
-        <div className="text-[13.5px] font-black">{title}</div>
-        {description && <div className="text-[12.5px] opacity-85 leading-relaxed">{description}</div>}
+        &lt;div className=&quot;text-xl&quot;&gt;{icon}&lt;/div&gt;
+        &lt;div className=&quot;text-[13.5px] font-black&quot;&gt;{title}&lt;/div&gt;
+        {description && &lt;div className=&quot;text-[12.5px] opacity-85 leading-relaxed&quot;&gt;{description}&lt;/div&gt;}
         {actionLabel && onAction && (
-          <button
-            type="button"
+          &lt;button
+            type=&quot;button&quot;
             onClick={onAction}
-            className="mt-1 px-3.5 py-1.5 rounded-xl bg-stone-900 text-white text-[12.5px] font-extrabold whitespace-nowrap"
-          >
+            className=&quot;mt-1 px-3.5 py-1.5 rounded-xl bg-stone-900 text-white text-[12.5px] font-extrabold whitespace-nowrap&quot;
+          &gt;
             {actionLabel}
-          </button>
+          &lt;/button&gt;
         )}
-      </div>
+      &lt;/div&gt;
     );
   };
 
 
   const renderLockedTabScreen = (tabLabel) => (
-    <div className="p-4">
-      <div className="bg-white rounded-3xl border border-stone-200 p-6 text-center space-y-3 shadow-sm">
-        <div className="w-12 h-12 rounded-2xl bg-amber-50 border border-amber-200 text-amber-700 flex items-center justify-center mx-auto">
-          <Lock className="w-6 h-6" />
-        </div>
-        <div className="space-y-1">
-          <h3 className="text-[13.5px] font-black text-stone-900">{tabLabel} 메뉴는 잠겨 있습니다</h3>
-          <p className="text-[13.5px] text-stone-500 leading-relaxed">
+    &lt;div className=&quot;p-4&quot;&gt;
+      &lt;div className=&quot;bg-white rounded-3xl border border-stone-200 p-6 text-center space-y-3 shadow-sm&quot;&gt;
+        &lt;div className=&quot;w-12 h-12 rounded-2xl bg-amber-50 border border-amber-200 text-amber-700 flex items-center justify-center mx-auto&quot;&gt;
+          &lt;Lock className=&quot;w-6 h-6&quot; /&gt;
+        &lt;/div&gt;
+        &lt;div className=&quot;space-y-1&quot;&gt;
+          &lt;h3 className=&quot;text-[13.5px] font-black text-stone-900&quot;&gt;{tabLabel} 메뉴는 잠겨 있습니다&lt;/h3&gt;
+          &lt;p className=&quot;text-[13.5px] text-stone-500 leading-relaxed&quot;&gt;
             현재 계정에서는 접근이 제한된 메뉴입니다. 관리자(수혁)에게 해당 메뉴의 열람 권한을 요청해 주세요.
-          </p>
-        </div>
-        <div className="flex items-center justify-center gap-2 pt-1">
+          &lt;/p&gt;
+        &lt;/div&gt;
+        &lt;div className=&quot;flex items-center justify-center gap-2 pt-1&quot;&gt;
           <button
             type="button"
             onClick={() => setIsEditorUnlockModalOpen(true)}
             className="px-4 py-2 rounded-xl bg-stone-900 hover:bg-stone-800 text-white text-[13.5px] font-extrabold whitespace-nowrap"
           >
             👤 내 계정 정보
-          </button>
+          &lt;/button&gt;
           <button
             type="button"
             onClick={() => setActiveTab("home")}
             className="px-3.5 py-2 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-[13.5px] font-bold whitespace-nowrap"
           >
             🏠 홈으로
-          </button>
-        </div>
-      </div>
-    </div>
+          &lt;/button&gt;
+        &lt;/div&gt;
+      &lt;/div&gt;
+    &lt;/div&gt;
   );
 
 
@@ -8499,6 +8790,10 @@ function MainApp() {
             setExpandedPageIds(d.expandedPageIds);
             try { localStorage.setItem("kim_pages_expanded_v1", JSON.stringify(d.expandedPageIds)); } catch (e) {}
           }
+          if (d?.collapsedSectionIds && typeof d.collapsedSectionIds === "object" && !Array.isArray(d.collapsedSectionIds)) {
+            setCollapsedSectionIds(d.collapsedSectionIds);
+            try { localStorage.setItem("kim_pages_collapsed_v1", JSON.stringify(d.collapsedSectionIds)); } catch (e) {}
+          }
           if (typeof d?.homeRoutineSlot === "string" && d.homeRoutineSlot) {
             setHomeRoutineSlotFilter(d.homeRoutineSlot);
             try { localStorage.setItem("kim_home_routine_slot_v1", d.homeRoutineSlot); } catch (e) {}
@@ -8667,7 +8962,8 @@ function MainApp() {
               baby_memo_tags: Array.isArray(d.baby_memo_tags) && d.baby_memo_tags.length > 0 ? d.baby_memo_tags.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_BABY_MEMO_TAGS],
               shopping_presets: Array.isArray(d.shopping_presets) && d.shopping_presets.length > 0 ? d.shopping_presets.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_SHOPPING_PRESETS],
               baby_health_tags: Array.isArray(d.baby_health_tags) && d.baby_health_tags.length > 0 ? d.baby_health_tags.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_BABY_HEALTH_TAGS],
-              schedule_places: Array.isArray(d.schedule_places) && d.schedule_places.length > 0 ? d.schedule_places.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_SCHEDULE_PLACES]
+              schedule_places: Array.isArray(d.schedule_places) && d.schedule_places.length > 0 ? d.schedule_places.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_SCHEDULE_PLACES],
+              house_warranty_brands: Array.isArray(d.house_warranty_brands) && d.house_warranty_brands.length > 0 ? d.house_warranty_brands.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_HOUSE_WARRANTY_BRANDS]
             };
             setCustomCategories(nextCats);
             try { localStorage.setItem("kim_custom_categories_v1", JSON.stringify(nextCats)); } catch (e) {}
@@ -8679,6 +8975,80 @@ function MainApp() {
 
 
 
+
+    unsubscribers.push(
+      onSnapshot(
+        getDocRef("family_meta_v4", "timer_alarms_v1"),
+        (snap) => {
+          if (!snap.exists()) return;
+          const d = snap.data() || {};
+          if (Array.isArray(d.alarms)) {
+            setCustomAlarms(d.alarms);
+            try { localStorage.setItem("kim_custom_alarms_v1", JSON.stringify(d.alarms)); } catch (e) {}
+          }
+          if (Array.isArray(d.sounds)) {
+            setCustomAlarmSounds(d.sounds);
+            try { localStorage.setItem("kim_custom_alarm_sounds_v1", JSON.stringify(d.sounds)); } catch (e) {}
+          }
+          if (typeof d.soundEnabled === "boolean") {
+            setTimerSoundEnabled(d.soundEnabled);
+            try { localStorage.setItem("kim_timer_sound_v1", String(d.soundEnabled)); } catch (e) {}
+          }
+          if (typeof d.vibrateEnabled === "boolean") {
+            setTimerVibrateEnabled(d.vibrateEnabled);
+            try { localStorage.setItem("kim_timer_vibrate_v1", String(d.vibrateEnabled)); } catch (e) {}
+          }
+          if (Array.isArray(d.stopwatchRecords)) {
+            setKitchenTimer((prev) => ({ ...prev, records: d.stopwatchRecords.slice(0, 10) }));
+          }
+          if (d.liveTimer && typeof d.liveTimer === "object" && d.liveTimer.clientSig !== timerClientSigRef.current) {
+            const remoteMs = Number(d.liveTimer.updatedAtMs) || 0;
+            if (remoteMs > lastAppliedRemoteTimerMsRef.current) {
+              lastAppliedRemoteTimerMsRef.current = remoteMs;
+              const lt = d.liveTimer;
+              const nowMs = Date.now();
+              let nextRem = Number(lt.remainingSec) || 0;
+              let nextEl = Number(lt.elapsedSec) || 0;
+              let nextRunning = Boolean(lt.running);
+              let nextTargetEnd = lt.targetEndMs || null;
+              if (nextRunning && lt.mode === "countdown" && Number(lt.targetEndMs) > 0) {
+                nextRem = Math.max(0, Math.ceil((Number(lt.targetEndMs) - nowMs) / 1000));
+                if (nextRem <= 0) {
+                  nextRunning = false;
+                  nextTargetEnd = null;
+                }
+              } else if (nextRunning && lt.mode === "stopwatch" && Number(lt.startedAtMs) > 0) {
+                nextEl = Math.max(0, Math.floor((nowMs - Number(lt.startedAtMs)) / 1000));
+              }
+              lastSyncedLiveTimerSigRef.current = JSON.stringify({
+                mode: lt.mode === "stopwatch" ? "stopwatch" : lt.mode === "alarm" ? "alarm" : "countdown",
+                label: lt.label || "타이머",
+                running: nextRunning,
+                startedAtMs: lt.startedAtMs || null,
+                targetEndMs: nextTargetEnd,
+                cookStartTimeStr: lt.cookStartTimeStr || "",
+                cookEndTimeStr: lt.cookEndTimeStr || "",
+                remSnapshot: nextRunning ? null : nextRem,
+                elSnapshot: nextRunning ? null : nextEl
+              });
+              setKitchenTimer((prev) => ({
+                ...prev,
+                mode: lt.mode === "stopwatch" ? "stopwatch" : lt.mode === "alarm" ? "alarm" : "countdown",
+                label: lt.label || "타이머",
+                running: nextRunning,
+                remainingSec: nextRem,
+                elapsedSec: nextEl,
+                startedAtMs: lt.startedAtMs || null,
+                targetEndMs: nextTargetEnd,
+                cookStartTimeStr: lt.cookStartTimeStr || "",
+                cookEndTimeStr: lt.cookEndTimeStr || ""
+              }));
+            }
+          }
+        },
+        () => {}
+      )
+    );
 
     unsubscribers.push(
       onSnapshot(
@@ -9333,6 +9703,10 @@ function MainApp() {
         routineTimeRanges,
         routineSlotDefs,
         routineViewMode,
+        smartNotifPrefs,
+        notifSilentMode,
+        customAlarms,
+        customAlarmSounds,
         ...(isAdminUnlocked ? { babyDiaryEntries: safeDiaryEntries, privateSchedules } : {}),
         ...(isSuhyeokAdmin ? { condolenceList } : {}),
         ...(isSuhyeokAdmin ? { condolencePin } : {})
@@ -9539,6 +9913,23 @@ function MainApp() {
         setExpandedPageIds(payload.expandedPageIds);
         try { localStorage.setItem("kim_pages_expanded_v1", JSON.stringify(payload.expandedPageIds)); } catch (e) {}
       }
+      if (payload.smartNotifPrefs && typeof payload.smartNotifPrefs === "object") {
+        const mergedNotif = { ...DEFAULT_SMART_NOTIF_PREFS, ...payload.smartNotifPrefs };
+        setSmartNotifPrefs(mergedNotif);
+        try { localStorage.setItem("kim_smart_notif_prefs_v1", JSON.stringify(mergedNotif)); } catch (e) {}
+      }
+      if (typeof payload.notifSilentMode === "boolean") {
+        setNotifSilentMode(payload.notifSilentMode);
+        try { localStorage.setItem("kim_notif_silent_v1", payload.notifSilentMode ? "true" : "false"); } catch (e) {}
+      }
+      if (Array.isArray(payload.customAlarms)) {
+        setCustomAlarms(payload.customAlarms);
+        try { localStorage.setItem("kim_custom_alarms_v1", JSON.stringify(payload.customAlarms)); } catch (e) {}
+      }
+      if (Array.isArray(payload.customAlarmSounds)) {
+        setCustomAlarmSounds(payload.customAlarmSounds);
+        try { localStorage.setItem("kim_custom_alarm_sounds_v1", JSON.stringify(payload.customAlarmSounds)); } catch (e) {}
+      }
       if (payload.customCategories && typeof payload.customCategories === "object") {
         const nextCats = {
           fridge: Array.isArray(payload.customCategories.fridge) && payload.customCategories.fridge.length > 0 ? payload.customCategories.fridge.map((s) => String(s || "").trim()).filter(Boolean) : [...FRIDGE_CATEGORIES],
@@ -9553,7 +9944,8 @@ function MainApp() {
           baby_memo_tags: Array.isArray(payload.customCategories.baby_memo_tags) && payload.customCategories.baby_memo_tags.length > 0 ? payload.customCategories.baby_memo_tags.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_BABY_MEMO_TAGS],
           shopping_presets: Array.isArray(payload.customCategories.shopping_presets) && payload.customCategories.shopping_presets.length > 0 ? payload.customCategories.shopping_presets.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_SHOPPING_PRESETS],
           baby_health_tags: Array.isArray(payload.customCategories.baby_health_tags) && payload.customCategories.baby_health_tags.length > 0 ? payload.customCategories.baby_health_tags.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_BABY_HEALTH_TAGS],
-          schedule_places: Array.isArray(payload.customCategories.schedule_places) && payload.customCategories.schedule_places.length > 0 ? payload.customCategories.schedule_places.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_SCHEDULE_PLACES]
+          schedule_places: Array.isArray(payload.customCategories.schedule_places) && payload.customCategories.schedule_places.length > 0 ? payload.customCategories.schedule_places.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_SCHEDULE_PLACES],
+          house_warranty_brands: Array.isArray(payload.customCategories.house_warranty_brands) && payload.customCategories.house_warranty_brands.length > 0 ? payload.customCategories.house_warranty_brands.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_HOUSE_WARRANTY_BRANDS]
         };
         setCustomCategories(nextCats);
         try { localStorage.setItem("kim_custom_categories_v1", JSON.stringify(nextCats)); } catch (e) {}
@@ -9763,6 +10155,32 @@ function MainApp() {
             )
           );
         }
+        if ((payload.smartNotifPrefs && typeof payload.smartNotifPrefs === "object") || typeof payload.notifSilentMode === "boolean") {
+          writePromises.push(
+            setDoc(
+              getDocRef("family_meta_v4", "notif_prefs_v1"),
+              {
+                ...(payload.smartNotifPrefs && typeof payload.smartNotifPrefs === "object" ? { smartPrefs: { ...DEFAULT_SMART_NOTIF_PREFS, ...payload.smartNotifPrefs } } : {}),
+                ...(typeof payload.notifSilentMode === "boolean" ? { silentMode: payload.notifSilentMode } : {}),
+                updatedAtMs: Date.now()
+              },
+              { merge: true }
+            )
+          );
+        }
+        if (Array.isArray(payload.customAlarms) || Array.isArray(payload.customAlarmSounds)) {
+          writePromises.push(
+            setDoc(
+              getDocRef("family_meta_v4", "timer_alarms_v1"),
+              {
+                ...(Array.isArray(payload.customAlarms) ? { alarms: payload.customAlarms } : {}),
+                ...(Array.isArray(payload.customAlarmSounds) ? { sounds: payload.customAlarmSounds } : {}),
+                updatedAtMs: Date.now()
+              },
+              { merge: true }
+            )
+          );
+        }
         if (typeof payload.handoverNote === "string" || typeof payload.handoverAttachedPageId === "string") {
           writePromises.push(
             setDoc(
@@ -9821,6 +10239,7 @@ function MainApp() {
                 shopping_presets: Array.isArray(payload.customCategories.shopping_presets) && payload.customCategories.shopping_presets.length > 0 ? payload.customCategories.shopping_presets : [...DEFAULT_SHOPPING_PRESETS],
                 baby_health_tags: Array.isArray(payload.customCategories.baby_health_tags) && payload.customCategories.baby_health_tags.length > 0 ? payload.customCategories.baby_health_tags : [...DEFAULT_BABY_HEALTH_TAGS],
                 schedule_places: Array.isArray(payload.customCategories.schedule_places) && payload.customCategories.schedule_places.length > 0 ? payload.customCategories.schedule_places : [...DEFAULT_SCHEDULE_PLACES],
+                house_warranty_brands: Array.isArray(payload.customCategories.house_warranty_brands) && payload.customCategories.house_warranty_brands.length > 0 ? payload.customCategories.house_warranty_brands : [...DEFAULT_HOUSE_WARRANTY_BRANDS],
                 updatedAtMs: Date.now()
               },
               { merge: true }
@@ -9948,117 +10367,222 @@ function MainApp() {
         const raw = JSON.parse(localStorage.getItem("kim_smart_notif_sent_v1") || "{}") || {};
         const cutoff = Date.now() - 48 * 3600 * 1000;
         const cleaned = {};
-        Object.keys(raw).forEach((k) => { if (Number(raw[k]) > cutoff) cleaned[k] = raw[k]; });
+        Object.keys(raw).forEach((k) => {
+          const v = raw[k];
+          if (typeof v === "number" && v > cutoff) {
+            cleaned[k] = { count: 1, lastSentMs: v };
+          } else if (v && typeof v === "object" && Number(v.lastSentMs) > cutoff) {
+            cleaned[k] = { count: Math.max(1, Number(v.count) || 1), lastSentMs: Number(v.lastSentMs) };
+          }
+        });
         return cleaned;
       } catch (e) { return {}; }
     };
-    const markSent = (sentMap, key) => {
-      sentMap[key] = Date.now();
+    const canSendRepeat = (sentMap, key, maxRepeat = 1, intervalMin = 30) => {
+      const maxC = Math.max(1, Math.min(10, Number(maxRepeat) || 1));
+      const ivMs = Math.max(1, Number(intervalMin) || 30) * 60 * 1000;
+      const entry = sentMap[key];
+      if (!entry) return { ok: true, nextCount: 1, maxCount: maxC };
+      if (entry.count >= maxC) return { ok: false, nextCount: entry.count, maxCount: maxC };
+      if (Date.now() - Number(entry.lastSentMs || 0) < ivMs) return { ok: false, nextCount: entry.count, maxCount: maxC };
+      return { ok: true, nextCount: entry.count + 1, maxCount: maxC };
+    };
+    const markSentRepeat = (sentMap, key, nextCount) => {
+      sentMap[key] = { count: nextCount, lastSentMs: Date.now() };
       try { localStorage.setItem("kim_smart_notif_sent_v1", JSON.stringify(sentMap)); } catch (e) {}
+    };
+    const applyCustomTpl = (itemKey, defTitle, defBody, vars) => {
+      const custom = smartNotifPrefs?.customTemplates?.[itemKey];
+      const rawTitle = (custom && typeof custom.title === "string" && custom.title.trim()) ? custom.title : defTitle;
+      const rawBody = (custom && typeof custom.body === "string" && custom.body.trim()) ? custom.body : defBody;
+      const replaceVars = (str) => {
+        let out = String(str || "");
+        Object.keys(vars || {}).forEach((vk) => {
+          out = out.split(`{${vk}}`).join(String(vars[vk] ?? ""));
+        });
+        return out;
+      };
+      let finalTitle = replaceVars(rawTitle);
+      const finalBody = replaceVars(rawBody);
+      if (smartNotifPrefs?.showRepeatBadge !== false && vars?.회차) {
+        if (!finalTitle.includes(vars.회차)) finalTitle = `${finalTitle} ${vars.회차}`;
+      }
+      return { title: finalTitle, body: finalBody };
     };
 
     const runSmartCheck = async () => {
+      if (Number(smartNotifPrefs?.snoozeUntilMs || 0) > Date.now()) return;
       const now = new Date();
       const nowMin = now.getHours() * 60 + now.getMinutes();
       if (isQuietNow(nowMin)) return;
       const todayStr = getTodayStr();
       const sentMap = readSentMap();
-      const leadMin = Number(smartNotifPrefs.scheduleLeadMinutes) || 30;
+      const rawLeadList = Array.isArray(smartNotifPrefs.scheduleLeadList) && smartNotifPrefs.scheduleLeadList.length > 0
+        ? smartNotifPrefs.scheduleLeadList
+        : [Number(smartNotifPrefs.scheduleLeadMinutes) || 30];
+      const leadList = Array.from(new Set(rawLeadList.map((x) => Math.max(0, Math.min(1440, Number(x) || 0))))).sort((a, b) => b - a);
 
-      // 1. 시간 지정 일정 임박 알림
+      // 1. 시간 지정 일정 임박 알림 (다중 사전 알림 지원 + 일정별 알림 ON/OFF)
       if (smartNotifPrefs.scheduleTimed) {
         const timedPool = [
-          ...schedules.filter((s) => !s.done && s.date === todayStr && s.time),
-          ...(isAdminUnlocked ? privateSchedules.filter((p) => !p.done && (p.owner || "수혁") === currentAdminOwner && p.date === todayStr && p.time) : [])
+          ...schedules.filter((s) => !s.done && s.notifEnabled !== false && s.date === todayStr && s.time),
+          ...(isAdminUnlocked ? privateSchedules.filter((p) => !p.done && p.notifEnabled !== false && (p.owner || "수혁") === currentAdminOwner && p.date === todayStr && p.time) : [])
         ];
         for (const ev of timedPool) {
           const evMin = toMin(ev.time);
           if (evMin === null) continue;
           const diff = evMin - nowMin;
-          if (diff >= 0 && diff <= leadMin) {
-            const key = `sched-timed-${todayStr}-${ev.id || ev.title}-${ev.time}`;
-            if (!sentMap[key]) {
-              markSent(sentMap, key);
-              const whenTxt = diff <= 1 ? "지금 시작" : `${diff}분 후`;
-              await showStatusBarNotification(
-                `⏰ [${ev.time}] ${ev.title || "예정된 일정"}`,
-                `${whenTxt} 예정된 일정이 있습니다.`,
-                key
-              );
-            }
-          }
-        }
-      }
-
-      // 2. 오늘·내일 종일 일정·기념일 요약
-      const dailyAtMin = toMin(smartNotifPrefs.scheduleDailyTime || "08:00") ?? 480;
-      if (smartNotifPrefs.scheduleDaily && nowMin >= dailyAtMin) {
-        const key = `sched-daily-${todayStr}`;
-        if (!sentMap[key]) {
-          const soon = imminentSchedulesWithin3Days.filter((s) => s.calc && s.calc.daysUntil <= 1);
-          if (soon.length > 0) {
-            markSent(sentMap, key);
-            const preview = soon.slice(0, 3).map((s) => `${s.calc.dDayText || "오늘"} ${s.title}`).join(" · ");
-            await showStatusBarNotification(
-              `📅 오늘·내일 일정 ${soon.length}건`,
-              preview,
-              key
-            );
-          }
-        }
-      }
-
-      // 3. 냉장고 유통기한 임박
-      const fridgeAtMin = toMin(smartNotifPrefs.fridgeExpiryTime || "08:30") ?? 510;
-      const fridgeDays = Math.max(0, Number(smartNotifPrefs.fridgeExpiryDays ?? 3));
-      if (smartNotifPrefs.fridgeExpiry && nowMin >= fridgeAtMin) {
-        const key = `fridge-exp-${todayStr}-d${fridgeDays}`;
-        if (!sentMap[key]) {
-          const expList = fridge.filter((f) => Number(f.quantity || 0) > 0 && f.expiryDate && getDaysDiff(f.expiryDate) >= 0 && getDaysDiff(f.expiryDate) <= fridgeDays);
-          if (expList.length > 0) {
-            markSent(sentMap, key);
-            const names = expList.slice(0, 3).map((f) => `${f.name}(D-${getDaysDiff(f.expiryDate)})`).join(", ");
-            await showStatusBarNotification(
-              `🥬 냉장고 유통기한 임박 ${expList.length}건`,
-              `${names}${expList.length > 3 ? ` 외 ${expList.length - 3}건` : ""}`,
-              key
-            );
-          }
-        }
-      }
-
-      // 4. 시간대별 미완료 루틴
-      const routineWin = Math.max(15, Number(smartNotifPrefs.routineWindowMinutes) || 90);
-      if (smartNotifPrefs.routineSlot && Array.isArray(routineSlotDefs)) {
-        const isWknd = now.getDay() === 0 || now.getDay() === 6;
-        for (const slot of routineSlotDefs) {
-          const sMin = toMin(slot.time);
-          if (sMin === null) continue;
-          if (nowMin >= sMin && nowMin <= sMin + routineWin) {
-            const key = `routine-${todayStr}-${slot.label}`;
-            if (!sentMap[key]) {
-              const pending = familyRoutines.filter((r) => {
-                if (isRoutineDoneNow(r)) return false;
-                const ts = r.timeSlot || "공통";
-                if (ts !== slot.label) return false;
-                if (r.dayType === "weekday" && isWknd) return false;
-                if (r.dayType === "weekend" && !isWknd) return false;
-                return true;
-              });
-              if (pending.length > 0) {
-                markSent(sentMap, key);
-                await showStatusBarNotification(
-                  `✅ [${slot.label}] 미완료 루틴 ${pending.length}건`,
-                  pending.slice(0, 3).map((r) => r.title).join(" · "),
-                  key
+          if (diff < 0) continue;
+          for (const lead of leadList) {
+            if (diff <= lead) {
+              const key = `sched-timed-${todayStr}-${ev.id || ev.title}-${ev.time}-m${lead}`;
+              if (!sentMap[key]) {
+                markSentRepeat(sentMap, key, 1);
+                const whenTxt = diff <= 1 ? "지금 시작" : `${diff}분 후`;
+                const locTxt = ev.location ? ` · 📍${ev.location}` : "";
+                const msg = applyCustomTpl(
+                  "scheduleTimed",
+                  "⏰ [{시간}] {제목}",
+                  "{남은시간} 예정된 일정이 있습니다.{장소}",
+                  {
+                    시간: ev.time,
+                    제목: ev.title || "예정된 일정",
+                    남은시간: whenTxt,
+                    장소: locTxt,
+                    회차: leadList.length > 1 ? `(${lead === 0 ? "정시" : `${lead}분전`})` : ""
+                  }
                 );
+                await showStatusBarNotification(msg.title, msg.body, key);
               }
             }
           }
         }
       }
 
-      // 5. 아기 수유 간격 알림
+      // 2. 오늘·내일 종일 일정·기념일 요약 (일정별 알림 ON/OFF + 반복)
+      const dailyAtMin = toMin(smartNotifPrefs.scheduleDailyTime || "08:00") ?? 480;
+      if (smartNotifPrefs.scheduleDaily && nowMin >= dailyAtMin) {
+        const key = `sched-daily-${todayStr}`;
+        const rep = canSendRepeat(sentMap, key, smartNotifPrefs.scheduleDailyRepeatCount, smartNotifPrefs.scheduleDailyRepeatInterval);
+        if (rep.ok) {
+          const soon = imminentSchedulesWithin3Days.filter((s) => s.notifEnabled !== false && s.calc && s.calc.daysUntil <= 1);
+          if (soon.length > 0) {
+            markSentRepeat(sentMap, key, rep.nextCount);
+            const preview = soon.slice(0, 3).map((s) => `${s.calc.dDayText || "오늘"} ${s.title}`).join(" · ");
+            const msg = applyCustomTpl(
+              "scheduleDaily",
+              "📅 오늘·내일 일정 {건수}건",
+              "{목록}",
+              {
+                건수: soon.length,
+                목록: preview,
+                회차: rep.maxCount > 1 ? `[${rep.nextCount}/${rep.maxCount}회]` : ""
+              }
+            );
+            await showStatusBarNotification(msg.title, msg.body, `${key}-r${rep.nextCount}`);
+          }
+        }
+      }
+
+      // 3. 디데이(D-Day) 일정 알림 (일정별 알림 ON/OFF + 반복)
+      const ddayAtMin = toMin(smartNotifPrefs.ddayAlertTime || "08:30") ?? 510;
+      const ddayDays = Math.max(0, Number(smartNotifPrefs.ddayAlertDays ?? 3));
+      if (smartNotifPrefs.ddayAlert && nowMin >= ddayAtMin) {
+        const key = `dday-${todayStr}-d${ddayDays}`;
+        const rep = canSendRepeat(sentMap, key, smartNotifPrefs.ddayRepeatCount, smartNotifPrefs.ddayRepeatInterval);
+        if (rep.ok) {
+          const ddayList = schedules
+            .filter((s) => s.showDday && !s.done && s.notifEnabled !== false)
+            .map((s) => ({ ...s, calc: calculateScheduleDday(s) }))
+            .filter((s) => s.calc && s.calc.daysUntil >= 0 && s.calc.daysUntil <= ddayDays)
+            .sort((a, b) => a.calc.daysUntil - b.calc.daysUntil);
+          if (ddayList.length > 0) {
+            markSentRepeat(sentMap, key, rep.nextCount);
+            const preview = ddayList.slice(0, 3).map((s) => `${s.title}(${s.calc.daysUntil === 0 ? "D-Day" : `D-${s.calc.daysUntil}`})`).join(" · ");
+            const msg = applyCustomTpl(
+              "ddayAlert",
+              "⭐ 디데이 일정 {건수}건",
+              "{목록}",
+              {
+                건수: ddayList.length,
+                목록: `${preview}${ddayList.length > 3 ? ` 외 ${ddayList.length - 3}건` : ""}`,
+                "D-Day": ddayList[0].calc.daysUntil === 0 ? "오늘" : `D-${ddayList[0].calc.daysUntil}`,
+                회차: rep.maxCount > 1 ? `[${rep.nextCount}/${rep.maxCount}회]` : ""
+              }
+            );
+            await showStatusBarNotification(msg.title, msg.body, `${key}-r${rep.nextCount}`);
+          }
+        }
+      }
+
+      // 4. 냉장고 유통기한 임박 (반복)
+      const fridgeAtMin = toMin(smartNotifPrefs.fridgeExpiryTime || "08:30") ?? 510;
+      const fridgeDays = Math.max(0, Number(smartNotifPrefs.fridgeExpiryDays ?? 3));
+      if (smartNotifPrefs.fridgeExpiry && nowMin >= fridgeAtMin) {
+        const key = `fridge-exp-${todayStr}-d${fridgeDays}`;
+        const rep = canSendRepeat(sentMap, key, smartNotifPrefs.fridgeExpiryRepeatCount, smartNotifPrefs.fridgeExpiryRepeatInterval);
+        if (rep.ok) {
+          const expList = fridge.filter((f) => Number(f.quantity || 0) > 0 && f.expiryDate && getDaysDiff(f.expiryDate) >= 0 && getDaysDiff(f.expiryDate) <= fridgeDays);
+          if (expList.length > 0) {
+            markSentRepeat(sentMap, key, rep.nextCount);
+            const names = expList.slice(0, 3).map((f) => `${f.name}(D-${getDaysDiff(f.expiryDate)})`).join(", ");
+            const msg = applyCustomTpl(
+              "fridgeExpiry",
+              "🥬 냉장고 유통기한 임박 {건수}건",
+              "{목록}",
+              {
+                건수: expList.length,
+                목록: `${names}${expList.length > 3 ? ` 외 ${expList.length - 3}건` : ""}`,
+                회차: rep.maxCount > 1 ? `[${rep.nextCount}/${rep.maxCount}회]` : ""
+              }
+            );
+            await showStatusBarNotification(msg.title, msg.body, `${key}-r${rep.nextCount}`);
+          }
+        }
+      }
+
+      // 5. 시간대별 미완료 루틴 (slot.startTime 버그 수정 + 요일/기한 필터 + 반복)
+      const routineWin = Math.max(15, Number(smartNotifPrefs.routineWindowMinutes) || 90);
+      if (smartNotifPrefs.routineSlot && Array.isArray(routineSlotDefs)) {
+        const isWknd = isDayOffKorea(todayStr);
+        for (const slot of routineSlotDefs) {
+          if (isWknd ? !slot.weekend : !slot.weekday) continue;
+          const sMin = toMin(slot.startTime || slot.time);
+          if (sMin === null) continue;
+          if (nowMin >= sMin && nowMin <= sMin + routineWin) {
+            const key = `routine-${todayStr}-${slot.label}`;
+            const rep = canSendRepeat(sentMap, key, smartNotifPrefs.routineSlotRepeatCount, smartNotifPrefs.routineSlotRepeatInterval);
+            if (rep.ok) {
+              const pending = familyRoutines.filter((r) => {
+                if (isRoutineDoneNow(r)) return false;
+                if (!isRoutineDueTodayOrPast(r, todayStr)) return false;
+                const ts = r.timeSlot || "상시";
+                if (ts !== slot.label) return false;
+                if (r.dayType === "weekday" && isWknd) return false;
+                if (r.dayType === "weekend" && !isWknd) return false;
+                return true;
+              });
+              if (pending.length > 0) {
+                markSentRepeat(sentMap, key, rep.nextCount);
+                const msg = applyCustomTpl(
+                  "routineSlot",
+                  "✅ [{시간대}] 미완료 루틴 {건수}건",
+                  "{목록}",
+                  {
+                    시간대: slot.label,
+                    건수: pending.length,
+                    목록: pending.slice(0, 3).map((r) => r.title).join(" · "),
+                    회차: rep.maxCount > 1 ? `[${rep.nextCount}/${rep.maxCount}회]` : ""
+                  }
+                );
+                await showStatusBarNotification(msg.title, msg.body, `${key}-r${rep.nextCount}`);
+              }
+            }
+          }
+        }
+      }
+
+      // 6. 아기 수유 간격 알림 (반복)
       if (smartNotifPrefs.babyFeeding) {
         const targetChild = selectedChildId || "시율";
         const feeds = babyActivities.filter((a) => a.childId === targetChild && !a.inProgress && ["모유", "분유", "유축수유"].includes(a.type));
@@ -10068,31 +10592,46 @@ function MainApp() {
           const threshold = Number(smartNotifPrefs.babyFeedingIntervalHours) || 3;
           if (elapsedHrs >= threshold && elapsedHrs < 12) {
             const key = `feed-${targetChild}-${latest.id || latest.startMs}-${threshold}`;
-            if (!sentMap[key]) {
-              markSent(sentMap, key);
-              await showStatusBarNotification(
-                `🍼 [${targetChild}] 수유 시간 안내`,
-                `마지막 수유 후 ${Math.floor(elapsedHrs)}시간 ${Math.round((elapsedHrs % 1) * 60)}분이 지났습니다.`,
-                key
+            const rep = canSendRepeat(sentMap, key, smartNotifPrefs.babyFeedingRepeatCount, smartNotifPrefs.babyFeedingRepeatInterval);
+            if (rep.ok) {
+              markSentRepeat(sentMap, key, rep.nextCount);
+              const elapsedTxt = `${Math.floor(elapsedHrs)}시간 ${Math.round((elapsedHrs % 1) * 60)}분`;
+              const msg = applyCustomTpl(
+                "babyFeeding",
+                "🍼 [{아이}] 수유 시간 안내",
+                "마지막 수유 후 {경과시간}이 지났습니다.",
+                {
+                  아이: targetChild,
+                  경과시간: elapsedTxt,
+                  회차: rep.maxCount > 1 ? `[${rep.nextCount}/${rep.maxCount}회]` : ""
+                }
               );
+              await showStatusBarNotification(msg.title, msg.body, `${key}-r${rep.nextCount}`);
             }
           }
         }
       }
 
-      // 6. 오늘 마감 미완료 할 일
+      // 7. 오늘 마감 미완료 할 일 (일정별 알림 ON/OFF + 반복)
       const todosAtMin = toMin(smartNotifPrefs.todosDueTime || "09:00") ?? 540;
       if (smartNotifPrefs.todosDue && nowMin >= todosAtMin) {
         const key = `todos-due-${todayStr}`;
-        if (!sentMap[key]) {
-          const dueTodos = schedules.filter((s) => s.category === "할일(To-Do)" && !s.done && s.date && s.date <= todayStr);
+        const rep = canSendRepeat(sentMap, key, smartNotifPrefs.todosDueRepeatCount, smartNotifPrefs.todosDueRepeatInterval);
+        if (rep.ok) {
+          const dueTodos = schedules.filter((s) => s.category === "할일(To-Do)" && !s.done && s.notifEnabled !== false && s.date && s.date <= todayStr);
           if (dueTodos.length > 0) {
-            markSent(sentMap, key);
-            await showStatusBarNotification(
-              `📝 마감 임박 할 일 ${dueTodos.length}건`,
-              dueTodos.slice(0, 3).map((t) => t.title).join(" · "),
-              key
+            markSentRepeat(sentMap, key, rep.nextCount);
+            const msg = applyCustomTpl(
+              "todosDue",
+              "📝 마감 임박 할 일 {건수}건",
+              "{목록}",
+              {
+                건수: dueTodos.length,
+                목록: dueTodos.slice(0, 3).map((t) => t.title).join(" · "),
+                회차: rep.maxCount > 1 ? `[${rep.nextCount}/${rep.maxCount}회]` : ""
+              }
             );
+            await showStatusBarNotification(msg.title, msg.body, `${key}-r${rep.nextCount}`);
           }
         }
       }
@@ -10367,6 +10906,7 @@ function MainApp() {
       isAnnual: Boolean(srcForm.isAnnual),
       showDday: Boolean(srcForm.showDday),
       hasOriginYear: Boolean(srcForm.hasOriginYear),
+      notifEnabled: srcForm.notifEnabled !== false,
       done: editingSchedule ? Boolean(editingSchedule.done) : false,
       memo: (srcForm.memo || "").trim(),
       attachments: Array.isArray(srcForm.attachments) ? srcForm.attachments : []
@@ -14874,6 +15414,8 @@ ${validText}
     };
 
 
+    if (cropCleanupRef.current) cropCleanupRef.current();
+    cropCleanupRef.current = onUp;
     window.addEventListener("mousemove", onMove, { passive: false });
     window.addEventListener("mouseup", onUp);
     window.addEventListener("touchmove", onMove, { passive: false });
@@ -15274,7 +15816,7 @@ ${validText}
   };
 
 
-  const handleMoveCheckedShoppingToFridge = async () => {
+  const https://www.google.com/search?q=handleMoveCheckedShoppingToFridge = async () => {
     if (!requireEditorAccess("shopping")) return;
     const checkedItems = shoppingList.filter((s) => s.checked);
     if (checkedItems.length === 0) return;
@@ -15843,6 +16385,7 @@ ${validText}
       color: srcForm.color || "default",
       highlight: Boolean(srcForm.highlight),
       isAnnual: Boolean(srcForm.isAnnual),
+      notifEnabled: srcForm.notifEnabled !== false,
       memo: String(srcForm.memo || "").trim(),
       done: Boolean(existing?.done),
       updatedAtMs: Date.now()
@@ -16843,7 +17386,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
   };
 
   const handleAddCustomCategory = async (kind, rawName) => {
-    const tabKey = (kind === "fridge" || kind === "shopping_presets") ? (kind === "shopping_presets" ? "shopping" : "fridge") : kind === "recipe" ? "recipes" : kind === "bucket" ? "bucket" : (kind === "schedule" || kind === "schedule_places") ? "schedule" : (kind === "baby_memo_tags" || kind === "baby_health_tags") ? "baby" : (kind === "house_room" || kind === "house_med_target") ? "house" : (kind === "condolence_cat" || kind === "condolence_group" || kind === "condolence_pay") ? "condolence" : "notices";
+    const tabKey = (kind === "fridge" || kind === "shopping_presets") ? (kind === "shopping_presets" ? "shopping" : "fridge") : kind === "recipe" ? "recipes" : kind === "bucket" ? "bucket" : (kind === "schedule" || kind === "schedule_places") ? "schedule" : (kind === "baby_memo_tags" || kind === "baby_health_tags") ? "baby" : (kind === "house_room" || kind === "house_med_target" || kind === "house_warranty_brands") ? "house" : (kind === "condolence_cat" || kind === "condolence_group" || kind === "condolence_pay") ? "condolence" : "notices";
     if (tabKey === "condolence") {
       if (!isCondolenceUnlocked) { showToast("🔒 경조사비 비밀번호 해제 후 편집할 수 있습니다."); return; }
     } else if (!requireEditorAccess(tabKey)) return;
@@ -16869,7 +17412,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
   };
 
   const handleRenameCustomCategory = async (kind, oldName, rawNext) => {
-    const tabKey = (kind === "fridge" || kind === "shopping_presets") ? (kind === "shopping_presets" ? "shopping" : "fridge") : kind === "recipe" ? "recipes" : kind === "bucket" ? "bucket" : (kind === "schedule" || kind === "schedule_places") ? "schedule" : (kind === "baby_memo_tags" || kind === "baby_health_tags") ? "baby" : (kind === "house_room" || kind === "house_med_target") ? "house" : (kind === "condolence_cat" || kind === "condolence_group" || kind === "condolence_pay") ? "condolence" : "notices";
+    const tabKey = (kind === "fridge" || kind === "shopping_presets") ? (kind === "shopping_presets" ? "shopping" : "fridge") : kind === "recipe" ? "recipes" : kind === "bucket" ? "bucket" : (kind === "schedule" || kind === "schedule_places") ? "schedule" : (kind === "baby_memo_tags" || kind === "baby_health_tags") ? "baby" : (kind === "house_room" || kind === "house_med_target" || kind === "house_warranty_brands") ? "house" : (kind === "condolence_cat" || kind === "condolence_group" || kind === "condolence_pay") ? "condolence" : "notices";
     if (tabKey === "condolence") {
       if (!isCondolenceUnlocked) { showToast("🔒 경조사비 비밀번호 해제 후 편집할 수 있습니다."); return; }
     } else if (!requireEditorAccess(tabKey)) return;
@@ -17077,7 +17620,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
   };
 
   const handleDeleteCustomCategory = async (kind, targetName) => {
-    const tabKey = (kind === "fridge" || kind === "shopping_presets") ? (kind === "shopping_presets" ? "shopping" : "fridge") : kind === "recipe" ? "recipes" : kind === "bucket" ? "bucket" : (kind === "schedule" || kind === "schedule_places") ? "schedule" : (kind === "baby_memo_tags" || kind === "baby_health_tags") ? "baby" : (kind === "house_room" || kind === "house_med_target") ? "house" : (kind === "condolence_cat" || kind === "condolence_group" || kind === "condolence_pay") ? "condolence" : "notices";
+    const tabKey = (kind === "fridge" || kind === "shopping_presets") ? (kind === "shopping_presets" ? "shopping" : "fridge") : kind === "recipe" ? "recipes" : kind === "bucket" ? "bucket" : (kind === "schedule" || kind === "schedule_places") ? "schedule" : (kind === "baby_memo_tags" || kind === "baby_health_tags") ? "baby" : (kind === "house_room" || kind === "house_med_target" || kind === "house_warranty_brands") ? "house" : (kind === "condolence_cat" || kind === "condolence_group" || kind === "condolence_pay") ? "condolence" : "notices";
     if (tabKey === "condolence") {
       if (!isCondolenceUnlocked) { showToast("🔒 경조사비 비밀번호 해제 후 편집할 수 있습니다."); return; }
     } else if (!requireEditorAccess(tabKey)) return;
@@ -17110,7 +17653,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
   };
 
   const handleMoveCustomCategory = async (kind, idx, delta) => {
-    const tabKey = (kind === "fridge" || kind === "shopping_presets") ? (kind === "shopping_presets" ? "shopping" : "fridge") : kind === "recipe" ? "recipes" : kind === "bucket" ? "bucket" : (kind === "schedule" || kind === "schedule_places") ? "schedule" : (kind === "baby_memo_tags" || kind === "baby_health_tags") ? "baby" : (kind === "house_room" || kind === "house_med_target") ? "house" : (kind === "condolence_cat" || kind === "condolence_group" || kind === "condolence_pay") ? "condolence" : "notices";
+    const tabKey = (kind === "fridge" || kind === "shopping_presets") ? (kind === "shopping_presets" ? "shopping" : "fridge") : kind === "recipe" ? "recipes" : kind === "bucket" ? "bucket" : (kind === "schedule" || kind === "schedule_places") ? "schedule" : (kind === "baby_memo_tags" || kind === "baby_health_tags") ? "baby" : (kind === "house_room" || kind === "house_med_target" || kind === "house_warranty_brands") ? "house" : (kind === "condolence_cat" || kind === "condolence_group" || kind === "condolence_pay") ? "condolence" : "notices";
     if (tabKey === "condolence") {
       if (!isCondolenceUnlocked) { showToast("🔒 경조사비 비밀번호 해제 후 편집할 수 있습니다."); return; }
     } else if (!requireEditorAccess(tabKey)) return;
@@ -17134,7 +17677,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
   };
 
   const handleResetCustomCategories = async (kind) => {
-    const tabKey = (kind === "fridge" || kind === "shopping_presets") ? (kind === "shopping_presets" ? "shopping" : "fridge") : kind === "recipe" ? "recipes" : kind === "bucket" ? "bucket" : (kind === "schedule" || kind === "schedule_places") ? "schedule" : (kind === "baby_memo_tags" || kind === "baby_health_tags") ? "baby" : (kind === "house_room" || kind === "house_med_target") ? "house" : (kind === "condolence_cat" || kind === "condolence_group" || kind === "condolence_pay") ? "condolence" : "notices";
+    const tabKey = (kind === "fridge" || kind === "shopping_presets") ? (kind === "shopping_presets" ? "shopping" : "fridge") : kind === "recipe" ? "recipes" : kind === "bucket" ? "bucket" : (kind === "schedule" || kind === "schedule_places") ? "schedule" : (kind === "baby_memo_tags" || kind === "baby_health_tags") ? "baby" : (kind === "house_room" || kind === "house_med_target" || kind === "house_warranty_brands") ? "house" : (kind === "condolence_cat" || kind === "condolence_group" || kind === "condolence_pay") ? "condolence" : "notices";
     if (tabKey === "condolence") {
       if (!isCondolenceUnlocked) { showToast("🔒 경조사비 비밀번호 해제 후 편집할 수 있습니다."); return; }
     } else if (!requireEditorAccess(tabKey)) return;
@@ -17167,6 +17710,8 @@ ${item.memo}` : `${item.title} 다녀옴!`,
         ? [...DEFAULT_BABY_HEALTH_TAGS]
         : kind === "schedule_places"
         ? [...DEFAULT_SCHEDULE_PLACES]
+        : kind === "house_warranty_brands"
+        ? [...DEFAULT_HOUSE_WARRANTY_BRANDS]
         : [...NOTICE_CATEGORIES];
     await saveCustomCategoriesToCloud({ ...customCategories, [kind]: defaults }, "↺ 기본 분류 목록으로 복원했습니다.");
   };
@@ -17462,53 +18007,53 @@ ${item.memo}` : `${item.title} 다녀옴!`,
     }).join("");
 
     const xml = `<?xml version="1.0" encoding="UTF-8"?>
-<?mso-application progid="Excel.Sheet"?>
-<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
- xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
- <Styles>
-  <Style ss:ID="Header"><Font ss:Bold="1" ss:Color="#FFFFFF"/><Interior ss:Color="#35503C" ss:Pattern="Solid"/></Style>
-  <Style ss:ID="Section"><Font ss:Bold="1" ss:Size="12" ss:Color="#35503C"/></Style>
-  <Style ss:ID="Num"><NumberFormat ss:Format="#,##0"/></Style>
-  <Style ss:ID="Total"><Font ss:Bold="1"/><Interior ss:Color="#EEF3EE" ss:Pattern="Solid"/></Style>
-  <Style ss:ID="TotalNum"><Font ss:Bold="1"/><Interior ss:Color="#EEF3EE" ss:Pattern="Solid"/><NumberFormat ss:Format="#,##0"/></Style>
- </Styles>
- <Worksheet ss:Name="경조사비 내역">
-  <Table>
-   <Row>
-    <Cell ss:StyleID="Header"><Data ss:Type="String">번호</Data></Cell>
-    <Cell ss:StyleID="Header"><Data ss:Type="String">날짜</Data></Cell>
-    <Cell ss:StyleID="Header"><Data ss:Type="String">구분</Data></Cell>
-    <Cell ss:StyleID="Header"><Data ss:Type="String">카테고리</Data></Cell>
-    <Cell ss:StyleID="Header"><Data ss:Type="String">그룹</Data></Cell>
-    <Cell ss:StyleID="Header"><Data ss:Type="String">성명</Data></Cell>
-    <Cell ss:StyleID="Header"><Data ss:Type="String">당사자</Data></Cell>
-    <Cell ss:StyleID="Header"><Data ss:Type="String">금액</Data></Cell>
-    <Cell ss:StyleID="Header"><Data ss:Type="String">입금액</Data></Cell>
-    <Cell ss:StyleID="Header"><Data ss:Type="String">출금액</Data></Cell>
-    <Cell ss:StyleID="Header"><Data ss:Type="String">결제수단</Data></Cell>
-    <Cell ss:StyleID="Header"><Data ss:Type="String">메모</Data></Cell>
-   </Row>
+&lt;?mso-application progid=&quot;Excel.Sheet&quot;?&gt;
+&lt;Workbook xmlns=&quot;urn:schemas-microsoft-com:office:spreadsheet&quot;
+ xmlns:ss=&quot;urn:schemas-microsoft-com:office:spreadsheet&quot;&gt;
+ &lt;Styles&gt;
+  &lt;Style ss:ID=&quot;Header&quot;&gt;&lt;Font ss:Bold=&quot;1&quot; ss:Color=&quot;#FFFFFF&quot;/&gt;&lt;Interior ss:Color=&quot;#35503C&quot; ss:Pattern=&quot;Solid&quot;/&gt;&lt;/Style&gt;
+  &lt;Style ss:ID=&quot;Section&quot;&gt;&lt;Font ss:Bold=&quot;1&quot; ss:Size=&quot;12&quot; ss:Color=&quot;#35503C&quot;/&gt;&lt;/Style&gt;
+  &lt;Style ss:ID=&quot;Num&quot;&gt;&lt;NumberFormat ss:Format=&quot;#,##0&quot;/&gt;&lt;/Style&gt;
+  &lt;Style ss:ID=&quot;Total&quot;&gt;&lt;Font ss:Bold=&quot;1&quot;/&gt;&lt;Interior ss:Color=&quot;#EEF3EE&quot; ss:Pattern=&quot;Solid&quot;/&gt;&lt;/Style&gt;
+  &lt;Style ss:ID=&quot;TotalNum&quot;&gt;&lt;Font ss:Bold=&quot;1&quot;/&gt;&lt;Interior ss:Color=&quot;#EEF3EE&quot; ss:Pattern=&quot;Solid&quot;/&gt;&lt;NumberFormat ss:Format=&quot;#,##0&quot;/&gt;&lt;/Style&gt;
+ &lt;/Styles&gt;
+ &lt;Worksheet ss:Name=&quot;경조사비 내역&quot;&gt;
+  &lt;Table&gt;
+   &lt;Row&gt;
+    &lt;Cell ss:StyleID=&quot;Header&quot;&gt;&lt;Data ss:Type=&quot;String&quot;&gt;번호&lt;/Data&gt;&lt;/Cell&gt;
+    &lt;Cell ss:StyleID=&quot;Header&quot;&gt;&lt;Data ss:Type=&quot;String&quot;&gt;날짜&lt;/Data&gt;&lt;/Cell&gt;
+    &lt;Cell ss:StyleID=&quot;Header&quot;&gt;&lt;Data ss:Type=&quot;String&quot;&gt;구분&lt;/Data&gt;&lt;/Cell&gt;
+    &lt;Cell ss:StyleID=&quot;Header&quot;&gt;&lt;Data ss:Type=&quot;String&quot;&gt;카테고리&lt;/Data&gt;&lt;/Cell&gt;
+    &lt;Cell ss:StyleID=&quot;Header&quot;&gt;&lt;Data ss:Type=&quot;String&quot;&gt;그룹&lt;/Data&gt;&lt;/Cell&gt;
+    &lt;Cell ss:StyleID=&quot;Header&quot;&gt;&lt;Data ss:Type=&quot;String&quot;&gt;성명&lt;/Data&gt;&lt;/Cell&gt;
+    &lt;Cell ss:StyleID=&quot;Header&quot;&gt;&lt;Data ss:Type=&quot;String&quot;&gt;당사자&lt;/Data&gt;&lt;/Cell&gt;
+    &lt;Cell ss:StyleID=&quot;Header&quot;&gt;&lt;Data ss:Type=&quot;String&quot;&gt;금액&lt;/Data&gt;&lt;/Cell&gt;
+    &lt;Cell ss:StyleID=&quot;Header&quot;&gt;&lt;Data ss:Type=&quot;String&quot;&gt;입금액&lt;/Data&gt;&lt;/Cell&gt;
+    &lt;Cell ss:StyleID=&quot;Header&quot;&gt;&lt;Data ss:Type=&quot;String&quot;&gt;출금액&lt;/Data&gt;&lt;/Cell&gt;
+    &lt;Cell ss:StyleID=&quot;Header&quot;&gt;&lt;Data ss:Type=&quot;String&quot;&gt;결제수단&lt;/Data&gt;&lt;/Cell&gt;
+    &lt;Cell ss:StyleID=&quot;Header&quot;&gt;&lt;Data ss:Type=&quot;String&quot;&gt;메모&lt;/Data&gt;&lt;/Cell&gt;
+   &lt;/Row&gt;
    ${detailRowsXml}
-   <Row>
-    <Cell ss:StyleID="Total"><Data ss:Type="String">총계</Data></Cell>
-    <Cell ss:StyleID="Total"><Data ss:Type="String">${rows.length}건</Data></Cell>
-    <Cell ss:StyleID="Total"><Data ss:Type="String">순액</Data></Cell>
-    <Cell ss:StyleID="Total"/><Cell ss:StyleID="Total"/><Cell ss:StyleID="Total"/><Cell ss:StyleID="Total"/>
-    <Cell ss:StyleID="TotalNum"><Data ss:Type="Number">${netTotal}</Data></Cell>
-    <Cell ss:StyleID="TotalNum"><Data ss:Type="Number">${totalIn}</Data></Cell>
-    <Cell ss:StyleID="TotalNum"><Data ss:Type="Number">${totalOut}</Data></Cell>
-    <Cell ss:StyleID="Total"/><Cell ss:StyleID="Total"/>
-   </Row>
-  </Table>
- </Worksheet>
- <Worksheet ss:Name="부분합 요약">
-  <Table>
-   ${buildSubtotalRows("category", "1. 카테고리별 부분합")}
-   ${buildSubtotalRows("group", "2. 그룹별 부분합")}
-   ${buildSubtotalRows("person", "3. 인별 부분합")}
-  </Table>
- </Worksheet>
-</Workbook>`;
+   &lt;Row&gt;
+    &lt;Cell ss:StyleID=&quot;Total&quot;&gt;&lt;Data ss:Type=&quot;String&quot;&gt;총계&lt;/Data&gt;&lt;/Cell&gt;
+    &lt;Cell ss:StyleID=&quot;Total&quot;&gt;&lt;Data ss:Type=&quot;String&quot;&gt;${rows.length}건&lt;/Data&gt;&lt;/Cell&gt;
+    &lt;Cell ss:StyleID=&quot;Total&quot;&gt;&lt;Data ss:Type=&quot;String&quot;&gt;순액&lt;/Data&gt;&lt;/Cell&gt;
+    &lt;Cell ss:StyleID=&quot;Total&quot;/&gt;&lt;Cell ss:StyleID=&quot;Total&quot;/&gt;&lt;Cell ss:StyleID=&quot;Total&quot;/&gt;&lt;Cell ss:StyleID=&quot;Total&quot;/&gt;
+    &lt;Cell ss:StyleID=&quot;TotalNum&quot;&gt;&lt;Data ss:Type=&quot;Number&quot;&gt;${netTotal}&lt;/Data&gt;&lt;/Cell&gt;
+    &lt;Cell ss:StyleID=&quot;TotalNum&quot;&gt;&lt;Data ss:Type=&quot;Number&quot;&gt;${totalIn}&lt;/Data&gt;&lt;/Cell&gt;
+    &lt;Cell ss:StyleID=&quot;TotalNum&quot;&gt;&lt;Data ss:Type=&quot;Number&quot;&gt;${totalOut}&lt;/Data&gt;&lt;/Cell&gt;
+    &lt;Cell ss:StyleID=&quot;Total&quot;/&gt;&lt;Cell ss:StyleID=&quot;Total&quot;/&gt;
+   &lt;/Row&gt;
+  &lt;/Table&gt;
+ &lt;/Worksheet&gt;
+ &lt;Worksheet ss:Name=&quot;부분합 요약&quot;&gt;
+  &lt;Table&gt;
+   ${buildSubtotalRows(&quot;category&quot;, &quot;1. 카테고리별 부분합&quot;)}
+   ${buildSubtotalRows(&quot;group&quot;, &quot;2. 그룹별 부분합&quot;)}
+   ${buildSubtotalRows(&quot;person&quot;, &quot;3. 인별 부분합&quot;)}
+  &lt;/Table&gt;
+ &lt;/Worksheet&gt;
+&lt;/Workbook&gt;`;
 
     const blob = new Blob([xml], { type: "application/vnd.ms-excel;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
@@ -19837,20 +20382,39 @@ ${item.memo}` : `${item.title} 다녀옴!`,
   };
 
 
+  const parseCookTimeSeconds = (rawText) => {
+    const s = String(rawText || "").trim();
+    if (!s) return 600;
+    const hMatch = s.match(/(\d+)\s*시간/);
+    const mMatch = s.match(/(\d+)\s*분/);
+    const sMatch = s.match(/(\d+)\s*초/);
+    if (hMatch || mMatch || sMatch) {
+      const total =
+        (hMatch ? Number(hMatch[1]) * 3600 : 0) +
+        (mMatch ? Number(mMatch[1]) * 60 : 0) +
+        (sMatch ? Number(sMatch[1]) : 0);
+      return Math.max(1, total);
+    }
+    return parseCookTimeMinutes(s) * 60;
+  };
+
   const startRecipeCookTimer = (recipe) => {
-    const mins = parseCookTimeMinutes(recipe?.cookTime || recipe?.cookMinutes || 10);
+    unlockAudioContext();
+    setTimerCompletedAlert("");
+    const totalSec = parseCookTimeSeconds(recipe?.cookTime || recipe?.cookMinutes || 10);
+    const durLabel = formatDurationSecKo(totalSec);
     const now = Date.now();
-    setKitchenTimer({
+    setKitchenTimer((prev) => ({
+      ...prev,
       open: true,
       mode: "countdown",
-      label: recipe?.title ? `${recipe.title} (${mins}분)` : `조리 타이머 (${mins}분)`,
+      label: recipe?.title ? `${recipe.title} (${durLabel})` : `타이머 (${durLabel})`,
       running: true,
-      remainingSec: mins * 60,
-      elapsedSec: 0,
+      remainingSec: totalSec,
       startedAtMs: null,
-      targetEndMs: now + mins * 60 * 1000
-    });
-    showToast(`⏱️ ${recipe?.title || "조리"} ${mins}분 타이머를 시작했습니다!`);
+      targetEndMs: now + totalSec * 1000
+    }));
+    showToast(`⏱️ ${recipe?.title || "조리"} ${durLabel} 타이머를 시작했습니다!`);
   };
 
 
@@ -19869,13 +20433,20 @@ ${item.memo}` : `${item.title} 다녀옴!`,
         const targetEnd = Number(prev.targetEndMs) || (now + (Number(prev.remainingSec) || 0) * 1000);
         const rem = Math.max(0, Math.ceil((targetEnd - now) / 1000));
         if (rem <= 0) {
-          const completedLabel = prev.label || "조리 타이머";
+          const completedLabel = prev.label || "타이머";
           setTimeout(() => {
-            showToast(`🔔 [${completedLabel}] 조리 타이머가 완료되었습니다!`);
+            playTimerAlarmSound("timer");
+            triggerTimerVibration([300, 120, 300, 120, 450]);
+            setTimerCompletedAlert(completedLabel);
+            showToast(`🔔 [${completedLabel}] 타이머가 완료되었습니다!`);
             showStatusBarNotification(
-              `⏱️ [${completedLabel}] 완료`,
-              "설정한 조리 타이머가 끝났습니다.",
-              `timer-${Date.now()}`
+              `⏲️ [${completedLabel}] 완료!`,
+              "설정한 타이머 시간이 모두 지났습니다.",
+              `timer-${Date.now()}`,
+              {
+                forceSound: timerSoundEnabled,
+                vibrate: timerVibrateEnabled ? [300, 120, 300, 120, 450] : undefined
+              }
             );
           }, 0);
           return { ...prev, running: false, remainingSec: 0, targetEndMs: null };
@@ -19886,14 +20457,115 @@ ${item.memo}` : `${item.title} 다녀옴!`,
     };
     tick();
     const tid = setInterval(tick, 500);
-    document.addEventListener("visibilitychange", tick);
+    const handleVisForStatusBar = () => {
+      tick();
+      if (document.visibilityState === "hidden") {
+        setKitchenTimer((cur) => {
+          if (cur.running) {
+            const nowMs = Date.now();
+            const sec = cur.mode === "stopwatch"
+              ? Math.max(0, Math.floor((nowMs - (Number(cur.startedAtMs) || nowMs)) / 1000))
+              : Math.max(0, Math.ceil(((Number(cur.targetEndMs) || nowMs) - nowMs) / 1000));
+            const h = Math.floor(sec / 3600);
+            const m = String(Math.floor((sec % 3600) / 60)).padStart(2, "0");
+            const s = String(sec % 60).padStart(2, "0");
+            const tStr = h > 0 ? `${h}:${m}:${s}` : `${m}:${s}`;
+            const startPart = cur.mode === "stopwatch" && cur.cookStartTimeStr ? `시작 ${cur.cookStartTimeStr} · ` : "";
+            const titleTxt = cur.mode === "stopwatch" ? `⏱️ 스톱워치 실행 중 (${tStr})` : `⏲️ 타이머 실행 중 (${tStr})`;
+            const bodyTxt = `${startPart}앱으로 돌아와 확인하세요.`;
+            setTimeout(() => {
+              showStatusBarNotification(titleTxt, bodyTxt, "app-stopwatch-running");
+            }, 0);
+          }
+          return cur;
+        });
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisForStatusBar);
     window.addEventListener("focus", tick);
     return () => {
       clearInterval(tid);
-      document.removeEventListener("visibilitychange", tick);
+      document.removeEventListener("visibilitychange", handleVisForStatusBar);
       window.removeEventListener("focus", tick);
     };
-  }, [kitchenTimer.running]);
+  }, [kitchenTimer.running, timerSoundEnabled, timerVibrateEnabled]);
+
+  useEffect(() => {
+    if (!Array.isArray(customAlarms) || customAlarms.length === 0) return;
+    const hasActive = customAlarms.some((a) => a && a.enabled);
+    if (!hasActive) return;
+
+    const checkAlarms = () => {
+      const now = new Date();
+      const nowMs = now.getTime();
+      const todayStr = getTodayStr();
+      const hhmm = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+      const isWknd = isDayOffKorea(todayStr);
+      let changed = false;
+
+      const updated = customAlarms.map((al) => {
+        if (!al || !al.enabled) return al;
+        if (al.type === "once" && Number(al.targetMs) > 0) {
+          if (nowMs >= Number(al.targetMs)) {
+            changed = true;
+            const titleTxt = al.label || "예약 알람";
+            setTimeout(() => {
+              const res = playTimerAlarmSound("alarm", al.soundId || "morning");
+              setCompletedAlertUrl(res?.externalUrl || "");
+              triggerTimerVibration([400, 150, 400, 150, 500]);
+              setTimerCompletedAlert(titleTxt);
+              showToast(`⏰ [${titleTxt}] 알람 시간입니다!`);
+              showStatusBarNotification(
+                `⏰ ${titleTxt}`,
+                "설정하신 알림 시간이 되었습니다.",
+                `custom-alarm-${al.id}-${Date.now()}`,
+                { forceSound: timerSoundEnabled, vibrate: timerVibrateEnabled ? [400, 150, 400, 150, 500] : undefined }
+              );
+            }, 0);
+            return { ...al, enabled: false, lastFiredKey: todayStr };
+          }
+          return al;
+        }
+        if (al.type === "daily" && al.time === hhmm && al.lastFiredKey !== todayStr) {
+          if (al.repeat === "weekday" && isWknd) return al;
+          if (al.repeat === "weekend" && !isWknd) return al;
+          changed = true;
+          const titleTxt = al.label || "모닝콜";
+          setTimeout(() => {
+            const res = playTimerAlarmSound("alarm", al.soundId || "morning");
+            setCompletedAlertUrl(res?.externalUrl || "");
+            triggerTimerVibration([400, 150, 400, 150, 500]);
+            setTimerCompletedAlert(`${titleTxt} (${al.time})`);
+            showToast(`☀️ [${al.time}] ${titleTxt} 울림!`);
+            showStatusBarNotification(
+              `☀️ [${al.time}] ${titleTxt}`,
+              "좋은 하루 시작하세요! 모닝콜 알람입니다.",
+              `morning-alarm-${al.id}-${todayStr}`,
+              { forceSound: timerSoundEnabled, vibrate: timerVibrateEnabled ? [400, 150, 400, 150, 500] : undefined }
+            );
+          }, 0);
+          return {
+            ...al,
+            lastFiredKey: todayStr,
+            ...(al.repeat === "once" ? { enabled: false } : {})
+          };
+        }
+        return al;
+      });
+
+      if (changed) {
+        saveCustomAlarms(updated);
+      }
+    };
+
+    checkAlarms();
+    const tid = setInterval(checkAlarms, 5000);
+    document.addEventListener("visibilitychange", checkAlarms);
+    return () => {
+      clearInterval(tid);
+      document.removeEventListener("visibilitychange", checkAlarms);
+    };
+  }, [customAlarms, timerSoundEnabled, timerVibrateEnabled]);
 
 
   const toastBannerEl = toastMsg ? (
@@ -19907,8 +20579,8 @@ ${item.memo}` : `${item.title} 다녀옴!`,
       title="눌러서 닫기"
       className="fixed top-4 left-1/2 -translate-x-1/2 z-[9999] w-max max-w-[min(92vw,410px)] bg-stone-900 text-white px-3.5 py-2 rounded-2xl text-[11.5px] font-bold shadow-2xl border border-stone-700/60 flex items-center gap-2 cursor-pointer select-none"
     >
-      <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-      <span className="min-w-0 flex-1 break-keep leading-snug">{toastMsg}</span>
+      &lt;CheckCircle2 className=&quot;w-4 h-4 text-emerald-400 shrink-0&quot; /&gt;
+      &lt;span className=&quot;min-w-0 flex-1 break-keep leading-snug&quot;&gt;{toastMsg}&lt;/span&gt;
       {toastUndo?.fn && (
         <button
           type="button"
@@ -19923,20 +20595,20 @@ ${item.memo}` : `${item.title} 다녀옴!`,
           className="ml-1 px-2 py-0.5 rounded-full bg-amber-500 hover:bg-amber-400 text-stone-950 text-[11px] font-black shrink-0 whitespace-nowrap"
         >
           ↩️ 되돌리기
-        </button>
+        &lt;/button&gt;
       )}
-    </div>
+    &lt;/div&gt;
   ) : null;
 
   if (authLoading || (user && profileLoading && !userProfile)) {
     return (
-      <div className="min-h-screen bg-[#FAF8F3] text-stone-800 max-w-md mx-auto flex items-center justify-center p-6 font-sans">
-        <div className="bg-white rounded-3xl border border-stone-200 p-6 w-full text-center space-y-2 shadow-sm">
-          <div className="text-2xl animate-pulse">🔐</div>
-          <div className="text-[15px] font-black text-stone-900">인증 상태 확인 중...</div>
-          <div className="text-[12.5px] text-stone-500">잠시만 기다려 주세요.</div>
-        </div>
-      </div>
+      &lt;div className=&quot;min-h-screen bg-[#FAF8F3] text-stone-800 max-w-md mx-auto flex items-center justify-center p-6 font-sans&quot;&gt;
+        &lt;div className=&quot;bg-white rounded-3xl border border-stone-200 p-6 w-full text-center space-y-2 shadow-sm&quot;&gt;
+          &lt;div className=&quot;text-2xl animate-pulse&quot;&gt;🔐&lt;/div&gt;
+          &lt;div className=&quot;text-[15px] font-black text-stone-900&quot;&gt;인증 상태 확인 중...&lt;/div&gt;
+          &lt;div className=&quot;text-[12.5px] text-stone-500&quot;&gt;잠시만 기다려 주세요.&lt;/div&gt;
+        &lt;/div&gt;
+      &lt;/div&gt;
     );
   }
 
@@ -19945,16 +20617,16 @@ ${item.memo}` : `${item.title} 다녀옴!`,
     const isInAppBrowser = /KAKAOTALK|NAVER|Instagram|FBAN|FBAV|Line/i.test(ua);
     const isAndroidUa = /Android/i.test(ua);
     return (
-      <div className="min-h-screen bg-[#FAF8F3] text-stone-800 max-w-md mx-auto flex items-center justify-center p-4 font-sans">
+      &lt;div className=&quot;min-h-screen bg-[#FAF8F3] text-stone-800 max-w-md mx-auto flex items-center justify-center p-4 font-sans&quot;&gt;
         {toastBannerEl}
-        <div className="bg-white rounded-2xl border border-stone-200 p-5 w-full space-y-3 shadow-lg">
-          <div className="text-center space-y-0.5">
-            <div className="text-xl">🏡</div>
-            <h1 className="text-[15.5px] font-black text-stone-900">혁리나목율♡ 가족 앱</h1>
-            <p className="text-[11px] text-stone-500">
+        &lt;div className=&quot;bg-white rounded-2xl border border-stone-200 p-5 w-full space-y-3 shadow-lg&quot;&gt;
+          &lt;div className=&quot;text-center space-y-0.5&quot;&gt;
+            &lt;div className=&quot;text-xl&quot;&gt;🏡&lt;/div&gt;
+            &lt;h1 className=&quot;text-[15px] font-black text-stone-900&quot;&gt;혁리나목율♡ 가족 앱&lt;/h1&gt;
+            &lt;p className=&quot;text-[11px] text-stone-500&quot;&gt;
               로그인 · 가입 후 관리자 승인 시 이용할 수 있어요.
-            </p>
-          </div>
+            &lt;/p&gt;
+          &lt;/div&gt;
 
           {isInAppBrowser && (
             <div className="p-2.5 rounded-xl bg-stone-50 border border-stone-200 space-y-1.5 text-[11px] text-stone-800">
@@ -20155,19 +20827,19 @@ ${item.memo}` : `${item.title} 다녀옴!`,
   if (userProfile?.needsNameSetup || userProfile?.displayName === "새 사용자") {
     const suggestedName = googleNameSetupInput || (userProfile?.displayName && userProfile.displayName !== "새 사용자" ? userProfile.displayName : user.displayName || "");
     return (
-      <div className="min-h-screen bg-[#FAF8F3] text-stone-800 max-w-md mx-auto flex items-center justify-center p-4 font-sans">
+      &lt;div className=&quot;min-h-screen bg-[#FAF8F3] text-stone-800 max-w-md mx-auto flex items-center justify-center p-4 font-sans&quot;&gt;
         {toastBannerEl}
-        <div className="bg-white rounded-2xl border border-stone-200 p-5 w-full space-y-3 shadow-lg">
-          <div className="text-center space-y-0.5">
-            <div className="text-2xl">👤</div>
-            <h2 className="text-[14.5px] font-black text-stone-900">사용자 이름 입력 (필수)</h2>
-            <p className="text-[11px] text-stone-500">
+        &lt;div className=&quot;bg-white rounded-2xl border border-stone-200 p-5 w-full space-y-3 shadow-lg&quot;&gt;
+          &lt;div className=&quot;text-center space-y-0.5&quot;&gt;
+            &lt;div className=&quot;text-2xl&quot;&gt;👤&lt;/div&gt;
+            &lt;h2 className=&quot;text-[14px] font-black text-stone-900&quot;&gt;사용자 이름 입력 (필수)&lt;/h2&gt;
+            &lt;p className=&quot;text-[11px] text-stone-500&quot;&gt;
               가족과 관리자가 구분할 수 있도록 이름을 입력해 주세요.
-            </p>
-          </div>
-          <div className="bg-stone-50 border border-stone-200 rounded-xl px-2.5 py-1.5 text-[11px] text-stone-600 truncate">
-            <span className="font-bold text-stone-800">계정:</span> {user.email || user.uid}
-          </div>
+            &lt;/p&gt;
+          &lt;/div&gt;
+          &lt;div className=&quot;bg-stone-50 border border-stone-200 rounded-xl px-2.5 py-1.5 text-[11px] text-stone-600 truncate&quot;&gt;
+            &lt;span className=&quot;font-bold text-stone-800&quot;&gt;계정:&lt;/span&gt; {user.email || user.uid}
+          &lt;/div&gt;
           <form
             onSubmit={async (e) => {
               e.preventDefault();
@@ -20203,22 +20875,22 @@ ${item.memo}` : `${item.title} 다녀옴!`,
               autoFocus
               className="w-full h-9 px-3 rounded-xl border border-stone-200 bg-stone-50 focus:bg-white text-[12px] font-bold"
             />
-            <button
-              type="submit"
-              className="w-full h-9 rounded-xl bg-[#3F624D] hover:bg-[#324F3E] text-white text-[12px] font-extrabold whitespace-nowrap"
-            >
+            &lt;button
+              type=&quot;submit&quot;
+              className=&quot;w-full h-9 rounded-xl bg-[#3F624D] hover:bg-[#324F3E] text-white text-[12px] font-extrabold whitespace-nowrap&quot;
+            &gt;
               ✅ 이름 저장하고 계속하기
-            </button>
-          </form>
-          <button
-            type="button"
+            &lt;/button&gt;
+          &lt;/form&gt;
+          &lt;button
+            type=&quot;button&quot;
             onClick={logoutToGuest}
-            className="w-full h-8 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-600 text-[11px] font-bold whitespace-nowrap"
-          >
+            className=&quot;w-full h-8 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-600 text-[11px] font-bold whitespace-nowrap&quot;
+          &gt;
             다른 계정으로 로그인
-          </button>
-        </div>
-      </div>
+          &lt;/button&gt;
+        &lt;/div&gt;
+      &lt;/div&gt;
     );
   }
 
@@ -20231,11 +20903,11 @@ ${item.memo}` : `${item.title} 다녀옴!`,
         onClick={(e) => e.stopPropagation()}
         className="bg-white rounded-2xl w-full max-w-sm shadow-2xl border border-stone-200 overflow-hidden"
       >
-        <div className="px-4 py-3 border-b border-stone-100 flex items-center justify-between bg-stone-50">
-          <div className="flex items-center gap-1.5">
-            <span className="text-[14px]">💌</span>
-            <h3 className="text-[13.5px] font-black text-stone-900">관리자에게 쪽지남기기</h3>
-          </div>
+        &lt;div className=&quot;px-4 py-3 border-b border-stone-100 flex items-center justify-between bg-stone-50&quot;&gt;
+          &lt;div className=&quot;flex items-center gap-1.5&quot;&gt;
+            &lt;span className=&quot;text-[14px]&quot;&gt;💌&lt;/span&gt;
+            &lt;h3 className=&quot;text-[13.5px] font-black text-stone-900&quot;&gt;관리자에게 쪽지남기기&lt;/h3&gt;
+          &lt;/div&gt;
           <button
             type="button"
             onClick={() => setShowSendAdminNoteModal(false)}
@@ -20243,18 +20915,18 @@ ${item.memo}` : `${item.title} 다녀옴!`,
             aria-label="닫기"
           >
             ✕
-          </button>
-        </div>
-        <div className="p-3.5 space-y-2.5">
+          &lt;/button&gt;
+        &lt;/div&gt;
+        &lt;div className=&quot;p-3.5 space-y-2.5&quot;&gt;
           {userProfile?.lastAdminNote && (
-            <div className="px-2.5 py-1.5 rounded-xl bg-stone-50 border border-stone-200 text-[10.5px] flex items-center justify-between gap-2">
-              <span className="truncate text-stone-600 font-bold">
+            &lt;div className=&quot;px-2.5 py-1.5 rounded-xl bg-stone-50 border border-stone-200 text-[10.5px] flex items-center justify-between gap-2&quot;&gt;
+              &lt;span className=&quot;truncate text-stone-600 font-bold&quot;&gt;
                 최근: {userProfile.lastAdminNote.text || "첨부파일"}
-              </span>
+              &lt;/span&gt;
               <span className={`shrink-0 font-black whitespace-nowrap ${userProfile.lastAdminNote.read ? "text-[#3F624D]" : "text-amber-600"}`}>
                 {userProfile.lastAdminNote.read ? "✅ 확인됨" : "⏳ 확인 대기"}
-              </span>
-            </div>
+              &lt;/span&gt;
+            &lt;/div&gt;
           )}
           <textarea
             rows={4}
@@ -20263,9 +20935,9 @@ ${item.memo}` : `${item.title} 다녀옴!`,
             placeholder="관리자에게 전할 말이나 요청사항을 편하게 남겨주세요."
             className="w-full p-2.5 rounded-xl border border-stone-200 bg-stone-50 text-[12px] font-medium resize-none focus:outline-none focus:border-[#3F624D]"
           />
-          <div className="space-y-1.5">
-            <label className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-stone-100 hover:bg-stone-200 border border-stone-200 text-stone-700 text-[11px] font-extrabold cursor-pointer">
-              <span>📎 사진·파일 첨부 ({adminNoteAttachments.length}/3)</span>
+          &lt;div className=&quot;space-y-1.5&quot;&gt;
+            &lt;label className=&quot;inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-stone-100 hover:bg-stone-200 border border-stone-200 text-stone-700 text-[11px] font-extrabold cursor-pointer&quot;&gt;
+              &lt;span&gt;📎 사진·파일 첨부 ({adminNoteAttachments.length}/3)&lt;/span&gt;
               <input
                 type="file"
                 multiple
@@ -20289,22 +20961,22 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                   }
                 }}
               />
-            </label>
+            &lt;/label&gt;
             {adminNoteAttachments.length > 0 && (
-              <div className="flex flex-wrap gap-1.5">
+              &lt;div className=&quot;flex flex-wrap gap-1.5&quot;&gt;
                 {adminNoteAttachments.map((att) => {
                   const isImg = String(att.mimeType || "").startsWith("image/");
                   return (
-                    <div
+                    &lt;div
                       key={att.id}
-                      className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg bg-stone-50 border border-stone-200 text-[10.5px] font-bold text-stone-700 max-w-full"
-                    >
+                      className=&quot;inline-flex items-center gap-1.5 px-2 py-1 rounded-lg bg-stone-50 border border-stone-200 text-[10.5px] font-bold text-stone-700 max-w-full&quot;
+                    &gt;
                       {isImg && att.dataUrl ? (
-                        <img src={att.dataUrl} alt={att.name} className="w-5 h-5 rounded object-cover shrink-0" />
+                        &lt;img src={att.dataUrl} alt={att.name} className=&quot;w-5 h-5 rounded object-cover shrink-0&quot; /&gt;
                       ) : (
-                        <span>📄</span>
+                        &lt;span&gt;📄&lt;/span&gt;
                       )}
-                      <span className="truncate max-w-[140px]">{att.name}</span>
+                      &lt;span className=&quot;truncate max-w-[140px]&quot;&gt;{att.name}&lt;/span&gt;
                       <button
                         type="button"
                         onClick={() => setAdminNoteAttachments((prev) => prev.filter((x) => x.id !== att.id))}
@@ -20312,30 +20984,30 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                         aria-label="첨부 삭제"
                       >
                         ×
-                      </button>
-                    </div>
+                      &lt;/button&gt;
+                    &lt;/div&gt;
                   );
                 })}
-              </div>
+              &lt;/div&gt;
             )}
-          </div>
-          <button
-            type="button"
+          &lt;/div&gt;
+          &lt;button
+            type=&quot;button&quot;
             disabled={adminNoteSending}
             onClick={handleSendAdminNote}
-            className="w-full py-2.5 rounded-xl bg-stone-900 hover:bg-stone-800 disabled:opacity-50 text-white text-[12.5px] font-black"
-          >
+            className=&quot;w-full py-2.5 rounded-xl bg-stone-900 hover:bg-stone-800 disabled:opacity-50 text-white text-[12.5px] font-black&quot;
+          &gt;
             {adminNoteSending ? "전송 중..." : "쪽지 보내기"}
-          </button>
-          <div className="pt-1.5 border-t border-stone-100 text-center text-[10.5px] text-stone-400 font-bold leading-relaxed">
-            <div>관리자 연락처</div>
-            <div className="flex items-center justify-center mt-0.5 text-stone-500">
-              <a href="tel:01059147933" className="underline hover:text-stone-800">관리자 : 01059147933</a>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
+          &lt;/button&gt;
+          &lt;div className=&quot;pt-1.5 border-t border-stone-100 text-center text-[10.5px] text-stone-400 font-bold leading-relaxed&quot;&gt;
+            &lt;div&gt;관리자 연락처&lt;/div&gt;
+            &lt;div className=&quot;flex items-center justify-center mt-0.5 text-stone-500&quot;&gt;
+              &lt;a href=&quot;tel:01059147933&quot; className=&quot;underline hover:text-stone-800&quot;&gt;관리자 : 01059147933&lt;/a&gt;
+            &lt;/div&gt;
+          &lt;/div&gt;
+        &lt;/div&gt;
+      &lt;/div&gt;
+    &lt;/div&gt;
   ) : null;
 
   if (!isApprovedUser) {
@@ -20343,16 +21015,16 @@ ${item.memo}` : `${item.title} 다녀옴!`,
     const isRejected = userProfile?.role === "rejected";
     if (isWithdrawn) {
       return (
-        <div className="min-h-screen bg-[#FAF8F3] text-stone-800 max-w-md mx-auto flex items-center justify-center p-4 font-sans">
+        &lt;div className=&quot;min-h-screen bg-[#FAF8F3] text-stone-800 max-w-md mx-auto flex items-center justify-center p-4 font-sans&quot;&gt;
           {toastBannerEl}
-          <div className="bg-white rounded-2xl border border-stone-200 p-5 w-full text-center space-y-3 shadow-lg">
-            <div className="text-3xl">👋</div>
-            <div className="space-y-1">
-              <h2 className="text-[17px] font-black text-stone-900">탈퇴 처리된 계정입니다</h2>
-              <p className="text-[12.5px] text-stone-500 leading-relaxed">
+          &lt;div className=&quot;bg-white rounded-2xl border border-stone-200 p-5 w-full text-center space-y-3 shadow-lg&quot;&gt;
+            &lt;div className=&quot;text-3xl&quot;&gt;👋&lt;/div&gt;
+            &lt;div className=&quot;space-y-1&quot;&gt;
+              &lt;h2 className=&quot;text-[17px] font-black text-stone-900&quot;&gt;탈퇴 처리된 계정입니다&lt;/h2&gt;
+              &lt;p className=&quot;text-[12.5px] text-stone-500 leading-relaxed&quot;&gt;
                 관리자에 의해 회원 탈퇴 처리되었습니다. 다시 이용하려면 계정 정리를 완료한 뒤 새로 가입해 주세요.
-              </p>
-            </div>
+              &lt;/p&gt;
+            &lt;/div&gt;
             <button
               type="button"
               onClick={async () => {
@@ -20368,36 +21040,36 @@ ${item.memo}` : `${item.title} 다녀옴!`,
               className="w-full py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-[13px] font-black"
             >
               계정 완전 삭제 및 나가기
-            </button>
-            <button
-              type="button"
+            &lt;/button&gt;
+            &lt;button
+              type=&quot;button&quot;
               onClick={logoutToGuest}
-              className="w-full py-2 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-[12px] font-bold"
-            >
+              className=&quot;w-full py-2 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-[12px] font-bold&quot;
+            &gt;
               로그아웃
-            </button>
-          </div>
-        </div>
+            &lt;/button&gt;
+          &lt;/div&gt;
+        &lt;/div&gt;
       );
     }
     return (
-      <div className="min-h-screen bg-[#FAF8F3] text-stone-800 max-w-md mx-auto flex items-center justify-center p-4 font-sans">
+      &lt;div className=&quot;min-h-screen bg-[#FAF8F3] text-stone-800 max-w-md mx-auto flex items-center justify-center p-4 font-sans&quot;&gt;
         {toastBannerEl}
-        <div className="bg-white rounded-2xl border border-stone-200 p-5 w-full text-center space-y-3 shadow-lg">
-          <div className="text-2xl">{isRejected ? "🚫" : "⏳"}</div>
-          <div className="space-y-0.5">
-            <h2 className="text-[14.5px] font-black text-stone-900">
+        &lt;div className=&quot;bg-white rounded-2xl border border-stone-200 p-5 w-full text-center space-y-3 shadow-lg&quot;&gt;
+          &lt;div className=&quot;text-2xl&quot;&gt;{isRejected ? "🚫" : "⏳"}&lt;/div&gt;
+          &lt;div className=&quot;space-y-0.5&quot;&gt;
+            &lt;h2 className=&quot;text-[14px] font-black text-stone-900&quot;&gt;
               {isRejected ? "접근이 제한된 계정입니다" : "관리자 승인 대기 중입니다"}
-            </h2>
-            <p className="text-[11px] text-stone-500 leading-snug">
+            &lt;/h2&gt;
+            &lt;p className=&quot;text-[11px] text-stone-500 leading-snug&quot;&gt;
               {isRejected
                 ? "관리자에게 문의해 주세요."
                 : "관리자 승인 후 자동으로 화면이 열립니다."}
-            </p>
-          </div>
-          <div className="bg-stone-50 border border-stone-200 rounded-2xl p-3 text-left text-[12px] space-y-1.5 text-stone-600">
-            <div className="flex items-center justify-between gap-2">
-              <div><strong className="text-stone-800">이름:</strong> {userProfile?.actorName || userProfile?.displayName || user.displayName || "-"}</div>
+            &lt;/p&gt;
+          &lt;/div&gt;
+          &lt;div className=&quot;bg-stone-50 border border-stone-200 rounded-2xl p-3 text-left text-[12px] space-y-1.5 text-stone-600&quot;&gt;
+            &lt;div className=&quot;flex items-center justify-between gap-2&quot;&gt;
+              &lt;div&gt;&lt;strong className=&quot;text-stone-800&quot;&gt;이름:&lt;/strong&gt; {userProfile?.actorName || userProfile?.displayName || user.displayName || "-"}&lt;/div&gt;
               {!isRejected && (
                 <button
                   type="button"
@@ -20408,16 +21080,16 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                   className="px-2 py-0.5 rounded-lg bg-white border border-stone-200 text-[10.5px] font-extrabold text-stone-600 hover:bg-stone-100 whitespace-nowrap"
                 >
                   ✏️ 이름 수정
-                </button>
+                &lt;/button&gt;
               )}
-            </div>
-            <div><strong className="text-stone-800">이메일:</strong> {user.email || "-"}</div>
-            <div className="break-all"><strong className="text-stone-800">UID:</strong> {user.uid}</div>
+            &lt;/div&gt;
+            &lt;div&gt;&lt;strong className=&quot;text-stone-800&quot;&gt;이메일:&lt;/strong&gt; {user.email || "-"}&lt;/div&gt;
+            &lt;div className=&quot;break-all&quot;&gt;&lt;strong className=&quot;text-stone-800&quot;&gt;UID:&lt;/strong&gt; {user.uid}&lt;/div&gt;
             {user.email && (
-              <div className="flex items-center justify-between gap-2 pt-1 border-t border-stone-200/80">
-                <span className="text-[11px] font-bold">
+              &lt;div className=&quot;flex items-center justify-between gap-2 pt-1 border-t border-stone-200/80&quot;&gt;
+                &lt;span className=&quot;text-[11px] font-bold&quot;&gt;
                   {user.emailVerified ? "✅ 이메일 인증 완료" : "📧 가입 확인 메일 미인증"}
-                </span>
+                &lt;/span&gt;
                 {!user.emailVerified && (
                   <button
                     type="button"
@@ -20432,52 +21104,52 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                     className="px-2 py-0.5 rounded-lg bg-[#3F624D] text-white text-[10.5px] font-extrabold whitespace-nowrap"
                   >
                     확인 메일 발송
-                  </button>
+                  &lt;/button&gt;
                 )}
-              </div>
+              &lt;/div&gt;
             )}
-          </div>
-          <div className="space-y-2 pt-1">
+          &lt;/div&gt;
+          &lt;div className=&quot;space-y-2 pt-1&quot;&gt;
             <button
               type="button"
               onClick={() => setShowSendAdminNoteModal(true)}
               className="w-full py-2.5 rounded-xl bg-[#EEF3EE] hover:bg-[#DFE9E0] border border-[#C9D8CC] text-[#35503C] text-[13px] font-black"
             >
               💌 관리자에게 쪽지남기기
-            </button>
-            <div className="text-[10.5px] text-stone-400 font-bold leading-relaxed">
+            &lt;/button&gt;
+            &lt;div className=&quot;text-[10.5px] text-stone-400 font-bold leading-relaxed&quot;&gt;
               관리자 연락처 ·{" "}
-              <a href="tel:01059147933" className="underline hover:text-stone-700">관리자 : 01059147933</a>
-            </div>
-            <button
-              type="button"
+              &lt;a href=&quot;tel:01059147933&quot; className=&quot;underline hover:text-stone-700&quot;&gt;관리자 : 01059147933&lt;/a&gt;
+            &lt;/div&gt;
+            &lt;button
+              type=&quot;button&quot;
               onClick={logoutToGuest}
-              className="w-full py-2.5 rounded-xl bg-stone-900 hover:bg-stone-800 text-white text-[13px] font-extrabold"
-            >
+              className=&quot;w-full py-2.5 rounded-xl bg-stone-900 hover:bg-stone-800 text-white text-[13px] font-extrabold&quot;
+            &gt;
               로그아웃 / 다른 계정으로 로그인
-            </button>
-          </div>
-        </div>
+            &lt;/button&gt;
+          &lt;/div&gt;
+        &lt;/div&gt;
         {sendAdminNoteModalEl}
-      </div>
+      &lt;/div&gt;
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#FAF8F3] text-stone-800 pb-24 max-w-md mx-auto shadow-xl border-x border-stone-200 relative font-sans">
+    &lt;div className=&quot;min-h-screen bg-[#FAF8F3] text-stone-800 pb-24 max-w-md mx-auto shadow-xl border-x border-stone-200 relative font-sans&quot;&gt;
       {diaryUploadProgress && (
-        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[9998] w-[88%] max-w-xs bg-stone-900/95 text-white px-4 py-2.5 rounded-2xl shadow-xl space-y-1.5">
-          <div className="flex items-center justify-between text-[12.5px] font-extrabold">
-            <span className="truncate">⏳ {diaryUploadProgress.stepText}</span>
-            <span className="text-emerald-300 shrink-0 ml-2">{diaryUploadProgress.pct}%</span>
-          </div>
-          <div className="w-full h-1.5 rounded-full bg-stone-700 overflow-hidden">
+        &lt;div className=&quot;fixed top-4 left-1/2 -translate-x-1/2 z-[9998] w-[88%] max-w-xs bg-stone-900/95 text-white px-4 py-2.5 rounded-2xl shadow-xl space-y-1.5&quot;&gt;
+          &lt;div className=&quot;flex items-center justify-between text-[12.5px] font-extrabold&quot;&gt;
+            &lt;span className=&quot;truncate&quot;&gt;⏳ {diaryUploadProgress.stepText}&lt;/span&gt;
+            &lt;span className=&quot;text-emerald-300 shrink-0 ml-2&quot;&gt;{diaryUploadProgress.pct}%&lt;/span&gt;
+          &lt;/div&gt;
+          &lt;div className=&quot;w-full h-1.5 rounded-full bg-stone-700 overflow-hidden&quot;&gt;
             <div
               className="h-full bg-emerald-400 transition-all duration-300"
               style={{ width: `${diaryUploadProgress.pct}%` }}
             />
-          </div>
-        </div>
+          &lt;/div&gt;
+        &lt;/div&gt;
       )}
 
 
@@ -20594,6 +21266,28 @@ ${item.memo}` : `${item.title} 다녀옴!`,
             </button>
           </div>
           <div className="flex items-center gap-0.5 shrink-0">
+            {(kitchenTimer.running || (kitchenTimer.mode === "stopwatch" && (kitchenTimer.elapsedSec > 0 || kitchenTimer.cookStartTimeStr)) || (kitchenTimer.mode === "countdown" && kitchenTimer.remainingSec > 0)) && (() => {
+              const dSec = kitchenTimer.mode === "stopwatch" ? (Number(kitchenTimer.elapsedSec) || 0) : (Number(kitchenTimer.remainingSec) || 0);
+              const hh = Math.floor(dSec / 3600);
+              const mm = String(Math.floor((dSec % 3600) / 60)).padStart(2, "0");
+              const ss = String(dSec % 60).padStart(2, "0");
+              const tFmt = hh > 0 ? `${hh}:${mm}:${ss}` : `${mm}:${ss}`;
+              return (
+                <button
+                  type="button"
+                  onClick={() => setKitchenTimer((p) => ({ ...p, open: !p.open }))}
+                  className={`h-7 px-2 rounded-full border text-[11px] font-mono font-black flex items-center gap-1 whitespace-nowrap shrink-0 transition ${
+                    kitchenTimer.running
+                      ? "bg-[#3F624D] text-white border-[#3F624D]"
+                      : "bg-stone-100 text-stone-700 border-stone-200 hover:bg-stone-200"
+                  }`}
+                  title="스톱워치 · 타이머 열기/접기"
+                >
+                  <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${kitchenTimer.running ? "bg-emerald-300 animate-pulse" : "bg-stone-400"}`} />
+                  <span>{kitchenTimer.mode === "stopwatch" ? "⏱️" : "⏲️"} {tFmt}</span>
+                </button>
+              );
+            })()}
             {activeTab === "home" && isAdminUnlocked && (
               <button
                 type="button"
@@ -20825,7 +21519,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                   className="w-full h-full object-cover transition group-hover:scale-[1.01]"
                 />
                 <div className="absolute inset-x-0 bottom-0 h-9 bg-gradient-to-t from-stone-950/75 via-stone-950/30 to-transparent pointer-events-none" />
-                <div className="absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded-full bg-stone-950/60 backdrop-blur-sm text-white text-[9.5px] font-semibold flex items-center gap-0.5 whitespace-nowrap">
+                <div className="absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded-full bg-stone-950/60 backdrop-blur-sm text-white text-[10px] font-semibold flex items-center gap-0.5 whitespace-nowrap">
                   <Camera className="w-2.5 h-2.5" />
                   <span>편집</span>
                 </div>
@@ -21084,7 +21778,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                     <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 shrink-0" />
                     <span>마지막 수면</span>
                   </div>
-                  <div className="text-[11.5px] font-black text-indigo-700 mt-0.5 whitespace-nowrap">
+                  <div className="text-[11.5px] font-black text-[#35503C] mt-0.5 whitespace-nowrap">
                     {sum.lastSleep ? formatElapsedKo(nowMs - sum.lastSleep.startMs) : "-"}
                   </div>
                   <div className="text-[10.5px] font-bold text-stone-500 whitespace-nowrap">
@@ -21165,7 +21859,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                         }
                         handleQuickTapBabyActivity(qId, "시율", qb.subType || null);
                       }}
-                      className={`py-1.5 px-0.5 rounded-xl border text-[9.5px] font-extrabold tracking-tighter flex flex-col items-center gap-0.5 transition active:scale-95 ${
+                      className={`py-1.5 px-0.5 rounded-xl border text-[10px] font-extrabold tracking-tighter flex flex-col items-center gap-0.5 transition active:scale-95 ${
                         isRunning
                           ? "bg-emerald-600 text-white border-emerald-600 animate-pulse"
                           : "bg-white hover:bg-stone-50 text-stone-800 border-stone-200"
@@ -21693,7 +22387,7 @@ time: "", location: "",
                         className="h-7 px-2 rounded-lg bg-[#EEF3EE] hover:bg-[#DFE9E0] text-[#35503C] text-[11px] font-semibold whitespace-nowrap"
                       >
                         + 추가
-                      </button>
+                      &lt;/button&gt;
                       <button
                         type="button"
                         onClick={() => {
@@ -21703,9 +22397,9 @@ time: "", location: "",
                         className="h-7 px-2 rounded-lg text-stone-700 hover:bg-stone-100 text-[11.5px] font-bold whitespace-nowrap"
                       >
                         전체
-                      </button>
-                    </div>
-                  </div>
+                      &lt;/button&gt;
+                    &lt;/div&gt;
+                  &lt;/div&gt;
 
                   {imminentSchedulesWithin3Days.length === 0 ? (
                     <div className="text-[12px] font-medium text-stone-600 py-1">
@@ -22333,7 +23027,7 @@ time: "", location: "",
                         className="h-7 px-2 rounded-lg bg-[#EEF3EE] hover:bg-[#DFE9E0] text-[#35503C] text-[11px] font-semibold whitespace-nowrap"
                       >
                         + 추가
-                      </button>
+                      &lt;/button&gt;
                       <button
                         type="button"
                         onClick={() => {
@@ -22343,9 +23037,9 @@ time: "", location: "",
                         className="h-7 px-2 rounded-lg text-stone-700 hover:bg-stone-100 text-[11.5px] font-bold whitespace-nowrap"
                       >
                         전체
-                      </button>
-                    </div>
-                  </div>
+                      &lt;/button&gt;
+                    &lt;/div&gt;
+                  &lt;/div&gt;
 
                   {previewTodos.length === 0 ? (
                     <div className="text-[12px] font-medium text-stone-600 py-1">
@@ -22496,7 +23190,7 @@ time: "", location: "",
 
             const menuGridSize = blockSizes.menu_grid || "normal";
             const gridPadCls = menuGridSize === "compact" ? "px-2 py-1.5 min-h-[50px]" : menuGridSize === "large" ? "px-3 py-2.5 min-h-[68px]" : "px-2.5 py-2 min-h-[58px]";
-            const gridTitleCls = menuGridSize === "compact" ? "text-[12.5px]" : menuGridSize === "large" ? "text-[14.5px]" : "text-[13.5px]";
+            const gridTitleCls = menuGridSize === "compact" ? "text-[12.5px]" : menuGridSize === "large" ? "text-[14px]" : "text-[13.5px]";
             const gridSubCls = menuGridSize === "compact" ? "text-[11px]" : menuGridSize === "large" ? "text-[12.5px]" : "text-[12px]";
 
             return (
@@ -23353,18 +24047,18 @@ time: "", location: "",
 
 
           {/* 상단 고정(Sticky) 1줄 인원 빠른 전환 바 */}
-          <div className={`sticky z-20 bg-white/95 backdrop-blur border border-stone-200 rounded-2xl px-2 py-1.5 shadow-sm ${isHeaderPinned ? "top-[82px]" : "top-1"}`}>
-            <div className="flex flex-wrap items-center gap-1">
+          <div className={`sticky z-20 bg-white/95 backdrop-blur border border-stone-200 rounded-2xl px-1.5 py-1.5 shadow-sm ${isHeaderPinned ? "top-[82px]" : "top-1"}`}>
+            <div className="grid grid-cols-5 gap-1">
               <button
                 type="button"
                 onClick={() => setSelectedMember("전체")}
-                className={`px-2 py-1 rounded-xl text-[11.5px] font-extrabold border whitespace-nowrap shrink-0 transition ${
+                className={`px-1 py-1 rounded-xl text-[11px] font-extrabold border whitespace-nowrap flex items-center justify-center transition ${
                   selectedMember === "전체"
                     ? "bg-[#3F624D] text-white border-[#3F624D]"
                     : "bg-stone-50 text-stone-600 border-stone-200"
                 }`}
               >
-                👨‍👩‍👧‍👦 전체
+                전체
               </button>
               {FAMILY_MEMBERS.map((mem) => {
                 const isSel = selectedMember === mem.id;
@@ -23385,14 +24079,14 @@ time: "", location: "",
                         }, 100);
                       }
                     }}
-                    className={`px-2 py-1 rounded-xl text-[11.5px] font-extrabold border whitespace-nowrap shrink-0 inline-flex items-center gap-1 transition ${
+                    className={`px-1 py-1 rounded-xl text-[11px] font-extrabold border whitespace-nowrap inline-flex items-center justify-center gap-1 min-w-0 transition ${
                       isSel
                         ? "bg-[#3F624D] text-white border-[#3F624D]"
                         : "bg-stone-50 text-stone-700 border-stone-200"
                     }`}
                   >
                     <MemberAvatar member={mem} size="sm" />
-                    <span>{mem.name}</span>
+                    <span className="truncate">{mem.name}</span>
                   </button>
                 );
               })}
@@ -23972,7 +24666,7 @@ time: "", location: "",
                               {previewMeals.map((pm) => (
                                 <div
                                   key={pm.id}
-                                  className={`w-full px-1 py-[1px] rounded text-[9.5px] font-bold leading-tight truncate ${getSlotChipStyle(pm.slot, isSel)}`}
+                                  className={`w-full px-1 py-[1px] rounded text-[10px] font-bold leading-tight truncate ${getSlotChipStyle(pm.slot, isSel)}`}
                                   title={`${pm.slot}: ${pm.menu}`}
                                 >
                                   {cleanMenuLabel(pm.menu)}
@@ -24165,7 +24859,7 @@ time: "", location: "",
                                 </span>
                                 <div className="flex items-center gap-1">
                                   {isTodayRow && (
-                                    <span className="px-1.5 py-0.5 rounded bg-[#5E7A65] text-white text-[9.5px] font-extrabold whitespace-nowrap">
+                                    <span className="px-1.5 py-0.5 rounded bg-[#5E7A65] text-white text-[10px] font-extrabold whitespace-nowrap">
                                       오늘
                                     </span>
                                   )}
@@ -24177,7 +24871,7 @@ time: "", location: "",
                                       setSelectedMember("전체");
                                       setActiveTab("daily");
                                     }}
-                                    className="px-1 py-0.5 rounded bg-stone-100 hover:bg-stone-200 text-stone-600 text-[9.5px] font-extrabold whitespace-nowrap"
+                                    className="px-1 py-0.5 rounded bg-stone-100 hover:bg-stone-200 text-stone-600 text-[10px] font-extrabold whitespace-nowrap"
                                     title="식단 탭에서 보기"
                                   >
                                     🍽️
@@ -24503,7 +25197,7 @@ time: "", location: "",
                                 title={`${tm.ym}: ${tm.total.toLocaleString()}원`}
                                 className="flex flex-col items-center gap-0.5 h-full justify-end cursor-pointer group"
                               >
-                                <span className={`text-[9.5px] font-extrabold whitespace-nowrap ${isSel ? "text-amber-300" : "text-stone-400"}`}>
+                                <span className={`text-[10px] font-extrabold whitespace-nowrap ${isSel ? "text-amber-300" : "text-stone-400"}`}>
                                   {manLabel}
                                 </span>
                                 <div className="w-full flex items-end justify-center h-9">
@@ -24951,7 +25645,7 @@ time: "", location: "",
                           <span className="text-[10px] font-bold text-stone-500 mr-0.5">년</span>
                           <span className="text-[17px] font-black text-stone-900">{uMonth}</span>
                           <span className="text-[10.5px] font-bold text-stone-500">월</span>
-                          <span className="text-[9.5px] font-bold text-stone-400 ml-0.5">▾</span>
+                          <span className="text-[10px] font-bold text-stone-400 ml-0.5">▾</span>
                           <input
                             type="month"
                             value={scheduleMonth}
@@ -25316,14 +26010,14 @@ time: "", location: "",
                                 {cell.dayNum}
                               </span>
                               {cell.lunarLbl && !isToday && (
-                                <span className="text-[7.5px] font-semibold text-stone-400 leading-none pt-[1px] shrink-0">
+                                <span className="text-[9px] font-semibold text-stone-400 leading-none pt-[1px] shrink-0">
                                   {cell.lunarLbl}
                                 </span>
                               )}
                             </div>
                             <div className="space-y-[1px] w-full overflow-hidden">
                               {holidayName && (
-                                <div className="text-[7.5px] leading-[1.15] tracking-[-0.04em] font-bold text-rose-600 whitespace-nowrap overflow-hidden">
+                                <div className="text-[9px] leading-[1.15] tracking-[-0.04em] font-bold text-rose-600 whitespace-nowrap overflow-hidden">
                                   {holidayName}
                                 </div>
                               )}
@@ -25342,7 +26036,7 @@ time: "", location: "",
                                   return (
                                     <div
                                       key={`f-${ev.id}`}
-                                      className={`text-[8px] leading-[1.22] tracking-[-0.04em] font-semibold pl-[2px] whitespace-nowrap overflow-hidden rounded-r-[2px] ${famCls}`}
+                                      className={`text-[9px] leading-[1.22] tracking-[-0.04em] font-semibold pl-[2px] whitespace-nowrap overflow-hidden rounded-r-[2px] ${famCls}`}
                                     >
                                       {ev.done ? "✓" : isRangeCont ? "▸" : ""}{ev.title}
                                     </div>
@@ -25353,7 +26047,7 @@ time: "", location: "",
                                 return (
                                   <div
                                     key={`p-${ev.id}`}
-                                    className={`text-[8px] leading-[1.22] tracking-[-0.04em] font-semibold whitespace-nowrap overflow-hidden rounded-[2px] ${cMeta.textCls} ${
+                                    className={`text-[9px] leading-[1.22] tracking-[-0.04em] font-semibold whitespace-nowrap overflow-hidden rounded-[2px] ${cMeta.textCls} ${
                                       ev.highlight && cMeta.bgCls ? `${cMeta.bgCls} px-[1px]` : isRangeEv ? "bg-amber-50/75 px-[1px]" : ""
                                     } ${ev.done ? "opacity-50" : ""}`}
                                   >
@@ -25362,7 +26056,7 @@ time: "", location: "",
                                 );
                               })}
                               {cell.combined.length > 6 && (
-                                <div className="text-[7.5px] font-bold text-stone-400 leading-none">
+                                <div className="text-[9px] font-bold text-stone-400 leading-none">
                                   +{cell.combined.length - 6}
                                 </div>
                               )}
@@ -25400,10 +26094,10 @@ time: "", location: "",
                           });
                           setIsScheduleModalOpen(true);
                         }}
-                        className="px-2.5 py-1 rounded-xl bg-pink-50 hover:bg-pink-100 border border-pink-200 text-pink-700 text-[11.5px] font-extrabold whitespace-nowrap"
+                        className="px-2.5 py-1 rounded-xl bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-800 text-[11.5px] font-extrabold whitespace-nowrap"
                       >
                         + 🏠 가족
-                      </button>
+                      &lt;/button&gt;
                       {isAdminUnlocked && (
                         <button
                           type="button"
@@ -25411,10 +26105,10 @@ time: "", location: "",
                           className="px-2.5 py-1 rounded-xl bg-stone-900 hover:bg-stone-800 text-white text-[11.5px] font-extrabold whitespace-nowrap"
                         >
                           + 🔒 내 일정·다이어리
-                        </button>
+                        &lt;/button&gt;
                       )}
-                    </div>
-                  </div>
+                    &lt;/div&gt;
+                  &lt;/div&gt;
 
                   {selectedFamilyEvents.length === 0 && selectedPrivateEvents.length === 0 ? (
                     <div className="text-[12px] text-stone-400 py-2.5 text-center bg-stone-50/80 rounded-xl border border-dashed border-stone-200">
@@ -25426,7 +26120,7 @@ time: "", location: "",
                       {selectedFamilyEvents.length > 0 && (
                         <div className="space-y-2">
                           {isAdminUnlocked && effectiveScope === "all" && (
-                            <div className="text-[11px] font-black text-indigo-700 flex items-center gap-1">
+                            <div className="text-[11px] font-black text-[#35503C] flex items-center gap-1">
                               <span>🏠 가족 공유 일정</span>
                               <span className="text-stone-400">({selectedFamilyEvents.length})</span>
                             </div>
@@ -25524,7 +26218,7 @@ time: "", location: "",
                                 </div>
 
                                 <div
-                                  className={`text-[14.5px] font-black break-keep ${
+                                  className={`text-[14px] font-black break-keep ${
                                     ev.done ? "text-stone-400" : "text-stone-900"
                                   }`}
                                 >
@@ -25622,12 +26316,12 @@ time: "", location: "",
                                         {ev.time ? <span className="mr-1 opacity-75">{ev.time}</span> : null}
                                         {ev.title}
                                         {ev.endDate && ev.endDate > ev.date && (
-                                          <span className="ml-1.5 px-1 py-0.5 rounded bg-amber-50 text-amber-700 text-[9.5px] font-bold">
+                                          <span className="ml-1.5 px-1 py-0.5 rounded bg-amber-50 text-amber-700 text-[10px] font-bold">
                                             {String(ev.date || "").slice(5)}~{String(ev.endDate || "").slice(5)}
                                           </span>
                                         )}
                                         {ev.isAnnual && (
-                                          <span className="ml-1.5 px-1 py-0.5 rounded bg-stone-100 text-stone-500 text-[9.5px] font-bold whitespace-nowrap">매년</span>
+                                          <span className="ml-1.5 px-1 py-0.5 rounded bg-stone-100 text-stone-500 text-[10px] font-bold whitespace-nowrap">매년</span>
                                         )}
                                       </div>
                                       {ev.memo && (
@@ -25673,7 +26367,7 @@ time: "", location: "",
           <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-sm space-y-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-1.5">
-                <CalendarRange className="w-4 h-4 text-indigo-600" />
+                <CalendarRange className="w-4 h-4 text-[#3F624D]" />
                 <h3 className="text-[13.5px] font-black text-stone-900">
                   📊 주간 일정 요약 ({scheduleWeekDates[0].slice(5)} ~ {scheduleWeekDates[6].slice(5)})
                 </h3>
@@ -25699,7 +26393,7 @@ time: "", location: "",
                     setScheduleSelectedDate(today);
                     setScheduleMonth(today.slice(0, 7));
                   }}
-                  className="px-2 py-0.5 rounded-lg bg-indigo-50 text-indigo-700 text-[11.5px] font-extrabold whitespace-nowrap"
+                  className="px-2 py-0.5 rounded-lg bg-[#EEF3EE] text-[#35503C] text-[11.5px] font-extrabold whitespace-nowrap"
                 >
                   이번주
                 </button>
@@ -25734,7 +26428,7 @@ time: "", location: "",
                       onClick={() => setScheduleSelectedDate(dayGroup.date)}
                       className={`p-3 rounded-xl border cursor-pointer transition ${
                         dayGroup.date === scheduleSelectedDate
-                          ? "bg-indigo-50/70 border-indigo-300"
+                          ? "bg-[#EEF3EE]/80 border-[#C9D8CC]"
                           : "bg-stone-50 border-stone-200 hover:bg-stone-100/70"
                       }`}
                     >
@@ -25749,7 +26443,7 @@ time: "", location: "",
                             </span>
                           )}
                         </div>
-                        <span className="text-[11.5px] font-extrabold text-indigo-700">
+                        <span className="text-[11.5px] font-extrabold text-[#35503C]">
                           {dayGroup.items.length}건
                         </span>
                       </div>
@@ -25981,8 +26675,8 @@ time: "", location: "",
                       </span>
                     </div>
                     <div>
-                      <span className="font-black text-teal-800">주말·공휴일:</span>{" "}
-                      <span className="font-semibold text-teal-700">
+                      <span className="font-black text-[#35503C]">주말·공휴일:</span>{" "}
+                      <span className="font-semibold text-[#3F624D]">
                         {weList.length > 0
                           ? weList.map((s, idx) => `${s.label} ${s.startTime}~${weList[(idx + 1) % weList.length].startTime}`).join(" · ")
                           : "지정된 시간대 없음"}
@@ -26093,7 +26787,7 @@ time: "", location: "",
                               }}
                               className={`px-2.5 py-0.5 rounded-lg text-[11.5px] font-extrabold border whitespace-nowrap ${
                                 slot.weekend
-                                  ? "bg-teal-600 text-white border-teal-600"
+                                  ? "bg-[#3F624D] text-white border-[#3F624D]"
                                   : "bg-stone-50 text-stone-400 border-stone-200"
                               }`}
                             >
@@ -26166,7 +26860,7 @@ time: "", location: "",
                         type="button"
                         onClick={() => setNewSlotWeekend((v) => !v)}
                         className={`px-2 py-1 rounded-lg text-[11.5px] font-extrabold border whitespace-nowrap ${
-                          newSlotWeekend ? "bg-teal-600 text-white border-teal-600" : "bg-white text-stone-400 border-stone-200"
+                          newSlotWeekend ? "bg-[#3F624D] text-white border-[#3F624D]" : "bg-white text-stone-400 border-stone-200"
                         }`}
                       >
                         주말
@@ -26200,7 +26894,7 @@ time: "", location: "",
                         recordActivity("루틴", "시간대 추가", `${lbl} (${newSlotTimeInput || "14:00"})`);
                         showToast(`⏰ [${lbl}] 시간대가 추가되었습니다!`);
                       }}
-                      className="px-2.5 py-1.5 rounded-lg bg-indigo-700 hover:bg-indigo-800 text-white text-[11.5px] font-extrabold whitespace-nowrap"
+                      className="px-2.5 py-1.5 rounded-lg bg-[#3F624D] hover:bg-[#35503C] text-white text-[11.5px] font-extrabold whitespace-nowrap"
                     >
                       + 추가
                     </button>
@@ -26402,7 +27096,7 @@ time: "", location: "",
                             <button
                               type="button"
                               onClick={() => handleToggleRoutine(rt.id)}
-                              className={`mt-0.5 w-4 h-4 rounded border flex items-center justify-center shrink-0 text-[9.5px] font-black transition active:scale-90 ${
+                              className={`mt-0.5 w-4 h-4 rounded border flex items-center justify-center shrink-0 text-[10px] font-black transition active:scale-90 ${
                                 doneNow
                                   ? "bg-[#5E7A65] border-[#5E7A65] text-white"
                                   : "bg-white border-stone-300 text-transparent hover:border-[#5E7A65]"
@@ -26504,7 +27198,7 @@ time: "", location: "",
                             className={`w-5 h-5 mt-0.5 rounded-lg border flex items-center justify-center shrink-0 ${
                               doneNow
                                 ? "bg-[#3F624D] border-[#3F624D] text-white"
-                                : "bg-white border-indigo-300"
+                                : "bg-white border-[#C9D8CC]"
                             }`}
                             title="전체 완료"
                           >
@@ -26564,7 +27258,7 @@ time: "", location: "",
                                   진행 {doneNow ? parseRoutineSteps(rt.title).length : getRoutineSubStepDoneSet(rt).size}/{parseRoutineSteps(rt.title).length}
                                 </span>
                               )}
-                              <span className="px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-800 text-[10.5px] font-black whitespace-nowrap">
+                              <span className="px-1.5 py-0.5 rounded bg-[#EEF3EE] text-[#35503C] text-[10.5px] font-black whitespace-nowrap">
                                 {rt.timeSlot || "상시"}
                               </span>
                               {rt.scheduledTime && (() => {
@@ -26587,7 +27281,7 @@ time: "", location: "",
                                 if (rt.cycle === "interval" && intervalInfo) {
                                   return (
                                     <span className={`px-1.5 py-0.5 rounded text-[10.5px] font-black whitespace-nowrap ${
-                                      !doneNow ? "bg-teal-100 text-teal-900" : "bg-stone-200 text-stone-600"
+                                      !doneNow ? "bg-[#EEF3EE] text-[#35503C]" : "bg-stone-200 text-stone-600"
                                     }`}>
                                       {intervalInfo.intervalDays}일마다{doneNow ? ` · D-${intervalInfo.daysLeft}` : " · 오늘 할 날"}
                                     </span>
@@ -26621,7 +27315,7 @@ time: "", location: "",
                                       ? `매주 ${WEEKDAY_KO[Number(rt.weekDay)] || ""}요일${nextDateInfo ? ` · ${nextDateInfo.dateLabel}` : ""}`
                                       : "매주 리셋";
                                   return (
-                                    <span className="px-1.5 py-0.5 rounded text-[10.5px] font-black bg-purple-100 text-purple-800 whitespace-nowrap">
+                                    <span className="px-1.5 py-0.5 rounded text-[10.5px] font-black bg-stone-100 text-stone-700 whitespace-nowrap">
                                       {wkLabel}
                                     </span>
                                   );
@@ -26718,7 +27412,7 @@ time: "", location: "",
                           <button
                             type="button"
                             onClick={() => handleStartEditRoutine(rt)}
-                            className="p-1 text-stone-400 hover:text-indigo-600"
+                            className="p-1 text-stone-400 hover:text-[#3F624D]"
                             title="루틴 수정"
                           >
                             <Edit2 className="w-3.5 h-3.5" />
@@ -26896,10 +27590,10 @@ time: "", location: "",
                       title="메모·첨부파일 포함 상세 등록"
                     >
                       상세
-                    </button>
-                  </div>
-                </div>
-              </div>
+                    &lt;/button&gt;
+                  &lt;/div&gt;
+                &lt;/div&gt;
+              &lt;/div&gt;
             )}
 
             {/* 상태 탭 + 완료 비우기 + 검색 */}
@@ -27015,7 +27709,7 @@ time: "", location: "",
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-1.5 min-w-0">
                           {todo._isPrivate && (
-                            <span className="px-1.5 py-0.5 rounded bg-stone-900 text-white text-[9.5px] font-black whitespace-nowrap shrink-0">
+                            <span className="px-1.5 py-0.5 rounded bg-stone-900 text-white text-[10px] font-black whitespace-nowrap shrink-0">
                               🔒 내 할일
                             </span>
                           )}
@@ -27045,22 +27739,22 @@ time: "", location: "",
                             {String(todo.date || "").slice(5)}({getDayName(todo.date)}){!todo.done && todo.date ? (() => { const d = getDaysDiff(todo.date); return d < 0 ? ` · ${Math.abs(d)}일 지남` : d === 0 ? " · 오늘" : ""; })() : ""}
                           </span>
                           {todo.category && todo.category !== "할일(To-Do)" && (
-                            <span className="px-1 py-0.5 rounded bg-amber-50 text-amber-800 text-[9.5px] font-bold whitespace-nowrap shrink-0">
+                            <span className="px-1 py-0.5 rounded bg-amber-50 text-amber-800 text-[10px] font-bold whitespace-nowrap shrink-0">
                               {todo.category}
                             </span>
                           )}
                           {todo.time && (
-                            <span className="px-1 py-0.5 rounded bg-[#EEF3EE] text-[#35503C] text-[9.5px] font-extrabold whitespace-nowrap shrink-0">
+                            <span className="px-1 py-0.5 rounded bg-[#EEF3EE] text-[#35503C] text-[10px] font-extrabold whitespace-nowrap shrink-0">
                               ⏰{formatRoutineTimeLabel(todo.time)}
                             </span>
                           )}
                           {todo.location && (
-                            <span className="px-1 py-0.5 rounded bg-stone-100 text-stone-700 text-[9.5px] font-bold whitespace-nowrap shrink-0 max-w-[110px] truncate">
+                            <span className="px-1 py-0.5 rounded bg-stone-100 text-stone-700 text-[10px] font-bold whitespace-nowrap shrink-0 max-w-[110px] truncate">
                               📍{todo.location}
                             </span>
                           )}
                           {Array.isArray(todo.attachments) && todo.attachments.length > 0 && (
-                            <span className="px-1 py-0.5 rounded bg-sky-100 text-sky-800 text-[9.5px] font-black whitespace-nowrap shrink-0">
+                            <span className="px-1 py-0.5 rounded bg-sky-100 text-sky-800 text-[10px] font-black whitespace-nowrap shrink-0">
                               📎{todo.attachments.length}
                             </span>
                           )}
@@ -27214,10 +27908,10 @@ time: "", location: "",
                           className="h-7 px-2 rounded-lg bg-[#3F624D] hover:bg-[#324E3D] text-white text-[11px] font-extrabold whitespace-nowrap"
                         >
                           + 추가
-                        </button>
+                        &lt;/button&gt;
                       )}
-                    </div>
-                  </div>
+                    &lt;/div&gt;
+                  &lt;/div&gt;
 
                   {/* 다가오는 D-Day 하이라이트 + 아이 생후 경과일 바로가기 */}
                   <div className="grid grid-cols-3 gap-1.5">
@@ -27331,11 +28025,11 @@ time: "", location: "",
                         className="h-8 px-3 rounded-xl bg-[#3F624D] text-white text-[12px] font-extrabold whitespace-nowrap"
                       >
                         + 첫 D-Day 등록
-                      </button>
+                      &lt;/button&gt;
                     )}
-                  </div>
+                  &lt;/div&gt;
                 ) : (
-                  <div className="space-y-2">
+                  &lt;div className=&quot;space-y-2&quot;&gt;
                     {filteredDdays.map((item) => {
                       const isPinnedHome = homeMiniDdayIds.includes(item.id);
                       const isSoon = item.calc.daysUntil >= 0 && item.calc.daysUntil <= 7;
@@ -27358,36 +28052,36 @@ time: "", location: "",
                               : "border-stone-200 hover:border-stone-300"
                           }`}
                         >
-                          <button
-                            type="button"
+                          &lt;button
+                            type=&quot;button&quot;
                             onClick={jumpToCalendar}
-                            className="min-w-0 flex-1 text-left"
-                            title="달력에서 해당 날짜 보기"
-                          >
-                            <div className="flex items-center gap-1.5 min-w-0">
-                              <span className="text-[13.5px] font-black text-stone-900 truncate">
+                            className=&quot;min-w-0 flex-1 text-left&quot;
+                            title=&quot;달력에서 해당 날짜 보기&quot;
+                          &gt;
+                            &lt;div className=&quot;flex items-center gap-1.5 min-w-0&quot;&gt;
+                              &lt;span className=&quot;text-[13.5px] font-black text-stone-900 truncate&quot;&gt;
                                 {item.title}
-                              </span>
+                              &lt;/span&gt;
                               {item.isAnnual && (
-                                <span className="px-1.5 py-0.5 rounded bg-stone-100 text-stone-600 text-[10px] font-extrabold whitespace-nowrap shrink-0">
+                                &lt;span className=&quot;px-1.5 py-0.5 rounded bg-stone-100 text-stone-600 text-[10px] font-extrabold whitespace-nowrap shrink-0&quot;&gt;
                                   매년
-                                </span>
+                                &lt;/span&gt;
                               )}
-                            </div>
-                            <div className="text-[11.5px] font-semibold text-stone-600 mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                              <span className="whitespace-nowrap">
+                            &lt;/div&gt;
+                            &lt;div className=&quot;text-[11.5px] font-semibold text-stone-600 mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5&quot;&gt;
+                              &lt;span className=&quot;whitespace-nowrap&quot;&gt;
                                 📅 {item.isAnnual ? `매년 ${String(item.date).slice(5).replace("-", "월 ")}일` : item.date}
-                              </span>
+                              &lt;/span&gt;
                               {item.calc.elapsedDays !== null && (
-                                <span className="text-[#35503C] font-extrabold whitespace-nowrap">
+                                &lt;span className=&quot;text-[#35503C] font-extrabold whitespace-nowrap&quot;&gt;
                                   · {item.id.includes("bday") ? "생후" : "함께한 지"} D+{item.calc.elapsedDays.toLocaleString()}일
-                                </span>
+                                &lt;/span&gt;
                               )}
-                            </div>
+                            &lt;/div&gt;
                             {item.memo && (
-                              <div className="text-[11px] text-stone-500 mt-0.5 truncate">{item.memo}</div>
+                              &lt;div className=&quot;text-[11px] text-stone-500 mt-0.5 truncate&quot;&gt;{item.memo}&lt;/div&gt;
                             )}
-                          </button>
+                          &lt;/button&gt;
 
                           <div className="flex items-center gap-1 shrink-0">
                             {accessRole !== "guest" && (
@@ -27577,7 +28271,7 @@ time: "", location: "",
                     <div className="flex items-center justify-between gap-1 text-[10.5px] font-bold">
                       <span className="whitespace-nowrap shrink-0">{zone.icon} {zone.key.replace("·팬트리", "")}</span>
                       {zExp > 0 && (
-                        <span className={`px-1 py-0.5 rounded-full text-[9.5px] font-black leading-none whitespace-nowrap shrink-0 ${isSel ? "bg-amber-300 text-stone-900" : "bg-orange-100 text-orange-800"}`}>
+                        <span className={`px-1 py-0.5 rounded-full text-[10px] font-black leading-none whitespace-nowrap shrink-0 ${isSel ? "bg-amber-300 text-stone-900" : "bg-orange-100 text-orange-800"}`}>
                           임박 {zExp}
                         </span>
                       )}
@@ -28369,7 +29063,7 @@ time: "", location: "",
 
           <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-sm space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-1.5">
-              <h2 className="text-[14.5px] font-black text-stone-900 flex items-center gap-1.5 whitespace-nowrap">
+              <h2 className="text-[14px] font-black text-stone-900 flex items-center gap-1.5 whitespace-nowrap">
                 <ShoppingCart className="w-4 h-4 text-[#3F624D] shrink-0" />
                 <span>장보기 품목 등록</span>
               </h2>
@@ -28806,7 +29500,7 @@ time: "", location: "",
                         </span>
                       )}
                       <span
-                        className={`text-[15.5px] font-extrabold break-keep ${
+                        className={`text-[15px] font-extrabold break-keep ${
                           item.checked ? "line-through text-stone-400" : "text-stone-900"
                         }`}
                       >
@@ -29219,7 +29913,7 @@ time: "", location: "",
 
 
                 <div
-                  className={`text-[15.5px] font-black break-keep ${
+                  className={`text-[15px] font-black break-keep ${
                     n.done ? "line-through text-stone-500" : "text-stone-900"
                   }`}
                 >
@@ -29579,7 +30273,7 @@ time: "", location: "",
                                         )
                                       );
                                     }}
-                                    className="w-full px-2.5 py-1.5 rounded-lg bg-white border border-stone-200 text-[15.5px] font-extrabold text-stone-900"
+                                    className="w-full px-2.5 py-1.5 rounded-lg bg-white border border-stone-200 text-[15px] font-extrabold text-stone-900"
                                   />
                                   {it.completeness && !it.completeness.ok && (
                                     <div className="text-[12.5px] font-bold text-rose-700">
@@ -29866,7 +30560,7 @@ time: "", location: "",
                   <span className="px-2.5 py-0.5 rounded-full text-[11.5px] font-extrabold bg-amber-100 text-amber-900 whitespace-nowrap shrink-0">
                     {rec.target} · ⏱️ {rec.time}
                   </span>
-                  <h3 className="text-[17.5px] font-black text-stone-900">{rec.title}</h3>
+                  <h3 className="text-[17px] font-black text-stone-900">{rec.title}</h3>
                   <div className="text-[13.5px] font-bold text-emerald-700">
                     🥬 활용 재료: {toSafeArray(rec.usedIngredients).join(", ")}
                   </div>
@@ -30034,7 +30728,7 @@ time: "", location: "",
             {platingResult && (
               <div className="p-3.5 rounded-2xl bg-rose-50/60 border border-rose-200 space-y-2.5">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-[15.5px] font-black text-stone-900">
+                  <span className="text-[15px] font-black text-stone-900">
                     🍽️ {platingResult.dishName}
                   </span>
                   <div className="flex items-center gap-1 shrink-0">
@@ -30324,7 +31018,7 @@ time: "", location: "",
                             <span className={`px-1.5 py-0.5 rounded text-[10px] font-black ${sel.done ? "bg-[#EEF3EE] text-[#35503C]" : "bg-amber-100 text-amber-800"} whitespace-nowrap`}>
                               {sel.done ? "✅ 다녀옴" : "📍 갈 곳"}
                             </span>
-                            <span className="text-[14.5px] font-black text-stone-900">{sel.title}</span>
+                            <span className="text-[14px] font-black text-stone-900">{sel.title}</span>
                           </div>
                           <div className="text-[11.5px] font-bold text-stone-500 mt-1">
                             👨‍👩‍👧‍👦 {mNames} · {sel.category || "나들이/여행"}{sel.doneDate ? ` · ${sel.doneDate}` : ""}
@@ -30565,6 +31259,33 @@ time: "", location: "",
                           </div>
                         </div>
                         <div className="flex items-center gap-0.5 shrink-0">
+                          {!item.done && canEditTab("schedule") && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditingSchedule(null);
+                                setScheduleForm({
+                                  title: item.title || "",
+                                  date: getTodayStr(),
+                                  endDate: "",
+                                  time: "",
+                                  location: item.address || item.title || "",
+                                  category: scheduleCategories.includes("여행/나들이") ? "여행/나들이" : (scheduleCategories[0] || "가족일정"),
+                                  members: getItemMembers(item),
+                                  isAnnual: false,
+                                  showDday: true,
+                                  hasOriginYear: false,
+                                  memo: item.memo || "",
+                                  attachments: []
+                                });
+                                setIsScheduleModalOpen(true);
+                              }}
+                              className="px-2 py-1 rounded-lg bg-[#EEF3EE] hover:bg-[#DFE9E0] text-[#35503C] text-[10.5px] font-extrabold whitespace-nowrap"
+                              title="가족 일정으로 등록"
+                            >
+                              🗓️ 일정
+                            </button>
+                          )}
                           <button
                             type="button"
                             onClick={() => openBucketAddModal(item)}
@@ -30980,7 +31701,7 @@ time: "", location: "",
                             )}
                           </div>
 
-                          <div className="text-[14.5px] font-black text-stone-900 break-keep">{it.title}</div>
+                          <div className="text-[14px] font-black text-stone-900 break-keep">{it.title}</div>
 
                           {houseSubTab === "storage" && it.detailLoc && (
                             <div className="text-[12.5px] font-bold text-stone-700">📦 {it.detailLoc}</div>
@@ -31226,6 +31947,36 @@ time: "", location: "",
                                 </button>
                               )}
                             </>
+                          )}
+                          {it.kind === "storage" && canEditTab("shopping") && (
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                const exist = shoppingItems.some(
+                                  (s) => !s.checked && String(s.name || "").trim().toLowerCase() === String(it.title || "").trim().toLowerCase()
+                                );
+                                if (exist) {
+                                  showToast(`'${it.title}' 항목이 이미 장보기 목록에 있습니다.`);
+                                  return;
+                                }
+                                if (user && db) {
+                                  const sid = `shop-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+                                  await setDoc(getDocRef("family_shopping_v4", sid), {
+                                    id: sid,
+                                    name: it.title,
+                                    qty: "1개",
+                                    category: "생활용품",
+                                    checked: false,
+                                    memo: it.room ? `[수납:${it.room}]` : "",
+                                    createdAtMs: Date.now()
+                                  });
+                                  showToast(`🛒 '${it.title}'을(를) 장보기에 담았습니다.`);
+                                }
+                              }}
+                              className="px-2 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-800 text-[11px] font-extrabold whitespace-nowrap"
+                            >
+                              🛒 장보기
+                            </button>
                           )}
                         </div>
                         {canEditTab("house") && (
@@ -32095,7 +32846,7 @@ time: "", location: "",
                           </div>
                         </div>
                         <div className="text-right shrink-0">
-                          <div className={`text-[14.5px] font-black whitespace-nowrap ${isIn ? "text-emerald-700" : "text-rose-700"}`}>
+                          <div className={`text-[14px] font-black whitespace-nowrap ${isIn ? "text-emerald-700" : "text-rose-700"}`}>
                             {isIn ? "+" : "-"}{Number(item.amount || 0).toLocaleString()}원
                           </div>
                         </div>
@@ -32344,7 +33095,7 @@ time: "", location: "",
                       className="flex items-center gap-2 min-w-0 flex-1 text-left py-0.5"
                     >
                       <span className="text-[17px] leading-none shrink-0">{pg.icon || "📄"}</span>
-                      <span className="text-[14.5px] font-bold text-stone-800 truncate">{pg.title}</span>
+                      <span className="text-[14px] font-bold text-stone-800 truncate">{pg.title}</span>
                       {String(pg.noteBody || "").trim() && (
                         <span className="px-1.5 py-0.5 rounded-full bg-[#EEF3EE] text-[#35503C] text-[10px] font-extrabold whitespace-nowrap shrink-0">
                           📝
@@ -32526,7 +33277,7 @@ time: "", location: "",
                                     ) : null}
                                   </div>
                                   <div className="relative z-10 px-3 pb-3 -mt-4 space-y-1.5">
-                                    <div className="w-9 h-9 rounded-xl bg-white border border-stone-200/80 shadow-xs flex items-center justify-center text-[19px] leading-none">
+                                    <div className="w-9 h-9 rounded-xl bg-white border border-stone-200/80 shadow-xs flex items-center justify-center text-[18px] leading-none">
                                       {pg.icon || "📄"}
                                     </div>
                                     <div className="text-[13px] font-extrabold text-stone-900 truncate">
@@ -32670,7 +33421,7 @@ time: "", location: "",
                             setPageTitleDraft(currentPage.title || "");
                             setIsEditingPageTitle(true);
                           }}
-                          className="text-[15.5px] font-black text-stone-900 truncate flex-1 cursor-pointer hover:text-[#3F624D]"
+                          className="text-[15px] font-black text-stone-900 truncate flex-1 min-w-0 cursor-pointer hover:text-[#3F624D]"
                           title="눌러서 제목 수정"
                         >
                           {currentPage.title}
@@ -33408,7 +34159,7 @@ time: "", location: "",
                                                 showToast("📷 본문에 사진을 삽입했습니다.");
                                               }
                                             }}
-                                            className="absolute bottom-1 left-1 px-1.5 py-0.5 rounded bg-black/65 text-white text-[9.5px] font-extrabold"
+                                            className="absolute bottom-1 left-1 px-1.5 py-0.5 rounded bg-black/65 text-white text-[10px] font-extrabold"
                                             title="본문 커서 위치에 삽입"
                                           >
                                             본문삽입
@@ -33706,7 +34457,7 @@ time: "", location: "",
                           title="클릭하여 사진 크게 보기"
                         />
                       ) : (
-                        <div className="w-11 h-11 rounded-xl bg-rose-50 border border-rose-100 flex items-center justify-center text-[17.5px] shrink-0">
+                        <div className="w-11 h-11 rounded-xl bg-rose-50 border border-rose-100 flex items-center justify-center text-[17px] shrink-0">
                           🍽️
                         </div>
                       )}
@@ -33849,7 +34600,7 @@ time: "", location: "",
                             <span className="inline-block px-2 py-0.5 rounded-md bg-rose-50 text-rose-700 text-[11.5px] font-extrabold mb-1 whitespace-nowrap">
                               {r.category || "기타"}
                             </span>
-                            <div className="text-[15.5px] font-black text-stone-900 break-keep">{r.title}</div>
+                            <div className="text-[15px] font-black text-stone-900 break-keep">{r.title}</div>
                           </div>
                           <div className="flex items-center gap-0.5 shrink-0">
                             <button
@@ -34078,7 +34829,7 @@ time: "", location: "",
                             toggleHomeMiniDdayId(homeKey);
                             showToast(isPinnedHome ? `📌 홈 상단에서 ${ch.name} 생후일을 해제했습니다.` : `📌 홈 상단에 ${ch.name} 생후 D+${st.days}일을 고정했습니다!`);
                           }}
-                          className={`px-1.5 py-0.5 rounded-full text-[9.5px] font-extrabold border whitespace-nowrap ${
+                          className={`px-1.5 py-0.5 rounded-full text-[10px] font-extrabold border whitespace-nowrap ${
                             isPinnedHome
                               ? "bg-[#5E7A65] text-white border-[#7E9E86]"
                               : isSel
@@ -34422,6 +35173,17 @@ time: "", location: "",
                                 📖 일기쓰기
                               </button>
                             )}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setAlarmQuickMinDraft("180");
+                                setAlarmQuickMemoDraft(`${activeChild.name} 수유 시간`);
+                                setKitchenTimer((p) => ({ ...p, open: true, mode: "alarm", label: "모닝콜·알람" }));
+                              }}
+                              className="px-1.5 py-0.5 rounded-md bg-[#EEF3EE] hover:bg-[#dce8de] border border-[#C9D8CC] text-[#35503C] text-[10px] font-extrabold whitespace-nowrap"
+                            >
+                              ⏰ 수유알람
+                            </button>
                           </div>
                           <span>수유 {fCount}회 ({fMl > 0 ? `${fMl}ml` : ""}{fMl > 0 && bMin > 0 ? " + " : ""}{bMin > 0 ? `모유 ${bMin}분` : fMl === 0 ? "0분" : ""}) · 기저귀 {dCount}회(소{dPee}·대{dPoo}) · 수면 {sTxt}</span>
                         </div>
@@ -34659,7 +35421,7 @@ time: "", location: "",
                                             });
                                             setIsMealModalOpen(true);
                                           }}
-                                          className="px-2 py-0.5 rounded-lg bg-teal-50 hover:bg-teal-100 border border-teal-200 text-teal-800 text-[10.5px] font-extrabold whitespace-nowrap"
+                                          className="px-2 py-0.5 rounded-lg bg-[#EEF3EE] hover:bg-[#DFE9E0] border border-[#C9D8CC] text-[#35503C] text-[10.5px] font-extrabold whitespace-nowrap"
                                           title="식단표에 이유식 바로 기록"
                                         >
                                           🍽️ 식단
@@ -35010,7 +35772,7 @@ time: "", location: "",
                               className={`px-2 py-1 rounded-xl text-[11px] font-extrabold whitespace-nowrap shrink-0 border ${
                                 item.isScheduled
                                   ? "bg-stone-100 text-stone-500 border-stone-200"
-                                  : "bg-pink-50 hover:bg-pink-100 text-pink-700 border-pink-200"
+                                  : "bg-rose-50 hover:bg-rose-100 text-rose-700 border-rose-200"
                               }`}
                             >
                               {item.isScheduled ? "등록됨" : "+ 일정등록"}
@@ -35611,7 +36373,7 @@ time: "", location: "",
                                 <span>
                                   ⚖️ {g.weight}kg{" "}
                                   {wDiff && (
-                                    <span className="text-indigo-600 text-[11px]">
+                                    <span className="text-[#3F624D] text-[11px]">
                                       ({Number(wDiff) >= 0 ? `+${wDiff}` : wDiff})
                                     </span>
                                   )}
@@ -36774,21 +37536,42 @@ time: "", location: "",
         const ss = String(displaySec % 60).padStart(2, "0");
         const timeText = hh > 0 ? `${hh}:${mm}:${ss}` : `${mm}:${ss}`;
 
-
-        const toNowHHMM = () => {
+        const toNowHHMMSS = () => {
           const d = new Date();
-          return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+          return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}:${String(d.getSeconds()).padStart(2, "0")}`;
         };
-        const computeHHMMDiffSec = (startStr, endStr) => {
+        const computeHHMMSSDiffSec = (startStr, endStr) => {
           if (!startStr || !endStr || !startStr.includes(":") || !endStr.includes(":")) return null;
-          const [sh, sm] = startStr.split(":").map(Number);
-          const [eh, em] = endStr.split(":").map(Number);
-          if (![sh, sm, eh, em].every(Number.isFinite)) return null;
-          let diffMin = eh * 60 + em - (sh * 60 + sm);
-          if (diffMin < 0) diffMin += 1440;
-          return diffMin * 60;
+          const [sh, sm, ssec = 0] = startStr.split(":").map(Number);
+          const [eh, em, esec = 0] = endStr.split(":").map(Number);
+          if (![sh, sm, ssec, eh, em, esec].every(Number.isFinite)) return null;
+          let diffSec = (eh * 3600 + em * 60 + esec) - (sh * 3600 + sm * 60 + ssec);
+          if (diffSec < 0) diffSec += 86400;
+          return diffSec;
         };
-
+        const adjustCountdownSec = (deltaSec) => {
+          unlockAudioContext();
+          setTimerCompletedAlert("");
+          setKitchenTimer((p) => {
+            const nextRem = Math.max(0, Math.min(35999, (Number(p.remainingSec) || 0) + deltaSec));
+            return {
+              ...p,
+              remainingSec: nextRem,
+              targetEndMs: p.running ? Date.now() + nextRem * 1000 : p.targetEndMs
+            };
+          });
+        };
+        const setCountdownExactSec = (nextRemRaw) => {
+          unlockAudioContext();
+          setTimerCompletedAlert("");
+          const nextRem = Math.max(0, Math.min(35999, Math.round(Number(nextRemRaw) || 0)));
+          setKitchenTimer((p) => ({
+            ...p,
+            remainingSec: nextRem,
+            targetEndMs: p.running ? Date.now() + nextRem * 1000 : p.targetEndMs
+          }));
+        };
+        const activeAlarmCount = Array.isArray(customAlarms) ? customAlarms.filter((a) => a && a.enabled).length : 0;
 
         if (!kitchenTimer.open && (kitchenTimer.running || displaySec > 0 || kitchenTimer.cookStartTimeStr)) {
           return (
@@ -36800,51 +37583,138 @@ time: "", location: "",
               title="누르면 타이머·스톱워치 펼치기"
             >
               <span className={`w-2 h-2 rounded-full ${kitchenTimer.running ? "bg-emerald-400 animate-pulse" : "bg-stone-400"}`} />
-              <span>{kitchenTimer.mode === "stopwatch" ? "⏱️" : "⏲️"} {timeText}</span>
+              <span>{kitchenTimer.mode === "stopwatch" ? "⏱️" : kitchenTimer.mode === "alarm" ? "⏰" : "⏲️"} {timeText}</span>
             </button>
           );
         }
         if (!kitchenTimer.open) return null;
 
+        // 원형 다이얼 계산 (countdown)
+        const dialMaxSec = Math.max(60, dialStepSec * 60);
+        const dialProgress = Math.min(1, (Number(kitchenTimer.remainingSec) || 0) / dialMaxSec);
+        const dialR = 46;
+        const dialCircum = 2 * Math.PI * dialR;
+        const dialDashOffset = dialCircum * (1 - dialProgress);
+        const knobAngle = -Math.PI / 2 + dialProgress * 2 * Math.PI;
+        const knobX = 56 + dialR * Math.cos(knobAngle);
+        const knobY = 56 + dialR * Math.sin(knobAngle);
+
+        const handleDialPointerDown = (e) => {
+          e.preventDefault();
+          const rect = e.currentTarget.getBoundingClientRect();
+          const cx = rect.left + rect.width / 2;
+          const cy = rect.top + rect.height / 2;
+          const ang = Math.atan2(e.clientY - cy, e.clientX - cx);
+          dialDragRef.current = { active: true, lastAngle: ang, accumRad: 0, cx, cy };
+          try { e.currentTarget.setPointerCapture(e.pointerId); } catch (err) {}
+          unlockAudioContext();
+        };
+        const handleDialPointerMove = (e) => {
+          if (!dialDragRef.current.active) return;
+          const { cx, cy, lastAngle } = dialDragRef.current;
+          const ang = Math.atan2(e.clientY - cy, e.clientX - cx);
+          let delta = ang - lastAngle;
+          if (delta > Math.PI) delta -= 2 * Math.PI;
+          if (delta < -Math.PI) delta += 2 * Math.PI;
+          dialDragRef.current.lastAngle = ang;
+          dialDragRef.current.accumRad += delta;
+          const radPerStep = (2 * Math.PI) / 60;
+          const steps = Math.trunc(dialDragRef.current.accumRad / radPerStep);
+          if (steps !== 0) {
+            dialDragRef.current.accumRad -= steps * radPerStep;
+            adjustCountdownSec(steps * dialStepSec);
+          }
+        };
+        const handleDialPointerUp = () => {
+          dialDragRef.current.active = false;
+        };
 
         return (
           <div
             style={{ bottom: "calc(4.75rem + env(safe-area-inset-bottom))" }}
-            className="fixed left-1/2 -translate-x-1/2 z-[48] w-[calc(100%-2rem)] max-w-sm bg-stone-900/95 backdrop-blur text-white rounded-2xl px-3 py-2.5 shadow-2xl border border-stone-700 space-y-2"
+            className="fixed left-1/2 -translate-x-1/2 z-[48] w-[calc(100%-2rem)] max-w-sm bg-stone-900/95 backdrop-blur text-white rounded-2xl px-3 py-2.5 shadow-2xl border border-stone-700 space-y-2 max-h-[72vh] overflow-y-auto"
           >
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-1.5 min-w-0">
-                <span className={`w-2 h-2 rounded-full shrink-0 ${kitchenTimer.running ? "bg-emerald-400 animate-pulse" : "bg-stone-500"}`} />
-                <span className="text-[12px] font-extrabold truncate">{kitchenTimer.label}</span>
+            {/* 상단 모드 탭 & 소리/진동/접기/닫기 */}
+            <div className="flex items-center justify-between gap-1.5">
+              <div className="flex items-center gap-1 bg-stone-800 p-0.5 rounded-xl">
+                {[
+                  { id: "countdown", label: "⏲️ 타이머" },
+                  { id: "stopwatch", label: "⏱️ 스톱워치" },
+                  { id: "alarm", label: `⏰ 알람${activeAlarmCount > 0 ? `(${activeAlarmCount})` : ""}` }
+                ].map((mTab) => (
+                  <button
+                    key={mTab.id}
+                    type="button"
+                    onClick={() =>
+                      setKitchenTimer((p) => ({
+                        ...p,
+                        mode: mTab.id,
+                        label: mTab.id === "stopwatch" ? "스톱워치" : mTab.id === "alarm" ? "모닝콜·알람" : "타이머"
+                      }))
+                    }
+                    className={`px-2 py-1 rounded-lg text-[10.5px] font-extrabold whitespace-nowrap transition ${
+                      kitchenTimer.mode === mTab.id
+                        ? "bg-[#3F624D] text-white shadow-xs"
+                        : "text-stone-300 hover:text-white"
+                    }`}
+                  >
+                    {mTab.label}
+                  </button>
+                ))}
               </div>
               <div className="flex items-center gap-1 shrink-0">
                 <button
                   type="button"
-                  onClick={() =>
-                    setKitchenTimer((p) => ({
-                      ...p,
-                      mode: p.mode === "countdown" ? "stopwatch" : "countdown",
-                      label: p.mode === "countdown" ? "요리 스톱워치" : "조리 타이머",
-                      running: false,
-                      startedAtMs: null,
-                      targetEndMs: null
-                    }))
-                  }
-                  className="px-2 py-0.5 rounded-lg bg-stone-700 hover:bg-stone-600 text-[10.5px] font-bold whitespace-nowrap"
+                  onClick={() => {
+                    const next = !timerSoundEnabled;
+                    setTimerSoundEnabled(next);
+                    try { localStorage.setItem("kim_timer_sound_v1", String(next)); } catch (e) {}
+                    if (user && db) {
+                      setDoc(getDocRef("family_meta_v4", "timer_alarms_v1"), { soundEnabled: next, updatedAtMs: Date.now() }, { merge: true }).catch(() => {});
+                    }
+                    if (!next) stopAlarmAudio();
+                    if (next) unlockAudioContext();
+                    showToast(next ? "🔊 타이머·알람 소리가 켜졌습니다." : "🔇 타이머·알람 소리가 꺼졌습니다.");
+                  }}
+                  className={`px-1.5 py-0.5 rounded-lg text-[10.5px] font-bold whitespace-nowrap ${
+                    timerSoundEnabled ? "bg-stone-700 text-amber-300" : "bg-stone-800 text-stone-500"
+                  }`}
+                  title="완료 소리 켜기/끄기"
                 >
-                  {kitchenTimer.mode === "countdown" ? "스톱워치 전환" : "타이머 전환"}
+                  {timerSoundEnabled ? "🔊" : "🔇"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const next = !timerVibrateEnabled;
+                    setTimerVibrateEnabled(next);
+                    try { localStorage.setItem("kim_timer_vibrate_v1", String(next)); } catch (e) {}
+                    if (user && db) {
+                      setDoc(getDocRef("family_meta_v4", "timer_alarms_v1"), { vibrateEnabled: next, updatedAtMs: Date.now() }, { merge: true }).catch(() => {});
+                    }
+                    if (next) triggerTimerVibration([80]);
+                    showToast(next ? "📳 진동 알림이 켜졌습니다." : "진동 알림이 꺼졌습니다.");
+                  }}
+                  className={`px-1.5 py-0.5 rounded-lg text-[10.5px] font-bold whitespace-nowrap ${
+                    timerVibrateEnabled ? "bg-stone-700 text-emerald-300" : "bg-stone-800 text-stone-500"
+                  }`}
+                  title="완료 진동 켜기/끄기"
+                >
+                  📳
                 </button>
                 <button
                   type="button"
                   onClick={() => setKitchenTimer((p) => ({ ...p, open: false }))}
                   className="px-1.5 py-0.5 rounded-lg bg-stone-800 hover:bg-stone-700 text-stone-300 text-[10.5px] font-bold whitespace-nowrap"
-                  title="계속 실행한 채 미니 배지로 접기"
                 >
                   접기
                 </button>
                 <button
                   type="button"
-                  onClick={() =>
+                  onClick={() => {
+                    stopAlarmAudio();
+                    closeStopwatchStatusNotif();
+                    setTimerCompletedAlert("");
                     setKitchenTimer((p) => ({
                       ...p,
                       open: false,
@@ -36855,134 +37725,291 @@ time: "", location: "",
                       targetEndMs: null,
                       cookStartTimeStr: "",
                       cookEndTimeStr: ""
-                    }))
-                  }
+                    }));
+                  }}
                   className="p-0.5 text-stone-400 hover:text-white"
-                  aria-label="타이머 종료 및 닫기"
-                  title="완전 종료"
+                  aria-label="닫기"
                 >
                   <X className="w-4 h-4" />
                 </button>
               </div>
             </div>
 
-
-            <div className="flex items-center justify-between gap-2">
-              <div className="font-mono text-[22px] font-black tracking-wider tabular-nums text-amber-300">
-                {timeText}
+            {timerCompletedAlert && (
+              <div className="flex items-center justify-between gap-1.5 px-2.5 py-1.5 rounded-xl bg-amber-500 text-stone-950">
+                <span className="text-[11.5px] font-black truncate min-w-0">🔔 [{timerCompletedAlert}] 완료!</span>
+                <div className="flex items-center gap-1 shrink-0">
+                  {completedAlertUrl && (
+                    <a
+                      href={normalizeDreamUrl(completedAlertUrl)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-2 py-0.5 rounded-lg bg-white text-stone-900 text-[10.5px] font-black whitespace-nowrap"
+                    >
+                      🎵 음악열기
+                    </a>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      stopAlarmAudio();
+                      setCompletedAlertUrl("");
+                      setTimerCompletedAlert("");
+                    }}
+                    className="px-2 py-0.5 rounded-lg bg-stone-900 text-white text-[10.5px] font-black whitespace-nowrap"
+                  >
+                    확인
+                  </button>
+                </div>
               </div>
-              <div className="flex items-center gap-1">
-                {kitchenTimer.mode === "countdown" && (
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setKitchenTimer((p) => ({
-                        ...p,
-                        remainingSec: p.remainingSec + 60,
-                        targetEndMs: p.running ? (Number(p.targetEndMs) || Date.now()) + 60000 : p.targetEndMs
-                      }))
-                    }
-                    className="px-1.5 py-1 rounded-lg bg-stone-800 hover:bg-stone-700 text-amber-300 text-[10.5px] font-extrabold whitespace-nowrap"
-                  >
-                    +1분
-                  </button>
-                )}
-                {kitchenTimer.mode === "countdown" && [3, 5, 10].map((m) => (
-                  <button
-                    key={m}
-                    type="button"
-                    onClick={() =>
-                      setKitchenTimer((p) => ({
-                        ...p,
-                        mode: "countdown",
-                        label: `조리 타이머 (${m}분)`,
-                        remainingSec: m * 60,
-                        running: true,
-                        startedAtMs: null,
-                        targetEndMs: Date.now() + m * 60 * 1000
-                      }))
-                    }
-                    className="px-1.5 py-1 rounded-lg bg-stone-800 hover:bg-stone-700 text-[10.5px] font-bold whitespace-nowrap"
-                  >
-                    {m}분
-                  </button>
-                ))}
-                <button
-                  type="button"
-                  onClick={() =>
-                    setKitchenTimer((p) => {
-                      const now = Date.now();
-                      if (p.running) {
-                        const nowStr = toNowHHMM();
-                        return {
+            )}
+
+            {/* 모드 1: 전자레인지식 원형 다이얼 타이머 */}
+            {kitchenTimer.mode === "countdown" && (
+              <div className="space-y-2">
+                <div className="flex items-center gap-3">
+                  {/* 원형 조그 다이얼 */}
+                  <div className="relative shrink-0 select-none">
+                    <svg
+                      width="112"
+                      height="112"
+                      viewBox="0 0 112 112"
+                      onPointerDown={handleDialPointerDown}
+                      onPointerMove={handleDialPointerMove}
+                      onPointerUp={handleDialPointerUp}
+                      onPointerCancel={handleDialPointerUp}
+                      style={{ touchAction: "none" }}
+                      className="cursor-grab active:cursor-grabbing"
+                    >
+                      <circle cx="56" cy="56" r={dialR} fill="none" stroke="#292524" strokeWidth="10" />
+                      <circle
+                        cx="56"
+                        cy="56"
+                        r={dialR}
+                        fill="none"
+                        stroke={kitchenTimer.running ? "#34d399" : "#fbbf24"}
+                        strokeWidth="10"
+                        strokeLinecap="round"
+                        strokeDasharray={dialCircum}
+                        strokeDashoffset={dialDashOffset}
+                        transform="rotate(-90 56 56)"
+                      />
+                      <circle cx={knobX} cy={knobY} r="7" fill="#ffffff" stroke="#3F624D" strokeWidth="2.5" />
+                    </svg>
+                    <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                      <span className="font-mono text-[18px] font-black tracking-tight tabular-nums text-amber-300 leading-none">
+                        {timeText}
+                      </span>
+                      <span className="text-[9px] text-stone-400 font-bold mt-1">돌려서 {dialStepSec === 60 ? "1분" : `${dialStepSec}초`}씩</span>
+                    </div>
+                  </div>
+
+                  {/* 우측 정밀도·분초 스테퍼·시작/리셋 */}
+                  <div className="flex-1 min-w-0 space-y-1.5">
+                    <div className="flex items-center gap-1">
+                      <span className="text-[10px] text-stone-400 font-bold whitespace-nowrap">다이얼:</span>
+                      {[
+                        { sec: 1, label: "1초" },
+                        { sec: 10, label: "10초" },
+                        { sec: 60, label: "1분" }
+                      ].map((u) => (
+                        <button
+                          key={u.sec}
+                          type="button"
+                          onClick={() => setDialStepSec(u.sec)}
+                          className={`flex-1 py-0.5 rounded-lg text-[10px] font-extrabold border whitespace-nowrap ${
+                            dialStepSec === u.sec
+                              ? "bg-amber-400 text-stone-950 border-amber-400"
+                              : "bg-stone-800 text-stone-300 border-stone-700"
+                          }`}
+                        >
+                          {u.label}
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* 분 / 초 직접 입력 및 미세 조정 */}
+                    <div className="grid grid-cols-2 gap-1.5">
+                      <div className="bg-stone-800 rounded-xl px-2 py-1 flex items-center justify-between gap-1">
+                        <button type="button" onClick={() => adjustCountdownSec(-60)} className="text-stone-400 hover:text-white font-black text-[13px] px-1">−</button>
+                        <div className="flex items-center gap-0.5 min-w-0">
+                          <input
+                            type="number"
+                            inputMode="numeric"
+                            min={0}
+                            max={599}
+                            value={Math.floor((Number(kitchenTimer.remainingSec) || 0) / 60)}
+                            onChange={(e) => {
+                              const mVal = Math.max(0, Math.min(599, Number(e.target.value) || 0));
+                              const sVal = (Number(kitchenTimer.remainingSec) || 0) % 60;
+                              setCountdownExactSec(mVal * 60 + sVal);
+                            }}
+                            className="w-8 bg-transparent text-center font-mono text-[13px] font-black text-white focus:outline-none"
+                          />
+                          <span className="text-[10px] text-stone-400 font-bold">분</span>
+                        </div>
+                        <button type="button" onClick={() => adjustCountdownSec(60)} className="text-amber-300 hover:text-amber-200 font-black text-[13px] px-1">+</button>
+                      </div>
+                      <div className="bg-stone-800 rounded-xl px-2 py-1 flex items-center justify-between gap-1">
+                        <button type="button" onClick={() => adjustCountdownSec(-1)} className="text-stone-400 hover:text-white font-black text-[13px] px-1">−</button>
+                        <div className="flex items-center gap-0.5 min-w-0">
+                          <input
+                            type="number"
+                            inputMode="numeric"
+                            min={0}
+                            max={59}
+                            value={(Number(kitchenTimer.remainingSec) || 0) % 60}
+                            onChange={(e) => {
+                              const sVal = Math.max(0, Math.min(59, Number(e.target.value) || 0));
+                              const mVal = Math.floor((Number(kitchenTimer.remainingSec) || 0) / 60);
+                              setCountdownExactSec(mVal * 60 + sVal);
+                            }}
+                            className="w-7 bg-transparent text-center font-mono text-[13px] font-black text-amber-300 focus:outline-none"
+                          />
+                          <span className="text-[10px] text-stone-400 font-bold">초</span>
+                        </div>
+                        <button type="button" onClick={() => adjustCountdownSec(1)} className="text-amber-300 hover:text-amber-200 font-black text-[13px] px-1">+</button>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          unlockAudioContext();
+                          setTimerCompletedAlert("");
+                          setKitchenTimer((p) => {
+                            const now = Date.now();
+                            if (p.running) {
+                              return { ...p, running: false, startedAtMs: null, targetEndMs: null };
+                            }
+                            const rem = Number(p.remainingSec) > 0 ? Number(p.remainingSec) : 180;
+                            return { ...p, running: true, remainingSec: rem, startedAtMs: null, targetEndMs: now + rem * 1000 };
+                          });
+                        }}
+                        className={`flex-1 py-1.5 rounded-xl text-[11.5px] font-extrabold whitespace-nowrap ${
+                          kitchenTimer.running ? "bg-amber-500 text-stone-950" : "bg-emerald-500 text-stone-950"
+                        }`}
+                      >
+                        {kitchenTimer.running ? "일시정지" : "▶ 시작"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setTimerCompletedAlert("");
+                          setKitchenTimer((p) => ({ ...p, running: false, remainingSec: 0, targetEndMs: null }));
+                        }}
+                        className="px-2.5 py-1.5 rounded-xl bg-stone-700 hover:bg-stone-600 text-[11px] font-bold whitespace-nowrap"
+                      >
+                        리셋
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 빠른 프리셋 */}
+                <div className="flex items-center gap-1">
+                  {[
+                    { sec: 30, label: "30초" },
+                    { sec: 60, label: "1분" },
+                    { sec: 180, label: "3분" },
+                    { sec: 300, label: "5분" },
+                    { sec: 600, label: "10분" }
+                  ].map((pr) => (
+                    <button
+                      key={pr.sec}
+                      type="button"
+                      onClick={() => {
+                        unlockAudioContext();
+                        setTimerCompletedAlert("");
+                        setKitchenTimer((p) => ({
+                          ...p,
+                          mode: "countdown",
+                          label: `타이머 (${pr.label})`,
+                          remainingSec: pr.sec,
+                          running: true,
+                          startedAtMs: null,
+                          targetEndMs: Date.now() + pr.sec * 1000
+                        }));
+                      }}
+                      className="flex-1 py-1 rounded-lg bg-stone-800 hover:bg-stone-700 text-[10.5px] font-bold whitespace-nowrap"
+                    >
+                      {pr.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* 모드 2: 범용 스톱워치 (초단위 기록 저장) */}
+            {kitchenTimer.mode === "stopwatch" && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="font-mono text-[24px] font-black tracking-wider tabular-nums text-amber-300">
+                    {timeText}
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setKitchenTimer((p) => {
+                          const now = Date.now();
+                          if (p.running) {
+                            return {
+                              ...p,
+                              running: false,
+                              startedAtMs: null,
+                              targetEndMs: null,
+                              ...(p.cookStartTimeStr ? { cookEndTimeStr: toNowHHMMSS() } : {})
+                            };
+                          }
+                          return {
+                            ...p,
+                            running: true,
+                            startedAtMs: now - (Number(p.elapsedSec) || 0) * 1000,
+                            targetEndMs: null,
+                            cookStartTimeStr: p.cookStartTimeStr || toNowHHMMSS(),
+                            cookEndTimeStr: ""
+                          };
+                        })
+                      }
+                      className={`px-3 py-1.5 rounded-xl text-[11.5px] font-extrabold whitespace-nowrap ${
+                        kitchenTimer.running ? "bg-amber-500 text-stone-950" : "bg-emerald-500 text-stone-950"
+                      }`}
+                    >
+                      {kitchenTimer.running ? "일시정지" : "▶ 시작"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        closeStopwatchStatusNotif();
+                        setKitchenTimer((p) => ({
                           ...p,
                           running: false,
+                          elapsedSec: 0,
                           startedAtMs: null,
-                          targetEndMs: null,
-                          ...(p.mode === "stopwatch" && p.cookStartTimeStr ? { cookEndTimeStr: nowStr } : {})
-                        };
-                      }
-                      if (p.mode === "stopwatch") {
-                        const startStr = p.cookStartTimeStr || toNowHHMM();
-                        return {
-                          ...p,
-                          running: true,
-                          startedAtMs: now - (Number(p.elapsedSec) || 0) * 1000,
-                          targetEndMs: null,
-                          cookStartTimeStr: startStr,
+                          cookStartTimeStr: "",
                           cookEndTimeStr: ""
-                        };
-                      }
-                      const rem = Number(p.remainingSec) > 0 ? Number(p.remainingSec) : 180;
-                      return {
-                        ...p,
-                        running: true,
-                        remainingSec: rem,
-                        startedAtMs: null,
-                        targetEndMs: now + rem * 1000
-                      };
-                    })
-                  }
-                  className={`px-2.5 py-1 rounded-lg text-[11.5px] font-extrabold whitespace-nowrap ${
-                    kitchenTimer.running ? "bg-amber-500 text-stone-950" : "bg-emerald-500 text-stone-950"
-                  }`}
-                >
-                  {kitchenTimer.running ? "일시정지" : "시작"}
-                </button>
-                <button
-                  type="button"
-                  onClick={() =>
-                    setKitchenTimer((p) => ({
-                      ...p,
-                      running: false,
-                      remainingSec: 0,
-                      elapsedSec: 0,
-                      startedAtMs: null,
-                      targetEndMs: null,
-                      cookStartTimeStr: "",
-                      cookEndTimeStr: ""
-                    }))
-                  }
-                  className="px-2 py-1 rounded-lg bg-stone-700 hover:bg-stone-600 text-[11px] font-bold whitespace-nowrap"
-                >
-                  리셋
-                </button>
-              </div>
-            </div>
+                        }));
+                      }}
+                      className="px-2.5 py-1.5 rounded-xl bg-stone-700 hover:bg-stone-600 text-[11px] font-bold whitespace-nowrap"
+                    >
+                      리셋
+                    </button>
+                  </div>
+                </div>
 
-
-            {kitchenTimer.mode === "stopwatch" && (
-              <div className="pt-1.5 border-t border-stone-800 space-y-1.5">
                 <div className="grid grid-cols-2 gap-1.5">
                   <div className="bg-stone-800/90 rounded-xl px-2.5 py-1.5 flex flex-col gap-0.5 min-w-0">
-                    <span className="text-[10px] font-bold text-stone-400 leading-none">시작 시간</span>
+                    <span className="text-[10px] font-bold text-stone-400 leading-none">시작 시간 (초단위)</span>
                     <input
                       type="time"
+                      step="1"
                       value={kitchenTimer.cookStartTimeStr || ""}
                       onChange={(e) => {
                         const nextStart = e.target.value;
                         setKitchenTimer((p) => {
-                          const diffSec = computeHHMMDiffSec(nextStart, p.cookEndTimeStr);
+                          const diffSec = computeHHMMSSDiffSec(nextStart, p.cookEndTimeStr);
                           return {
                             ...p,
                             cookStartTimeStr: nextStart,
@@ -36990,19 +38017,20 @@ time: "", location: "",
                           };
                         });
                       }}
-                      className="bg-transparent text-white font-mono text-[12px] font-extrabold focus:outline-none w-full min-w-0"
+                      className="bg-transparent text-white font-mono text-[11.5px] font-extrabold focus:outline-none w-full min-w-0"
                     />
                   </div>
                   <div className="bg-stone-800/90 rounded-xl px-2.5 py-1.5 flex flex-col gap-0.5 min-w-0">
-                    <span className="text-[10px] font-bold text-stone-400 leading-none">완료 시간</span>
+                    <span className="text-[10px] font-bold text-stone-400 leading-none">완료 시간 (초단위)</span>
                     <input
                       type="time"
+                      step="1"
                       value={kitchenTimer.cookEndTimeStr || ""}
                       onChange={(e) => {
                         const nextEnd = e.target.value;
                         setKitchenTimer((p) => {
-                          const baseStart = p.cookStartTimeStr || toNowHHMM();
-                          const diffSec = computeHHMMDiffSec(baseStart, nextEnd);
+                          const baseStart = p.cookStartTimeStr || toNowHHMMSS();
+                          const diffSec = computeHHMMSSDiffSec(baseStart, nextEnd);
                           return {
                             ...p,
                             cookStartTimeStr: baseStart,
@@ -37011,56 +38039,70 @@ time: "", location: "",
                           };
                         });
                       }}
-                      className="bg-transparent text-amber-300 font-mono text-[12px] font-extrabold focus:outline-none w-full min-w-0"
+                      className="bg-transparent text-amber-300 font-mono text-[11.5px] font-extrabold focus:outline-none w-full min-w-0"
                     />
                   </div>
                 </div>
-                <div className="flex items-center justify-between gap-1.5">
+
+                <div className="flex items-center justify-between gap-1 flex-wrap">
                   <button
                     type="button"
                     onClick={() => {
-                      const nowStr = toNowHHMM();
+                      const nowStr = toNowHHMMSS();
                       setKitchenTimer((p) => {
                         const baseStart = p.cookStartTimeStr || nowStr;
-                        const diffSec = computeHHMMDiffSec(baseStart, nowStr) ?? 0;
+                        const diffSec = p.running && p.startedAtMs
+                          ? Math.max(0, Math.floor((Date.now() - Number(p.startedAtMs)) / 1000))
+                          : (computeHHMMSSDiffSec(baseStart, nowStr) ?? Number(p.elapsedSec) ?? 0);
+                        const recItem = {
+                          id: `sw-${Date.now()}`,
+                          sec: diffSec,
+                          text: formatDurationSecKo(diffSec),
+                          range: `${baseStart}~${nowStr}`
+                        };
+                        const nextRecs = [recItem, ...(Array.isArray(p.records) ? p.records : [])].slice(0, 10);
+                        if (user && db) {
+                          setDoc(getDocRef("family_meta_v4", "timer_alarms_v1"), { stopwatchRecords: nextRecs, updatedAtMs: Date.now() }, { merge: true }).catch(() => {});
+                        }
                         return {
                           ...p,
                           running: false,
                           startedAtMs: null,
                           cookStartTimeStr: baseStart,
                           cookEndTimeStr: nowStr,
-                          elapsedSec: diffSec
+                          elapsedSec: diffSec,
+                          records: nextRecs
                         };
                       });
-                      showToast("🏁 완료 시각 기준으로 총 조리 시간이 자동 계산되었습니다!");
+                      showToast("🏁 초단위 경과 시간이 기록 목록에 저장되었습니다!");
                     }}
                     className="flex-1 py-1 px-2 rounded-lg bg-emerald-600/90 hover:bg-emerald-500 text-white text-[11px] font-extrabold whitespace-nowrap"
                   >
-                    🏁 완료 찍기
+                    🏁 완료·기록저장
                   </button>
                   {displaySec > 0 && (
                     <>
                       <button
                         type="button"
                         onClick={async () => {
-                          const mins = Math.max(1, Math.round(displaySec / 60));
+                          const durTxt = formatDurationSecKo(displaySec);
                           const rangeTxt =
                             kitchenTimer.cookStartTimeStr && kitchenTimer.cookEndTimeStr
                               ? ` (${kitchenTimer.cookStartTimeStr}~${kitchenTimer.cookEndTimeStr})`
                               : "";
-                          await copyTextSafe(`⏱️ 조리 소요시간: ${mins}분${rangeTxt}`, `📋 조리시간(${mins}분)이 복사되었습니다!`);
+                          await copyTextSafe(`⏱️ 소요시간: ${durTxt}${rangeTxt}`, `📋 소요시간(${durTxt})이 복사되었습니다!`);
                         }}
                         className="px-2 py-1 rounded-lg bg-stone-700 hover:bg-stone-600 text-[11px] font-extrabold whitespace-nowrap"
                       >
-                        📋 {Math.max(1, Math.round(displaySec / 60))}분 복사
+                        📋 {formatDurationSecKo(displaySec)} 복사
                       </button>
                       {canEditTab("recipes") && (
                         <button
                           type="button"
                           onClick={() => {
-                            const mins = Math.max(1, Math.round(displaySec / 60));
-                            openNewRecipeModal({ cookTime: `${mins}분` });
-                            showToast(`📖 레시피북 조리시간에 '${mins}분'이 자동 입력되었습니다!`);
+                            const durTxt = formatDurationSecKo(displaySec);
+                            openNewRecipeModal({ cookTime: durTxt });
+                            showToast(`📖 레시피북 조리시간에 '${durTxt}'이 자동 입력되었습니다!`);
                           }}
                           className="px-2 py-1 rounded-lg bg-amber-500/90 hover:bg-amber-400 text-stone-950 text-[11px] font-black whitespace-nowrap"
                         >
@@ -37070,6 +38112,363 @@ time: "", location: "",
                     </>
                   )}
                 </div>
+
+                {Array.isArray(kitchenTimer.records) && kitchenTimer.records.length > 0 && (
+                  <div className="pt-1.5 border-t border-stone-800 space-y-1 max-h-24 overflow-y-auto">
+                    <div className="flex items-center justify-between text-[10px] text-stone-400 font-bold">
+                      <span>📌 최근 스톱워치 기록 ({kitchenTimer.records.length})</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setKitchenTimer((p) => ({ ...p, records: [] }));
+                          if (user && db) {
+                            setDoc(getDocRef("family_meta_v4", "timer_alarms_v1"), { stopwatchRecords: [], updatedAtMs: Date.now() }, { merge: true }).catch(() => {});
+                          }
+                        }}
+                        className="text-stone-500 hover:text-rose-400"
+                      >
+                        비우기
+                      </button>
+                    </div>
+                    {kitchenTimer.records.map((rec) => (
+                      <div key={rec.id} className="flex items-center justify-between gap-1.5 text-[10.5px] bg-stone-800/70 rounded-lg px-2 py-1">
+                        <span className="font-bold text-amber-300 whitespace-nowrap">{rec.text}</span>
+                        <span className="text-stone-400 font-mono truncate">{rec.range}</span>
+                        <button
+                          type="button"
+                          onClick={() => copyTextSafe(`⏱️ ${rec.text} (${rec.range})`, `📋 '${rec.text}' 복사 완료!`)}
+                          className="text-stone-300 hover:text-white text-[10px] font-bold shrink-0"
+                        >
+                          복사
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* 모드 3: 모닝콜 · N분 후 알람 */}
+            {kitchenTimer.mode === "alarm" && (
+              <div className="space-y-2">
+                {/* 원탭 몇 분 후 알람 */}
+                <div className="bg-stone-800/80 rounded-xl p-2 space-y-1.5">
+                  <div className="text-[10.5px] font-black text-amber-300">⚡ 몇 분 후 알람</div>
+                  <div className="flex items-center gap-1 flex-wrap">
+                    {[5, 10, 15, 30, 60].map((m) => (
+                      <button
+                        key={m}
+                        type="button"
+                        onClick={() => {
+                          unlockAudioContext();
+                          const tMs = Date.now() + m * 60000;
+                          const d = new Date(tMs);
+                          const hhmmStr = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+                          const memoTxt = alarmQuickMemoDraft.trim() || `${m}분 후 알림`;
+                          saveCustomAlarms((prev) => [
+                            { id: `al-${Date.now()}`, type: "once", time: hhmmStr, targetMs: tMs, repeat: "once", label: memoTxt, enabled: true, lastFiredKey: "" },
+                            ...prev
+                          ]);
+                          setAlarmQuickMemoDraft("");
+                          showToast(`⏰ ${m}분 후 (${hhmmStr}) '${memoTxt}' 알람을 예약했습니다!`);
+                        }}
+                        className="px-2 py-1 rounded-lg bg-stone-700 hover:bg-[#3F624D] text-[10.5px] font-extrabold whitespace-nowrap"
+                      >
+                        +{m}분
+                      </button>
+                    ))}
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <input
+                      type="number"
+                      inputMode="numeric"
+                      min={1}
+                      max={720}
+                      value={alarmQuickMinDraft}
+                      onChange={(e) => setAlarmQuickMinDraft(e.target.value)}
+                      className="w-12 h-7 px-1.5 rounded-lg bg-stone-900 border border-stone-700 text-center text-[11px] font-bold text-white"
+                    />
+                    <span className="text-[10.5px] text-stone-400 font-bold whitespace-nowrap">분 후</span>
+                    <input
+                      type="text"
+                      value={alarmQuickMemoDraft}
+                      onChange={(e) => setAlarmQuickMemoDraft(e.target.value)}
+                      placeholder="내용 (예: 세탁기, 약)"
+                      className="flex-1 min-w-0 h-7 px-2 rounded-lg bg-stone-900 border border-stone-700 text-[11px] font-bold text-white"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        unlockAudioContext();
+                        const mins = Math.max(1, Math.min(720, Number(alarmQuickMinDraft) || 10));
+                        const tMs = Date.now() + mins * 60000;
+                        const d = new Date(tMs);
+                        const hhmmStr = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+                        const memoTxt = alarmQuickMemoDraft.trim() || `${mins}분 후 알림`;
+                        saveCustomAlarms((prev) => [
+                          { id: `al-${Date.now()}`, type: "once", time: hhmmStr, targetMs: tMs, repeat: "once", label: memoTxt, enabled: true, lastFiredKey: "" },
+                          ...prev
+                        ]);
+                        setAlarmQuickMemoDraft("");
+                        showToast(`⏰ ${mins}분 후 (${hhmmStr}) 알람 예약 완료!`);
+                      }}
+                      className="h-7 px-2.5 rounded-lg bg-[#3F624D] hover:bg-[#35503C] text-white text-[10.5px] font-extrabold whitespace-nowrap shrink-0"
+                    >
+                      예약
+                    </button>
+                  </div>
+                </div>
+
+                {/* 모닝콜 · 정시 알람 등록 + 클라우드 음악 선택 */}
+                <div className="bg-stone-800/80 rounded-xl p-2 space-y-1.5">
+                  <div className="flex items-center justify-between gap-1">
+                    <span className="text-[10.5px] font-black text-emerald-300">☀️ 모닝콜 · 지정 시각 알람</span>
+                    <button
+                      type="button"
+                      onClick={() => setIsAlarmMusicManageOpen((v) => !v)}
+                      className={`px-2 py-0.5 rounded-lg text-[10px] font-bold border whitespace-nowrap ${
+                        isAlarmMusicManageOpen
+                          ? "bg-[#3F624D] text-white border-[#3F624D]"
+                          : "bg-stone-900 text-stone-300 border-stone-700 hover:text-white"
+                      }`}
+                    >
+                      ☁️ 클라우드 음악({customAlarmSounds.length})
+                    </button>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <input
+                      type="time"
+                      value={alarmTimeDraft}
+                      onChange={(e) => setAlarmTimeDraft(e.target.value || "07:00")}
+                      className="h-7 px-1.5 rounded-lg bg-stone-900 border border-stone-700 text-[11px] font-bold text-white shrink-0"
+                    />
+                    <select
+                      value={alarmRepeatDraft}
+                      onChange={(e) => setAlarmRepeatDraft(e.target.value)}
+                      className="h-7 px-1 rounded-lg bg-stone-900 border border-stone-700 text-[10.5px] font-bold text-stone-200 shrink-0"
+                    >
+                      <option value="everyday">매일</option>
+                      <option value="weekday">평일</option>
+                      <option value="weekend">주말</option>
+                      <option value="once">한번만</option>
+                    </select>
+                    <input
+                      type="text"
+                      value={alarmLabelDraft}
+                      onChange={(e) => setAlarmLabelDraft(e.target.value)}
+                      placeholder="모닝콜"
+                      className="flex-1 min-w-0 h-7 px-2 rounded-lg bg-stone-900 border border-stone-700 text-[11px] font-bold text-white"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        unlockAudioContext();
+                        const tm = alarmTimeDraft || "07:00";
+                        const lbl = alarmLabelDraft.trim() || "모닝콜";
+                        saveCustomAlarms((prev) => [
+                          { id: `mc-${Date.now()}`, type: "daily", time: tm, targetMs: null, repeat: alarmRepeatDraft, label: lbl, soundId: alarmSoundIdDraft || "morning", enabled: true, lastFiredKey: "" },
+                          ...prev
+                        ]);
+                        setAlarmLabelDraft("");
+                        showToast(`☀️ [${tm}] '${lbl}' 알람이 등록되었습니다!`);
+                      }}
+                      className="h-7 px-2.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-stone-950 text-[10.5px] font-black whitespace-nowrap shrink-0"
+                    >
+                      + 추가
+                    </button>
+                  </div>
+
+                  {/* 음악 선택 드롭다운 & 미리듣기 */}
+                  <div className="flex items-center gap-1">
+                    <span className="text-[10px] text-stone-400 font-bold whitespace-nowrap">🎵 음악:</span>
+                    <select
+                      value={alarmSoundIdDraft}
+                      onChange={(e) => setAlarmSoundIdDraft(e.target.value)}
+                      className="flex-1 min-w-0 h-6 px-1.5 rounded-lg bg-stone-900 border border-stone-700 text-[10.5px] font-bold text-amber-200 truncate"
+                    >
+                      <optgroup label="기본 멜로디">
+                        {ALARM_MELODY_PRESETS.map((p) => (
+                          <option key={p.id} value={p.id}>{p.label}</option>
+                        ))}
+                      </optgroup>
+                      {customAlarmSounds.length > 0 && (
+                        <optgroup label="☁️ 클라우드 저장 음악">
+                          {customAlarmSounds.map((cs) => (
+                            <option key={cs.id} value={cs.id}>☁️ {cs.label}</option>
+                          ))}
+                        </optgroup>
+                      )}
+                      {babyDreamLinks.length > 0 && (
+                        <optgroup label="🌙 클라우드 아기꿈나라">
+                          {babyDreamLinks.map((dl) => (
+                            <option key={dl.id} value={dl.id}>{dl.icon || "🎵"} {dl.label}</option>
+                          ))}
+                        </optgroup>
+                      )}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (previewingSoundId === alarmSoundIdDraft) {
+                          stopAlarmAudio();
+                        } else {
+                          playAlarmSoundById(alarmSoundIdDraft, true);
+                        }
+                      }}
+                      className="h-6 px-2 rounded-lg bg-stone-700 hover:bg-stone-600 text-[10px] font-bold whitespace-nowrap shrink-0"
+                      title="선택한 음악 미리듣기/정지"
+                    >
+                      {previewingSoundId === alarmSoundIdDraft ? "⏹ 정지" : "▶ 듣기"}
+                    </button>
+                  </div>
+
+                  {/* 클라우드 음악 등록·관리 */}
+                  {isAlarmMusicManageOpen && (
+                    <div className="pt-1.5 border-t border-stone-700/80 space-y-1.5">
+                      <div className="flex items-center justify-between gap-1">
+                        <span className="text-[10px] font-bold text-stone-300">☁️ 클라우드 음악 추가 (MP3·음원파일 또는 링크)</span>
+                        <input
+                          ref={alarmSoundFileInputRef}
+                          type="file"
+                          accept="audio/*"
+                          className="hidden"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            e.target.value = "";
+                            if (!file) return;
+                            if (file.size > 550 * 1024) {
+                              showToast("⚠️ 클라우드 저장용 오디오는 550KB 이하 파일만 업로드 가능합니다. 긴 음악은 링크로 등록해 주세요.");
+                              return;
+                            }
+                            const reader = new FileReader();
+                            reader.onload = () => {
+                              const dataUrl = String(reader.result || "");
+                              if (!dataUrl.startsWith("data:audio/")) {
+                                showToast("⚠️ 올바른 오디오 파일이 아닙니다.");
+                                return;
+                              }
+                              const cleanTitle = file.name.replace(/\.[^.]+$/, "").slice(0, 28) || "내 알람음";
+                              const newId = `cloud-${Date.now()}`;
+                              saveCustomAlarmSounds((prev) => [{ id: newId, label: cleanTitle, url: dataUrl, isFile: true }, ...prev]);
+                              setAlarmSoundIdDraft(newId);
+                              showToast(`☁️ '${cleanTitle}' 음원을 클라우드에 저장했습니다!`);
+                            };
+                            reader.readAsDataURL(file);
+                          }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => alarmSoundFileInputRef.current?.click()}
+                          className="px-2 py-0.5 rounded bg-[#3F624D] hover:bg-[#35503C] text-white text-[10px] font-extrabold whitespace-nowrap shrink-0"
+                        >
+                          📁 파일올리기
+                        </button>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <input
+                          type="text"
+                          value={newAlarmSoundLabel}
+                          onChange={(e) => setNewAlarmSoundLabel(e.target.value)}
+                          placeholder="음악 이름"
+                          className="w-24 h-6 px-1.5 rounded bg-stone-900 border border-stone-700 text-[10.5px] font-bold text-white"
+                        />
+                        <input
+                          type="url"
+                          value={newAlarmSoundUrl}
+                          onChange={(e) => setNewAlarmSoundUrl(e.target.value)}
+                          placeholder="오디오/유튜브 URL"
+                          className="flex-1 min-w-0 h-6 px-1.5 rounded bg-stone-900 border border-stone-700 text-[10.5px] text-white"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const lbl = newAlarmSoundLabel.trim();
+                            const u = newAlarmSoundUrl.trim();
+                            if (!lbl || !u) {
+                              showToast("음악 이름과 URL을 모두 입력해 주세요.");
+                              return;
+                            }
+                            const newId = `cloud-${Date.now()}`;
+                            saveCustomAlarmSounds((prev) => [{ id: newId, label: lbl, url: u, isFile: false }, ...prev]);
+                            setAlarmSoundIdDraft(newId);
+                            setNewAlarmSoundLabel("");
+                            setNewAlarmSoundUrl("");
+                            showToast(`☁️ '${lbl}' 링크를 클라우드에 저장했습니다!`);
+                          }}
+                          className="h-6 px-2 rounded bg-amber-500 text-stone-950 text-[10px] font-black whitespace-nowrap shrink-0"
+                        >
+                          저장
+                        </button>
+                      </div>
+                      {customAlarmSounds.length > 0 && (
+                        <div className="space-y-1 max-h-20 overflow-y-auto">
+                          {customAlarmSounds.map((cs) => (
+                            <div key={cs.id} className="flex items-center justify-between gap-1 bg-stone-900/80 rounded px-2 py-0.5 text-[10px]">
+                              <span className="truncate font-bold text-stone-200">☁️ {cs.label}</span>
+                              <div className="flex items-center gap-1 shrink-0">
+                                <button
+                                  type="button"
+                                  onClick={() => playAlarmSoundById(cs.id, true)}
+                                  className="text-amber-300 hover:text-amber-200 font-bold"
+                                >
+                                  ▶
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => saveCustomAlarmSounds((prev) => prev.filter((x) => x.id !== cs.id))}
+                                  className="text-stone-400 hover:text-rose-400 font-bold"
+                                >
+                                  삭제
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* 등록된 알람 목록 */}
+                {customAlarms.length > 0 && (
+                  <div className="space-y-1 max-h-28 overflow-y-auto">
+                    {customAlarms.map((al) => {
+                      const remMin = al.type === "once" && al.enabled && Number(al.targetMs) > Date.now()
+                        ? Math.max(1, Math.ceil((Number(al.targetMs) - Date.now()) / 60000))
+                        : null;
+                      const repLabel = al.type === "once" ? "1회" : al.repeat === "weekday" ? "평일" : al.repeat === "weekend" ? "주말" : al.repeat === "once" ? "1회" : "매일";
+                      const sndLabel =
+                        ALARM_MELODY_PRESETS.find((p) => p.id === al.soundId)?.label ||
+                        customAlarmSounds.find((c) => c.id === al.soundId)?.label ||
+                        babyDreamLinks.find((d) => d.id === al.soundId)?.label ||
+                        "";
+                      return (
+                        <div key={al.id} className="flex items-center justify-between gap-1.5 bg-stone-800/70 rounded-lg px-2 py-1 text-[11px]">
+                          <button
+                            type="button"
+                            onClick={() => saveCustomAlarms((prev) => prev.map((x) => (x.id === al.id ? { ...x, enabled: !x.enabled } : x)))}
+                            className="flex items-center gap-1.5 min-w-0 flex-1 text-left"
+                          >
+                            <span className={`w-2 h-2 rounded-full shrink-0 ${al.enabled ? "bg-emerald-400" : "bg-stone-500"}`} />
+                            <span className={`font-mono font-black whitespace-nowrap ${al.enabled ? "text-amber-300" : "text-stone-500 line-through"}`}>{al.time}</span>
+                            <span className="text-[10px] px-1 rounded bg-stone-700 text-stone-300 whitespace-nowrap">{repLabel}</span>
+                            <span className={`truncate font-bold ${al.enabled ? "text-white" : "text-stone-500"}`}>{al.label}</span>
+                            {sndLabel && <span className="text-[9px] text-amber-200/80 truncate max-w-[70px]">🎵{sndLabel.replace(/^[^\w가-힣]+/, "")}</span>}
+                            {remMin !== null && <span className="text-[10px] text-emerald-300 whitespace-nowrap">({remMin}분후)</span>}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => saveCustomAlarms((prev) => prev.filter((x) => x.id !== al.id))}
+                            className="text-stone-400 hover:text-rose-400 px-1 font-bold"
+                            aria-label="알람 삭제"
+                          >
+                            ×
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -37131,12 +38530,25 @@ time: "", location: "",
                   {
                     tab: "home",
                     icon: "⏱️",
-                    label: "조리타이머",
+                    label: "스톱워치",
                     onClick: () =>
                       setKitchenTimer((p) => ({
                         ...p,
                         open: true,
-                        label: p.label || "조리 타이머"
+                        mode: "stopwatch",
+                        label: "스톱워치"
+                      }))
+                  },
+                  {
+                    tab: "home",
+                    icon: "⏰",
+                    label: "모닝콜·알람",
+                    onClick: () =>
+                      setKitchenTimer((p) => ({
+                        ...p,
+                        open: true,
+                        mode: "alarm",
+                        label: "모닝콜·알람"
                       }))
                   }
                 ]
@@ -37243,8 +38655,18 @@ time: "", location: "",
                 ]
               },
               {
-                group: "🗂️ 노트 · 버킷 · 내보내기",
+                group: "🗂️ 노트 · 버킷 · 소통",
                 items: [
+                  {
+                    tab: "baby",
+                    icon: "🤝",
+                    label: "인수인계",
+                    onClick: () => {
+                      if (!handoverDateStr || handoverDateStr < getTodayStr()) setHandoverDateStr(getTodayStr());
+                      setHandoverModalTab("config");
+                      setIsHandoverModalOpen(true);
+                    }
+                  },
                   {
                     tab: "pages",
                     icon: "🗂️",
@@ -37389,10 +38811,10 @@ time: "", location: "",
             className="bg-white rounded-3xl max-w-md w-full max-h-[85vh] flex flex-col overflow-hidden shadow-2xl border border-stone-200"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="px-4 py-3.5 bg-indigo-950 text-white flex items-center justify-between gap-2 shrink-0">
+            <div className="px-4 py-3 bg-[#35503C] text-white flex items-center justify-between gap-2 shrink-0">
               <div className="min-w-0">
-                <div className="text-[15.5px] font-black">🌙 아기꿈나라 링크 관리</div>
-                <div className="text-[11px] text-indigo-200 font-semibold">유튜브 바로 실행 · 실시간 동기화</div>
+                <div className="text-[13.5px] font-black">🌙 아기꿈나라 링크 관리</div>
+                <div className="text-[10.5px] text-emerald-100 font-semibold">유튜브 바로 실행 · 실시간 동기화</div>
               </div>
               <div className="flex items-center gap-1.5 shrink-0">
                 {canEditTab("baby") && (
@@ -37433,7 +38855,7 @@ time: "", location: "",
                               type="button"
                               onClick={() => setDreamLinkDraft((p) => ({ ...p, icon: ic }))}
                               className={`w-7 h-7 rounded-lg text-[15px] flex items-center justify-center border transition ${
-                                dreamLinkDraft.icon === ic ? "bg-indigo-100 border-indigo-400 scale-105" : "bg-stone-50 border-stone-200"
+                                dreamLinkDraft.icon === ic ? "bg-[#EEF3EE] border-[#3F624D] scale-105" : "bg-stone-50 border-stone-200"
                               }`}
                             >
                               {ic}
@@ -37477,7 +38899,7 @@ time: "", location: "",
                               saveBabyDreamLinksToCloud(nextList, `🌙 '${cleanLabel}' 링크를 수정했습니다!`);
                               setEditingDreamLinkId(null);
                             }}
-                            className="px-3 py-1 rounded-lg bg-indigo-900 text-white text-[11.5px] font-extrabold whitespace-nowrap"
+                            className="px-3 py-1 rounded-lg bg-[#3F624D] hover:bg-[#35503C] text-white text-[11.5px] font-extrabold whitespace-nowrap"
                           >
                             저장
                           </button>
@@ -37486,7 +38908,7 @@ time: "", location: "",
                     ) : (
                       <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-2 min-w-0 flex-1">
-                          <span className="w-9 h-9 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-[18px] shrink-0">
+                          <span className="w-9 h-9 rounded-xl bg-[#EEF3EE] border border-[#C9D8CC] flex items-center justify-center text-[18px] shrink-0">
                             {dl.icon || "🎵"}
                           </span>
                           <div className="min-w-0 flex-1">
@@ -37570,8 +38992,8 @@ time: "", location: "",
 
               {/* 새 아기꿈나라 링크 추가 폼 */}
               {canEditTab("baby") && !editingDreamLinkId && (
-                <div className="bg-white rounded-2xl border border-dashed border-indigo-200 p-3 space-y-2">
-                  <div className="text-[12px] font-black text-indigo-900">+ 새 소리 링크 추가</div>
+                <div className="bg-white rounded-2xl border border-dashed border-[#C9D8CC] p-3 space-y-2">
+                  <div className="text-[12px] font-black text-[#35503C]">+ 새 소리 링크 추가</div>
                   <div className="flex items-center gap-1 flex-wrap">
                     {BABY_DREAM_ICON_PRESETS.map((ic) => (
                       <button
@@ -37579,7 +39001,7 @@ time: "", location: "",
                         type="button"
                         onClick={() => setDreamLinkDraft((p) => ({ ...p, icon: ic }))}
                         className={`w-7 h-7 rounded-lg text-[15px] flex items-center justify-center border transition ${
-                          dreamLinkDraft.icon === ic ? "bg-indigo-100 border-indigo-400 scale-105" : "bg-stone-50 border-stone-200"
+                          dreamLinkDraft.icon === ic ? "bg-[#EEF3EE] border-[#3F624D] scale-105" : "bg-stone-50 border-stone-200"
                         }`}
                       >
                         {ic}
@@ -37618,7 +39040,7 @@ time: "", location: "",
                       saveBabyDreamLinksToCloud(nextList, `🌙 '${cleanLabel}' 링크를 추가했습니다!`);
                       setDreamLinkDraft({ label: "", icon: "🎵", url: "" });
                     }}
-                    className="w-full py-2 rounded-xl bg-indigo-950 hover:bg-indigo-900 text-white text-[12.5px] font-extrabold"
+                    className="w-full py-2 rounded-xl bg-[#3F624D] hover:bg-[#35503C] text-white text-[12.5px] font-extrabold"
                   >
                     + 아기꿈나라에 추가
                   </button>
@@ -37680,7 +39102,7 @@ time: "", location: "",
                     { id: "notices", label: "가족공지", icon: "📌" },
                     { id: "bucket", label: "버킷리스트", icon: "🌟" },
                     { id: "house", label: "살림수첩", icon: "🏠" },
-                    { id: "kitchen_timer", label: "조리타이머", icon: "⏱️" },
+                    { id: "kitchen_timer", label: "스톱워치", icon: "⏱️" },
                     { id: "baby_dream", label: "아기꿈나라", icon: "🌙" },
                     { id: "handover", label: "인수인계", icon: "🤝" }
                   ]
@@ -37733,7 +39155,7 @@ time: "", location: "",
                         }`}
                       >
                         {badgeCount > 0 && (
-                          <span className={`absolute top-1.5 right-1.5 min-w-[16px] h-4 px-1 rounded-full text-[9.5px] font-black flex items-center justify-center leading-none ${
+                          <span className={`absolute top-1.5 right-1.5 min-w-[16px] h-4 px-1 rounded-full text-[10px] font-black flex items-center justify-center leading-none ${
                             activeTab === m.id ? "bg-amber-400 text-stone-950" : "bg-amber-500 text-white"
                           }`}>
                             {badgeCount > 99 ? "99+" : badgeCount}
@@ -38154,7 +39576,7 @@ time: "", location: "",
             >
               {/* 조르테 스타일 다크 헤더 */}
               <div className="bg-[#595959] text-white px-3.5 py-2.5 flex items-center justify-between gap-2 shrink-0">
-                <div className="text-[14.5px] font-bold tracking-tight truncate">
+                <div className="text-[14px] font-bold tracking-tight truncate">
                   {popHeaderText}
                 </div>
                 {activeDetail ? (
@@ -38356,7 +39778,7 @@ time: "", location: "",
                       <button
                         type="button"
                         onClick={() => handleScheduleToNotice(activeDetail)}
-                        className="px-2.5 py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-800 text-[11.5px] font-extrabold whitespace-nowrap transition"
+                        className="px-2.5 py-1.5 rounded-lg bg-[#EEF3EE] hover:bg-[#dce8de] border border-[#C9D8CC] text-[#35503C] text-[11.5px] font-extrabold whitespace-nowrap transition"
                       >
                         📌 공지 올리기
                       </button>
@@ -38420,7 +39842,7 @@ time: "", location: "",
                         >
                           <div className="min-w-0 flex-1">
                             <div
-                              className={`text-[14.5px] font-bold break-keep leading-snug ${
+                              className={`text-[14px] font-bold break-keep leading-snug ${
                                 ev._isFamily ? "text-indigo-900" : cMeta.textCls
                               } ${ev.done ? "line-through opacity-45" : ""}`}
                             >
@@ -38576,7 +39998,7 @@ time: "", location: "",
                     className="flex-1 py-2 rounded-md bg-[#727272] hover:bg-[#828282] text-white text-[13px] font-bold transition"
                   >
                     새로운 일정
-                  </button>
+                  &lt;/button&gt;
                   <button
                     type="button"
                     onClick={() => shiftPopupDay(1)}
@@ -38584,11 +40006,11 @@ time: "", location: "",
                     aria-label="다음 날"
                   >
                     &gt;&gt;
-                  </button>
-                </div>
+                  &lt;/button&gt;
+                &lt;/div&gt;
               )}
-            </div>
-          </div>
+            &lt;/div&gt;
+          &lt;/div&gt;
         );
       })()}
 
@@ -39101,7 +40523,7 @@ time: "", location: "",
                         ? c.id === "weekdays"
                           ? "bg-[#3F624D] text-white border-[#3F624D]"
                           : c.id === "weekend_holiday"
-                          ? "bg-teal-600 text-white border-teal-600"
+                          ? "bg-[#3F624D] text-white border-[#3F624D]"
                           : "bg-stone-900 text-white border-stone-900"
                         : "bg-stone-50 text-stone-600 border-stone-200"
                     }`}
@@ -39117,10 +40539,10 @@ time: "", location: "",
               <div className="flex items-center justify-between mb-1">
                 <label className="text-[11.5px] font-extrabold text-stone-500">시간대</label>
                 {newRoutineCycle === "weekdays" && (
-                  <span className="text-[10.5px] font-bold text-indigo-600">평일 전용 시간대만 표시</span>
+                  <span className="text-[10.5px] font-bold text-[#3F624D]">평일 전용 시간대만 표시</span>
                 )}
                 {newRoutineCycle === "weekend_holiday" && (
-                  <span className="text-[10.5px] font-bold text-teal-600">주말·공휴일 시간대만 표시</span>
+                  <span className="text-[10.5px] font-bold text-[#3F624D]">주말·공휴일 시간대만 표시</span>
                 )}
               </div>
               <div className="flex flex-wrap gap-1.5">
@@ -41329,7 +42751,7 @@ time: "", location: "",
                   value={condolenceForm.amount ? Number(String(condolenceForm.amount).replace(/[^0-9]/g, "")).toLocaleString() : ""}
                   onChange={(e) => setCondolenceForm((p) => ({ ...p, amount: e.target.value.replace(/[^0-9]/g, "") }))}
                   placeholder="예: 100,000"
-                  className="w-full min-w-0 h-10 px-3 rounded-xl border border-stone-200 bg-stone-50 text-[14.5px] font-black text-stone-900 focus:outline-none focus:border-[#3F624D] focus:bg-white"
+                  className="w-full min-w-0 h-10 px-3 rounded-xl border border-stone-200 bg-stone-50 text-[14px] font-black text-stone-900 focus:outline-none focus:border-[#3F624D] focus:bg-white"
                 />
                 <div className="grid grid-cols-6 gap-1">
                   {[30000, 50000, 100000, 200000, 300000, 500000].map((v) => (
@@ -41871,6 +43293,7 @@ time: "", location: "",
           shopping_presets: { title: "🛒 자주사는 품목", placeholder: "예: 식빵 또는 식빵|1봉|기타" },
           baby_health_tags: { title: "🩺 진료·증상 태그", placeholder: "새 증상·진료 태그 (예: 중이염, 항생제)" },
           schedule_places: { title: "📍 일정 빠른 장소", placeholder: "새 자주 가는 장소 (예: 보건소, 키즈카페)" },
+          house_warranty_brands: { title: "🏷️ 보증 브랜드", placeholder: "새 브랜드명 (예: 발뮤다, 브라운, 쿠쿠)" },
           condolence_cat: { title: "💌 경조사 카테고리", placeholder: "새 경조사 분류 (예: 칠순/팔순, 집들이, 승진)" },
           condolence_group: { title: "👥 경조사 그룹", placeholder: "새 경조사 그룹 (예: 동호회, 대학동기, 거래처)" },
           condolence_pay: { title: "💳 경조사 결제수단", placeholder: "새 결제수단 (예: 카카오페이, 토스, 상품권, 화환)" }
@@ -41918,6 +43341,7 @@ time: "", location: "",
                   { id: "schedule", label: "🗓️ 일정", cnt: (customCategories.schedule || []).length },
                   { id: "house_room", label: "🏠 수납", cnt: houseStorageRooms.length },
                   { id: "house_med_target", label: "💊 약대상", cnt: houseMedTargets.length },
+                  { id: "house_warranty_brands", label: "🏷️ 브랜드", cnt: houseWarrantyBrands.length },
                   { id: "baby_memo_tags", label: "🍼 수유태그", cnt: babyMemoTags.length },
                   { id: "shopping_presets", label: "🛒 자주담기", cnt: shoppingPresets.length },
                   { id: "baby_health_tags", label: "🩺 진료태그", cnt: babyHealthTags.length },
@@ -42149,7 +43573,7 @@ time: "", location: "",
                         copy[idx].deductQty = Math.max(0, copy[idx].deductQty - 1);
                         setCookingConfirmModal({ ...cookingConfirmModal, items: copy });
                       }}
-                      className="w-11 h-11 rounded-xl bg-white border border-stone-200 text-[17.5px] font-black flex items-center justify-center"
+                      className="w-11 h-11 rounded-xl bg-white border border-stone-200 text-[17px] font-black flex items-center justify-center"
                     >
                       -
                     </button>
@@ -42166,7 +43590,7 @@ time: "", location: "",
                         );
                         setCookingConfirmModal({ ...cookingConfirmModal, items: copy });
                       }}
-                      className="w-11 h-11 rounded-xl bg-white border border-stone-200 text-[17.5px] font-black flex items-center justify-center"
+                      className="w-11 h-11 rounded-xl bg-white border border-stone-200 text-[17px] font-black flex items-center justify-center"
                     >
                       +
                     </button>
@@ -42515,14 +43939,14 @@ time: "", location: "",
                           setConfirmResetAccessDefaults(false);
                           showToast("권한 설정을 기본값으로 복원했습니다.");
                         }}
-                        className="px-1.5 py-0.5 rounded bg-rose-600 text-white text-[9.5px] font-black whitespace-nowrap animate-pulse"
+                        className="px-1.5 py-0.5 rounded bg-rose-600 text-white text-[10px] font-black whitespace-nowrap animate-pulse"
                       >
                         ⚠️ 복원확정
                       </button>
                       <button
                         type="button"
                         onClick={() => setConfirmResetAccessDefaults(false)}
-                        className="px-1.5 py-0.5 rounded bg-stone-200 text-stone-600 text-[9.5px] font-bold whitespace-nowrap"
+                        className="px-1.5 py-0.5 rounded bg-stone-200 text-stone-600 text-[10px] font-bold whitespace-nowrap"
                       >
                         취소
                       </button>
@@ -42544,7 +43968,7 @@ time: "", location: "",
                     <span className="text-[11px] font-black text-stone-900 whitespace-nowrap">👥 회원 명단 ({managedUsers.length}명)</span>
                     <div className="flex items-center gap-1 shrink-0">
                       {managedUsers.some((u) => u.role === "pending") && (
-                        <span className="px-1.5 py-0.5 rounded-full bg-amber-500 text-white text-[9.5px] font-black whitespace-nowrap">
+                        <span className="px-1.5 py-0.5 rounded-full bg-amber-500 text-white text-[10px] font-black whitespace-nowrap">
                           대기 {managedUsers.filter((u) => u.role === "pending").length}
                         </span>
                       )}
@@ -42722,7 +44146,7 @@ time: "", location: "",
                                 </button>
                                 <div className="flex justify-center min-w-0">
                                   {isSelf ? (
-                                    <span className="px-1.5 py-0.5 rounded bg-stone-800 text-white text-[9.5px] font-black whitespace-nowrap">
+                                    <span className="px-1.5 py-0.5 rounded bg-stone-800 text-white text-[10px] font-black whitespace-nowrap">
                                       관리자
                                     </span>
                                   ) : (
@@ -42741,7 +44165,7 @@ time: "", location: "",
                                           handleUpdateUserRole(mu.uid, "pending");
                                         }
                                       }}
-                                      className={`w-full min-w-0 truncate h-6 px-1 rounded border text-[9.5px] font-extrabold cursor-pointer ${selectCls}`}
+                                      className={`w-full min-w-0 truncate h-6 px-1 rounded border text-[10px] font-extrabold cursor-pointer ${selectCls}`}
                                     >
                                       <option value="pending" className="bg-white text-stone-900">⏳ 대기</option>
                                       <option value="admin:수혁" className="bg-white text-stone-900">👑 수혁</option>
@@ -43021,7 +44445,7 @@ time: "", location: "",
                 <span className="text-[11px] font-black text-stone-800 whitespace-nowrap">
                   📧 가입·승인 완료 메일 자동 발송 (EmailJS 선택)
                 </span>
-                <span className={`px-1.5 py-0.5 rounded text-[9.5px] font-extrabold whitespace-nowrap ${emailJsConfig.serviceId && emailJsConfig.templateId && emailJsConfig.publicKey ? "bg-[#EEF3EE] text-[#35503C]" : "bg-stone-200 text-stone-500"}`}>
+                <span className={`px-1.5 py-0.5 rounded text-[10px] font-extrabold whitespace-nowrap ${emailJsConfig.serviceId && emailJsConfig.templateId && emailJsConfig.publicKey ? "bg-[#EEF3EE] text-[#35503C]" : "bg-stone-200 text-stone-500"}`}>
                   {emailJsConfig.serviceId && emailJsConfig.templateId && emailJsConfig.publicKey ? "자동발송 ON" : "미설정(메일앱)"}
                 </span>
               </div>
@@ -43299,7 +44723,7 @@ time: "", location: "",
                       >
                         <div className="min-w-0">
                           <div className="text-[11px] font-bold text-stone-800 truncate">{log.label}</div>
-                          <div className="text-[9.5px] text-stone-400 truncate">
+                          <div className="text-[10px] text-stone-400 truncate">
                             {log.type === "meal" ? "식단" : log.type === "fridge" ? "냉장고" : "일정"} · {log.deletedAt}
                           </div>
                         </div>
@@ -43760,7 +45184,7 @@ time: "", location: "",
                           <span className="font-black text-stone-900 truncate">{n.fromName}</span>
                           <span className="text-stone-400 font-bold shrink-0">({n.fromRoleLabel || "회원"} → {n.target === "아빠" || n.target === "전체" || !n.target ? "관리자" : n.target})</span>
                         </div>
-                        <span className="text-[9.5px] text-stone-400 shrink-0">
+                        <span className="text-[10px] text-stone-400 shrink-0">
                           {n.createdAtMs ? new Date(n.createdAtMs).toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }) : ""}
                         </span>
                       </div>
@@ -44016,7 +45440,7 @@ time: "", location: "",
                             {checked ? "✓" : ""}
                           </span>
                           <span className="text-[11.5px] font-black text-stone-500 shrink-0">{m.slot}</span>
-                          <span className="text-[13.5px] font-extrabold truncate flex-1">{m.menu}</span>
+                          <span className="text-[13.5px] font-extrabold truncate flex-1 min-w-0">{m.menu}</span>
                           <span className="text-[11.5px] font-bold text-stone-400 shrink-0">
                             {toSafeArray(m.members).join(",")}
                           </span>
@@ -44160,7 +45584,7 @@ time: "", location: "",
                         }`}
                       >
                         <div className="text-[11.5px] font-black text-stone-500">{h.hour}시</div>
-                        <div className="text-[17.5px] leading-none">{h.emoji}</div>
+                        <div className="text-[17px] leading-none">{h.emoji}</div>
                         <div className="text-[13.5px] font-black text-stone-900">{h.temp}°</div>
                         <div className={`text-[11.5px] font-extrabold ${h.rainProb >= 40 ? "text-sky-700" : "text-stone-400"}`}>
                           ☔ {h.rainProb}%
@@ -44186,7 +45610,7 @@ time: "", location: "",
                   {weatherInfo.weekly.map((w) => (
                     <div key={w.date} className={`px-3 py-1.5 flex items-center justify-between text-[13.5px] ${w.rainProb >= 40 ? "bg-sky-50/50" : ""}`}>
                       <span className="font-extrabold text-stone-800 w-16">{w.dayName}</span>
-                      <span className="text-[17.5px]">{w.emoji}</span>
+                      <span className="text-[17px]">{w.emoji}</span>
                       <span className={`text-[12.5px] font-extrabold ${w.rainProb >= 40 ? "text-sky-700" : "text-stone-400"}`}>
                         ☔ {w.rainProb}%
                       </span>
@@ -44277,7 +45701,7 @@ time: "", location: "",
                       : "bg-stone-50 border-stone-200"
                   }`}
                 >
-                  <div className="text-[15.5px] font-black text-stone-900">{ch.label}</div>
+                  <div className="text-[15px] font-black text-stone-900">{ch.label}</div>
                   <div className="text-[11.5px] font-bold text-stone-500 mt-0.5">{ch.sub}</div>
                 </button>
               ))}
@@ -44420,7 +45844,7 @@ time: "", location: "",
                         });
                       }
                     }}
-                    className="text-[15.5px] font-black text-stone-900 bg-stone-50 px-2 py-1 rounded-lg border border-stone-200"
+                    className="text-[15px] font-black text-stone-900 bg-stone-50 px-2 py-1 rounded-lg border border-stone-200"
                   />
                   <button
                     type="button"
@@ -44724,7 +46148,7 @@ time: "", location: "",
               <button
                 type="button"
                 onClick={handleSaveActivityModal}
-                className="w-full py-2.5 rounded-2xl bg-[#5E7A65] hover:bg-[#4E6855] text-white text-[15.5px] font-black shadow-sm"
+                className="w-full py-2.5 rounded-2xl bg-[#5E7A65] hover:bg-[#4E6855] text-white text-[13.5px] font-black shadow-sm"
               >
                 저장
               </button>
@@ -45095,10 +46519,10 @@ time: "", location: "",
               <div className="bg-[#35503C] text-white px-4 py-3 flex items-center justify-between gap-2 shrink-0">
                 <div className="min-w-0">
                   <div className="text-[10px] tracking-widest font-bold text-emerald-200 uppercase">Family Time Capsule</div>
-                  <div className="text-[15.5px] font-black truncate">📰 {yearNum}년 {monthNum}월 성장 매거진</div>
+                  <div className="text-[13.5px] font-black truncate">📰 {yearNum}년 {monthNum}월 성장 매거진</div>
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
-                  <button type="button" onClick={() => shiftMagazineMonth(-1)} className="px-2 py-1 rounded-lg bg-white whitespace-nowrap shrink-0/15 hover:bg-white/25 text-[12px] font-bold">◀</button>
+                  <button type="button" onClick={() => shiftMagazineMonth(-1)} className="px-2 py-1 rounded-lg bg-white/15 hover:bg-white/25 text-[12px] font-bold whitespace-nowrap shrink-0">◀</button>
                   <button
                     type="button"
                     disabled={ym >= getTodayStr().slice(0, 7)}
@@ -45500,200 +46924,618 @@ time: "", location: "",
               </div>
             </div>
 
-            {isNotifSettingsOpen && (
-              <div className="rounded-xl border border-stone-200 bg-stone-50/95 p-2.5 space-y-1.5 shrink-0 text-[11px] max-h-[38vh] overflow-y-auto">
-                <div className="flex items-center justify-between gap-2 pb-1 border-b border-stone-200/80">
-                  <span className="font-black text-stone-800 whitespace-nowrap">⏰ 항목별 알림·시간 설정</span>
-                  <button
-                    type="button"
-                    onClick={() => saveSmartNotifPrefs((p) => ({ ...p, enabled: !p.enabled }))}
-                    className={`h-6 px-2.5 rounded-full text-[10.5px] font-extrabold border whitespace-nowrap shrink-0 ${
-                      smartNotifPrefs.enabled ? "bg-[#3F624D] text-white border-[#3F624D]" : "bg-white text-stone-500 border-stone-200"
-                    }`}
-                  >
-                    {smartNotifPrefs.enabled ? "전체 ON" : "전체 OFF"}
-                  </button>
+            {isNotifSettingsOpen && (() => {
+              const todayStrPreview = getTodayStr();
+              const isSnoozing = Number(smartNotifPrefs?.snoozeUntilMs || 0) > Date.now();
+              const leadList = Array.isArray(smartNotifPrefs.scheduleLeadList) && smartNotifPrefs.scheduleLeadList.length > 0
+                ? smartNotifPrefs.scheduleLeadList
+                : [Number(smartNotifPrefs.scheduleLeadMinutes) || 30];
+
+              const NOTIF_ITEM_META = {
+                scheduleTimed: {
+                  defTitle: "⏰ [{시간}] {제목}",
+                  defBody: "{남은시간} 예정된 일정이 있습니다.{장소}",
+                  vars: ["시간", "제목", "남은시간", "장소", "회차"],
+                  getSample: () => {
+                    const ev = schedules.find((s) => !s.done && s.notifEnabled !== false && s.date >= todayStrPreview && s.time);
+                    return ev
+                      ? { real: true, vars: { 시간: ev.time, 제목: ev.title, 남은시간: "30분 후", 장소: ev.location ? ` · 📍${ev.location}` : "", 회차: leadList.length > 1 ? "(30분전)" : "" } }
+                      : { real: false, vars: { 시간: "14:00", 제목: "소아과 정기검진", 남은시간: "30분 후", 장소: " · 📍이진소아과", 회차: "" } };
+                  }
+                },
+                scheduleDaily: {
+                  defTitle: "📅 오늘·내일 일정 {건수}건",
+                  defBody: "{목록}",
+                  vars: ["건수", "목록", "회차"],
+                  getSample: () => {
+                    const soon = imminentSchedulesWithin3Days.filter((s) => s.notifEnabled !== false && s.calc && s.calc.daysUntil <= 1);
+                    return soon.length > 0
+                      ? { real: true, vars: { 건수: soon.length, 목록: soon.slice(0, 3).map((s) => `${s.calc.dDayText || "오늘"} ${s.title}`).join(" · "), 회차: (smartNotifPrefs.scheduleDailyRepeatCount || 1) > 1 ? `[1/${smartNotifPrefs.scheduleDailyRepeatCount}회]` : "" } }
+                      : { real: false, vars: { 건수: 2, 목록: "오늘 어린이집 하원 준비 · D-1 예방접종", 회차: "" } };
+                  }
+                },
+                ddayAlert: {
+                  defTitle: "⭐ 디데이 일정 {건수}건",
+                  defBody: "{목록}",
+                  vars: ["건수", "목록", "D-Day", "회차"],
+                  getSample: () => {
+                    const ddays = schedules.filter((s) => s.showDday && !s.done && s.notifEnabled !== false).map((s) => ({ ...s, calc: calculateScheduleDday(s) })).filter((s) => s.calc && s.calc.daysUntil >= 0).sort((a, b) => a.calc.daysUntil - b.calc.daysUntil);
+                    return ddays.length > 0
+                      ? { real: true, vars: { 건수: ddays.length, 목록: ddays.slice(0, 3).map((s) => `${s.title}(${s.calc.daysUntil === 0 ? "D-Day" : `D-${s.calc.daysUntil}`})`).join(" · "), "D-Day": ddays[0].calc.daysUntil === 0 ? "오늘" : `D-${ddays[0].calc.daysUntil}`, 회차: (smartNotifPrefs.ddayRepeatCount || 1) > 1 ? `[1/${smartNotifPrefs.ddayRepeatCount}회]` : "" } }
+                      : { real: false, vars: { 건수: 1, 목록: "💍 결혼기념일(D-2)", "D-Day": "D-2", 회차: "" } };
+                  }
+                },
+                fridgeExpiry: {
+                  defTitle: "🥬 냉장고 유통기한 임박 {건수}건",
+                  defBody: "{목록}",
+                  vars: ["건수", "목록", "회차"],
+                  getSample: () => {
+                    const expList = fridge.filter((f) => Number(f.quantity || 0) > 0 && f.expiryDate && getDaysDiff(f.expiryDate) >= 0 && getDaysDiff(f.expiryDate) <= Number(smartNotifPrefs.fridgeExpiryDays ?? 3));
+                    return expList.length > 0
+                      ? { real: true, vars: { 건수: expList.length, 목록: expList.slice(0, 3).map((f) => `${f.name}(D-${getDaysDiff(f.expiryDate)})`).join(", "), 회차: (smartNotifPrefs.fridgeExpiryRepeatCount || 1) > 1 ? `[1/${smartNotifPrefs.fridgeExpiryRepeatCount}회]` : "" } }
+                      : { real: false, vars: { 건수: 2, 목록: "우유(D-1), 두부(D-2)", 회차: "" } };
+                  }
+                },
+                routineSlot: {
+                  defTitle: "✅ [{시간대}] 미완료 루틴 {건수}건",
+                  defBody: "{목록}",
+                  vars: ["시간대", "건수", "목록", "회차"],
+                  getSample: () => {
+                    const curSlot = getCurrentRoutineTimeSlot(routineTimeRanges, null, routineSlotDefs, isDayOffKorea(todayStr));
+                    const pending = familyRoutines.filter((r) => !isRoutineDoneNow(r) && isRoutineDueTodayOrPast(r, todayStr) && (r.timeSlot || "상시") === curSlot);
+                    return pending.length > 0
+                      ? { real: true, vars: { 시간대: curSlot, 건수: pending.length, 목록: pending.slice(0, 3).map((r) => r.title).join(" · "), 회차: (smartNotifPrefs.routineSlotRepeatCount || 1) > 1 ? `[1/${smartNotifPrefs.routineSlotRepeatCount}회]` : "" } }
+                      : { real: false, vars: { 시간대: curSlot || "아침", 건수: 2, 목록: "시목이 가방 챙기기 · 유산균 먹이기", 회차: "[1/2회]" } };
+                  }
+                },
+                babyFeeding: {
+                  defTitle: "🍼 [{아이}] 수유 시간 안내",
+                  defBody: "마지막 수유 후 {경과시간}이 지났습니다.",
+                  vars: ["아이", "경과시간", "회차"],
+                  getSample: () => {
+                    const targetChild = selectedChildId || "시율";
+                    const feeds = babyActivities.filter((a) => a.childId === targetChild && !a.inProgress && ["모유", "분유", "유축수유"].includes(a.type));
+                    if (feeds.length > 0) {
+                      const hrs = Math.max(0, (Date.now() - Number(feeds[0].startMs || 0)) / 3600000);
+                      return { real: true, vars: { 아이: targetChild, 경과시간: `${Math.floor(hrs)}시간 ${Math.round((hrs % 1) * 60)}분`, 회차: (smartNotifPrefs.babyFeedingRepeatCount || 1) > 1 ? `[1/${smartNotifPrefs.babyFeedingRepeatCount}회]` : "" } };
+                    }
+                    return { real: false, vars: { 아이: targetChild, 경과시간: "3시간 10분", 회차: "[1/2회]" } };
+                  }
+                },
+                todosDue: {
+                  defTitle: "📝 마감 임박 할 일 {건수}건",
+                  defBody: "{목록}",
+                  vars: ["건수", "목록", "회차"],
+                  getSample: () => {
+                    const dueTodos = schedules.filter((s) => s.category === "할일(To-Do)" && !s.done && s.notifEnabled !== false && s.date && s.date <= todayStr);
+                    return dueTodos.length > 0
+                      ? { real: true, vars: { 건수: dueTodos.length, 목록: dueTodos.slice(0, 3).map((t) => t.title).join(" · "), 회차: (smartNotifPrefs.todosDueRepeatCount || 1) > 1 ? `[1/${smartNotifPrefs.todosDueRepeatCount}회]` : "" } }
+                      : { real: false, vars: { 건수: 2, 목록: "기저귀 주문하기 · 소아과 예약", 회차: "[1/2회]" } };
+                  }
+                }
+              };
+
+              const renderPreviewCard = (itemKey) => {
+                if (expandedNotifPreviewKey !== itemKey) return null;
+                const meta = NOTIF_ITEM_META[itemKey];
+                if (!meta) return null;
+                const custom = smartNotifPrefs?.customTemplates?.[itemKey] || {};
+                const titleTpl = typeof custom.title === "string" && custom.title !== "" ? custom.title : meta.defTitle;
+                const bodyTpl = typeof custom.body === "string" && custom.body !== "" ? custom.body : meta.defBody;
+                const sample = meta.getSample();
+                const fillVars = (s) => {
+                  let out = String(s || "");
+                  Object.keys(sample.vars).forEach((vk) => {
+                    out = out.split(`{${vk}}`).join(String(sample.vars[vk] ?? ""));
+                  });
+                  return out;
+                };
+                let previewTitle = fillVars(titleTpl);
+                const previewBody = fillVars(bodyTpl);
+                if (smartNotifPrefs?.showRepeatBadge !== false && sample.vars.회차 && !previewTitle.includes(sample.vars.회차)) {
+                  previewTitle = `${previewTitle} ${sample.vars.회차}`;
+                }
+                const updateTpl = (field, val) => {
+                  saveSmartNotifPrefs((p) => ({
+                    ...p,
+                    customTemplates: {
+                      ...(p.customTemplates || {}),
+                      [itemKey]: {
+                        title: field === "title" ? val : (p.customTemplates?.[itemKey]?.title ?? ""),
+                        body: field === "body" ? val : (p.customTemplates?.[itemKey]?.body ?? "")
+                      }
+                    }
+                  }));
+                };
+                return (
+                  <div className="mt-1.5 pt-1.5 border-t border-stone-200/80 space-y-1.5">
+                    <div className="rounded-lg bg-stone-900 text-white px-2.5 py-2 space-y-0.5 shadow-xs">
+                      <div className="flex items-center justify-between gap-1 text-[10px] text-stone-400">
+                        <span>📲 상태바 미리보기 ({sample.real ? "실제 데이터" : "예시 데이터"})</span>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            const ok = await showStatusBarNotification(previewTitle, previewBody, `preview-${itemKey}-${Date.now()}`);
+                            showToast(ok ? "📲 미리보기 내용으로 테스트 알림을 보냈습니다!" : `⚠️ ${lastNotifErrorRef.current || "알림 권한을 확인해 주세요."}`);
+                          }}
+                          className="px-1.5 py-0.5 rounded bg-[#3F624D] text-white font-bold whitespace-nowrap"
+                        >
+                          지금 테스트
+                        </button>
+                      </div>
+                      <div className="text-[11.5px] font-black text-white leading-snug">{previewTitle}</div>
+                      <div className="text-[10.5px] text-stone-300 leading-snug break-all">{previewBody}</div>
+                    </div>
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between gap-1">
+                        <span className="text-[10px] font-bold text-stone-500">✏️ 알림 제목 · 본문 편집</span>
+                        {(custom.title || custom.body) && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              saveSmartNotifPrefs((p) => {
+                                const nextT = { ...(p.customTemplates || {}) };
+                                delete nextT[itemKey];
+                                return { ...p, customTemplates: nextT };
+                              });
+                            }}
+                            className="text-[10px] font-bold text-rose-600 hover:underline whitespace-nowrap"
+                          >
+                            ↺ 기본문구
+                          </button>
+                        )}
+                      </div>
+                      <input
+                        type="text"
+                        value={custom.title ?? ""}
+                        placeholder={meta.defTitle}
+                        onChange={(e) => updateTpl("title", e.target.value)}
+                        className="w-full h-6 px-2 rounded border border-stone-200 bg-stone-50 text-[10.5px] font-bold text-stone-800"
+                      />
+                      <input
+                        type="text"
+                        value={custom.body ?? ""}
+                        placeholder={meta.defBody}
+                        onChange={(e) => updateTpl("body", e.target.value)}
+                        className="w-full h-6 px-2 rounded border border-stone-200 bg-stone-50 text-[10.5px] font-medium text-stone-700"
+                      />
+                      <div className="flex items-center gap-1 flex-wrap">
+                        <span className="text-[10px] text-stone-400">변수:</span>
+                        {meta.vars.map((vn) => (
+                          <button
+                            key={vn}
+                            type="button"
+                            onClick={() => updateTpl("body", `${custom.body || meta.defBody} {${vn}}`.trim())}
+                            className="px-1.5 py-0.5 rounded bg-[#EEF3EE] hover:bg-[#dce8de] border border-[#C9D8CC] text-[10px] font-bold text-[#35503C] whitespace-nowrap"
+                          >
+                            +{vn}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                );
+              };
+
+              const renderRepeatControls = (countKey, ivKey, defCount = 1, defIv = 60) => {
+                const cnt = Math.max(1, Number(smartNotifPrefs[countKey] ?? defCount));
+                const iv = Math.max(1, Number(smartNotifPrefs[ivKey] ?? defIv));
+                return (
+                  <div className="flex items-center gap-1 pt-1 border-t border-stone-100 flex-wrap">
+                    <span className="text-[10px] font-bold text-stone-400 whitespace-nowrap">🔁 반복:</span>
+                    <select
+                      value={cnt}
+                      onChange={(e) => saveSmartNotifPrefs({ [countKey]: Number(e.target.value) })}
+                      className="h-5 px-1 rounded border border-stone-200 bg-stone-50 text-[10px] font-bold text-stone-700"
+                    >
+                      <option value={1}>1회만</option>
+                      <option value={2}>2회</option>
+                      <option value={3}>3회</option>
+                      <option value={4}>4회</option>
+                      <option value={5}>5회</option>
+                    </select>
+                    {cnt > 1 && (
+                      <select
+                        value={iv}
+                        onChange={(e) => saveSmartNotifPrefs({ [ivKey]: Number(e.target.value) })}
+                        className="h-5 px-1 rounded border border-stone-200 bg-stone-50 text-[10px] font-bold text-stone-700"
+                      >
+                        <option value={5}>5분 간격</option>
+                        <option value={10}>10분 간격</option>
+                        <option value={15}>15분 간격</option>
+                        <option value={20}>20분 간격</option>
+                        <option value={30}>30분 간격</option>
+                        <option value={60}>1시간 간격</option>
+                        <option value={120}>2시간 간격</option>
+                      </select>
+                    )}
+                  </div>
+                );
+              };
+
+              return (
+              <div className="rounded-xl border border-stone-200 bg-stone-50/95 p-2.5 space-y-1.5 shrink-0 text-[11px] max-h-[42vh] overflow-y-auto">
+                <div className="flex items-center justify-between gap-1.5 pb-1 border-b border-stone-200/80 flex-wrap">
+                  <span className="font-black text-stone-800 whitespace-nowrap">⏰ 항목별 알림 · 반복 · 미리보기</span>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        try { localStorage.removeItem("kim_smart_notif_sent_v1"); } catch (e) {}
+                        showToast("🔄 오늘 알림 발송 이력을 초기화했습니다!");
+                      }}
+                      className="h-6 px-2 rounded-full text-[10px] font-bold border border-stone-200 bg-white text-stone-600 hover:bg-stone-100 whitespace-nowrap"
+                      title="오늘 이미 울린 알림도 다시 울리도록 초기화"
+                    >
+                      🔄 이력리셋
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => saveSmartNotifPrefs((p) => ({ ...p, enabled: !p.enabled }))}
+                      className={`h-6 px-2.5 rounded-full text-[10.5px] font-extrabold border whitespace-nowrap shrink-0 ${
+                        smartNotifPrefs.enabled ? "bg-[#3F624D] text-white border-[#3F624D]" : "bg-white text-stone-500 border-stone-200"
+                      }`}
+                    >
+                      {smartNotifPrefs.enabled ? "전체 ON" : "전체 OFF"}
+                    </button>
+                  </div>
                 </div>
+
                 {smartNotifPrefs.enabled && (
                   <div className="space-y-1.5">
-                    {/* 1. 시간 지정 일정 */}
-                    <div className="flex items-center justify-between gap-1.5 bg-white rounded-lg border border-stone-200/80 px-2 py-1">
+                    {/* 빠른 프리셋 & 스누즈 */}
+                    <div className="flex items-center justify-between gap-1 flex-wrap bg-white rounded-lg border border-stone-200/80 px-2 py-1">
+                      <div className="flex items-center gap-1 flex-wrap">
+                        <span className="text-[10px] font-bold text-stone-400 whitespace-nowrap">프리셋:</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            saveSmartNotifPrefs({
+                              scheduleTimed: true, scheduleLeadList: [30], scheduleDaily: true, scheduleDailyRepeatCount: 1,
+                              ddayAlert: true, ddayRepeatCount: 1, fridgeExpiry: true, fridgeExpiryRepeatCount: 1,
+                              routineSlot: true, routineSlotRepeatCount: 2, routineSlotRepeatInterval: 30,
+                              todosDue: true, todosDueRepeatCount: 2, todosDueRepeatInterval: 60
+                            });
+                            showToast("✅ 표준 육아 알림으로 설정했습니다.");
+                          }}
+                          className="px-1.5 py-0.5 rounded bg-stone-100 hover:bg-stone-200 text-[10px] font-bold text-stone-700 whitespace-nowrap"
+                        >
+                          표준
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            saveSmartNotifPrefs({
+                              scheduleTimed: true, scheduleLeadList: [60, 30, 10, 0], scheduleDaily: true, scheduleDailyRepeatCount: 2, scheduleDailyRepeatInterval: 60,
+                              ddayAlert: true, ddayAlertDays: 3, ddayRepeatCount: 2, ddayRepeatInterval: 60,
+                              fridgeExpiry: true, fridgeExpiryRepeatCount: 2, fridgeExpiryRepeatInterval: 120,
+                              routineSlot: true, routineSlotRepeatCount: 3, routineSlotRepeatInterval: 20,
+                              babyFeeding: true, babyFeedingRepeatCount: 3, babyFeedingRepeatInterval: 15,
+                              todosDue: true, todosDueRepeatCount: 3, todosDueRepeatInterval: 45
+                            });
+                            showToast("🔥 놓침방지 다중 반복 알림으로 설정했습니다!");
+                          }}
+                          className="px-1.5 py-0.5 rounded bg-[#EEF3EE] hover:bg-[#dce8de] text-[10px] font-bold text-[#35503C] whitespace-nowrap"
+                        >
+                          놓침방지 반복
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            saveSmartNotifPrefs((p) => ({ ...p, showRepeatBadge: p.showRepeatBadge === false }));
+                          }}
+                          className={`px-1.5 py-0.5 rounded text-[10px] font-bold whitespace-nowrap border ${
+                            smartNotifPrefs.showRepeatBadge !== false ? "bg-stone-800 text-white border-stone-800" : "bg-white text-stone-500 border-stone-200"
+                          }`}
+                        >
+                          회차표시
+                        </button>
+                      </div>
                       <button
                         type="button"
-                        onClick={() => saveSmartNotifPrefs((p) => ({ ...p, scheduleTimed: !p.scheduleTimed }))}
-                        className="flex items-center gap-1.5 font-bold text-stone-700 whitespace-nowrap min-w-0"
+                        onClick={() => {
+                          if (isSnoozing) {
+                            saveSmartNotifPrefs({ snoozeUntilMs: 0 });
+                            showToast("🔔 알림 일시정지를 해제했습니다.");
+                          } else {
+                            saveSmartNotifPrefs({ snoozeUntilMs: Date.now() + 60 * 60 * 1000 });
+                            showToast("⏸️ 1시간 동안 스마트 알림을 쉬어갑니다.");
+                          }
+                        }}
+                        className={`px-1.5 py-0.5 rounded text-[10px] font-bold whitespace-nowrap border ${
+                          isSnoozing ? "bg-amber-100 text-amber-900 border-amber-300" : "bg-stone-50 text-stone-600 border-stone-200"
+                        }`}
                       >
-                        <span className={`w-2 h-2 rounded-full shrink-0 ${smartNotifPrefs.scheduleTimed ? "bg-[#3F624D]" : "bg-stone-300"}`} />
-                        <span>⏰ 시간 일정</span>
+                        {isSnoozing ? "⏸️ 1시간 쉼중(해제)" : "⏸️ 1시간 쉼"}
                       </button>
-                      {smartNotifPrefs.scheduleTimed && (() => {
-                        const curLead = Math.max(1, Number(smartNotifPrefs.scheduleLeadMinutes) || 30);
-                        const isPreset = [5, 10, 15, 30, 60, 120].includes(curLead);
-                        const showCustom = Boolean(smartNotifPrefs.scheduleLeadCustom) || !isPreset;
-                        return (
-                          <div className="flex items-center gap-1 shrink-0">
-                            <select
-                              value={showCustom ? "custom" : curLead}
-                              onChange={(e) => {
-                                if (e.target.value === "custom") {
-                                  saveSmartNotifPrefs({ scheduleLeadCustom: true, scheduleLeadMinutes: curLead });
-                                } else {
-                                  saveSmartNotifPrefs({ scheduleLeadCustom: false, scheduleLeadMinutes: Number(e.target.value) });
-                                }
-                              }}
-                              className="h-6 px-1.5 rounded border border-stone-200 bg-stone-50 text-[10.5px] font-bold text-stone-700"
-                            >
-                              <option value={5}>5분 전</option>
-                              <option value={10}>10분 전</option>
-                              <option value={15}>15분 전</option>
-                              <option value={30}>30분 전</option>
-                              <option value={60}>1시간 전</option>
-                              <option value={120}>2시간 전</option>
-                              <option value="custom">직접입력</option>
-                            </select>
-                            {showCustom && (
-                              <div className="flex items-center gap-0.5">
-                                <input
-                                  type="number"
-                                  min={1}
-                                  max={1440}
-                                  value={curLead}
-                                  onChange={(e) => {
-                                    const v = Math.max(1, Math.min(1440, Number(e.target.value) || 1));
-                                    saveSmartNotifPrefs({ scheduleLeadCustom: true, scheduleLeadMinutes: v });
-                                  }}
-                                  className="w-12 h-6 px-1 rounded border border-stone-200 bg-white text-[10.5px] font-bold text-stone-800 text-center"
-                                />
-                                <span className="text-[10px] font-bold text-stone-500 whitespace-nowrap">분 전</span>
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })()}
+                    </div>
+
+                    {/* 1. 시간 지정 일정 (다중 시점) */}
+                    <div className="bg-white rounded-lg border border-stone-200/80 px-2 py-1.5 space-y-1">
+                      <div className="flex items-center justify-between gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => saveSmartNotifPrefs((p) => ({ ...p, scheduleTimed: !p.scheduleTimed }))}
+                          className="flex items-center gap-1.5 font-bold text-stone-700 whitespace-nowrap min-w-0"
+                        >
+                          <span className={`w-2 h-2 rounded-full shrink-0 ${smartNotifPrefs.scheduleTimed ? "bg-[#3F624D]" : "bg-stone-300"}`} />
+                          <span>⏰ 시간 일정</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setExpandedNotifPreviewKey((k) => (k === "scheduleTimed" ? null : "scheduleTimed"))}
+                          className="px-1.5 py-0.5 rounded bg-stone-100 hover:bg-stone-200 text-[10px] font-bold text-stone-600 whitespace-nowrap"
+                        >
+                          {expandedNotifPreviewKey === "scheduleTimed" ? "접기" : "👁️ 미리보기·편집"}
+                        </button>
+                      </div>
+                      {smartNotifPrefs.scheduleTimed && (
+                        <div className="flex items-center gap-1 flex-wrap">
+                          <span className="text-[10px] font-bold text-stone-400 whitespace-nowrap">알림시점(복수):</span>
+                          {[
+                            { m: 60, label: "1시간전" },
+                            { m: 30, label: "30분전" },
+                            { m: 15, label: "15분전" },
+                            { m: 10, label: "10분전" },
+                            { m: 5, label: "5분전" },
+                            { m: 0, label: "정시" }
+                          ].map((opt) => {
+                            const active = leadList.includes(opt.m);
+                            return (
+                              <button
+                                key={opt.m}
+                                type="button"
+                                onClick={() => {
+                                  const next = active
+                                    ? (leadList.length > 1 ? leadList.filter((x) => x !== opt.m) : leadList)
+                                    : [...leadList, opt.m].sort((a, b) => b - a);
+                                  saveSmartNotifPrefs({ scheduleLeadList: next, scheduleLeadMinutes: next[0] ?? 30 });
+                                }}
+                                className={`px-1.5 py-0.5 rounded text-[10px] font-extrabold border whitespace-nowrap ${
+                                  active ? "bg-[#3F624D] text-white border-[#3F624D]" : "bg-stone-50 text-stone-600 border-stone-200"
+                                }`}
+                              >
+                                {opt.label}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                      {renderPreviewCard("scheduleTimed")}
                     </div>
 
                     {/* 2. 오늘·내일 요약 */}
-                    <div className="flex items-center justify-between gap-1.5 bg-white rounded-lg border border-stone-200/80 px-2 py-1">
-                      <button
-                        type="button"
-                        onClick={() => saveSmartNotifPrefs((p) => ({ ...p, scheduleDaily: !p.scheduleDaily }))}
-                        className="flex items-center gap-1.5 font-bold text-stone-700 whitespace-nowrap min-w-0"
-                      >
-                        <span className={`w-2 h-2 rounded-full shrink-0 ${smartNotifPrefs.scheduleDaily ? "bg-[#3F624D]" : "bg-stone-300"}`} />
-                        <span>📅 오늘·내일 요약</span>
-                      </button>
-                      {smartNotifPrefs.scheduleDaily && (
-                        <input
-                          type="time"
-                          value={smartNotifPrefs.scheduleDailyTime || "08:00"}
-                          onChange={(e) => saveSmartNotifPrefs({ scheduleDailyTime: e.target.value || "08:00" })}
-                          className="h-6 px-1.5 rounded border border-stone-200 bg-stone-50 text-[10.5px] font-bold text-stone-700 shrink-0"
-                        />
-                      )}
-                    </div>
-
-                    {/* 3. 냉장고 유통기한 */}
-                    <div className="flex items-center justify-between gap-1.5 bg-white rounded-lg border border-stone-200/80 px-2 py-1">
-                      <button
-                        type="button"
-                        onClick={() => saveSmartNotifPrefs((p) => ({ ...p, fridgeExpiry: !p.fridgeExpiry }))}
-                        className="flex items-center gap-1.5 font-bold text-stone-700 whitespace-nowrap min-w-0"
-                      >
-                        <span className={`w-2 h-2 rounded-full shrink-0 ${smartNotifPrefs.fridgeExpiry ? "bg-[#3F624D]" : "bg-stone-300"}`} />
-                        <span>🥬 유통기한</span>
-                      </button>
-                      {smartNotifPrefs.fridgeExpiry && (
+                    <div className="bg-white rounded-lg border border-stone-200/80 px-2 py-1.5 space-y-1">
+                      <div className="flex items-center justify-between gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => saveSmartNotifPrefs((p) => ({ ...p, scheduleDaily: !p.scheduleDaily }))}
+                          className="flex items-center gap-1.5 font-bold text-stone-700 whitespace-nowrap min-w-0"
+                        >
+                          <span className={`w-2 h-2 rounded-full shrink-0 ${smartNotifPrefs.scheduleDaily ? "bg-[#3F624D]" : "bg-stone-300"}`} />
+                          <span>📅 오늘·내일 요약</span>
+                        </button>
                         <div className="flex items-center gap-1 shrink-0">
-                          <select
-                            value={Number(smartNotifPrefs.fridgeExpiryDays ?? 3)}
-                            onChange={(e) => saveSmartNotifPrefs({ fridgeExpiryDays: Number(e.target.value) })}
-                            className="h-6 px-1 rounded border border-stone-200 bg-stone-50 text-[10.5px] font-bold text-stone-700"
+                          {smartNotifPrefs.scheduleDaily && (
+                            <input
+                              type="time"
+                              value={smartNotifPrefs.scheduleDailyTime || "08:00"}
+                              onChange={(e) => saveSmartNotifPrefs({ scheduleDailyTime: e.target.value || "08:00" })}
+                              className="h-6 px-1 rounded border border-stone-200 bg-stone-50 text-[10.5px] font-bold text-stone-700"
+                            />
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => setExpandedNotifPreviewKey((k) => (k === "scheduleDaily" ? null : "scheduleDaily"))}
+                            className="px-1.5 py-0.5 rounded bg-stone-100 hover:bg-stone-200 text-[10px] font-bold text-stone-600 whitespace-nowrap"
                           >
-                            <option value={1}>D-1</option>
-                            <option value={3}>D-3</option>
-                            <option value={5}>D-5</option>
-                            <option value={7}>D-7</option>
-                          </select>
-                          <input
-                            type="time"
-                            value={smartNotifPrefs.fridgeExpiryTime || "08:30"}
-                            onChange={(e) => saveSmartNotifPrefs({ fridgeExpiryTime: e.target.value || "08:30" })}
-                            className="h-6 px-1 rounded border border-stone-200 bg-stone-50 text-[10.5px] font-bold text-stone-700"
-                          />
+                            {expandedNotifPreviewKey === "scheduleDaily" ? "접기" : "👁️ 편집"}
+                          </button>
                         </div>
-                      )}
+                      </div>
+                      {smartNotifPrefs.scheduleDaily && renderRepeatControls("scheduleDailyRepeatCount", "scheduleDailyRepeatInterval", 1, 60)}
+                      {renderPreviewCard("scheduleDaily")}
                     </div>
 
-                    {/* 4. 시간대 루틴 */}
-                    <div className="flex items-center justify-between gap-1.5 bg-white rounded-lg border border-stone-200/80 px-2 py-1">
-                      <button
-                        type="button"
-                        onClick={() => saveSmartNotifPrefs((p) => ({ ...p, routineSlot: !p.routineSlot }))}
-                        className="flex items-center gap-1.5 font-bold text-stone-700 whitespace-nowrap min-w-0"
-                      >
-                        <span className={`w-2 h-2 rounded-full shrink-0 ${smartNotifPrefs.routineSlot ? "bg-[#3F624D]" : "bg-stone-300"}`} />
-                        <span>✅ 시간대 루틴</span>
-                      </button>
-                      {smartNotifPrefs.routineSlot && (
-                        <select
-                          value={Number(smartNotifPrefs.routineWindowMinutes) || 90}
-                          onChange={(e) => saveSmartNotifPrefs({ routineWindowMinutes: Number(e.target.value) })}
-                          className="h-6 px-1.5 rounded border border-stone-200 bg-stone-50 text-[10.5px] font-bold text-stone-700 shrink-0"
+                    {/* 3. 디데이(D-Day) 일정 */}
+                    <div className="bg-white rounded-lg border border-stone-200/80 px-2 py-1.5 space-y-1">
+                      <div className="flex items-center justify-between gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => saveSmartNotifPrefs((p) => ({ ...p, ddayAlert: !p.ddayAlert }))}
+                          className="flex items-center gap-1.5 font-bold text-stone-700 whitespace-nowrap min-w-0"
                         >
-                          <option value={30}>시작+30분</option>
-                          <option value={60}>시작+1시간</option>
-                          <option value={90}>시작+1.5시간</option>
-                          <option value={120}>시작+2시간</option>
-                        </select>
-                      )}
+                          <span className={`w-2 h-2 rounded-full shrink-0 ${smartNotifPrefs.ddayAlert ? "bg-[#3F624D]" : "bg-stone-300"}`} />
+                          <span>⭐ 디데이 일정</span>
+                        </button>
+                        <div className="flex items-center gap-1 shrink-0">
+                          {smartNotifPrefs.ddayAlert && (
+                            <>
+                              <select
+                                value={Number(smartNotifPrefs.ddayAlertDays ?? 3)}
+                                onChange={(e) => saveSmartNotifPrefs({ ddayAlertDays: Number(e.target.value) })}
+                                className="h-6 px-1 rounded border border-stone-200 bg-stone-50 text-[10.5px] font-bold text-stone-700"
+                              >
+                                <option value={0}>당일</option>
+                                <option value={1}>D-1</option>
+                                <option value={3}>D-3</option>
+                                <option value={7}>D-7</option>
+                              </select>
+                              <input
+                                type="time"
+                                value={smartNotifPrefs.ddayAlertTime || "08:30"}
+                                onChange={(e) => saveSmartNotifPrefs({ ddayAlertTime: e.target.value || "08:30" })}
+                                className="h-6 px-1 rounded border border-stone-200 bg-stone-50 text-[10.5px] font-bold text-stone-700"
+                              />
+                            </>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => setExpandedNotifPreviewKey((k) => (k === "ddayAlert" ? null : "ddayAlert"))}
+                            className="px-1.5 py-0.5 rounded bg-stone-100 hover:bg-stone-200 text-[10px] font-bold text-stone-600 whitespace-nowrap"
+                          >
+                            {expandedNotifPreviewKey === "ddayAlert" ? "접기" : "👁️ 편집"}
+                          </button>
+                        </div>
+                      </div>
+                      {smartNotifPrefs.ddayAlert && renderRepeatControls("ddayRepeatCount", "ddayRepeatInterval", 1, 60)}
+                      {renderPreviewCard("ddayAlert")}
                     </div>
 
-                    {/* 5. 아기 수유 간격 */}
-                    <div className="flex items-center justify-between gap-1.5 bg-white rounded-lg border border-stone-200/80 px-2 py-1">
-                      <button
-                        type="button"
-                        onClick={() => saveSmartNotifPrefs((p) => ({ ...p, babyFeeding: !p.babyFeeding }))}
-                        className="flex items-center gap-1.5 font-bold text-stone-700 whitespace-nowrap min-w-0"
-                      >
-                        <span className={`w-2 h-2 rounded-full shrink-0 ${smartNotifPrefs.babyFeeding ? "bg-[#3F624D]" : "bg-stone-300"}`} />
-                        <span>🍼 수유 간격</span>
-                      </button>
-                      {smartNotifPrefs.babyFeeding && (
-                        <select
-                          value={Number(smartNotifPrefs.babyFeedingIntervalHours) || 3}
-                          onChange={(e) => saveSmartNotifPrefs({ babyFeedingIntervalHours: Number(e.target.value) })}
-                          className="h-6 px-1.5 rounded border border-stone-200 bg-stone-50 text-[10.5px] font-bold text-stone-700 shrink-0"
+                    {/* 4. 냉장고 유통기한 */}
+                    <div className="bg-white rounded-lg border border-stone-200/80 px-2 py-1.5 space-y-1">
+                      <div className="flex items-center justify-between gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => saveSmartNotifPrefs((p) => ({ ...p, fridgeExpiry: !p.fridgeExpiry }))}
+                          className="flex items-center gap-1.5 font-bold text-stone-700 whitespace-nowrap min-w-0"
                         >
-                          <option value={2}>2시간마다</option>
-                          <option value={2.5}>2시간 30분</option>
-                          <option value={3}>3시간마다</option>
-                          <option value={3.5}>3시간 30분</option>
-                          <option value={4}>4시간마다</option>
-                        </select>
-                      )}
+                          <span className={`w-2 h-2 rounded-full shrink-0 ${smartNotifPrefs.fridgeExpiry ? "bg-[#3F624D]" : "bg-stone-300"}`} />
+                          <span>🥬 유통기한</span>
+                        </button>
+                        <div className="flex items-center gap-1 shrink-0">
+                          {smartNotifPrefs.fridgeExpiry && (
+                            <>
+                              <select
+                                value={Number(smartNotifPrefs.fridgeExpiryDays ?? 3)}
+                                onChange={(e) => saveSmartNotifPrefs({ fridgeExpiryDays: Number(e.target.value) })}
+                                className="h-6 px-1 rounded border border-stone-200 bg-stone-50 text-[10.5px] font-bold text-stone-700"
+                              >
+                                <option value={1}>D-1</option>
+                                <option value={3}>D-3</option>
+                                <option value={5}>D-5</option>
+                                <option value={7}>D-7</option>
+                              </select>
+                              <input
+                                type="time"
+                                value={smartNotifPrefs.fridgeExpiryTime || "08:30"}
+                                onChange={(e) => saveSmartNotifPrefs({ fridgeExpiryTime: e.target.value || "08:30" })}
+                                className="h-6 px-1 rounded border border-stone-200 bg-stone-50 text-[10.5px] font-bold text-stone-700"
+                              />
+                            </>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => setExpandedNotifPreviewKey((k) => (k === "fridgeExpiry" ? null : "fridgeExpiry"))}
+                            className="px-1.5 py-0.5 rounded bg-stone-100 hover:bg-stone-200 text-[10px] font-bold text-stone-600 whitespace-nowrap"
+                          >
+                            {expandedNotifPreviewKey === "fridgeExpiry" ? "접기" : "👁️ 편집"}
+                          </button>
+                        </div>
+                      </div>
+                      {smartNotifPrefs.fridgeExpiry && renderRepeatControls("fridgeExpiryRepeatCount", "fridgeExpiryRepeatInterval", 1, 120)}
+                      {renderPreviewCard("fridgeExpiry")}
                     </div>
 
-                    {/* 6. 마감 할 일 */}
-                    <div className="flex items-center justify-between gap-1.5 bg-white rounded-lg border border-stone-200/80 px-2 py-1">
-                      <button
-                        type="button"
-                        onClick={() => saveSmartNotifPrefs((p) => ({ ...p, todosDue: !p.todosDue }))}
-                        className="flex items-center gap-1.5 font-bold text-stone-700 whitespace-nowrap min-w-0"
-                      >
-                        <span className={`w-2 h-2 rounded-full shrink-0 ${smartNotifPrefs.todosDue ? "bg-[#3F624D]" : "bg-stone-300"}`} />
-                        <span>📝 마감 할 일</span>
-                      </button>
-                      {smartNotifPrefs.todosDue && (
-                        <input
-                          type="time"
-                          value={smartNotifPrefs.todosDueTime || "09:00"}
-                          onChange={(e) => saveSmartNotifPrefs({ todosDueTime: e.target.value || "09:00" })}
-                          className="h-6 px-1.5 rounded border border-stone-200 bg-stone-50 text-[10.5px] font-bold text-stone-700 shrink-0"
-                        />
-                      )}
+                    {/* 5. 시간대 루틴 */}
+                    <div className="bg-white rounded-lg border border-stone-200/80 px-2 py-1.5 space-y-1">
+                      <div className="flex items-center justify-between gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => saveSmartNotifPrefs((p) => ({ ...p, routineSlot: !p.routineSlot }))}
+                          className="flex items-center gap-1.5 font-bold text-stone-700 whitespace-nowrap min-w-0"
+                        >
+                          <span className={`w-2 h-2 rounded-full shrink-0 ${smartNotifPrefs.routineSlot ? "bg-[#3F624D]" : "bg-stone-300"}`} />
+                          <span>✅ 시간대 루틴</span>
+                        </button>
+                        <div className="flex items-center gap-1 shrink-0">
+                          {smartNotifPrefs.routineSlot && (
+                            <select
+                              value={Number(smartNotifPrefs.routineWindowMinutes) || 90}
+                              onChange={(e) => saveSmartNotifPrefs({ routineWindowMinutes: Number(e.target.value) })}
+                              className="h-6 px-1.5 rounded border border-stone-200 bg-stone-50 text-[10.5px] font-bold text-stone-700"
+                            >
+                              <option value={30}>시작+30분</option>
+                              <option value={60}>시작+1시간</option>
+                              <option value={90}>시작+1.5시간</option>
+                              <option value={120}>시작+2시간</option>
+                            </select>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => setExpandedNotifPreviewKey((k) => (k === "routineSlot" ? null : "routineSlot"))}
+                            className="px-1.5 py-0.5 rounded bg-stone-100 hover:bg-stone-200 text-[10px] font-bold text-stone-600 whitespace-nowrap"
+                          >
+                            {expandedNotifPreviewKey === "routineSlot" ? "접기" : "👁️ 편집"}
+                          </button>
+                        </div>
+                      </div>
+                      {smartNotifPrefs.routineSlot && renderRepeatControls("routineSlotRepeatCount", "routineSlotRepeatInterval", 2, 30)}
+                      {renderPreviewCard("routineSlot")}
                     </div>
 
-                    {/* 7. 야간 방해금지 시간대 */}
+                    {/* 6. 아기 수유 간격 */}
+                    <div className="bg-white rounded-lg border border-stone-200/80 px-2 py-1.5 space-y-1">
+                      <div className="flex items-center justify-between gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => saveSmartNotifPrefs((p) => ({ ...p, babyFeeding: !p.babyFeeding }))}
+                          className="flex items-center gap-1.5 font-bold text-stone-700 whitespace-nowrap min-w-0"
+                        >
+                          <span className={`w-2 h-2 rounded-full shrink-0 ${smartNotifPrefs.babyFeeding ? "bg-[#3F624D]" : "bg-stone-300"}`} />
+                          <span>🍼 수유 간격</span>
+                        </button>
+                        <div className="flex items-center gap-1 shrink-0">
+                          {smartNotifPrefs.babyFeeding && (
+                            <select
+                              value={Number(smartNotifPrefs.babyFeedingIntervalHours) || 3}
+                              onChange={(e) => saveSmartNotifPrefs({ babyFeedingIntervalHours: Number(e.target.value) })}
+                              className="h-6 px-1.5 rounded border border-stone-200 bg-stone-50 text-[10.5px] font-bold text-stone-700"
+                            >
+                              <option value={2}>2시간마다</option>
+                              <option value={2.5}>2시간 30분</option>
+                              <option value={3}>3시간마다</option>
+                              <option value={3.5}>3시간 30분</option>
+                              <option value={4}>4시간마다</option>
+                            </select>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => setExpandedNotifPreviewKey((k) => (k === "babyFeeding" ? null : "babyFeeding"))}
+                            className="px-1.5 py-0.5 rounded bg-stone-100 hover:bg-stone-200 text-[10px] font-bold text-stone-600 whitespace-nowrap"
+                          >
+                            {expandedNotifPreviewKey === "babyFeeding" ? "접기" : "👁️ 편집"}
+                          </button>
+                        </div>
+                      </div>
+                      {smartNotifPrefs.babyFeeding && renderRepeatControls("babyFeedingRepeatCount", "babyFeedingRepeatInterval", 2, 15)}
+                      {renderPreviewCard("babyFeeding")}
+                    </div>
+
+                    {/* 7. 마감 할 일 */}
+                    <div className="bg-white rounded-lg border border-stone-200/80 px-2 py-1.5 space-y-1">
+                      <div className="flex items-center justify-between gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => saveSmartNotifPrefs((p) => ({ ...p, todosDue: !p.todosDue }))}
+                          className="flex items-center gap-1.5 font-bold text-stone-700 whitespace-nowrap min-w-0"
+                        >
+                          <span className={`w-2 h-2 rounded-full shrink-0 ${smartNotifPrefs.todosDue ? "bg-[#3F624D]" : "bg-stone-300"}`} />
+                          <span>📝 마감 할 일</span>
+                        </button>
+                        <div className="flex items-center gap-1 shrink-0">
+                          {smartNotifPrefs.todosDue && (
+                            <input
+                              type="time"
+                              value={smartNotifPrefs.todosDueTime || "09:00"}
+                              onChange={(e) => saveSmartNotifPrefs({ todosDueTime: e.target.value || "09:00" })}
+                              className="h-6 px-1 rounded border border-stone-200 bg-stone-50 text-[10.5px] font-bold text-stone-700"
+                            />
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => setExpandedNotifPreviewKey((k) => (k === "todosDue" ? null : "todosDue"))}
+                            className="px-1.5 py-0.5 rounded bg-stone-100 hover:bg-stone-200 text-[10px] font-bold text-stone-600 whitespace-nowrap"
+                          >
+                            {expandedNotifPreviewKey === "todosDue" ? "접기" : "👁️ 편집"}
+                          </button>
+                        </div>
+                      </div>
+                      {smartNotifPrefs.todosDue && renderRepeatControls("todosDueRepeatCount", "todosDueRepeatInterval", 2, 60)}
+                      {renderPreviewCard("todosDue")}
+                    </div>
+
+                    {/* 8. 야간 방해금지 시간대 */}
                     <div className="flex items-center justify-between gap-1.5 bg-white rounded-lg border border-stone-200/80 px-2 py-1 flex-wrap">
                       <button
                         type="button"
@@ -45724,7 +47566,8 @@ time: "", location: "",
                   </div>
                 )}
               </div>
-            )}
+              );
+            })()}
 
             <div className="flex items-center gap-1 overflow-x-auto no-scrollbar py-0.5 shrink-0">
               {allCats.map((cat) => {
@@ -46409,18 +48252,18 @@ time: "", location: "",
                   placeholder="조리시간 (예: 25분)"
                   className="flex-1 min-w-0 px-2.5 py-2 rounded-xl border border-stone-200 text-[13px] font-bold"
                 />
-                {(Number(kitchenTimer?.elapsedSec) || 0) >= 60 && (
+                {(Number(kitchenTimer?.elapsedSec) || 0) >= 1 && (
                   <button
                     type="button"
                     onClick={() => {
-                      const mins = Math.max(1, Math.round((Number(kitchenTimer.elapsedSec) || 0) / 60));
-                      setRecipeForm((prev) => ({ ...prev, cookTime: `${mins}분` }));
-                      showToast(`⏱️ 스톱워치 기록(${mins}분)을 반영했습니다!`);
+                      const durTxt = formatDurationSecKo(kitchenTimer.elapsedSec);
+                      setRecipeForm((prev) => ({ ...prev, cookTime: durTxt }));
+                      showToast(`⏱️ 스톱워치 기록(${durTxt})을 반영했습니다!`);
                     }}
                     title="스톱워치 경과시간 불러오기"
                     className="px-2 py-2 rounded-xl bg-amber-100 hover:bg-amber-200 text-amber-900 text-[11px] font-black whitespace-nowrap shrink-0"
                   >
-                    {Math.max(1, Math.round((Number(kitchenTimer.elapsedSec) || 0) / 60))}분↓
+                    {formatDurationSecKo(kitchenTimer.elapsedSec)}↓
                   </button>
                 )}
               </div>
@@ -46634,7 +48477,7 @@ time: "", location: "",
           onClick={() => setZoomedRecipePhoto(null)}
         >
           <div className="w-full max-w-md flex items-center justify-between text-white mb-2 px-1">
-            <span className="text-[15.5px] font-black truncate">{zoomedRecipePhoto.title}</span>
+            <span className="text-[13.5px] font-black truncate">{zoomedRecipePhoto.title}</span>
             <button
               type="button"
               onClick={() => setZoomedRecipePhoto(null)}
@@ -46665,7 +48508,7 @@ time: "", location: "",
               <div>
                 <div className="flex items-center gap-1.5">
                   <span className="text-lg">{getFridgeCategoryIcon(quickFridgeItem.category)}</span>
-                  <span className="text-[17.5px] font-black text-stone-900">{quickFridgeItem.name}</span>
+                  <span className="text-[17px] font-black text-stone-900">{quickFridgeItem.name}</span>
                 </div>
                 <div className="text-[12.5px] font-bold text-stone-500 mt-0.5">
                   {resolveItemShelfZone(quickFridgeItem)} ·{" "}
@@ -46709,7 +48552,7 @@ time: "", location: "",
                 >
                   -
                 </button>
-                <span className="text-[15.5px] font-black px-2">
+                <span className="text-[15px] font-black px-2">
                   {Number(quickFridgeItem.quantity) || 0}{quickFridgeItem.unit}
                 </span>
                 <button
@@ -48099,7 +49942,7 @@ time: "", location: "",
                   <h3 className="text-[13.5px] font-black text-stone-900 truncate min-w-0">🤝 카톡 육아 인수인계</h3>
                   <span
                     className={`px-2 py-0.5 rounded-full text-[10px] font-black whitespace-nowrap ${
-                      isFutureTarget ? "bg-indigo-100 text-indigo-800" : "bg-[#EEF3EE] text-[#35503C]"
+                      isFutureTarget ? "bg-amber-100 text-amber-800" : "bg-[#EEF3EE] text-[#35503C]"
                     }`}
                   >
                     {isFutureTarget ? `${dayLabel} 사전안내` : "오늘 실시간"}
@@ -48131,7 +49974,7 @@ time: "", location: "",
                     <span>{tb.label}</span>
                     {tb.badge > 0 && (
                       <span
-                        className={`px-1.5 rounded-full text-[9.5px] font-black ${
+                        className={`px-1.5 rounded-full text-[10px] font-black ${
                           activeTabKey === tb.id ? "bg-amber-300 text-stone-950" : "bg-amber-500 text-white"
                         }`}
                       >
@@ -48435,7 +50278,7 @@ time: "", location: "",
                                   onClick={() => toggleHandoverItem(`nt:${n.id}`)}
                                   className={`px-2 py-0.5 rounded-lg text-[10.5px] font-bold border whitespace-nowrap ${
                                     inc
-                                      ? "bg-indigo-50 text-indigo-900 border-indigo-200"
+                                      ? "bg-[#EEF3EE] text-[#35503C] border-[#C9D8CC]"
                                       : "bg-stone-50 text-stone-400 border-stone-200 line-through"
                                   }`}
                                 >
@@ -48497,7 +50340,7 @@ time: "", location: "",
                             <button
                               type="button"
                               onClick={() => jumpFromHandover(() => { setSelectedPageId(attachedPage.id); setActiveTab("pages"); })}
-                              className="text-[10.5px] font-extrabold text-indigo-700 whitespace-nowrap"
+                              className="text-[10.5px] font-extrabold text-[#35503C] whitespace-nowrap"
                             >
                               편집→
                             </button>
@@ -48811,7 +50654,7 @@ time: "", location: "",
                                     <span className="break-keep flex-1 underline decoration-stone-900/25 underline-offset-2 group-hover:decoration-stone-900">
                                       {line}
                                     </span>
-                                    <span className="text-[9.5px] font-black text-stone-700/75 group-hover:text-stone-950 whitespace-nowrap shrink-0 mt-0.5">
+                                    <span className="text-[10px] font-black text-stone-700/75 group-hover:text-stone-950 whitespace-nowrap shrink-0 mt-0.5">
                                       ✏️
                                     </span>
                                   </button>
@@ -48929,7 +50772,7 @@ time: "", location: "",
                           <span>{st.label}</span>
                           {st.miss > 0 && (
                             <span
-                              className={`px-1 rounded-full text-[9.5px] font-black ${
+                              className={`px-1 rounded-full text-[10px] font-black ${
                                 handoverGuideSubTab === st.id ? "bg-amber-300 text-stone-950" : "bg-amber-100 text-amber-800"
                               }`}
                             >
@@ -49463,9 +51306,9 @@ time: "", location: "",
                     className="px-2.5 py-2 rounded-xl bg-white border border-stone-200 text-stone-700 text-[11.5px] font-extrabold whitespace-nowrap"
                   >
                     + 추가
-                  </button>
-                </div>
-                <div className="flex items-center gap-1.5">
+                  &lt;/button&gt;
+                &lt;/div&gt;
+                &lt;div className=&quot;flex items-center gap-1.5&quot;&gt;
                   {homeMiniDdayIds.length > 0 && (
                     <button
                       type="button"
@@ -49482,7 +51325,7 @@ time: "", location: "",
                       className="px-2.5 py-2 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-600 text-[11.5px] font-extrabold whitespace-nowrap"
                     >
                       초기화
-                    </button>
+                    &lt;/button&gt;
                   )}
                   <button
                     type="button"
@@ -49490,11 +51333,11 @@ time: "", location: "",
                     className="px-4 py-2 rounded-xl bg-stone-900 text-white text-[12px] font-black whitespace-nowrap"
                   >
                     완료
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
+                  &lt;/button&gt;
+                &lt;/div&gt;
+              &lt;/div&gt;
+            &lt;/div&gt;
+          &lt;/div&gt;
         );
       })()}
 
@@ -49712,6 +51555,36 @@ time: "", location: "",
 
             {houseForm.kind === "warranty" && (
               <>
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[11px] font-extrabold text-stone-500">브랜드 빠른 선택</span>
+                    {canEditTab("house") && (
+                      <button
+                        type="button"
+                        onClick={() => openCategoryManager("house_warranty_brands")}
+                        className="px-1.5 py-0.5 rounded-md bg-stone-100 hover:bg-stone-200 text-stone-600 text-[10px] font-extrabold whitespace-nowrap"
+                      >
+                        ⚙️ 브랜드 편집
+                      </button>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap gap-1">
+                    {houseWarrantyBrands.map((br) => (
+                      <button
+                        key={br}
+                        type="button"
+                        onClick={() => setHouseForm((p) => ({ ...p, brand: p.brand === br ? "" : br }))}
+                        className={`px-2 py-0.5 rounded-full text-[10.5px] font-extrabold border whitespace-nowrap transition ${
+                          houseForm.brand === br
+                            ? "bg-[#3F624D] text-white border-[#3F624D]"
+                            : "bg-stone-50 text-stone-600 border-stone-200 hover:bg-stone-100"
+                        }`}
+                      >
+                        {br}
+                      </button>
+                    ))}
+                  </div>
+                </div>
                 <div className="grid grid-cols-2 gap-2">
                   <input
                     type="text"
@@ -50071,8 +51944,8 @@ time: "", location: "",
             >
               <div className="flex items-center justify-between pb-2 border-b border-stone-100">
                 <div className="flex items-center gap-2 min-w-0">
-                  <span className="text-[19px] shrink-0">{targetPg.icon || "📄"}</span>
-                  <span className="text-[14.5px] font-black text-stone-900 truncate">{targetPg.title}</span>
+                  <span className="text-[18px] shrink-0">{targetPg.icon || "📄"}</span>
+                  <span className="text-[14px] font-black text-stone-900 truncate">{targetPg.title}</span>
                 </div>
                 <button type="button" onClick={() => setPageMenuTargetId(null)} className="p-1 text-stone-400">
                   <X className="w-4 h-4" />
@@ -50121,9 +51994,9 @@ time: "", location: "",
                     setPageMenuTargetId(null);
                     setIsNoticeModalOpen(true);
                   }}
-                  className="w-full py-2.5 px-3 rounded-xl hover:bg-indigo-50 text-left text-[13.5px] font-extrabold text-indigo-800 flex items-center gap-2"
+                  className="w-full py-2.5 px-3 rounded-xl hover:bg-[#EEF3EE] text-left text-[13.5px] font-extrabold text-[#35503C] flex items-center gap-2"
                 >
-                  <Pin className="w-4 h-4 text-indigo-600" />
+                  <Pin className="w-4 h-4 text-[#3F624D]" />
                   <span>가족공지로 공유하기</span>
                 </button>
               )}
@@ -50503,7 +52376,7 @@ time: "", location: "",
                     className="px-2.5 py-1.5 rounded-xl bg-[#EEF3EE] hover:bg-[#DFE9E0] text-[#35503C] text-[11.5px] font-extrabold whitespace-nowrap"
                   >
                     ✅ 할 일 등록
-                  </button>
+                  &lt;/button&gt;
                 )}
                 {canEditTab("shopping") && (
                   <button
@@ -50539,9 +52412,9 @@ time: "", location: "",
                     className="px-2.5 py-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 text-[11.5px] font-extrabold whitespace-nowrap"
                   >
                     🛒 장보기 담기
-                  </button>
+                  &lt;/button&gt;
                 )}
-              </div>
+              &lt;/div&gt;
 
               {/* 하단 액션 버튼 */}
               <div className="flex items-center justify-between gap-2 pt-1">
@@ -50598,8 +52471,8 @@ time: "", location: "",
 
 export default function App() {
   return (
-    <ErrorBoundary>
-      <MainApp />
-    </ErrorBoundary>
+    &lt;ErrorBoundary&gt;
+      &lt;MainApp /&gt;
+    &lt;/ErrorBoundary&gt;
   );
 }
