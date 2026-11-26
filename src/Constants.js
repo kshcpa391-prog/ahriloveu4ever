@@ -1186,7 +1186,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v14.42";
+export const APP_CODE_VERSION = "v14.43";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1274,6 +1274,21 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v14.43",
+    version: "v14.43",
+    date: "2026-11-26",
+    title: "🐛 NaN원 방어·ESC 모달 닫기 + ⚙️ 경조사금액·수유량·배변·수면 자유편집 4종 + 🌡️ 발열→상비약/재측정알람 연계 + ☁️ 육아/경조사 뷰상태 Firebase 이관 + 🎨 색상·폰트·줄바꿈 통일",
+    items: [
+      "🐛 [버그 수정 · 안정성] 식비·냉장고·장보기·경조사·내보내기 금액 포맷팅 6곳에 안전 숫자 파싱을 적용해 콤마/비숫자 입력 시 'NaN원'이 표시되는 오류를 원천 차단했습니다.",
+      "⌨️ [사용자 편의성] 인앱 확인 모달과 통합 세부 카테고리 관리 모달에서 ESC 키로 즉시 닫을 수 있도록 키보드 접근성을 보강했습니다.",
+      "⚙️ [시스템 자유도 확장 4종] 하드코딩되어 있던 경조사 금액 프리셋(💰)·아기 수유량 프리셋(🍼)·배변 구분(🧷)·수면 구분(😴) 4종을 통합 카테고리 자유관리(추가/수정/삭제/기본복원)로 승격하고 Firebase 실시간 동기화 및 전체 백업/복원에 완전 연동했습니다.",
+      "🔗 [메뉴간 연계 · 육아→상비약/알람] 아기 체온 37.5°C 이상 입력 시 1탭으로 '💊 상비약함(해열제)' 검색 이동 및 '⏰ 2시간 뒤 재측정 알람' 예약 바가 즉시 나타나며, 저장된 진료·체온 카드에서도 1탭 '⏰ 재측정' 알람을 바로 등록할 수 있습니다.",
+      "☁️ [Firebase 클라우드 이관] 기존에 기기 전환·새로고침 시 초기화되던 선택 아이(시율/시목), 성장그래프 지표·확대 모드, 경조사 소계 탭 상태를 Firebase(family_meta_v4/home_layout) 실시간 동기화로 이관했습니다.",
+      "🎨 [디자인·색상·폰트 통일] 앱 전역의 rose 시맨틱 팔레트와 이질적으로 남아 있던 red-* 클래스 17곳을 rose-*로 일괄 통일하고, 가독성이 떨어지던 9px 초소형 폰트 10곳을 최소 기준 10px로 정규화했습니다.",
+      "📱 [줄바꿈·표·겹침 조정] 모바일에서 2줄로 늘어나던 인라인 칩·버튼 20+곳에 whitespace-nowrap/shrink-0을 적용하고, 페이지 마크다운 표 셀에 최소 너비와 단어 단위 줄바꿈(break-keep)을 적용해 글자 찢어짐을 방지했습니다."
+    ]
+  },
   {
     id: "patch-v14.42",
     version: "v14.42",
@@ -7340,6 +7355,10 @@ export const DEFAULT_MEAL_SOURCE_TYPES = ["집밥/온가족식", "유아식/이�
 export const DEFAULT_SCHEDULE_QUICK_TIMES = ["09:30", "11:00", "14:00", "16:30", "18:30"];
 export const DEFAULT_BABY_TEMP_PRESETS = ["36.8|정상", "37.5|미열", "38.0|발열", "38.5|고열"];
 export const DEFAULT_BUDGET_PRESETS = ["80만", "100만", "120만", "150만"];
+export const DEFAULT_CONDOLENCE_AMOUNTS = ["3만", "5만", "10만", "20만", "30만", "50만"];
+export const DEFAULT_BABY_FEED_AMOUNTS = ["20", "30", "40", "60", "80", "100", "120", "160", "200"];
+export const DEFAULT_BABY_DIAPER_TYPES = ["소변", "대변", "혼합"];
+export const DEFAULT_BABY_SLEEP_TYPES = ["낮잠", "밤잠"];
 
 export const APP_FEATURE_GUIDES = [
   {
