@@ -1182,7 +1182,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v14.36";
+export const APP_CODE_VERSION = "v14.37";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1200,7 +1200,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-26 10:28";
+export const APP_BUILD_DATE = "2026-11-26 10:43";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1270,6 +1270,16 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v14.37",
+    version: "v14.37",
+    date: "2026-11-26",
+    title: "홈 상단(가족사진·D-Day) 비중 균형 조정 & 전체 메뉴 바텀시트 무스크롤 1스크린 최적화",
+    changes: [
+      "🏠 홈 상단 비중 균형 조정: 상단 헤더·유틸바 여백을 슬림화하고, 우측 D-Day 스택을 좌측 16:9 가족사진 높이에 맞춰 균등 배치해 하단 빈 여백을 없애고 첫 화면 콘텐츠 노출 확대",
+      "📱 전체 메뉴(+) 바텀시트 무스크롤 최적화: 44px 이상 터치 영역과 22px 초록 아이콘·13px 라벨 가독성을 유지하면서 그룹 간격·패딩을 정밀 조정해 표준 모바일 화면에서 스크롤 없이 한눈에 전체 메뉴를 볼 수 있도록 개선 (과거 패치노트 474건 100% 보존)"
+    ]
+  },
   {
     id: "patch-v14.36",
     version: "v14.36",
