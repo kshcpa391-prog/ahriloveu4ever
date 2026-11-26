@@ -1182,7 +1182,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v14.38";
+export const APP_CODE_VERSION = "v14.39";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1200,7 +1200,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-26 10:53";
+export const APP_BUILD_DATE = "2026-11-26 11:10";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1270,6 +1270,18 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v14.39",
+    version: "v14.39",
+    date: "2026-11-26",
+    title: "인앱 확인 모달(window.confirm 20곳 전면 교체)·카테고리 권한/일기Blob 누수 수정 · 식사구분·일정시간 자유편집 · 식비 직접지출 추가 · 할일→알람 연계",
+    changes: [
+      "🐛 버그 및 안정성 수정: ① 카카오톡/네이버 인앱 브라우저에서 무반응·차단될 수 있던 window.confirm 20곳을 앱 공통 세이지그린 인앱 확인 모달(askConfirm · ESC/뒤로가기 연동)로 전면 교체 ② 통합 카테고리 관리(getCategoryTabKey)에서 일기기분·AI스타일/대상·루틴시간·타이머/퀵알람이 'notices' 권한으로 오매핑되던 버그 수정 ③ 전체메뉴(+) 일정 추가 시 하드코딩 분류('육아/병원')를 동적 scheduleCategories[0]으로 수정 ④ 육아일기 저장 완료 시 blob: 사진 URL 미해제 누수 정리 및 기본 기분 동적화",
+      "🎛️ 시스템 자유도 확장: 하드코딩되어 있던 식단 [🍽️ 식사구분](집밥/유아식/어린이집/외식 등)과 일정 [🕒 일정시간](빠른시간 프리셋)을 통합 세부 카테고리 자유 관리(custom_categories_v1)로 승격해 추가·수정(기존 식단 일괄 반영)·삭제·순서변경·기본복원 및 각 입력창 옆 ⚙️ 바로가기 지원",
+      "🔗 기능 고도화 및 메뉴 연계: ① 월간·식비 가계부 지출 원장에 [+ 지출] 직접 등록(날짜·품목·분류·금액) 및 수동 지출 삭제 기능을 추가해 장보기 외 지출도 실시간 관리 ② 일정 [✅ 할 일(To-Do)] 미완료 항목에 [⏰] 1탭 버튼을 추가해 모닝콜 퀵알람으로 즉시 예약 연계",
+      "🎨 디자인·폰트·중복 정리: 잔여 purple- 색상 3건(PRIVATE_CAL_COLORS)을 violet-으로 통일(0건 달성), 전체메뉴 시트 제목(14.5px→13.5px)·가이드 모달 배지(9.5px→10px) 폰트 규격 통일, 식단표 스캔 모달 중복 부연 설명 제거 및 과거 패치노트 476건 100% 보존"
+    ]
+  },
   {
     id: "patch-v14.38",
     version: "v14.38",
@@ -7284,6 +7296,8 @@ export const DEFAULT_BABY_DIARY_MOODS = ["😊 행복", "🥰 감동", "😴 잘
 export const DEFAULT_AI_MEAL_STYLES = ["일반 집밥", "다이어트·저탄수", "고단백·체력보충", "간편 원플레이트"];
 export const DEFAULT_AI_MEAL_TARGETS = ["온가족 한끼", "부부 (수혁 & 아리나)", "시목이 유아식", "시율이 이유식/유아식"];
 export const DEFAULT_ROUTINE_TIME_PRESETS = ["07:30", "09:00", "12:00", "17:30", "20:00", "21:30"];
+export const DEFAULT_MEAL_SOURCE_TYPES = ["집밥/온가족식", "유아식/이유식", "어린이집 급식", "외식/배달"];
+export const DEFAULT_SCHEDULE_QUICK_TIMES = ["09:30", "11:00", "14:00", "16:30", "18:30"];
 
 export const APP_FEATURE_GUIDES = [
   {
@@ -7315,7 +7329,7 @@ export const APP_FEATURE_GUIDES = [
       "[📷 AI 스캔]으로 어린이집 식단표·화이트보드 손글씨를 찍어 한 번에 등록할 수 있어요.",
       "[📋 식단 복사]로 특정 날짜·끼니를 다른 날에 복사하거나, 일별 카드의 [📌 공지]로 가족공지에 바로 공유해요."
     ],
-    tips: "[✨ AI 3일식단]과 [📤 식단출력]으로 현재 식단·재고를 AI에 바로 넘겨 식단 평가를 받을 수 있어요."
+    tips: "[✨ AI 3일식단]·[📤 식단출력] 연계와 함께 식사 구분(집밥·유아식·외식 등)도 ⚙️ 버튼으로 자유롭게 추가·수정할 수 있어요."
   },
   {
     id: "schedule",
@@ -7326,7 +7340,7 @@ export const APP_FEATURE_GUIDES = [
     summary: "조르테 스타일 통합 달력, To-Do 체크리스트, 자동 리셋 루틴, D-Day 보드를 한곳에서 씁니다.",
     steps: [
       "📅 달력: 가족 일정(🏠)과 내 개인일정·다이어리(🔒, 관리자 본인 전용)를 함께 보고, 한국 공휴일·음력·기간 범위(시작~종료일)·시간·장소(네이버지도 연결)를 지원해요.",
-      "✅ 할 일(To-Do): 마감일별 할 일을 빠르게 추가·검색하고 1탭 완료 체크 또는 장보기로 보낼 수 있어요.",
+      "✅ 할 일(To-Do): 마감일별 할 일을 빠르게 추가·검색하고 1탭 완료 체크, 🛒 장보기, ⏰ 모닝콜 알람 예약으로 바로 보낼 수 있어요.",
       "🔄 루틴: 아침·점심·하원후·오후·저녁·자기전·상시 시간대별 루틴을 관리해요. 제목을 쉼표(,)로 적으면 단계별 칩으로 쪼개져 개별 체크가 돼요.",
       "⭐ D-Day: 기념일·생일 카운트다운을 모아보고, [📌 홈] 토글로 홈 상단 미니바에 고정할 수 있어요."
     ],
@@ -7488,7 +7502,7 @@ export const APP_FEATURE_GUIDES = [
     steps: [
       "📅 월간 식단: 달력에서 끼니별 메뉴를 바로 보거나 [📋 한눈에]에서 검색·끼니 필터·최신순 정렬로 모아봐요.",
       "💰 월간 식비: 목표 예산을 인라인 수정하고, 최근 6개월 추이 막대(클릭 시 해당 월 이동)와 월말 예상 지출 페이스를 확인해요.",
-      "지출 원장에서 품목 검색·카테고리 필터·[📊 CSV] 엑셀 다운로드를 지원하며, [🗂️ 결산노트]·[📌 공지]로 공유할 수 있어요."
+      "지출 원장에서 [+ 지출] 직접 등록·삭제와 품목 검색·카테고리 필터·[📊 CSV] 엑셀 다운로드를 지원하며, [🗂️ 결산노트]·[📌 공지]로 공유할 수 있어요."
     ],
     tips: "좌우 스와이프로 이전 달·다음 달로 빠르게 이동하고, 다른 달을 볼 때는 [이번 달] 버튼으로 즉시 돌아올 수 있어요."
   },

@@ -194,6 +194,8 @@ import {
   DEFAULT_AI_MEAL_STYLES,
   DEFAULT_AI_MEAL_TARGETS,
   DEFAULT_ROUTINE_TIME_PRESETS,
+  DEFAULT_MEAL_SOURCE_TYPES,
+  DEFAULT_SCHEDULE_QUICK_TIMES,
   APP_FEATURE_GUIDES
 } from "./Constants";
 
@@ -2256,7 +2258,7 @@ const PRIVATE_CAL_COLORS = [
   { id: "blue", label: "파랑", textCls: "text-sky-700", bgCls: "bg-sky-100/80", dotCls: "bg-sky-600", dot: "#0284c7" },
   { id: "green", label: "초록", textCls: "text-emerald-700", bgCls: "bg-emerald-100/80", dotCls: "bg-emerald-600", dot: "#059669" },
   { id: "amber", label: "주황", textCls: "text-amber-800", bgCls: "bg-amber-100/80", dotCls: "bg-amber-500", dot: "#f59e0b" },
-  { id: "purple", label: "보라", textCls: "text-purple-700", bgCls: "bg-purple-100/80", dotCls: "bg-purple-600", dot: "#9333ea" }
+  { id: "purple", label: "보라", textCls: "text-violet-700", bgCls: "bg-violet-100/80", dotCls: "bg-violet-600", dot: "#7c3aed" }
 ];
 
 const lunarDateCache = new Map();
@@ -2298,7 +2300,9 @@ const ScheduleFormModal = React.memo(({
   scheduleCategories = SCHEDULE_CATEGORIES,
   onManageCategories,
   schedulePlaces = DEFAULT_SCHEDULE_PLACES,
-  onManagePlaces
+  onManagePlaces,
+  scheduleQuickTimes = DEFAULT_SCHEDULE_QUICK_TIMES,
+  onManageQuickTimes
 }) => {
   const [draft, setDraft] = useState(() => ({
     scheduleScope: "family",
@@ -2515,7 +2519,7 @@ const ScheduleFormModal = React.memo(({
         </div>
         <div className="flex items-center gap-1 flex-wrap -mt-1.5">
           <span className="text-[10.5px] font-bold text-stone-400 whitespace-nowrap">빠른시간:</span>
-          {["09:30", "11:00", "14:00", "16:30", "18:30"].map((tm) => (
+          {(Array.isArray(scheduleQuickTimes) ? scheduleQuickTimes : DEFAULT_SCHEDULE_QUICK_TIMES).map((tm) => (
             <button
               key={tm}
               type="button"
@@ -2529,6 +2533,16 @@ const ScheduleFormModal = React.memo(({
               {tm}
             </button>
           ))}
+          {onManageQuickTimes && (
+            <button
+              type="button"
+              onClick={onManageQuickTimes}
+              className="px-1.5 py-0.5 rounded-lg bg-[#EEF3EE] hover:bg-[#dce8de] border border-[#C9D8CC] text-[10px] font-extrabold text-[#35503C] whitespace-nowrap"
+              title="일정 빠른시간 자유 추가·편집"
+            >
+              ⚙️
+            </button>
+          )}
         </div>
         {Array.isArray(schedulePlaces) && schedulePlaces.length > 0 && (
           <div className="flex items-center gap-1 flex-wrap -mt-1">
@@ -3705,11 +3719,11 @@ const FeatureGuideModal = React.memo(({
                             {g.title}
                           </span>
                           {isCur && (
-                            <span className="px-1.5 py-0.5 rounded-md bg-[#3F624D] text-white text-[9.5px] font-black whitespace-nowrap">
+                            <span className="px-1.5 py-0.5 rounded-md bg-[#3F624D] text-white text-[10px] font-black whitespace-nowrap">
                               현재 화면
                             </span>
                           )}
-                          <span className="px-1.5 py-0.5 rounded-md bg-stone-100 text-stone-600 text-[9.5px] font-bold whitespace-nowrap">
+                          <span className="px-1.5 py-0.5 rounded-md bg-stone-100 text-stone-600 text-[10px] font-bold whitespace-nowrap">
                             {g.audience}
                           </span>
                         </div>
@@ -5103,7 +5117,9 @@ function MainApp() {
           baby_diary_moods: Array.isArray(saved.baby_diary_moods) && saved.baby_diary_moods.length > 0 ? saved.baby_diary_moods.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_BABY_DIARY_MOODS],
           ai_meal_styles: Array.isArray(saved.ai_meal_styles) && saved.ai_meal_styles.length > 0 ? saved.ai_meal_styles.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_AI_MEAL_STYLES],
           ai_meal_targets: Array.isArray(saved.ai_meal_targets) && saved.ai_meal_targets.length > 0 ? saved.ai_meal_targets.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_AI_MEAL_TARGETS],
-          routine_time_presets: Array.isArray(saved.routine_time_presets) && saved.routine_time_presets.length > 0 ? saved.routine_time_presets.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_ROUTINE_TIME_PRESETS]
+          routine_time_presets: Array.isArray(saved.routine_time_presets) && saved.routine_time_presets.length > 0 ? saved.routine_time_presets.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_ROUTINE_TIME_PRESETS],
+          meal_source_types: Array.isArray(saved.meal_source_types) && saved.meal_source_types.length > 0 ? saved.meal_source_types.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_MEAL_SOURCE_TYPES],
+          schedule_quick_times: Array.isArray(saved.schedule_quick_times) && saved.schedule_quick_times.length > 0 ? saved.schedule_quick_times.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_SCHEDULE_QUICK_TIMES]
         };
       }
     } catch (e) {}
@@ -5127,7 +5143,9 @@ function MainApp() {
       baby_diary_moods: [...DEFAULT_BABY_DIARY_MOODS],
       ai_meal_styles: [...DEFAULT_AI_MEAL_STYLES],
       ai_meal_targets: [...DEFAULT_AI_MEAL_TARGETS],
-      routine_time_presets: [...DEFAULT_ROUTINE_TIME_PRESETS]
+      routine_time_presets: [...DEFAULT_ROUTINE_TIME_PRESETS],
+      meal_source_types: [...DEFAULT_MEAL_SOURCE_TYPES],
+      schedule_quick_times: [...DEFAULT_SCHEDULE_QUICK_TIMES]
     };
   });
   const fridgeCategories = customCategories.fridge;
@@ -5150,6 +5168,34 @@ function MainApp() {
   const aiMealStyles = customCategories.ai_meal_styles || DEFAULT_AI_MEAL_STYLES;
   const aiMealTargets = customCategories.ai_meal_targets || DEFAULT_AI_MEAL_TARGETS;
   const routineTimePresets = customCategories.routine_time_presets || DEFAULT_ROUTINE_TIME_PRESETS;
+  const mealSourceTypes = customCategories.meal_source_types || DEFAULT_MEAL_SOURCE_TYPES;
+  const scheduleQuickTimes = customCategories.schedule_quick_times || DEFAULT_SCHEDULE_QUICK_TIMES;
+  const [isManualExpenseOpen, setIsManualExpenseOpen] = useState(false);
+  const [manualExpenseForm, setManualExpenseForm] = useState(() => ({
+    date: getTodayStr(),
+    title: "",
+    category: (customCategories.fridge && customCategories.fridge[0]) || "기타",
+    amount: ""
+  }));
+  const [confirmDialog, setConfirmDialog] = useState(null);
+  const confirmResolverRef = useRef(null);
+  const askConfirm = useCallback((message, confirmLabel = "확인", danger = true) => {
+    return new Promise((resolve) => {
+      if (confirmResolverRef.current) {
+        try { confirmResolverRef.current(false); } catch (e) {}
+      }
+      confirmResolverRef.current = resolve;
+      setConfirmDialog({ message: String(message || ""), confirmLabel, danger });
+    });
+  }, []);
+  const closeConfirmDialog = useCallback((result) => {
+    const resolver = confirmResolverRef.current;
+    confirmResolverRef.current = null;
+    setConfirmDialog(null);
+    if (resolver) {
+      try { resolver(Boolean(result)); } catch (e) {}
+    }
+  }, []);
 
   // === 🔒 비밀메뉴: 경조사비 입출금내역 상태 ===
   const isSuhyeokAdmin = isAdminUnlocked && (actorName === "수혁" || actorName === "김수혁");
@@ -5577,7 +5623,7 @@ function MainApp() {
         .filter((c) => c.items.length >= Math.max(1, maxLen - 2))
         .sort((a, b) => String(b.at || "").localeCompare(String(a.at || "")) || b.items.length - a.items.length);
       const picked = bestList[0] || candidates[0];
-      const ok = window.confirm(
+      const ok = await askConfirm(
         `[${picked.label}] 클라우드 백업에서 루틴 ${picked.items.length}건을 복원할까요?\n(현재 목록 ${familyRoutines.length}건이 교체되며, 직전 상태는 백업됩니다.)`
       );
       if (!ok) return;
@@ -6179,7 +6225,7 @@ function MainApp() {
       showToast("정리할 완료된 할 일(To-Do)이 없습니다.");
       return;
     }
-    if (!window.confirm(`완료된 할 일 ${completedTodos.length}건을 모두 비울까요?`)) return;
+    if (!(await askConfirm(`완료된 할 일 ${completedTodos.length}건을 모두 비울까요?`)) return;
     const delIds = completedTodos.map((s) => s.id);
     const delSet = new Set(delIds);
     setSchedules((prev) => prev.filter((s) => !delSet.has(s.id)));
@@ -9445,7 +9491,9 @@ function MainApp() {
               baby_diary_moods: Array.isArray(d.baby_diary_moods) && d.baby_diary_moods.length > 0 ? d.baby_diary_moods.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_BABY_DIARY_MOODS],
               ai_meal_styles: Array.isArray(d.ai_meal_styles) && d.ai_meal_styles.length > 0 ? d.ai_meal_styles.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_AI_MEAL_STYLES],
               ai_meal_targets: Array.isArray(d.ai_meal_targets) && d.ai_meal_targets.length > 0 ? d.ai_meal_targets.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_AI_MEAL_TARGETS],
-              routine_time_presets: Array.isArray(d.routine_time_presets) && d.routine_time_presets.length > 0 ? d.routine_time_presets.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_ROUTINE_TIME_PRESETS]
+              routine_time_presets: Array.isArray(d.routine_time_presets) && d.routine_time_presets.length > 0 ? d.routine_time_presets.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_ROUTINE_TIME_PRESETS],
+              meal_source_types: Array.isArray(d.meal_source_types) && d.meal_source_types.length > 0 ? d.meal_source_types.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_MEAL_SOURCE_TYPES],
+              schedule_quick_times: Array.isArray(d.schedule_quick_times) && d.schedule_quick_times.length > 0 ? d.schedule_quick_times.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_SCHEDULE_QUICK_TIMES]
             };
             setCustomCategories(nextCats);
             try { localStorage.setItem("kim_custom_categories_v1", JSON.stringify(nextCats)); } catch (e) {}
@@ -10354,7 +10402,7 @@ function MainApp() {
       const totalConflicts = mealConflicts + fridgeConflicts + schConflicts;
 
 
-      const confirmRestore = window.confirm(
+      const confirmRestore = await askConfirm(
         `백업 파일을 복원할까요?\n` +
         `• 식단 ${toSafeArray(payload.meals).length}건 (기존 충돌 ${mealConflicts}건)\n` +
         `• 냉장고 ${toSafeArray(payload.fridge).length}건 (기존 충돌 ${fridgeConflicts}건)\n` +
@@ -10484,7 +10532,9 @@ function MainApp() {
           baby_diary_moods: Array.isArray(payload.customCategories.baby_diary_moods) && payload.customCategories.baby_diary_moods.length > 0 ? payload.customCategories.baby_diary_moods.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_BABY_DIARY_MOODS],
           ai_meal_styles: Array.isArray(payload.customCategories.ai_meal_styles) && payload.customCategories.ai_meal_styles.length > 0 ? payload.customCategories.ai_meal_styles.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_AI_MEAL_STYLES],
           ai_meal_targets: Array.isArray(payload.customCategories.ai_meal_targets) && payload.customCategories.ai_meal_targets.length > 0 ? payload.customCategories.ai_meal_targets.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_AI_MEAL_TARGETS],
-          routine_time_presets: Array.isArray(payload.customCategories.routine_time_presets) && payload.customCategories.routine_time_presets.length > 0 ? payload.customCategories.routine_time_presets.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_ROUTINE_TIME_PRESETS]
+          routine_time_presets: Array.isArray(payload.customCategories.routine_time_presets) && payload.customCategories.routine_time_presets.length > 0 ? payload.customCategories.routine_time_presets.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_ROUTINE_TIME_PRESETS],
+          meal_source_types: Array.isArray(payload.customCategories.meal_source_types) && payload.customCategories.meal_source_types.length > 0 ? payload.customCategories.meal_source_types.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_MEAL_SOURCE_TYPES],
+          schedule_quick_times: Array.isArray(payload.customCategories.schedule_quick_times) && payload.customCategories.schedule_quick_times.length > 0 ? payload.customCategories.schedule_quick_times.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_SCHEDULE_QUICK_TIMES]
         };
         setCustomCategories(nextCats);
         try { localStorage.setItem("kim_custom_categories_v1", JSON.stringify(nextCats)); } catch (e) {}
@@ -11282,7 +11332,7 @@ function MainApp() {
     };
     const existing = schedules.find((s) => s.id === schId);
     if (existing) {
-      const ok = window.confirm(
+      const ok = await askConfirm(
         `이미 '${existing.title}' 일정(${existing.date})이 등록되어 있습니다. 기존 메모/완료 여부를 덮어쓰고 권장일(${targetDate})로 초기화할까요?`
       );
       if (!ok) return;
@@ -14570,11 +14620,12 @@ ${validText}
         stepText: saveResult?.timedOut ? "로컬 저장 완료 (백그라운드 동기화)" : "저장 완료!",
         pct: 100
       });
+      (formPhotos || []).forEach((p) => { if (typeof p?.url === "string" && p.url.startsWith("blob:")) { try { URL.revokeObjectURL(p.url); } catch (e) {} } });
       setEditingDiaryEntry(null);
       setPendingDiaryPhotoFile(null);
       setDiaryForm({
         date: getTodayStr(),
-        mood: "😊 행복",
+        mood: babyDiaryMoods[0] || "😊 행복",
         title: "",
         content: "",
         contentHtml: "",
@@ -16076,7 +16127,7 @@ ${validText}
 
   const handleDeleteRecipe = async (recipeId) => {
     if (!requireEditorAccess()) return;
-    if (!window.confirm("이 레시피를 가족 레시피북에서 삭제할까요?")) return;
+    if (!(await askConfirm("이 레시피를 가족 레시피북에서 삭제할까요?")) return;
     setRecipes((prev) => prev.filter((r) => r.id !== recipeId));
     if (user && db) {
       try {
@@ -16978,7 +17029,7 @@ ${validText}
       showToast("일정 내용을 입력해 주세요.");
       return;
     }
-    if (!window.confirm("이 개인 일정을 가족 공유 일정으로 이동할까요?\n(기존 개인 일정에서는 삭제되고 가족 일정에 등록됩니다.)")) {
+    if (!(await askConfirm("이 개인 일정을 가족 공유 일정으로 이동할까요?\n(기존 개인 일정에서는 삭제되고 가족 일정에 등록됩니다.)")) {
       return;
     }
     const existing = privateSchedules.find((p) => p.id === editingPrivateCalId);
@@ -17556,7 +17607,7 @@ ${validText}
       showToast(`${currentAdminOwner} 개인 일정이 이미 비어 있습니다.`);
       return;
     }
-    if (!window.confirm(`🔒 ${currentAdminOwner} 개인 일정 ${ownerItems.length.toLocaleString()}건을 클라우드에서 모두 삭제할까요?\n(먼저 CSV 내보내기로 백업하는 것을 권장합니다.)`)) {
+    if (!(await askConfirm(`🔒 ${currentAdminOwner} 개인 일정 ${ownerItems.length.toLocaleString()}건을 클라우드에서 모두 삭제할까요?\n(먼저 CSV 내보내기로 백업하는 것을 권장합니다.)`)) {
       return;
     }
     setPrivateCalCsvBusy(true);
@@ -17914,6 +17965,22 @@ ${item.memo}` : `${item.title} 다녀옴!`,
 
 
   // === ⚙️ 통합 세부 카테고리 자유 관리 (재료 · 레시피 · 가족공지) ===
+  const getCategoryTabKey = (kind) => {
+    if (kind === "fridge") return "fridge";
+    if (kind === "shopping_presets") return "shopping";
+    if (kind === "recipe") return "recipes";
+    if (kind === "bucket") return "bucket";
+    if (kind === "schedule" || kind === "schedule_places" || kind === "schedule_quick_times") return "schedule";
+    if (kind === "routine_time_presets") return "routines";
+    if (kind === "meal_source_types") return "daily";
+    if (kind === "ai_meal_styles" || kind === "ai_meal_targets") return "ai";
+    if (kind === "timer_presets" || kind === "quick_alarm_presets") return "alarm";
+    if (kind === "baby_memo_tags" || kind === "baby_health_tags" || kind === "baby_diary_moods") return "baby";
+    if (kind === "house_room" || kind === "house_med_target" || kind === "house_warranty_brands") return "house";
+    if (kind === "condolence_cat" || kind === "condolence_group" || kind === "condolence_pay") return "condolence";
+    return "notices";
+  };
+
   const openCategoryManager = (kind = "fridge") => {
     setCategoryManageKind(kind);
     setNewCategoryInput("");
@@ -17939,7 +18006,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
   };
 
   const handleAddCustomCategory = async (kind, rawName) => {
-    const tabKey = (kind === "fridge" || kind === "shopping_presets") ? (kind === "shopping_presets" ? "shopping" : "fridge") : kind === "recipe" ? "recipes" : kind === "bucket" ? "bucket" : (kind === "schedule" || kind === "schedule_places") ? "schedule" : (kind === "baby_memo_tags" || kind === "baby_health_tags") ? "baby" : (kind === "house_room" || kind === "house_med_target" || kind === "house_warranty_brands") ? "house" : (kind === "condolence_cat" || kind === "condolence_group" || kind === "condolence_pay") ? "condolence" : "notices";
+    const tabKey = getCategoryTabKey(kind);
     if (tabKey === "condolence") {
       if (!isCondolenceUnlocked) { showToast("🔒 경조사비 비밀번호 해제 후 편집할 수 있습니다."); return; }
     } else if (!requireEditorAccess(tabKey)) return;
@@ -17965,7 +18032,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
   };
 
   const handleRenameCustomCategory = async (kind, oldName, rawNext) => {
-    const tabKey = (kind === "fridge" || kind === "shopping_presets") ? (kind === "shopping_presets" ? "shopping" : "fridge") : kind === "recipe" ? "recipes" : kind === "bucket" ? "bucket" : (kind === "schedule" || kind === "schedule_places") ? "schedule" : (kind === "baby_memo_tags" || kind === "baby_health_tags") ? "baby" : (kind === "house_room" || kind === "house_med_target" || kind === "house_warranty_brands") ? "house" : (kind === "condolence_cat" || kind === "condolence_group" || kind === "condolence_pay") ? "condolence" : "notices";
+    const tabKey = getCategoryTabKey(kind);
     if (tabKey === "condolence") {
       if (!isCondolenceUnlocked) { showToast("🔒 경조사비 비밀번호 해제 후 편집할 수 있습니다."); return; }
     } else if (!requireEditorAccess(tabKey)) return;
@@ -18101,6 +18168,19 @@ ${item.memo}` : `${item.title} 다녀옴!`,
           } catch (e) {}
         }
       }
+    } else if (kind === "meal_source_types") {
+      const affected = meals.filter((m) => m.sourceType === oldName);
+      if (affected.length > 0 && user && db) {
+        try {
+          for (let i = 0; i < affected.length; i += 200) {
+            const batch = writeBatch(db);
+            affected.slice(i, i + 200).forEach((m) => {
+              batch.set(getDocRef("family_meals_v4", m.id), { ...m, sourceType: nextName }, { merge: true });
+            });
+            await batch.commit();
+          }
+        } catch (e) {}
+      }
     } else if (kind === "condolence_cat") {
       if (condolenceCatFilter === oldName) setCondolenceCatFilter(nextName);
       const affected = condolenceList.filter((c) => c.category === oldName);
@@ -18173,7 +18253,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
   };
 
   const handleDeleteCustomCategory = async (kind, targetName) => {
-    const tabKey = (kind === "fridge" || kind === "shopping_presets") ? (kind === "shopping_presets" ? "shopping" : "fridge") : kind === "recipe" ? "recipes" : kind === "bucket" ? "bucket" : (kind === "schedule" || kind === "schedule_places") ? "schedule" : (kind === "baby_memo_tags" || kind === "baby_health_tags") ? "baby" : (kind === "house_room" || kind === "house_med_target" || kind === "house_warranty_brands") ? "house" : (kind === "condolence_cat" || kind === "condolence_group" || kind === "condolence_pay") ? "condolence" : "notices";
+    const tabKey = getCategoryTabKey(kind);
     if (tabKey === "condolence") {
       if (!isCondolenceUnlocked) { showToast("🔒 경조사비 비밀번호 해제 후 편집할 수 있습니다."); return; }
     } else if (!requireEditorAccess(tabKey)) return;
@@ -18206,7 +18286,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
   };
 
   const handleMoveCustomCategory = async (kind, idx, delta) => {
-    const tabKey = (kind === "fridge" || kind === "shopping_presets") ? (kind === "shopping_presets" ? "shopping" : "fridge") : kind === "recipe" ? "recipes" : kind === "bucket" ? "bucket" : (kind === "schedule" || kind === "schedule_places") ? "schedule" : (kind === "baby_memo_tags" || kind === "baby_health_tags") ? "baby" : (kind === "house_room" || kind === "house_med_target" || kind === "house_warranty_brands") ? "house" : (kind === "condolence_cat" || kind === "condolence_group" || kind === "condolence_pay") ? "condolence" : "notices";
+    const tabKey = getCategoryTabKey(kind);
     if (tabKey === "condolence") {
       if (!isCondolenceUnlocked) { showToast("🔒 경조사비 비밀번호 해제 후 편집할 수 있습니다."); return; }
     } else if (!requireEditorAccess(tabKey)) return;
@@ -18230,7 +18310,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
   };
 
   const handleResetCustomCategories = async (kind) => {
-    const tabKey = (kind === "fridge" || kind === "shopping_presets") ? (kind === "shopping_presets" ? "shopping" : "fridge") : kind === "recipe" ? "recipes" : kind === "bucket" ? "bucket" : (kind === "schedule" || kind === "schedule_places") ? "schedule" : (kind === "baby_memo_tags" || kind === "baby_health_tags") ? "baby" : (kind === "house_room" || kind === "house_med_target" || kind === "house_warranty_brands") ? "house" : (kind === "condolence_cat" || kind === "condolence_group" || kind === "condolence_pay") ? "condolence" : "notices";
+    const tabKey = getCategoryTabKey(kind);
     if (tabKey === "condolence") {
       if (!isCondolenceUnlocked) { showToast("🔒 경조사비 비밀번호 해제 후 편집할 수 있습니다."); return; }
     } else if (!requireEditorAccess(tabKey)) return;
@@ -18277,6 +18357,10 @@ ${item.memo}` : `${item.title} 다녀옴!`,
         ? [...DEFAULT_AI_MEAL_TARGETS]
         : kind === "routine_time_presets"
         ? [...DEFAULT_ROUTINE_TIME_PRESETS]
+        : kind === "meal_source_types"
+        ? [...DEFAULT_MEAL_SOURCE_TYPES]
+        : kind === "schedule_quick_times"
+        ? [...DEFAULT_SCHEDULE_QUICK_TIMES]
         : [...NOTICE_CATEGORIES];
     await saveCustomCategoriesToCloud({ ...customCategories, [kind]: defaults }, "↺ 기본 분류 목록으로 복원했습니다.");
   };
@@ -18447,7 +18531,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
 
   const handleDeleteCondolence = async (item) => {
     if (!isCondolenceUnlocked || !item?.id) return;
-    if (!window.confirm(`'${item.person} (${Number(item.amount || 0).toLocaleString()}원)' 경조사 내역을 삭제할까요?`)) return;
+    if (!(await askConfirm(`'${item.person} (${Number(item.amount || 0).toLocaleString()}원)' 경조사 내역을 삭제할까요?`)) return;
     const prev = condolenceList;
     const nextList = condolenceList.filter((x) => x.id !== item.id);
     setCondolenceList(nextList);
@@ -19229,7 +19313,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
 
   const handleBulkDeleteCondolence = async () => {
     if (!isCondolenceUnlocked || condolenceBulkIds.length === 0) return;
-    if (!window.confirm(`선택한 경조사비 내역 ${condolenceBulkIds.length}건을 클라우드에서 일괄 삭제할까요?`)) return;
+    if (!(await askConfirm(`선택한 경조사비 내역 ${condolenceBulkIds.length}건을 클라우드에서 일괄 삭제할까요?`)) return;
     setCondolenceBulkBusy(true);
     const idSet = new Set(condolenceBulkIds);
     const prev = condolenceList;
@@ -19409,7 +19493,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
 
   const handleDeleteHouseItem = async (item) => {
     if (!requireEditorAccess("house") || !item?.id) return;
-    if (!window.confirm(`'${item.title}' 항목을 삭제할까요?`)) return;
+    if (!(await askConfirm(`'${item.title}' 항목을 삭제할까요?`)) return;
     setHouseItems((prev) => prev.filter((x) => x.id !== item.id));
     if (user && db) {
       beginWrite();
@@ -19674,7 +19758,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
     const msg = scopeDetails.length > 0
       ? `'${target.title}' 페이지(${scopeDetails.join(" · ")})를 삭제할까요?`
       : `'${target.title}' 페이지를 삭제할까요?`;
-    if (!window.confirm(msg)) return;
+    if (!(await askConfirm(msg)) return;
     const delSet = new Set(delIds);
     setFamilyPages((prev) => prev.filter((p) => !delSet.has(p.id)));
     if (handoverAttachedPageId && delSet.has(handoverAttachedPageId)) {
@@ -19752,7 +19836,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
     if (!requireEditorAccess("pages") || !page || !sectionObj?.heading) return;
     const childCount = sectionObj.items.length;
     if (childCount > 0) {
-      const ok = window.confirm(`'${sectionObj.heading.text || "섹션"}' 섹션과 포함된 항목 ${childCount}개를 모두 삭제할까요?`);
+      const ok = await askConfirm(`'${sectionObj.heading.text || "섹션"}' 섹션과 포함된 항목 ${childCount}개를 모두 삭제할까요?`);
       if (!ok) return;
     }
     const delSet = new Set([sectionObj.heading.id, ...sectionObj.items.map((it) => it.blk.id)]);
@@ -20552,8 +20636,9 @@ ${item.memo}` : `${item.title} 다녀옴!`,
         setShowAdminInboxModal(false);
         setShowRolePermModal(false);
         setShowSendAdminNoteModal(false);
+        if (confirmDialog) { closeConfirmDialog(false); return; }
+        setIsGuideModalOpen(false);
         setIsHandoverModalOpen(false);
-        setReturnToHandoverPending(false);
         setIsHomeDdayPickerOpen(false);
         setCategoryManageKind("");
         setIsPrivateCalCsvModalOpen(false);
@@ -20580,7 +20665,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
     };
     window.addEventListener("keydown", onEsc);
     return () => window.removeEventListener("keydown", onEsc);
-  }, [isMoreNavOpen, isHomeEditMode, isQuickShoppingOpen, isGrowthPctPickerOpen, isHomeRoutineFilterOpen, isRoutineRangeEditOpen, isQuickFabOpen, isRoutineModalOpen, isActivityModalOpen, isEditorUnlockModalOpen, isMealCopyModalOpen, diaryExportPreviewUrl, diaryLightboxUrl, diaryImportModal, cropModal, isWeatherModalOpen, liveActivityPopup, activityEditModal, zipImportPicker, magazineMonth, isSettingsOpen, isHeroPhotoModalOpen, isPageModalOpen, pageMenuTargetId, isPageSwitcherOpen, isPagePasteModalOpen, activeTableTaskModal, isDreamLinksModalOpen, isPatchModalOpen, isBucketModalOpen, isHouseModalOpen, isHandoverModalOpen, isHomeDdayPickerOpen, categoryManageKind, isPrivateCalCsvModalOpen, isCondolenceFormOpen, isCondolenceExcelModalOpen, isCondolencePinModalOpen, calDayPopupDate, isScheduleModalOpen, isMealModalOpen, isFridgeModalOpen, isNoticeModalOpen, isRecipeModalOpen, isDaycareModalOpen, isReceiptModalOpen, isShoppingPhotoModalOpen, zoomedRecipePhoto, isInventoryExportOpen, stockInItem, quickLogRecipe, cookingConfirmModal, quickFridgeItem, isDiaryFormatOpen, isHouseRoomManageOpen, isNotifSettingsOpen, isPageEmojiPickerOpen, showAdminInboxModal, showRolePermModal, showSendAdminNoteModal]);
+  }, [isMoreNavOpen, isHomeEditMode, isQuickShoppingOpen, isGrowthPctPickerOpen, isHomeRoutineFilterOpen, isRoutineRangeEditOpen, isQuickFabOpen, isRoutineModalOpen, isActivityModalOpen, isEditorUnlockModalOpen, isMealCopyModalOpen, diaryExportPreviewUrl, diaryLightboxUrl, diaryImportModal, cropModal, isWeatherModalOpen, liveActivityPopup, activityEditModal, zipImportPicker, magazineMonth, isSettingsOpen, isHeroPhotoModalOpen, isPageModalOpen, pageMenuTargetId, isPageSwitcherOpen, isPagePasteModalOpen, activeTableTaskModal, isDreamLinksModalOpen, confirmDialog, isGuideModalOpen, isPatchModalOpen, isBucketModalOpen, isHouseModalOpen, isHandoverModalOpen, isHomeDdayPickerOpen, categoryManageKind, isPrivateCalCsvModalOpen, isCondolenceFormOpen, isCondolenceExcelModalOpen, isCondolencePinModalOpen, calDayPopupDate, isScheduleModalOpen, isMealModalOpen, isFridgeModalOpen, isNoticeModalOpen, isRecipeModalOpen, isDaycareModalOpen, isReceiptModalOpen, isShoppingPhotoModalOpen, zoomedRecipePhoto, isInventoryExportOpen, stockInItem, quickLogRecipe, cookingConfirmModal, quickFridgeItem, isDiaryFormatOpen, isHouseRoomManageOpen, isNotifSettingsOpen, isPageEmojiPickerOpen, showAdminInboxModal, showRolePermModal, showSendAdminNoteModal]);
 
   // ==========================================
   // 모바일·브라우저 뒤로가기 이전 화면 이동 (Chrome User-Gesture History API + URL 해시)
@@ -20622,6 +20707,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
   };
 
   const anyOverlayModalOpen = Boolean(
+    confirmDialog ||
     isMoreNavOpen ||
     isHomeEditMode ||
     isQuickShoppingOpen ||
@@ -20688,6 +20774,8 @@ ${item.memo}` : `${item.title} 다녀옴!`,
 
   backCloseHandlerRef.current = () => {
     if (anyOverlayModalOpen) {
+      if (confirmDialog) closeConfirmDialog(false);
+      setIsGuideModalOpen(false);
       setIsMoreNavOpen(false);
       setIsHomeEditMode(false);
       setIsQuickShoppingOpen(false);
@@ -25924,7 +26012,24 @@ time: "", location: "",
                       <h3 className="text-[13.5px] font-black text-stone-900">
                         🧾 {currentMonth}월 장보기 지출 원장 ({filteredLedger.length}건)
                       </h3>
-                      <div className="flex items-center gap-1.5 shrink-0">
+                      <div className="flex items-center gap-1.5 shrink-0 flex-wrap justify-end">
+                        {canEditTab("monthly") && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setManualExpenseForm({
+                                date: getTodayStr().startsWith(currentMonth) ? getTodayStr() : `${currentMonth}-01`,
+                                title: "",
+                                category: fridgeCategories[0] || "기타",
+                                amount: ""
+                              });
+                              setIsManualExpenseOpen((v) => !v);
+                            }}
+                            className="px-2 py-1 rounded-lg bg-[#3F624D] hover:bg-[#324F3E] text-white text-[11px] font-extrabold whitespace-nowrap shrink-0"
+                          >
+                            + 지출
+                          </button>
+                        )}
                         {(expenseCatFilter !== "전체" || eq) && (
                           <span className="text-[12px] font-black text-[#2F523E] whitespace-nowrap">
                             합계 {filteredSum.toLocaleString()}원
@@ -25975,6 +26080,95 @@ time: "", location: "",
                         )}
                       </div>
                     </div>
+                    {isManualExpenseOpen && canEditTab("monthly") && (
+                      <div className="p-2.5 rounded-xl bg-[#FAF8F3] border border-stone-200 space-y-2">
+                        <div className="grid grid-cols-2 gap-1.5">
+                          <input
+                            type="date"
+                            value={manualExpenseForm.date}
+                            onChange={(e) => setManualExpenseForm((p) => ({ ...p, date: e.target.value }))}
+                            className="px-2 py-1.5 rounded-lg border border-stone-200 bg-white text-[12px] font-bold min-w-0"
+                          />
+                          <select
+                            value={manualExpenseForm.category}
+                            onChange={(e) => setManualExpenseForm((p) => ({ ...p, category: e.target.value }))}
+                            className="px-2 py-1.5 rounded-lg border border-stone-200 bg-white text-[12px] font-bold min-w-0 truncate"
+                          >
+                            {fridgeCategories.map((c) => (
+                              <option key={c} value={c}>{c}</option>
+                            ))}
+                            <option value="외식/배달">외식/배달</option>
+                            {!fridgeCategories.includes("기타") && <option value="기타">기타</option>}
+                          </select>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <input
+                            type="text"
+                            placeholder="지출 내용 (예: 동네마트 과일, 카페)"
+                            value={manualExpenseForm.title}
+                            onChange={(e) => setManualExpenseForm((p) => ({ ...p, title: e.target.value }))}
+                            className="flex-1 min-w-0 px-2.5 py-1.5 rounded-lg border border-stone-200 bg-white text-[12px] font-bold"
+                          />
+                          <input
+                            type="number"
+                            inputMode="numeric"
+                            placeholder="금액(원)"
+                            value={manualExpenseForm.amount}
+                            onChange={(e) => setManualExpenseForm((p) => ({ ...p, amount: e.target.value }))}
+                            className="w-24 shrink-0 px-2 py-1.5 rounded-lg border border-stone-200 bg-white text-[12px] font-bold"
+                          />
+                        </div>
+                        <div className="flex justify-end gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => setIsManualExpenseOpen(false)}
+                            className="px-2.5 py-1 rounded-lg bg-stone-200 hover:bg-stone-300 text-stone-700 text-[11px] font-extrabold whitespace-nowrap"
+                          >
+                            취소
+                          </button>
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              const title = String(manualExpenseForm.title || "").trim();
+                              const amount = Number(manualExpenseForm.amount) || 0;
+                              if (!title || amount <= 0) {
+                                showToast("⚠️ 지출 내용과 금액(0원 초과)을 입력해 주세요.");
+                                return;
+                              }
+                              if (!user || !db) {
+                                showToast("⚠️ 서버 연결 후 저장할 수 있습니다.");
+                                return;
+                              }
+                              const expId = `exp-man-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+                              const expDate = manualExpenseForm.date || getTodayStr();
+                              beginWrite();
+                              try {
+                                await setDoc(getDocRef("family_expenses_v4", expId), {
+                                  id: expId,
+                                  title,
+                                  amount,
+                                  category: manualExpenseForm.category || "기타",
+                                  date: expDate,
+                                  source: "manual",
+                                  createdAtMs: Date.now()
+                                });
+                                recordActivity("월간·식비", "지출등록", `${title} (${amount.toLocaleString()}원)`, { targetSubTab: "expense" });
+                                setIsManualExpenseOpen(false);
+                                showToast(`💰 '${title}' ${amount.toLocaleString()}원을 원장에 기록했습니다!`);
+                              } catch (e) {
+                                setSyncErrorMsg(e?.message || "지출 저장 오류");
+                                showToast("❌ 지출 저장에 실패했습니다.");
+                              } finally {
+                                endWrite();
+                              }
+                            }}
+                            className="px-3 py-1 rounded-lg bg-[#3F624D] hover:bg-[#324F3E] text-white text-[11px] font-extrabold whitespace-nowrap"
+                          >
+                            저장
+                          </button>
+                        </div>
+                      </div>
+                    )}
                     {monthlyExpenseSummary.ledgerItems.length > 0 && (
                       <div className="space-y-1.5">
                         <div className="relative">
@@ -26056,6 +26250,28 @@ time: "", location: "",
                               </div>
                             </div>
                             <div className="flex items-center gap-1.5 shrink-0">
+                              {exp.source === "manual" && canEditTab("monthly") && String(exp.id || "").startsWith("exp-man-") && (
+                                <button
+                                  type="button"
+                                  onClick={async () => {
+                                    if (!user || !db) return;
+                                    if (!(await askConfirm(`'${exp.title}' (${Number(exp.amount || 0).toLocaleString()}원) 지출 기록을 삭제할까요?`, "삭제"))) return;
+                                    beginWrite();
+                                    try {
+                                      await deleteDoc(getDocRef("family_expenses_v4", exp.id));
+                                      showToast("🗑️ 지출 기록을 삭제했습니다.");
+                                    } catch (e) {
+                                      setSyncErrorMsg(e?.message || "지출 삭제 오류");
+                                    } finally {
+                                      endWrite();
+                                    }
+                                  }}
+                                  className="p-1 rounded-md text-stone-400 hover:text-rose-600 text-[11px] leading-none"
+                                  title="수동 지출 삭제"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              )}
                               {canEditTab("house") && (
                                 <button
                                   type="button"
@@ -28493,6 +28709,19 @@ time: "", location: "",
 
 
                     <div className="flex items-center gap-1 shrink-0">
+                      {!todo.done && canEditTab("alarm") && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setActiveTab("alarm");
+                            openQuickAlarmModal({ presetMin: 60, memo: todo.title });
+                          }}
+                          className="p-1 text-stone-400 hover:text-[#35503C] text-[12px] leading-none"
+                          title="1시간 후 모닝콜·알람 예약"
+                        >
+                          ⏰
+                        </button>
+                      )}
                       {!todo.done && canEditTab("shopping") && (
                         <button
                           type="button"
@@ -32144,7 +32373,7 @@ time: "", location: "",
                         type="button"
                         onClick={async () => {
                           if (!requireEditorAccess()) return;
-                          if (!window.confirm(`다녀온 버킷리스트 ${doneCount}건을 정리할까요?`)) return;
+                          if (!(await askConfirm(`다녀온 버킷리스트 ${doneCount}건을 정리할까요?`)) return;
                           const doneIds = bucketList.filter((b) => b.done).map((b) => b.id);
                           setBucketList((prev) => prev.filter((b) => !b.done));
                           if (selectedBucketMapItem && doneIds.includes(selectedBucketMapItem.id)) {
@@ -35595,8 +35824,8 @@ time: "", location: "",
                                         {canEditTab("pages") && (
                                           <button
                                             type="button"
-                                            onClick={() => {
-                                              if (window.confirm("이 표를 삭제할까요?")) handleDeletePageBlock(currentPage, blk.id);
+                                            onClick={async () => {
+                                              if (await askConfirm("이 표를 삭제할까요?")) handleDeletePageBlock(currentPage, blk.id);
                                             }}
                                             className="text-[11px] text-rose-500 font-extrabold"
                                           >
@@ -35823,8 +36052,8 @@ time: "", location: "",
                                                   {canEditTab("pages") && isTblSel && (
                                                     <button
                                                       type="button"
-                                                      onClick={() => {
-                                                        if (window.confirm("이 표를 삭제할까요?")) handleDeletePageBlock(currentPage, blk.id);
+                                                      onClick={async () => {
+                                                        if (await askConfirm("이 표를 삭제할까요?")) handleDeletePageBlock(currentPage, blk.id);
                                                       }}
                                                       className="text-[11px] text-rose-600 font-extrabold"
                                                     >
@@ -40401,7 +40630,7 @@ time: "", location: "",
           >
             {/* 고정 상단 헤더 */}
             <div className="px-4 sm:px-5 py-1.5 bg-[#FAF8F3] border-b border-stone-200/80 flex items-center justify-between gap-2 shrink-0">
-              <h2 className="text-[14.5px] font-semibold text-stone-900 tracking-tight">전체 메뉴</h2>
+              <h2 className="text-[13.5px] font-black text-stone-900 tracking-tight">전체 메뉴</h2>
               <button
                 type="button"
                 ref={quickFabCloseRef}
@@ -40496,7 +40725,7 @@ time: "", location: "",
                           endDate: "",
                           time: "",
                           location: "",
-                          category: "육아/병원",
+                          category: scheduleCategories[0] || "육아/병원",
                           members: (scheduleMemberFilter === "전체" || scheduleMemberFilter === "공통") ? ["수혁", "아리나", "시목", "시율"] : [scheduleMemberFilter],
                           isAnnual: false,
                           showDday: false,
@@ -40783,8 +41012,8 @@ time: "", location: "",
                 {canEditTab("baby") && (
                   <button
                     type="button"
-                    onClick={() => {
-                      if (!window.confirm("아기꿈나라 링크를 기본 4종(아소리·종이소리·자장가·쉬소리)으로 복원할까요?")) return;
+                    onClick={async () => {
+                      if (!(await askConfirm("아기꿈나라 링크를 기본 4종(아소리·종이소리·자장가·쉬소리)으로 복원할까요?")) return;
                       saveBabyDreamLinksToCloud(INITIAL_BABY_DREAM_LINKS, "🌙 기본 링크 4종으로 복원했습니다!");
                       setEditingDreamLinkId(null);
                     }}
@@ -42700,8 +42929,8 @@ time: "", location: "",
               <div className="flex items-center justify-between gap-2 pt-1 border-t border-stone-100">
                 <button
                   type="button"
-                  onClick={() => {
-                    if (!window.confirm("이 반복 루틴을 삭제할까요?")) return;
+                  onClick={async () => {
+                    if (!(await askConfirm("이 반복 루틴을 삭제할까요?")) return;
                     const targetId = editingRoutineId;
                     handleCancelEditRoutine();
                     handleDeleteRoutine(targetId);
@@ -42780,6 +43009,8 @@ time: "", location: "",
           onManageCategories={canEditTab("schedule") ? () => openCategoryManager("schedule") : undefined}
           schedulePlaces={schedulePlaces}
           onManagePlaces={canEditTab("schedule") ? () => openCategoryManager("schedule_places") : undefined}
+          scheduleQuickTimes={scheduleQuickTimes}
+          onManageQuickTimes={canEditTab("schedule") ? () => openCategoryManager("schedule_quick_times") : undefined}
         />
       )}
 
@@ -42793,9 +43024,6 @@ time: "", location: "",
                 <h3 className="text-[13.5px] font-black text-stone-900">
                   📸 식단표 이미지 AI 고속 스캔 (손글씨·인쇄물)
                 </h3>
-                <p className="text-[12.5px] text-stone-500">
-                  손글씨·인쇄물 식단표를 자동 인식합니다.
-                </p>
               </div>
               <button type="button" onClick={() => setIsDaycareModalOpen(false)}>
                 <X className="w-5 h-5 text-stone-400" />
@@ -43578,13 +43806,13 @@ time: "", location: "",
                     const exclSum = Number(receiptExcludedAmount) || 0;
                     const recTotal = Number(receiptTotalAmount) || 0;
                     if (recTotal === 0) {
-                      const okNoTotal = window.confirm(
+                      const okNoTotal = await askConfirm(
                         `영수증 결제금액이 입력되지 않아 합계 대사가 미완료 상태입니다.\n품목 합계 ${itemsSum.toLocaleString()}원으로 그대로 입고할까요?`
                       );
                       if (!okNoTotal) return;
                     } else if (itemsSum + exclSum !== recTotal) {
                       const diffVal = itemsSum + exclSum - recTotal;
-                      const okDiff = window.confirm(
+                      const okDiff = await askConfirm(
                         `품목 합계+봉투(${(itemsSum + exclSum).toLocaleString()}원)와 영수증 결제금액(${recTotal.toLocaleString()}원)이 ${diffVal > 0 ? `+${diffVal.toLocaleString()}` : diffVal.toLocaleString()}원 차이납니다.\n그래도 입고할까요?`
                       );
                       if (!okDiff) return;
@@ -44137,22 +44365,36 @@ time: "", location: "",
 
 
             <div className="grid grid-cols-2 gap-2">
-              <select
-                value={mealForm.sourceType}
-                onChange={(e) => setMealForm({ ...mealForm, sourceType: e.target.value })}
-                className="px-3 py-2 rounded-xl border border-stone-200 text-[13.5px] font-bold"
-              >
-                <option value="집밥/온가족식">🏠 집밥/온가족식</option>
-                <option value="유아식/이유식">🍼 유아식/이유식</option>
-                <option value="어린이집 급식">🏫 어린이집 급식</option>
-                <option value="외식/배달">🛵 외식/배달</option>
-              </select>
+              <div className="flex items-center gap-1 min-w-0">
+                <select
+                  value={mealForm.sourceType}
+                  onChange={(e) => setMealForm({ ...mealForm, sourceType: e.target.value })}
+                  className="flex-1 min-w-0 px-2.5 py-2 rounded-xl border border-stone-200 text-[13px] font-bold truncate"
+                >
+                  {mealSourceTypes.map((st) => (
+                    <option key={st} value={st}>{st}</option>
+                  ))}
+                  {mealForm.sourceType && !mealSourceTypes.includes(mealForm.sourceType) && (
+                    <option value={mealForm.sourceType}>{mealForm.sourceType}</option>
+                  )}
+                </select>
+                {canEditTab("daily") && (
+                  <button
+                    type="button"
+                    onClick={() => openCategoryManager("meal_source_types")}
+                    className="h-9 px-2 rounded-xl bg-[#EEF3EE] hover:bg-[#dce8de] border border-[#C9D8CC] text-[11px] font-extrabold text-[#35503C] shrink-0"
+                    title="식사 구분 자유 추가·편집"
+                  >
+                    ⚙️
+                  </button>
+                )}
+              </div>
               <input
                 type="number" inputMode="numeric"
                 placeholder="외식/배달 지출액(원)"
                 value={mealForm.cost}
                 onChange={(e) => setMealForm({ ...mealForm, cost: e.target.value })}
-                className="px-3 py-2 rounded-xl border border-stone-200 text-[13.5px] font-bold"
+                className="min-w-0 px-3 py-2 rounded-xl border border-stone-200 text-[13px] font-bold"
               />
             </div>
 
@@ -45255,6 +45497,8 @@ time: "", location: "",
           ai_meal_styles: { title: "✨ AI 식단 스타일", placeholder: "새 식단 스타일 (예: 냉털 15분, 저염·산모식)" },
           ai_meal_targets: { title: "🍽️ AI 식단 대상", placeholder: "새 식단 대상 (예: 손님 초대, 주말 브런치)" },
           routine_time_presets: { title: "⏰ 루틴 시간 프리셋", placeholder: "HH:MM 형식 (예: 06:30, 14:00, 22:30)" },
+          meal_source_types: { title: "🍽️ 식사 구분", placeholder: "새 식사 구분 (예: 반찬가게, 시댁/친정)" },
+          schedule_quick_times: { title: "🕒 일정 빠른 시간", placeholder: "HH:MM 형식 (예: 08:30, 13:00, 19:30)" },
           condolence_cat: { title: "💌 경조사 카테고리", placeholder: "새 경조사 분류 (예: 칠순/팔순, 집들이, 승진)" },
           condolence_group: { title: "👥 경조사 그룹", placeholder: "새 경조사 그룹 (예: 동호회, 대학동기, 거래처)" },
           condolence_pay: { title: "💳 경조사 결제수단", placeholder: "새 결제수단 (예: 카카오페이, 토스, 상품권, 화환)" }
@@ -45313,6 +45557,8 @@ time: "", location: "",
                   { id: "ai_meal_styles", label: "✨ AI스타일", cnt: aiMealStyles.length },
                   { id: "ai_meal_targets", label: "🍽️ AI대상", cnt: aiMealTargets.length },
                   { id: "routine_time_presets", label: "⏰ 루틴시간", cnt: routineTimePresets.length },
+                  { id: "meal_source_types", label: "🍽️ 식사구분", cnt: mealSourceTypes.length },
+                  { id: "schedule_quick_times", label: "🕒 일정시간", cnt: scheduleQuickTimes.length },
                   ...(isSuhyeokAdmin && isCondolenceUnlocked ? [
                     { id: "condolence_cat", label: "💌 경조분류", cnt: condolenceCategories.length },
                     { id: "condolence_group", label: "👥 경조그룹", cnt: condolenceGroups.length },
@@ -54410,8 +54656,8 @@ time: "", location: "",
                 {canEdit ? (
                   <button
                     type="button"
-                    onClick={() => {
-                      if (!window.confirm("이 항목을 표에서 삭제할까요?")) return;
+                    onClick={async () => {
+                      if (!(await askConfirm("이 항목을 표에서 삭제할까요?")) return;
                       handleUpdateTableBlock(activePg, activeTableTaskModal.blockId, (t) => ({
                         ...t,
                         rows: (t.rows || []).filter((r) => r.id !== activeTableTaskModal.rowId)
@@ -54452,6 +54698,45 @@ time: "", location: "",
           </div>
         );
       })()}
+
+      {confirmDialog && (
+        <div
+          className="fixed inset-0 z-[95] bg-black/50 backdrop-blur-[1px] flex items-center justify-center p-4"
+          onClick={() => closeConfirmDialog(false)}
+        >
+          <div
+            role="alertdialog"
+            aria-modal="true"
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-xs bg-white rounded-2xl border border-stone-200 shadow-2xl p-4 space-y-3"
+          >
+            <div className="text-[13.5px] font-black text-stone-900">확인</div>
+            <p className="text-[12.5px] text-stone-700 font-semibold leading-relaxed whitespace-pre-line break-keep">
+              {confirmDialog.message}
+            </p>
+            <div className="flex items-center justify-end gap-1.5 pt-1">
+              <button
+                type="button"
+                onClick={() => closeConfirmDialog(false)}
+                className="px-3 py-1.5 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-[12px] font-extrabold whitespace-nowrap"
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                onClick={() => closeConfirmDialog(true)}
+                className={`px-3 py-1.5 rounded-xl text-white text-[12px] font-extrabold whitespace-nowrap ${
+                  confirmDialog.danger
+                    ? "bg-rose-600 hover:bg-rose-700"
+                    : "bg-[#3F624D] hover:bg-[#324F3E]"
+                }`}
+              >
+                {confirmDialog.confirmLabel || "확인"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <FeatureGuideModal
         isOpen={isGuideModalOpen}
