@@ -1182,7 +1182,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v14.39";
+export const APP_CODE_VERSION = "v14.40";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1270,6 +1270,19 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v14.40",
+    version: "v14.40",
+    date: "2026-11-25",
+    title: "🐛 useCallback 미임포트 빌드오류·JSON 복원 누락 수정 + ❄️ 보관위치·🌡️ 체온 프리셋 자유관리 + 로컬설정 4종 Firebase 이관 + 버튼/표 줄바꿈·겹침 정비",
+    items: [
+      "🐛 치명적 빌드·런타임 오류 및 백업 누락 수정: ① React import에 누락된 useCallback을 추가해 확인 모달(askConfirm/closeConfirmDialog) 런타임 크래시 및 배포 빌드 오류 완전 해소 ② JSON 전체 복원 클라우드 저장(custom_categories_v1)에서 누락되어 있던 식사구분(meal_source_types)·일정 빠른시간(schedule_quick_times) 동기화 복구",
+      "🎛️ 시스템 자유도 확장(전 메뉴 22종+ 통합 관리): 하드코딩되어 있던 냉장고 보관위치(냉장실·메인 냉동실·별도 냉동고·실온·팬트리)와 육아 진료 체온 프리셋(36.8°·37.5°·38.0°·38.5°)을 통합 세부 분류 관리(❄️ 보관위치 · 🌡️ 체온프리셋)로 승격해 추가·수정·삭제·순서변경·기본복원·클라우드 실시간 동기화 지원",
+      "☁️ 로컬 전용 설정 4종 Firebase 이관: 플로팅 타이머·미니배지 드래그 위치(timer_alarms_v1), 수정자 이름 수동 변경(users/{uid}.actorName), 마지막 확인 앱 버전(users/{uid}.lastSeenVersion)을 Firestore에 동기화해 기기 간 일관성 확보",
+      "🔗 메뉴간 연계 및 UX 고도화: 냉장고 보관위치 필터, 육아 진료 체온 프리셋, 월간 식비 수동 지출 분류 옆에 원탭 ⚙️ 편집 버튼 추가 및 세부 분류 모달 상단 탭 영역 스크롤 제한(max-h-24)으로 모바일 화면 겹침·잘림 방지",
+      "✨ 시각적 피로도 최소화·줄바꿈/디자인 통일: 줄바꿈으로 커지던 버튼 12종에 whitespace-nowrap·shrink-0 적용, 설정 모달 버튼 폰트 규격 통일 및 도움말의 구버전 분류 수(14종) 문구 최신화"
+    ]
+  },
   {
     id: "patch-v14.39",
     version: "v14.39",
@@ -7298,6 +7311,7 @@ export const DEFAULT_AI_MEAL_TARGETS = ["온가족 한끼", "부부 (수혁 & �
 export const DEFAULT_ROUTINE_TIME_PRESETS = ["07:30", "09:00", "12:00", "17:30", "20:00", "21:30"];
 export const DEFAULT_MEAL_SOURCE_TYPES = ["집밥/온가족식", "유아식/이유식", "어린이집 급식", "외식/배달"];
 export const DEFAULT_SCHEDULE_QUICK_TIMES = ["09:30", "11:00", "14:00", "16:30", "18:30"];
+export const DEFAULT_BABY_TEMP_PRESETS = ["36.8|정상", "37.5|미열", "38.0|발열", "38.5|고열"];
 
 export const APP_FEATURE_GUIDES = [
   {
@@ -7532,7 +7546,7 @@ export const APP_FEATURE_GUIDES = [
       "로그인 & 승인: Google 또는 이메일로 가입 후 관리자가 승인하면 이용 가능해요. 카톡 등 인앱 브라우저에서는 [크롬으로 열기] 또는 이메일 로그인을 권장해요.",
       "3단계 권한 & 쪽지: 미로그인(보기 전용) · 육아지원군(분류/개별 메뉴별 열람·편집 제어) · 관리자(전체 권한)로 나뉘며, 비관리자는 더보기에서 [관리자에게 쪽지남기기]를 쓸 수 있어요.",
       "🔔 수정 알림 & 스마트 알림: 다른 기기 수정 내역을 실시간 팝업과 상태바 알림으로 받고, 일정·유통기한·루틴·수유 간격·방해금지 시간을 세부 설정해요.",
-      "⚙️ 설정: 세부 분류 통합 관리(14종), 클라우드/JSON 전체 백업·경량 백업·1초 복원, 회원 승인·권한 관리를 할 수 있어요."
+      "⚙️ 설정: 전 메뉴 세부 분류 통합 관리(22종+), 클라우드/JSON 전체·경량 백업 및 1초 복원, 회원 승인·권한 관리를 한곳에서 할 수 있어요."
     ],
     tips: "모바일에서는 뒤로가기 버튼으로 열린 팝업이나 이전 탭을 차례대로 닫을 수 있어요."
   },
