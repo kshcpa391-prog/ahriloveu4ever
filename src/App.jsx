@@ -38,7 +38,15 @@ import {
   ChevronDown,
   Search,
   MoreHorizontal,
-  Copy
+  Copy,
+  HelpCircle,
+  ChefHat,
+  BookOpen,
+  Timer,
+  AlarmClock,
+  TrendingUp,
+  Users,
+  FileText
 } from "lucide-react";
 import {
   onAuthStateChanged,
@@ -185,7 +193,8 @@ import {
   DEFAULT_BABY_DIARY_MOODS,
   DEFAULT_AI_MEAL_STYLES,
   DEFAULT_AI_MEAL_TARGETS,
-  DEFAULT_ROUTINE_TIME_PRESETS
+  DEFAULT_ROUTINE_TIME_PRESETS,
+  APP_FEATURE_GUIDES
 } from "./Constants";
 
 
@@ -3492,6 +3501,276 @@ const computeFridgeProjectedUsage = (fridgeList, mealsList, baseDateStr, addDays
 };
 
 
+
+const FeatureGuideModal = React.memo(({
+  isOpen,
+  onClose,
+  currentTab = "home",
+  isSuhyeokAdmin = false,
+  canViewTab = null,
+  onNavigateTab = null
+}) => {
+  const [searchQuery, setSearchQuery] = useState("");
+  const [expandedIds, setExpandedIds] = useState({});
+
+  useEffect(() => {
+    if (!isOpen) return;
+    setSearchQuery("");
+    const matched = APP_FEATURE_GUIDES.find((g) => Array.isArray(g.tabIds) && g.tabIds.includes(currentTab));
+    if (matched) {
+      setExpandedIds({ [matched.id]: true });
+    } else if (currentTab === "login") {
+      setExpandedIds({ settings: true, home: true });
+    } else {
+      setExpandedIds({ home: true });
+    }
+  }, [isOpen, currentTab]);
+
+  if (!isOpen) return null;
+
+  const q = searchQuery.trim().toLowerCase();
+  const baseGuides = APP_FEATURE_GUIDES.filter((g) => !g.suhyeokOnly || isSuhyeokAdmin);
+  const currentMatched = baseGuides.find((g) => Array.isArray(g.tabIds) && g.tabIds.includes(currentTab));
+
+  const orderedGuides = currentMatched && !q
+    ? [currentMatched, ...baseGuides.filter((g) => g.id !== currentMatched.id)]
+    : baseGuides;
+
+  const filteredGuides = q
+    ? orderedGuides.filter((g) =>
+        [g.title, g.summary, g.tips, ...(g.steps || [])]
+          .filter(Boolean)
+          .some((txt) => String(txt).toLowerCase().includes(q))
+      )
+    : orderedGuides;
+
+  const allExpanded = filteredGuides.length > 0 && filteredGuides.every((g) => expandedIds[g.id]);
+
+  return (
+    <div
+      className="fixed inset-0 z-[80] bg-black/50 backdrop-blur-[1px] flex items-center justify-center p-3"
+      onClick={onClose}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="앱 기능별 사용 가이드"
+        onClick={(e) => e.stopPropagation()}
+        className="w-full max-w-lg max-h-[86vh] bg-white rounded-3xl border border-stone-200 shadow-2xl flex flex-col overflow-hidden"
+      >
+        <div className="px-4 py-3 border-b border-stone-200 bg-[#FAF8F3] flex items-center justify-between gap-2 shrink-0">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="text-[16px]">📘</span>
+            <div className="min-w-0">
+              <h3 className="text-[13.5px] font-black text-stone-900 truncate">
+                혁리나목율♡ 기능별 사용 가이드
+              </h3>
+              <p className="text-[10.5px] text-stone-500 font-bold truncate">
+                {currentMatched
+                  ? `현재 보고 있는 [${currentMatched.title}] 가이드를 맨 위에 띄웠어요`
+                  : "메뉴별 핵심 사용법과 팁을 한눈에 확인해 보세요"}
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-8 h-8 rounded-full bg-white hover:bg-stone-100 border border-stone-200 text-stone-600 flex items-center justify-center shrink-0"
+            aria-label="가이드 닫기"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        <div className="px-3.5 py-2.5 border-b border-stone-100 bg-white space-y-2 shrink-0">
+          <div className="flex items-center gap-1.5">
+            <div className="relative flex-1 min-w-0">
+              <Search className="w-3.5 h-3.5 text-stone-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Escape") {
+                    if (searchQuery) {
+                      e.stopPropagation();
+                      setSearchQuery("");
+                    }
+                  }
+                }}
+                enterKeyHint="search"
+                placeholder="기능·키워드 검색 (예: 영수증, 루틴, 백업, 수유)"
+                className="w-full h-8 pl-8 pr-7 rounded-xl border border-stone-200 bg-stone-50 focus:bg-white text-[12px] font-bold text-stone-800"
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery("")}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-700"
+                  aria-label="검색어 지우기"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                if (allExpanded) {
+                  setExpandedIds({});
+                } else {
+                  const next = {};
+                  filteredGuides.forEach((g) => {
+                    next[g.id] = true;
+                  });
+                  setExpandedIds(next);
+                }
+              }}
+              className="h-8 px-2.5 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-[11px] font-extrabold whitespace-nowrap shrink-0"
+            >
+              {allExpanded ? "모두 접기" : "모두 펼치기"}
+            </button>
+          </div>
+          <div className="flex flex-wrap gap-1">
+            {orderedGuides.map((g) => {
+              const isCur = currentMatched?.id === g.id;
+              const isOpenItem = Boolean(expandedIds[g.id]) || Boolean(q);
+              return (
+                <button
+                  key={`chip-${g.id}`}
+                  type="button"
+                  onClick={() => {
+                    setSearchQuery("");
+                    setExpandedIds((prev) => ({ ...prev, [g.id]: !prev[g.id] }));
+                  }}
+                  className={`px-2 py-0.5 rounded-full text-[10.5px] font-extrabold border whitespace-nowrap transition ${
+                    isCur
+                      ? "bg-[#3F624D] text-white border-[#3F624D]"
+                      : isOpenItem
+                      ? "bg-[#EEF3EE] text-[#35503C] border-[#C9D8CC]"
+                      : "bg-stone-50 text-stone-600 border-stone-200 hover:bg-stone-100"
+                  }`}
+                >
+                  {g.icon} {g.title.split(" ")[0]}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-3 space-y-2 bg-[#FAF8F3]/60">
+          {filteredGuides.length === 0 ? (
+            <div className="py-10 text-center space-y-2">
+              <div className="text-[12.5px] font-bold text-stone-400">
+                검색어와 일치하는 가이드가 없습니다.
+              </div>
+              <button
+                type="button"
+                onClick={() => setSearchQuery("")}
+                className="px-3 py-1.5 rounded-xl bg-white border border-stone-200 text-stone-700 text-[11.5px] font-extrabold"
+              >
+                🔄 검색 초기화
+              </button>
+            </div>
+          ) : (
+            filteredGuides.map((g) => {
+              const isCur = currentMatched?.id === g.id;
+              const isExpanded = Boolean(q) || Boolean(expandedIds[g.id]);
+              const targetTab = Array.isArray(g.tabIds) && g.tabIds.length > 0 ? g.tabIds[0] : null;
+              const canJump = Boolean(
+                onNavigateTab &&
+                targetTab &&
+                targetTab !== currentTab &&
+                (!canViewTab || canViewTab(targetTab))
+              );
+              return (
+                <div
+                  key={g.id}
+                  className={`rounded-2xl border transition overflow-hidden ${
+                    isCur
+                      ? "bg-white border-[#3F624D] shadow-sm"
+                      : "bg-white border-stone-200"
+                  }`}
+                >
+                  <button
+                    type="button"
+                    onClick={() => setExpandedIds((prev) => ({ ...prev, [g.id]: !prev[g.id] }))}
+                    className="w-full px-3 py-2.5 flex items-center justify-between gap-2 text-left hover:bg-stone-50/70 transition"
+                  >
+                    <div className="flex items-start gap-2 min-w-0 flex-1">
+                      <span className="text-[16px] shrink-0 mt-0.5">{g.icon}</span>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="text-[13px] font-black text-stone-900">
+                            {g.title}
+                          </span>
+                          {isCur && (
+                            <span className="px-1.5 py-0.5 rounded-md bg-[#3F624D] text-white text-[9.5px] font-black whitespace-nowrap">
+                              현재 화면
+                            </span>
+                          )}
+                          <span className="px-1.5 py-0.5 rounded-md bg-stone-100 text-stone-600 text-[9.5px] font-bold whitespace-nowrap">
+                            {g.audience}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-stone-500 font-semibold mt-0.5 leading-snug">
+                          {g.summary}
+                        </p>
+                      </div>
+                    </div>
+                    <ChevronDown
+                      className={`w-4 h-4 text-stone-400 shrink-0 transition-transform ${
+                        isExpanded ? "rotate-180 text-[#3F624D]" : ""
+                      }`}
+                    />
+                  </button>
+
+                  {isExpanded && (
+                    <div className="px-3 pb-3 pt-1.5 border-t border-stone-100 space-y-2">
+                      <ul className="space-y-1.5">
+                        {(g.steps || []).map((st, sIdx) => (
+                          <li
+                            key={`${g.id}-st-${sIdx}`}
+                            className="flex items-start gap-1.5 text-[11.5px] text-stone-700 leading-relaxed font-medium"
+                          >
+                            <span className="w-4 h-4 rounded-full bg-[#EEF3EE] text-[#35503C] text-[10px] font-black flex items-center justify-center shrink-0 mt-0.5">
+                              {sIdx + 1}
+                            </span>
+                            <span className="flex-1 min-w-0 break-keep">{st}</span>
+                          </li>
+                        ))}
+                      </ul>
+                      {g.tips && (
+                        <div className="px-2.5 py-2 rounded-xl bg-[#EEF3EE]/75 border border-[#C9D8CC] text-[11px] text-[#35503C] font-bold leading-relaxed">
+                          💡 {g.tips}
+                        </div>
+                      )}
+                      {canJump && (
+                        <div className="flex justify-end pt-0.5">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              onNavigateTab(targetTab);
+                              onClose();
+                            }}
+                            className="px-2.5 py-1 rounded-xl bg-[#3F624D] hover:bg-[#324F3E] text-white text-[11px] font-extrabold whitespace-nowrap"
+                          >
+                            해당 메뉴로 이동 →
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })
+          )}
+        </div>
+      </div>
+    </div>
+  );
+});
+
 function MainApp() {
   const [user, setUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
@@ -3594,6 +3873,44 @@ function MainApp() {
   });
   const [fridgeConflictData, setFridgeConflictData] = useState(null);
   const [isQuickFabOpen, setIsQuickFabOpen] = useState(false);
+  const quickFabBtnRef = useRef(null);
+  const quickFabSheetRef = useRef(null);
+  const quickFabCloseRef = useRef(null);
+  const closeQuickFabSimple = () => {
+    setIsQuickFabOpen(false);
+    setTimeout(() => quickFabBtnRef.current?.focus(), 0);
+  };
+  useEffect(() => {
+    if (!isQuickFabOpen) return;
+    const t = setTimeout(() => quickFabCloseRef.current?.focus(), 20);
+    const onKey = (e) => {
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        closeQuickFabSimple();
+        return;
+      }
+      if (e.key === "Tab" && quickFabSheetRef.current) {
+        const focusables = quickFabSheetRef.current.querySelectorAll(
+          'button:not([disabled]), a[href], input:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        );
+        if (focusables.length === 0) return;
+        const first = focusables[0];
+        const last = focusables[focusables.length - 1];
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => {
+      clearTimeout(t);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [isQuickFabOpen]);
   useEffect(() => {
     setIsQuickFabOpen(false);
     if (activeTab !== "home") setIsHomeEditMode(false);
@@ -3913,6 +4230,7 @@ function MainApp() {
   // 패치노트 기록 및 모달 상태
   const [patchNotes, setPatchNotes] = useState(INITIAL_PATCH_NOTES);
   const [isPatchModalOpen, setIsPatchModalOpen] = useState(false);
+  const [isGuideModalOpen, setIsGuideModalOpen] = useState(false);
   const [patchSearchQuery, setPatchSearchQuery] = useState("");
   const [patchShowAll, setPatchShowAll] = useState(false);
   const [isMoreNavOpen, setIsMoreNavOpen] = useState(false);
@@ -6259,6 +6577,7 @@ function MainApp() {
   const [scannedReceiptItems, setScannedReceiptItems] = useState([]);
   const [receiptErrorMsg, setReceiptErrorMsg] = useState("");
   const receiptFileInputRef = useRef(null);
+  const receiptCameraInputRef = useRef(null);
 
 
   // 설정 모달
@@ -12993,6 +13312,7 @@ ${validText}
       await runReceiptOcrWithImagePart(imgPart);
     } finally {
       if (receiptFileInputRef.current) receiptFileInputRef.current.value = "";
+      if (receiptCameraInputRef.current) receiptCameraInputRef.current.value = "";
     }
   };
 
@@ -20222,6 +20542,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
         setTaskModalDraft(null);
         setIsDreamLinksModalOpen(false);
         setIsPatchModalOpen(false);
+        setIsGuideModalOpen(false);
         setIsBucketModalOpen(false);
         setIsHouseModalOpen(false);
         setIsDiaryFormatOpen(false);
@@ -20329,6 +20650,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
     isShoppingPhotoModalOpen ||
     isInventoryExportOpen ||
     isPatchModalOpen ||
+    isGuideModalOpen ||
     isSettingsOpen ||
     isRoutineModalOpen ||
     isActivityModalOpen ||
@@ -20391,6 +20713,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
       setZoomedRecipePhoto(null);
       setIsInventoryExportOpen(false);
       setIsPatchModalOpen(false);
+      setIsGuideModalOpen(false);
       setIsSettingsOpen(false);
       setIsRoutineModalOpen(false);
       setIsActivityModalOpen(false);
@@ -21122,10 +21445,26 @@ ${item.memo}` : `${item.title} 다녀옴!`,
             </button>
           </form>
 
-          <div className="pt-1 border-t border-stone-100 text-center text-[10px] text-stone-400 font-bold">
-            <a href="tel:01059147933" className="underline hover:text-stone-700">관리자 연락처 : 01059147933</a>
+          <div className="pt-1 border-t border-stone-100 space-y-1.5 text-center">
+            <button
+              type="button"
+              onClick={() => setIsGuideModalOpen(true)}
+              className="w-full h-8 px-3 rounded-xl bg-[#EEF3EE] hover:bg-[#DFE9E0] border border-[#C9D8CC] text-[#35503C] text-[11px] font-extrabold flex items-center justify-center gap-1.5 whitespace-nowrap transition"
+            >
+              <HelpCircle className="w-3.5 h-3.5 shrink-0" />
+              <span>앱 기능별 사용 가이드 보기</span>
+            </button>
+            <div className="text-[10px] text-stone-400 font-bold">
+              <a href="tel:01059147933" className="underline hover:text-stone-700">관리자 연락처 : 01059147933</a>
+            </div>
           </div>
         </div>
+        <FeatureGuideModal
+          isOpen={isGuideModalOpen}
+          onClose={() => setIsGuideModalOpen(false)}
+          currentTab="login"
+          isSuhyeokAdmin={false}
+        />
       </div>
     );
   }
@@ -21628,6 +21967,15 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                 )}
               </button>
             )}
+            <button
+              type="button"
+              onClick={() => setIsGuideModalOpen(true)}
+              className="relative w-8 h-8 rounded-full hover:bg-stone-100 text-stone-600 hover:text-stone-900 flex items-center justify-center shrink-0"
+              title="기능별 사용 가이드"
+              aria-label="기능별 사용 가이드"
+            >
+              <HelpCircle className="w-3.5 h-3.5" />
+            </button>
             <button
               type="button"
               onClick={() => setIsSettingsOpen(true)}
@@ -40036,296 +40384,354 @@ time: "", location: "",
         </div>
       )}
 
-      {/* 스마트 빠른 등록 플로팅 메뉴 & FAB */}
+      {/* 전체 메뉴 바텀시트 (빠른 실행) & FAB */}
       {isQuickFabOpen && (
-        <>
+        <div
+          className="fixed inset-0 bg-black/40 backdrop-blur-[1px] z-[60] flex items-end justify-center"
+          onClick={closeQuickFabSimple}
+        >
           <div
-            onClick={() => setIsQuickFabOpen(false)}
-            className="fixed inset-0 bg-black/25 z-30"
-            aria-hidden="true"
-          />
-          <div
-            style={{ bottom: "calc(7.4rem + env(safe-area-inset-bottom))" }}
-            className="fixed inset-x-2 mx-auto z-40 w-[calc(100vw-16px)] max-w-[460px] max-h-[86vh] overflow-y-auto bg-white/95 backdrop-blur border border-stone-200 rounded-3xl shadow-2xl p-3 space-y-2"
+            ref={quickFabSheetRef}
+            role="dialog"
+            aria-modal="true"
+            aria-label="전체 메뉴"
+            style={{ maxHeight: "88dvh" }}
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-[460px] bg-[#FAF8F3] rounded-t-3xl shadow-2xl border-t border-stone-200 flex flex-col overflow-hidden"
           >
-            {[
-              {
-                group: "🍽️ 식단 · 살림",
-                items: [
-                  {
-                    tab: "daily",
-                    icon: "🍽️",
-                    label: "식단 기록",
-                    onClick: () => {
-                      const h = new Date().getHours();
-                      const smartSlot =
-                        h >= 5 && h < 10 ? "아침" : h >= 10 && h < 14 ? "점심" : h >= 14 && h < 17 ? "오후간식" : h >= 17 && h < 21 ? "저녁" : "야식";
-                      setEditingMeal(null);
-                      setMealForm({
-                        date: activeTab === "home" ? getTodayStr() : selectedDate,
-                        slot: smartSlot,
-                        menu: "",
-                        members: selectedMember === "전체" ? ["수혁", "아리나"] : [selectedMember],
-                        ingredients: [],
-                        note: "",
-                        sourceType: "집밥/온가족식",
-                        cost: "",
-                        mealStatus: "recorded"
-                      });
-                      setIsMealModalOpen(true);
-                    }
-                  },
-                  { tab: "fridge", icon: "❄️", label: "냉장고", onClick: () => openAddFridgeModal() },
-                  {
-                    tab: "shopping",
-                    icon: "🛒",
-                    label: "장보기",
-                    onClick: () => {
-                      setActiveTab("shopping");
-                      setTimeout(() => document.getElementById("shopping-item-input")?.focus(), 180);
-                    }
-                  },
-                  { tab: "fridge", icon: "🧾", label: "영수증", onClick: () => setIsReceiptModalOpen(true) },
-                  { tab: "recipes", icon: "🍳", label: "레시피", onClick: () => openNewRecipeModal() },
-                  {
-                    tab: "home",
-                    icon: "⏱️",
-                    label: "스톱워치",
-                    onClick: () =>
-                      setKitchenTimer((p) => ({
-                        ...p,
-                        open: true,
-                        mode: "stopwatch",
-                        label: "스톱워치"
-                      }))
-                  },
-                  {
-                    tab: "alarm",
-                    icon: "⏰",
-                    label: "모닝콜·알람",
-                    onClick: () => {
-                      setActiveTab("alarm");
-                      setAlarmSheetMode("picker");
-                    }
-                  }
-                ]
-              },
-              {
-                group: "🗓️ 일정 · 육아 · 공지",
-                items: [
-                  {
-                    tab: "schedule",
-                    icon: "🗓️",
-                    label: "일정",
-                    onClick: () => {
-                      setEditingSchedule(null);
-                      setScheduleForm({
-                        title: "",
-                        date: scheduleSelectedDate || getTodayStr(),
-                        endDate: "",
-                        time: "",
-                        location: "",
-                        category: "육아/병원",
-                        members: (scheduleMemberFilter === "전체" || scheduleMemberFilter === "공통") ? ["수혁", "아리나", "시목", "시율"] : [scheduleMemberFilter],
-                        isAnnual: false,
-                        showDday: false,
-                        hasOriginYear: false,
-                        memo: "",
-                            attachments: []
-                          });
-                      setIsScheduleModalOpen(true);
-                    }
-                  },
-                  ...(isAdminUnlocked
-                    ? [
-                        {
-                          tab: "schedule",
-                          icon: "🔒",
-                          label: "내 일정",
-                          onClick: () => openPrivateCalModal(getTodayStr(), null)
+            {/* 고정 상단 헤더 */}
+            <div className="px-4 sm:px-5 py-3 bg-[#FAF8F3] border-b border-stone-200/80 flex items-center justify-between gap-2 shrink-0">
+              <h2 className="text-[15px] font-semibold text-stone-900 tracking-tight">전체 메뉴</h2>
+              <button
+                type="button"
+                ref={quickFabCloseRef}
+                onClick={closeQuickFabSimple}
+                className="min-w-[44px] min-h-[44px] -mr-2 rounded-full hover:bg-[#EEF3EE] active:bg-[#DFE9E0] text-stone-600 hover:text-[#35503C] flex items-center justify-center transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3F624D]"
+                aria-label="전체 메뉴 닫기"
+                title="닫기"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* 스크롤 가능한 메뉴 본문 */}
+            <div
+              style={{ paddingBottom: "calc(1.25rem + env(safe-area-inset-bottom))" }}
+              className="flex-1 overflow-y-auto px-4 sm:px-5 pt-4 space-y-5"
+            >
+              {[
+                {
+                  id: "food_home",
+                  group: "식단·살림",
+                  headerAction: canEditTab("daily")
+                    ? {
+                        label: "식단 내보내기",
+                        icon: Upload,
+                        onClick: () => {
+                          setExportScope("all");
+                          setIsInventoryExportOpen(true);
                         }
-                      ]
-                    : []),
-                  {
-                    tab: "schedule",
-                    icon: "✅",
-                    label: "할 일",
-                    onClick: () => {
-                      setEditingSchedule(null);
-                      setScheduleForm({
-                        title: "",
-                        date: getTodayStr(),
-                        endDate: "",
-                        time: "",
-                        location: "",
-                        category: "할일(To-Do)",
-                        members: (scheduleMemberFilter === "전체" || scheduleMemberFilter === "공통") ? ["수혁", "아리나", "시목", "시율"] : [scheduleMemberFilter],
-                        isAnnual: false,
-                        showDday: false,
-                        hasOriginYear: false,
-                        memo: "",
-                            attachments: []
-                          });
-                      setIsScheduleModalOpen(true);
+                      }
+                    : null,
+                  items: [
+                    {
+                      tab: "daily",
+                      Icon: Utensils,
+                      label: "식단 기록",
+                      onClick: () => {
+                        const h = new Date().getHours();
+                        const smartSlot =
+                          h >= 5 && h < 10 ? "아침" : h >= 10 && h < 14 ? "점심" : h >= 14 && h < 17 ? "오후간식" : h >= 17 && h < 21 ? "저녁" : "야식";
+                        setEditingMeal(null);
+                        setMealForm({
+                          date: activeTab === "home" ? getTodayStr() : selectedDate,
+                          slot: smartSlot,
+                          menu: "",
+                          members: selectedMember === "전체" ? ["수혁", "아리나"] : [selectedMember],
+                          ingredients: [],
+                          note: "",
+                          sourceType: "집밥/온가족식",
+                          cost: "",
+                          mealStatus: "recorded"
+                        });
+                        setIsMealModalOpen(true);
+                      }
+                    },
+                    { tab: "fridge", Icon: Package, label: "냉장고", onClick: () => openAddFridgeModal() },
+                    {
+                      tab: "shopping",
+                      Icon: ShoppingCart,
+                      label: "장보기",
+                      onClick: () => {
+                        setActiveTab("shopping");
+                        setTimeout(() => document.getElementById("shopping-item-input")?.focus(), 180);
+                      }
+                    },
+                    { tab: "fridge", Icon: Receipt, label: "영수증", onClick: () => setIsReceiptModalOpen(true) },
+                    { tab: "recipes", Icon: ChefHat, label: "레시피", onClick: () => openNewRecipeModal() },
+                    {
+                      tab: "house",
+                      Icon: Home,
+                      label: "살림수첩",
+                      onClick: () => {
+                        setActiveTab("house");
+                        openHouseModal(houseSubTab, null);
+                      }
                     }
-                  },
-                  { tab: "schedule", icon: "🔄", label: "루틴", onClick: () => openNewRoutineModal() },
-                  {
-                    tab: "baby",
-                    adminOnly: true,
-                    icon: "📖",
-                    label: "육아일기",
-                    onClick: () => {
-                      setEditingDiaryEntry(null);
-                      setDiaryForm({ date: getTodayStr(), mood: "😊 행복", title: "", content: "", contentHtml: "", photoUrl: "", photos: [], childIds: [selectedChildId], textStyle: { ...DEFAULT_DIARY_TEXT_STYLE } }); diarySavedRangeRef.current = null; setHasDiarySelection(false); setDiaryEditorSyncTick((t) => t + 1);
-                      setActiveTab("baby");
-                      setBabySubTab("diary");
-                      window.scrollTo({ top: 0, behavior: "instant" });
+                  ]
+                },
+                {
+                  id: "schedule_life",
+                  group: "일정·생활",
+                  items: [
+                    {
+                      tab: "schedule",
+                      Icon: CalendarDays,
+                      label: "일정",
+                      onClick: () => {
+                        setEditingSchedule(null);
+                        setScheduleForm({
+                          title: "",
+                          date: scheduleSelectedDate || getTodayStr(),
+                          endDate: "",
+                          time: "",
+                          location: "",
+                          category: "육아/병원",
+                          members: (scheduleMemberFilter === "전체" || scheduleMemberFilter === "공통") ? ["수혁", "아리나", "시목", "시율"] : [scheduleMemberFilter],
+                          isAnnual: false,
+                          showDday: false,
+                          hasOriginYear: false,
+                          memo: "",
+                          attachments: []
+                        });
+                        setIsScheduleModalOpen(true);
+                      }
+                    },
+                    ...(isAdminUnlocked
+                      ? [
+                          {
+                            tab: "schedule",
+                            Icon: Lock,
+                            label: "내 일정",
+                            onClick: () => openPrivateCalModal(getTodayStr(), null)
+                          }
+                        ]
+                      : []),
+                    {
+                      tab: "schedule",
+                      Icon: CheckCircle2,
+                      label: "할 일",
+                      onClick: () => {
+                        setEditingSchedule(null);
+                        setScheduleForm({
+                          title: "",
+                          date: getTodayStr(),
+                          endDate: "",
+                          time: "",
+                          location: "",
+                          category: "할일(To-Do)",
+                          members: (scheduleMemberFilter === "전체" || scheduleMemberFilter === "공통") ? ["수혁", "아리나", "시목", "시율"] : [scheduleMemberFilter],
+                          isAnnual: false,
+                          showDday: false,
+                          hasOriginYear: false,
+                          memo: "",
+                          attachments: []
+                        });
+                        setIsScheduleModalOpen(true);
+                      }
+                    },
+                    { tab: "schedule", Icon: RefreshCw, label: "루틴", onClick: () => openNewRoutineModal() },
+                    {
+                      tab: "home",
+                      Icon: Timer,
+                      label: "스톱워치",
+                      onClick: () =>
+                        setKitchenTimer((p) => ({
+                          ...p,
+                          open: true,
+                          mode: "stopwatch",
+                          label: "스톱워치"
+                        }))
+                    },
+                    {
+                      tab: "alarm",
+                      Icon: AlarmClock,
+                      label: "모닝콜·알람",
+                      onClick: () => {
+                        setActiveTab("alarm");
+                        setAlarmSheetMode("picker");
+                      }
                     }
-                  },
-                  {
-                    tab: "baby",
-                    icon: "📏",
-                    label: "성장기록",
-                    onClick: () => {
-                      setActiveTab("baby");
-                      setBabySubTab("growth");
-                      setTimeout(() => document.getElementById("baby-growth-height-input")?.focus(), 200);
+                  ]
+                },
+                {
+                  id: "baby_family",
+                  group: "육아·가족",
+                  items: [
+                    {
+                      tab: "baby",
+                      adminOnly: true,
+                      Icon: BookOpen,
+                      label: "육아일기",
+                      onClick: () => {
+                        setEditingDiaryEntry(null);
+                        setDiaryForm({ date: getTodayStr(), mood: "😊 행복", title: "", content: "", contentHtml: "", photoUrl: "", photos: [], childIds: [selectedChildId], textStyle: { ...DEFAULT_DIARY_TEXT_STYLE } });
+                        diarySavedRangeRef.current = null;
+                        setHasDiarySelection(false);
+                        setDiaryEditorSyncTick((t) => t + 1);
+                        setActiveTab("baby");
+                        setBabySubTab("diary");
+                        window.scrollTo({ top: 0, behavior: "instant" });
+                      }
+                    },
+                    {
+                      tab: "baby",
+                      Icon: TrendingUp,
+                      label: "성장기록",
+                      onClick: () => {
+                        setActiveTab("baby");
+                        setBabySubTab("growth");
+                        setTimeout(() => document.getElementById("baby-growth-height-input")?.focus(), 200);
+                      }
+                    },
+                    {
+                      tab: "notices",
+                      Icon: Pin,
+                      label: "가족공지",
+                      onClick: () => {
+                        setEditingNotice(null);
+                        setNoticeForm({
+                          title: "",
+                          content: "",
+                          category: noticeCategories.includes("육아/아이들") ? "육아/아이들" : (noticeCategories[0] || "일반"),
+                          author: actorName || "수혁",
+                          pinned: true
+                        });
+                        setIsNoticeModalOpen(true);
+                      }
+                    },
+                    {
+                      tab: "baby",
+                      Icon: Users,
+                      label: "인수인계",
+                      onClick: () => {
+                        if (!handoverDate || handoverDate < getTodayStr()) setHandoverDate(getTodayStr());
+                        setHandoverModalTab("config");
+                        setIsHandoverModalOpen(true);
+                      }
+                    },
+                    {
+                      tab: "pages",
+                      Icon: FileText,
+                      label: "공유노트",
+                      onClick: () => {
+                        setActiveTab("pages");
+                        openCreatePageModal(null);
+                      }
+                    },
+                    {
+                      tab: "bucket",
+                      Icon: Star,
+                      label: "버킷리스트",
+                      onClick: () => {
+                        setActiveTab("bucket");
+                        openBucketAddModal(null);
+                      }
                     }
-                  },
-                  {
-                    tab: "notices",
-                    icon: "📌",
-                    label: "가족공지",
-                    onClick: () => {
-                      setEditingNotice(null);
-                      setNoticeForm({
-                        title: "",
-                        content: "",
-                        category: noticeCategories.includes("육아/아이들") ? "육아/아이들" : (noticeCategories[0] || "일반"),
-                        author: actorName || "수혁",
-                        pinned: true
-                      });
-                      setIsNoticeModalOpen(true);
-                    }
-                  }
-                ]
-              },
-              {
-                group: "🗂️ 노트 · 버킷 · 소통",
-                items: [
-                  {
-                    tab: "baby",
-                    icon: "🤝",
-                    label: "인수인계",
-                    onClick: () => {
-                      if (!handoverDate || handoverDate < getTodayStr()) setHandoverDate(getTodayStr());
-                      setHandoverModalTab("config");
-                      setIsHandoverModalOpen(true);
-                    }
-                  },
-                  {
-                    tab: "pages",
-                    icon: "🗂️",
-                    label: "공유노트",
-                    onClick: () => {
-                      setActiveTab("pages");
-                      openCreatePageModal(null);
-                    }
-                  },
-                  {
-                    tab: "bucket",
-                    icon: "🌟",
-                    label: "버킷리스트",
-                    onClick: () => {
-                      setActiveTab("bucket");
-                      openBucketAddModal(null);
-                    }
-                  },
-                  {
-                    tab: "house",
-                    icon: "🏠",
-                    label: "살림수첩",
-                    onClick: () => {
-                      setActiveTab("house");
-                      openHouseModal(houseSubTab, null);
-                    }
-                  },
-                  {
-                    tab: "daily",
-                    icon: "📤",
-                    label: "식단내보내기",
-                    onClick: () => {
-                      setExportScope("all");
-                      setIsInventoryExportOpen(true);
-                    }
-                  }
-                ]
-              }
-            ]
-              .map((g) => ({
-                ...g,
-                items: g.items.filter((act) => canEditTab(act.tab) && (!act.adminOnly || isAdminUnlocked))
-              }))
-              .filter((g) => g.items.length > 0)
-              .map((g) => (
-                <div key={g.group} className="space-y-1">
-                  <div className="text-[11.5px] font-extrabold text-stone-500 px-0.5 leading-none">{g.group}</div>
-                  <div className="grid grid-cols-4 gap-1.5">
-                    {g.items.map((act) => (
-                      <button
-                        key={act.label}
-                        type="button"
-                        onClick={() => {
-                          setIsQuickFabOpen(false);
-                          act.onClick();
-                        }}
-                        className="h-[50px] px-1 rounded-xl bg-[#FAF8F3] hover:bg-[#EEF3EE] border border-stone-200/90 text-stone-900 flex flex-col items-center justify-center gap-1 transition active:scale-95 min-w-0 shadow-sm"
-                      >
-                        <span className="text-[20px] leading-none">{act.icon}</span>
-                        <span className="text-[11px] font-extrabold whitespace-nowrap truncate max-w-full leading-none">{act.label}</span>
-                      </button>
-                    ))}
-                  </div>
+                  ]
+                }
+              ]
+                .map((g) => ({
+                  ...g,
+                  items: g.items.filter((act) => canEditTab(act.tab) && (!act.adminOnly || isAdminUnlocked))
+                }))
+                .filter((g) => g.items.length > 0 || g.headerAction)
+                .map((g) => {
+                  const HeaderActionIcon = g.headerAction?.icon;
+                  return (
+                    <section key={g.id} className="space-y-2">
+                      <div className="flex items-center justify-between gap-2 min-h-[32px]">
+                        <h3 className="text-[14.5px] font-semibold text-stone-900 leading-tight">{g.group}</h3>
+                        {g.headerAction && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setIsQuickFabOpen(false);
+                              g.headerAction.onClick();
+                            }}
+                            className="min-h-[44px] -my-1.5 px-2.5 rounded-xl text-[12.5px] font-semibold text-[#35503C] hover:bg-[#EEF3EE] active:bg-[#DFE9E0] flex items-center gap-1.5 shrink-0 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3F624D]"
+                          >
+                            {HeaderActionIcon && <HeaderActionIcon className="w-3.5 h-3.5 text-[#3F624D] shrink-0" strokeWidth={2} />}
+                            <span>{g.headerAction.label}</span>
+                          </button>
+                        )}
+                      </div>
+                      <div className="grid grid-cols-3 max-[339px]:grid-cols-2 gap-1.5">
+                        {g.items.map((act) => {
+                          const ItemIcon = act.Icon;
+                          return (
+                            <button
+                              key={act.label}
+                              type="button"
+                              onClick={() => {
+                                setIsQuickFabOpen(false);
+                                act.onClick();
+                              }}
+                              className="min-h-[68px] py-2.5 px-1.5 rounded-2xl hover:bg-[#EEF3EE] active:bg-[#DFE9E0] active:scale-[0.98] flex flex-col items-center justify-center gap-1.5 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3F624D] min-w-0"
+                            >
+                              <ItemIcon className="w-6 h-6 text-[#3F624D] shrink-0" strokeWidth={1.85} />
+                              <span className="text-[14px] font-medium text-stone-800 text-center leading-tight break-keep">
+                                {act.label}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </section>
+                  );
+                })}
+
+              {/* 아기꿈나라 (은은한 배경 그룹 + 2열 × 2행) */}
+              <section className="rounded-2xl bg-[#EEF3EE]/60 border border-[#C9D8CC]/70 p-3.5 space-y-2.5">
+                <div className="flex items-center justify-between gap-2">
+                  <h3 className="text-[14.5px] font-semibold text-stone-900 leading-tight">아기꿈나라</h3>
+                  {canEditTab("baby") && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsQuickFabOpen(false);
+                        setEditingDreamLinkId(null);
+                        setDreamLinkDraft({ label: "", icon: "🎵", url: "" });
+                        setIsDreamLinksModalOpen(true);
+                      }}
+                      className="min-h-[44px] -my-2 px-2.5 rounded-xl text-[12.5px] font-semibold text-[#35503C] hover:bg-white/80 active:bg-white flex items-center gap-1 shrink-0 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3F624D]"
+                    >
+                      <Settings className="w-3.5 h-3.5 text-[#3F624D] shrink-0" strokeWidth={2} />
+                      <span>링크관리</span>
+                    </button>
+                  )}
                 </div>
-              ))}
-            {/* 🌙 아기꿈나라 유튜브 바로 실행 */}
-            <div className="space-y-1 pt-1.5 border-t border-stone-100">
-              <div className="flex items-center justify-between px-0.5">
-                <span className="text-[11.5px] font-extrabold text-stone-500 leading-none">🌙 아기꿈나라</span>
-                {canEditTab("baby") && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsQuickFabOpen(false);
-                      setEditingDreamLinkId(null);
-                      setDreamLinkDraft({ label: "", icon: "🎵", url: "" });
-                      setIsDreamLinksModalOpen(true);
-                    }}
-                    className="text-[11px] font-extrabold text-stone-500 hover:text-stone-800 whitespace-nowrap leading-none"
-                  >
-                    ⚙️ 링크관리
-                  </button>
-                )}
-              </div>
-              <div className="grid grid-cols-4 gap-1.5">
-                {babyDreamLinks.map((dl) => (
-                  <a
-                    key={dl.id}
-                    href={normalizeDreamUrl(dl.url)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    onClick={() => setIsQuickFabOpen(false)}
-                    className="h-[50px] px-1 rounded-xl bg-[#FAF8F3] hover:bg-[#EEF3EE] border border-stone-200/90 text-stone-900 flex flex-col items-center justify-center gap-1 transition active:scale-95 min-w-0 shadow-sm"
-                  >
-                    <span className="text-[20px] leading-none">{dl.icon || "🎵"}</span>
-                    <span className="text-[11px] font-extrabold whitespace-nowrap truncate max-w-full leading-none">{dl.label}</span>
-                  </a>
-                ))}
-              </div>
+                <div className="grid grid-cols-2 gap-2">
+                  {babyDreamLinks.map((dl) => (
+                    <a
+                      key={dl.id}
+                      href={normalizeDreamUrl(dl.url)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={() => setIsQuickFabOpen(false)}
+                      className="min-h-[48px] px-3 py-2 rounded-xl bg-white/85 hover:bg-white active:bg-[#DFE9E0]/60 flex items-center justify-center gap-2 transition active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3F624D] min-w-0"
+                    >
+                      <span className="text-[16px] leading-none opacity-80 shrink-0">{dl.icon || "🎵"}</span>
+                      <span className="text-[14px] font-medium text-stone-800 leading-tight break-keep">
+                        {dl.label}
+                      </span>
+                    </a>
+                  ))}
+                </div>
+              </section>
             </div>
           </div>
-        </>
+        </div>
       )}
 
 
@@ -40342,16 +40748,16 @@ time: "", location: "",
         </button>
       )}
 
-      {isEditorUnlocked && !isPageVisualEditMode && !isNoteBodyFocused && !isPagePasteModalOpen && !activeTableTaskModal && !editingBlockId && !(activeTab === "bucket" && bucketViewMode === "map") && activeTab !== "condolence" && activeTab !== "alarm" && (
+      {isEditorUnlocked && !isQuickFabOpen && !isPageVisualEditMode && !isNoteBodyFocused && !isPagePasteModalOpen && !activeTableTaskModal && !editingBlockId && !(activeTab === "bucket" && bucketViewMode === "map") && activeTab !== "condolence" && activeTab !== "alarm" && (
         <button
+          ref={quickFabBtnRef}
           type="button"
-          onClick={() => setIsQuickFabOpen((v) => !v)}
+          onClick={() => setIsQuickFabOpen(true)}
           style={{ bottom: "calc(4.75rem + env(safe-area-inset-bottom))" }}
-          className={`fixed right-4 z-40 w-12 h-12 rounded-full text-white shadow-xl flex items-center justify-center transition active:scale-95 ${
-            isQuickFabOpen ? "bg-rose-600 rotate-45" : "bg-stone-900 hover:bg-amber-600"
-          }`}
-          title="스마트 빠른 등록"
-          aria-label="스마트 빠른 등록"
+          className="fixed right-4 z-40 w-12 h-12 rounded-full bg-stone-900 hover:bg-[#3F624D] text-white shadow-xl flex items-center justify-center transition active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3F624D]"
+          title="전체 메뉴 열기"
+          aria-label="전체 메뉴 열기"
+          aria-expanded={isQuickFabOpen}
         >
           <Plus className="w-6 h-6" />
         </button>
@@ -42872,30 +43278,45 @@ time: "", location: "",
 
 
             <input
+              ref={receiptCameraInputRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              onChange={handleReceiptImageUpload}
+              className="hidden"
+            />
+            <input
               ref={receiptFileInputRef}
               type="file"
               accept="image/*"
               onChange={handleReceiptImageUpload}
               className="hidden"
             />
-            <button
-              type="button"
-              onClick={() => receiptFileInputRef.current?.click()}
-              disabled={isReceiptScanning}
-              className="w-full py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white text-[13.5px] font-black flex items-center justify-center gap-2"
-            >
-              {isReceiptScanning ? (
-                <>
-                  <RefreshCw className="w-4 h-4 animate-spin" />
-                  <span>Gemini Vision AI가 영수증 품목 추출 중...</span>
-                </>
-              ) : (
-                <>
-                  <Upload className="w-4 h-4" />
-                  <span>영수증 사진 촬영 / 캡처 이미지 업로드</span>
-                </>
-              )}
-            </button>
+            {isReceiptScanning ? (
+              <div className="w-full py-3 px-3 rounded-2xl bg-[#3F624D] text-white text-[13px] font-black flex items-center justify-center gap-2">
+                <RefreshCw className="w-4 h-4 animate-spin shrink-0" />
+                <span>AI가 영수증 품목을 분석하는 중...</span>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => receiptCameraInputRef.current?.click()}
+                  className="py-3 px-2.5 rounded-2xl bg-[#3F624D] hover:bg-[#324F3E] text-white text-[13px] font-black flex items-center justify-center gap-1.5 whitespace-nowrap transition active:scale-95"
+                >
+                  <Camera className="w-4 h-4 shrink-0" />
+                  <span>카메라 촬영</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => receiptFileInputRef.current?.click()}
+                  className="py-3 px-2.5 rounded-2xl bg-[#EEF3EE] hover:bg-[#DFE9E0] text-[#35503C] border border-[#C9D8CC] text-[13px] font-black flex items-center justify-center gap-1.5 whitespace-nowrap transition active:scale-95"
+                >
+                  <Upload className="w-4 h-4 shrink-0" />
+                  <span>사진 업로드</span>
+                </button>
+              </div>
+            )}
 
 
             {receiptErrorMsg && (
@@ -54031,6 +54452,15 @@ time: "", location: "",
           </div>
         );
       })()}
+
+      <FeatureGuideModal
+        isOpen={isGuideModalOpen}
+        onClose={() => setIsGuideModalOpen(false)}
+        currentTab={activeTab}
+        isSuhyeokAdmin={isSuhyeokAdmin}
+        canViewTab={canViewTab}
+        onNavigateTab={(tabId) => setActiveTab(tabId)}
+      />
 
     </div>
   );
