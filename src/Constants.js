@@ -1182,7 +1182,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v14.37";
+export const APP_CODE_VERSION = "v14.38";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1200,7 +1200,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-26 10:43";
+export const APP_BUILD_DATE = "2026-11-26 10:53";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1270,6 +1270,16 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v14.38",
+    version: "v14.38",
+    date: "2026-11-26",
+    title: "상단 유틸 바(관리자·이름) 가로 스크롤 제거 & 전체 메뉴 바텀시트 1화면 무스크롤 완결",
+    changes: [
+      "📱 상단 유틸 바 가로 잘림 해소: 연결됨·버전·관리자 배지와 우측 아이콘(편집·알림·가이드·설정) 폭·여백을 최적화해 360px 모바일에서도 '관리자 · 김수혁'이 가로 스크롤 없이 한 번에 표시되도록 개선",
+      "🎯 전체 메뉴 바텀시트 1스크린 완결: 시트 전체 높이를 약 552px(max-h-[92dvh])로 압축해 식단·살림 제목부터 아기꿈나라 4종 버튼까지 스크롤 없이 한눈에 전부 보이도록 조정 (44px 이상 터치 영역 및 과거 패치노트 475건 100% 보존)"
+    ]
+  },
   {
     id: "patch-v14.37",
     version: "v14.37",

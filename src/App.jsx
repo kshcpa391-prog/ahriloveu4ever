@@ -21842,7 +21842,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
         )}
 
 
-        <div className="mb-1 flex items-center justify-between gap-1">
+        <div className="mb-1 flex items-center justify-between gap-0.5">
           <div className="flex items-center gap-1 min-w-0 flex-1 overflow-x-auto no-scrollbar">
             <button
               type="button"
@@ -21858,7 +21858,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                 }
               }}
               title={syncStatus === "connected" ? "서버 연결 정상" : "눌러서 서버 재연결 시도"}
-              className={`inline-flex items-center gap-1 h-7 px-1.5 rounded-full text-[11px] font-medium whitespace-nowrap shrink-0 transition ${
+              className={`inline-flex items-center gap-1 h-6 px-1 rounded-full text-[10.5px] font-medium whitespace-nowrap shrink-0 transition ${
                 syncStatus === "offline" || syncStatus === "error"
                   ? "bg-rose-50 text-rose-700 border border-rose-300 font-semibold cursor-pointer"
                   : syncStatus === "saving" || syncStatus === "connecting"
@@ -21877,9 +21877,9 @@ ${item.memo}` : `${item.title} 다녀옴!`,
               />
               <span>
                 {syncStatus === "offline"
-                  ? "끊김·재시도"
+                  ? "끊김"
                   : syncStatus === "error"
-                  ? "오류·재시도"
+                  ? "오류"
                   : syncStatus === "saving"
                   ? "저장 중"
                   : syncStatus === "connecting"
@@ -21890,7 +21890,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
             <button
               type="button"
               onClick={() => setIsPatchModalOpen(true)}
-              className="h-7 px-2 rounded-full bg-stone-100 hover:bg-stone-200 border border-stone-200 text-stone-700 text-[11px] font-semibold whitespace-nowrap shrink-0 transition"
+              className="h-6 px-1.5 rounded-full bg-stone-100 hover:bg-stone-200 border border-stone-200 text-stone-700 text-[10.5px] font-semibold whitespace-nowrap shrink-0 transition"
               title="앱 버전 및 패치노트 보기"
             >
               {APP_CODE_VERSION}
@@ -21898,7 +21898,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
             <button
               type="button"
               onClick={() => setIsEditorUnlockModalOpen(true)}
-              className={`h-7 px-2 rounded-full border text-[11px] font-semibold whitespace-nowrap shrink-0 transition ${
+              className={`h-6 px-1.5 rounded-full border text-[10.5px] font-semibold whitespace-nowrap shrink-0 transition ${
                 isAdminUnlocked
                   ? "bg-[#EEF3EE] hover:bg-[#DFE9E0] border-[#C9D8CC] text-[#35503C]"
                   : isHelperUnlocked
@@ -21910,7 +21910,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
               {isAdminUnlocked ? `관리자 · ${actorName || "수혁"}` : isHelperUnlocked ? `육아지원군 · ${actorName || "이모님"}` : "보기 전용"}
             </button>
           </div>
-          <div className="flex items-center gap-0.5 shrink-0">
+          <div className="flex items-center gap-0 shrink-0">
             {(kitchenTimer.running || (kitchenTimer.mode === "stopwatch" && (kitchenTimer.elapsedSec > 0 || kitchenTimer.cookStartTimeStr)) || (kitchenTimer.mode === "countdown" && kitchenTimer.remainingSec > 0)) && (() => {
               const dSec = kitchenTimer.mode === "stopwatch" ? (Number(kitchenTimer.elapsedSec) || 0) : (Number(kitchenTimer.remainingSec) || 0);
               const hh = Math.floor(dSec / 3600);
@@ -21937,7 +21937,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
               <button
                 type="button"
                 onClick={() => setIsHomeEditMode((v) => !v)}
-                className={`h-7 px-2 rounded-full text-[11px] font-semibold whitespace-nowrap shrink-0 transition ${
+                className={`h-6 px-1.5 rounded-full text-[10.5px] font-semibold whitespace-nowrap shrink-0 transition ${
                   isHomeEditMode
                     ? "bg-[#3F624D] text-white"
                     : "text-stone-600 hover:bg-stone-100"
@@ -21957,7 +21957,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                 if (user && db) { setDoc(getDocRef("family_meta_v4", "activity_read_v1"), { lastSeenMs: nowMs, updatedAtMs: nowMs }, { merge: true }).catch(() => {}); }
                   setIsActivityModalOpen(true);
                 }}
-                className="relative w-8 h-8 rounded-full hover:bg-stone-100 text-stone-600 hover:text-stone-900 flex items-center justify-center shrink-0"
+                className="relative w-7 h-7 rounded-full hover:bg-stone-100 text-stone-600 hover:text-stone-900 flex items-center justify-center shrink-0"
                 title="최근 수정 알림"
                 aria-label="최근 수정 알림"
               >
@@ -21970,7 +21970,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
             <button
               type="button"
               onClick={() => setIsGuideModalOpen(true)}
-              className="relative w-8 h-8 rounded-full hover:bg-stone-100 text-stone-600 hover:text-stone-900 flex items-center justify-center shrink-0"
+              className="relative w-7 h-7 rounded-full hover:bg-stone-100 text-stone-600 hover:text-stone-900 flex items-center justify-center shrink-0"
               title="기능별 사용 가이드"
               aria-label="기능별 사용 가이드"
             >
@@ -21979,7 +21979,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
             <button
               type="button"
               onClick={() => setIsSettingsOpen(true)}
-              className="relative w-8 h-8 rounded-full hover:bg-stone-100 text-stone-600 hover:text-stone-900 flex items-center justify-center shrink-0"
+              className="relative w-7 h-7 rounded-full hover:bg-stone-100 text-stone-600 hover:text-stone-900 flex items-center justify-center shrink-0"
               title="앱 설정"
               aria-label="앱 설정"
             >
@@ -40395,18 +40395,18 @@ time: "", location: "",
             role="dialog"
             aria-modal="true"
             aria-label="전체 메뉴"
-            style={{ maxHeight: "90dvh" }}
+            style={{ maxHeight: "92dvh" }}
             onClick={(e) => e.stopPropagation()}
             className="w-full max-w-[460px] bg-[#FAF8F3] rounded-t-3xl shadow-2xl border-t border-stone-200 flex flex-col overflow-hidden"
           >
             {/* 고정 상단 헤더 */}
-            <div className="px-4 sm:px-5 py-2 bg-[#FAF8F3] border-b border-stone-200/80 flex items-center justify-between gap-2 shrink-0">
-              <h2 className="text-[15px] font-semibold text-stone-900 tracking-tight">전체 메뉴</h2>
+            <div className="px-4 sm:px-5 py-1.5 bg-[#FAF8F3] border-b border-stone-200/80 flex items-center justify-between gap-2 shrink-0">
+              <h2 className="text-[14.5px] font-semibold text-stone-900 tracking-tight">전체 메뉴</h2>
               <button
                 type="button"
                 ref={quickFabCloseRef}
                 onClick={closeQuickFabSimple}
-                className="min-w-[44px] min-h-[44px] -mr-2 -my-1 rounded-full hover:bg-[#EEF3EE] active:bg-[#DFE9E0] text-stone-600 hover:text-[#35503C] flex items-center justify-center transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3F624D]"
+                className="min-w-[44px] min-h-[44px] -mr-2 -my-1.5 rounded-full hover:bg-[#EEF3EE] active:bg-[#DFE9E0] text-stone-600 hover:text-[#35503C] flex items-center justify-center transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3F624D]"
                 aria-label="전체 메뉴 닫기"
                 title="닫기"
               >
@@ -40414,10 +40414,10 @@ time: "", location: "",
               </button>
             </div>
 
-            {/* 스크롤 가능한 메뉴 본문 (표준 모바일 무스크롤 비중 최적화) */}
+            {/* 스크롤 가능한 메뉴 본문 (표준 모바일 무스크롤 1스크린 비중 최적화) */}
             <div
-              style={{ paddingBottom: "calc(0.85rem + env(safe-area-inset-bottom))" }}
-              className="flex-1 overflow-y-auto px-4 sm:px-5 pt-2.5 space-y-2.5"
+              style={{ paddingBottom: "calc(0.65rem + env(safe-area-inset-bottom))" }}
+              className="flex-1 overflow-y-auto px-4 sm:px-5 pt-2 space-y-2"
             >
               {[
                 {
@@ -40650,8 +40650,8 @@ time: "", location: "",
                   const HeaderActionIcon = g.headerAction?.icon;
                   return (
                     <section key={g.id} className="space-y-1">
-                      <div className="flex items-center justify-between gap-2 min-h-[24px]">
-                        <h3 className="text-[13.5px] font-semibold text-stone-900 leading-tight">{g.group}</h3>
+                      <div className="flex items-center justify-between gap-2 min-h-[20px]">
+                        <h3 className="text-[13px] font-semibold text-stone-900 leading-none">{g.group}</h3>
                         {g.headerAction && (
                           <button
                             type="button"
@@ -40659,7 +40659,7 @@ time: "", location: "",
                               setIsQuickFabOpen(false);
                               g.headerAction.onClick();
                             }}
-                            className="min-h-[44px] -my-2.5 px-2 rounded-xl text-[12px] font-semibold text-[#35503C] hover:bg-[#EEF3EE] active:bg-[#DFE9E0] flex items-center gap-1 shrink-0 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3F624D]"
+                            className="min-h-[44px] -my-3 px-2 rounded-xl text-[12px] font-semibold text-[#35503C] hover:bg-[#EEF3EE] active:bg-[#DFE9E0] flex items-center gap-1 shrink-0 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3F624D]"
                           >
                             {HeaderActionIcon && <HeaderActionIcon className="w-3.5 h-3.5 text-[#3F624D] shrink-0" strokeWidth={2} />}
                             <span>{g.headerAction.label}</span>
@@ -40677,10 +40677,10 @@ time: "", location: "",
                                 setIsQuickFabOpen(false);
                                 act.onClick();
                               }}
-                              className="min-h-[48px] py-1.5 px-1 rounded-xl hover:bg-[#EEF3EE] active:bg-[#DFE9E0] active:scale-[0.98] flex flex-col items-center justify-center gap-1 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3F624D] min-w-0"
+                              className="min-h-[44px] py-1 px-1 rounded-xl hover:bg-[#EEF3EE] active:bg-[#DFE9E0] active:scale-[0.98] flex flex-col items-center justify-center gap-0.5 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3F624D] min-w-0"
                             >
-                              <ItemIcon className="w-[22px] h-[22px] text-[#3F624D] shrink-0" strokeWidth={1.85} />
-                              <span className="text-[13px] font-medium text-stone-800 text-center leading-tight break-keep">
+                              <ItemIcon className="w-5 h-5 text-[#3F624D] shrink-0" strokeWidth={1.85} />
+                              <span className="text-[12.5px] font-medium text-stone-800 text-center leading-tight break-keep">
                                 {act.label}
                               </span>
                             </button>
@@ -40692,9 +40692,9 @@ time: "", location: "",
                 })}
 
               {/* 아기꿈나라 (은은한 배경 그룹 + 2열 × 2행) */}
-              <section className="rounded-2xl bg-[#EEF3EE]/60 border border-[#C9D8CC]/70 px-3 py-2.5 space-y-1.5">
-                <div className="flex items-center justify-between gap-2">
-                  <h3 className="text-[13.5px] font-semibold text-stone-900 leading-tight">아기꿈나라</h3>
+              <section className="rounded-2xl bg-[#EEF3EE]/60 border border-[#C9D8CC]/70 px-3 py-2 space-y-1.5">
+                <div className="flex items-center justify-between gap-2 min-h-[20px]">
+                  <h3 className="text-[13px] font-semibold text-stone-900 leading-none">아기꿈나라</h3>
                   {canEditTab("baby") && (
                     <button
                       type="button"
@@ -40704,7 +40704,7 @@ time: "", location: "",
                         setDreamLinkDraft({ label: "", icon: "🎵", url: "" });
                         setIsDreamLinksModalOpen(true);
                       }}
-                      className="min-h-[44px] -my-2.5 px-2 rounded-xl text-[12px] font-semibold text-[#35503C] hover:bg-white/80 active:bg-white flex items-center gap-1 shrink-0 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3F624D]"
+                      className="min-h-[44px] -my-3 px-2 rounded-xl text-[12px] font-semibold text-[#35503C] hover:bg-white/80 active:bg-white flex items-center gap-1 shrink-0 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3F624D]"
                     >
                       <Settings className="w-3.5 h-3.5 text-[#3F624D] shrink-0" strokeWidth={2} />
                       <span>링크관리</span>
@@ -40719,10 +40719,10 @@ time: "", location: "",
                       target="_blank"
                       rel="noopener noreferrer"
                       onClick={() => setIsQuickFabOpen(false)}
-                      className="min-h-[44px] px-2.5 py-1.5 rounded-xl bg-white/85 hover:bg-white active:bg-[#DFE9E0]/60 flex items-center justify-center gap-1.5 transition active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3F624D] min-w-0"
+                      className="min-h-[44px] px-2.5 py-1 rounded-xl bg-white/85 hover:bg-white active:bg-[#DFE9E0]/60 flex items-center justify-center gap-1.5 transition active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3F624D] min-w-0"
                     >
-                      <span className="text-[15px] leading-none opacity-80 shrink-0">{dl.icon || "🎵"}</span>
-                      <span className="text-[13px] font-medium text-stone-800 leading-tight break-keep">
+                      <span className="text-[14px] leading-none opacity-80 shrink-0">{dl.icon || "🎵"}</span>
+                      <span className="text-[12.5px] font-medium text-stone-800 leading-tight break-keep">
                         {dl.label}
                       </span>
                     </a>
