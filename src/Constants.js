@@ -1186,7 +1186,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v14.40";
+export const APP_CODE_VERSION = "v14.41";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1204,7 +1204,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-26 12:20";
+export const APP_BUILD_DATE = "2026-11-26 13:20";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1274,6 +1274,18 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v14.41",
+    version: "v14.41",
+    date: "2026-11-26",
+    title: "🐛 빌드 손상 374줄·지도파서·공지→일정·보관위치 갱신 버그 수정 + 🎯 내보내기목표·💰 예산프리셋 자유관리 + ☁️ 뷰모드 Firebase 이관",
+    changes: [
+      "🐛 배포·런타임 버그 5종 수정: ① App.jsx 내 손상된 HTML 엔티티 374줄 복구(정당한 JSX 텍스트 엔티티 보존) ② 구글맵 URL 좌표 파서(parseCoordsFromMapUrl) 손상 정규식 복구 ③ 가족공지→일정 연계의 잘못된 분류('집안일/기타')·멤버 ID('아리'→'아리나') 수정 ④ 냉장고 보관위치(fridge_locations) 이름 변경 시 기존 재고(family_fridge_v4) 200건 분할 배치 일괄 갱신 및 삭제 시 필터 초기화 누락 보완",
+      "🎛️ 시스템 자유도 확장(전 메뉴 26종+ 통합 관리): 하드코딩되어 있던 [🎯 AI 내보내기 목표(export_meal_goals)]와 [💰 식비 예산 프리셋(budget_presets)]을 통합 세부 분류 관리(custom_categories_v1)로 승격해 추가·수정·삭제·순서변경·기본복원·실시간 클라우드 동기화·JSON 백업/복원 및 각 입력창 옆 ⚙️ 바로가기 지원",
+      "☁️ 로컬 전용 설정 Firebase 이관: 냉장고 보기 모드(fridgeViewMode: 리스트/칸별)와 레시피북 보기 모드(recipeViewMode: 상세카드/요약리스트)를 Firestore(family_meta_v4/home_layout) 실시간 동기화 및 JSON 백업/복원으로 이관해 기기 간 선호 화면 유지",
+      "🔗 메뉴 연계·줄바꿈·폰트 통일: 미완료 가족공지 카드에 [⏰] 1탭 모닝콜 퀵알람 예약 연계 추가, 내보내기 목표 드롭다운 min-w-0 truncate 및 모닝콜 [저장] whitespace-nowrap 보강, 탈퇴화면·장보기·가족공지·AI추천 카드의 불규칙 폰트(15~17px)를 표준 규격(13.5~15px)으로 통일 및 도움말 최신화(과거 패치노트 478건 100% 보존)"
+    ]
+  },
   {
     id: "patch-v14.40",
     version: "v14.40",
@@ -7316,6 +7328,7 @@ export const DEFAULT_ROUTINE_TIME_PRESETS = ["07:30", "09:00", "12:00", "17:30",
 export const DEFAULT_MEAL_SOURCE_TYPES = ["집밥/온가족식", "유아식/이유식", "어린이집 급식", "외식/배달"];
 export const DEFAULT_SCHEDULE_QUICK_TIMES = ["09:30", "11:00", "14:00", "16:30", "18:30"];
 export const DEFAULT_BABY_TEMP_PRESETS = ["36.8|정상", "37.5|미열", "38.0|발열", "38.5|고열"];
+export const DEFAULT_BUDGET_PRESETS = ["80만", "100만", "120만", "150만"];
 
 export const APP_FEATURE_GUIDES = [
   {
@@ -7448,7 +7461,7 @@ export const APP_FEATURE_GUIDES = [
     steps: [
       "카테고리(육아/아이들·일정/행사·집안일 등)와 상단 고정(📌) 여부로 공지를 작성해요.",
       "완료된 항목은 [✓ 확인완료] 처리하고, 상단 [미완료만] 토글로 진행 중인 공지만 모아볼 수 있어요.",
-      "각 공지 카드에서 1탭으로 [✅ 할 일], [🗓️ 일정], [🛒 장보기], [🗂️ 노트]로 변환할 수 있어요."
+      "각 공지 카드에서 1탭으로 [✅ 할 일], [🗓️ 일정], [⏰ 알람], [🛒 장보기], [🗂️ 노트]로 변환할 수 있어요."
     ],
     tips: "상단 고정된 진행 중 공지가 있을 때 헤더의 [🤝 인수인계]를 누르면 공지 내용이 포함된 카톡 인수인계 창이 바로 열려요."
   },
@@ -7550,7 +7563,7 @@ export const APP_FEATURE_GUIDES = [
       "로그인 & 승인: Google 또는 이메일로 가입 후 관리자가 승인하면 이용 가능해요. 카톡 등 인앱 브라우저에서는 [크롬으로 열기] 또는 이메일 로그인을 권장해요.",
       "3단계 권한 & 쪽지: 미로그인(보기 전용) · 육아지원군(분류/개별 메뉴별 열람·편집 제어) · 관리자(전체 권한)로 나뉘며, 비관리자는 더보기에서 [관리자에게 쪽지남기기]를 쓸 수 있어요.",
       "🔔 수정 알림 & 스마트 알림: 다른 기기 수정 내역을 실시간 팝업과 상태바 알림으로 받고, 일정·유통기한·루틴·수유 간격·방해금지 시간을 세부 설정해요.",
-      "⚙️ 설정: 전 메뉴 세부 분류 통합 관리(22종+), 클라우드/JSON 전체·경량 백업 및 1초 복원, 회원 승인·권한 관리를 한곳에서 할 수 있어요."
+      "⚙️ 설정: 전 메뉴 세부 분류 통합 관리(26종+), 클라우드/JSON 전체·경량 백업 및 1초 복원, 회원 승인·권한 관리를 한곳에서 할 수 있어요."
     ],
     tips: "모바일에서는 뒤로가기 버튼으로 열린 팝업이나 이전 탭을 차례대로 닫을 수 있어요."
   },
