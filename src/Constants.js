@@ -450,13 +450,11 @@ export const calculateScheduleDday = (item) => {
 
 
   let elapsedDays = null;
-  let yearsCount = null;
   if (item.hasOriginYear === true && origYear >= 1950 && origYear <= currentYear) {
     const origDateObj = new Date(origYear, origMonth - 1, origDay);
     const diffFromOrigin = Math.floor((today - origDateObj) / (1000 * 60 * 60 * 24));
     if (diffFromOrigin >= 0) {
       elapsedDays = diffFromOrigin + 1;
-      yearsCount = currentYear - origYear;
     }
   }
 
@@ -1048,8 +1046,14 @@ export const shelfZoneToLocation = (zoneName) => {
 };
 
 
-export const getOffsetDateStr = (baseDateStr, offsetDays = 0) =>
-  addMonthsToDateStr(baseDateStr || getTodayStr(), 0, offsetDays);
+export const getOffsetDateStr = (baseDateStr, offsetDays = 0) => {
+  const safeBase = baseDateStr || getTodayStr();
+  const [y, m, d] = String(safeBase).split("-").map(Number);
+  if (!y || !m || !d) return safeBase;
+  const dt = new Date(y, m - 1, d);
+  dt.setDate(dt.getDate() + (Number(offsetDays) || 0));
+  return formatDate(dt);
+};
 
 
 export const EXPORT_MEAL_GOALS = [
@@ -1200,7 +1204,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-26 11:10";
+export const APP_BUILD_DATE = "2026-11-26 12:20";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1273,14 +1277,14 @@ export const INITIAL_PATCH_NOTES = [
   {
     id: "patch-v14.40",
     version: "v14.40",
-    date: "2026-11-25",
-    title: "🐛 useCallback 미임포트 빌드오류·JSON 복원 누락 수정 + ❄️ 보관위치·🌡️ 체온 프리셋 자유관리 + 로컬설정 4종 Firebase 이관 + 버튼/표 줄바꿈·겹침 정비",
-    items: [
-      "🐛 치명적 빌드·런타임 오류 및 백업 누락 수정: ① React import에 누락된 useCallback을 추가해 확인 모달(askConfirm/closeConfirmDialog) 런타임 크래시 및 배포 빌드 오류 완전 해소 ② JSON 전체 복원 클라우드 저장(custom_categories_v1)에서 누락되어 있던 식사구분(meal_source_types)·일정 빠른시간(schedule_quick_times) 동기화 복구",
-      "🎛️ 시스템 자유도 확장(전 메뉴 22종+ 통합 관리): 하드코딩되어 있던 냉장고 보관위치(냉장실·메인 냉동실·별도 냉동고·실온·팬트리)와 육아 진료 체온 프리셋(36.8°·37.5°·38.0°·38.5°)을 통합 세부 분류 관리(❄️ 보관위치 · 🌡️ 체온프리셋)로 승격해 추가·수정·삭제·순서변경·기본복원·클라우드 실시간 동기화 지원",
-      "☁️ 로컬 전용 설정 4종 Firebase 이관: 플로팅 타이머·미니배지 드래그 위치(timer_alarms_v1), 수정자 이름 수동 변경(users/{uid}.actorName), 마지막 확인 앱 버전(users/{uid}.lastSeenVersion)을 Firestore에 동기화해 기기 간 일관성 확보",
-      "🔗 메뉴간 연계 및 UX 고도화: 냉장고 보관위치 필터, 육아 진료 체온 프리셋, 월간 식비 수동 지출 분류 옆에 원탭 ⚙️ 편집 버튼 추가 및 세부 분류 모달 상단 탭 영역 스크롤 제한(max-h-24)으로 모바일 화면 겹침·잘림 방지",
-      "✨ 시각적 피로도 최소화·줄바꿈/디자인 통일: 줄바꿈으로 커지던 버튼 12종에 whitespace-nowrap·shrink-0 적용, 설정 모달 버튼 폰트 규격 통일 및 도움말의 구버전 분류 수(14종) 문구 최신화"
+    date: "2026-11-26",
+    title: "🐛 배포·빌드 오류 완전 해소 + 📱 홈 맨위 유틸바 무스크롤 1줄 압축 + ❄️ 보관위치·🌡️ 체온 프리셋 자유관리 + 로컬설정 4종 Firebase 이관",
+    changes: [
+      "🐛 배포·빌드·런타임 오류 완전 해소: ① React import 누락 useCallback 복구 ② Constants.js의 no-use-before-define(getOffsetDateStr) 및 미사용 변수(yearsCount) 제거로 엄격 CI/ESLint 빌드 통과 ③ JSON 전체 복원 시 custom_categories_v1 클라우드 저장 누락(식사구분·일정시간) 복구",
+      "📱 홈 맨위 유틸 바 가로 스크롤 완전 제거: 연결 상태 점과 버전 배지를 통합([● v14.40])하고 권한 배지·타이머 칩·우측 아이콘(편집·알림·가이드·설정) 폭과 여백을 압축해 모바일 화면에서도 가로 스크롤이나 '관리자' 잘림 없이 한눈에 전부 표시",
+      "🎛️ 시스템 자유도 확장(전 메뉴 22종+ 통합 관리): 냉장고 보관위치(fridge_locations)와 육아 진료 체온 프리셋(baby_temp_presets)을 통합 세부 분류 관리로 승격해 추가·수정·삭제·순서변경·기본복원·실시간 클라우드 동기화 및 원탭 ⚙️ 연계 지원",
+      "☁️ 로컬 전용 설정 4종 Firebase 이관: 플로팅 타이머·미니배지 위치(timer_alarms_v1), 수정자 이름 수동 변경(users/{uid}.actorName), 마지막 확인 앱 버전(users/{uid}.lastSeenVersion)을 Firestore에 동기화",
+      "✨ 시각적 피로도·줄바꿈·겹침 정비: 버튼 12종 whitespace-nowrap·shrink-0 적용, 세부 분류 모달 탭 max-h-24 스크롤 제한, 월간 식비 분류 ⚙️ 연계, 설정 버튼 규격 통일 및 도움말 최신화(과거 패치노트 477건 100% 보존)"
     ]
   },
   {

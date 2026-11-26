@@ -4857,16 +4857,10 @@ function MainApp() {
       const prevVer = localStorage.getItem("kim_last_seen_version_v1");
       if (!prevVer) {
         localStorage.setItem("kim_last_seen_version_v1", APP_CODE_VERSION);
-        if (user && db) {
-          setDoc(getDocRef("users", user.uid), { lastSeenVersion: APP_CODE_VERSION }, { merge: true }).catch(() => {});
-        }
         return;
       }
       if (prevVer !== APP_CODE_VERSION) {
         localStorage.setItem("kim_last_seen_version_v1", APP_CODE_VERSION);
-        if (user && db) {
-          setDoc(getDocRef("users", user.uid), { lastSeenVersion: APP_CODE_VERSION }, { merge: true }).catch(() => {});
-        }
         const latestNote = Array.isArray(INITIAL_PATCH_NOTES) ? INITIAL_PATCH_NOTES[0] : null;
         const patchTitle = latestNote?.title ? String(latestNote.title).trim() : "새로운 기능이 반영되었습니다.";
         const timer = setTimeout(() => {
@@ -4881,6 +4875,10 @@ function MainApp() {
       }
     } catch (e) {}
   }, []);
+  useEffect(() => {
+    if (!user || !db) return;
+    setDoc(getDocRef("users", user.uid), { lastSeenVersion: APP_CODE_VERSION }, { merge: true }).catch(() => {});
+  }, [user]);
   const activitySnapshotInitRef = useRef(false);
   const inboxSnapshotInitRef = useRef(false);
   const lastInboxNotifIdRef = useRef("");
@@ -22010,75 +22008,72 @@ ${item.memo}` : `${item.title} 다녀옴!`,
         )}
 
 
-        <div className="mb-1 flex items-center justify-between gap-0.5">
-          <div className="flex items-center gap-1 min-w-0 flex-1 overflow-x-auto no-scrollbar">
-            <button
-              type="button"
-              onClick={async () => {
-                if (syncStatus === "connected" || !auth) return;
-                showToast("🔄 서버 재연결을 시도합니다...");
-                try {
-                  if (!auth.currentUser) {
-                    showToast("다시 로그인해 주세요.");
+        <div className="mb-1 flex items-center justify-between gap-1 min-w-0">
+          <div className="flex items-center gap-1 min-w-0 flex-1 overflow-hidden">
+            {syncStatus !== "connected" && (
+              <button
+                type="button"
+                onClick={async () => {
+                  if (!auth) return;
+                  showToast("🔄 서버 재연결을 시도합니다...");
+                  try {
+                    if (!auth.currentUser) {
+                      showToast("다시 로그인해 주세요.");
+                    }
+                  } catch (e) {
+                    setSyncErrorMsg("서버 재연결 실패: 네트워크를 확인해 주세요.");
                   }
-                } catch (e) {
-                  setSyncErrorMsg("서버 재연결 실패: 네트워크를 확인해 주세요.");
-                }
-              }}
-              title={syncStatus === "connected" ? "서버 연결 정상" : "눌러서 서버 재연결 시도"}
-              className={`inline-flex items-center gap-1 h-6 px-1 rounded-full text-[10.5px] font-medium whitespace-nowrap shrink-0 transition ${
-                syncStatus === "offline" || syncStatus === "error"
-                  ? "bg-rose-50 text-rose-700 border border-rose-300 font-semibold cursor-pointer"
-                  : syncStatus === "saving" || syncStatus === "connecting"
-                  ? "bg-amber-50 text-amber-800 border border-amber-300 font-semibold cursor-pointer"
-                  : "text-stone-600 cursor-default"
-              }`}
-            >
-              <span
-                className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                }}
+                title="눌러서 서버 재연결 시도"
+                className={`inline-flex items-center gap-1 h-6 px-1.5 rounded-full text-[10px] font-semibold whitespace-nowrap shrink-0 transition ${
                   syncStatus === "offline" || syncStatus === "error"
-                    ? "bg-rose-600"
-                    : syncStatus === "saving" || syncStatus === "connecting"
-                    ? "bg-amber-500 animate-pulse"
-                    : "bg-[#3F624D]"
+                    ? "bg-rose-50 text-rose-700 border border-rose-300 cursor-pointer"
+                    : "bg-amber-50 text-amber-800 border border-amber-300 cursor-pointer"
                 }`}
-              />
-              <span>
-                {syncStatus === "offline"
-                  ? "끊김"
-                  : syncStatus === "error"
-                  ? "오류"
-                  : syncStatus === "saving"
-                  ? "저장 중"
-                  : syncStatus === "connecting"
-                  ? "연결 중"
-                  : "연결됨"}
-              </span>
-            </button>
+              >
+                <span
+                  className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                    syncStatus === "offline" || syncStatus === "error"
+                      ? "bg-rose-600"
+                      : "bg-amber-500 animate-pulse"
+                  }`}
+                />
+                <span>
+                  {syncStatus === "offline"
+                    ? "끊김"
+                    : syncStatus === "error"
+                    ? "오류"
+                    : syncStatus === "saving"
+                    ? "저장"
+                    : "연결"}
+                </span>
+              </button>
+            )}
             <button
               type="button"
               onClick={() => setIsPatchModalOpen(true)}
-              className="h-6 px-1.5 rounded-full bg-stone-100 hover:bg-stone-200 border border-stone-200 text-stone-700 text-[10.5px] font-semibold whitespace-nowrap shrink-0 transition"
-              title="앱 버전 및 패치노트 보기"
+              className="inline-flex items-center gap-1 h-6 px-1.5 rounded-full bg-stone-100 hover:bg-stone-200 border border-stone-200 text-stone-700 text-[10px] font-bold whitespace-nowrap shrink-0 transition"
+              title={syncStatus === "connected" ? `서버 연결됨 · ${APP_CODE_VERSION} 패치노트 보기` : `앱 버전 ${APP_CODE_VERSION} 패치노트 보기`}
             >
-              {APP_CODE_VERSION}
+              {syncStatus === "connected" && <span className="w-1.5 h-1.5 rounded-full bg-[#3F624D] shrink-0" />}
+              <span>{APP_CODE_VERSION}</span>
             </button>
             <button
               type="button"
               onClick={() => setIsEditorUnlockModalOpen(true)}
-              className={`h-6 px-1.5 rounded-full border text-[10.5px] font-semibold whitespace-nowrap shrink-0 transition ${
+              className={`h-6 px-1.5 rounded-full border text-[10px] font-bold whitespace-nowrap truncate min-w-0 max-w-[104px] transition ${
                 isAdminUnlocked
                   ? "bg-[#EEF3EE] hover:bg-[#DFE9E0] border-[#C9D8CC] text-[#35503C]"
                   : isHelperUnlocked
                   ? "bg-sky-50 hover:bg-sky-100 border-sky-200 text-sky-800"
                   : "bg-stone-100 hover:bg-stone-200 border-stone-200 text-stone-700"
               }`}
-              title="권한 및 사용자 전환"
+              title={`권한 및 사용자 전환 (${isAdminUnlocked ? `관리자 · ${actorName || "수혁"}` : isHelperUnlocked ? `육아지원군 · ${actorName || "이모님"}` : "보기 전용"})`}
             >
-              {isAdminUnlocked ? `관리자 · ${actorName || "수혁"}` : isHelperUnlocked ? `육아지원군 · ${actorName || "이모님"}` : "보기 전용"}
+              {isAdminUnlocked ? `관리·${actorName || "수혁"}` : isHelperUnlocked ? `지원·${actorName || "이모님"}` : "보기전용"}
             </button>
           </div>
-          <div className="flex items-center gap-0 shrink-0">
+          <div className="flex items-center gap-0.5 shrink-0">
             {(kitchenTimer.running || (kitchenTimer.mode === "stopwatch" && (kitchenTimer.elapsedSec > 0 || kitchenTimer.cookStartTimeStr)) || (kitchenTimer.mode === "countdown" && kitchenTimer.remainingSec > 0)) && (() => {
               const dSec = kitchenTimer.mode === "stopwatch" ? (Number(kitchenTimer.elapsedSec) || 0) : (Number(kitchenTimer.remainingSec) || 0);
               const hh = Math.floor(dSec / 3600);
@@ -22089,7 +22084,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                 <button
                   type="button"
                   onClick={() => setKitchenTimer((p) => ({ ...p, open: !p.open }))}
-                  className={`h-7 px-2 rounded-full border text-[11px] font-mono font-black flex items-center gap-1 whitespace-nowrap shrink-0 transition ${
+                  className={`h-6 px-1.5 rounded-full border text-[10px] font-mono font-black flex items-center gap-1 whitespace-nowrap shrink-0 transition ${
                     kitchenTimer.running
                       ? "bg-[#3F624D] text-white border-[#3F624D]"
                       : "bg-stone-100 text-stone-700 border-stone-200 hover:bg-stone-200"
@@ -22097,7 +22092,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                   title="스톱워치 · 타이머 열기/접기"
                 >
                   <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${kitchenTimer.running ? "bg-emerald-300 animate-pulse" : "bg-stone-400"}`} />
-                  <span>{kitchenTimer.mode === "stopwatch" ? "⏱️" : "⏲️"} {tFmt}</span>
+                  <span>{tFmt}</span>
                 </button>
               );
             })()}
@@ -22105,7 +22100,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
               <button
                 type="button"
                 onClick={() => setIsHomeEditMode((v) => !v)}
-                className={`h-6 px-1.5 rounded-full text-[10.5px] font-semibold whitespace-nowrap shrink-0 transition ${
+                className={`h-6 px-1.5 rounded-full text-[10px] font-bold whitespace-nowrap shrink-0 transition ${
                   isHomeEditMode
                     ? "bg-[#3F624D] text-white"
                     : "text-stone-600 hover:bg-stone-100"
@@ -22122,23 +22117,23 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                   const nowMs = Date.now();
                   setLastSeenActivityMs(nowMs);
                   try { localStorage.setItem("kim_last_seen_activity_ms_v1", String(nowMs)); } catch (e) {}
-                if (user && db) { setDoc(getDocRef("family_meta_v4", "activity_read_v1"), { lastSeenMs: nowMs, updatedAtMs: nowMs }, { merge: true }).catch(() => {}); }
+                  if (user && db) { setDoc(getDocRef("family_meta_v4", "activity_read_v1"), { lastSeenMs: nowMs, updatedAtMs: nowMs }, { merge: true }).catch(() => {}); }
                   setIsActivityModalOpen(true);
                 }}
-                className="relative w-7 h-7 rounded-full hover:bg-stone-100 text-stone-600 hover:text-stone-900 flex items-center justify-center shrink-0"
+                className="relative w-6 h-6 rounded-full hover:bg-stone-100 text-stone-600 hover:text-stone-900 flex items-center justify-center shrink-0 transition"
                 title="최근 수정 알림"
                 aria-label="최근 수정 알림"
               >
                 <Bell className="w-3.5 h-3.5" />
                 {visibleRecentActivities[0]?.atMs && visibleRecentActivities[0].atMs > lastSeenActivityMs && (
-                  <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-rose-600" />
+                  <span className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-rose-600" />
                 )}
               </button>
             )}
             <button
               type="button"
               onClick={() => setIsGuideModalOpen(true)}
-              className="relative w-7 h-7 rounded-full hover:bg-stone-100 text-stone-600 hover:text-stone-900 flex items-center justify-center shrink-0"
+              className="relative w-6 h-6 rounded-full hover:bg-stone-100 text-stone-600 hover:text-stone-900 flex items-center justify-center shrink-0 transition"
               title="기능별 사용 가이드"
               aria-label="기능별 사용 가이드"
             >
@@ -22147,13 +22142,13 @@ ${item.memo}` : `${item.title} 다녀옴!`,
             <button
               type="button"
               onClick={() => setIsSettingsOpen(true)}
-              className="relative w-7 h-7 rounded-full hover:bg-stone-100 text-stone-600 hover:text-stone-900 flex items-center justify-center shrink-0"
+              className="relative w-6 h-6 rounded-full hover:bg-stone-100 text-stone-600 hover:text-stone-900 flex items-center justify-center shrink-0 transition"
               title="앱 설정"
               aria-label="앱 설정"
             >
               <Settings className="w-3.5 h-3.5" />
               {isAdminUnlocked && managedUsers.some((u) => u.role === "pending") && (
-                <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-amber-500 ring-2 ring-white animate-pulse" />
+                <span className="absolute top-0.5 right-0.5 w-2 h-2 rounded-full bg-amber-500 ring-2 ring-white animate-pulse" />
               )}
             </button>
           </div>
