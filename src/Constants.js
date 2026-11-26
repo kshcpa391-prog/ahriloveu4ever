@@ -1186,7 +1186,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v14.41";
+export const APP_CODE_VERSION = "v14.42";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1204,7 +1204,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-26 13:20";
+export const APP_BUILD_DATE = "2026-11-26 13:30";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1274,6 +1274,17 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v14.42",
+    version: "v14.42",
+    date: "2026-11-26",
+    title: "⏱️ 떠다니는 스톱워치 미니배지 초슬림 축소(55%↓) + 1탭 [×] 끄기 · 영구 ON/OFF(Firebase 동기화) · 헤더 즉시 종료",
+    changes: [
+      "⏱️ 플로팅 스톱워치 미니배지 초슬림화: 불필요한 '일시정지 · 펼치기' 문구를 제거해 '● 00:12 ×' 초소형 알약(높이 28px · 가로 폭 절반 이하)으로 축소해 화면 가림 최소화",
+      "🚫 떠다니는 배지 아예 끄기 지원: 미니배지 우측 [×] 1탭 또는 타이머 [더보기]의 [📌 플로팅 배지: 켬/끔] 토글로 떠다니는 배지를 완전히 끌 수 있으며(Firebase timer_alarms_v1.pillHidden 실시간 동기화), 꺼도 상단 바 [● 00:12] 칩에서 언제든 확인·열기 가능",
+      "⚡ 타이머 창 헤더 [접기] 옆에 1탭 [종료] 버튼 추가해 [더보기]를 열지 않고도 스톱워치 즉시 정지·닫기 가능 (과거 패치노트 479건 100% 보존)"
+    ]
+  },
   {
     id: "patch-v14.41",
     version: "v14.41",

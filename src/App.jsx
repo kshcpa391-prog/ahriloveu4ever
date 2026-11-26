@@ -6821,6 +6821,18 @@ function MainApp() {
   const [timerVibrateEnabled, setTimerVibrateEnabled] = useState(() => {
     try { return localStorage.getItem("kim_timer_vibrate_v1") !== "false"; } catch (e) { return true; }
   });
+  const [timerPillHidden, setTimerPillHidden] = useState(() => {
+    try { return localStorage.getItem("kim_timer_pill_hidden_v1") === "true"; } catch (e) { return false; }
+  });
+  const updateTimerPillHidden = (hiddenVal, toastMsg = "") => {
+    const next = Boolean(hiddenVal);
+    setTimerPillHidden(next);
+    try { localStorage.setItem("kim_timer_pill_hidden_v1", String(next)); } catch (e) {}
+    if (user && db) {
+      setDoc(getDocRef("family_meta_v4", "timer_alarms_v1"), { pillHidden: next, updatedAtMs: Date.now() }, { merge: true }).catch(() => {});
+    }
+    if (toastMsg) showToast(toastMsg);
+  };
   const [dialStepSec, setDialStepSec] = useState(10);
   const [isTimerMoreOpen, setIsTimerMoreOpen] = useState(false);
   const [isStopwatchTimeEditOpen, setIsStopwatchTimeEditOpen] = useState(false);
@@ -9647,6 +9659,10 @@ function MainApp() {
           if (typeof d.vibrateEnabled === "boolean") {
             setTimerVibrateEnabled(d.vibrateEnabled);
             try { localStorage.setItem("kim_timer_vibrate_v1", String(d.vibrateEnabled)); } catch (e) {}
+          }
+          if (typeof d.pillHidden === "boolean") {
+            setTimerPillHidden(d.pillHidden);
+            try { localStorage.setItem("kim_timer_pill_hidden_v1", String(d.pillHidden)); } catch (e) {}
           }
           if (typeof d.defaultVolume === "number" && Number.isFinite(d.defaultVolume)) {
             const vClean = Math.max(0, Math.min(100, Math.round(d.defaultVolume)));
@@ -39943,15 +39959,15 @@ time: "", location: "",
           };
         };
 
-        if (!kitchenTimer.open && (kitchenTimer.running || displaySec > 0 || kitchenTimer.cookStartTimeStr)) {
-          const safePill = timerPillPos ? clampFloatCoord(timerPillPos.x, timerPillPos.y, 190, 42) : null;
+        if (!kitchenTimer.open && !timerPillHidden && (kitchenTimer.running || displaySec > 0 || kitchenTimer.cookStartTimeStr)) {
+          const safePill = timerPillPos ? clampFloatCoord(timerPillPos.x, timerPillPos.y, 92, 30) : null;
           const pillStyle = safePill
             ? { left: `${safePill.x}px`, top: `${safePill.y}px`, touchAction: "none" }
-            : { bottom: "calc(5.25rem + env(safe-area-inset-bottom))", left: "12px", touchAction: "none" };
+            : { bottom: "calc(5.25rem + env(safe-area-inset-bottom))", left: "10px", touchAction: "none" };
           return (
-            <button
-              type="button"
+            <div
               onPointerDown={(e) => {
+                if (e.target.closest("button[data-pill-hide='1']")) return;
                 const rect = e.currentTarget.getBoundingClientRect();
                 timerPillDragRef.current = {
                   active: true,
@@ -39997,18 +40013,27 @@ time: "", location: "",
                 setKitchenTimer((p) => ({ ...p, open: true }));
               }}
               style={pillStyle}
-              className="fixed z-[48] min-h-[38px] px-3 py-1.5 rounded-full bg-[#25332D] text-white border border-white/25 shadow-[0_8px_22px_rgba(16,26,22,0.34)] flex items-center gap-2 text-[12px] font-bold hover:bg-[#2C3D36] cursor-grab active:cursor-grabbing select-none"
-              title="드래그해 이동 · 누르면 펼치기"
-              aria-label={`플로팅 ${kitchenTimer.mode === "stopwatch" ? "스톱워치" : "타이머"} 펼치기, 현재 ${timeText}`}
+              className="fixed z-[48] h-7 pl-2 pr-1 rounded-full bg-[#25332D]/95 text-white border border-white/25 shadow-[0_6px_16px_rgba(16,26,22,0.3)] flex items-center gap-1.5 hover:bg-[#2C3D36] cursor-grab active:cursor-grabbing select-none"
+              title="드래그 이동 · 누르면 펼치기 · × 누르면 플로팅 숨김"
             >
-              <span className={`w-2 h-2 rounded-full shrink-0 ${kitchenTimer.running ? "bg-[#6EE7B7] animate-pulse" : "bg-[#9AAFA5]"}`} />
-              <span className="font-mono text-[13px] font-black tracking-wide tabular-nums text-white whitespace-nowrap">
+              <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${kitchenTimer.running ? "bg-[#6EE7B7] animate-pulse" : "bg-[#9AAFA5]"}`} />
+              <span className="font-mono text-[11.5px] font-black tracking-tight tabular-nums text-white whitespace-nowrap">
                 {timeText}
               </span>
-              <span className="text-[10.5px] font-semibold text-[#B8C6BF] whitespace-nowrap">
-                {kitchenTimer.running ? "진행 중" : "일시정지"} · 펼치기
-              </span>
-            </button>
+              <button
+                type="button"
+                data-pill-hide="1"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  updateTimerPillHidden(true, "⏱️ 떠다니는 배지를 껐습니다. 상단 바에서 언제든 열 수 있어요.");
+                }}
+                className="w-5 h-5 rounded-full hover:bg-white/15 text-[#B8C6BF] hover:text-white flex items-center justify-center shrink-0 transition"
+                title="떠다니는 배지 끄기 (상단 바에서만 보기)"
+                aria-label="떠다니는 스톱워치 배지 끄기"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </div>
           );
         }
         if (!kitchenTimer.open) return null;
@@ -40202,9 +40227,34 @@ time: "", location: "",
                     setIsTimerMoreOpen(false);
                     setKitchenTimer((p) => ({ ...p, open: false }));
                   }}
-                  className="min-h-[32px] px-2.5 py-1 rounded-xl bg-[#1B2622] hover:bg-[#2E3F38] text-[#D7E3DD] border border-[#384C43] text-[11px] font-bold whitespace-nowrap transition"
+                  className="min-h-[32px] px-2 py-1 rounded-xl bg-[#1B2622] hover:bg-[#2E3F38] text-[#D7E3DD] border border-[#384C43] text-[11px] font-bold whitespace-nowrap transition"
                 >
                   접기
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    stopAlarmAudio();
+                    closeStopwatchStatusNotif();
+                    setTimerCompletedAlert("");
+                    setIsTimerMoreOpen(false);
+                    setIsStopwatchTimeEditOpen(false);
+                    setKitchenTimer((p) => ({
+                      ...p,
+                      open: false,
+                      running: false,
+                      remainingSec: 0,
+                      elapsedSec: 0,
+                      startedAtMs: null,
+                      targetEndMs: null,
+                      cookStartTimeStr: "",
+                      cookEndTimeStr: ""
+                    }));
+                  }}
+                  className="min-h-[32px] px-2 py-1 rounded-xl bg-[#1B2622] hover:bg-rose-950/70 text-[#D7E3DD] hover:text-rose-200 border border-[#384C43] text-[11px] font-bold whitespace-nowrap transition"
+                  title="스톱워치·타이머 완전 종료 및 닫기"
+                >
+                  종료
                 </button>
               </div>
             </div>
@@ -40224,6 +40274,25 @@ time: "", location: "",
                   >
                     <span>⏰ 모닝콜{activeAlarmCount > 0 ? ` (${activeAlarmCount}개)` : ""}</span>
                     <span className="text-[#6EE7B7] text-[10.5px] font-extrabold">열기 →</span>
+                  </button>
+                  <button
+                    type="button"
+                    aria-pressed={!timerPillHidden}
+                    onClick={() =>
+                      updateTimerPillHidden(
+                        !timerPillHidden,
+                        !timerPillHidden
+                          ? "🚫 떠다니는 미니배지를 껐습니다. 상단 바에서 확인하세요."
+                          : "📌 떠다니는 미니배지를 다시 켰습니다."
+                      )
+                    }
+                    className={`min-h-[34px] px-2.5 py-1 rounded-lg border text-[11px] font-bold whitespace-nowrap transition ${
+                      !timerPillHidden
+                        ? "bg-[#2C4238] border-[#6EE7B7]/60 text-[#6EE7B7]"
+                        : "bg-[#25332D] border-[#3E554B] text-[#B8C6BF] hover:text-white"
+                    }`}
+                  >
+                    {timerPillHidden ? "📌 플로팅 끔" : "📌 플로팅 켬"}
                   </button>
                   <button
                     type="button"
