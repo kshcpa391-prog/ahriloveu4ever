@@ -1186,7 +1186,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v14.44";
+export const APP_CODE_VERSION = "v14.45";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1204,7 +1204,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-27 00:30";
+export const APP_BUILD_DATE = "2026-11-27 01:00";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1274,6 +1274,19 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v14.45",
+    version: "v14.45",
+    date: "2026-11-27",
+    title: "🛡️ 데이터 유실·저장오류 6종 완전 수정(레시피 stepsText·쪽지·장보기입고 롤백·공유노트·알람음량·타이머) + 🔄 복원 부분실패 재시도 & 안전백업 보강 + ⚙️ 사용중 분류 삭제 이관·할일 내부식별 + ⬆️ 스톱워치/위로버튼 충돌 해소 + 🗂️ 공유노트 본문 체크리스트 연계",
+    items: [
+      "🛡️ [1. 데이터 유실·저장 오류 6종 수정] ① 레시피 요약목록 수정 시 stepsText 누락으로 조리 순서가 삭제되던 치명 버그 수정 ② 관리자 쪽지 저장이 모두 실패해도 성공 토스트가 뜨고 입력 내용이 지워지던 버그 수정(실패 시 입력·첨부 100% 보존) ③ 장보기→냉장고 입고 트랜잭션 실패 시 낙관적 로컬 변경을 즉시 롤백하고 성공 안내 차단 ④ 공유노트 savePageToCloud 실패 시 로컬 상태 롤백 및 호출부(페이지 메타·버킷·레시피·공지·경조사 노트 저장) 결과 검증 추가 ⑤ 새 기기에서 Number(null)===0으로 알람 기본 음량이 무음(0) 초기화되던 버그를 85로 교정 ⑥ 실행 중 타이머가 최초 1회 클라우드 동기화를 건너뛰던 버그 수정",
+      "🔄 [3. 백업·복원 완성] ① 복원 직전 안전 백업(pre_restore)에 루틴·버킷·살림수첩·커스텀분류·수납장소·즐겨찾기·고정가이드·아기꿈나라·예산을 포함(900KB 안전 제한 시 핵심 경량 폴백) ② JSON 복원 시 전체 성공/실패 건수를 정밀 집계해 실패 건이 있으면 '100% 복원' 대신 정확한 성공·실패 건수를 안내하고, 설정창 내 [🔄 실패한 복원 N건 재시도] 버튼으로 부분 실패 항목만 즉시 재시도 가능",
+      "⚙️ [5. 시스템 자유도 개선] ① 사용 중인 분류(재료·보관위치·레시피·난이도·공지·버킷·일정·경조사·수납장소 등)를 삭제할 때 연결된 기존 자료 건수를 확인하고 남은 기본 분류로 200건 분할 배치 자동 이관 후 삭제 ② 할일(To-Do) 내부 플래그(isTodo) 및 판별 헬퍼(isTodoScheduleItem)를 도입해 '할일(To-Do)' 표시명을 변경해도 할일 기능이 유지되도록 보강",
+      "⬆️ [7. UI 충돌 해소] 좌측 하단에서 정면 겹치던 플로팅 스톱워치 미니배지(bottom 5.25rem)와 맨 위로(↑) 버튼(bottom 4.75rem)의 충돌을 해결해 미니배지 표시 중에는 맨 위로 버튼이 자동으로 위로 회피 배치",
+      "🗂️ [8. 메뉴 연계 고도화] 공유노트→장보기 담기 시 기존 블록(blocks)뿐 아니라 리치 본문 에디터(noteBody) 내 미완료 체크박스까지 모두 추출해 중복 없이 담도록 확장 (과거 패치노트 482건 100% 보존)"
+    ]
+  },
   {
     id: "patch-v14.44",
     version: "v14.44",

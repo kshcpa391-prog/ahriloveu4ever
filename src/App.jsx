@@ -5119,6 +5119,7 @@ function MainApp() {
     return localStorage.getItem("kim_backup_done_month") || "";
   });
   const [isRestoringJson, setIsRestoringJson] = useState(false);
+  const [failedRestoreTasks, setFailedRestoreTasks] = useState([]);
   const jsonRestoreInputRef = useRef(null);
 
 
@@ -6889,7 +6890,7 @@ function MainApp() {
       remSnapshot: kitchenTimer.running ? null : Number(kitchenTimer.remainingSec) || 0,
       elSnapshot: kitchenTimer.running ? null : Number(kitchenTimer.elapsedSec) || 0
     });
-    if (!lastSyncedLiveTimerSigRef.current) {
+    if (!lastSyncedLiveTimerSigRef.current && !kitchenTimer.running) {
       lastSyncedLiveTimerSigRef.current = syncSig;
       return;
     }
@@ -7005,7 +7006,9 @@ function MainApp() {
   const [completedAlertAlarmMeta, setCompletedAlertAlarmMeta] = useState(null);
   const [alarmDefaultVolume, setAlarmDefaultVolume] = useState(() => {
     try {
-      const v = Number(localStorage.getItem("kim_alarm_volume_v1"));
+      const raw = localStorage.getItem("kim_alarm_volume_v1");
+      if (raw === null || raw === "") return 85;
+      const v = Number(raw);
       return Number.isFinite(v) ? Math.max(0, Math.min(100, v)) : 85;
     } catch (e) { return 85; }
   });
@@ -8181,11 +8184,20 @@ function MainApp() {
           savedToMeta = true;
         } catch (e) {}
       }
-      await setDoc(
-        getDocRef("users", user.uid),
-        { lastAdminNote: noteObj, updatedAtMs: Date.now() },
-        { merge: true }
-      ).catch(() => {});
+      let savedToUser = false;
+      try {
+        await setDoc(
+          getDocRef("users", user.uid),
+          { lastAdminNote: noteObj, updatedAtMs: Date.now() },
+          { merge: true }
+        );
+        savedToUser = true;
+      } catch (userErr) {
+        if (!savedToMeta) throw userErr;
+      }
+      if (!savedToMeta && !savedToUser) {
+        throw new Error("서버에 쪽지를 저장하지 못했습니다. 네트워크를 확인 후 다시 시도해 주세요.");
+      }
       if (savedToMeta) {
         recordActivity("쪽지", `${noteObj.fromName}님이 관리자에게 쪽지를 남겼습니다`, text.slice(0, 40), {
           targetTab: "home"
@@ -10693,10 +10705,22 @@ function MainApp() {
       setIsRestoringJson(true);
       if (user && db) {
         try {
+          const fullPreRestoreData = {
+            meals, fridge, expenses, shoppingList, notices, schedules,
+            babyChecks, babyGrowthLogs, babyMedicalNotes, familyRoutines,
+            bucketList, houseItems, customCategories, houseStorageRooms,
+            favoriteSingleMenus, favoriteMealCombos, handoverProfile,
+            babyDreamLinks, monthlyBudget
+          };
+          const preBytes = new Blob([JSON.stringify(fullPreRestoreData)]).size;
+          const safePreData = preBytes <= 880000
+            ? fullPreRestoreData
+            : { meals, fridge, expenses, shoppingList, notices, schedules, familyRoutines, customCategories, houseStorageRooms, monthlyBudget };
           await setDoc(getDocRef("family_backups_v4", `pre_restore_${Date.now()}`), {
             slot: "pre_restore",
             createdAt: new Date().toISOString(),
-            data: { meals, fridge, expenses, shoppingList, notices, schedules, babyChecks, babyGrowthLogs, babyMedicalNotes }
+            byteSize: new Blob([JSON.stringify(safePreData)]).size,
+            data: safePreData
           });
         } catch (bkErr) {
           throw new Error("복원 전 안전 백업 생성에 실패하여 복원을 중단했습니다.");
@@ -11167,12 +11191,14 @@ function MainApp() {
 
 
         const results = await Promise.allSettled(writePromises);
+        const succeededCount = results.filter((r) => r.status === "fulfilled").length;
         const failedCount = results.filter((r) => r.status === "rejected").length;
         if (failedCount > 0) {
-          showToast(`⚠️ 일부(${failedCount}건) 복원에 실패했습니다. 네트워크를 확인해 주세요.`);
-          setIsSettingsOpen(false);
+          setFailedRestoreTasks([{ payload, failedCount, succeededCount, failedAt: Date.now() }]);
+          showToast(`⚠️ 부분 복원됨 (성공 ${succeededCount}건 / 실패 ${failedCount}건) — 설정창에서 실패 항목 재시도가 가능합니다.`);
           return;
         }
+        setFailedRestoreTasks([]);
       }
 
 
@@ -16827,8 +16853,9 @@ const priceStr = exportIncludePrice && safeItPrice > 0 ? `${safeItPrice.toLocale
 
 
   const handleConfirmStockIn = async () => {
-    if (!requireEditorAccess()) return;
+    if (!requireEditorAccess("shopping")) return;
     if (!stockInItem) return;
+    const prevStockItem = stockInItem;
     const fId = `f-${Date.now()}`;
     const priceNum = Number(stockInPrice) || 0;
     const expDateObj = new Date();
@@ -16900,17 +16927,24 @@ const priceStr = exportIncludePrice && safeItPrice > 0 ? `${safeItPrice.toLocale
       } catch (e) {
         errMsg = e?.message || "장보기 입고 동기화 오류";
         setSyncErrorMsg(errMsg);
-        showToast(`⚠️ ${errMsg}`);
+        setFridgeMap((prev) => {
+          const nextLocal = { ...(prev.local || {}) };
+          delete nextLocal[fId];
+          return { ...prev, local: nextLocal };
+        });
+        setShoppingList((prev) => (prev.some((s) => s.id === prevStockItem.id) ? prev : [prevStockItem, ...prev]));
+        showToast(`⚠️ 입고 저장 실패: ${errMsg}`);
       } finally {
         inFlightOpsRef.current.delete(stockLockKey);
         endWrite(ok, errMsg);
       }
+      if (!ok) return;
     } else {
       inFlightOpsRef.current.delete(stockLockKey);
     }
     setStockInItem(null);
     setStockInPrice("");
-    setStockInLocation("냉장실");
+    setStockInLocation(fridgeLocations[0] || "냉장실");
     showToast("구매 완료! 냉장고 입고 및 식비 가계부에 반영되었습니다.");
   };
 
@@ -18018,18 +18052,27 @@ const priceStr = exportIncludePrice && safeItPrice > 0 ? `${safeItPrice.toLocale
 
 
   const savePageToCloud = async (pageObj) => {
+    const prevSnapshot = familyPages.find((p) => p.id === pageObj.id) || null;
     setFamilyPages((prev) => {
       const exists = prev.some((p) => p.id === pageObj.id);
       return exists ? prev.map((p) => (p.id === pageObj.id ? pageObj : p)) : [...prev, pageObj];
     });
     if (user && db) {
+      beginWrite();
       try {
         await setDoc(getDocRef("family_pages_v1", pageObj.id), pageObj, { merge: true });
+        endWrite(true, "");
         return { ok: true };
       } catch (err) {
+        setFamilyPages((prev) =>
+          prevSnapshot
+            ? prev.map((p) => (p.id === pageObj.id ? prevSnapshot : p))
+            : prev.filter((p) => p.id !== pageObj.id)
+        );
         const msg = err?.message?.includes("exceeds")
           ? "⚠️ 첨부 용량이 너무 커서 저장하지 못했습니다."
           : "⚠️ 공유노트 클라우드 저장에 실패했습니다.";
+        endWrite(false, msg);
         showToast(msg);
         return { ok: false, error: msg };
       }
@@ -18039,8 +18082,23 @@ const priceStr = exportIncludePrice && safeItPrice > 0 ? `${safeItPrice.toLocale
   // === 메뉴 간 원탭 연계 헬퍼 (v12.65) ===
   const handleSendPageTodosToShopping = async (page) => {
     if (!requireEditorAccess("shopping") || !page) return;
-    const uncheckedTodos = (Array.isArray(page.blocks) ? page.blocks : [])
-      .filter((b) => b && b.type === "todo" && !b.checked && String(b.text || "").trim());
+    const blockTodos = (Array.isArray(page.blocks) ? page.blocks : [])
+      .filter((b) => b && b.type === "todo" && !b.checked && String(b.text || "").trim())
+      .map((b) => ({ text: String(b.text || "").trim() }));
+    const bodyTodos = [];
+    if (typeof page.noteBody === "string" && page.noteBody.trim()) {
+      const rawBody = page.noteBody;
+      const htmlMatches = rawBody.match(/<div[^>]*data-todo="1"[^>]*data-checked="false"[^>]*>[\s\S]*?<\/div>/gi) || [];
+      htmlMatches.forEach((m) => {
+        const txt = m.replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " ").replace(/\s+/g, " ").trim();
+        if (txt) bodyTodos.push({ text: txt });
+      });
+      rawBody.split(/\r?\n/).forEach((ln) => {
+        const md = ln.trim().match(/^(?:[-*+]\s*)?\[\s\]\s+(.+)$/);
+        if (md && md[1]?.trim()) bodyTodos.push({ text: md[1].trim() });
+      });
+    }
+    const uncheckedTodos = [...blockTodos, ...bodyTodos];
     if (uncheckedTodos.length === 0) {
       showToast("장보기에 담을 미완료 체크 항목이 없습니다.");
       return;
@@ -18607,8 +18665,23 @@ ${item.memo}` : `${item.title} 다녀옴!`,
         showToast("최소 1개 이상의 장소는 유지해야 합니다.");
         return;
       }
+      const nextRooms = houseStorageRooms.filter((r) => r !== targetName);
+      const fallbackRoom = nextRooms[0];
+      const affectedHouse = houseItems.filter((h) => h.type === "storage" && h.room === targetName);
+      if (affectedHouse.length > 0) {
+        if (!await askConfirm(`'${targetName}' 장소에 연결된 수납 항목 ${affectedHouse.length}건이 있습니다.\n삭제 시 '${fallbackRoom}' 장소로 자동 이동됩니다. 계속할까요?`, "이동 후 삭제")) return;
+        if (user && db) {
+          for (let i = 0; i < affectedHouse.length; i += 200) {
+            const batch = writeBatch(db);
+            affectedHouse.slice(i, i + 200).forEach((h) => {
+              batch.set(getDocRef("family_house_items_v1", h.id), { ...h, room: fallbackRoom }, { merge: true });
+            });
+            await batch.commit().catch(() => {});
+          }
+        }
+      }
       if (houseFilter === targetName) setHouseFilter("전체");
-      await saveHouseStorageRoomsToCloud(houseStorageRooms.filter((r) => r !== targetName), `🗑️ '${targetName}' 장소를 삭제했습니다.`);
+      await saveHouseStorageRoomsToCloud(nextRooms, affectedHouse.length > 0 ? `🗑️ '${targetName}' 삭제 · ${affectedHouse.length}건을 '${fallbackRoom}'(으)로 이동했습니다.` : `🗑️ '${targetName}' 장소를 삭제했습니다.`);
       return;
     }
     const curList = customCategories[kind] || [];
@@ -18617,18 +18690,46 @@ ${item.memo}` : `${item.title} 다녀옴!`,
       return;
     }
     const nextList = curList.filter((c) => c !== targetName);
+    const fallbackCat = nextList[0];
+    const migrateSpecs = {
+      fridge: { list: fridge.filter((x) => x.category === targetName), col: "family_fridge_v4", field: "category" },
+      fridge_locations: { list: fridge.filter((x) => x.location === targetName), col: "family_fridge_v4", field: "location" },
+      recipe: { list: recipes.filter((x) => x.category === targetName), col: "family_recipes_v8", field: "category" },
+      recipe_difficulties: { list: recipes.filter((x) => x.difficulty === targetName), col: "family_recipes_v8", field: "difficulty" },
+      notice: { list: notices.filter((x) => x.category === targetName), col: "family_notices_v4", field: "category" },
+      bucket: { list: bucketList.filter((x) => x.category === targetName), col: "family_bucket_v1", field: "category" },
+      schedule: { list: schedules.filter((x) => x.category === targetName), col: "family_schedules_v4", field: "category" },
+      condolence_cat: { list: condolenceList.filter((x) => x.category === targetName), col: "family_condolence_v1", field: "category" },
+      condolence_group: { list: condolenceList.filter((x) => x.group === targetName), col: "family_condolence_v1", field: "group" }
+    };
+    const spec = migrateSpecs[kind];
+    let migratedCnt = 0;
+    if (spec && spec.list.length > 0) {
+      if (!await askConfirm(`'${targetName}' 분류를 사용 중인 기록 ${spec.list.length}건이 있습니다.\n삭제 시 '${fallbackCat}' 분류로 자동 이동됩니다. 계속할까요?`, "이동 후 삭제")) return;
+      migratedCnt = spec.list.length;
+      if (user && db) {
+        for (let i = 0; i < spec.list.length; i += 200) {
+          const batch = writeBatch(db);
+          spec.list.slice(i, i + 200).forEach((item) => {
+            batch.set(getDocRef(spec.col, item.id), { ...item, [spec.field]: fallbackCat }, { merge: true });
+          });
+          await batch.commit().catch(() => {});
+        }
+      }
+    }
     const nextCats = { ...customCategories, [kind]: nextList };
     if (kind === "fridge" && fridgeCatFilter === targetName) setFridgeCatFilter("전체");
     if (kind === "fridge_locations" && fridgeLocFilter === targetName) setFridgeLocFilter("전체");
     if (kind === "fridge" && shoppingCatFilter === targetName) setShoppingCatFilter("전체");
     if (kind === "recipe" && recipeCatFilter === targetName) setRecipeCatFilter("전체");
+    if (kind === "recipe_difficulties" && recipeDiffFilter === targetName) setRecipeDiffFilter("전체");
     if (kind === "bucket" && bucketCatFilter === targetName) setBucketCatFilter("전체");
     if (kind === "notice" && noticeCatFilter === targetName) setNoticeCatFilter("전체");
     if (kind === "schedule" && scheduleCatFilter === targetName) setScheduleCatFilter("전체");
     if (kind === "condolence_cat" && condolenceCatFilter === targetName) setCondolenceCatFilter("전체");
     if (kind === "condolence_group" && condolenceGroupFilter === targetName) setCondolenceGroupFilter("전체");
     if (kind === "house_med_target" && houseFilter === targetName) setHouseFilter("전체");
-    await saveCustomCategoriesToCloud(nextCats, `🗑️ '${targetName}' 분류를 삭제했습니다.`);
+    await saveCustomCategoriesToCloud(nextCats, migratedCnt > 0 ? `🗑️ '${targetName}' 삭제 · ${migratedCnt}건을 '${fallbackCat}'(으)로 이동했습니다.` : `🗑️ '${targetName}' 분류를 삭제했습니다.`);
   };
 
   const handleMoveCustomCategory = async (kind, idx, delta) => {
@@ -20029,7 +20130,8 @@ ${item.memo}` : `${item.title} 다녀옴!`,
         parentId: pageMetaForm.parentId === editingPageMeta.id ? null : (pageMetaForm.parentId || null),
         updatedAtMs: nowMs
       };
-      await savePageToCloud(updated);
+      const res = await savePageToCloud(updated);
+      if (res && res.ok === false) return;
       setIsPageModalOpen(false);
       setEditingPageMeta(null);
       recordActivity("노트", "수정", cleanTitle);
@@ -37119,12 +37221,13 @@ time: "", location: "",
                           setEditingRecipe(r);
                           setRecipeForm({
                             title: r.title || "",
-                            category: r.category || "메인반찬",
+                            category: r.category || recipeCategories[0] || "메인반찬",
                             photoDataUrl: r.photoDataUrl || "",
                             ingredientsText: r.ingredientsText || "",
                             cookTime: r.cookTime || "20분",
-                            difficulty: r.difficulty || "쉬움",
+                            difficulty: r.difficulty || recipeDifficulties[0] || "쉬움",
                             ratings: r.ratings || { 수혁: 5, 아리나: 5, 시목: 0, 시율: 0 },
+                            stepsText: r.stepsText || "",
                             memo: r.memo || "",
                             platingCoach: r.platingCoach || null
                           });
@@ -41578,18 +41681,22 @@ time: "", location: "",
       )}
 
 
-      {showScrollTop && !isQuickFabOpen && !isPageVisualEditMode && !isNoteBodyFocused && !isPagePasteModalOpen && !activeTableTaskModal && !isBucketModalOpen && (
+      {showScrollTop && !isQuickFabOpen && !isPageVisualEditMode && !isNoteBodyFocused && !isPagePasteModalOpen && !activeTableTaskModal && !isBucketModalOpen && (() => {
+        const isTimerPillVisibleAtDefault =
+          !kitchenTimer.open && !timerPillHidden && !timerPillPos && (kitchenTimer.running || (Number(kitchenTimer.elapsedSec) || 0) > 0 || (Number(kitchenTimer.remainingSec) || 0) > 0 || Boolean(kitchenTimer.cookStartTimeStr));
+        return (
         <button
           type="button"
           onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
-          style={{ bottom: "calc(4.75rem + env(safe-area-inset-bottom))" }}
+          style={{ bottom: isTimerPillVisibleAtDefault ? "calc(7.65rem + env(safe-area-inset-bottom))" : "calc(4.75rem + env(safe-area-inset-bottom))" }}
           className="fixed left-4 z-30 w-9 h-9 rounded-full bg-white/90 hover:bg-white border border-stone-200 text-stone-600 shadow-md flex items-center justify-center text-[13px] font-black transition active:scale-95"
           title="맨 위로 이동"
           aria-label="맨 위로 이동"
         >
           ↑
         </button>
-      )}
+        );
+      })()}
 
       {isEditorUnlocked && !isQuickFabOpen && !isPageVisualEditMode && !isNoteBodyFocused && !isPagePasteModalOpen && !activeTableTaskModal && !editingBlockId && !(activeTab === "bucket" && bucketViewMode === "map") && activeTab !== "condolence" && activeTab !== "alarm" && (
         <button
@@ -46695,6 +46802,32 @@ time: "", location: "",
                 식단 {meals.length} · 냉장고 {fridge.length} · 일정 {schedules.length} · 버킷 {bucketList.length} · 노트 {familyPages.length} · 살림 {houseItems.length}
               </div>
             </div>
+
+            {failedRestoreTasks.length > 0 && (
+              <div className="p-2 rounded-xl bg-amber-50 border border-amber-200 text-[10.5px] text-amber-900 flex items-center justify-between gap-2">
+                <span className="font-bold min-w-0">
+                  ⚠️ 직전 복원 부분 실패 (성공 {failedRestoreTasks[0].succeededCount}건 · 실패 {failedRestoreTasks[0].failedCount}건)
+                </span>
+                <div className="flex items-center gap-1 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      jsonRestoreInputRef.current?.click();
+                    }}
+                    className="px-2 py-0.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-[10px] font-extrabold whitespace-nowrap"
+                  >
+                    🔄 다시 복원
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFailedRestoreTasks([])}
+                    className="px-1.5 py-0.5 rounded-lg bg-amber-100 hover:bg-amber-200 text-amber-800 text-[10px] font-bold whitespace-nowrap"
+                  >
+                    닫기
+                  </button>
+                </div>
+              </div>
+            )}
 
             <div className="grid grid-cols-2 gap-1.5">
               {accessRole !== "guest" && (
