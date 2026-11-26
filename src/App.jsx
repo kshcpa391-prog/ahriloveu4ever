@@ -202,6 +202,8 @@ import {
   DEFAULT_BABY_FEED_AMOUNTS,
   DEFAULT_BABY_DIAPER_TYPES,
   DEFAULT_BABY_SLEEP_TYPES,
+  DEFAULT_FRIDGE_UNITS,
+  DEFAULT_RECIPE_DIFFICULTIES,
   APP_FEATURE_GUIDES
 } from "./Constants";
 
@@ -5000,7 +5002,10 @@ function MainApp() {
   }); // visual | list
   const [fridgeSearch, setFridgeSearch] = useState("");
   const [debouncedFridgeSearch, setDebouncedFridgeSearch] = useState("");
-  const [fridgeSort, setFridgeSort] = useState("expiry"); // expiry | recent | name
+  const [fridgeSort, setFridgeSort] = useState(() => {
+    try { const v = localStorage.getItem("kim_fridge_sort_v1"); if (["expiry", "recent", "name"].includes(v)) return v; } catch (e) {}
+    return "expiry";
+  }); // expiry | recent | name
   const [bulkMoveMode, setBulkMoveMode] = useState(false);
   const [selectedBulkFridgeIds, setSelectedBulkFridgeIds] = useState([]);
   const [bulkTargetZone, setBulkTargetZone] = useState("냉장 1단(상단)");
@@ -5046,7 +5051,10 @@ function MainApp() {
   }, [recipeSearch]);
   const [recipeCatFilter, setRecipeCatFilter] = useState("전체");
   const [recipeDiffFilter, setRecipeDiffFilter] = useState("전체");
-  const [recipeSort, setRecipeSort] = useState("latest"); // latest | rating | time
+  const [recipeSort, setRecipeSort] = useState(() => {
+    try { const v = localStorage.getItem("kim_recipe_sort_v1"); if (["latest", "rating", "time"].includes(v)) return v; } catch (e) {}
+    return "latest";
+  }); // latest | rating | time
   const [recipeViewMode, setRecipeViewMode] = useState(() => {
     try { const v = localStorage.getItem("kim_recipe_view_mode_v1"); return v === "summary" ? "summary" : "cards"; } catch (e) { return "cards"; }
   }); // cards | summary
@@ -5118,7 +5126,10 @@ function MainApp() {
   const [monthlySubTab, setMonthlySubTab] = useState("calendar");
   const [currentMonth, setCurrentMonth] = useState(() => getCurrentYearMonth());
   const [monthlyMember, setMonthlyMember] = useState("시목");
-  const [monthlyCalViewMode, setMonthlyCalViewMode] = useState("list");
+  const [monthlyCalViewMode, setMonthlyCalViewMode] = useState(() => {
+    try { const v = localStorage.getItem("kim_monthly_cal_view_v1"); if (v === "calendar" || v === "list") return v; } catch (e) {}
+    return "list";
+  });
   const [monthlyListOrder, setMonthlyListOrder] = useState("desc");
   const [monthlySlotFilter, setMonthlySlotFilter] = useState("전체");
   const [monthlySearchQuery, setMonthlySearchQuery] = useState("");
@@ -5141,7 +5152,10 @@ function MainApp() {
     lat: null,
     lng: null
   });
-  const [bucketViewMode, setBucketViewMode] = useState("map");
+  const [bucketViewMode, setBucketViewMode] = useState(() => {
+    try { const v = localStorage.getItem("kim_bucket_view_v1"); if (v === "map" || v === "list") return v; } catch (e) {}
+    return "map";
+  });
   const [bucketCatFilter, setBucketCatFilter] = useState("전체");
   const [bucketWeatherOnly, setBucketWeatherOnly] = useState(false);
   const [bucketMemberFilter, setBucketMemberFilter] = useState("전체");
@@ -5194,7 +5208,9 @@ function MainApp() {
           condolence_amounts: Array.isArray(saved.condolence_amounts) && saved.condolence_amounts.length > 0 ? saved.condolence_amounts.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_CONDOLENCE_AMOUNTS],
           baby_feed_amounts: Array.isArray(saved.baby_feed_amounts) && saved.baby_feed_amounts.length > 0 ? saved.baby_feed_amounts.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_BABY_FEED_AMOUNTS],
           baby_diaper_types: Array.isArray(saved.baby_diaper_types) && saved.baby_diaper_types.length > 0 ? saved.baby_diaper_types.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_BABY_DIAPER_TYPES],
-          baby_sleep_types: Array.isArray(saved.baby_sleep_types) && saved.baby_sleep_types.length > 0 ? saved.baby_sleep_types.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_BABY_SLEEP_TYPES]
+          baby_sleep_types: Array.isArray(saved.baby_sleep_types) && saved.baby_sleep_types.length > 0 ? saved.baby_sleep_types.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_BABY_SLEEP_TYPES],
+          fridge_units: Array.isArray(saved.fridge_units) && saved.fridge_units.length > 0 ? saved.fridge_units.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_FRIDGE_UNITS],
+          recipe_difficulties: Array.isArray(saved.recipe_difficulties) && saved.recipe_difficulties.length > 0 ? saved.recipe_difficulties.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_RECIPE_DIFFICULTIES]
         };
       }
     } catch (e) {}
@@ -5228,7 +5244,9 @@ function MainApp() {
       condolence_amounts: [...DEFAULT_CONDOLENCE_AMOUNTS],
       baby_feed_amounts: [...DEFAULT_BABY_FEED_AMOUNTS],
       baby_diaper_types: [...DEFAULT_BABY_DIAPER_TYPES],
-      baby_sleep_types: [...DEFAULT_BABY_SLEEP_TYPES]
+      baby_sleep_types: [...DEFAULT_BABY_SLEEP_TYPES],
+      fridge_units: [...DEFAULT_FRIDGE_UNITS],
+      recipe_difficulties: [...DEFAULT_RECIPE_DIFFICULTIES]
     };
   });
   const fridgeCategories = customCategories.fridge;
@@ -5261,6 +5279,8 @@ function MainApp() {
   const babyFeedAmounts = customCategories.baby_feed_amounts || DEFAULT_BABY_FEED_AMOUNTS;
   const babyDiaperTypes = customCategories.baby_diaper_types || DEFAULT_BABY_DIAPER_TYPES;
   const babySleepTypes = customCategories.baby_sleep_types || DEFAULT_BABY_SLEEP_TYPES;
+  const fridgeUnits = customCategories.fridge_units || DEFAULT_FRIDGE_UNITS;
+  const recipeDifficulties = customCategories.recipe_difficulties || DEFAULT_RECIPE_DIFFICULTIES;
   const [isManualExpenseOpen, setIsManualExpenseOpen] = useState(false);
   const [manualExpenseForm, setManualExpenseForm] = useState(() => ({
     date: getTodayStr(),
@@ -5333,6 +5353,7 @@ function MainApp() {
     return "category";
   });
   const uiViewPrefsInitRef = useRef(false);
+  const isApplyingRemoteViewPrefsRef = useRef(false);
   useEffect(() => {
     try {
       localStorage.setItem("kim_selected_child_v1", selectedChildId);
@@ -5344,6 +5365,7 @@ function MainApp() {
       uiViewPrefsInitRef.current = true;
       return;
     }
+    if (isApplyingRemoteViewPrefsRef.current) return;
     if (!user || !db) return;
     const tid = setTimeout(() => {
       setDoc(
@@ -5688,7 +5710,34 @@ function MainApp() {
   });
   const [editingRoutineId, setEditingRoutineId] = useState(null);
   const [isRoutineModalOpen, setIsRoutineModalOpen] = useState(false);
-  const [hideEmptyMealSlots, setHideEmptyMealSlots] = useState(true);
+  const [hideEmptyMealSlots, setHideEmptyMealSlots] = useState(() => {
+    try { const v = localStorage.getItem("kim_hide_empty_meals_v1"); if (v === "false") return false; if (v === "true") return true; } catch (e) {}
+    return true;
+  });
+  const uiExtraPrefsInitRef = useRef(false);
+  useEffect(() => {
+    try {
+      localStorage.setItem("kim_bucket_view_v1", bucketViewMode);
+      localStorage.setItem("kim_monthly_cal_view_v1", monthlyCalViewMode);
+      localStorage.setItem("kim_hide_empty_meals_v1", String(hideEmptyMealSlots));
+      localStorage.setItem("kim_fridge_sort_v1", fridgeSort);
+      localStorage.setItem("kim_recipe_sort_v1", recipeSort);
+    } catch (e) {}
+    if (!uiExtraPrefsInitRef.current) {
+      uiExtraPrefsInitRef.current = true;
+      return;
+    }
+    if (isApplyingRemoteViewPrefsRef.current) return;
+    if (!user || !db) return;
+    const tid = setTimeout(() => {
+      setDoc(
+        getDocRef("family_meta_v4", "home_layout"),
+        { bucketViewMode, monthlyCalViewMode, hideEmptyMealSlots, fridgeSort, recipeSort, updatedAtMs: Date.now() },
+        { merge: true }
+      ).catch(() => {});
+    }, 450);
+    return () => clearTimeout(tid);
+  }, [bucketViewMode, monthlyCalViewMode, hideEmptyMealSlots, fridgeSort, recipeSort, user]);
   const [currentDayKey, setCurrentDayKey] = useState(() => getTodayStr());
   useEffect(() => {
     const syncDayKey = () => {
@@ -9475,11 +9524,12 @@ function MainApp() {
             setHomeRoutineTargetFilter(d.homeRoutineTarget);
             try { localStorage.setItem("kim_home_routine_target_v1", d.homeRoutineTarget); } catch (e) {}
           }
+          isApplyingRemoteViewPrefsRef.current = true;
           if (d?.selectedChildId === "시목" || d?.selectedChildId === "시율") {
             setSelectedChildId(d.selectedChildId);
             try { localStorage.setItem("kim_selected_child_v1", d.selectedChildId); } catch (e) {}
           }
-          if (d?.growthChartMetric === "weight" || d?.growthChartMetric === "height" || d?.growthChartMetric === "head") {
+          if (["weight", "height", "head", "bmi"].includes(d?.growthChartMetric)) {
             setGrowthChartMetric(d.growthChartMetric);
             try { localStorage.setItem("kim_growth_metric_v1", d.growthChartMetric); } catch (e) {}
           }
@@ -9491,6 +9541,27 @@ function MainApp() {
             setCondolenceSubtotalTab(d.condolenceSubtotalTab);
             try { localStorage.setItem("kim_condolence_subtotal_tab_v1", d.condolenceSubtotalTab); } catch (e) {}
           }
+          if (d?.bucketViewMode === "map" || d?.bucketViewMode === "list") {
+            setBucketViewMode(d.bucketViewMode);
+            try { localStorage.setItem("kim_bucket_view_v1", d.bucketViewMode); } catch (e) {}
+          }
+          if (d?.monthlyCalViewMode === "calendar" || d?.monthlyCalViewMode === "list") {
+            setMonthlyCalViewMode(d.monthlyCalViewMode);
+            try { localStorage.setItem("kim_monthly_cal_view_v1", d.monthlyCalViewMode); } catch (e) {}
+          }
+          if (typeof d?.hideEmptyMealSlots === "boolean") {
+            setHideEmptyMealSlots(d.hideEmptyMealSlots);
+            try { localStorage.setItem("kim_hide_empty_meals_v1", String(d.hideEmptyMealSlots)); } catch (e) {}
+          }
+          if (["expiry", "recent", "name"].includes(d?.fridgeSort)) {
+            setFridgeSort(d.fridgeSort);
+            try { localStorage.setItem("kim_fridge_sort_v1", d.fridgeSort); } catch (e) {}
+          }
+          if (["latest", "rating", "time"].includes(d?.recipeSort)) {
+            setRecipeSort(d.recipeSort);
+            try { localStorage.setItem("kim_recipe_sort_v1", d.recipeSort); } catch (e) {}
+          }
+          setTimeout(() => { isApplyingRemoteViewPrefsRef.current = false; }, 120);
         },
         () => {}
       )
@@ -9668,7 +9739,9 @@ function MainApp() {
               condolence_amounts: Array.isArray(d.condolence_amounts) && d.condolence_amounts.length > 0 ? d.condolence_amounts.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_CONDOLENCE_AMOUNTS],
               baby_feed_amounts: Array.isArray(d.baby_feed_amounts) && d.baby_feed_amounts.length > 0 ? d.baby_feed_amounts.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_BABY_FEED_AMOUNTS],
               baby_diaper_types: Array.isArray(d.baby_diaper_types) && d.baby_diaper_types.length > 0 ? d.baby_diaper_types.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_BABY_DIAPER_TYPES],
-              baby_sleep_types: Array.isArray(d.baby_sleep_types) && d.baby_sleep_types.length > 0 ? d.baby_sleep_types.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_BABY_SLEEP_TYPES]
+              baby_sleep_types: Array.isArray(d.baby_sleep_types) && d.baby_sleep_types.length > 0 ? d.baby_sleep_types.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_BABY_SLEEP_TYPES],
+              fridge_units: Array.isArray(d.fridge_units) && d.fridge_units.length > 0 ? d.fridge_units.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_FRIDGE_UNITS],
+              recipe_difficulties: Array.isArray(d.recipe_difficulties) && d.recipe_difficulties.length > 0 ? d.recipe_difficulties.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_RECIPE_DIFFICULTIES]
             };
             setCustomCategories(nextCats);
             try { localStorage.setItem("kim_custom_categories_v1", JSON.stringify(nextCats)); } catch (e) {}
@@ -10480,6 +10553,11 @@ function MainApp() {
         routineViewMode,
         fridgeViewMode,
         recipeViewMode,
+        bucketViewMode,
+        monthlyCalViewMode,
+        hideEmptyMealSlots,
+        fridgeSort,
+        recipeSort,
         smartNotifPrefs,
         notifSilentMode,
         customAlarms,
@@ -10739,7 +10817,9 @@ function MainApp() {
           condolence_amounts: Array.isArray(payload.customCategories.condolence_amounts) && payload.customCategories.condolence_amounts.length > 0 ? payload.customCategories.condolence_amounts.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_CONDOLENCE_AMOUNTS],
           baby_feed_amounts: Array.isArray(payload.customCategories.baby_feed_amounts) && payload.customCategories.baby_feed_amounts.length > 0 ? payload.customCategories.baby_feed_amounts.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_BABY_FEED_AMOUNTS],
           baby_diaper_types: Array.isArray(payload.customCategories.baby_diaper_types) && payload.customCategories.baby_diaper_types.length > 0 ? payload.customCategories.baby_diaper_types.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_BABY_DIAPER_TYPES],
-          baby_sleep_types: Array.isArray(payload.customCategories.baby_sleep_types) && payload.customCategories.baby_sleep_types.length > 0 ? payload.customCategories.baby_sleep_types.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_BABY_SLEEP_TYPES]
+          baby_sleep_types: Array.isArray(payload.customCategories.baby_sleep_types) && payload.customCategories.baby_sleep_types.length > 0 ? payload.customCategories.baby_sleep_types.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_BABY_SLEEP_TYPES],
+          fridge_units: Array.isArray(payload.customCategories.fridge_units) && payload.customCategories.fridge_units.length > 0 ? payload.customCategories.fridge_units.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_FRIDGE_UNITS],
+          recipe_difficulties: Array.isArray(payload.customCategories.recipe_difficulties) && payload.customCategories.recipe_difficulties.length > 0 ? payload.customCategories.recipe_difficulties.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_RECIPE_DIFFICULTIES]
         };
         setCustomCategories(nextCats);
         try { localStorage.setItem("kim_custom_categories_v1", JSON.stringify(nextCats)); } catch (e) {}
@@ -10804,6 +10884,11 @@ function MainApp() {
       if (payload.recipeViewMode === "cards" || payload.recipeViewMode === "summary") {
         updateRecipeViewMode(payload.recipeViewMode);
       }
+      if (payload.bucketViewMode === "map" || payload.bucketViewMode === "list") setBucketViewMode(payload.bucketViewMode);
+      if (payload.monthlyCalViewMode === "calendar" || payload.monthlyCalViewMode === "list") setMonthlyCalViewMode(payload.monthlyCalViewMode);
+      if (typeof payload.hideEmptyMealSlots === "boolean") setHideEmptyMealSlots(payload.hideEmptyMealSlots);
+      if (["expiry", "recent", "name"].includes(payload.fridgeSort)) setFridgeSort(payload.fridgeSort);
+      if (["latest", "rating", "time"].includes(payload.recipeSort)) setRecipeSort(payload.recipeSort);
       if (isSuhyeokAdmin && typeof payload.condolencePin === "string" && payload.condolencePin.trim().length >= 4) {
         const rp = payload.condolencePin.trim();
         setCondolencePin(rp);
@@ -11057,6 +11142,8 @@ function MainApp() {
                 baby_feed_amounts: Array.isArray(payload.customCategories.baby_feed_amounts) && payload.customCategories.baby_feed_amounts.length > 0 ? payload.customCategories.baby_feed_amounts : [...DEFAULT_BABY_FEED_AMOUNTS],
                 baby_diaper_types: Array.isArray(payload.customCategories.baby_diaper_types) && payload.customCategories.baby_diaper_types.length > 0 ? payload.customCategories.baby_diaper_types : [...DEFAULT_BABY_DIAPER_TYPES],
                 baby_sleep_types: Array.isArray(payload.customCategories.baby_sleep_types) && payload.customCategories.baby_sleep_types.length > 0 ? payload.customCategories.baby_sleep_types : [...DEFAULT_BABY_SLEEP_TYPES],
+                fridge_units: Array.isArray(payload.customCategories.fridge_units) && payload.customCategories.fridge_units.length > 0 ? payload.customCategories.fridge_units : [...DEFAULT_FRIDGE_UNITS],
+                recipe_difficulties: Array.isArray(payload.customCategories.recipe_difficulties) && payload.customCategories.recipe_difficulties.length > 0 ? payload.customCategories.recipe_difficulties : [...DEFAULT_RECIPE_DIFFICULTIES],
                 updatedAtMs: Date.now()
               },
               { merge: true }
@@ -18188,9 +18275,9 @@ ${item.memo}` : `${item.title} 다녀옴!`,
 
   // === ⚙️ 통합 세부 카테고리 자유 관리 (재료 · 레시피 · 가족공지) ===
   const getCategoryTabKey = (kind) => {
-    if (kind === "fridge" || kind === "fridge_locations") return "fridge";
+    if (kind === "fridge" || kind === "fridge_locations" || kind === "fridge_units") return "fridge";
     if (kind === "shopping_presets") return "shopping";
-    if (kind === "recipe") return "recipes";
+    if (kind === "recipe" || kind === "recipe_difficulties") return "recipes";
     if (kind === "bucket") return "bucket";
     if (kind === "schedule" || kind === "schedule_places" || kind === "schedule_quick_times") return "schedule";
     if (kind === "routine_time_presets") return "routines";
@@ -18348,6 +18435,20 @@ ${item.memo}` : `${item.title} 다녀옴!`,
             const batch = writeBatch(db);
             affected.slice(i, i + 200).forEach((r) => {
               batch.set(getDocRef("family_recipes_v8", r.id), { ...r, category: nextName }, { merge: true });
+            });
+            await batch.commit();
+          }
+        } catch (e) {}
+      }
+    } else if (kind === "recipe_difficulties") {
+      if (recipeDiffFilter === oldName) setRecipeDiffFilter(nextName);
+      const affected = recipes.filter((r) => r.difficulty === oldName);
+      if (affected.length > 0 && user && db) {
+        try {
+          for (let i = 0; i < affected.length; i += 200) {
+            const batch = writeBatch(db);
+            affected.slice(i, i + 200).forEach((r) => {
+              batch.set(getDocRef("family_recipes_v8", r.id), { ...r, difficulty: nextName }, { merge: true });
             });
             await batch.commit();
           }
@@ -18622,6 +18723,10 @@ ${item.memo}` : `${item.title} 다녀옴!`,
         ? [...DEFAULT_BABY_DIAPER_TYPES]
         : kind === "baby_sleep_types"
         ? [...DEFAULT_BABY_SLEEP_TYPES]
+        : kind === "fridge_units"
+        ? [...DEFAULT_FRIDGE_UNITS]
+        : kind === "recipe_difficulties"
+        ? [...DEFAULT_RECIPE_DIFFICULTIES]
         : [...NOTICE_CATEGORIES];
     await saveCustomCategoriesToCloud({ ...customCategories, [kind]: defaults }, "↺ 기본 분류 목록으로 복원했습니다.");
   };
@@ -30781,7 +30886,24 @@ time: "", location: "",
                 </div>
 
 
-                <div className="flex items-center gap-1.5 shrink-0">
+                <div className="flex items-center gap-1 shrink-0">
+                  {canViewTab("recipes") && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const kw = String(item.name || "").trim().split(/\s+/)[0];
+                        setRecipeCatFilter("전체");
+                        setRecipeDiffFilter("전체");
+                        setRecipeSearch(kw);
+                        setActiveTab("recipes");
+                        showToast(`📖 레시피북에서 '${kw}' 활용 요리를 검색합니다.`);
+                      }}
+                      className="p-1.5 rounded-lg bg-stone-100 hover:bg-[#EEF3EE] text-stone-600 hover:text-[#35503C] text-[12px] shrink-0"
+                      title="이 재료로 레시피 검색"
+                    >
+                      📖
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => {
@@ -36765,9 +36887,9 @@ time: "", location: "",
                   className="flex-1 min-w-0 truncate px-2.5 py-1.5 rounded-xl border border-stone-200 bg-white text-[12.5px] font-bold"
                 >
                   <option value="전체">난이도 전체</option>
-                  <option value="쉬움">쉬움</option>
-                  <option value="보통">보통</option>
-                  <option value="어려움">어려움</option>
+                  {recipeDifficulties.map((d) => (
+                    <option key={d} value={d}>{d}</option>
+                  ))}
                 </select>
                 <select
                   value={recipeSort}
@@ -37056,18 +37178,57 @@ time: "", location: "",
                             <div className="text-[15px] font-black text-stone-900 break-keep">{r.title}</div>
                           </div>
                           <div className="flex items-center gap-0.5 shrink-0">
+                            {canEditTab("pages") && (
+                              <button
+                                type="button"
+                                onClick={async () => {
+                                  if (!requireEditorAccess("pages")) return;
+                                  const pageId = `pg-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+                                  const ingList = String(r.ingredientsText || "").split(/[+,\n]+/).map((s) => s.trim()).filter(Boolean);
+                                  const blocks = [
+                                    { id: `blk-${Date.now()}-h1`, type: "heading", text: `🥕 재료 (${r.cookTime || "20분"} · ${r.difficulty || recipeDifficulties[0] || "쉬움"})`, color: "emerald" },
+                                    ...ingList.map((ing, idx) => ({ id: `blk-${Date.now()}-t-${idx}`, type: "todo", text: ing, checked: false })),
+                                    ...(r.stepsText ? [{ id: `blk-${Date.now()}-h2`, type: "heading", text: "👩‍🍳 조리 순서", color: "amber" }, { id: `blk-${Date.now()}-s`, type: "text", text: r.stepsText }] : []),
+                                    ...(r.memo ? [{ id: `blk-${Date.now()}-m`, type: "text", text: `📝 메모: ${r.memo}` }] : [])
+                                  ];
+                                  const newPage = {
+                                    id: pageId,
+                                    title: `🍽️ ${r.title}`,
+                                    icon: "📖",
+                                    coverColor: "sage",
+                                    parentId: null,
+                                    blocks,
+                                    createdAt: new Date().toISOString(),
+                                    updatedAt: new Date().toISOString(),
+                                    updatedBy: actorName || "가족"
+                                  };
+                                  setFamilyPages((prev) => [newPage, ...prev]);
+                                  if (user && db) {
+                                    try { await setDoc(getDocRef("family_pages_v1", pageId), newPage, { merge: true }); } catch (e) {}
+                                  }
+                                  recordActivity("공유노트", "레시피→노트 저장", r.title, { targetId: pageId });
+                                  setSelectedPageId(pageId);
+                                  setActiveTab("pages");
+                                  showToast(`🗂️ '${r.title}' 레시피를 공유노트로 저장했습니다.`);
+                                }}
+                                className="p-1.5 rounded-lg hover:bg-[#EEF3EE] text-stone-500 hover:text-[#35503C] text-[12px]"
+                                title="공유노트 페이지로 저장"
+                              >
+                                🗂️
+                              </button>
+                            )}
                             <button
                               type="button"
                               onClick={() => {
-                                if (!requireEditorAccess()) return;
+                                if (!requireEditorAccess("recipes")) return;
                                 setEditingRecipe(r);
                                 setRecipeForm({
                                   title: r.title || "",
-                                  category: r.category || "메인반찬",
+                                  category: r.category || recipeCategories[0] || "메인반찬",
                                   photoDataUrl: r.photoDataUrl || "",
                                   ingredientsText: r.ingredientsText || "",
                                   cookTime: r.cookTime || "20분",
-                                  difficulty: r.difficulty || "쉬움",
+                                  difficulty: r.difficulty || recipeDifficulties[0] || "쉬움",
                                   ratings: r.ratings || { 수혁: 5, 아리나: 5, 시목: 0, 시율: 0 },
                                   stepsText: r.stepsText || "",
                                   memo: r.memo || "",
@@ -37154,8 +37315,8 @@ time: "", location: "",
                       {["수혁", "아리나", "시목", "시율"].map((mName) => {
                         const score = Number(r.ratings?.[mName] || 0);
                         return score > 0 ? (
-                          <span key={mName} className="px-2 py-0.5 rounded-full bg-amber-50 whitespace-nowrap shrink-0 border border-amber-200 text-amber-900 whitespace-nowrap">
-                            {mName} {"⭐".repeat(score)}
+                          <span key={mName} className="px-2 py-0.5 rounded-full bg-amber-50 whitespace-nowrap shrink-0 border border-amber-200 text-amber-900">
+                            {mName === "아리나" ? "아리" : mName} {"⭐".repeat(score)}
                           </span>
                         ) : null;
                       })}
@@ -42260,7 +42421,7 @@ time: "", location: "",
               {activeDetail ? (
                 <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3 bg-white">
                   <div className="pb-2.5 border-b border-stone-300">
-                    <div className={`text-[17px] font-black text-stone-900 break-keep leading-snug ${activeDetail.done ? "line-through opacity-50" : ""}`}>
+                    <div className={`text-[15px] font-black text-stone-900 break-keep leading-snug ${activeDetail.done ? "line-through opacity-50" : ""}`}>
                       {activeDetail.title}
                     </div>
                   </div>
@@ -45014,8 +45175,34 @@ time: "", location: "",
                 placeholder="단위 (개, 팩, g)"
                 value={fridgeForm.unit}
                 onChange={(e) => setFridgeForm({ ...fridgeForm, unit: e.target.value })}
-                className="px-3 py-2 rounded-xl border border-stone-200 text-[13.5px] font-bold"
+                className="px-3 py-2 rounded-xl border border-stone-200 text-[13.5px] font-bold min-w-0"
               />
+            </div>
+            <div className="flex items-center gap-1 flex-wrap">
+              {fridgeUnits.map((u) => (
+                <button
+                  key={u}
+                  type="button"
+                  onClick={() => setFridgeForm({ ...fridgeForm, unit: u })}
+                  className={`px-2 py-0.5 rounded-lg text-[10.5px] font-extrabold border whitespace-nowrap transition ${
+                    fridgeForm.unit === u
+                      ? "bg-[#3F624D] text-white border-[#3F624D]"
+                      : "bg-stone-50 text-stone-600 border-stone-200 hover:bg-stone-100"
+                  }`}
+                >
+                  {u}
+                </button>
+              ))}
+              {canEditTab("fridge") && (
+                <button
+                  type="button"
+                  onClick={() => openCategoryManager("fridge_units")}
+                  className="px-1.5 py-0.5 rounded-lg text-[10px] font-extrabold bg-stone-100 text-stone-500 hover:bg-stone-200 whitespace-nowrap"
+                  title="단위 프리셋 편집"
+                >
+                  ⚙️
+                </button>
+              )}
             </div>
 
 
@@ -45977,7 +46164,9 @@ time: "", location: "",
           condolence_amounts: { title: "💰 경조사 금액 프리셋", placeholder: "예: 7만, 15만 또는 70000" },
           baby_feed_amounts: { title: "🍼 아기 수유량 프리셋", placeholder: "숫자(ml/g) 입력 (예: 140, 180, 240)" },
           baby_diaper_types: { title: "🧷 기저귀 배변 구분", placeholder: "새 배변 구분 (예: 묽은변, 녹변)" },
-          baby_sleep_types: { title: "😴 아기 수면 구분", placeholder: "새 수면 구분 (예: 쪽잠, 유모차잠)" }
+          baby_sleep_types: { title: "😴 아기 수면 구분", placeholder: "새 수면 구분 (예: 쪽잠, 유모차잠)" },
+          fridge_units: { title: "⚖️ 냉장고 단위 프리셋", placeholder: "새 단위 (예: 망, 포기, 컵, 줄)" },
+          recipe_difficulties: { title: "👩‍🍳 레시피 난이도", placeholder: "새 난이도 (예: 초간단, 5분컷, 특식)" }
         }[categoryManageKind] || { title: "⚙️ 분류 관리", placeholder: "새 분류 입력" };
         return (
           <div
@@ -46017,7 +46206,9 @@ time: "", location: "",
                 {[
                   { id: "fridge", label: "❄️ 재료", cnt: (customCategories.fridge || []).length },
                   { id: "fridge_locations", label: "🧊 보관위치", cnt: fridgeLocations.length },
+                  { id: "fridge_units", label: "⚖️ 단위", cnt: fridgeUnits.length },
                   { id: "recipe", label: "📖 레시피", cnt: (customCategories.recipe || []).length },
+                  { id: "recipe_difficulties", label: "👩‍🍳 난이도", cnt: recipeDifficulties.length },
                   { id: "notice", label: "📌 공지", cnt: (customCategories.notice || []).length },
                   { id: "bucket", label: "🌟 버킷", cnt: (customCategories.bucket || []).length },
                   { id: "schedule", label: "🗓️ 일정", cnt: (customCategories.schedule || []).length },
@@ -51047,15 +51238,30 @@ time: "", location: "",
                   </button>
                 )}
               </div>
-              <select
-                value={recipeForm.difficulty}
-                onChange={(e) => setRecipeForm({ ...recipeForm, difficulty: e.target.value })}
-                className="px-3 py-2 rounded-xl border border-stone-200 text-[13.5px] font-bold bg-stone-50"
-              >
-                <option value="쉬움">난이도: 쉬움</option>
-                <option value="보통">난이도: 보통</option>
-                <option value="어려움">난이도: 어려움</option>
-              </select>
+              <div className="flex items-center gap-1 min-w-0">
+                <select
+                  value={recipeForm.difficulty}
+                  onChange={(e) => setRecipeForm({ ...recipeForm, difficulty: e.target.value })}
+                  className="flex-1 min-w-0 truncate px-2.5 py-2 rounded-xl border border-stone-200 text-[13px] font-bold bg-stone-50"
+                >
+                  {!recipeDifficulties.includes(recipeForm.difficulty) && recipeForm.difficulty && (
+                    <option value={recipeForm.difficulty}>난이도: {recipeForm.difficulty}</option>
+                  )}
+                  {recipeDifficulties.map((d) => (
+                    <option key={d} value={d}>난이도: {d}</option>
+                  ))}
+                </select>
+                {canEditTab("recipes") && (
+                  <button
+                    type="button"
+                    onClick={() => openCategoryManager("recipe_difficulties")}
+                    className="h-9 px-2 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-600 text-[11px] font-extrabold shrink-0 whitespace-nowrap"
+                    title="난이도 항목 편집"
+                  >
+                    ⚙️
+                  </button>
+                )}
+              </div>
             </div>
 
 
@@ -51288,7 +51494,7 @@ time: "", location: "",
               <div>
                 <div className="flex items-center gap-1.5">
                   <span className="text-lg">{getFridgeCategoryIcon(quickFridgeItem.category)}</span>
-                  <span className="text-[17px] font-black text-stone-900">{quickFridgeItem.name}</span>
+                  <span className="text-[15px] font-black text-stone-900 truncate min-w-0">{quickFridgeItem.name}</span>
                 </div>
                 <div className="text-[12.5px] font-bold text-stone-500 mt-0.5">
                   {resolveItemShelfZone(quickFridgeItem)} ·{" "}
@@ -54958,7 +55164,7 @@ time: "", location: "",
                   readOnly={!canEdit}
                   onChange={(e) => setTaskModalDraft((p) => ({ ...p, taskName: e.target.value }))}
                   placeholder="Task 이름"
-                  className="flex-1 min-w-0 text-[18px] font-black text-stone-900 bg-transparent border-b border-transparent focus:border-stone-300 focus:outline-none pb-0.5"
+                  className="flex-1 min-w-0 text-[15px] font-black text-stone-900 bg-transparent border-b border-transparent focus:border-stone-300 focus:outline-none pb-0.5"
                 />
                 <button
                   type="button"

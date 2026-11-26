@@ -1186,7 +1186,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v14.43";
+export const APP_CODE_VERSION = "v14.44";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1204,7 +1204,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-26 13:30";
+export const APP_BUILD_DATE = "2026-11-27 00:30";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1245,7 +1245,7 @@ export const BABY_ACTIVITY_TYPES = [
   { id: "유축수유", label: "유축수유", emoji: "💚", timed: true, isFeed: true, hasMl: true, bg: "bg-[#7CB342]", soft: "bg-lime-50 text-[#689F38] border-lime-200", text: "text-[#689F38]" },
   { id: "목욕", label: "목욕", emoji: "🛁", timed: false, bg: "bg-[#4FC3F7]", soft: "bg-sky-50 text-[#2998D0] border-sky-200", text: "text-[#2998D0]" },
   { id: "터미타임", label: "터미타임", emoji: "🧸", timed: true, bg: "bg-[#4EA1E0]", soft: "bg-sky-50 text-[#4EA1E0] border-sky-200", text: "text-[#4EA1E0]" },
-  { id: "투약", label: "투약", emoji: "💊", timed: false, bg: "bg-[#EF5350]", soft: "bg-red-50 text-[#E53935] border-red-200", text: "text-[#E53935]" },
+  { id: "투약", label: "투약", emoji: "💊", timed: false, bg: "bg-[#EF5350]", soft: "bg-rose-50 text-[#E53935] border-rose-200", text: "text-[#E53935]" },
   { id: "기타", label: "기타", emoji: "📝", timed: false, bg: "bg-[#78909C]", soft: "bg-stone-100 text-[#607D8B] border-stone-200", text: "text-[#607D8B]" }
 ];
 
@@ -1274,6 +1274,19 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v14.44",
+    version: "v14.44",
+    date: "2026-11-27",
+    title: "🐛 배포 손상구문·BMI 동기화 누락·레시피 카드 권한/에코쓰기 버그 수정 + ⚙️ 냉장고 단위·레시피 난이도 자유편집 + ☁️ 뷰·정렬 5종 Firebase 이관 + 🔗 장보기→레시피·레시피→공유노트 연계 + 🎨 폰트·색상 통일",
+    items: [
+      "🐛 [버그 수정 · 배포 안정성] ① App.jsx 내 손상된 HTML 엔티티 374줄·구글맵 좌표 정규식·함수 선언(handleMoveCheckedShoppingToFridge) 복구 ② 성장그래프 비만도(bmi) 지표가 Firebase 수신 시 누락되던 버그 수정 ③ 뷰 설정 원격 수신 시 불필요한 재쓰기(echo write) 루프 차단 ④ 레시피 카드 뷰 수정 버튼의 권한 키('recipes') 누락 및 호칭('아리나'→'아리')·중복 클래스 교정",
+      "⚙️ [시스템 자유도 확장 2종] 하드코딩되어 있던 냉장고 단위 프리셋(개·팩·봉·g 등)과 레시피 난이도(쉬움·보통·어려움)를 통합 세부 카테고리 자유관리(추가/수정/삭제/순서변경/기본복원)로 승격하고, 난이도 이름 변경 시 기존 레시피 일괄 갱신 및 Firebase·JSON 백업에 완전 연동했습니다.",
+      "☁️ [Firebase 클라우드 이관 5종] 새로고침·기기 전환 시 초기화되던 버킷리스트 보기(지도/목록), 월간식단 보기(한눈에/달력), 식단 빈 끼니 숨김, 냉장고 정렬, 레시피 정렬 5종을 Firestore(family_meta_v4/home_layout) 실시간 동기화 및 JSON 백업/복원으로 이관했습니다.",
+      "🔗 [메뉴간 연계 · 편의성] ① 장보기 카드에 [📖] 1탭 버튼을 추가해 해당 재료가 들어간 레시피를 즉시 검색 ② 레시피 카드에 [🗂️] 1탭 버튼을 추가해 재료 체크리스트와 조리순서를 공유노트 새 페이지로 바로 저장 ③ 냉장고 등록·수정 모달에 단위 원탭 프리셋 칩 및 ⚙️ 바로가기를 추가했습니다.",
+      "🎨 [디자인·폰트·색상 통일] Constants.js 잔여 red-* 클래스(투약 배지)를 rose-*로 통일하고, 조르테 일정 상세·냉장고 퀵시트·공유노트 표 상세 모달의 불규칙한 대형 폰트(17~18px)를 표준 규격(15px)으로 정돈했습니다. (과거 패치노트 481건 100% 보존)"
+    ]
+  },
   {
     id: "patch-v14.43",
     version: "v14.43",
@@ -7359,6 +7372,8 @@ export const DEFAULT_CONDOLENCE_AMOUNTS = ["3만", "5만", "10만", "20만", "30
 export const DEFAULT_BABY_FEED_AMOUNTS = ["20", "30", "40", "60", "80", "100", "120", "160", "200"];
 export const DEFAULT_BABY_DIAPER_TYPES = ["소변", "대변", "혼합"];
 export const DEFAULT_BABY_SLEEP_TYPES = ["낮잠", "밤잠"];
+export const DEFAULT_FRIDGE_UNITS = ["개", "팩", "봉", "모", "캔", "병", "단", "통", "알", "g", "kg", "ml", "L"];
+export const DEFAULT_RECIPE_DIFFICULTIES = ["쉬움", "보통", "어려움"];
 
 export const APP_FEATURE_GUIDES = [
   {
@@ -7450,7 +7465,7 @@ export const APP_FEATURE_GUIDES = [
       "장을 본 뒤 체크한 품목은 [❄️ 냉장고에 바로 넣기] 버튼으로 보관 위치·소비기한을 정해 한 번에 냉장고로 옮겨요.",
       "냉장고의 임박·부족 재료가 상단에 자동 추천되므로 [+] 버튼으로 바로 장보기 목록에 담을 수 있어요."
     ],
-    tips: "상단 [📋] 버튼을 누르면 미구매 장보기 목록을 급함 우선순위로 정리해 카톡 공유용으로 바로 복사해 줘요."
+    tips: "각 품목의 [📖] 버튼으로 레시피를 바로 검색하고, 상단 [📋] 버튼으로 미구매 목록을 급함 우선순위로 카톡 복사할 수 있어요."
   },
   {
     id: "recipes",
@@ -7465,7 +7480,7 @@ export const APP_FEATURE_GUIDES = [
       "[⏱️ 타이머]를 누르면 레시피 조리시간(예: 20분, 3분 30초)이 플로팅 타이머에 자동 세팅돼요.",
       "[🍽️ 식단 재현]으로 오늘·원하는 날짜 식단에 바로 등록할 수 있어요."
     ],
-    tips: "사진 업로드 시 한상차림 사진에서 원하는 요리만 자유비율로 잘라(크롭) 올릴 수 있어요."
+    tips: "레시피 카드의 [🗂️] 버튼으로 재료 체크리스트·조리순서를 공유노트 페이지로 1탭 저장할 수 있고, 난이도도 ⚙️에서 자유 편집할 수 있어요."
   },
   {
     id: "ai",
