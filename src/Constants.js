@@ -1186,7 +1186,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v14.54";
+export const APP_CODE_VERSION = "v14.55";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1204,7 +1204,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-27 13:35";
+export const APP_BUILD_DATE = "2026-11-27 13:45";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1274,6 +1274,17 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v14.55",
+    version: "v14.55",
+    date: "2026-11-27",
+    title: "🕒 일반 저장(식단·냉장고·공지·일정) 수정이력 자동 연결 + 🔄 루틴 배열 전용 복원 어댑터 + ⚙️ 만든음식 분류/단위/보관위치 일괄 이관 + ⏱️ 스톱워치 기록 백업/복원 + 🔥 Firebase.js 1:1 정합성 검증",
+    items: [
+      "🕒 [B-4 수정이력 전면 연결 & 루틴 배열 복원 어댑터] 일반 저장 경로(식단·냉장고·가족공지·일정) 저장 성공 시 family_revisions_v1에 최초 기준본(baseline) 및 변경 diff 이력을 자동 기록하는 recordItemRevisionSafe 헬퍼를 연동했습니다. 또한 family_meta_v4/daily_routines.items 배열 안에 저장된 반복 루틴의 개별 항목을 안전하게 새 버전으로 복원하는 전용 어댑터를 handleConfirmRestoreRevision에 추가했습니다.",
+      "⚙️ [G 만든 음식 분류·단위·보관위치 일괄 이관] 보관위치(fridge_locations) 이름 변경 시 기존 냉장고 재고뿐 아니라 만든 음식 소분(family_cooked_portions_v1)의 location도 함께 일괄 이관하고, 만든 음식 분류(cooked_categories)·단위(cooked_units) 이름 변경 시 family_cooked_batches_v1·family_cooked_portions_v1을 200건 분할 배치로 일괄 갱신하도록 보완했습니다.",
+      "💾🔥 [H 스톱워치 기록 백업/복원 & Firebase.js 정합성] JSON 전체 백업·복원에 스톱워치 최근 기록(kitchenTimerRecords)을 포함하고 클라우드(timer_alarms_v1.stopwatchRecords)와 동기화했습니다. Firebase.js와 App.jsx 간 7개 import/export 1:1 일치 및 과거 패치노트 492건 100% 보존(총 493건)을 검증했습니다."
+    ]
+  },
   {
     id: "patch-v14.54",
     version: "v14.54",

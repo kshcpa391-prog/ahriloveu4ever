@@ -10906,6 +10906,7 @@ function MainApp() {
         cookedPortions,
         cookedLogs,
         itemRevisions,
+        kitchenTimerRecords: Array.isArray(kitchenTimer?.records) ? kitchenTimer.records : [],
         ...(isAdminUnlocked ? { babyDiaryEntries: safeDiaryEntries, privateSchedules } : {}),
         ...(isSuhyeokAdmin ? { condolenceList } : {}),
         ...(isSuhyeokAdmin ? { condolencePin } : {})
@@ -11265,6 +11266,12 @@ function MainApp() {
         setFridgeDuplicatePolicy(payload.fridgeDuplicatePolicy);
         try { localStorage.setItem("kim_fridge_dup_policy_v1", payload.fridgeDuplicatePolicy); } catch (e) {}
         syncHomeSettingsToCloud(null, null, null, null, null, null, null, { fridgeDuplicatePolicy: payload.fridgeDuplicatePolicy });
+      }
+      if (Array.isArray(payload.kitchenTimerRecords) && payload.kitchenTimerRecords.length > 0) {
+        setKitchenTimer((prev) => ({ ...prev, records: payload.kitchenTimerRecords.slice(0, 10) }));
+        if (user && db) {
+          setDoc(getDocRef("family_meta_v4", "timer_alarms_v1"), { stopwatchRecords: payload.kitchenTimerRecords.slice(0, 10), updatedAtMs: Date.now() }, { merge: true }).catch(() => {});
+        }
       }
       if (payload.fridgeViewMode === "list" || payload.fridgeViewMode === "visual") {
         updateFridgeViewMode(payload.fridgeViewMode);
@@ -14550,6 +14557,14 @@ const priceStr = exportIncludePrice && safeItPrice > 0 ? `${safeItPrice.toLocale
       const qtyInfo = editingFridge
         ? `${cleanName} (${editingFridge.quantity}${editingFridge.unit || "개"} → ${parsedQty}${payload.unit})`
         : `${cleanName} (0 → ${parsedQty}${payload.unit})`;
+      recordItemRevisionSafe({
+        entityType: "fridge",
+        entityId: payload.id,
+        entityTitle: payload.name,
+        prevData: editingFridge || null,
+        nextData: payload,
+        action: editingFridge ? "update" : "create"
+      });
       recordActivity("냉장고", editingFridge ? "수정" : "입고", qtyInfo, {
         beforeText: editingFridge
           ? `${editingFridge.name} · ${editingFridge.quantity}${editingFridge.unit || "개"} · ${editingFridge.location}${editingFridge.expiryDate ? ` · 기한 ${editingFridge.expiryDate}` : " · 기한 미확인"}`
@@ -15179,6 +15194,14 @@ const priceStr = exportIncludePrice && safeItPrice > 0 ? `${safeItPrice.toLocale
       setIsMealModalOpen(false);
       setEditingMeal(null);
       ok = true;
+      recordItemRevisionSafe({
+        entityType: "meal",
+        entityId: payload.id,
+        entityTitle: `${payload.date} ${payload.slot} · ${payload.menu}`,
+        prevData: editingMeal || null,
+        nextData: payload,
+        action: editingMeal ? "update" : "create"
+      });
       recordActivity("식단", editingMeal ? "수정" : "등록", `${payload.date} ${payload.slot} · ${payload.menu}`, {
         beforeText: editingMeal ? `${editingMeal.date} ${editingMeal.slot} · ${editingMeal.menu || ""}` : "",
         afterText: `${payload.date} ${payload.slot} · ${payload.menu} (${payload.mealStatus === "planned" ? "계획" : "기록"})`
@@ -19432,7 +19455,8 @@ ${item.memo}` : `${item.title} 다녀옴!`,
     } else if (kind === "fridge_locations") {
       if (fridgeLocFilter === oldName) setFridgeLocFilter(nextName);
       const affectedFridge = fridge.filter((it) => it.location === oldName);
-      if (affectedFridge.length > 0 && user && db) {
+      const affectedPortions = cookedPortions.filter((p) => p.location === oldName);
+      if (user && db) {
         try {
           for (let i = 0; i < affectedFridge.length; i += 200) {
             const batch = writeBatch(db);
@@ -19441,7 +19465,54 @@ ${item.memo}` : `${item.title} 다녀옴!`,
             });
             await batch.commit();
           }
-        } catch (e) {}
+          for (let i = 0; i < affectedPortions.length; i += 200) {
+            const batch = writeBatch(db);
+            affectedPortions.slice(i, i + 200).forEach((p) => {
+              batch.set(getDocRef("family_cooked_portions_v1", p.id), { ...p, location: nextName, updatedAtMs: Date.now() }, { merge: true });
+            });
+            await batch.commit();
+          }
+        } catch (e) {
+          showToast(`⚠️ 보관위치 연결 항목 이관 중 오류: ${e?.message || "네트워크 오류"}`);
+        }
+      }
+    } else if (kind === "cooked_categories") {
+      const affectedBatches = cookedBatches.filter((b) => b.category === oldName);
+      if (affectedBatches.length > 0 && user && db) {
+        try {
+          for (let i = 0; i < affectedBatches.length; i += 200) {
+            const batch = writeBatch(db);
+            affectedBatches.slice(i, i + 200).forEach((b) => {
+              batch.set(getDocRef("family_cooked_batches_v1", b.id), { ...b, category: nextName, updatedAtMs: Date.now() }, { merge: true });
+            });
+            await batch.commit();
+          }
+        } catch (e) {
+          showToast(`⚠️ 만든 음식 분류 이관 중 오류: ${e?.message || "네트워크 오류"}`);
+        }
+      }
+    } else if (kind === "cooked_units") {
+      const affectedBatches = cookedBatches.filter((b) => b.unit === oldName);
+      const affectedPortions = cookedPortions.filter((p) => p.unit === oldName);
+      if ((affectedBatches.length > 0 || affectedPortions.length > 0) && user && db) {
+        try {
+          for (let i = 0; i < affectedBatches.length; i += 200) {
+            const batch = writeBatch(db);
+            affectedBatches.slice(i, i + 200).forEach((b) => {
+              batch.set(getDocRef("family_cooked_batches_v1", b.id), { ...b, unit: nextName, updatedAtMs: Date.now() }, { merge: true });
+            });
+            await batch.commit();
+          }
+          for (let i = 0; i < affectedPortions.length; i += 200) {
+            const batch = writeBatch(db);
+            affectedPortions.slice(i, i + 200).forEach((p) => {
+              batch.set(getDocRef("family_cooked_portions_v1", p.id), { ...p, unit: nextName, updatedAtMs: Date.now() }, { merge: true });
+            });
+            await batch.commit();
+          }
+        } catch (e) {
+          showToast(`⚠️ 만든 음식 단위명 이관 중 오류: ${e?.message || "네트워크 오류"}`);
+        }
       }
     } else if (kind === "house_med_target") {
       if (houseFilter === oldName) setHouseFilter(nextName);
@@ -22296,6 +22367,54 @@ ${item.memo}` : `${item.title} 다녀옴!`,
     return () => window.removeEventListener("online", onOnline);
   }, [offlineMutationQueue, user, db, offlineQueueStorageKey]);
 
+  // 일반 저장 경로(식단·냉장고·공지·일정 등)에서도 영구 수정이력(기준본 + 변경 diff) 자동 보존
+  const recordItemRevisionSafe = ({ entityType, entityId, entityTitle, prevData = null, nextData = null, action = "update" }) => {
+    if (!user || user.isAnonymous || !db || !entityType || !entityId) return;
+    try {
+      const nowMs = Date.now();
+      const actor = actorName || userProfile?.actorName || "가족";
+      const prevSnap = prevData ? sanitizeSnapshotForRevision(prevData) : null;
+      const nextSnap = nextData ? sanitizeSnapshotForRevision(nextData) : null;
+      const diffFields = prevSnap && nextSnap ? computeRevisionDiff(prevSnap, nextSnap) : [];
+      if (action === "update" && prevSnap && nextSnap && diffFields.length === 0) return;
+
+      const batch = writeBatch(db);
+      const hasExisting = itemRevisions.some((r) => r.entityType === entityType && r.entityId === entityId);
+      if (prevSnap && !hasExisting) {
+        const baseRevId = `rev-${entityType}-${entityId}-base-${nowMs}`;
+        batch.set(getDocRef("family_revisions_v1", baseRevId), {
+          id: baseRevId,
+          entityType,
+          entityId,
+          entityTitle: String(entityTitle || ""),
+          version: Math.max(1, Number(prevData?.version) || 1),
+          action: "baseline",
+          actorName: actor,
+          actorUid: user.uid,
+          createdAtMs: nowMs - 1,
+          diffFields: [],
+          snapshot: prevSnap
+        });
+      }
+      const nextVer = Math.max(1, Number(nextData?.version) || (Number(prevData?.version) || 1) + 1);
+      const revId = `rev-${entityType}-${entityId}-v${nextVer}-${nowMs}-${Math.random().toString(36).slice(2, 5)}`;
+      batch.set(getDocRef("family_revisions_v1", revId), {
+        id: revId,
+        entityType,
+        entityId,
+        entityTitle: String(entityTitle || ""),
+        version: nextVer,
+        action,
+        actorName: actor,
+        actorUid: user.uid,
+        createdAtMs: nowMs,
+        diffFields,
+        snapshot: nextSnap || prevSnap || {}
+      });
+      batch.commit().catch(() => {});
+    } catch (e) {}
+  };
+
   const openRevisionHistory = (entityType, item) => {
     if (!item?.id) return;
     const meta = REVISION_ENTITY_TYPES[entityType];
@@ -22324,6 +22443,29 @@ ${item.memo}` : `${item.title} 다녀옴!`,
     if (tabKey === "condolence" ? !isSuhyeokAdmin : !requireEditorAccess(tabKey)) return;
     const nextVersion = (Number(currentItem?.version) || 1) + 1;
     const restoredPayload = buildRestoredEntityPayload(currentItem, rev.snapshot, nextVersion, rev.id);
+    // 루틴은 family_meta_v4/daily_routines의 items 배열 내부 항목이므로 전용 어댑터로 안전 복원
+    if (entityType === "routine") {
+      const nextList = familyRoutines.map((r) => (r.id === entityId ? { ...r, ...restoredPayload, id: entityId } : r));
+      setFamilyRoutines(nextList);
+      await syncRoutinesToCloud(nextList, { type: "upsert", item: { ...restoredPayload, id: entityId } });
+      recordItemRevisionSafe({
+        entityType: "routine",
+        entityId,
+        entityTitle,
+        prevData: currentItem,
+        nextData: restoredPayload,
+        action: "restore"
+      });
+      setRevisionModalState((prev) => ({
+        ...prev,
+        currentItem: restoredPayload,
+        restorePreviewRev: null,
+        conflictError: ""
+      }));
+      recordActivity("반복 루틴", "복원", `${entityTitle} (v${rev.version} → v${nextVersion})`);
+      showToast(`↩️ 루틴 '${entityTitle}'을(를) 새 버전(v${nextVersion})으로 복원했습니다!`);
+      return;
+    }
     const linkedNote = meta.hasLinkedEffect ? meta.effectHint : "";
     const extraCol = entityType === "meal" ? "family_meals_v3" : "";
     const res = await commitEntityWithRevision({
