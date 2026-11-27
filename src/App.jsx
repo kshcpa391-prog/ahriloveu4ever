@@ -205,6 +205,8 @@ import {
   DEFAULT_FRIDGE_UNITS,
   DEFAULT_RECIPE_DIFFICULTIES,
   DEFAULT_ROUTINE_ASSIGNEES,
+  DEFAULT_EXPIRY_PRESETS,
+  parseExpiryPresetToken,
   extractKoreanChosung,
   normalizeSearchText,
   stripHtmlToPlainText,
@@ -5233,7 +5235,8 @@ function MainApp() {
           recipe_difficulties: Array.isArray(saved.recipe_difficulties) && saved.recipe_difficulties.length > 0 ? saved.recipe_difficulties.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_RECIPE_DIFFICULTIES],
           routine_assignees: Array.isArray(saved.routine_assignees) && saved.routine_assignees.length > 0 ? saved.routine_assignees.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_ROUTINE_ASSIGNEES],
           cooked_categories: Array.isArray(saved.cooked_categories) && saved.cooked_categories.length > 0 ? saved.cooked_categories.map((s) => String(s || "").trim()).filter(Boolean) : [...COOKED_DISH_CATEGORIES],
-          cooked_units: Array.isArray(saved.cooked_units) && saved.cooked_units.length > 0 ? saved.cooked_units.map((s) => String(s || "").trim()).filter(Boolean) : [...COOKED_UNITS]
+          cooked_units: Array.isArray(saved.cooked_units) && saved.cooked_units.length > 0 ? saved.cooked_units.map((s) => String(s || "").trim()).filter(Boolean) : [...COOKED_UNITS],
+          fridge_expiry_presets: Array.isArray(saved.fridge_expiry_presets) && saved.fridge_expiry_presets.length > 0 ? saved.fridge_expiry_presets.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_EXPIRY_PRESETS]
         };
       }
     } catch (e) {}
@@ -5272,7 +5275,8 @@ function MainApp() {
       recipe_difficulties: [...DEFAULT_RECIPE_DIFFICULTIES],
       routine_assignees: [...DEFAULT_ROUTINE_ASSIGNEES],
       cooked_categories: [...COOKED_DISH_CATEGORIES],
-      cooked_units: [...COOKED_UNITS]
+      cooked_units: [...COOKED_UNITS],
+      fridge_expiry_presets: [...DEFAULT_EXPIRY_PRESETS]
     };
   });
   const fridgeCategories = customCategories.fridge;
@@ -5310,6 +5314,7 @@ function MainApp() {
   const routineAssignees = customCategories.routine_assignees || DEFAULT_ROUTINE_ASSIGNEES;
   const cookedDishCategories = customCategories.cooked_categories || COOKED_DISH_CATEGORIES;
   const cookedUnits = customCategories.cooked_units || COOKED_UNITS;
+  const fridgeExpiryPresets = (customCategories.fridge_expiry_presets || DEFAULT_EXPIRY_PRESETS).map(parseExpiryPresetToken).filter(Boolean);
   const [isManualExpenseOpen, setIsManualExpenseOpen] = useState(false);
   const [manualExpenseForm, setManualExpenseForm] = useState(() => ({
     date: getTodayStr(),
@@ -6607,6 +6612,16 @@ function MainApp() {
     try { return localStorage.getItem("kim_show_depleted_cooked_v1") === "true"; } catch (e) { return false; }
   });
   const [activeCookedBatchId, setActiveCookedBatchId] = useState("");
+
+  // v14.49 냉장고 UI 경량화 시트 상태
+  const [fridgeFilterSheetOpen, setFridgeFilterSheetOpen] = useState(false);
+  const [fridgeAddMenuOpen, setFridgeAddMenuOpen] = useState(false);
+  const [fridgeMoreMenuOpen, setFridgeMoreMenuOpen] = useState(false);
+  const [fridgeExpiringExpanded, setFridgeExpiringExpanded] = useState(false);
+  const [fridgeUseSheet, setFridgeUseSheet] = useState(null); // { item, customQty }
+  const [fridgeItemMoreSheet, setFridgeItemMoreSheet] = useState(null); // item
+  const [cookedDetailSheet, setCookedDetailSheet] = useState(null); // portion
+
   const cookedViewPrefsInitRef = useRef(false);
   useEffect(() => {
     try {
@@ -10012,7 +10027,8 @@ function MainApp() {
               recipe_difficulties: Array.isArray(d.recipe_difficulties) && d.recipe_difficulties.length > 0 ? d.recipe_difficulties.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_RECIPE_DIFFICULTIES],
               routine_assignees: Array.isArray(d.routine_assignees) && d.routine_assignees.length > 0 ? d.routine_assignees.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_ROUTINE_ASSIGNEES],
               cooked_categories: Array.isArray(d.cooked_categories) && d.cooked_categories.length > 0 ? d.cooked_categories.map((s) => String(s || "").trim()).filter(Boolean) : [...COOKED_DISH_CATEGORIES],
-              cooked_units: Array.isArray(d.cooked_units) && d.cooked_units.length > 0 ? d.cooked_units.map((s) => String(s || "").trim()).filter(Boolean) : [...COOKED_UNITS]
+              cooked_units: Array.isArray(d.cooked_units) && d.cooked_units.length > 0 ? d.cooked_units.map((s) => String(s || "").trim()).filter(Boolean) : [...COOKED_UNITS],
+              fridge_expiry_presets: Array.isArray(d.fridge_expiry_presets) && d.fridge_expiry_presets.length > 0 ? d.fridge_expiry_presets.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_EXPIRY_PRESETS]
             };
             setCustomCategories(nextCats);
             try { localStorage.setItem("kim_custom_categories_v1", JSON.stringify(nextCats)); } catch (e) {}
@@ -10831,6 +10847,8 @@ function MainApp() {
         recipeSort,
         routineShowFuture,
         todoIncludeOtherCats,
+        fridgeSectionMode,
+        showDepletedCooked,
         smartNotifPrefs,
         notifSilentMode,
         customAlarms,
@@ -11111,7 +11129,8 @@ function MainApp() {
           recipe_difficulties: Array.isArray(payload.customCategories.recipe_difficulties) && payload.customCategories.recipe_difficulties.length > 0 ? payload.customCategories.recipe_difficulties.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_RECIPE_DIFFICULTIES],
           routine_assignees: Array.isArray(payload.customCategories.routine_assignees) && payload.customCategories.routine_assignees.length > 0 ? payload.customCategories.routine_assignees.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_ROUTINE_ASSIGNEES],
           cooked_categories: Array.isArray(payload.customCategories.cooked_categories) && payload.customCategories.cooked_categories.length > 0 ? payload.customCategories.cooked_categories.map((s) => String(s || "").trim()).filter(Boolean) : [...COOKED_DISH_CATEGORIES],
-          cooked_units: Array.isArray(payload.customCategories.cooked_units) && payload.customCategories.cooked_units.length > 0 ? payload.customCategories.cooked_units.map((s) => String(s || "").trim()).filter(Boolean) : [...COOKED_UNITS]
+          cooked_units: Array.isArray(payload.customCategories.cooked_units) && payload.customCategories.cooked_units.length > 0 ? payload.customCategories.cooked_units.map((s) => String(s || "").trim()).filter(Boolean) : [...COOKED_UNITS],
+          fridge_expiry_presets: Array.isArray(payload.customCategories.fridge_expiry_presets) && payload.customCategories.fridge_expiry_presets.length > 0 ? payload.customCategories.fridge_expiry_presets.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_EXPIRY_PRESETS]
         };
         setCustomCategories(nextCats);
         try { localStorage.setItem("kim_custom_categories_v1", JSON.stringify(nextCats)); } catch (e) {}
@@ -11439,6 +11458,7 @@ function MainApp() {
                 routine_assignees: Array.isArray(payload.customCategories.routine_assignees) && payload.customCategories.routine_assignees.length > 0 ? payload.customCategories.routine_assignees : [...DEFAULT_ROUTINE_ASSIGNEES],
                 cooked_categories: Array.isArray(payload.customCategories.cooked_categories) && payload.customCategories.cooked_categories.length > 0 ? payload.customCategories.cooked_categories : [...COOKED_DISH_CATEGORIES],
                 cooked_units: Array.isArray(payload.customCategories.cooked_units) && payload.customCategories.cooked_units.length > 0 ? payload.customCategories.cooked_units : [...COOKED_UNITS],
+                fridge_expiry_presets: Array.isArray(payload.customCategories.fridge_expiry_presets) && payload.customCategories.fridge_expiry_presets.length > 0 ? payload.customCategories.fridge_expiry_presets : [...DEFAULT_EXPIRY_PRESETS],
                 updatedAtMs: Date.now()
               },
               { merge: true }
@@ -18715,7 +18735,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
 
   // === ⚙️ 통합 세부 카테고리 자유 관리 (재료 · 레시피 · 가족공지) ===
   const getCategoryTabKey = (kind) => {
-    if (kind === "fridge" || kind === "fridge_locations" || kind === "fridge_units" || kind === "cooked_categories" || kind === "cooked_units") return "fridge";
+    if (kind === "fridge" || kind === "fridge_locations" || kind === "fridge_units" || kind === "cooked_categories" || kind === "cooked_units" || kind === "fridge_expiry_presets") return "fridge";
     if (kind === "shopping_presets") return "shopping";
     if (kind === "recipe" || kind === "recipe_difficulties") return "recipes";
     if (kind === "bucket") return "bucket";
@@ -19239,6 +19259,8 @@ ${item.memo}` : `${item.title} 다녀옴!`,
         ? [...COOKED_DISH_CATEGORIES]
         : kind === "cooked_units"
         ? [...COOKED_UNITS]
+        : kind === "fridge_expiry_presets"
+        ? [...DEFAULT_EXPIRY_PRESETS]
         : [...NOTICE_CATEGORIES];
     await saveCustomCategoriesToCloud({ ...customCategories, [kind]: defaults }, "↺ 기본 분류 목록으로 복원했습니다.");
   };
@@ -21475,7 +21497,13 @@ ${item.memo}` : `${item.title} 다녀옴!`,
       !isGlobalSearchOpen &&
       !revisionModalState.open &&
       !isCookedModalOpen &&
-      !cookedActionModal.open
+      !cookedActionModal.open &&
+      !fridgeFilterSheetOpen &&
+      !fridgeAddMenuOpen &&
+      !fridgeMoreMenuOpen &&
+      !fridgeUseSheet &&
+      !fridgeItemMoreSheet &&
+      !cookedDetailSheet
     ) return;
     const onEsc = (e) => {
       if (e.key === "Escape") {
@@ -21491,6 +21519,12 @@ ${item.memo}` : `${item.title} 다녀옴!`,
         setRevisionModalState((p) => ({ ...p, open: false, restorePreviewRev: null }));
         setIsCookedModalOpen(false);
         setCookedActionModal((p) => ({ ...p, open: false }));
+        setFridgeFilterSheetOpen(false);
+        setFridgeAddMenuOpen(false);
+        setFridgeMoreMenuOpen(false);
+        setFridgeUseSheet(null);
+        setFridgeItemMoreSheet(null);
+        setCookedDetailSheet(null);
         setIsActivityModalOpen(false);
         setIsEditorUnlockModalOpen(false);
         setIsMealCopyModalOpen(false);
@@ -22752,6 +22786,12 @@ ${item.memo}` : `${item.title} 다녀옴!`,
     revisionModalState.open ||
     isCookedModalOpen ||
     cookedActionModal.open ||
+    fridgeFilterSheetOpen ||
+    fridgeAddMenuOpen ||
+    fridgeMoreMenuOpen ||
+    Boolean(fridgeUseSheet) ||
+    Boolean(fridgeItemMoreSheet) ||
+    Boolean(cookedDetailSheet) ||
     isActivityModalOpen ||
     isEditorUnlockModalOpen ||
     isMealCopyModalOpen ||
@@ -22839,6 +22879,12 @@ ${item.memo}` : `${item.title} 다녀옴!`,
       setRevisionModalState((p) => ({ ...p, open: false, restorePreviewRev: null }));
       setIsCookedModalOpen(false);
       setCookedActionModal((p) => ({ ...p, open: false }));
+      setFridgeFilterSheetOpen(false);
+      setFridgeAddMenuOpen(false);
+      setFridgeMoreMenuOpen(false);
+      setFridgeUseSheet(null);
+      setFridgeItemMoreSheet(null);
+      setCookedDetailSheet(null);
       setIsHomeDdayPickerOpen(false);
       setCategoryManageKind("");
       setAlarmSheetMode("");
@@ -31267,590 +31313,359 @@ time: "", location: "",
       {/* ==========================================
           탭 5: 스마트 냉장고
       ========================================== */}
-      {activeTab === "fridge" && (!canViewTab("fridge") ? renderLockedTabScreen("❄️ 냉장고") : (
-        <div className="p-3 space-y-2.5">
-          {/* v14.47 ③ 냉장고 상단 구분: 전체 / 식재료 / 만든 음식 (재고 합계 중복 없음) */}
-          <div className="flex items-center justify-between gap-2 bg-white p-1.5 rounded-2xl border border-stone-200 shadow-sm">
-            <div className="grid grid-cols-3 gap-1 flex-1 min-w-0">
-              {[
-                { id: "all", label: `전체 (${fridge.length + cookedPortions.filter((p) => roundQty2(p.remainingQty) > 0).length})` },
-                { id: "raw", label: `🥬 식재료 (${fridge.length})` },
-                { id: "cooked", label: `🍲 만든음식 (${cookedPortions.filter((p) => roundQty2(p.remainingQty) > 0).length})` }
-              ].map((seg) => (
+      {activeTab === "fridge" && (!canViewTab("fridge") ? renderLockedTabScreen("❄️ 냉장고") : (() => {
+        const activeCookedList = cookedPortions.filter((p) => roundQty2(p.remainingQty) > 0);
+        const depletedCookedList = cookedPortions.filter((p) => roundQty2(p.remainingQty) <= 0);
+        const rawCount = fridge.length;
+        const cookedCount = activeCookedList.length;
+        const totalCombinedCount = rawCount + cookedCount;
+
+        // 현재 탭 범위에 맞춘 보관 위치별 건수 (전체=식재료+만든음식, 식재료=식재료만, 만든음식=만든음식만)
+        const locBuckets = [
+          { key: "냉장실", label: "냉장실", icon: "❄️", check: (loc) => String(loc || "").includes("냉장") },
+          { key: "냉동실", label: "냉동실", icon: "🧊", check: (loc) => String(loc || "").includes("냉동") },
+          { key: "실온·팬트리", label: "실온", icon: "🧺", check: (loc) => !String(loc || "").includes("냉장") && !String(loc || "").includes("냉동") }
+        ].map((g) => {
+          const rItems = fridgeSectionMode === "cooked" ? [] : fridge.filter((it) => g.check(it.location));
+          const cItems = fridgeSectionMode === "raw" ? [] : activeCookedList.filter((it) => g.check(it.location));
+          const expRaw = rItems.filter((it) => it.expiryDate && getDaysDiff(it.expiryDate) <= 3).length;
+          const expCook = cItems.filter((it) => it.expiryDate && getDaysDiff(it.expiryDate) <= 3).length;
+          return { ...g, total: rItems.length + cItems.length, exp: expRaw + expCook };
+        });
+
+        // 임박·경고 요약 집계 (선택 탭 범위 반영: 경과 / 오늘 / 임박 D-1~3)
+        const warnRaw = fridgeSectionMode === "cooked" ? [] : expiringItems;
+        const warnCook = fridgeSectionMode === "raw"
+          ? []
+          : activeCookedList
+              .filter((p) => p.expiryDate && getDaysDiff(p.expiryDate) <= 3)
+              .map((p) => ({ id: p.id, name: p.dishName, diff: getDaysDiff(p.expiryDate), location: p.location, _isCooked: true, _portion: p }));
+        const allWarnItems = [...warnRaw.map((w) => ({ ...w, _isCooked: false })), ...warnCook].sort((a, b) => a.diff - b.diff);
+        const expiredCnt = allWarnItems.filter((w) => w.diff < 0).length;
+        const dueTodayCnt = allWarnItems.filter((w) => w.diff === 0).length;
+        const soonCnt = allWarnItems.filter((w) => w.diff > 0 && w.diff <= 3).length;
+
+        const qLower = debouncedFridgeSearch.trim().toLowerCase();
+        const filteredRawItems = fridgeSectionMode === "cooked"
+          ? []
+          : fridge
+              .filter(
+                (i) =>
+                  matchesFridgeLocFilter(i.location, fridgeLocFilter) &&
+                  (fridgeCatFilter === "전체" || i.category === fridgeCatFilter) &&
+                  (!visualExpiringOnly || (i.expiryDate && getDaysDiff(i.expiryDate) <= 3)) &&
+                  (!qLower ||
+                    String(i.name || "").toLowerCase().includes(qLower) ||
+                    String(i.category || "").toLowerCase().includes(qLower) ||
+                    String(i.location || "").toLowerCase().includes(qLower))
+              )
+              .sort((a, b) => {
+                if (fridgeSort === "name") return String(a.name || "").localeCompare(String(b.name || ""), "ko");
+                if (fridgeSort === "recent") {
+                  const dateDiff = String(b.purchaseDate || "").localeCompare(String(a.purchaseDate || ""));
+                  if (dateDiff !== 0) return dateDiff;
+                  return String(a.name || "").localeCompare(String(b.name || ""), "ko") || String(a.id || "").localeCompare(String(b.id || ""));
+                }
+                const diffCmp = getDaysDiff(a.expiryDate) - getDaysDiff(b.expiryDate);
+                if (diffCmp !== 0) return diffCmp;
+                return String(a.name || "").localeCompare(String(b.name || ""), "ko") || String(a.id || "").localeCompare(String(b.id || ""));
+              });
+
+        const filteredCookedItems = fridgeSectionMode === "raw"
+          ? []
+          : (showDepletedCooked ? cookedPortions : activeCookedList)
+              .filter((p) => {
+                if (!matchesFridgeLocFilter(p.location, fridgeLocFilter)) return false;
+                if (visualExpiringOnly && !(p.expiryDate && getDaysDiff(p.expiryDate) <= 3)) return false;
+                if (qLower) {
+                  const b = cookedBatches.find((x) => x.id === p.batchId);
+                  const hay = `${p.dishName || ""} ${p.location || ""} ${b?.category || ""} ${b?.memo || ""}`.toLowerCase();
+                  if (!hay.includes(qLower)) return false;
+                }
+                return true;
+              })
+              .sort((a, b) => {
+                const aDep = roundQty2(a.remainingQty) <= 0 ? 1 : 0;
+                const bDep = roundQty2(b.remainingQty) <= 0 ? 1 : 0;
+                if (aDep !== bDep) return aDep - bDep;
+                if (fridgeSort === "name") return String(a.dishName || "").localeCompare(String(b.dishName || ""), "ko");
+                const da = a.expiryDate ? getDaysDiff(a.expiryDate) : 999;
+                const db2 = b.expiryDate ? getDaysDiff(b.expiryDate) : 999;
+                if (da !== db2) return da - db2;
+                return (b.updatedAtMs || 0) - (a.updatedAtMs || 0);
+              });
+
+        const activeFilterCount =
+          (fridgeCatFilter !== "전체" ? 1 : 0) +
+          (visualExpiringOnly ? 1 : 0) +
+          (fridgeSort !== "expiry" ? 1 : 0);
+
+        return (
+        <div className="p-3 pb-28 space-y-2.5">
+          {/* 1. 종류 탭: 전체 / 식재료 / 만든 음식 (3열 균등, 이름 잘림 없음, 통합 집계) */}
+          <div className="grid grid-cols-3 gap-1.5 bg-white p-1 rounded-2xl border border-stone-200">
+            {[
+              { id: "all", label: "전체", cnt: totalCombinedCount },
+              { id: "raw", label: "식재료", cnt: rawCount },
+              { id: "cooked", label: "만든 음식", cnt: cookedCount }
+            ].map((seg) => {
+              const active = fridgeSectionMode === seg.id;
+              return (
                 <button
                   key={seg.id}
                   type="button"
                   onClick={() => setFridgeSectionMode(seg.id)}
-                  className={`py-1.5 px-1.5 rounded-xl text-[11px] font-extrabold transition whitespace-nowrap truncate ${
-                    fridgeSectionMode === seg.id
-                      ? "bg-[#3F624D] text-white shadow-sm"
-                      : "bg-stone-50 text-stone-600 hover:bg-stone-100"
-                  }`}
-                >
-                  {seg.label}
-                </button>
-              ))}
-            </div>
-            {canEditTab("fridge") && (
-              <button
-                type="button"
-                onClick={() => openNewCookedModal(null)}
-                className="px-2.5 py-1.5 rounded-xl bg-[#EEF3EE] hover:bg-[#DFE9E0] text-[#35503C] border border-[#C9D8CC] text-[11px] font-extrabold whitespace-nowrap shrink-0"
-              >
-                + 만든음식
-              </button>
-            )}
-          </div>
-
-          {/* 만든 반찬 · 소분 음식 관리 섹션 */}
-          {(fridgeSectionMode === "all" || fridgeSectionMode === "cooked") && (
-            <div className="bg-white rounded-2xl border border-stone-200 shadow-sm p-3 space-y-2.5">
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-1.5 min-w-0">
-                  <span className="text-[13.5px] font-black text-stone-900 truncate">🍲 만든 반찬 · 소분 음식</span>
-                  <span className="px-1.5 py-0.5 rounded-full bg-[#EEF3EE] text-[#35503C] text-[10.5px] font-extrabold whitespace-nowrap shrink-0">
-                    남음 {cookedPortions.filter((p) => roundQty2(p.remainingQty) > 0).length}건
-                  </span>
-                </div>
-                {cookedPortions.some((p) => roundQty2(p.remainingQty) <= 0) && (
-                  <button
-                    type="button"
-                    onClick={() => setShowDepletedCooked((v) => !v)}
-                    className="px-2 py-1 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-600 text-[10.5px] font-extrabold whitespace-nowrap shrink-0"
-                  >
-                    {showDepletedCooked ? "소진 숨김" : `소진 ${cookedPortions.filter((p) => roundQty2(p.remainingQty) <= 0).length}건`}
-                  </button>
-                )}
-              </div>
-
-              {cookedPortions.filter((p) => showDepletedCooked || roundQty2(p.remainingQty) > 0).length === 0 ? (
-                <div className="text-center py-5 text-[12px] text-stone-400 font-bold">
-                  등록된 만든 음식·소분 반찬이 없습니다. [+ 만든음식] 또는 레시피북에서 바로 추가해 보세요.
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {cookedPortions
-                    .filter((p) => showDepletedCooked || roundQty2(p.remainingQty) > 0)
-                    .map((p) => {
-                      const batch = cookedBatches.find((b) => b.id === p.batchId);
-                      const ledger = batch ? computeCookedBatchLedger(batch, cookedPortions, cookedLogs, meals) : null;
-                      const portionReserved = roundQty2(
-                        meals
-                          .filter((m) => m.mealStatus === "planned" && m.cookedPortionId === p.id)
-                          .reduce((acc, m) => acc + Math.max(0, roundQty2(m.cookedQty || 0)), 0)
-                      );
-                      const isDepleted = roundQty2(p.remainingQty) <= 0;
-                      const isHighlighted = activeCookedBatchId && p.batchId === activeCookedBatchId;
-                      return (
-                        <div
-                          key={p.id}
-                          className={`p-2.5 rounded-xl border transition space-y-1.5 ${
-                            isHighlighted
-                              ? "bg-[#EEF3EE]/70 border-[#3F624D] ring-1 ring-[#3F624D]/30"
-                              : isDepleted
-                              ? "bg-stone-50/80 border-stone-200 opacity-75"
-                              : "bg-[#FAF8F3]/70 border-stone-200"
-                          }`}
-                        >
-                          <div className="flex items-start justify-between gap-2 min-w-0">
-                            <div className="min-w-0 flex-1">
-                              <div className="flex items-center gap-1.5 flex-wrap">
-                                <span className={`text-[13.5px] font-black truncate ${isDepleted ? "line-through text-stone-400" : "text-stone-900"}`}>
-                                  {p.dishName}
-                                </span>
-                                <span className="px-1.5 py-0.5 rounded-md bg-[#3F624D] text-white text-[10.5px] font-black whitespace-nowrap">
-                                  남은 {p.remainingQty}{p.unit}
-                                </span>
-                                {portionReserved > 0 && (
-                                  <span className="px-1.5 py-0.5 rounded-md bg-amber-50 text-amber-800 border border-amber-200 text-[10px] font-extrabold whitespace-nowrap">
-                                    예약 {portionReserved}{p.unit}
-                                  </span>
-                                )}
-                                <span className="px-1.5 py-0.5 rounded-md bg-white text-stone-700 border border-stone-200 text-[10.5px] font-extrabold whitespace-nowrap">
-                                  {p.location}
-                                </span>
-                              </div>
-                              <div className="text-[11px] font-semibold text-stone-500 mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                                <span>조리 {p.cookedAt || batch?.cookedAt || "-"}</span>
-                                {p.thawedAt && <span className="text-sky-700">· 해동 {p.thawedAt}</span>}
-                                {p.plannedEatDate && <span className="text-[#35503C]">· 예정 {p.plannedEatDate}</span>}
-                                <span>· 기한 {p.expiryDate || "미설정"}</span>
-                                {ledger && (
-                                  <span className="text-stone-400">
-                                    · 묶음 총 {ledger.initialQty}{ledger.unit} (섭취 {ledger.consumedQty} / 잔량 {ledger.remainingQty})
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => openRevisionHistory("cooked_portion", p)}
-                              className="px-1.5 py-1 rounded-lg bg-white hover:bg-stone-100 border border-stone-200 text-stone-500 text-[10.5px] font-extrabold whitespace-nowrap shrink-0"
-                              title="수정 이력 · 복원"
-                            >
-                              🕒 이력
-                            </button>
-                          </div>
-
-                          {!isDepleted && canEditTab("fridge") && (
-                            <div className="flex flex-wrap items-center gap-1 pt-0.5">
-                              <button
-                                type="button"
-                                onClick={() => setCookedActionModal({
-                                  open: true,
-                                  type: "consume",
-                                  portion: p,
-                                  qty: String(Math.min(1, roundQty2(p.remainingQty))),
-                                  member: "온가족",
-                                  targetLocation: p.location,
-                                  reason: "",
-                                  linkToMeal: true,
-                                  mealSlot: "저녁",
-                                  mealDate: getTodayStr()
-                                })}
-                                className="px-2.5 py-1 rounded-lg bg-[#3F624D] hover:bg-[#33513F] text-white text-[11px] font-extrabold whitespace-nowrap"
-                              >
-                                🍽️ 먹었어요
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => setCookedActionModal({
-                                  open: true,
-                                  type: "move",
-                                  portion: p,
-                                  qty: String(roundQty2(p.remainingQty)),
-                                  member: "온가족",
-                                  targetLocation: String(p.location || "").includes("냉동") ? "냉장실" : "메인 냉동실",
-                                  reason: "",
-                                  linkToMeal: false,
-                                  mealSlot: "저녁",
-                                  mealDate: getTodayStr()
-                                })}
-                                className="px-2.5 py-1 rounded-lg bg-[#EEF3EE] hover:bg-[#DFE9E0] text-[#35503C] border border-[#C9D8CC] text-[11px] font-extrabold whitespace-nowrap"
-                              >
-                                📦 보관 이동
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => setCookedActionModal({
-                                  open: true,
-                                  type: "discard",
-                                  portion: p,
-                                  qty: String(roundQty2(p.remainingQty)),
-                                  member: "온가족",
-                                  targetLocation: p.location,
-                                  reason: "",
-                                  linkToMeal: false,
-                                  mealSlot: "저녁",
-                                  mealDate: getTodayStr()
-                                })}
-                                className="px-2 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-[11px] font-extrabold whitespace-nowrap"
-                              >
-                                🗑️ 폐기
-                              </button>
-                              {canEditTab("daily") && (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setEditingMeal(null);
-                                    setMealForm({
-                                      date: p.plannedEatDate || getTodayStr(),
-                                      slot: "저녁",
-                                      menu: p.dishName,
-                                      members: toSafeArray(batch?.members).length > 0 ? toSafeArray(batch?.members) : ["수혁", "아리나"],
-                                      ingredients: [],
-                                      note: `🍲 만든 음식 예약 (${p.location})`,
-                                      sourceType: "집밥/온가족식",
-                                      cost: "",
-                                      mealStatus: "planned",
-                                      cookedPortionId: p.id,
-                                      cookedBatchId: p.batchId,
-                                      cookedQty: String(Math.min(1, roundQty2(p.remainingQty)))
-                                    });
-                                    setIsMealModalOpen(true);
-                                  }}
-                                  className="px-2 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 text-[11px] font-extrabold whitespace-nowrap"
-                                  title="계획 식단으로 예약 (잔량 미차감)"
-                                >
-                                  📅 식단예약
-                                </button>
-                              )}
-                              {canEditTab("notices") && (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setEditingNotice(null);
-                                    setNoticeForm({
-                                      title: `🍲 [남은 반찬] ${p.dishName} (${p.remainingQty}${p.unit})`,
-                                      content: `보관 위치: ${p.location}\n조리일: ${p.cookedAt || batch?.cookedAt || "-"}\n보관 기한: ${p.expiryDate || "미설정"}`,
-                                      category: noticeCategories.includes("집안일") ? "집안일" : (noticeCategories[0] || "일반"),
-                                      author: actorName || "수혁",
-                                      pinned: false
-                                    });
-                                    setIsNoticeModalOpen(true);
-                                  }}
-                                  className="px-2 py-1 rounded-lg bg-[#EEF3EE] hover:bg-[#DFE9E0] text-[#35503C] border border-[#C9D8CC] text-[11px] font-extrabold whitespace-nowrap"
-                                  title="가족공지로 공유"
-                                >
-                                  📌 공지
-                                </button>
-                              )}
-                              <button
-                                type="button"
-                                onClick={() => setCookedActionModal({
-                                  open: true,
-                                  type: "adjust",
-                                  portion: p,
-                                  qty: String(roundQty2(p.remainingQty)),
-                                  member: "온가족",
-                                  targetLocation: p.location,
-                                  reason: "",
-                                  linkToMeal: false,
-                                  mealSlot: "저녁",
-                                  mealDate: getTodayStr()
-                                })}
-                                className="px-2 py-1 rounded-lg bg-white hover:bg-stone-100 text-stone-600 border border-stone-200 text-[11px] font-extrabold whitespace-nowrap"
-                              >
-                                ⚖️ 정정
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                </div>
-              )}
-            </div>
-          )}
-
-          <div className="grid grid-cols-2 gap-1.5">
-            <button
-              type="button"
-              onClick={() => setIsReceiptModalOpen(true)}
-              className="py-1.5 px-2.5 rounded-xl bg-[#EEF3EE] hover:bg-[#DFE9E0] border border-[#C9D8CC] text-[#35503C] text-[11.5px] font-extrabold flex items-center justify-between gap-1 whitespace-nowrap"
-            >
-              <span className="flex items-center gap-1 truncate">
-                <Receipt className="w-3.5 h-3.5 text-[#3F624D] shrink-0" />
-                <span>영수증 AI 스캔</span>
-              </span>
-              <ChevronRight className="w-3.5 h-3.5 text-[#3F624D]/70 shrink-0" />
-            </button>
-            <button
-              type="button"
-              onClick={() => setIsInventoryExportOpen(true)}
-              className="py-1.5 px-2.5 rounded-xl bg-stone-100 hover:bg-stone-200/80 border border-stone-200 text-stone-800 text-[11.5px] font-extrabold flex items-center justify-between gap-1 whitespace-nowrap"
-            >
-              <span className="truncate">📤 식단·재고 출력</span>
-              <ChevronRight className="w-3.5 h-3.5 text-stone-400 shrink-0" />
-            </button>
-          </div>
-
-          {/* 임박·경과 재료 컴팩트 배너 (만든 음식 전용 보기에서는 숨김) */}
-          {fridgeSectionMode !== "cooked" && expiringItems.length > 0 && (
-            <div className="bg-amber-50/80 border border-amber-200/90 rounded-2xl p-2.5 space-y-1.5">
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-1 text-[12px] font-black text-amber-900 whitespace-nowrap">
-                  <AlertCircle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                  <span>임박·경과 ({expiringItems.length})</span>
-                </div>
-                <div className="flex items-center gap-1 shrink-0">
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      const lines = [
-                        `❄️ 냉장고 임박·경과 재료 (${expiringItems.length}건)`,
-                        ...expiringItems.map((it) => `• ${it.name} (${it.diff < 0 ? `${Math.abs(it.diff)}일 지남` : it.diff === 0 ? "오늘 만료" : `D-${it.diff}`}${it.location ? ` · ${it.location}` : ""})`)
-                      ];
-                      await copyTextSafe(lines.join("\n"), `📋 임박 재료 ${expiringItems.length}건을 복사했습니다!`);
-                    }}
-                    className="h-6 px-1.5 rounded-lg bg-white hover:bg-amber-100 text-amber-800 border border-amber-200 text-[10.5px] font-extrabold whitespace-nowrap"
-                    title="임박·경과 재료 목록 복사"
-                  >
-                    📋
-                  </button>
-                  {canViewTab("ai") && (
-                    <button
-                      type="button"
-                      onClick={() => handleExpiringToAiChef(expiringItems.slice(0, 4).map((i) => i.name))}
-                      className="h-6 px-2 rounded-lg bg-[#3F624D] hover:bg-[#324F3E] text-white text-[10.5px] font-extrabold whitespace-nowrap"
-                    >
-                      ✨ AI 추천
-                    </button>
-                  )}
-                </div>
-              </div>
-              <div className="flex flex-wrap gap-1">
-                {expiringItems.map((item) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => setQuickFridgeItem(item)}
-                    className="px-2 py-0.5 rounded-lg text-[10.5px] font-bold bg-white hover:bg-amber-100 text-amber-900 border border-amber-200/90 active:scale-95 transition whitespace-nowrap"
-                  >
-                    {item.name} <span className={item.diff <= 0 ? "text-rose-600 font-black" : "text-amber-700 font-extrabold"}>({item.diff < 0 ? `${Math.abs(item.diff)}일 지남` : item.diff === 0 ? "오늘" : `D-${item.diff}`})</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* 보관 구역 슬림 3칸 카드 (글자 크기·높이 경량화) */}
-          {fridge.length > 0 && (
-            <div className="grid grid-cols-3 gap-1.5">
-              {[
-                { key: "냉장실", icon: "❄️", check: (loc) => String(loc || "").includes("냉장") },
-                { key: "냉동실", icon: "🧊", check: (loc) => String(loc || "").includes("냉동") },
-                { key: "실온·팬트리", icon: "🧺", check: (loc) => String(loc || "").includes("실온") || String(loc || "").includes("팬트리") }
-              ].map((zone) => {
-                const zItems = fridge.filter((it) => zone.check(it.location));
-                const zExp = expiringItems.filter((it) => zone.check(it.location)).length;
-                const isSel = fridgeLocFilter === zone.key;
-                return (
-                  <button
-                    key={zone.key}
-                    type="button"
-                    onClick={() => setFridgeLocFilter(isSel ? "전체" : zone.key)}
-                    className={`px-2 py-1.5 rounded-xl border text-left transition ${
-                      isSel ? "bg-[#3F624D] text-white border-[#3F624D] shadow-sm" : "bg-white text-stone-800 border-stone-200 hover:bg-stone-50"
-                    }`}
-                  >
-                    <div className="flex items-center justify-between gap-1 text-[10.5px] font-bold">
-                      <span className="whitespace-nowrap shrink-0">{zone.icon} {zone.key.replace("·팬트리", "")}</span>
-                      {zExp > 0 && (
-                        <span className={`px-1 py-0.5 rounded-full text-[10px] font-black leading-none whitespace-nowrap shrink-0 ${isSel ? "bg-amber-300 text-stone-900" : "bg-amber-100 text-amber-800"}`}>
-                          임박 {zExp}
-                        </span>
-                      )}
-                    </div>
-                    <div className={`text-[13px] font-black mt-0.5 whitespace-nowrap ${isSel ? "text-white" : "text-stone-900"}`}>
-                      {zItems.length}개
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          )}
-
-          {/* 전체·뷰전환·복사·추가 1줄 통합 컨트롤 */}
-          <div className="flex items-center justify-between gap-1.5">
-            {fridgeViewMode === "visual" ? (
-              <div className="flex items-center gap-1 bg-stone-200 p-0.5 rounded-xl overflow-x-auto flex-1 min-w-0">
-                {["전체", ...fridgeLocations].map((loc) => (
-                  <button
-                    type="button"
-                    key={loc}
-                    onClick={() => setFridgeLocFilter(loc)}
-                    className={`px-2 py-1 rounded-lg text-[10.5px] font-extrabold whitespace-nowrap shrink-0 transition ${
-                      fridgeLocFilter === loc
-                        ? "bg-white text-stone-900 shadow-sm"
-                        : "text-stone-600"
-                    }`}
-                  >
-                    {loc}
-                  </button>
-                ))}
-                {canEditTab("fridge") && (
-                  <button
-                    type="button"
-                    onClick={() => openCategoryManager("fridge_locations")}
-                    className="px-1.5 py-1 rounded-lg text-[10.5px] font-extrabold text-stone-500 hover:text-stone-900 hover:bg-white/70 whitespace-nowrap shrink-0 transition"
-                    title="보관 위치 자유 관리"
-                    aria-label="보관 위치 자유 관리"
-                  >
-                    ⚙️
-                  </button>
-                )}
-              </div>
-            ) : (
-              <div className="flex items-center gap-1 bg-stone-100 p-0.5 rounded-xl flex-1 min-w-0">
-                <button
-                  type="button"
-                  onClick={() => setFridgeLocFilter("전체")}
-                  className={`px-2 py-1 rounded-lg text-[11px] font-extrabold whitespace-nowrap transition ${
-                    fridgeLocFilter === "전체"
+                  className={`py-2 px-1.5 rounded-xl text-[12px] font-extrabold transition flex items-center justify-center gap-1 ${
+                    active
                       ? "bg-[#3F624D] text-white"
-                      : "text-stone-600 hover:bg-white"
+                      : "bg-transparent text-stone-600 hover:bg-stone-50"
                   }`}
                 >
-                  전체 {fridge.length}
+                  <span>{seg.label}</span>
+                  <span className={`text-[11px] font-black ${active ? "text-white/90" : "text-stone-400"}`}>
+                    {seg.cnt}
+                  </span>
                 </button>
+              );
+            })}
+          </div>
+
+          {/* 2. 검색 · 필터 · 통합 추가 · 화면 더보기 바 */}
+          <div className="space-y-1.5">
+            <div className="flex items-center gap-1.5">
+              <div className="relative flex-1 min-w-0">
+                <input
+                  type="text"
+                  enterKeyHint="search"
+                  placeholder="음식·재료 검색..."
+                  value={fridgeSearch}
+                  onChange={(e) => setFridgeSearch(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Escape") setFridgeSearch(""); }}
+                  className="w-full h-9 pl-3 pr-7 rounded-xl border border-stone-200 bg-white text-[13px] font-bold text-stone-800 placeholder:text-stone-400 focus:outline-none focus:border-[#3F624D]"
+                />
+                {fridgeSearch && (
+                  <button
+                    type="button"
+                    onClick={() => setFridgeSearch("")}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-700 text-[12px] font-black"
+                    aria-label="검색어 지우기"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => setFridgeFilterSheetOpen(true)}
+                className={`h-9 px-2.5 rounded-xl border text-[12px] font-extrabold whitespace-nowrap shrink-0 transition flex items-center gap-1 ${
+                  activeFilterCount > 0
+                    ? "bg-[#EEF3EE] text-[#35503C] border-[#3F624D]/40"
+                    : "bg-white text-stone-700 border-stone-200 hover:bg-stone-50"
+                }`}
+              >
+                <span>필터</span>
+                {activeFilterCount > 0 && (
+                  <span className="px-1.5 py-0.5 rounded-full bg-[#3F624D] text-white text-[10px] font-black">
+                    {activeFilterCount}
+                  </span>
+                )}
+              </button>
+              {canEditTab("fridge") && (
                 <button
                   type="button"
-                  onClick={() => { updateFridgeViewMode("list"); setBulkMoveMode(false); setSelectedBulkFridgeIds([]); }}
-                  className="flex-1 py-1 rounded-lg text-[11px] font-extrabold whitespace-nowrap bg-white text-stone-900 shadow-sm"
+                  onClick={() => setFridgeAddMenuOpen(true)}
+                  className="h-9 px-3 rounded-xl bg-[#3F624D] hover:bg-[#33513F] text-white text-[12px] font-extrabold whitespace-nowrap shrink-0 transition"
                 >
-                  📋 리스트
+                  + 추가
                 </button>
+              )}
+              <button
+                type="button"
+                onClick={() => setFridgeMoreMenuOpen(true)}
+                className="h-9 w-9 rounded-xl bg-white hover:bg-stone-50 border border-stone-200 text-stone-700 flex items-center justify-center shrink-0 transition"
+                title="냉장고 더보기 (보기전환 · AI추천 · 출력)"
+                aria-label="냉장고 더보기"
+              >
+                <MoreHorizontal className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* 현재 적용된 필터 조건만 간결하게 1줄 표시 */}
+            {(fridgeCatFilter !== "전체" || fridgeLocFilter !== "전체" || visualExpiringOnly || fridgeSort !== "expiry" || fridgeViewMode === "visual") && (
+              <div className="flex items-center gap-1.5 flex-wrap text-[11px] font-bold">
+                {fridgeViewMode === "visual" && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFridgeViewMode("list");
+                      setIsVisualMultiSelect(false);
+                      setVisualSelectedIds([]);
+                      try { localStorage.setItem("kim_fridge_view_mode_v1", "list"); } catch (e) {}
+                    }}
+                    className="px-2 py-0.5 rounded-full bg-[#EEF3EE] text-[#35503C] border border-[#C9D8CC] whitespace-nowrap"
+                  >
+                    🧊 칸별 보기 · 리스트로 ✕
+                  </button>
+                )}
+                {fridgeLocFilter !== "전체" && (
+                  <button
+                    type="button"
+                    onClick={() => setFridgeLocFilter("전체")}
+                    className="px-2 py-0.5 rounded-full bg-[#EEF3EE] text-[#35503C] border border-[#C9D8CC] whitespace-nowrap"
+                  >
+                    {fridgeLocFilter} ✕
+                  </button>
+                )}
+                {fridgeCatFilter !== "전체" && (
+                  <button
+                    type="button"
+                    onClick={() => setFridgeCatFilter("전체")}
+                    className="px-2 py-0.5 rounded-full bg-[#EEF3EE] text-[#35503C] border border-[#C9D8CC] whitespace-nowrap"
+                  >
+                    {fridgeCatFilter} ✕
+                  </button>
+                )}
+                {visualExpiringOnly && (
+                  <button
+                    type="button"
+                    onClick={() => setVisualExpiringOnly(false)}
+                    className="px-2 py-0.5 rounded-full bg-rose-50 text-rose-700 border border-rose-200 whitespace-nowrap"
+                  >
+                    임박·경과만 ✕
+                  </button>
+                )}
+                {fridgeSort !== "expiry" && (
+                  <span className="px-2 py-0.5 rounded-full bg-stone-100 text-stone-600 whitespace-nowrap">
+                    {fridgeSort === "recent" ? "최신순" : "이름순"}
+                  </span>
+                )}
                 <button
                   type="button"
-                  onClick={() => updateFridgeViewMode("visual")}
-                  className="flex-1 py-1 rounded-lg text-[11px] font-extrabold whitespace-nowrap text-stone-500 hover:text-stone-800"
+                  onClick={() => {
+                    setFridgeLocFilter("전체");
+                    setFridgeCatFilter("전체");
+                    setVisualExpiringOnly(false);
+                    setFridgeSort("expiry");
+                    setFridgeSearch("");
+                  }}
+                  className="text-stone-400 hover:text-stone-700 underline ml-0.5 whitespace-nowrap"
                 >
-                  🗂️ 칸별
+                  초기화
                 </button>
               </div>
             )}
-            <div className="flex items-center gap-1 shrink-0">
-              {fridgeViewMode === "visual" && (
-                <button
-                  type="button"
-                  onClick={() => { updateFridgeViewMode("list"); setBulkMoveMode(false); setSelectedBulkFridgeIds([]); }}
-                  className="h-8 px-2 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-[11px] font-extrabold whitespace-nowrap"
-                >
-                  📋 리스트
-                </button>
-              )}
-              <button
-                type="button"
-                onClick={async () => {
-                  const q = debouncedFridgeSearch.trim().toLowerCase();
-                  const list = fridge.filter(
-                    (i) =>
-                      matchesFridgeLocFilter(i.location, fridgeLocFilter) &&
-                      (fridgeCatFilter === "전체" || i.category === fridgeCatFilter) &&
-                      (!visualExpiringOnly || getDaysDiff(i.expiryDate) <= 3) &&
-                      (!q || String(i.name || "").toLowerCase().includes(q))
-                  );
-                  if (list.length === 0) {
-                    showToast("❄️ 복사할 냉장고 재료가 없습니다.");
-                    return;
-                  }
-                  const lines = [
-                    `❄️ 냉장고 재고 (${list.length}건)`,
-                    ...list.map((it) => {
-                      const diff = getDaysDiff(it.expiryDate);
-                      const dTxt = it.expiryDate ? (diff < 0 ? "만료" : diff === 0 ? "오늘" : `D-${diff}`) : "";
-                      return `• [${it.location || "냉장"}] ${it.name} (${it.quantity || 1}${it.unit || "개"}${dTxt ? ` · ${dTxt}` : ""})`;
-                    })
-                  ];
-                  await copyTextSafe(lines.join("\n"), `📋 냉장고 재고 ${list.length}건을 복사했습니다!`);
-                }}
-                className="h-8 px-2 rounded-xl bg-white hover:bg-stone-50 border border-stone-200 text-stone-700 text-[11px] font-extrabold whitespace-nowrap"
-                title="현재 필터 기준 냉장고 재고 복사"
-              >
-                📋
-              </button>
-              <button
-                type="button"
-                onClick={openAddFridgeModal}
-                className="h-8 px-2.5 rounded-xl bg-[#3F624D] hover:bg-[#324E3D] text-white text-[11px] font-extrabold flex items-center gap-0.5 whitespace-nowrap"
-              >
-                <Plus className="w-3.5 h-3.5" /> 추가
-              </button>
-            </div>
           </div>
 
-          {/* 재료 분류별 필터: 가로 스크롤 잘림 없이 한눈에 전체 표시 (건수 포함) */}
-          <div className="bg-white rounded-xl border border-stone-200/80 p-2">
-            <div className="flex flex-wrap gap-1">
-              {(() => {
-                const locScoped = fridge.filter((i) => matchesFridgeLocFilter(i.location, fridgeLocFilter));
-                const shortCatLabel = (c) =>
-                  c === "유아식/이유식 재료" ? "유아식" : c;
-                return (
-                  <>
-                    {["전체", ...fridgeCategories].map((cat) => {
-                      const cnt = cat === "전체" ? locScoped.length : locScoped.filter((i) => i.category === cat).length;
-                      const active = fridgeCatFilter === cat;
-                      return (
-                        <button
-                          type="button"
-                          key={cat}
-                          onClick={() => setFridgeCatFilter(cat)}
-                          className={`px-2 py-1 rounded-lg text-[11px] font-bold whitespace-nowrap border transition flex items-center gap-1 ${
-                            active
-                              ? "bg-[#3F624D] text-white border-[#3F624D]"
-                              : cnt === 0
-                              ? "bg-stone-50/70 text-stone-400 border-stone-200/70"
-                              : "bg-stone-50 text-stone-700 border-stone-200 hover:bg-stone-100"
-                          }`}
-                        >
-                          <span>{cat === "전체" ? "전체" : `${getFridgeCategoryIcon(cat)} ${shortCatLabel(cat)}`}</span>
-                          <span className={`text-[10px] font-black ${active ? "text-emerald-100" : cnt === 0 ? "text-stone-300" : "text-stone-400"}`}>
-                            {cnt}
-                          </span>
-                        </button>
-                      );
-                    })}
-                    {canEditTab("fridge") && (
-                      <button
-                        type="button"
-                        onClick={() => openCategoryManager("fridge")}
-                        className="px-2 py-1 rounded-lg text-[11px] font-extrabold whitespace-nowrap border border-dashed border-stone-300 bg-white hover:bg-stone-100 text-stone-600 transition"
-                        title="재료 카테고리 추가·수정·삭제"
-                      >
-                        ⚙️ 분류
-                      </button>
+          {/* 3. 보관 위치 3칸 요약 바 (현재 탭 범위 기준) */}
+          <div className="grid grid-cols-3 gap-1.5">
+            {locBuckets.map((g) => {
+              const isSelected = fridgeLocFilter === g.key;
+              return (
+                <button
+                  key={g.key}
+                  type="button"
+                  onClick={() => setFridgeLocFilter(isSelected ? "전체" : g.key)}
+                  className={`py-2 px-2.5 rounded-xl border text-left transition ${
+                    isSelected
+                      ? "bg-[#EEF3EE] border-[#3F624D]"
+                      : "bg-white border-stone-200 hover:bg-stone-50"
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-1">
+                    <span className={`text-[11.5px] font-extrabold ${isSelected ? "text-[#35503C]" : "text-stone-600"}`}>
+                      {g.icon} {g.label}
+                    </span>
+                    {g.exp > 0 && (
+                      <span className="text-[10px] font-black text-amber-700 whitespace-nowrap">
+                        임박 {g.exp}
+                      </span>
                     )}
-                  </>
-                );
-              })()}
-            </div>
+                  </div>
+                  <div className={`text-[14px] font-black mt-0.5 leading-tight ${isSelected ? "text-[#2F523E]" : "text-stone-900"}`}>
+                    {g.total}개
+                  </div>
+                </button>
+              );
+            })}
           </div>
 
-          {/* 검색 + 임박만 + 정렬 */}
-          <div className="flex items-center gap-1.5">
-            <div className="relative flex-1 min-w-0">
-              <input
-                type="text"
-                value={fridgeSearch}
-                onChange={(e) => setFridgeSearch(e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Escape") setFridgeSearch(""); }}
-                enterKeyHint="search"
-                placeholder="🔍 재료 검색..."
-                className="w-full h-8 px-2.5 pr-7 rounded-xl border border-stone-200 bg-white text-[12px] font-semibold text-stone-800 placeholder:text-stone-400"
-              />
-              {fridgeSearch && (
-                <button
-                  type="button"
-                  onClick={() => setFridgeSearch("")}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-700 text-[12px] font-black"
-                >
-                  ✕
-                </button>
-              )}
-            </div>
-            {fridgeViewMode === "list" && (
-              <div className="flex items-center gap-1 shrink-0">
+          {/* 4. 간결한 임박·경고 요약 바 (클릭 시 임박 필터, 상세 품목은 펼쳤을 때만 표시) */}
+          {allWarnItems.length > 0 && (
+            <div className={`rounded-xl border transition ${visualExpiringOnly ? "bg-rose-50/80 border-rose-300" : "bg-amber-50/60 border-amber-200/90"}`}>
+              <div className="px-3 py-2 flex items-center justify-between gap-2">
                 <button
                   type="button"
                   onClick={() => setVisualExpiringOnly((v) => !v)}
-                  className={`h-8 px-2 rounded-xl border text-[11px] font-extrabold whitespace-nowrap ${
-                    visualExpiringOnly
-                      ? "bg-amber-600 text-white border-amber-600"
-                      : "bg-white text-amber-700 border-amber-200"
-                  }`}
+                  className="flex-1 min-w-0 text-left flex items-center gap-1.5 flex-wrap"
                 >
-                  ⏰ 임박만{expiringItems.length > 0 ? ` (${expiringItems.length})` : ""}
+                  <AlertCircle className={`w-3.5 h-3.5 shrink-0 ${expiredCnt > 0 ? "text-rose-600" : "text-amber-600"}`} />
+                  <span className="text-[12px] font-extrabold text-stone-800">
+                    {expiredCnt > 0 && <span className="text-rose-700 mr-1.5">경과 {expiredCnt}</span>}
+                    {dueTodayCnt > 0 && <span className="text-rose-600 mr-1.5">오늘 {dueTodayCnt}</span>}
+                    {soonCnt > 0 && <span className="text-amber-800">임박 {soonCnt}</span>}
+                  </span>
+                  <span className="text-[11px] font-bold text-stone-500">
+                    {visualExpiringOnly ? "· 필터 적용 중" : "· 눌러서 보기"}
+                  </span>
                 </button>
-                <select
-                  value={fridgeSort}
-                  onChange={(e) => setFridgeSort(e.target.value)}
-                  className="h-8 px-1.5 rounded-xl border border-stone-200 bg-white text-[11px] font-extrabold text-stone-700 shrink-0"
+                <button
+                  type="button"
+                  onClick={() => setFridgeExpiringExpanded((v) => !v)}
+                  className="px-2 py-0.5 rounded-lg bg-white/90 hover:bg-white border border-stone-200 text-[11px] font-extrabold text-stone-600 whitespace-nowrap shrink-0"
                 >
-                  <option value="expiry">임박순</option>
-                  <option value="recent">최신순</option>
-                  <option value="name">이름순</option>
-                </select>
+                  {fridgeExpiringExpanded ? "접기 ▴" : "펼치기 ▾"}
+                </button>
               </div>
-            )}
-          </div>
-
-
-          {fridge.length === 0 ? (
-            <div className="bg-white p-6 rounded-2xl border border-stone-200 text-center space-y-2">
-              <div className="text-[13.5px] font-bold text-stone-500">
-                현재 표시할 냉장고 재료가 없습니다.
-              </div>
-              <button
-                type="button"
-                onClick={handleRestoreAllDeleted}
-                className="px-3 py-1.5 rounded-xl bg-amber-100 text-amber-900 text-[12.5px] font-extrabold whitespace-nowrap"
-              >
-                숨겨진 재료 다시 불러오기
-              </button>
+              {fridgeExpiringExpanded && (
+                <div className="px-3 pb-2.5 pt-1 border-t border-amber-200/60 space-y-2">
+                  <div className="flex flex-wrap gap-1">
+                    {allWarnItems.map((it) => (
+                      <button
+                        key={`${it._isCooked ? "c" : "r"}-${it.id}`}
+                        type="button"
+                        onClick={() => {
+                          if (it._isCooked && it._portion) setCookedDetailSheet(it._portion);
+                          else setQuickFridgeItem(it);
+                        }}
+                        className={`px-2 py-0.5 rounded-lg text-[11px] font-bold border bg-white whitespace-nowrap ${
+                          it.diff <= 0 ? "border-rose-200 text-rose-700" : "border-amber-200 text-amber-900"
+                        }`}
+                      >
+                        {it._isCooked ? "🍲 " : ""}{it.name} ({it.diff < 0 ? `${Math.abs(it.diff)}일 지남` : it.diff === 0 ? "오늘" : `D-${it.diff}`})
+                      </button>
+                    ))}
+                  </div>
+                  <div className="flex items-center justify-end gap-1.5">
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        const lines = [
+                          `❄️ 냉장고 임박·경과 (${allWarnItems.length}건)`,
+                          ...allWarnItems.map((it) => `• ${it._isCooked ? "[만든음식] " : ""}${it.name} (${it.diff < 0 ? `${Math.abs(it.diff)}일 지남` : it.diff === 0 ? "오늘 만료" : `D-${it.diff}`}${it.location ? ` · ${it.location}` : ""})`)
+                        ];
+                        await copyTextSafe(lines.join("\n"), `📋 임박·경과 ${allWarnItems.length}건을 복사했습니다!`);
+                      }}
+                      className="px-2 py-1 rounded-lg bg-white border border-stone-200 text-[11px] font-extrabold text-stone-700 whitespace-nowrap"
+                    >
+                      📋 복사
+                    </button>
+                    {canViewTab("ai") && (
+                      <button
+                        type="button"
+                        onClick={() => { setActiveTab("ai"); handleRunAiChef(); }}
+                        className="px-2.5 py-1 rounded-lg bg-[#3F624D] text-white text-[11px] font-extrabold whitespace-nowrap"
+                      >
+                        ✨ AI 추천
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
-          ) : fridgeViewMode === "visual" ? (() => {
+          )}
+
+          {/* 5. 재고 목록 (칸별 뷰 OR 통합 리스트 뷰) */}
+          {fridgeViewMode === "visual" && fridgeSectionMode !== "cooked" ? (() => {
             const qFridge = debouncedFridgeSearch.trim().toLowerCase();
             const filteredFridge = fridge.filter(
               (i) =>
@@ -32179,204 +31994,206 @@ time: "", location: "",
             );
           })() : (
             <div className="space-y-2">
-              {(visualExpiringOnly || fridgeLocFilter !== "전체" || fridgeCatFilter !== "전체" || debouncedFridgeSearch.trim()) && (
-                <div className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-xl bg-stone-100 text-[11.5px] font-bold text-stone-600">
-                  <span className="truncate">
-                    필터 적용 중 ({fridge.filter((i) => {
-                      const qFridge = debouncedFridgeSearch.trim().toLowerCase();
-                      return (
-                        matchesFridgeLocFilter(i.location, fridgeLocFilter) &&
-                        (fridgeCatFilter === "전체" || i.category === fridgeCatFilter) &&
-                        (!visualExpiringOnly || getDaysDiff(i.expiryDate) <= 3) &&
-                        (!qFridge || String(i.name || "").toLowerCase().includes(qFridge) || String(i.category || "").toLowerCase().includes(qFridge))
-                      );
-                    }).length}개)
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setFridgeLocFilter("전체");
-                      setFridgeCatFilter("전체");
-                      setVisualExpiringOnly(false);
-                      setFridgeSearch("");
-                    }}
-                    className="text-emerald-700 font-extrabold whitespace-nowrap shrink-0 hover:underline"
-                  >
-                    전체 초기화
-                  </button>
-                </div>
-              )}
-              {fridge
-                .filter((i) => {
-                  const qFridge = debouncedFridgeSearch.trim().toLowerCase();
-                  return (
-                    matchesFridgeLocFilter(i.location, fridgeLocFilter) &&
-                    (fridgeCatFilter === "전체" || i.category === fridgeCatFilter) &&
-                    (!visualExpiringOnly || getDaysDiff(i.expiryDate) <= 3) &&
-                    (!qFridge || String(i.name || "").toLowerCase().includes(qFridge) || String(i.category || "").toLowerCase().includes(qFridge))
-                  );
-                })
-                .sort((a, b) => {
-                  if (fridgeSort === "name") {
-                    return String(a.name || "").localeCompare(String(b.name || ""), "ko") || String(a.id || "").localeCompare(String(b.id || ""));
-                  }
-                  if (fridgeSort === "recent") {
-                    return String(b.createdAt || b.purchaseDate || b.id || "").localeCompare(
-                      String(a.createdAt || a.purchaseDate || a.id || "")
-                    ) || String(a.name || "").localeCompare(String(b.name || ""), "ko");
-                  }
-                  const diffCmp = getDaysDiff(a.expiryDate) - getDaysDiff(b.expiryDate);
-                  if (diffCmp !== 0) return diffCmp;
-                  return String(a.name || "").localeCompare(String(b.name || ""), "ko") || String(a.id || "").localeCompare(String(b.id || ""));
-                })
-                .map((item) => {
-                  const diff = getDaysDiff(item.expiryDate);
-                  return (
-                    <div
-                      key={item.id}
-                      className="bg-white p-2.5 rounded-2xl border border-stone-200 shadow-sm space-y-1.5"
+              {filteredCookedItems.length === 0 && filteredRawItems.length === 0 ? (
+                <div className="bg-white rounded-2xl border border-stone-200 py-10 px-4 text-center space-y-2">
+                  <div className="text-[13px] font-extrabold text-stone-500">조건에 맞는 재고가 없습니다.</div>
+                  {(fridgeLocFilter !== "전체" || fridgeCatFilter !== "전체" || visualExpiringOnly || fridgeSearch) && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFridgeLocFilter("전체");
+                        setFridgeCatFilter("전체");
+                        setVisualExpiringOnly(false);
+                        setFridgeSearch("");
+                      }}
+                      className="px-3 py-1.5 rounded-xl bg-[#EEF3EE] text-[#35503C] text-[12px] font-extrabold"
                     >
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="min-w-0 flex-1">
-                          <div className="flex flex-wrap items-center gap-1 mb-0.5">
-                            <span className="px-1.5 py-0.5 rounded text-[11.5px] font-extrabold bg-stone-100 text-stone-700 whitespace-nowrap">
-                              {String(item.location || "").includes("냉동") ? "냉동실" : item.location}
-                            </span>
-                            <span className="px-1.5 py-0.5 rounded text-[11.5px] font-bold bg-emerald-50 text-emerald-700 whitespace-nowrap">
-                              {item.category}
-                            </span>
-                            <span
-                              className={`px-1.5 py-0.5 rounded text-[11.5px] font-extrabold whitespace-nowrap ${
-                                diff <= 3
-                                  ? "bg-rose-100 text-rose-700"
-                                  : "bg-stone-100 text-stone-500"
-                              }`}
-                            >
-                              {item.expiryDate ? `${item.expiryDate} (${diff < 0 ? `${Math.abs(diff)}일 지남` : diff === 0 ? "오늘 만료" : `D-${diff}`})` : "⏳ 기한 미확인"}
-                            </span>
+                      필터 초기화
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <>
+                  {/* 만든 음식 카드 (전체 탭에서도 동일한 목록 체계로 통합 표시 · 만든 음식 배지 구분) */}
+                  {filteredCookedItems.map((p) => {
+                    const batch = cookedBatches.find((b) => b.id === p.batchId);
+                    const portionReserved = roundQty2(
+                      meals
+                        .filter((m) => m.mealStatus === "planned" && m.cookedPortionId === p.id)
+                        .reduce((acc, m) => acc + Math.max(0, roundQty2(m.cookedQty || 0)), 0)
+                    );
+                    const isDepleted = roundQty2(p.remainingQty) <= 0;
+                    const cDiff = p.expiryDate ? getDaysDiff(p.expiryDate) : 999;
+                    const isWarn = p.expiryDate && cDiff <= 3;
+                    const isHighlighted = activeCookedBatchId && p.batchId === activeCookedBatchId;
+                    return (
+                      <div
+                        key={`cooked-${p.id}`}
+                        className={`bg-white rounded-2xl border p-3 space-y-2 transition ${
+                          isHighlighted
+                            ? "border-[#3F624D] ring-1 ring-[#3F624D]/30"
+                            : isDepleted
+                            ? "border-stone-200 opacity-65"
+                            : "border-stone-200/90"
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0 flex-1 space-y-1">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="px-1.5 py-0.5 rounded-md bg-[#EEF3EE] text-[#35503C] text-[10.5px] font-extrabold whitespace-nowrap">
+                                🍲 만든 음식
+                              </span>
+                              <span className={`text-[14px] font-black leading-snug break-keep ${isDepleted ? "line-through text-stone-400" : "text-stone-900"}`}>
+                                {p.dishName}
+                              </span>
+                            </div>
+                            <div className="text-[11.5px] font-semibold text-stone-500 flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+                              <span>{p.location}</span>
+                              <span>·</span>
+                              <span>조리 {p.cookedAt || batch?.cookedAt || "-"}</span>
+                              <span>·</span>
+                              <span className={isWarn ? "text-rose-700 font-extrabold" : ""}>
+                                {p.expiryDate
+                                  ? `기한 ${p.expiryDate} (${cDiff < 0 ? `${Math.abs(cDiff)}일 지남` : cDiff === 0 ? "오늘" : `D-${cDiff}`})`
+                                  : "기한 미설정"}
+                              </span>
+                              {p.thawedAt && <span className="text-sky-700">· 해동 {p.thawedAt}</span>}
+                            </div>
                           </div>
-                          <div className="flex items-baseline gap-1.5 flex-wrap">
-                            <span className="text-[13.5px] font-black text-stone-900">{item.name}</span>
-                            {Number(item.quantity) > 0 && Number(item.quantity) < 1 && (
-                              <span className="px-1.5 py-0.5 rounded bg-[#EEF3EE] text-[#35503C] border border-[#C9D8CC] text-[10.5px] font-black whitespace-nowrap">
-                                🌗 반남음
-                              </span>
-                            )}
-                            {Number(item.price) > 0 && (
-                              <span className="text-[11.5px] font-bold text-stone-400">
-                                {(Number(String(item.price ?? 0).replace(/[^0-9.-]/g, "")) || 0).toLocaleString()}원
-                              </span>
+                          <div className="text-right shrink-0">
+                            <div className="text-[13.5px] font-black text-[#2F523E] whitespace-nowrap">
+                              {p.remainingQty}{p.unit}
+                            </div>
+                            {portionReserved > 0 && (
+                              <div className="text-[10px] font-extrabold text-amber-700 whitespace-nowrap">
+                                예약 {portionReserved}{p.unit}
+                              </div>
                             )}
                           </div>
                         </div>
 
-
-                        <div className="flex items-center gap-1 bg-stone-100 px-1.5 py-0.5 rounded-xl shrink-0">
+                        <div className="flex items-center gap-1.5 pt-1 border-t border-stone-100">
+                          {!isDepleted && canEditTab("fridge") && (
+                            <button
+                              type="button"
+                              onClick={() => setCookedActionModal({
+                                open: true,
+                                type: "consume",
+                                portion: p,
+                                qty: String(Math.min(1, roundQty2(p.remainingQty))),
+                                member: "온가족",
+                                targetLocation: p.location,
+                                reason: "",
+                                linkToMeal: true,
+                                mealSlot: "저녁",
+                                mealDate: getTodayStr()
+                              })}
+                              className="flex-1 py-1.5 px-2.5 rounded-xl bg-[#3F624D] hover:bg-[#33513F] text-white text-[12px] font-extrabold whitespace-nowrap transition"
+                            >
+                              먹었어요
+                            </button>
+                          )}
                           <button
                             type="button"
-                            onClick={() => handleAdjustQuantity(item, Number(item.quantity) > 0 && Number(item.quantity) < 1 ? -Number(item.quantity) : -1)}
-                            className="w-6 h-6 rounded-lg bg-white font-black text-stone-700 shadow-sm"
+                            onClick={() => setCookedDetailSheet(p)}
+                            className={`${!isDepleted && canEditTab("fridge") ? "px-3.5" : "flex-1"} py-1.5 rounded-xl bg-stone-100 hover:bg-stone-200/80 text-stone-700 text-[12px] font-extrabold whitespace-nowrap transition`}
                           >
-                            -
-                          </button>
-                          <span className="text-[12px] font-black px-1 whitespace-nowrap">
-                            {Number(item.quantity) || 0}
-                            {item.unit}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => handleAdjustQuantity(item, 1)}
-                            className="w-6 h-6 rounded-lg bg-white font-black text-stone-700 shadow-sm"
-                          >
-                            +
+                            더보기
                           </button>
                         </div>
                       </div>
+                    );
+                  })}
 
+                  {/* 식재료 카드 (음식명·수량 우선, 보조 정보 1줄, 기본 동작: 사용 / 장보기 / 더보기) */}
+                  {filteredRawItems.map((item) => {
+                    const diff = getDaysDiff(item.expiryDate);
+                    const isWarn = Boolean(item.expiryDate && diff <= 3);
+                    const locLabel = String(item.location || "").includes("냉동") ? "냉동실" : item.location;
+                    const cleanQty = roundQty2(Number(item.quantity) || 0);
+                    return (
+                      <div
+                        key={`raw-${item.id}`}
+                        className="bg-white rounded-2xl border border-stone-200/90 p-3 space-y-2"
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0 flex-1 space-y-1">
+                            <div className="flex items-baseline gap-1.5 flex-wrap">
+                              <span className="text-[14px] font-black text-stone-900 leading-snug break-keep">
+                                {item.name}
+                              </span>
+                              {cleanQty > 0 && cleanQty < 1 && (
+                                <span className="text-[10.5px] font-extrabold text-[#35503C] whitespace-nowrap">
+                                  반남음
+                                </span>
+                              )}
+                              {Number(item.price) > 0 && (
+                                <span className="text-[11px] font-semibold text-stone-400 whitespace-nowrap">
+                                  {(Number(String(item.price ?? 0).replace(/[^0-9.-]/g, "")) || 0).toLocaleString()}원
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-[11.5px] font-semibold text-stone-500 flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+                              <span>{locLabel}</span>
+                              <span>·</span>
+                              <span>{item.category}</span>
+                              <span>·</span>
+                              <span className={isWarn ? "text-rose-700 font-extrabold" : ""}>
+                                {item.expiryDate
+                                  ? `${item.expiryDate} (${diff < 0 ? `${Math.abs(diff)}일 지남` : diff === 0 ? "오늘 만료" : `D-${diff}`})`
+                                  : "기한 미확인"}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="text-[14px] font-black text-stone-900 whitespace-nowrap shrink-0">
+                            {cleanQty}{item.unit}
+                          </div>
+                        </div>
 
-                      <div className="flex items-center justify-between pt-1.5 border-t border-stone-100 gap-1">
-                        <div className="flex items-center gap-1 flex-nowrap min-w-0 overflow-x-auto">
+                        <div className="grid grid-cols-3 gap-1.5 pt-1 border-t border-stone-100">
                           <button
                             type="button"
-                            onClick={() => handleHalfEatFridgeItem(item)}
-                            className="px-1.5 py-1 rounded-lg bg-[#EEF3EE] hover:bg-[#DFE9E0] text-[#35503C] border border-[#C9D8CC] text-[10.5px] font-extrabold whitespace-nowrap shrink-0"
-                            title="수량 0.5(또는 절반) 차감"
+                            onClick={() => setFridgeUseSheet({ item, customQty: String(Math.min(1, cleanQty || 1)) })}
+                            className="py-1.5 px-2 rounded-xl bg-[#3F624D] hover:bg-[#33513F] text-white text-[12px] font-extrabold whitespace-nowrap transition"
                           >
-                            🌗 반만
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleConsumeFridgeItem(item, false)}
-                            className="px-1.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[10.5px] font-extrabold flex items-center gap-0.5 whitespace-nowrap shrink-0"
-                          >
-                            <Check className="w-3 h-3 shrink-0" /> 다먹음
+                            사용
                           </button>
                           <button
                             type="button"
                             onClick={() => handleConsumeFridgeItem(item, true)}
-                            className="px-1.5 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 text-[10.5px] font-extrabold whitespace-nowrap shrink-0"
+                            className="py-1.5 px-2 rounded-xl bg-[#EEF3EE] hover:bg-[#DFE9E0] text-[#35503C] text-[12px] font-extrabold whitespace-nowrap transition"
                           >
-                            +장보기
+                            장보기
                           </button>
                           <button
                             type="button"
-                            onClick={() => handleWasteFridgeItem(item)}
-                            className="px-1.5 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-800 border border-rose-200 text-[10.5px] font-extrabold whitespace-nowrap shrink-0"
-                            title="폐기 처리 및 손실 기록"
+                            onClick={() => setFridgeItemMoreSheet(item)}
+                            className="py-1.5 px-2 rounded-xl bg-stone-100 hover:bg-stone-200/80 text-stone-700 text-[12px] font-extrabold whitespace-nowrap transition"
                           >
-                            🗑️폐기
-                          </button>
-                        </div>
-
-
-                        <div className="flex items-center gap-0.5 shrink-0">
-                          <button
-                            type="button"
-                            onClick={() => handleFridgeToRecipeSearch(item.name)}
-                            className="p-1.5 rounded-lg hover:bg-stone-100 text-stone-500 text-[12px] leading-none"
-                            title="이 재료 레시피 검색"
-                          >
-                            📖
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setEditingFridge(item);
-                              setFridgeForm({
-                                name: item.name,
-                                location: item.location,
-                                category: item.category,
-                                quantity: item.quantity,
-                                unit: item.unit,
-                                expiryDate: item.expiryDate,
-                                price: item.price || "",
-                                purchaseDate: item.purchaseDate || selectedDate,
-                                recordExpense: true,
-                                shelfZone: item.shelfZone || ""
-                              });
-                              setFridgeConflictData(null);
-                              setIsFridgeModalOpen(true);
-                            }}
-                            className="p-1.5 rounded-lg hover:bg-stone-100 text-stone-500"
-                          >
-                            <Edit2 className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleMistakeDeleteFridgeItem(item)}
-                            className="p-1.5 rounded-lg hover:bg-rose-50 text-stone-400 hover:text-rose-500"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
+                            더보기
                           </button>
                         </div>
                       </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+
+                  {/* 소진된 만든 음식 접기 토글 (만든 음식 탭에서만 하단 간결 표시) */}
+                  {fridgeSectionMode === "cooked" && depletedCookedList.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setShowDepletedCooked((v) => !v)}
+                      className="w-full py-2 rounded-xl bg-stone-100 hover:bg-stone-200/80 text-stone-600 text-[11.5px] font-extrabold"
+                    >
+                      {showDepletedCooked ? "소진된 음식 접기 ▴" : `소진 완료된 음식 ${depletedCookedList.length}건 보기 ▾`}
+                    </button>
+                  )}
+                </>
+              )}
             </div>
           )}
         </div>
-      ))}
+        );
+      })())}
 
 
       {/* ==========================================
@@ -43606,7 +43423,7 @@ time: "", location: "",
         );
       })()}
 
-      {isEditorUnlocked && !isQuickFabOpen && !isPageVisualEditMode && !isNoteBodyFocused && !isPagePasteModalOpen && !activeTableTaskModal && !editingBlockId && !(activeTab === "bucket" && bucketViewMode === "map") && activeTab !== "condolence" && activeTab !== "alarm" && (
+      {isEditorUnlocked && !isQuickFabOpen && !isPageVisualEditMode && !isNoteBodyFocused && !isPagePasteModalOpen && !activeTableTaskModal && !editingBlockId && !(activeTab === "bucket" && bucketViewMode === "map") && activeTab !== "condolence" && activeTab !== "alarm" && activeTab !== "fridge" && (
         <button
           ref={quickFabBtnRef}
           type="button"
@@ -46316,12 +46133,13 @@ time: "", location: "",
                         <span className="text-[10.5px] font-bold text-stone-400 whitespace-nowrap">
                           📅 {it.expiryDate || "기한"}
                         </span>
-                        {[
+                        {(fridgeExpiryPresets.length > 0 ? fridgeExpiryPresets : [
                           { label: "1일", addM: 0, addD: 1 },
                           { label: "3일", addM: 0, addD: 3 },
                           { label: "1주", addM: 0, addD: 7 },
-                          { label: "한달", addM: 1, addD: 0 }
-                        ].map((opt) => {
+                          { label: "1달", addM: 1, addD: 0 },
+                          { label: "3달", addM: 3, addD: 0 }
+                        ]).map((opt) => {
                           const targetExp = addMonthsToDateStr(getTodayStr(), opt.addM, opt.addD);
                           const isSel = it.expiryDate === targetExp;
                           return (
@@ -47368,33 +47186,46 @@ time: "", location: "",
                 />
               </div>
             </div>
-            <div className="grid grid-cols-4 gap-1.5">
-              {[
-                { label: "1일뒤", addM: 0, addD: 1 },
-                { label: "3일뒤", addM: 0, addD: 3 },
-                { label: "1주뒤", addM: 0, addD: 7 },
-                { label: "한달뒤", addM: 1, addD: 0 }
-              ].map((opt) => {
-                const targetExp = addMonthsToDateStr(getTodayStr(), opt.addM, opt.addD);
-                const isSel = fridgeForm.expiryDate === targetExp;
-                return (
-                  <button
-                    key={opt.label}
-                    type="button"
-                    onClick={() => {
-                      setIsExpiryManuallyEdited(true);
-                      setFridgeForm({ ...fridgeForm, expiryDate: targetExp });
-                    }}
-                    className={`py-1.5 px-1 rounded-xl text-[11.5px] font-extrabold border whitespace-nowrap transition ${
-                      isSel
-                        ? "bg-emerald-600 text-white border-emerald-600 shadow-sm"
-                        : "bg-stone-50 hover:bg-stone-100 text-stone-700 border-stone-200"
-                    }`}
-                  >
-                    {opt.label}
-                  </button>
-                );
-              })}
+            <div className="flex items-center gap-1">
+              <div className={`grid gap-1 flex-1 min-w-0 ${fridgeExpiryPresets.length === 4 ? "grid-cols-4" : "grid-cols-5"}`}>
+                {(fridgeExpiryPresets.length > 0 ? fridgeExpiryPresets : [
+                  { label: "1일", addM: 0, addD: 1 },
+                  { label: "3일", addM: 0, addD: 3 },
+                  { label: "1주", addM: 0, addD: 7 },
+                  { label: "1달", addM: 1, addD: 0 },
+                  { label: "3달", addM: 3, addD: 0 }
+                ]).map((opt) => {
+                  const targetExp = addMonthsToDateStr(getTodayStr(), opt.addM, opt.addD);
+                  const isSel = fridgeForm.expiryDate === targetExp;
+                  return (
+                    <button
+                      key={opt.label}
+                      type="button"
+                      onClick={() => {
+                        setIsExpiryManuallyEdited(true);
+                        setFridgeForm({ ...fridgeForm, expiryDate: targetExp });
+                      }}
+                      className={`py-1.5 px-0.5 rounded-xl text-[11px] font-extrabold border whitespace-nowrap transition ${
+                        isSel
+                          ? "bg-[#3F624D] text-white border-[#3F624D] shadow-sm"
+                          : "bg-stone-50 hover:bg-stone-100 text-stone-700 border-stone-200"
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  );
+                })}
+              </div>
+              {isEditorUnlocked && (
+                <button
+                  type="button"
+                  onClick={() => openCategoryManager("fridge_expiry_presets")}
+                  className="py-1.5 px-1.5 rounded-xl bg-stone-100 hover:bg-[#EEF3EE] text-stone-600 border border-stone-200 text-[11px] font-extrabold whitespace-nowrap shrink-0"
+                  title="소비기한 빠른설정 자유편집"
+                >
+                  ⚙️
+                </button>
+              )}
             </div>
 
 
@@ -47507,13 +47338,14 @@ time: "", location: "",
                 onChange={(e) => setStockInExpiry(e.target.value)}
                 className="w-full px-3 py-2 rounded-xl border border-stone-200 text-[13px] font-bold"
               />
-              <div className="grid grid-cols-4 gap-1.5">
-                {[
-                  { label: "1일뒤", addM: 0, addD: 1 },
-                  { label: "3일뒤", addM: 0, addD: 3 },
-                  { label: "1주뒤", addM: 0, addD: 7 },
-                  { label: "한달뒤", addM: 1, addD: 0 }
-                ].map((opt) => {
+              <div className={`grid gap-1 ${fridgeExpiryPresets.length === 4 ? "grid-cols-4" : "grid-cols-5"}`}>
+                {(fridgeExpiryPresets.length > 0 ? fridgeExpiryPresets : [
+                  { label: "1일", addM: 0, addD: 1 },
+                  { label: "3일", addM: 0, addD: 3 },
+                  { label: "1주", addM: 0, addD: 7 },
+                  { label: "1달", addM: 1, addD: 0 },
+                  { label: "3달", addM: 3, addD: 0 }
+                ]).map((opt) => {
                   const targetExp = addMonthsToDateStr(getTodayStr(), opt.addM, opt.addD);
                   const isSel = (stockInExpiry || getDefaultExpiryForLocation(stockInLocation)) === targetExp;
                   return (
@@ -47521,9 +47353,9 @@ time: "", location: "",
                       key={opt.label}
                       type="button"
                       onClick={() => setStockInExpiry(targetExp)}
-                      className={`py-1.5 px-1 rounded-xl text-[11.5px] font-extrabold border whitespace-nowrap transition ${
+                      className={`py-1.5 px-0.5 rounded-xl text-[11px] font-extrabold border whitespace-nowrap transition ${
                         isSel
-                          ? "bg-emerald-600 text-white border-emerald-600 shadow-sm"
+                          ? "bg-[#3F624D] text-white border-[#3F624D] shadow-sm"
                           : "bg-stone-50 hover:bg-stone-100 text-stone-700 border-stone-200"
                       }`}
                     >
@@ -48307,7 +48139,8 @@ time: "", location: "",
           recipe_difficulties: { title: "👩‍🍳 레시피 난이도", placeholder: "새 난이도 (예: 초간단, 5분컷, 특식)" },
           routine_assignees: { title: "🔄 루틴 대상·담당자", placeholder: "새 담당자 (예: 산후도우미, 친정, 시댁)" },
           cooked_categories: { title: "🍲 만든 음식 분류", placeholder: "새 분류 (예: 찜·조림, 아이반찬, 국물)" },
-          cooked_units: { title: "🥄 만든 음식 단위", placeholder: "새 단위 (예: 국자, 팩, 병, 큐브)" }
+          cooked_units: { title: "🥄 만든 음식 단위", placeholder: "새 단위 (예: 국자, 팩, 병, 큐브)" },
+          fridge_expiry_presets: { title: "📅 소비기한 빠른설정", placeholder: "예: 2주, 6달 또는 6달|6|0" }
         }[categoryManageKind] || { title: "⚙️ 분류 관리", placeholder: "새 분류 입력" };
         return (
           <div
@@ -48350,6 +48183,7 @@ time: "", location: "",
                   { id: "fridge_units", label: "⚖️ 단위", cnt: fridgeUnits.length },
                   { id: "cooked_categories", label: "🍲 음식분류", cnt: cookedDishCategories.length },
                   { id: "cooked_units", label: "🥄 음식단위", cnt: cookedUnits.length },
+                  { id: "fridge_expiry_presets", label: "📅 소비기한", cnt: fridgeExpiryPresets.length },
                   { id: "recipe", label: "📖 레시피", cnt: (customCategories.recipe || []).length },
                   { id: "recipe_difficulties", label: "👩‍🍳 난이도", cnt: recipeDifficulties.length },
                   { id: "notice", label: "📌 공지", cnt: (customCategories.notice || []).length },
@@ -53744,13 +53578,14 @@ time: "", location: "",
               <label className="text-[12.5px] font-black text-stone-700 block">
                 📅 소비기한 빠른 설정 {quickFridgeItem.expiryDate ? <span className="text-stone-400 font-bold">({quickFridgeItem.expiryDate})</span> : null}
               </label>
-              <div className="grid grid-cols-4 gap-1.5">
-                {[
-                  { label: "1일뒤", addM: 0, addD: 1 },
-                  { label: "3일뒤", addM: 0, addD: 3 },
-                  { label: "1주뒤", addM: 0, addD: 7 },
-                  { label: "한달뒤", addM: 1, addD: 0 }
-                ].map((opt) => {
+              <div className={`grid gap-1 ${fridgeExpiryPresets.length === 4 ? "grid-cols-4" : "grid-cols-5"}`}>
+                {(fridgeExpiryPresets.length > 0 ? fridgeExpiryPresets : [
+                  { label: "1일", addM: 0, addD: 1 },
+                  { label: "3일", addM: 0, addD: 3 },
+                  { label: "1주", addM: 0, addD: 7 },
+                  { label: "1달", addM: 1, addD: 0 },
+                  { label: "3달", addM: 3, addD: 0 }
+                ]).map((opt) => {
                   const targetExp = addMonthsToDateStr(getTodayStr(), opt.addM, opt.addD);
                   const isSel = quickFridgeItem.expiryDate === targetExp;
                   return (
@@ -53758,9 +53593,9 @@ time: "", location: "",
                       key={opt.label}
                       type="button"
                       onClick={() => handleQuickUpdateFridgeExpiry(quickFridgeItem, targetExp, opt.label)}
-                      className={`py-1.5 px-1 rounded-xl text-[11.5px] font-extrabold border whitespace-nowrap transition ${
+                      className={`py-1.5 px-0.5 rounded-xl text-[11px] font-extrabold border whitespace-nowrap transition ${
                         isSel
-                          ? "bg-emerald-600 text-white border-emerald-600 shadow-sm"
+                          ? "bg-[#3F624D] text-white border-[#3F624D] shadow-sm"
                           : "bg-stone-50 hover:bg-stone-100 text-stone-700 border-stone-200"
                       }`}
                     >
@@ -58396,6 +58231,621 @@ time: "", location: "",
           </div>
         </div>
       )}
+
+
+      {/* v14.49 냉장고 필터 시트 (카테고리 · 정렬 · 임박만) */}
+      {fridgeFilterSheetOpen && (
+        <div
+          className="fixed inset-0 bg-black/45 z-[72] flex items-end sm:items-center justify-center sm:p-4"
+          onClick={() => setFridgeFilterSheetOpen(false)}
+        >
+          <div
+            className="bg-white w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl p-4 space-y-3.5 max-h-[85dvh] overflow-y-auto shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between">
+              <h3 className="text-[14px] font-black text-stone-900">냉장고 필터 · 정렬</h3>
+              <button type="button" onClick={() => setFridgeFilterSheetOpen(false)} className="w-7 h-7 rounded-lg bg-stone-100 text-stone-600 flex items-center justify-center">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-1.5">
+              <div className="text-[11.5px] font-extrabold text-stone-500">정렬 기준</div>
+              <div className="grid grid-cols-3 gap-1.5">
+                {[
+                  { id: "expiry", label: "임박순" },
+                  { id: "recent", label: "최신순" },
+                  { id: "name", label: "이름순" }
+                ].map((opt) => (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    onClick={() => setFridgeSort(opt.id)}
+                    className={`py-2 rounded-xl text-[12px] font-extrabold border whitespace-nowrap ${
+                      fridgeSort === opt.id ? "bg-[#3F624D] text-white border-[#3F624D]" : "bg-stone-50 text-stone-700 border-stone-200"
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between p-2.5 rounded-xl bg-stone-50 border border-stone-200">
+              <span className="text-[12.5px] font-extrabold text-stone-800">임박·경과 품목만 보기</span>
+              <button
+                type="button"
+                onClick={() => setVisualExpiringOnly((v) => !v)}
+                className={`px-3 py-1 rounded-lg text-[11.5px] font-extrabold whitespace-nowrap ${
+                  visualExpiringOnly ? "bg-rose-600 text-white" : "bg-white border border-stone-300 text-stone-600"
+                }`}
+              >
+                {visualExpiringOnly ? "켜짐" : "꺼짐"}
+              </button>
+            </div>
+
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="text-[11.5px] font-extrabold text-stone-500">식재료 분류</span>
+                {isEditorUnlocked && (
+                  <button
+                    type="button"
+                    onClick={() => { setFridgeFilterSheetOpen(false); openCategoryManager("fridge"); }}
+                    className="text-[11px] font-extrabold text-[#35503C] hover:underline whitespace-nowrap"
+                  >
+                    ⚙️ 분류 관리
+                  </button>
+                )}
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {["전체", ...fridgeCategories].map((cat) => {
+                  const cnt = cat === "전체"
+                    ? fridge.filter((i) => matchesFridgeLocFilter(i.location, fridgeLocFilter)).length
+                    : fridge.filter((i) => matchesFridgeLocFilter(i.location, fridgeLocFilter) && i.category === cat).length;
+                  const active = fridgeCatFilter === cat;
+                  return (
+                    <button
+                      key={cat}
+                      type="button"
+                      onClick={() => setFridgeCatFilter(cat)}
+                      className={`px-2.5 py-1.5 rounded-xl text-[12px] font-extrabold border whitespace-nowrap ${
+                        active ? "bg-[#3F624D] text-white border-[#3F624D]" : "bg-stone-50 text-stone-700 border-stone-200"
+                      }`}
+                    >
+                      {cat} ({cnt})
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="flex gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => {
+                  setFridgeCatFilter("전체");
+                  setVisualExpiringOnly(false);
+                  setFridgeSort("expiry");
+                }}
+                className="flex-1 py-2.5 rounded-xl bg-stone-100 text-stone-600 text-[12.5px] font-extrabold whitespace-nowrap"
+              >
+                초기화
+              </button>
+              <button
+                type="button"
+                onClick={() => setFridgeFilterSheetOpen(false)}
+                className="flex-1 py-2.5 rounded-xl bg-[#3F624D] text-white text-[12.5px] font-extrabold whitespace-nowrap"
+              >
+                적용 완료
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* v14.49 냉장고 통합 [+ 추가] 메뉴 시트 (식재료 · 만든 음식 · 영수증 AI 스캔) */}
+      {fridgeAddMenuOpen && (
+        <div
+          className="fixed inset-0 bg-black/45 z-[72] flex items-end sm:items-center justify-center sm:p-4"
+          onClick={() => setFridgeAddMenuOpen(false)}
+        >
+          <div
+            className="bg-white w-full sm:max-w-sm rounded-t-3xl sm:rounded-3xl p-4 space-y-2 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between pb-1">
+              <h3 className="text-[14px] font-black text-stone-900">냉장고에 추가</h3>
+              <button type="button" onClick={() => setFridgeAddMenuOpen(false)} className="w-7 h-7 rounded-lg bg-stone-100 text-stone-600 flex items-center justify-center">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <button
+              type="button"
+              onClick={() => { setFridgeAddMenuOpen(false); openNewFridgeModalWithFilter(); }}
+              className="w-full py-3 px-3.5 rounded-2xl bg-[#EEF3EE] hover:bg-[#DFE9E0] text-[#2F523E] text-left font-extrabold text-[13px] flex items-center justify-between"
+            >
+              <span>🥬 식재료 직접 추가</span>
+              <ChevronRight className="w-4 h-4" />
+            </button>
+            <button
+              type="button"
+              onClick={() => { setFridgeAddMenuOpen(false); openNewCookedModal(null); }}
+              className="w-full py-3 px-3.5 rounded-2xl bg-stone-50 hover:bg-stone-100 text-stone-800 text-left font-extrabold text-[13px] flex items-center justify-between border border-stone-200"
+            >
+              <span>🍲 만든 음식 · 소분 등록</span>
+              <ChevronRight className="w-4 h-4 text-stone-400" />
+            </button>
+            <button
+              type="button"
+              onClick={() => { setFridgeAddMenuOpen(false); setIsReceiptModalOpen(true); }}
+              className="w-full py-3 px-3.5 rounded-2xl bg-stone-50 hover:bg-stone-100 text-stone-800 text-left font-extrabold text-[13px] flex items-center justify-between border border-stone-200"
+            >
+              <span>🧾 영수증 AI 스캔 입고</span>
+              <ChevronRight className="w-4 h-4 text-stone-400" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* v14.49 냉장고 화면 더보기 시트 (보기 전환 · AI 추천 · 출력 · 복사 · 분류관리) */}
+      {fridgeMoreMenuOpen && (
+        <div
+          className="fixed inset-0 bg-black/45 z-[72] flex items-end sm:items-center justify-center sm:p-4"
+          onClick={() => setFridgeMoreMenuOpen(false)}
+        >
+          <div
+            className="bg-white w-full sm:max-w-sm rounded-t-3xl sm:rounded-3xl p-4 space-y-1.5 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between pb-1">
+              <h3 className="text-[14px] font-black text-stone-900">냉장고 화면 메뉴</h3>
+              <button type="button" onClick={() => setFridgeMoreMenuOpen(false)} className="w-7 h-7 rounded-lg bg-stone-100 text-stone-600 flex items-center justify-center">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                const nextMode = fridgeViewMode === "visual" ? "list" : "visual";
+                setFridgeViewMode(nextMode);
+                if (nextMode === "visual" && fridgeSectionMode === "cooked") setFridgeSectionMode("raw");
+                setIsVisualMultiSelect(false);
+                setVisualSelectedIds([]);
+                try { localStorage.setItem("kim_fridge_view_mode_v1", nextMode); } catch (e) {}
+                setFridgeMoreMenuOpen(false);
+              }}
+              className="w-full py-2.5 px-3 rounded-xl hover:bg-stone-50 text-left text-[13px] font-extrabold text-stone-800 flex items-center justify-between"
+            >
+              <span>{fridgeViewMode === "visual" ? "📋 리스트 보기로 전환" : "🧊 냉장고 칸별 보기로 전환"}</span>
+              <ChevronRight className="w-4 h-4 text-stone-400" />
+            </button>
+            {canViewTab("ai") && (
+              <button
+                type="button"
+                onClick={() => { setFridgeMoreMenuOpen(false); setActiveTab("ai"); handleRunAiChef(); }}
+                className="w-full py-2.5 px-3 rounded-xl hover:bg-[#EEF3EE] text-left text-[13px] font-extrabold text-[#35503C] flex items-center justify-between"
+              >
+                <span>✨ 보유 재료로 AI 추천 받기</span>
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => { setFridgeMoreMenuOpen(false); setIsInventoryExportOpen(true); }}
+              className="w-full py-2.5 px-3 rounded-xl hover:bg-stone-50 text-left text-[13px] font-extrabold text-stone-800 flex items-center justify-between"
+            >
+              <span>📤 식단 · 재고 출력</span>
+              <ChevronRight className="w-4 h-4 text-stone-400" />
+            </button>
+            <button
+              type="button"
+              onClick={async () => {
+                setFridgeMoreMenuOpen(false);
+                const lines = [
+                  `❄️ 냉장고 재고 (${fridge.length}종 · 만든 음식 ${cookedPortions.filter((p) => roundQty2(p.remainingQty) > 0).length}종)`,
+                  ...cookedPortions.filter((p) => roundQty2(p.remainingQty) > 0).map((p) => `• [만든음식] ${p.dishName} ${p.remainingQty}${p.unit} (${p.location})`),
+                  ...fridge.map((i) => `• ${i.name} ${roundQty2(Number(i.quantity) || 0)}${i.unit} (${i.location}${i.expiryDate ? ` · ~${i.expiryDate}` : ""})`)
+                ];
+                await copyTextSafe(lines.join("\n"), "📋 냉장고 재고 목록을 복사했습니다!");
+              }}
+              className="w-full py-2.5 px-3 rounded-xl hover:bg-stone-50 text-left text-[13px] font-extrabold text-stone-800 flex items-center justify-between"
+            >
+              <span>📋 재고 목록 카톡 복사</span>
+              <ChevronRight className="w-4 h-4 text-stone-400" />
+            </button>
+            {isEditorUnlocked && (
+              <button
+                type="button"
+                onClick={() => { setFridgeMoreMenuOpen(false); openCategoryManager("fridge"); }}
+                className="w-full py-2.5 px-3 rounded-xl hover:bg-stone-50 text-left text-[13px] font-extrabold text-stone-800 flex items-center justify-between"
+              >
+                <span>⚙️ 분류 · 단위 · 보관위치 관리</span>
+                <ChevronRight className="w-4 h-4 text-stone-400" />
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* v14.49 식재료 [사용] 시트 (반만 · 전부 · 수량 직접 입력) */}
+      {fridgeUseSheet?.item && (() => {
+        const it = fridgeUseSheet.item;
+        const curQty = roundQty2(Number(it.quantity) || 0);
+        return (
+          <div
+            className="fixed inset-0 bg-black/45 z-[73] flex items-end sm:items-center justify-center sm:p-4"
+            onClick={() => setFridgeUseSheet(null)}
+          >
+            <div
+              className="bg-white w-full sm:max-w-sm rounded-t-3xl sm:rounded-3xl p-4 space-y-3 shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between">
+                <h3 className="text-[14px] font-black text-stone-900">식재료 사용 · 수량 조절</h3>
+                <button type="button" onClick={() => setFridgeUseSheet(null)} className="w-7 h-7 rounded-lg bg-stone-100 text-stone-600 flex items-center justify-center">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              <div className="p-2.5 rounded-xl bg-[#FAF8F3] border border-stone-200 flex items-center justify-between">
+                <span className="text-[13px] font-black text-stone-900">{it.name}</span>
+                <span className="text-[13px] font-black text-[#2F523E]">현재 {curQty}{it.unit}</span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const target = it;
+                    setFridgeUseSheet(null);
+                    handleHalfEatFridgeItem(target);
+                  }}
+                  className="py-2.5 px-3 rounded-xl bg-[#EEF3EE] hover:bg-[#DFE9E0] text-[#2F523E] text-[12.5px] font-extrabold whitespace-nowrap"
+                >
+                  🌗 반만 사용
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const target = it;
+                    setFridgeUseSheet(null);
+                    handleConsumeFridgeItem(target, false);
+                  }}
+                  className="py-2.5 px-3 rounded-xl bg-[#3F624D] hover:bg-[#33513F] text-white text-[12.5px] font-extrabold whitespace-nowrap"
+                >
+                  ✓ 전부 다 먹음
+                </button>
+              </div>
+
+              <div className="p-2.5 rounded-xl bg-stone-50 border border-stone-200 space-y-2">
+                <div className="text-[11.5px] font-extrabold text-stone-500">직접 수량 사용 (차감할 양 입력)</div>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setFridgeUseSheet((p) => ({ ...p, customQty: String(Math.max(0.5, roundQty2((Number(p.customQty) || 1) - 0.5))) }))}
+                    className="w-9 h-9 rounded-xl bg-white border border-stone-200 font-black text-stone-700"
+                  >
+                    -
+                  </button>
+                  <input
+                    type="number"
+                    step="0.5"
+                    min="0.1"
+                    value={fridgeUseSheet.customQty}
+                    onChange={(e) => setFridgeUseSheet((p) => ({ ...p, customQty: e.target.value }))}
+                    className="flex-1 min-w-0 h-9 px-3 rounded-xl border border-stone-200 bg-white text-center text-[13.5px] font-black"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setFridgeUseSheet((p) => ({ ...p, customQty: String(roundQty2((Number(p.customQty) || 0) + 0.5)) }))}
+                    className="w-9 h-9 rounded-xl bg-white border border-stone-200 font-black text-stone-700"
+                  >
+                    +
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const useQ = roundQty2(fridgeUseSheet.customQty);
+                      if (!Number.isFinite(useQ) || useQ <= 0) {
+                        showToast("0보다 큰 사용 수량을 입력해 주세요.");
+                        return;
+                      }
+                      const target = it;
+                      setFridgeUseSheet(null);
+                      if (useQ >= curQty) handleConsumeFridgeItem(target, false);
+                      else handleAdjustQuantity(target, -useQ);
+                    }}
+                    className="h-9 px-3 rounded-xl bg-stone-800 hover:bg-stone-900 text-white text-[12px] font-extrabold whitespace-nowrap shrink-0"
+                  >
+                    차감
+                  </button>
+                </div>
+                <div className="flex items-center justify-between pt-1 border-t border-stone-200/70">
+                  <span className="text-[11px] font-bold text-stone-500">재고 수량 1개 추가</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const target = it;
+                      setFridgeUseSheet(null);
+                      handleAdjustQuantity(target, 1);
+                    }}
+                    className="px-2.5 py-1 rounded-lg bg-white border border-stone-200 text-[11px] font-extrabold text-stone-700 whitespace-nowrap"
+                  >
+                    +1{it.unit} 늘리기
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* v14.49 식재료 [더보기] 시트 (수정 · 레시피 · 폐기 · 수정이력 · 삭제) */}
+      {fridgeItemMoreSheet && (
+        <div
+          className="fixed inset-0 bg-black/45 z-[73] flex items-end sm:items-center justify-center sm:p-4"
+          onClick={() => setFridgeItemMoreSheet(null)}
+        >
+          <div
+            className="bg-white w-full sm:max-w-sm rounded-t-3xl sm:rounded-3xl p-4 space-y-1.5 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between pb-1">
+              <h3 className="text-[14px] font-black text-stone-900 truncate">{fridgeItemMoreSheet.name}</h3>
+              <button type="button" onClick={() => setFridgeItemMoreSheet(null)} className="w-7 h-7 rounded-lg bg-stone-100 text-stone-600 flex items-center justify-center shrink-0">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                const it = fridgeItemMoreSheet;
+                setFridgeItemMoreSheet(null);
+                setEditingFridge(it);
+                setFridgeForm({
+                  name: it.name,
+                  location: it.location,
+                  category: it.category,
+                  quantity: it.quantity,
+                  unit: it.unit,
+                  expiryDate: it.expiryDate,
+                  price: it.price || "",
+                  purchaseDate: it.purchaseDate || selectedDate,
+                  recordExpense: true,
+                  shelfZone: it.shelfZone || ""
+                });
+                setFridgeConflictData(null);
+                setIsFridgeModalOpen(true);
+              }}
+              className="w-full py-2.5 px-3 rounded-xl hover:bg-stone-50 text-left text-[13px] font-extrabold text-stone-800"
+            >
+              ✏️ 정보 수정
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                const nm = fridgeItemMoreSheet.name;
+                setFridgeItemMoreSheet(null);
+                handleFridgeToRecipeSearch(nm);
+              }}
+              className="w-full py-2.5 px-3 rounded-xl hover:bg-stone-50 text-left text-[13px] font-extrabold text-stone-800"
+            >
+              📖 이 재료로 레시피 검색
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                const it = fridgeItemMoreSheet;
+                setFridgeItemMoreSheet(null);
+                openRevisionHistory("fridge", it);
+              }}
+              className="w-full py-2.5 px-3 rounded-xl hover:bg-stone-50 text-left text-[13px] font-extrabold text-stone-800"
+            >
+              🕒 수정 이력 · 복원
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                const it = fridgeItemMoreSheet;
+                setFridgeItemMoreSheet(null);
+                handleWasteFridgeItem(it);
+              }}
+              className="w-full py-2.5 px-3 rounded-xl hover:bg-rose-50 text-left text-[13px] font-extrabold text-rose-700"
+            >
+              🗑️ 폐기 처리 (손실 기록)
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                const it = fridgeItemMoreSheet;
+                setFridgeItemMoreSheet(null);
+                handleMistakeDeleteFridgeItem(it);
+              }}
+              className="w-full py-2.5 px-3 rounded-xl hover:bg-rose-50 text-left text-[13px] font-extrabold text-stone-500"
+            >
+              ❌ 목록에서 삭제 (오입력)
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* v14.49 만든 음식 상세 · 더보기 시트 (묶음 총량/섭취/잔량 상세 + 이동/예약/공지/정정/폐기/이력) */}
+      {cookedDetailSheet && (() => {
+        const p = cookedPortions.find((x) => x.id === cookedDetailSheet.id) || cookedDetailSheet;
+        const batch = cookedBatches.find((b) => b.id === p.batchId);
+        const ledger = batch ? computeCookedBatchLedger(batch, cookedPortions, cookedLogs, meals) : null;
+        return (
+          <div
+            className="fixed inset-0 bg-black/45 z-[73] flex items-end sm:items-center justify-center sm:p-4"
+            onClick={() => setCookedDetailSheet(null)}
+          >
+            <div
+              className="bg-white w-full sm:max-w-sm rounded-t-3xl sm:rounded-3xl p-4 space-y-3 max-h-[85dvh] overflow-y-auto shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <h3 className="text-[14px] font-black text-stone-900 truncate">🍲 {p.dishName}</h3>
+                  <div className="text-[11px] font-semibold text-stone-500">
+                    {p.location} · 조리 {p.cookedAt || batch?.cookedAt || "-"} · 기한 {p.expiryDate || "미설정"}
+                  </div>
+                </div>
+                <button type="button" onClick={() => setCookedDetailSheet(null)} className="w-7 h-7 rounded-lg bg-stone-100 text-stone-600 flex items-center justify-center shrink-0">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {ledger && (
+                <div className="grid grid-cols-4 gap-1.5 bg-[#FAF8F3] p-2.5 rounded-2xl border border-stone-200 text-center">
+                  <div>
+                    <div className="text-[10px] font-bold text-stone-500">총 조리량</div>
+                    <div className="text-[13px] font-black text-stone-900">{ledger.initialQty}{ledger.unit}</div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] font-bold text-stone-500">섭취</div>
+                    <div className="text-[13px] font-black text-stone-700">{ledger.consumedQty}{ledger.unit}</div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] font-bold text-stone-500">남은 양</div>
+                    <div className="text-[13px] font-black text-[#2F523E]">{ledger.remainingQty}{ledger.unit}</div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] font-bold text-stone-500">예약</div>
+                    <div className="text-[13px] font-black text-amber-700">{ledger.reservedQty}{ledger.unit}</div>
+                  </div>
+                </div>
+              )}
+
+              <div className="space-y-1">
+                {roundQty2(p.remainingQty) > 0 && canEditTab("fridge") && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCookedDetailSheet(null);
+                        setCookedActionModal({
+                          open: true,
+                          type: "move",
+                          portion: p,
+                          qty: String(roundQty2(p.remainingQty)),
+                          member: "온가족",
+                          targetLocation: String(p.location || "").includes("냉동") ? "냉장실" : "메인 냉동실",
+                          reason: "",
+                          linkToMeal: false,
+                          mealSlot: "저녁",
+                          mealDate: getTodayStr()
+                        });
+                      }}
+                      className="w-full py-2.5 px-3 rounded-xl hover:bg-[#EEF3EE] text-left text-[13px] font-extrabold text-[#35503C]"
+                    >
+                      📦 보관 이동 · 일부 분할 / 해동
+                    </button>
+                    {canEditTab("daily") && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCookedDetailSheet(null);
+                          setEditingMeal(null);
+                          setMealForm({
+                            date: p.plannedEatDate || getTodayStr(),
+                            slot: "저녁",
+                            menu: p.dishName,
+                            members: toSafeArray(batch?.members).length > 0 ? toSafeArray(batch?.members) : ["수혁", "아리나"],
+                            ingredients: [],
+                            note: `🍲 만든 음식 예약 (${p.location})`,
+                            sourceType: "집밥/온가족식",
+                            cost: "",
+                            mealStatus: "planned",
+                            cookedPortionId: p.id,
+                            cookedBatchId: p.batchId,
+                            cookedQty: String(Math.min(1, roundQty2(p.remainingQty)))
+                          });
+                          setIsMealModalOpen(true);
+                        }}
+                        className="w-full py-2.5 px-3 rounded-xl hover:bg-stone-50 text-left text-[13px] font-extrabold text-stone-800"
+                      >
+                        📅 계획 식단에 예약하기 (잔량 미차감)
+                      </button>
+                    )}
+                    {canEditTab("notices") && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCookedDetailSheet(null);
+                          setEditingNotice(null);
+                          setNoticeForm({
+                            title: `🍲 [남은 반찬] ${p.dishName} (${p.remainingQty}${p.unit})`,
+                            content: `보관 위치: ${p.location}\n조리일: ${p.cookedAt || batch?.cookedAt || "-"}\n보관 기한: ${p.expiryDate || "미설정"}`,
+                            category: noticeCategories.includes("집안일") ? "집안일" : (noticeCategories[0] || "일반"),
+                            author: actorName || "수혁",
+                            pinned: false
+                          });
+                          setIsNoticeModalOpen(true);
+                        }}
+                        className="w-full py-2.5 px-3 rounded-xl hover:bg-stone-50 text-left text-[13px] font-extrabold text-stone-800"
+                      >
+                        📌 가족공지로 공유하기
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCookedDetailSheet(null);
+                        setCookedActionModal({
+                          open: true,
+                          type: "adjust",
+                          portion: p,
+                          qty: String(roundQty2(p.remainingQty)),
+                          member: "온가족",
+                          targetLocation: p.location,
+                          reason: "",
+                          linkToMeal: false,
+                          mealSlot: "저녁",
+                          mealDate: getTodayStr()
+                        });
+                      }}
+                      className="w-full py-2.5 px-3 rounded-xl hover:bg-stone-50 text-left text-[13px] font-extrabold text-stone-800"
+                    >
+                      ⚖️ 남은 수량 정정 (사유 기록)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCookedDetailSheet(null);
+                        setCookedActionModal({
+                          open: true,
+                          type: "discard",
+                          portion: p,
+                          qty: String(roundQty2(p.remainingQty)),
+                          member: "온가족",
+                          targetLocation: p.location,
+                          reason: "",
+                          linkToMeal: false,
+                          mealSlot: "저녁",
+                          mealDate: getTodayStr()
+                        });
+                      }}
+                      className="w-full py-2.5 px-3 rounded-xl hover:bg-rose-50 text-left text-[13px] font-extrabold text-rose-700"
+                    >
+                      🗑️ 폐기 기록
+                    </button>
+                  </>
+                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCookedDetailSheet(null);
+                    openRevisionHistory("cooked_portion", p);
+                  }}
+                  className="w-full py-2.5 px-3 rounded-xl hover:bg-stone-50 text-left text-[13px] font-extrabold text-stone-800"
+                >
+                  🕒 수정 이력 · 복원
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       <FeatureGuideModal
         isOpen={isGuideModalOpen}

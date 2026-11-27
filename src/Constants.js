@@ -1186,7 +1186,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v14.48";
+export const APP_CODE_VERSION = "v14.50";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1204,7 +1204,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-27 11:45";
+export const APP_BUILD_DATE = "2026-11-27 12:10";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1274,6 +1274,30 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v14.50",
+    version: "v14.50",
+    date: "2026-11-27",
+    title: "📅 소비기한 빠른설정 [3달(3개월뒤)] 추가 및 1줄 5열 무줄바꿈 통일 + ⚙️ 소비기한 프리셋 자유편집 + ☁️ 냉장고 탭설정 백업 통합 + 🎨 세이지그린 색상 통일",
+    items: [
+      "📅 [소비기한 빠른설정 3개월 추가 · 1줄 무줄바꿈] 냉장고 재료 등록·수정 모달, 장보기→냉장고 입고 모달, 냉장고 퀵 액션 시트, 영수증 AI 스캔 4곳 모두에 [3달(3개월 뒤)] 버튼을 추가하고, 간결한 5열 1줄 배치(1일 · 3일 · 1주 · 1달 · 3달, grid-cols-5 · whitespace-nowrap)로 360px 모바일에서도 줄바꿈 없이 깔끔하게 표시되도록 개선했습니다.",
+      "⚙️ [시스템 자유도 확장] 소비기한 빠른설정 프리셋(fridge_expiry_presets)을 통합 세부 분류 관리(custom_categories_v1)로 승격해 원하는 기한(예: 2주, 6달, 1년 등)을 자유롭게 추가·수정·삭제·순서변경·기본복원하고 Firebase 실시간 동기화·JSON 백업/복원에 연동했습니다.",
+      "🎨 [디자인·색상 통일 & 백업 정합성] 소비기한 선택 버튼에 남아 있던 이질적인 emerald-600 색상을 앱 공통 세이지그린(#3F624D)으로 일괄 통일하고, 냉장고 탭 구분(fridgeSectionMode)·소진 표시(showDepletedCooked)를 JSON 전체 백업·복원에도 포함해 클라우드 동기화와 100% 일치시켰습니다. (과거 패치노트 487건 100% 보존)"
+    ]
+  },
+  {
+    id: "patch-v14.49",
+    version: "v14.49",
+    date: "2026-11-27",
+    title: "❄️ 냉장고 화면 정보 배치·시각 밀도 전면 개편 (3탭 무잘림 · 필터/추가/더보기 통합 · 접이식 임박요약 · 식재료/만든음식 통합목록 · 간결 카드 · 하단 FAB 겹침 해소)",
+    items: [
+      "❄️ [상단 3탭 · 집계 기준 통일] 상단을 [전체 / 식재료 / 만든 음식] 3열 균등 탭으로 넓혀 탭 글자 잘림을 없애고, 모든 숫자(전체 = 식재료 + 남은 만든 음식)와 보관 위치별 건수가 선택한 탭 범위에 맞춰 일관되게 표시되도록 정비했습니다.",
+      "🔍 [화면 순서 · 밀도 최적화] 종류 탭 → 검색·필터·추가·더보기 → 보관 위치(냉장/냉동/실온) → 1줄 접이식 임박·경고 요약(경과·오늘·임박, 탭 시 필터·펼치기 시 상세 품목) → 통합 목록 순으로 재구성해 첫 화면에서 재고 목록이 즉시 보이도록 개선했습니다.",
+      "📦 [필터·추가·더보기 통합] 여러 줄 카테고리 패널을 [필터] 시트로 이동(활성 조건만 1줄 칩 표시), 영수증 AI 스캔·식재료 추가·만든 음식 등록을 [+ 추가] 메뉴로 통합, 식단·재고 출력·AI 추천·리스트/칸별 보기·복사·분류 관리를 [⋯ 더보기] 메뉴로 정리했습니다.",
+      "🥬🍲 [카드 슬림화 · 상세 시트 분리] 전체 탭에서 식재료와 만든 음식을 동일한 목록 체계로 표시(만든 음식 배지 구분)하고, 식재료 카드는 [사용(반만/전부/수량입력) · 장보기 · 더보기], 만든 음식 카드는 [먹었어요 · 더보기(총량/섭취/잔량 상세 + 보관이동/식단예약/공지/정정/폐기/이력)]로 압축했습니다.",
+      "📱 [하단 가림 해소] 냉장고 탭의 중복 플로팅(+) 버튼을 숨기고 목록 하단 여백을 확보해 360·390·430px 모바일·큰 글씨 환경에서도 카드 버튼 가림·겹침을 해소했습니다. (과거 패치노트 486건 100% 보존)"
+    ]
+  },
   {
     id: "patch-v14.48",
     version: "v14.48",
@@ -7424,6 +7448,25 @@ export const DEFAULT_BABY_SLEEP_TYPES = ["낮잠", "밤잠"];
 export const DEFAULT_FRIDGE_UNITS = ["개", "팩", "봉", "모", "캔", "병", "단", "통", "알", "g", "kg", "ml", "L"];
 export const DEFAULT_RECIPE_DIFFICULTIES = ["쉬움", "보통", "어려움"];
 export const DEFAULT_ROUTINE_ASSIGNEES = ["공통", "시목", "시율", "시목·시율", "수혁", "아리나"];
+export const DEFAULT_EXPIRY_PRESETS = ["1일|0|1", "3일|0|3", "1주|0|7", "1달|1|0", "3달|3|0"];
+export const parseExpiryPresetToken = (raw) => {
+  const s = String(raw || "").trim();
+  if (!s) return null;
+  if (s.includes("|")) {
+    const [lbl, mStr, dStr] = s.split("|").map((x) => x.trim());
+    const addM = Math.max(0, Number(mStr) || 0);
+    const addD = Math.max(0, Number(dStr) || 0);
+    if (!lbl || (addM === 0 && addD === 0)) return null;
+    return { label: lbl, addM, addD };
+  }
+  const mMon = s.match(/^(\d+)\s*(?:달|개월)/);
+  if (mMon) return { label: s, addM: Number(mMon[1]) || 1, addD: 0 };
+  const mWeek = s.match(/^(\d+)\s*주/);
+  if (mWeek) return { label: s, addM: 0, addD: (Number(mWeek[1]) || 1) * 7 };
+  const mDay = s.match(/^(\d+)\s*일/);
+  if (mDay) return { label: s, addM: 0, addD: Number(mDay[1]) || 1 };
+  return null;
+};
 
 export const APP_FEATURE_GUIDES = [
   {
