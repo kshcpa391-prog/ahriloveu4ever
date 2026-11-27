@@ -1186,7 +1186,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v14.53";
+export const APP_CODE_VERSION = "v14.54";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1204,7 +1204,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-27 13:05";
+export const APP_BUILD_DATE = "2026-11-27 13:35";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1274,6 +1274,19 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v14.54",
+    version: "v14.54",
+    date: "2026-11-27",
+    title: "🛡️ 치명적 데이터 정합성 7종 전면 수정(중복재고 그룹 트랜잭션 합산·오프라인 충돌/권한거부 보존·식단-소분 멱등 차감·수정이력/사진복원·백업/실패전용 재시도·0개 표기·검색/ESC/카테고리 이관)",
+    items: [
+      "🛡️ [B-1 중복 재고 합치기 수량 유실·단위 불일치 수정] 그룹 전체 합치기(handleMergeDuplicateFridgeGroup)와 단건 합치기(handleMergeDuplicateFridgeItems)를 Firestore runTransaction 기반 서버 최신값 읽기로 전환해 2+3+4=9개를 손실 없이 합산하고, 단위가 다르면(1봉 vs 500g) 임의 삭제하지 않고 차단·보존하며 mergedLots로 원래 입고 정보(수량·기한·금액)를 추적 보존합니다.",
+      "☁️ [B-2 오프라인 대기열 유실 방지 & 계정 격리] 오프라인 큐를 계정별 키(kim_offline_mutation_queue_v1_{uid})로 격리하고, 버전 충돌(conflict)·편집권한 부족(permission-blocked) 항목을 삭제하지 않고 원문·상태·실패사유와 함께 보존하며, 함수형 병합·로그인/재시작 자동 재처리로 신규 작업 덮어쓰기를 차단했습니다.",
+      "🍲 [B-3 식단↔소분 멱등 차감·잔량부족 방어·복사 증빙 차단] handleMarkPlannedMealRecorded 트랜잭션에서 최신 식단·소분 문서를 함께 읽고 consumedOpIds 영구 기록으로 과거 요청 재시도(A=2→B=1→A 재시도 시 잔량 7 유지)를 차단했으며, 잔량 부족·소분 부재 시 실제 잔량 검증, 식단 수정 시 메타데이터 보존, 복사 시 과거 처리 증빙(cookedConsumedOpId 등) 제거를 적용했습니다.",
+      "🕒🖼️ [B-4/B-5 수정이력·사진/첨부·수량 복원 정확화] baby_health 수정이력 경로를 family_baby_notes_v7로 교정하고, 식단 일반 저장 이력 기록을 보강했으며, photoUrls 복원 시 [image-ref:...] 문자열 저장 차단·첨부 url/storagePath 보존 및 소분 수량 복원 시 family_cooked_logs_v1 보정 로그(type: adjust) 원자적 기록을 구현했습니다.",
+      "💾🔍 [B-6/B-7/G/E 백업·복원·검색·ESC·카테고리·프리셋] JSON 복원에 5종 누락 설정(routineShowFuture·todoIncludeOtherCats·fridgeSectionMode·showDepletedCooked·fridgeDuplicatePolicy)과 개인일정 결과 집계를 추가하고, 자동/안전 백업에 만든음식 3종을 포함했으며, [실패 N건만 재시도] 직접 재전송을 구현했습니다. 또한 formatFridgeQtyUnit(0, '1개')→'0개' 교정, 통합검색 살림(title/kind/detailLoc)·식비(title) 스키마 일치, ESC 의존성 12종 보강, 수납장소 삭제(kind) 오류 가드 및 소비기한 프리셋 유연 줄바꿈을 적용했습니다. (과거 패치노트 491건 100% 보존)"
+    ]
+  },
   {
     id: "patch-v14.53",
     version: "v14.53",
@@ -7912,7 +7925,7 @@ export const REVISION_ENTITY_TYPES = {
   routine: { label: "반복 루틴", icon: "🔄", col: "family_meta_v4", tabKey: "routines", hasLinkedEffect: false },
   baby_activity: { label: "육아 생활기록", icon: "🍼", col: "family_baby_activities_v1", tabKey: "baby", hasLinkedEffect: false },
   baby_growth: { label: "성장기록", icon: "📏", col: "family_baby_growth_v7", tabKey: "baby", hasLinkedEffect: false },
-  baby_health: { label: "진료·체온", icon: "🩺", col: "family_baby_health_v7", tabKey: "baby", hasLinkedEffect: false },
+  baby_health: { label: "진료·체온", icon: "🩺", col: "family_baby_notes_v7", tabKey: "baby", hasLinkedEffect: false },
   baby_diary: { label: "육아일기", icon: "📖", col: "family_baby_diary_v8", tabKey: "baby", hasLinkedEffect: false },
   house: { label: "살림수첩", icon: "🏠", col: "family_house_items_v1", tabKey: "house", hasLinkedEffect: false },
   expense: { label: "식비 지출", icon: "💰", col: "family_expenses_v4", tabKey: "monthly", hasLinkedEffect: true, effectHint: "금액 변경 시 월간 식비 합계와 예산 잔액이 즉시 변동됩니다." },
@@ -8003,7 +8016,10 @@ export const sanitizeSnapshotForRevision = (item) => {
         name: att?.name || "첨부파일",
         mimeType: att?.mimeType || "",
         size: att?.size || (typeof att?.dataUrl === "string" ? att.dataUrl.length : 0),
-        hasRef: Boolean(att?.dataUrl || att?.url)
+        ...(att?.url ? { url: att.url } : {}),
+        ...(att?.storagePath ? { storagePath: att.storagePath } : {}),
+        ...(typeof att?.dataUrl === "string" && att.dataUrl.length <= 2048 ? { dataUrl: att.dataUrl } : {}),
+        hasRef: Boolean(att?.dataUrl || att?.url || att?.storagePath)
       }));
     } else if (k === "photoUrls" && Array.isArray(v)) {
       out[k] = v.map((u, idx) =>
@@ -8079,11 +8095,33 @@ export const buildRestoredEntityPayload = (currentItem, targetSnapshot, nextVers
   const restored = { ...base };
   for (const [k, v] of Object.entries(snap)) {
     if (REVISION_PROTECTED_FIELDS.includes(k)) continue;
-    // Preserve existing image/attachment binary if snapshot stored a lightweight reference placeholder
-    if (typeof v === "string" && v.startsWith("[image-ref:") && typeof base[k] === "string" && base[k]) {
+    // Never overwrite real media URLs with placeholder strings; preserve recoverable references
+    if (typeof v === "string" && v.startsWith("[image-ref:")) {
       continue;
     }
-    if (k === "attachments" && Array.isArray(v) && v.every((x) => !x?.dataUrl) && Array.isArray(base.attachments)) {
+    if (k === "photoUrls" && Array.isArray(v)) {
+      const hasPlaceholder = v.some((u) => typeof u === "string" && u.startsWith("[image-ref:"));
+      if (hasPlaceholder) {
+        const validUrls = v.filter((u) => typeof u === "string" && !u.startsWith("[image-ref:"));
+        if (validUrls.length > 0) {
+          restored[k] = validUrls;
+        } else if (Array.isArray(base.photoUrls)) {
+          restored[k] = base.photoUrls;
+        }
+        continue;
+      }
+    }
+    if (k === "attachments" && Array.isArray(v)) {
+      const baseMap = new Map(
+        (Array.isArray(base.attachments) ? base.attachments : [])
+          .filter((x) => x && (x.id || x.name))
+          .map((x) => [x.id || x.name, x])
+      );
+      restored[k] = v.map((att) => {
+        if (att?.url || att?.storagePath || att?.dataUrl) return att;
+        const matched = baseMap.get(att?.id || att?.name);
+        return matched ? { ...att, ...(matched.url ? { url: matched.url } : {}), ...(matched.storagePath ? { storagePath: matched.storagePath } : {}), ...(matched.dataUrl ? { dataUrl: matched.dataUrl } : {}) } : att;
+      });
       continue;
     }
     restored[k] = v;
@@ -8228,16 +8266,19 @@ export const computeCookedBatchLedger = (batch, portions = [], logs = [], planne
 // ============================================================================
 export const formatFridgeQtyUnit = (quantity, unit) => {
   const rawUnit = String(unit || "개").trim();
-  const numQty = Number(String(quantity ?? "").replace(/[^0-9.-]/g, ""));
-  // unit 자체가 "01개" 또는 "1봉"처럼 숫자를 포함한 경우 분리 정규화
+  const rawQtyStr = quantity === null || quantity === undefined ? "" : String(quantity).trim();
+  const cleanedQtyStr = rawQtyStr.replace(/[^0-9.-]/g, "");
+  const hasExplicitQty = cleanedQtyStr !== "" && Number.isFinite(Number(cleanedQtyStr));
+  const numQty = hasExplicitQty ? Math.max(0, roundQty2(Number(cleanedQtyStr))) : NaN;
+  // unit 자체가 "01개" 또는 "1봉"처럼 숫자를 포함한 경우 단위 문자만 분리하고, 명시된 수량(0 포함)을 우선
   const unitNumMatch = rawUnit.match(/^0*(\d+(?:\.\d+)?)\s*([^\d\s].*)$/);
   if (unitNumMatch) {
-    const parsedFromUnit = roundQty2(Number(unitNumMatch[1]) || 0);
+    const parsedFromUnit = Math.max(0, roundQty2(Number(unitNumMatch[1]) || 0));
     const cleanUnit = unitNumMatch[2].trim() || "개";
-    const finalQty = Number.isFinite(numQty) && numQty > 0 ? roundQty2(numQty) : parsedFromUnit;
+    const finalQty = hasExplicitQty ? numQty : parsedFromUnit;
     return `${finalQty}${cleanUnit}`;
   }
-  const cleanQty = Number.isFinite(numQty) ? roundQty2(numQty) : 0;
+  const cleanQty = hasExplicitQty ? numQty : 0;
   return `${cleanQty}${rawUnit || "개"}`;
 };
 

@@ -10616,7 +10616,10 @@ function MainApp() {
       wasteEvents,
       babyChecks,
       babyGrowthLogs,
-      babyMedicalNotes
+      babyMedicalNotes,
+      cookedBatches,
+      cookedPortions,
+      cookedLogs
     };
     const serialized = JSON.stringify(backupDataObj);
     let h = 2166136261;
@@ -11038,7 +11041,8 @@ function MainApp() {
             babyChecks, babyGrowthLogs, babyMedicalNotes, familyRoutines,
             bucketList, houseItems, customCategories, houseStorageRooms,
             favoriteSingleMenus, favoriteMealCombos, handoverProfile,
-            babyDreamLinks, monthlyBudget
+            babyDreamLinks, monthlyBudget,
+            cookedBatches, cookedPortions, cookedLogs
           };
           const preBytes = new Blob([JSON.stringify(fullPreRestoreData)]).size;
           const safePreData = preBytes <= 880000
@@ -11237,6 +11241,31 @@ function MainApp() {
         try { localStorage.setItem("kim_routine_view_mode_v1", payload.routineViewMode); } catch (e) {}
         syncHomeSettingsToCloud(null, null, null, null, payload.routineViewMode);
       }
+      if (typeof payload.routineShowFuture === "boolean") {
+        setRoutineShowFuture(payload.routineShowFuture);
+        try { localStorage.setItem("kim_routine_show_future_v1", payload.routineShowFuture ? "1" : "0"); } catch (e) {}
+        syncHomeSettingsToCloud(null, null, null, null, null, null, null, { routineShowFuture: payload.routineShowFuture });
+      }
+      if (typeof payload.todoIncludeOtherCats === "boolean") {
+        setTodoIncludeOtherCats(payload.todoIncludeOtherCats);
+        try { localStorage.setItem("kim_todo_include_other_v1", payload.todoIncludeOtherCats ? "1" : "0"); } catch (e) {}
+        syncHomeSettingsToCloud(null, null, null, null, null, null, null, { todoIncludeOtherCats: payload.todoIncludeOtherCats });
+      }
+      if (payload.fridgeSectionMode === "all" || payload.fridgeSectionMode === "ingredients" || payload.fridgeSectionMode === "cooked") {
+        setFridgeSectionMode(payload.fridgeSectionMode);
+        try { localStorage.setItem("kim_fridge_section_mode_v1", payload.fridgeSectionMode); } catch (e) {}
+        syncHomeSettingsToCloud(null, null, null, null, null, null, null, { fridgeSectionMode: payload.fridgeSectionMode });
+      }
+      if (typeof payload.showDepletedCooked === "boolean") {
+        setShowDepletedCooked(payload.showDepletedCooked);
+        try { localStorage.setItem("kim_show_depleted_cooked_v1", payload.showDepletedCooked ? "1" : "0"); } catch (e) {}
+        syncHomeSettingsToCloud(null, null, null, null, null, null, null, { showDepletedCooked: payload.showDepletedCooked });
+      }
+      if (payload.fridgeDuplicatePolicy === "ask" || payload.fridgeDuplicatePolicy === "auto_merge" || payload.fridgeDuplicatePolicy === "warn_only") {
+        setFridgeDuplicatePolicy(payload.fridgeDuplicatePolicy);
+        try { localStorage.setItem("kim_fridge_dup_policy_v1", payload.fridgeDuplicatePolicy); } catch (e) {}
+        syncHomeSettingsToCloud(null, null, null, null, null, null, null, { fridgeDuplicatePolicy: payload.fridgeDuplicatePolicy });
+      }
       if (payload.fridgeViewMode === "list" || payload.fridgeViewMode === "visual") {
         updateFridgeViewMode(payload.fridgeViewMode);
       }
@@ -11286,24 +11315,7 @@ function MainApp() {
             return { ...norm, _bucketDocId: bId };
           });
         setPrivateSchedules(hydrated);
-        if (user && db) {
-          const entries = Object.entries(groupedBuckets);
-          (async () => {
-            for (let i = 0; i < entries.length; i += 400) {
-              const batch = writeBatch(db);
-              entries.slice(i, i + 400).forEach(([bId, bData]) => {
-                batch.set(getDocRef("admin_private_schedules_v1", bId), {
-                  isYearBucket: true,
-                  owner: bData.owner,
-                  year: bData.year,
-                  items: bData.items,
-                  updatedAtMs: Date.now()
-                });
-              });
-              await batch.commit().catch(() => {});
-            }
-          })();
-        }
+        payload.__privateScheduleBuckets = groupedBuckets;
       }
       if (Array.isArray(payload.deletedIds)) {
         setDeletedIds(payload.deletedIds);
@@ -11312,7 +11324,24 @@ function MainApp() {
 
 
       if (user && db) {
-        const writePromises = [];
+        const writeTasks = [];
+        const enqueueWriteTask = (col, docId, data, merge = false) => {
+          writeTasks.push({ col, docId, data, merge });
+        };
+        if (isAdminUnlocked && payload.__privateScheduleBuckets) {
+          Object.entries(payload.__privateScheduleBuckets).forEach(([bId, bData]) => {
+            enqueueWriteTask("admin_private_schedules_v1", bId, {
+              isYearBucket: true,
+              owner: bData.owner,
+              year: bData.year,
+              items: bData.items,
+              updatedAtMs: Date.now()
+            }, false);
+          });
+        }
+        const writePromises = writeTasks.map((t) =>
+          t.merge ? setDoc(getDocRef(t.col, t.docId), t.data, { merge: true }) : setDoc(getDocRef(t.col, t.docId), t.data)
+        );
         if (isAdminUnlocked && Array.isArray(payload.babyDiaryEntries)) {
           payload.babyDiaryEntries.forEach((bd) => {
             if (bd?.id) writePromises.push(setDoc(getDocRef("family_baby_diary_v8", bd.id), bd));
@@ -11554,10 +11583,20 @@ function MainApp() {
 
         const results = await Promise.allSettled(writePromises);
         const succeededCount = results.filter((r) => r.status === "fulfilled").length;
-        const failedCount = results.filter((r) => r.status === "rejected").length;
+        const failedIndices = results.map((r, idx) => (r.status === "rejected" ? idx : -1)).filter((i) => i >= 0);
+        const failedCount = failedIndices.length;
         if (failedCount > 0) {
-          setFailedRestoreTasks([{ payload, failedCount, succeededCount, failedAt: Date.now() }]);
-          showToast(`⚠️ 부분 복원됨 (성공 ${succeededCount}건 / 실패 ${failedCount}건) — 설정창에서 실패 항목 재시도가 가능합니다.`);
+          const failedDirectTasks = failedIndices
+            .filter((i) => i < writeTasks.length)
+            .map((i) => writeTasks[i]);
+          setFailedRestoreTasks([{
+            payload,
+            failedDirectTasks,
+            failedCount,
+            succeededCount,
+            failedAt: Date.now()
+          }]);
+          showToast(`⚠️ 부분 복원됨 (성공 ${succeededCount}건 / 실패 ${failedCount}건) — 설정창에서 실패 항목만 재시도할 수 있습니다.`);
           return;
         }
         setFailedRestoreTasks([]);
@@ -14184,47 +14223,190 @@ const priceStr = exportIncludePrice && safeItPrice > 0 ? `${safeItPrice.toLocale
   // 10. 냉장고·식단·장보기·공지사항 핸들러
   // ==========================================
 
-  const handleMergeDuplicateFridgeItems = async (keepItem, removeItem, addQty = null) => {
-    if (!requireEditorAccess("fridge") || !keepItem) return;
+  const handleMergeDuplicateFridgeItems = async (keepItem, removeItem, addQty = null, incomingMeta = null) => {
+    if (!requireEditorAccess("fridge") || !keepItem) return { ok: false, error: "권한 또는 대상 없음" };
     if (!user || !db) {
       showToast("⚠️ 서버 연결 후 합칠 수 있습니다.");
-      return;
+      return { ok: false, error: "서버 미연결" };
     }
-    const baseQty = roundQty2(Number(keepItem.quantity) || 0);
-    const deltaQty = addQty !== null ? roundQty2(addQty) : roundQty2(Number(removeItem?.quantity) || 0);
-    const sameUnit = !removeItem || String(keepItem.unit || "개").trim() === String(removeItem.unit || "개").trim();
-    const nextQty = sameUnit ? roundQty2(baseQty + deltaQty) : baseQty;
-    const earliestExp =
-      keepItem.expiryDate && removeItem?.expiryDate
-        ? (keepItem.expiryDate <= removeItem.expiryDate ? keepItem.expiryDate : removeItem.expiryDate)
-        : (keepItem.expiryDate || removeItem?.expiryDate || "");
-    const updatedKeep = {
-      ...keepItem,
-      quantity: nextQty,
-      expiryDate: earliestExp,
-      updatedAt: new Date().toISOString()
-    };
+    const keepUnit = String(keepItem.unit || "개").trim();
+    const otherUnit = removeItem ? String(removeItem.unit || "개").trim() : String(incomingMeta?.unit || keepUnit).trim();
+    if (keepUnit !== otherUnit) {
+      const msg = `단위가 다릅니다 (${keepUnit} ≠ ${otherUnit}). 환산 근거 없이 임의로 합치거나 삭제하지 않습니다.`;
+      showToast(`⚠️ ${msg}`);
+      return { ok: false, error: msg, unitMismatch: true };
+    }
     beginWrite();
     let ok = false;
     let errMsg = "";
+    let finalKeep = null;
     try {
-      const batch = writeBatch(db);
-      batch.set(getDocRef("family_fridge_v4", keepItem.id), updatedKeep, { merge: true });
-      if (removeItem?.id && removeItem.id !== keepItem.id) {
-        batch.delete(getDocRef("family_fridge_v4", removeItem.id));
-        batch.delete(getDocRef("family_fridge_v3", removeItem.id));
-      }
-      await batch.commit();
+      await runTransaction(db, async (tx) => {
+        const keepRef = getDocRef("family_fridge_v4", keepItem.id);
+        const keepSnap = await tx.get(keepRef);
+        const curKeep = keepSnap.exists() ? keepSnap.data() : keepItem;
+        const curKeepUnit = String(curKeep.unit || "개").trim();
+        let delta = addQty !== null ? Math.max(0, roundQty2(Number(addQty) || 0)) : 0;
+        let sourceLot = null;
+
+        if (removeItem?.id && removeItem.id !== keepItem.id) {
+          const remRef = getDocRef("family_fridge_v4", removeItem.id);
+          const remSnap = await tx.get(remRef);
+          if (!remSnap.exists()) {
+            return; // 이미 다른 기기에서 통합·삭제됨
+          }
+          const curRem = remSnap.data();
+          const curRemUnit = String(curRem.unit || "개").trim();
+          if (curKeepUnit !== curRemUnit) {
+            throw new Error(`단위 불일치 (${curKeepUnit} ≠ ${curRemUnit})`);
+          }
+          delta = addQty !== null ? Math.max(0, roundQty2(Number(addQty) || 0)) : Math.max(0, roundQty2(Number(curRem.quantity ?? curRem.qty) || 0));
+          sourceLot = {
+            sourceId: curRem.id,
+            quantity: delta,
+            unit: curRemUnit,
+            expiryDate: curRem.expiryDate || "",
+            purchaseDate: curRem.purchaseDate || "",
+            location: curRem.location || "",
+            price: Number(curRem.price) || 0,
+            mergedAt: new Date().toISOString()
+          };
+          tx.delete(remRef);
+          tx.delete(getDocRef("family_fridge_v3", removeItem.id));
+        } else if (incomingMeta) {
+          sourceLot = {
+            sourceId: `incoming-${Date.now()}`,
+            quantity: delta,
+            unit: curKeepUnit,
+            expiryDate: incomingMeta.expiryDate || "",
+            purchaseDate: incomingMeta.purchaseDate || getTodayStr(),
+            location: incomingMeta.location || curKeep.location || "",
+            price: Number(incomingMeta.price) || 0,
+            mergedAt: new Date().toISOString()
+          };
+        }
+
+        const serverBaseQty = Math.max(0, roundQty2(Number(curKeep.quantity ?? curKeep.qty) || 0));
+        const nextQty = roundQty2(serverBaseQty + delta);
+        const candExp = removeItem?.expiryDate || incomingMeta?.expiryDate || "";
+        const earliestExp =
+          curKeep.expiryDate && candExp
+            ? (curKeep.expiryDate <= candExp ? curKeep.expiryDate : candExp)
+            : (curKeep.expiryDate || candExp || "");
+        const prevLots = Array.isArray(curKeep.mergedLots) ? curKeep.mergedLots : [];
+        const nextPrice = roundQty2((Number(curKeep.price) || 0) + (sourceLot?.price || 0));
+        finalKeep = {
+          ...curKeep,
+          quantity: nextQty,
+          qty: nextQty,
+          expiryDate: earliestExp,
+          price: nextPrice,
+          ...(sourceLot ? { mergedLots: [...prevLots, sourceLot].slice(-20) } : {}),
+          version: (Number(curKeep.version) || 1) + 1,
+          updatedAt: new Date().toISOString()
+        };
+        tx.set(keepRef, finalKeep, { merge: true });
+      });
       ok = true;
-      recordActivity("냉장고", "중복합치기", `${keepItem.name} (${formatFridgeQtyUnit(nextQty, keepItem.unit)})`);
-      showToast(
-        sameUnit
-          ? `✅ '${keepItem.name}' 수량을 합쳐 ${formatFridgeQtyUnit(nextQty, keepItem.unit)}(으)로 통합했습니다!`
-          : `✅ '${keepItem.name}' 중복 항목을 1건으로 정리했습니다! (단위 상이로 기존 ${formatFridgeQtyUnit(baseQty, keepItem.unit)} 유지)`
-      );
+      if (finalKeep) {
+        recordActivity("냉장고", "중복합치기", `${finalKeep.name} (${formatFridgeQtyUnit(finalKeep.quantity, finalKeep.unit)})`);
+        showToast(`✅ '${finalKeep.name}' 수량을 합쳐 ${formatFridgeQtyUnit(finalKeep.quantity, finalKeep.unit)}(으)로 통합했습니다!`);
+      }
+      return { ok: true, updatedItem: finalKeep };
     } catch (e) {
       errMsg = e?.message || "중복 통합 오류";
       showToast(`⚠️ 중복 통합 실패: ${errMsg}`);
+      return { ok: false, error: errMsg };
+    } finally {
+      endWrite(ok, errMsg);
+    }
+  };
+
+  const handleMergeDuplicateFridgeGroup = async (primaryItem, extraItems = []) => {
+    if (!requireEditorAccess("fridge") || !primaryItem || !Array.isArray(extraItems) || extraItems.length === 0) {
+      return { ok: false, error: "통합할 대상이 없습니다." };
+    }
+    if (!user || !db) {
+      showToast("⚠️ 서버 연결 후 합칠 수 있습니다.");
+      return { ok: false, error: "서버 미연결" };
+    }
+    const primaryUnit = String(primaryItem.unit || "개").trim();
+    const compatible = extraItems.filter((ex) => ex?.id && ex.id !== primaryItem.id && String(ex.unit || "개").trim() === primaryUnit);
+    const incompatible = extraItems.filter((ex) => ex?.id && ex.id !== primaryItem.id && String(ex.unit || "개").trim() !== primaryUnit);
+    if (compatible.length === 0) {
+      const msg = `단위가 서로 달라(${primaryUnit} 외 ${incompatible.map((x) => x.unit || "개").join(", ")}) 안전하게 합칠 수 있는 항목이 없습니다.`;
+      showToast(`⚠️ ${msg}`);
+      return { ok: false, error: msg, skippedCount: incompatible.length };
+    }
+    beginWrite();
+    let ok = false;
+    let errMsg = "";
+    let finalKeep = null;
+    let mergedCount = 0;
+    try {
+      await runTransaction(db, async (tx) => {
+        const keepRef = getDocRef("family_fridge_v4", primaryItem.id);
+        const keepSnap = await tx.get(keepRef);
+        const curKeep = keepSnap.exists() ? keepSnap.data() : primaryItem;
+        const curUnit = String(curKeep.unit || "개").trim();
+        let totalQty = Math.max(0, roundQty2(Number(curKeep.quantity ?? curKeep.qty) || 0));
+        let totalPrice = Number(curKeep.price) || 0;
+        let earliestExp = curKeep.expiryDate || "";
+        const newLots = Array.isArray(curKeep.mergedLots) ? [...curKeep.mergedLots] : [];
+
+        // Firestore transaction requires all reads before writes
+        const remSnaps = [];
+        for (const ex of compatible) {
+          const ref = getDocRef("family_fridge_v4", ex.id);
+          const snap = await tx.get(ref);
+          if (snap.exists()) remSnaps.push({ ref, id: ex.id, data: snap.data() });
+        }
+
+        for (const entry of remSnaps) {
+          const d = entry.data;
+          if (String(d.unit || "개").trim() !== curUnit) continue;
+          const q = Math.max(0, roundQty2(Number(d.quantity ?? d.qty) || 0));
+          totalQty = roundQty2(totalQty + q);
+          totalPrice = roundQty2(totalPrice + (Number(d.price) || 0));
+          if (d.expiryDate && (!earliestExp || d.expiryDate < earliestExp)) {
+            earliestExp = d.expiryDate;
+          }
+          newLots.push({
+            sourceId: d.id,
+            quantity: q,
+            unit: curUnit,
+            expiryDate: d.expiryDate || "",
+            purchaseDate: d.purchaseDate || "",
+            location: d.location || "",
+            price: Number(d.price) || 0,
+            mergedAt: new Date().toISOString()
+          });
+          tx.delete(entry.ref);
+          tx.delete(getDocRef("family_fridge_v3", entry.id));
+          mergedCount += 1;
+        }
+
+        finalKeep = {
+          ...curKeep,
+          quantity: totalQty,
+          qty: totalQty,
+          price: totalPrice,
+          expiryDate: earliestExp,
+          mergedLots: newLots.slice(-30),
+          version: (Number(curKeep.version) || 1) + 1,
+          updatedAt: new Date().toISOString()
+        };
+        tx.set(keepRef, finalKeep, { merge: true });
+      });
+      ok = true;
+      const skipNote = incompatible.length > 0 ? ` (단위 상이 ${incompatible.length}건 별도 유지)` : "";
+      recordActivity("냉장고", "중복그룹통합", `${finalKeep.name} (${formatFridgeQtyUnit(finalKeep.quantity, finalKeep.unit)})`);
+      showToast(`✅ '${finalKeep.name}' ${mergedCount + 1}건 합산 → ${formatFridgeQtyUnit(finalKeep.quantity, finalKeep.unit)}${skipNote}`);
+      return { ok: true, updatedItem: finalKeep, mergedCount, skippedCount: incompatible.length };
+    } catch (e) {
+      errMsg = e?.message || "그룹 중복 통합 오류";
+      showToast(`⚠️ 중복 통합 실패: ${errMsg}`);
+      return { ok: false, error: errMsg };
     } finally {
       endWrite(ok, errMsg);
     }
@@ -14252,8 +14434,14 @@ const priceStr = exportIncludePrice && safeItPrice > 0 ? `${safeItPrice.toLocale
         const existing = topDup.item;
         const sameLocUnit = existing.location === fridgeForm.location && String(existing.unit || "개") === String(fridgeForm.unit || "개");
         if (fridgeDuplicatePolicy === "auto_merge" && sameLocUnit) {
-          await handleMergeDuplicateFridgeItems(existing, null, parsedQty);
-          setIsFridgeModalOpen(false);
+          const mRes = await handleMergeDuplicateFridgeItems(existing, null, parsedQty, {
+            unit: fridgeForm.unit || "개",
+            expiryDate: fridgeForm.expiryDate || "",
+            purchaseDate: getTodayStr(),
+            location: fridgeForm.location || "냉장실",
+            price: Number(fridgeForm.price) || 0
+          });
+          if (mRes?.ok) setIsFridgeModalOpen(false);
           return;
         }
         const wantMerge = await askConfirm(
@@ -14261,8 +14449,14 @@ const priceStr = exportIncludePrice && safeItPrice > 0 ? `${safeItPrice.toLocale
           "기존에 합치기"
         );
         if (wantMerge) {
-          await handleMergeDuplicateFridgeItems(existing, null, parsedQty);
-          setIsFridgeModalOpen(false);
+          const mRes = await handleMergeDuplicateFridgeItems(existing, null, parsedQty, {
+            unit: fridgeForm.unit || "개",
+            expiryDate: fridgeForm.expiryDate || "",
+            purchaseDate: getTodayStr(),
+            location: fridgeForm.location || "냉장실",
+            price: Number(fridgeForm.price) || 0
+          });
+          if (mRes?.ok) setIsFridgeModalOpen(false);
           return;
         }
       }
@@ -14935,6 +15129,11 @@ const priceStr = exportIncludePrice && safeItPrice > 0 ? `${safeItPrice.toLocale
         cookedBatchId: mealForm.cookedBatchId || "",
         cookedQty: roundQty2(mealForm.cookedQty || 1)
       } : {}),
+      ...(editingMeal?.cookedConsumedOpId ? { cookedConsumedOpId: editingMeal.cookedConsumedOpId } : {}),
+      ...(editingMeal?.actualCookedQty !== undefined ? { actualCookedQty: editingMeal.actualCookedQty } : {}),
+      ...(editingMeal?.lastOpId ? { lastOpId: editingMeal.lastOpId } : {}),
+      ...(editingMeal?.createdAt ? { createdAt: editingMeal.createdAt } : { createdAt: new Date().toISOString() }),
+      version: (Number(editingMeal?.version) || 0) + 1,
       updatedAt: new Date().toISOString()
     };
 
@@ -15001,11 +15200,14 @@ const priceStr = exportIncludePrice && safeItPrice > 0 ? `${safeItPrice.toLocale
       return;
     }
     const newId = `m-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`;
+    const { cookedConsumedOpId: _dropOp, actualCookedQty: _dropAct, lastOpId: _dropLast, version: _dropVer, ...cleanSrcMeal } = srcMeal;
     const payload = {
-      ...srcMeal,
+      ...cleanSrcMeal,
       id: newId,
       date: targetDate,
       mealStatus: targetDate > getTodayStr() ? "planned" : "recorded",
+      version: 1,
+      createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
     beginWrite();
@@ -15072,62 +15274,94 @@ const priceStr = exportIncludePrice && safeItPrice > 0 ? `${safeItPrice.toLocale
     if (!user || !db) return;
     const nowMs = Date.now();
     const consumeOpId = `op-meal-eat-${meal.id}`;
-    const updated = {
-      ...meal,
-      mealStatus: "recorded",
-      ...(meal.cookedPortionId ? { cookedConsumedOpId: consumeOpId } : {}),
-      updatedAt: new Date(nowMs).toISOString(),
-      updatedAtMs: nowMs
-    };
+    let finalUpdated = null;
+    let actualConsumedQty = 0;
+    let alreadyApplied = false;
     try {
       await runTransaction(db, async (tx) => {
-        if (meal.cookedPortionId && !meal.cookedConsumedOpId) {
-          const pRef = getDocRef("family_cooked_portions_v1", meal.cookedPortionId);
+        const mealRef4 = getDocRef("family_meals_v4", meal.id);
+        const mealRef3 = getDocRef("family_meals_v3", meal.id);
+        const mealSnap = await tx.get(mealRef4);
+        const curMeal = mealSnap.exists() ? mealSnap.data() : meal;
+
+        // 영구 증빙: 식단 자체에 이미 동일 consumeOpId 처리 기록이 있으면 중복 차감 차단
+        if (curMeal.cookedConsumedOpId === consumeOpId) {
+          alreadyApplied = true;
+          finalUpdated = curMeal;
+          return;
+        }
+
+        const plannedQty = Math.max(0, roundQty2(curMeal.cookedQty || 1));
+        if (curMeal.cookedPortionId) {
+          const pRef = getDocRef("family_cooked_portions_v1", curMeal.cookedPortionId);
           const pSnap = await tx.get(pRef);
-          if (pSnap.exists()) {
-            const pCur = pSnap.data();
-            if (pCur.lastOpId !== consumeOpId) {
-              const eatQ = Math.min(roundQty2(pCur.remainingQty), roundQty2(meal.cookedQty || 1));
-              if (eatQ > 0) {
-                const nextRem = roundQty2(roundQty2(pCur.remainingQty) - eatQ);
-                tx.set(pRef, {
-                  ...pCur,
-                  remainingQty: nextRem,
-                  status: nextRem <= 0 ? "depleted" : "active",
-                  version: (Number(pCur.version) || 1) + 1,
-                  lastOpId: consumeOpId,
-                  updatedAtMs: nowMs
-                }, { merge: true });
-                const logId = `cl-${nowMs}-meal`;
-                tx.set(getDocRef("family_cooked_logs_v1", logId), {
-                  id: logId,
-                  batchId: pCur.batchId,
-                  portionId: pCur.id,
-                  type: "consume",
-                  qty: eatQ,
-                  unit: pCur.unit,
-                  member: toSafeArray(meal.members).join("·") || "온가족",
-                  mealId: meal.id,
-                  reason: "계획 식단 완료 섭취",
-                  opId: consumeOpId,
-                  actorName: actorName || "가족",
-                  createdAtMs: nowMs
-                });
-              }
+          if (!pSnap.exists()) {
+            throw new Error("연결된 만든 음식 소분 기록을 찾을 수 없어 완료 처리할 수 없습니다.");
+          }
+          const pCur = pSnap.data();
+          const appliedOps = Array.isArray(pCur.consumedOpIds) ? pCur.consumedOpIds : [];
+          if (pCur.lastOpId === consumeOpId || appliedOps.includes(consumeOpId)) {
+            alreadyApplied = true;
+            actualConsumedQty = Number(curMeal.actualCookedQty ?? plannedQty);
+          } else {
+            const curRem = Math.max(0, roundQty2(pCur.remainingQty));
+            if (curRem < plannedQty) {
+              throw new Error(`남은 양(${curRem}${pCur.unit || ""})이 계획량(${plannedQty}${pCur.unit || ""})보다 부족합니다. 식단 수량을 수정하거나 소분 잔량을 먼저 확인해 주세요.`);
             }
+            actualConsumedQty = plannedQty;
+            const nextRem = roundQty2(curRem - actualConsumedQty);
+            tx.set(pRef, {
+              ...pCur,
+              remainingQty: nextRem,
+              status: nextRem <= 0 ? "depleted" : "active",
+              version: (Number(pCur.version) || 1) + 1,
+              lastOpId: consumeOpId,
+              consumedOpIds: [...appliedOps.filter((x) => x !== consumeOpId), consumeOpId].slice(-50),
+              updatedAtMs: nowMs
+            }, { merge: true });
+            const logId = `cl-${consumeOpId}`;
+            tx.set(getDocRef("family_cooked_logs_v1", logId), {
+              id: logId,
+              batchId: pCur.batchId,
+              portionId: pCur.id,
+              type: "consume",
+              qty: actualConsumedQty,
+              unit: pCur.unit,
+              member: toSafeArray(curMeal.members).join("·") || "온가족",
+              mealId: curMeal.id,
+              reason: "계획 식단 완료 섭취",
+              opId: consumeOpId,
+              actorName: actorName || "가족",
+              createdAtMs: nowMs
+            });
           }
         }
-        tx.set(getDocRef("family_meals_v3", meal.id), updated);
-        tx.set(getDocRef("family_meals_v4", meal.id), updated);
+
+        finalUpdated = {
+          ...curMeal,
+          mealStatus: "recorded",
+          ...(curMeal.cookedPortionId ? { cookedConsumedOpId: consumeOpId, actualCookedQty: actualConsumedQty } : {}),
+          version: (Number(curMeal.version) || 1) + 1,
+          updatedAt: new Date(nowMs).toISOString(),
+          updatedAtMs: nowMs
+        };
+        tx.set(mealRef3, finalUpdated);
+        tx.set(mealRef4, finalUpdated);
       });
-      setMealsMap((prev) => ({ ...prev, local: { ...(prev.local || {}), [meal.id]: updated } }));
+      if (finalUpdated) {
+        setMealsMap((prev) => ({ ...prev, local: { ...(prev.local || {}), [meal.id]: finalUpdated } }));
+      }
+      if (alreadyApplied) {
+        showToast("ℹ️ 이미 차감 처리된 식단입니다. (중복 차감 방지됨)");
+        return;
+      }
       recordActivity("식단", "기록전환", `${meal.date} ${meal.slot} · ${meal.menu}`, {
         beforeText: "계획 식단",
         afterText: "실제 기록"
       });
-      showToast(meal.cookedPortionId ? "✅ 먹음 기록 완료! (연결된 만든 음식 잔량 1회 차감)" : "✅ 실제 먹은 식단으로 기록되었습니다!");
+      showToast(meal.cookedPortionId ? `✅ 먹음 기록 완료! (${actualConsumedQty} 차감됨)` : "✅ 실제 먹은 식단으로 기록되었습니다!");
     } catch (err) {
-      showToast(`⚠️ 상태 변경 실패: ${err?.message || "네트워크 오류"}`);
+      showToast(`⚠️ ${err?.message || "상태 변경 실패"}`);
     }
   };
 
@@ -19242,16 +19476,21 @@ ${item.memo}` : `${item.title} 다녀옴!`,
       }
       const nextRooms = houseStorageRooms.filter((r) => r !== targetName);
       const fallbackRoom = nextRooms[0];
-      const affectedHouse = houseItems.filter((h) => h.type === "storage" && h.room === targetName);
+      const affectedHouse = houseItems.filter((h) => (h.kind || h.type) === "storage" && h.room === targetName);
       if (affectedHouse.length > 0) {
         if (!await askConfirm(`'${targetName}' 장소에 연결된 수납 항목 ${affectedHouse.length}건이 있습니다.\n삭제 시 '${fallbackRoom}' 장소로 자동 이동됩니다. 계속할까요?`, "이동 후 삭제")) return;
         if (user && db) {
-          for (let i = 0; i < affectedHouse.length; i += 200) {
-            const batch = writeBatch(db);
-            affectedHouse.slice(i, i + 200).forEach((h) => {
-              batch.set(getDocRef("family_house_items_v1", h.id), { ...h, room: fallbackRoom }, { merge: true });
-            });
-            await batch.commit().catch(() => {});
+          try {
+            for (let i = 0; i < affectedHouse.length; i += 200) {
+              const batch = writeBatch(db);
+              affectedHouse.slice(i, i + 200).forEach((h) => {
+                batch.set(getDocRef("family_house_items_v1", h.id), { ...h, room: fallbackRoom }, { merge: true });
+              });
+              await batch.commit();
+            }
+          } catch (migErr) {
+            showToast(`⚠️ 연결 항목 이관 실패로 삭제를 중단했습니다: ${migErr?.message || "네트워크 오류"}`);
+            return;
           }
         }
       }
@@ -21758,7 +21997,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
     };
     window.addEventListener("keydown", onEsc);
     return () => window.removeEventListener("keydown", onEsc);
-  }, [isMoreNavOpen, isHomeEditMode, isQuickShoppingOpen, isGrowthPctPickerOpen, isHomeRoutineFilterOpen, isRoutineRangeEditOpen, isQuickFabOpen, isRoutineModalOpen, isActivityModalOpen, isEditorUnlockModalOpen, isMealCopyModalOpen, diaryExportPreviewUrl, diaryLightboxUrl, diaryImportModal, cropModal, isWeatherModalOpen, liveActivityPopup, activityEditModal, zipImportPicker, magazineMonth, isSettingsOpen, isHeroPhotoModalOpen, isPageModalOpen, pageMenuTargetId, isPageSwitcherOpen, isPagePasteModalOpen, activeTableTaskModal, isDreamLinksModalOpen, confirmDialog, isGuideModalOpen, isPatchModalOpen, isBucketModalOpen, isHouseModalOpen, isHandoverModalOpen, isHomeDdayPickerOpen, categoryManageKind, isPrivateCalCsvModalOpen, isCondolenceFormOpen, isCondolenceExcelModalOpen, isCondolencePinModalOpen, calDayPopupDate, isScheduleModalOpen, isMealModalOpen, isFridgeModalOpen, isNoticeModalOpen, isRecipeModalOpen, isDaycareModalOpen, isReceiptModalOpen, isShoppingPhotoModalOpen, zoomedRecipePhoto, isInventoryExportOpen, stockInItem, quickLogRecipe, cookingConfirmModal, quickFridgeItem, isDiaryFormatOpen, isHouseRoomManageOpen, isNotifSettingsOpen, isPageEmojiPickerOpen, showAdminInboxModal, showRolePermModal, showSendAdminNoteModal]);
+  }, [isMoreNavOpen, isHomeEditMode, isQuickShoppingOpen, isGrowthPctPickerOpen, isHomeRoutineFilterOpen, isRoutineRangeEditOpen, isQuickFabOpen, isRoutineModalOpen, isActivityModalOpen, isEditorUnlockModalOpen, isMealCopyModalOpen, diaryExportPreviewUrl, diaryLightboxUrl, diaryImportModal, cropModal, isWeatherModalOpen, liveActivityPopup, activityEditModal, zipImportPicker, magazineMonth, isSettingsOpen, isHeroPhotoModalOpen, isPageModalOpen, pageMenuTargetId, isPageSwitcherOpen, isPagePasteModalOpen, activeTableTaskModal, isDreamLinksModalOpen, confirmDialog, isGuideModalOpen, isPatchModalOpen, isBucketModalOpen, isHouseModalOpen, isHandoverModalOpen, isHomeDdayPickerOpen, categoryManageKind, isPrivateCalCsvModalOpen, isCondolenceFormOpen, isCondolenceExcelModalOpen, isCondolencePinModalOpen, calDayPopupDate, isScheduleModalOpen, isMealModalOpen, isFridgeModalOpen, isNoticeModalOpen, isRecipeModalOpen, isDaycareModalOpen, isReceiptModalOpen, isShoppingPhotoModalOpen, zoomedRecipePhoto, isInventoryExportOpen, stockInItem, quickLogRecipe, cookingConfirmModal, quickFridgeItem, isDiaryFormatOpen, isHouseRoomManageOpen, isNotifSettingsOpen, isPageEmojiPickerOpen, showAdminInboxModal, showRolePermModal, showSendAdminNoteModal, isGlobalSearchOpen, revisionModalState.open, isCookedModalOpen, cookedActionModal.open, fridgeFilterSheetOpen, fridgeAddMenuOpen, fridgeMoreMenuOpen, fridgeUseSheet, fridgeItemMoreSheet, cookedDetailSheet, fridgeDupModalOpen, isManualExpenseOpen]);
 
   // ==========================================
   // 모바일·브라우저 뒤로가기 이전 화면 이동 (Chrome User-Gesture History API + URL 해시)
@@ -21805,8 +22044,8 @@ ${item.memo}` : `${item.title} 다녀옴!`,
   const enqueueOfflineMutation = (entry) => {
     setOfflineMutationQueue((prev) => {
       if (prev.some((x) => x.opId === entry.opId)) return prev;
-      const next = [...prev, { ...entry, queuedAtMs: Date.now() }];
-      try { localStorage.setItem("kim_offline_mutation_queue_v1", JSON.stringify(next)); } catch (e) {}
+      const next = [...prev, { ...entry, ownerUid: user?.uid || "guest", status: "pending", queuedAtMs: Date.now() }].slice(-50);
+      try { localStorage.setItem(`kim_offline_mutation_queue_v1_${user?.uid || "guest"}`, JSON.stringify(next)); } catch (e) {}
       return next;
     });
   };
@@ -21953,43 +22192,109 @@ ${item.memo}` : `${item.title} 다녀옴!`,
     }
   };
 
-  // 온라인 복귀 시 오프라인 대기열 버전·권한 재검증 안내
+  // 계정별 오프라인 대기열 키 분리 및 전환 시 로드
+  const offlineQueueStorageKey = `kim_offline_mutation_queue_v1_${user?.uid || "guest"}`;
   useEffect(() => {
-    const onOnline = async () => {
-      if (offlineMutationQueue.length === 0 || !user || !db) return;
-      const pending = [...offlineMutationQueue];
-      const remaining = [];
-      let syncedCnt = 0;
-      let conflictCnt = 0;
-      for (const item of pending) {
-        if (item.tabKey && !canEditTab(item.tabKey)) {
-          continue;
-        }
-        const res = await commitEntityWithRevision({
-          colName: item.colName,
-          extraColName: item.extraColName,
-          docId: item.docId,
-          entityType: item.entityType,
-          entityTitle: item.entityTitle,
-          tabKey: item.tabKey,
-          nextData: item.payload,
-          prevData: item.prevData ? { ...item.prevData, version: item.baseVersion } : null,
-          action: item.action,
-          opId: item.opId,
-          linkedEffectNote: item.linkedEffectNote
-        });
-        if (res.ok) syncedCnt += 1;
-        else if (res.conflict) conflictCnt += 1;
-        else remaining.push(item);
+    try {
+      const scoped = JSON.parse(localStorage.getItem(offlineQueueStorageKey) || "[]");
+      if (Array.isArray(scoped) && scoped.length > 0) {
+        setOfflineMutationQueue(scoped);
+      } else {
+        setOfflineMutationQueue([]);
       }
-      setOfflineMutationQueue(remaining);
-      try { localStorage.setItem("kim_offline_mutation_queue_v1", JSON.stringify(remaining)); } catch (e) {}
-      if (syncedCnt > 0) showToast(`☁️ 온라인 복귀: 대기 중이던 ${syncedCnt}건을 동기화했습니다.`);
-      if (conflictCnt > 0) showToast(`⚠️ ${conflictCnt}건은 다른 기기와 버전 충돌이 발생해 덮어쓰기를 중단했습니다.`);
-    };
+    } catch (e) {
+      setOfflineMutationQueue([]);
+    }
+  }, [offlineQueueStorageKey]);
+
+  // 온라인 복귀 및 로그인·재시작 시 오프라인 대기열 안전 재처리 (충돌·권한거부 원문 절대 유실 방지)
+  const flushOfflineMutationQueue = async () => {
+    if (!user || user.isAnonymous || !db) return;
+    const currentUid = user.uid;
+    const candidates = offlineMutationQueue.filter(
+      (it) => it && (!it.ownerUid || it.ownerUid === currentUid) && (!it.status || it.status === "pending" || it.status === "failed")
+    );
+    if (candidates.length === 0) return;
+
+    const resultsByOpId = new Map();
+    let syncedCnt = 0;
+    let conflictCnt = 0;
+    let blockedCnt = 0;
+
+    for (const item of candidates) {
+      if (item.tabKey && !canEditTab(item.tabKey)) {
+        blockedCnt += 1;
+        resultsByOpId.set(item.opId, {
+          ...item,
+          status: "permission-blocked",
+          errorMsg: "현재 계정에는 편집 권한이 없어 전송을 보류했습니다.",
+          lastAttemptAtMs: Date.now()
+        });
+        continue;
+      }
+      const res = await commitEntityWithRevision({
+        colName: item.colName,
+        extraColName: item.extraColName,
+        docId: item.docId,
+        entityType: item.entityType,
+        entityTitle: item.entityTitle,
+        tabKey: item.tabKey,
+        nextData: item.payload,
+        prevData: item.prevData ? { ...item.prevData, version: item.baseVersion } : null,
+        action: item.action,
+        opId: item.opId,
+        linkedEffectNote: item.linkedEffectNote
+      });
+      if (res.ok) {
+        syncedCnt += 1;
+        resultsByOpId.set(item.opId, { __synced: true });
+      } else if (res.conflict) {
+        conflictCnt += 1;
+        resultsByOpId.set(item.opId, {
+          ...item,
+          status: "conflict",
+          errorMsg: res.error || "다른 기기에서 먼저 수정되어 버전 충돌이 발생했습니다.",
+          lastAttemptAtMs: Date.now()
+        });
+      } else {
+        resultsByOpId.set(item.opId, {
+          ...item,
+          status: "failed",
+          errorMsg: res.error || "네트워크 오류",
+          lastAttemptAtMs: Date.now()
+        });
+      }
+    }
+
+    setOfflineMutationQueue((prev) => {
+      const next = [];
+      for (const it of prev) {
+        const outcome = resultsByOpId.get(it.opId);
+        if (!outcome) {
+          next.push(it);
+        } else if (outcome.__synced) {
+          // 업로드 성공 확인된 항목만 대기열에서 제거
+        } else {
+          next.push(outcome);
+        }
+      }
+      try { localStorage.setItem(offlineQueueStorageKey, JSON.stringify(next)); } catch (e) {}
+      return next;
+    });
+
+    if (syncedCnt > 0) showToast(`☁️ 대기 중이던 ${syncedCnt}건을 서버에 동기화했습니다.`);
+    if (conflictCnt > 0) showToast(`⚠️ ${conflictCnt}건은 버전 충돌로 보류되었습니다. 원본은 대기열에 안전하게 보관 중입니다.`);
+    if (blockedCnt > 0) showToast(`🔒 ${blockedCnt}건은 편집 권한 부족으로 보류되었습니다. 원본은 대기열에 보관 중입니다.`);
+  };
+
+  useEffect(() => {
+    const onOnline = () => { flushOfflineMutationQueue(); };
     window.addEventListener("online", onOnline);
+    if (navigator.onLine && user && !user.isAnonymous && db && offlineMutationQueue.some((x) => !x.status || x.status === "pending")) {
+      flushOfflineMutationQueue();
+    }
     return () => window.removeEventListener("online", onOnline);
-  }, [offlineMutationQueue, user]);
+  }, [offlineMutationQueue, user, db, offlineQueueStorageKey]);
 
   const openRevisionHistory = (entityType, item) => {
     if (!item?.id) return;
@@ -22041,6 +22346,26 @@ ${item.memo}` : `${item.title} 다녀옴!`,
     if (!res.ok) {
       showToast(`⚠️ 복원 실패: ${res.error || "네트워크 오류"}`);
       return;
+    }
+    if ((entityType === "cooked_portion" || entityType === "cooked_batch") && user && db) {
+      const beforeQty = entityType === "cooked_portion" ? roundQty2(currentItem?.remainingQty) : roundQty2(currentItem?.totalQty);
+      const afterQty = entityType === "cooked_portion" ? roundQty2(res.payload?.remainingQty) : roundQty2(res.payload?.totalQty);
+      const delta = roundQty2(afterQty - beforeQty);
+      if (Math.abs(delta) >= 0.01) {
+        const adjId = `cl-restore-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`;
+        setDoc(getDocRef("family_cooked_logs_v1", adjId), {
+          id: adjId,
+          batchId: entityType === "cooked_batch" ? entityId : (res.payload?.batchId || currentItem?.batchId || ""),
+          portionId: entityType === "cooked_portion" ? entityId : "",
+          type: "adjust",
+          qty: Math.abs(delta),
+          delta,
+          unit: res.payload?.unit || currentItem?.unit || "인분",
+          reason: `수정이력 복원 보정 (v${rev.version} → v${res.payload.version})`,
+          actorName: actorName || "가족",
+          createdAtMs: Date.now()
+        }).catch(() => {});
+      }
     }
     setRevisionModalState((prev) => ({
       ...prev,
@@ -22713,31 +23038,35 @@ ${item.memo}` : `${item.title} 다녀옴!`,
     }
     if (canViewTab("house")) {
       houseItems.forEach((hi) => {
+        const hTitle = hi.title || hi.name || "살림 기록";
+        const hKind = hi.kind || hi.type || "storage";
+        const hDetailLoc = hi.detailLoc || hi.detailLocation || "";
         pushDoc({
           id: `hs:${hi.id}`,
           cat: "house",
-          title: hi.name || "살림 기록",
-          subtitle: `${hi.type === "medicine" ? "💊 상비약" : hi.type === "warranty" ? "🛠️ 보증·A/S" : "🔎 수납"} · ${hi.room || hi.target || hi.brand || ""}`,
-          body: `${hi.detailLocation || ""} ${hi.memo || ""}`,
+          title: hTitle,
+          subtitle: `${hKind === "medicine" ? "💊 상비약" : hKind === "warranty" ? "🛠️ 보증·A/S" : "🔎 수납"} · ${hi.room || hi.target || hi.brand || ""}`,
+          body: `${hDetailLoc} ${hi.memo || ""}`,
           tags: `${hi.room || ""} ${hi.target || ""} ${hi.brand || ""}`,
           date: hi.expiryDate || hi.purchaseDate || "",
           members: hi.target ? [hi.target] : [],
-          nav: { type: "house", sub: hi.type || "storage", id: hi.id, name: hi.name }
+          nav: { type: "house", sub: hKind, id: hi.id, name: hTitle }
         });
       });
     }
     if (canViewTab("monthly")) {
       expenses.forEach((ex) => {
+        const exTitle = ex.title || ex.item || "식비 지출";
         pushDoc({
           id: `ex:${ex.id}`,
           cat: "monthly",
-          title: ex.item || "식비 지출",
+          title: exTitle,
           subtitle: `${ex.date || ""} · ${(Number(ex.amount) || 0).toLocaleString()}원`,
           body: ex.memo || "",
           tags: `${ex.category || ""}`,
           date: ex.date || "",
           members: [],
-          nav: { type: "expense", id: ex.id, date: ex.date, item: ex.item }
+          nav: { type: "expense", id: ex.id, date: ex.date, item: exTitle }
         });
       });
     }
@@ -27105,7 +27434,7 @@ time: "", location: "",
 
           {/* 상단 고정(Sticky) 1줄 인원 빠른 전환 바 */}
           <div className={`sticky z-20 bg-white/95 backdrop-blur border border-stone-200 rounded-2xl px-1.5 py-1.5 shadow-sm ${isHeaderPinned ? "top-[82px]" : "top-1"}`}>
-            <div className="grid grid-cols-5 gap-1">
+            <div className="flex flex-wrap gap-1">
               <button
                 type="button"
                 onClick={() => setSelectedMember("전체")}
@@ -48994,12 +49323,40 @@ time: "", location: "",
                 <div className="flex items-center gap-1 shrink-0">
                   <button
                     type="button"
-                    onClick={() => {
+                    onClick={async () => {
+                      const rec = failedRestoreTasks[0];
+                      if (rec?.failedDirectTasks && rec.failedDirectTasks.length > 0 && user && db) {
+                        setIsRestoringJson(true);
+                        try {
+                          const retryRes = await Promise.allSettled(
+                            rec.failedDirectTasks.map((t) =>
+                              t.merge ? setDoc(getDocRef(t.col, t.docId), t.data, { merge: true }) : setDoc(getDocRef(t.col, t.docId), t.data)
+                            )
+                          );
+                          const stillFailed = rec.failedDirectTasks.filter((_, idx) => retryRes[idx].status === "rejected");
+                          const fixedCnt = rec.failedDirectTasks.length - stillFailed.length;
+                          if (stillFailed.length === 0) {
+                            setFailedRestoreTasks([]);
+                            showToast(`✅ 실패했던 ${fixedCnt}건이 모두 정상 복원되었습니다!`);
+                          } else {
+                            setFailedRestoreTasks([{
+                              ...rec,
+                              failedDirectTasks: stillFailed,
+                              succeededCount: rec.succeededCount + fixedCnt,
+                              failedCount: stillFailed.length
+                            }]);
+                            showToast(`⚠️ ${fixedCnt}건 복원, ${stillFailed.length}건 여전히 실패`);
+                          }
+                        } finally {
+                          setIsRestoringJson(false);
+                        }
+                        return;
+                      }
                       jsonRestoreInputRef.current?.click();
                     }}
-                    className="px-2 py-0.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-[10px] font-extrabold whitespace-nowrap"
+                    className="px-2 py-0.5 rounded-lg bg-[#3F624D] hover:bg-[#324F3E] text-white text-[10px] font-extrabold whitespace-nowrap"
                   >
-                    🔄 다시 복원
+                    🔄 실패 항목 재시도
                   </button>
                   <button
                     type="button"
@@ -59313,9 +59670,7 @@ time: "", location: "",
                           <button
                             type="button"
                             onClick={async () => {
-                              for (const ex of extras) {
-                                await handleMergeDuplicateFridgeItems(primary, ex);
-                              }
+                              await handleMergeDuplicateFridgeGroup(primary, extras);
                             }}
                             className="w-full py-1.5 rounded-xl bg-[#3F624D] hover:bg-[#33513F] text-white text-[11.5px] font-extrabold whitespace-nowrap"
                           >
