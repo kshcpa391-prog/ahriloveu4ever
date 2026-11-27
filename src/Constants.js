@@ -1186,7 +1186,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v14.55";
+export const APP_CODE_VERSION = "v14.56";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1204,7 +1204,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-27 13:45";
+export const APP_BUILD_DATE = "2026-11-27 14:48";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1274,6 +1274,17 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v14.56",
+    version: "v14.56",
+    date: "2026-11-27",
+    title: "🐛 홈 [남은 할 일] 개인일정 체크해도 안 사라지던 치명 버그 수정 + 개인 할 일 편집 오복제 방지 + 🔒 구분·복사 연계 + ⬆️ 맨위로 버튼 겹침 해소",
+    items: [
+      "🐛 [홈 개인일정 완료 체크 버그 수정] 홈 [남은 할 일] 체크박스가 개인일정(_isPrivate) 여부와 무관하게 가족일정 핸들러(handleToggleScheduleDone)를 호출해 개인일정이 화면에서 사라지지 않고 가족 컬렉션에 잘못 기록되던 버그를 수정했습니다. 이제 개인일정은 handleTogglePrivateScheduleDone으로 정확히 완료 처리되며, handleToggleScheduleDone 내부에도 2중 안전 가드를 추가했습니다.",
+      "🛡️ [개인일정 완료 피드백·롤백 & 편집 오복제 방지] handleTogglePrivateScheduleDone에 완료/진행중 토스트 안내 및 서버 저장 실패 시 자동 롤백을 추가했고, 홈 [남은 할 일]에서 개인 할 일을 눌러 수정할 때 가족일정이 아닌 개인일정 편집 모드로 열리도록 교정했습니다.",
+      "✨ [시인성 · 복사 연계 · 겹침 해소] 홈 [남은 할 일] 개인 항목 앞에 🔒 배지를 표시하고 [복사] 버튼에 본인 미완료 개인 할 일도 포함했으며, 좌측 섹션 제목(육아·일정)을 가리던 [↑ 맨 위로] 버튼을 우측 하단(+) 버튼 위로 재배치해 겹침을 해소했습니다. (과거 패치노트 493건 100% 보존)"
+    ]
+  },
   {
     id: "patch-v14.55",
     version: "v14.55",

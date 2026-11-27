@@ -12330,8 +12330,10 @@ function MainApp() {
 
 
   const handleToggleScheduleDone = async (item) => {
+    if (item?._isPrivate) return handleTogglePrivateScheduleDone(item);
     if (!requireEditorAccess("schedule")) return;
-    const updated = { ...item, done: !item.done };
+    const { _isPrivate, calc, ...cleanItem } = item;
+    const updated = { ...cleanItem, done: !item.done };
     setSchedules((prev) => prev.map((s) => (s.id === item.id ? updated : s)));
     recordActivity(item.type === "todo" ? "할일" : "일정", updated.done ? "완료" : "미완료", `${item.title || ""}`);
     showToast(updated.done ? `✅ '${item.title}' 완료!` : `↩️ '${item.title}' 진행중으로 변경`);
@@ -18422,16 +18424,26 @@ const priceStr = exportIncludePrice && safeItPrice > 0 ? `${safeItPrice.toLocale
   };
 
   const handleTogglePrivateScheduleDone = async (item) => {
-    if (!isAdminUnlocked) return;
-    const updated = { ...item, done: !item.done, updatedAtMs: Date.now() };
-    const nextAll = privateSchedules.map((x) => (x.id === item.id ? updated : x));
+    if (!isAdminUnlocked || !item?.id) return;
+    const prevAll = privateSchedules;
+    const { _isPrivate, calc, ...cleanBase } = item;
+    const updated = { ...cleanBase, done: !item.done, updatedAtMs: Date.now() };
+    const nextAll = prevAll.map((x) => (x.id === item.id ? updated : x));
     setPrivateSchedules(nextAll);
     try { localStorage.setItem("kim_private_schedules_cache_v1", JSON.stringify(nextAll)); } catch (e) {}
+    showToast(updated.done ? `✅ '${item.title}' 완료!` : `↩️ '${item.title}' 진행중으로 변경`);
     if (user && db) {
-      if (item._bucketDocId) {
-        await syncPrivateBucketInCloud(item._bucketDocId, nextAll);
-      } else {
-        await setDoc(getDocRef("admin_private_schedules_v1", item.id), stripPrivateMeta(updated), { merge: true }).catch(() => {});
+      try {
+        if (item._bucketDocId) {
+          await syncPrivateBucketInCloud(item._bucketDocId, nextAll);
+        } else {
+          await setDoc(getDocRef("admin_private_schedules_v1", item.id), stripPrivateMeta(updated), { merge: true });
+        }
+      } catch (e) {
+        setPrivateSchedules(prevAll);
+        try { localStorage.setItem("kim_private_schedules_cache_v1", JSON.stringify(prevAll)); } catch {}
+        setSyncErrorMsg(e?.message || "개인 일정 완료 상태 동기화 오류");
+        showToast("⚠️ 개인 일정 상태 저장 실패: 이전 상태로 되돌렸습니다.");
       }
     }
   };
@@ -26513,9 +26525,12 @@ time: "", location: "",
                         <button
                           type="button"
                           onClick={async () => {
-                            const allOpenTodos = schedules
-                              .filter((s) => isTodoScheduleItem(s) && !s.done)
-                              .sort((a, b) => String(a.date || "9999-99-99").localeCompare(String(b.date || "9999-99-99")));
+                            const allOpenTodos = [
+                              ...schedules.filter((s) => isTodoScheduleItem(s) && !s.done),
+                              ...(isAdminUnlocked
+                                ? privateSchedules.filter((p) => (p.owner || "수혁") === currentAdminOwner && isTodoScheduleItem(p) && !p.done)
+                                : [])
+                            ].sort((a, b) => String(a.date || "9999-99-99").localeCompare(String(b.date || "9999-99-99")));
                             const lines = [
                               `✅ 남은 할 일 (${allOpenTodos.length}건)`,
                               ...allOpenTodos.map((t) => {
@@ -26584,9 +26599,35 @@ time: "", location: "",
                           <div
                             key={todo.id}
                             onClick={() => {
+                              if (todo._isPrivate) {
+                                if (!isAdminUnlocked) return;
+                                setEditingSchedule(null);
+                                setEditingPrivateCalId(todo.id);
+                                setScheduleForm({
+                                  scheduleScope: "private",
+                                  title: todo.title || "",
+                                  date: todo.date || getTodayStr(),
+                                  endDate: todo.endDate || "",
+                                  time: todo.time || "",
+                                  location: todo.location || "",
+                                  category: todo.category || "할일(To-Do)",
+                                  members: ["수혁", "아리나"],
+                                  isAnnual: Boolean(todo.isAnnual),
+                                  showDday: false,
+                                  hasOriginYear: false,
+                                  color: todo.color || "default",
+                                  highlight: Boolean(todo.highlight),
+                                  memo: todo.memo || "",
+                                  attachments: []
+                                });
+                                setIsScheduleModalOpen(true);
+                                return;
+                              }
                               if (!requireEditorAccess("schedule")) return;
+                              setEditingPrivateCalId(null);
                               setEditingSchedule(todo);
                               setScheduleForm({
+                                scheduleScope: "family",
                                 title: todo.title || "",
                                 date: todo.date || getTodayStr(),
                                 endDate: todo.endDate || "",
@@ -26618,7 +26659,8 @@ time: "", location: "",
                                 aria-label={`${todo.title} 완료 체크`}
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  handleToggleScheduleDone(todo);
+                                  if (todo._isPrivate) handleTogglePrivateScheduleDone(todo);
+                                  else handleToggleScheduleDone(todo);
                                 }}
                                 className="w-9 h-9 -ml-2 flex items-center justify-center shrink-0"
                               >
@@ -26629,8 +26671,9 @@ time: "", location: "",
                                 />
                               </button>
                               <div className="min-w-0 flex-1">
-                                <div className="text-[13.5px] font-bold text-stone-900 leading-snug truncate">
-                                  {todo.title}
+                                <div className="text-[13.5px] font-bold text-stone-900 leading-snug truncate flex items-center gap-1">
+                                  {todo._isPrivate && <span className="text-[10.5px] shrink-0" title="개인 할 일">🔒</span>}
+                                  <span className="truncate">{todo.title}</span>
                                 </div>
                                 {(todo.time || todo.location || hasMemo || attCount > 0) && (() => {
                                   const cd = isDueToday && todo.time ? getTodayScheduleCountdown(todo.time) : null;
@@ -44081,8 +44124,8 @@ time: "", location: "",
         <button
           type="button"
           onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
-          style={{ bottom: isTimerPillVisibleAtDefault ? "calc(7.65rem + env(safe-area-inset-bottom))" : "calc(4.75rem + env(safe-area-inset-bottom))" }}
-          className="fixed left-4 z-30 w-9 h-9 rounded-full bg-white/90 hover:bg-white border border-stone-200 text-stone-600 shadow-md flex items-center justify-center text-[13px] font-black transition active:scale-95"
+          style={{ bottom: "calc(8.35rem + env(safe-area-inset-bottom))" }}
+          className="fixed right-5 z-30 w-8 h-8 rounded-full bg-white/85 hover:bg-white backdrop-blur-sm border border-stone-200 text-stone-600 shadow-md flex items-center justify-center text-[13.5px] font-black transition active:scale-95"
           title="맨 위로 이동"
           aria-label="맨 위로 이동"
         >
