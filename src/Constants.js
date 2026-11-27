@@ -1186,7 +1186,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v14.50";
+export const APP_CODE_VERSION = "v14.52";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1204,7 +1204,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-27 12:10";
+export const APP_BUILD_DATE = "2026-11-27 12:25";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1274,6 +1274,30 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v14.52",
+    version: "v14.52",
+    date: "2026-11-27",
+    title: "🐛 런타임 ReferenceError 5건·삭제로그 클라우드 비우기 버그 수정 + ⚙️ 살림수첩 보증·유통기한 프리셋 자유편집 + ☁️ 냉장고 뷰모드·삭제로그 Firebase 동기화 완성 + 🎨 세이지그린 색상·무줄바꿈 통일 + 🔗 메뉴 연계 강화",
+    items: [
+      "🐛 [치명적 런타임 크래시 5건 전수 수정] 냉장고 칸별 보기 전환 시 미정의 상태 호출(setIsVisualMultiSelect/setVisualSelectedIds), 냉장고→AI추천 버튼(handleRunAiChef), 냉장고 추가 시트 '식재료 직접 추가'(openNewFridgeModalWithFilter), 공유노트 수정이력 모달 닫기(setPageOptionModalId)에서 발생하던 ReferenceError를 모두 정상 핸들러로 교정했습니다.",
+      "☁️ [Firebase 동기화 누락 보완] ① 설정→'최근 삭제 로그 비우기' 시 로컬만 비워져 새로고침하면 삭제 기록이 되살아나던 버그를 수정해 Firestore(family_deleted_logs_v8) 문서까지 원자적 배치(writeBatch)로 함께 정리하도록 개선했습니다. ② 냉장고 보기 방식(리스트/칸별) 전환 시에도 Firestore(family_meta_v4/home_layout)에 즉시 동기화되도록 보완했습니다.",
+      "⚙️ [시스템 자유도 확장] 살림수첩의 가전 보증기간 프리셋(house_warranty_presets)과 상비약 유통기한 프리셋(house_med_expiry_presets)을 통합 세부 분류 관리(custom_categories_v1)로 승격하고, 모달 내 [⚙️ 편집] 버튼과 연(년) 단위 자연어 파싱(예: '구매+5년|60|0', '2년뒤')을 지원해 자유로운 추가·수정·삭제·순서변경·기본복원 및 클라우드 동기화·JSON 백업을 연동했습니다.",
+      "🎨 [디자인·색상 통일 · 줄바꿈 방지 · 메뉴 연계] 장보기 입고·AI 부족재료 담기·입고 모달·살림수첩 프리셋에 남아 있던 이질적인 emerald-600/sky-600 버튼을 앱 공통 세이지그린(#3F624D)으로 통일하고, 모바일에서 2줄로 깨지던 컴팩트 버튼 14곳에 whitespace-nowrap shrink-0을 적용했습니다. 또한 장보기 상단에 [❄️ 냉장고]·[💰 월간식비] 1탭 바로가기를 추가하고, 냉장고→AI추천 시 보유 재료를 자동 담아 이동하도록 메뉴 연계를 고도화했습니다. (과거 패치노트 489건 100% 보존)"
+    ]
+  },
+  {
+    id: "patch-v14.51",
+    version: "v14.51",
+    date: "2026-11-27",
+    title: "🛡️ 중복 재료 입고 3중 방지(직접추가·영수증스캔·장보기입고 실시간 감지·합치기) + 🧹 기존 중복 재료 점검·통합 모달 + 🐛 '01개' 수량표기 버그 수정 + ⚙️ 중복처리 정책 Firebase 이관",
+    items: [
+      "🛡️ [중복 재료 입고 3중 방지] ① 냉장고 직접 추가 모달에서 품목명 입력 즉시 기존 보유 재고를 실시간 감지해 [⚠️ 이미 보유 중] 카드와 [기존에 수량 합치기]·[기존 수정] 1탭 버튼을 표시하며, 저장 시에도 중복 확인 가드를 제공합니다. ② 영수증 AI 스캔 결과에서 이미 냉장고에 있는 품목에 [⚠️ 보유중] 배지를 자동 표시하고, 상단 [중복 항목 제외] 버튼으로 1탭 제외 가능 ③ 장보기 입고 모달에서도 기존 보유 재고 안내 및 [기존 재고에 수량 합치기] 1탭 처리를 지원합니다.",
+      "🧹 [기존 중복 재료 일괄 점검 · 통합 모달] 냉장고 [⋯ 더보기] 메뉴에 [🧹 중복 재료 점검·합치기 (N그룹)] 기능을 신설해, 청양고추(1봉/1개)처럼 이미 중복 입고된 재료를 자동 그룹화하고 [1건으로 합치기(빠른 기한 유지·수량 합산)]·[중복 1건 삭제]·[📖 레시피] 연계를 원자적 배치(writeBatch)로 안전 처리합니다.",
+      "🐛 ['01개' 수량·단위 버그 수정] 수량 0과 단위 '1개'가 합쳐지거나 문자열 앞 0이 남아 '01개'로 표시되던 버그를 formatFridgeQtyUnit() 정규화 헬퍼로 근본 교정했습니다.",
+      "⚙️☁️ [자유도 · Firebase 이관 · 디자인 통일] 중복 입고 처리 방식(fridgeDuplicatePolicy: 항상 확인 / 같은 위치·단위 자동 합산 / 경고만 표시)을 자유롭게 선택하고 Firestore(family_meta_v4/home_layout) 실시간 동기화·JSON 백업으로 이관했으며, 냉장고 추가 모달 저장 버튼을 앱 공통 세이지그린(#3F624D)으로 통일했습니다. (과거 패치노트 488건 100% 보존)"
+    ]
+  },
   {
     id: "patch-v14.50",
     version: "v14.50",
@@ -7449,6 +7473,8 @@ export const DEFAULT_FRIDGE_UNITS = ["개", "팩", "봉", "모", "캔", "병", "
 export const DEFAULT_RECIPE_DIFFICULTIES = ["쉬움", "보통", "어려움"];
 export const DEFAULT_ROUTINE_ASSIGNEES = ["공통", "시목", "시율", "시목·시율", "수혁", "아리나"];
 export const DEFAULT_EXPIRY_PRESETS = ["1일|0|1", "3일|0|3", "1주|0|7", "1달|1|0", "3달|3|0"];
+export const DEFAULT_HOUSE_WARRANTY_PRESETS = ["구매+1년|12|0", "구매+2년|24|0", "구매+3년|36|0"];
+export const DEFAULT_HOUSE_MED_EXPIRY_PRESETS = ["1달뒤|1|0", "3달뒤|3|0", "6달뒤|6|0", "1년뒤|12|0"];
 export const parseExpiryPresetToken = (raw) => {
   const s = String(raw || "").trim();
   if (!s) return null;
@@ -7459,11 +7485,13 @@ export const parseExpiryPresetToken = (raw) => {
     if (!lbl || (addM === 0 && addD === 0)) return null;
     return { label: lbl, addM, addD };
   }
-  const mMon = s.match(/^(\d+)\s*(?:달|개월)/);
+  const mYear = s.match(/(\d+)\s*년/);
+  if (mYear) return { label: s, addM: (Number(mYear[1]) || 1) * 12, addD: 0 };
+  const mMon = s.match(/(\d+)\s*(?:달|개월)/);
   if (mMon) return { label: s, addM: Number(mMon[1]) || 1, addD: 0 };
-  const mWeek = s.match(/^(\d+)\s*주/);
+  const mWeek = s.match(/(\d+)\s*주/);
   if (mWeek) return { label: s, addM: 0, addD: (Number(mWeek[1]) || 1) * 7 };
-  const mDay = s.match(/^(\d+)\s*일/);
+  const mDay = s.match(/(\d+)\s*일/);
   if (mDay) return { label: s, addM: 0, addD: Number(mDay[1]) || 1 };
   return null;
 };
@@ -8163,4 +8191,98 @@ export const computeCookedBatchLedger = (batch, portions = [], logs = [], planne
     balanced,
     discrepancy: roundQty2(lhs - rhs)
   };
+};
+
+
+// ============================================================================
+// v14.51 냉장고 중복 재료 탐지 · 기존 중복 그룹핑 · '01개' 수량/단위 정규화 엔진
+// ============================================================================
+export const formatFridgeQtyUnit = (quantity, unit) => {
+  const rawUnit = String(unit || "개").trim();
+  const numQty = Number(String(quantity ?? "").replace(/[^0-9.-]/g, ""));
+  // unit 자체가 "01개" 또는 "1봉"처럼 숫자를 포함한 경우 분리 정규화
+  const unitNumMatch = rawUnit.match(/^0*(\d+(?:\.\d+)?)\s*([^\d\s].*)$/);
+  if (unitNumMatch) {
+    const parsedFromUnit = roundQty2(Number(unitNumMatch[1]) || 0);
+    const cleanUnit = unitNumMatch[2].trim() || "개";
+    const finalQty = Number.isFinite(numQty) && numQty > 0 ? roundQty2(numQty) : parsedFromUnit;
+    return `${finalQty}${cleanUnit}`;
+  }
+  const cleanQty = Number.isFinite(numQty) ? roundQty2(numQty) : 0;
+  return `${cleanQty}${rawUnit || "개"}`;
+};
+
+export const normalizeIngredientName = (name) => {
+  return String(name || "")
+    .toLowerCase()
+    .replace(/\([^)]*\)/g, "")
+    .replace(/\[[^\]]*\]/g, "")
+    .replace(/\d+(?:\.\d+)?\s*(?:g|kg|ml|l|개|봉|팩|모|캔|병|단|통|알)/gi, "")
+    .replace(/(?:국내산|국산|유기농|친환경|무농약|냉장|냉동|손질|신선|특란)/g, "")
+    .replace(/[^a-z0-9가-힣]/g, "")
+    .trim();
+};
+
+export const findDuplicateFridgeCandidates = (fridgeList, { name, location = "", expiryDate = "", price = 0, excludeId = "" } = {}) => {
+  const norm = normalizeIngredientName(name);
+  if (!norm || norm.length < 1) return [];
+  const priceNum = Number(price) || 0;
+  const expMs = expiryDate ? new Date(String(expiryDate).slice(0, 10) + "T00:00:00").getTime() : NaN;
+  const out = [];
+  for (const item of Array.isArray(fridgeList) ? fridgeList : []) {
+    if (!item || (excludeId && item.id === excludeId)) continue;
+    const iNorm = normalizeIngredientName(item.name);
+    if (!iNorm) continue;
+    const exact = iNorm === norm;
+    const partial = !exact && norm.length >= 2 && iNorm.length >= 2 && (iNorm.includes(norm) || norm.includes(iNorm));
+    if (!exact && !partial) continue;
+
+    let score = exact ? 60 : 30;
+    const reasons = [];
+    if (exact) reasons.push("같은 이름");
+    else reasons.push("유사 이름");
+    if (location && item.location === location) {
+      score += 15;
+      reasons.push("같은 보관위치");
+    }
+    if (priceNum > 0 && Number(item.price) === priceNum) {
+      score += 20;
+      reasons.push("같은 가격");
+    }
+    if (Number.isFinite(expMs) && item.expiryDate) {
+      const iExpMs = new Date(String(item.expiryDate).slice(0, 10) + "T00:00:00").getTime();
+      const dayGap = Math.abs(Math.round((expMs - iExpMs) / 86400000));
+      if (Number.isFinite(dayGap) && dayGap <= 2) {
+        score += 20;
+        reasons.push(dayGap === 0 ? "같은 소비기한" : `기한 ${dayGap}일 차이`);
+      }
+    }
+    out.push({
+      item,
+      exact,
+      likelyDuplicate: score >= 75,
+      score,
+      reasons
+    });
+  }
+  return out.sort((a, b) => b.score - a.score);
+};
+
+export const groupDuplicateFridgeItems = (fridgeList) => {
+  const map = new Map();
+  for (const item of Array.isArray(fridgeList) ? fridgeList : []) {
+    if (!item || !item.id) continue;
+    const key = normalizeIngredientName(item.name);
+    if (!key) continue;
+    if (!map.has(key)) map.set(key, []);
+    map.get(key).push(item);
+  }
+  const groups = [];
+  for (const [key, items] of map.entries()) {
+    if (items.length >= 2) {
+      const sorted = [...items].sort((a, b) => getDaysDiff(a.expiryDate) - getDaysDiff(b.expiryDate));
+      groups.push({ key, name: sorted[0].name, items: sorted });
+    }
+  }
+  return groups.sort((a, b) => b.items.length - a.items.length || a.name.localeCompare(b.name, "ko"));
 };
