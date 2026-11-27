@@ -204,6 +204,7 @@ import {
   DEFAULT_BABY_SLEEP_TYPES,
   DEFAULT_FRIDGE_UNITS,
   DEFAULT_RECIPE_DIFFICULTIES,
+  DEFAULT_ROUTINE_ASSIGNEES,
   APP_FEATURE_GUIDES
 } from "./Constants";
 
@@ -5211,7 +5212,8 @@ function MainApp() {
           baby_diaper_types: Array.isArray(saved.baby_diaper_types) && saved.baby_diaper_types.length > 0 ? saved.baby_diaper_types.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_BABY_DIAPER_TYPES],
           baby_sleep_types: Array.isArray(saved.baby_sleep_types) && saved.baby_sleep_types.length > 0 ? saved.baby_sleep_types.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_BABY_SLEEP_TYPES],
           fridge_units: Array.isArray(saved.fridge_units) && saved.fridge_units.length > 0 ? saved.fridge_units.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_FRIDGE_UNITS],
-          recipe_difficulties: Array.isArray(saved.recipe_difficulties) && saved.recipe_difficulties.length > 0 ? saved.recipe_difficulties.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_RECIPE_DIFFICULTIES]
+          recipe_difficulties: Array.isArray(saved.recipe_difficulties) && saved.recipe_difficulties.length > 0 ? saved.recipe_difficulties.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_RECIPE_DIFFICULTIES],
+          routine_assignees: Array.isArray(saved.routine_assignees) && saved.routine_assignees.length > 0 ? saved.routine_assignees.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_ROUTINE_ASSIGNEES]
         };
       }
     } catch (e) {}
@@ -5247,7 +5249,8 @@ function MainApp() {
       baby_diaper_types: [...DEFAULT_BABY_DIAPER_TYPES],
       baby_sleep_types: [...DEFAULT_BABY_SLEEP_TYPES],
       fridge_units: [...DEFAULT_FRIDGE_UNITS],
-      recipe_difficulties: [...DEFAULT_RECIPE_DIFFICULTIES]
+      recipe_difficulties: [...DEFAULT_RECIPE_DIFFICULTIES],
+      routine_assignees: [...DEFAULT_ROUTINE_ASSIGNEES]
     };
   });
   const fridgeCategories = customCategories.fridge;
@@ -5282,6 +5285,7 @@ function MainApp() {
   const babySleepTypes = customCategories.baby_sleep_types || DEFAULT_BABY_SLEEP_TYPES;
   const fridgeUnits = customCategories.fridge_units || DEFAULT_FRIDGE_UNITS;
   const recipeDifficulties = customCategories.recipe_difficulties || DEFAULT_RECIPE_DIFFICULTIES;
+  const routineAssignees = customCategories.routine_assignees || DEFAULT_ROUTINE_ASSIGNEES;
   const [isManualExpenseOpen, setIsManualExpenseOpen] = useState(false);
   const [manualExpenseForm, setManualExpenseForm] = useState(() => ({
     date: getTodayStr(),
@@ -5678,7 +5682,9 @@ function MainApp() {
   const [scheduleCatFilter, setScheduleCatFilter] = useState("전체");
   const [todoStatusFilter, setTodoStatusFilter] = useState("all");
   const [todoSearchQuery, setTodoSearchQuery] = useState("");
-  const [todoIncludeOtherCats, setTodoIncludeOtherCats] = useState(false); // all | active | completed
+  const [todoIncludeOtherCats, setTodoIncludeOtherCats] = useState(() => {
+    try { return localStorage.getItem("kim_todo_include_other_v1") === "true"; } catch (e) { return false; }
+  });
   const [quickTodoTitle, setQuickTodoTitle] = useState("");
   const [quickTodoDate, setQuickTodoDate] = useState(() => getTodayStr());
   const [familyRoutines, setFamilyRoutines] = useState(() => {
@@ -5700,7 +5706,9 @@ function MainApp() {
   const [newRoutineIntervalDays, setNewRoutineIntervalDays] = useState(2);
   const [newRoutineNthWeek, setNewRoutineNthWeek] = useState(1);
   const [routineTimeFilter, setRoutineTimeFilter] = useState("전체");
-  const [routineShowFuture, setRoutineShowFuture] = useState(false);
+  const [routineShowFuture, setRoutineShowFuture] = useState(() => {
+    try { return localStorage.getItem("kim_routine_show_future_v1") === "true"; } catch (e) { return false; }
+  });
   const [routineTargetFilter, setRoutineTargetFilter] = useState("전체");
   const [homeRoutineTargetFilter, setHomeRoutineTargetFilter] = useState(() => {
     try {
@@ -5723,6 +5731,8 @@ function MainApp() {
       localStorage.setItem("kim_hide_empty_meals_v1", String(hideEmptyMealSlots));
       localStorage.setItem("kim_fridge_sort_v1", fridgeSort);
       localStorage.setItem("kim_recipe_sort_v1", recipeSort);
+      localStorage.setItem("kim_routine_show_future_v1", String(routineShowFuture));
+      localStorage.setItem("kim_todo_include_other_v1", String(todoIncludeOtherCats));
     } catch (e) {}
     if (!uiExtraPrefsInitRef.current) {
       uiExtraPrefsInitRef.current = true;
@@ -5733,12 +5743,12 @@ function MainApp() {
     const tid = setTimeout(() => {
       setDoc(
         getDocRef("family_meta_v4", "home_layout"),
-        { bucketViewMode, monthlyCalViewMode, hideEmptyMealSlots, fridgeSort, recipeSort, updatedAtMs: Date.now() },
+        { bucketViewMode, monthlyCalViewMode, hideEmptyMealSlots, fridgeSort, recipeSort, routineShowFuture, todoIncludeOtherCats, updatedAtMs: Date.now() },
         { merge: true }
       ).catch(() => {});
     }, 450);
     return () => clearTimeout(tid);
-  }, [bucketViewMode, monthlyCalViewMode, hideEmptyMealSlots, fridgeSort, recipeSort, user]);
+  }, [bucketViewMode, monthlyCalViewMode, hideEmptyMealSlots, fridgeSort, recipeSort, routineShowFuture, todoIncludeOtherCats, user]);
   const [currentDayKey, setCurrentDayKey] = useState(() => getTodayStr());
   useEffect(() => {
     const syncDayKey = () => {
@@ -6236,11 +6246,15 @@ function MainApp() {
   };
 
 
+  const isTodoScheduleItem = (item) =>
+    Boolean(item && (item.isTodo === true || item.category === "할일(To-Do)" || item.category === "할일"));
+
   const handleStartEditRoutine = (rt) => {
     if (!requireEditorAccess("routines") || !rt) return;
     setEditingRoutineId(rt.id);
     routineTitleLiveRef.current = rt.title || "";
     setNewRoutineTitle(rt.title || "");
+    setNewRoutineMemo(rt.memo || "");
     setNewRoutineAttachments(Array.isArray(rt.attachments) ? rt.attachments : []);
     setNewRoutineTimeSlot(rt.timeSlot || "상시");
     setNewRoutineScheduledTime(rt.scheduledTime || "");
@@ -6257,10 +6271,11 @@ function MainApp() {
 
 
   const openNewRoutineModal = () => {
-    if (!requireEditorAccess()) return;
+    if (!requireEditorAccess("routines")) return;
     setEditingRoutineId(null);
     routineTitleLiveRef.current = "";
     setNewRoutineTitle("");
+    setNewRoutineMemo("");
     setNewRoutineAttachments([]);
     setNewRoutineTimeSlot(getCurrentRoutineTimeSlot(routineTimeRanges, liveMinuteTick, routineSlotDefs, isHolidayOrWeekend(currentDayKey)));
     setNewRoutineScheduledTime("");
@@ -6278,6 +6293,7 @@ function MainApp() {
     setEditingRoutineId(null);
     routineTitleLiveRef.current = "";
     setNewRoutineTitle("");
+    setNewRoutineMemo("");
     setNewRoutineScheduledTime("");
     setNewRoutineAttachments([]);
     setIsRoutineModalOpen(false);
@@ -6338,9 +6354,14 @@ function MainApp() {
           ...(r.title === title && r.stepDoneKey ? { stepDoneKey: r.stepDoneKey, stepDoneIndices: r.stepDoneIndices || [] } : {})
         };
       });
+      const cleanMemo = String(newRoutineMemo || "").trim();
       const editedItem = nextList.find((r) => r.id === editingRoutineId);
       const finalEditedItem = editedItem
-        ? { ...editedItem, ...(newRoutineAttachments.length > 0 ? { attachments: newRoutineAttachments } : {}) }
+        ? {
+            ...editedItem,
+            ...(cleanMemo ? { memo: cleanMemo } : {}),
+            ...(newRoutineAttachments.length > 0 ? { attachments: newRoutineAttachments } : {})
+          }
         : null;
       const finalNextList = finalEditedItem
         ? nextList.map((r) => (r.id === editingRoutineId ? finalEditedItem : r))
@@ -6348,14 +6369,17 @@ function MainApp() {
       setFamilyRoutines(finalNextList);
       setEditingRoutineId(null);
       routineTitleLiveRef.current = "";
-    setNewRoutineTitle("");
+      setNewRoutineTitle("");
+      setNewRoutineMemo("");
       setNewRoutineScheduledTime("");
       setNewRoutineAttachments([]);
       setIsRoutineModalOpen(false);
       syncRoutinesToCloud(finalNextList, finalEditedItem ? { type: "upsert", item: finalEditedItem } : null);
+      recordActivity("루틴", "수정", title);
       showToast(`✏️ '${title}' 루틴이 수정되었습니다!`);
       return;
     }
+    const cleanMemo = String(newRoutineMemo || "").trim();
     const nextItem = {
       id: `rt-${Date.now()}`,
       title,
@@ -6366,8 +6390,9 @@ function MainApp() {
       ...(cycleVal === "monthly" ? { monthDay: mDayVal } : {}),
       ...(cycleVal === "monthly_weekday" ? { nthWeek: nthVal, weekDay: wdVal } : {}),
       ...(cycleVal === "weekly" && wdVal !== null ? { weekDay: wdVal } : {}),
-      assignee: newRoutineAssignee || "공통",
+      assignee: newRoutineAssignee || (routineAssignees[0] || "공통"),
       startDate: getTodayStr(),
+      ...(cleanMemo ? { memo: cleanMemo } : {}),
       ...(newRoutineAttachments.length > 0 ? { attachments: newRoutineAttachments } : {}),
       lastDoneKey: ""
     };
@@ -6375,6 +6400,7 @@ function MainApp() {
     setFamilyRoutines(nextList);
     routineTitleLiveRef.current = "";
     setNewRoutineTitle("");
+    setNewRoutineMemo("");
     setNewRoutineScheduledTime("");
     setNewRoutineAttachments([]);
     setIsRoutineModalOpen(false);
@@ -6395,8 +6421,8 @@ function MainApp() {
 
 
   const handleClearCompletedTodos = async () => {
-    if (!requireEditorAccess()) return;
-    const completedTodos = allTodoChecklistItems.filter((s) => s.done && s.category === "할일(To-Do)");
+    if (!requireEditorAccess("schedule")) return;
+    const completedTodos = allTodoChecklistItems.filter((s) => s.done && isTodoScheduleItem(s));
     if (completedTodos.length === 0) {
       showToast("정리할 완료된 할 일(To-Do)이 없습니다.");
       return;
@@ -6500,6 +6526,7 @@ function MainApp() {
     attachments: []
   });
   const [newRoutineAttachments, setNewRoutineAttachments] = useState([]);
+  const [newRoutineMemo, setNewRoutineMemo] = useState("");
 
 
   // 식단 모달 상태
@@ -9573,6 +9600,14 @@ function MainApp() {
             setRecipeSort(d.recipeSort);
             try { localStorage.setItem("kim_recipe_sort_v1", d.recipeSort); } catch (e) {}
           }
+          if (typeof d?.routineShowFuture === "boolean") {
+            setRoutineShowFuture(d.routineShowFuture);
+            try { localStorage.setItem("kim_routine_show_future_v1", String(d.routineShowFuture)); } catch (e) {}
+          }
+          if (typeof d?.todoIncludeOtherCats === "boolean") {
+            setTodoIncludeOtherCats(d.todoIncludeOtherCats);
+            try { localStorage.setItem("kim_todo_include_other_v1", String(d.todoIncludeOtherCats)); } catch (e) {}
+          }
           setTimeout(() => { isApplyingRemoteViewPrefsRef.current = false; }, 120);
         },
         () => {}
@@ -9753,7 +9788,8 @@ function MainApp() {
               baby_diaper_types: Array.isArray(d.baby_diaper_types) && d.baby_diaper_types.length > 0 ? d.baby_diaper_types.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_BABY_DIAPER_TYPES],
               baby_sleep_types: Array.isArray(d.baby_sleep_types) && d.baby_sleep_types.length > 0 ? d.baby_sleep_types.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_BABY_SLEEP_TYPES],
               fridge_units: Array.isArray(d.fridge_units) && d.fridge_units.length > 0 ? d.fridge_units.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_FRIDGE_UNITS],
-              recipe_difficulties: Array.isArray(d.recipe_difficulties) && d.recipe_difficulties.length > 0 ? d.recipe_difficulties.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_RECIPE_DIFFICULTIES]
+              recipe_difficulties: Array.isArray(d.recipe_difficulties) && d.recipe_difficulties.length > 0 ? d.recipe_difficulties.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_RECIPE_DIFFICULTIES],
+              routine_assignees: Array.isArray(d.routine_assignees) && d.routine_assignees.length > 0 ? d.routine_assignees.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_ROUTINE_ASSIGNEES]
             };
             setCustomCategories(nextCats);
             try { localStorage.setItem("kim_custom_categories_v1", JSON.stringify(nextCats)); } catch (e) {}
@@ -10570,6 +10606,8 @@ function MainApp() {
         hideEmptyMealSlots,
         fridgeSort,
         recipeSort,
+        routineShowFuture,
+        todoIncludeOtherCats,
         smartNotifPrefs,
         notifSilentMode,
         customAlarms,
@@ -10843,7 +10881,8 @@ function MainApp() {
           baby_diaper_types: Array.isArray(payload.customCategories.baby_diaper_types) && payload.customCategories.baby_diaper_types.length > 0 ? payload.customCategories.baby_diaper_types.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_BABY_DIAPER_TYPES],
           baby_sleep_types: Array.isArray(payload.customCategories.baby_sleep_types) && payload.customCategories.baby_sleep_types.length > 0 ? payload.customCategories.baby_sleep_types.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_BABY_SLEEP_TYPES],
           fridge_units: Array.isArray(payload.customCategories.fridge_units) && payload.customCategories.fridge_units.length > 0 ? payload.customCategories.fridge_units.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_FRIDGE_UNITS],
-          recipe_difficulties: Array.isArray(payload.customCategories.recipe_difficulties) && payload.customCategories.recipe_difficulties.length > 0 ? payload.customCategories.recipe_difficulties.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_RECIPE_DIFFICULTIES]
+          recipe_difficulties: Array.isArray(payload.customCategories.recipe_difficulties) && payload.customCategories.recipe_difficulties.length > 0 ? payload.customCategories.recipe_difficulties.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_RECIPE_DIFFICULTIES],
+          routine_assignees: Array.isArray(payload.customCategories.routine_assignees) && payload.customCategories.routine_assignees.length > 0 ? payload.customCategories.routine_assignees.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_ROUTINE_ASSIGNEES]
         };
         setCustomCategories(nextCats);
         try { localStorage.setItem("kim_custom_categories_v1", JSON.stringify(nextCats)); } catch (e) {}
@@ -11168,6 +11207,7 @@ function MainApp() {
                 baby_sleep_types: Array.isArray(payload.customCategories.baby_sleep_types) && payload.customCategories.baby_sleep_types.length > 0 ? payload.customCategories.baby_sleep_types : [...DEFAULT_BABY_SLEEP_TYPES],
                 fridge_units: Array.isArray(payload.customCategories.fridge_units) && payload.customCategories.fridge_units.length > 0 ? payload.customCategories.fridge_units : [...DEFAULT_FRIDGE_UNITS],
                 recipe_difficulties: Array.isArray(payload.customCategories.recipe_difficulties) && payload.customCategories.recipe_difficulties.length > 0 ? payload.customCategories.recipe_difficulties : [...DEFAULT_RECIPE_DIFFICULTIES],
+                routine_assignees: Array.isArray(payload.customCategories.routine_assignees) && payload.customCategories.routine_assignees.length > 0 ? payload.customCategories.routine_assignees : [...DEFAULT_ROUTINE_ASSIGNEES],
                 updatedAtMs: Date.now()
               },
               { merge: true }
@@ -11551,7 +11591,7 @@ function MainApp() {
         const key = `todos-due-${todayStr}`;
         const rep = canSendRepeat(sentMap, key, smartNotifPrefs.todosDueRepeatCount, smartNotifPrefs.todosDueRepeatInterval);
         if (rep.ok) {
-          const dueTodos = schedules.filter((s) => s.category === "할일(To-Do)" && !s.done && s.notifEnabled !== false && s.date && s.date <= todayStr);
+          const dueTodos = schedules.filter((s) => isTodoScheduleItem(s) && !s.done && s.notifEnabled !== false && s.date && s.date <= todayStr);
           if (dueTodos.length > 0) {
             markSentRepeat(sentMap, key, rep.nextCount);
             const msg = applyCustomTpl(
@@ -11835,6 +11875,7 @@ function MainApp() {
       time: cleanTime,
       location: cleanLocation,
       category: srcForm.category || "할일(To-Do)",
+      isTodo: isTodoScheduleItem({ isTodo: editingSchedule?.isTodo, category: srcForm.category || "할일(To-Do)" }),
       members: safeMembers.length > 0 ? safeMembers : ["수혁", "아리나", "시목", "시율"],
       isAnnual: Boolean(srcForm.isAnnual),
       showDday: Boolean(srcForm.showDday),
@@ -12037,7 +12078,7 @@ function MainApp() {
     const famTodos = schedules
       .filter((s) => {
         if (s.category === "기념일/생일" || s.isAnnual) return false;
-        if (!todoIncludeOtherCats && s.category !== "할일(To-Do)") return false;
+        if (!todoIncludeOtherCats && !isTodoScheduleItem(s)) return false;
         const memMatch = matchesScheduleMemberFilter(s.members, scheduleMemberFilter);
         if (!memMatch) return false;
         if (todoStatusFilter === "active") return !s.done;
@@ -12051,7 +12092,7 @@ function MainApp() {
           .filter((p) => {
             if ((p.owner || "수혁") !== currentAdminOwner) return false;
             if (p.isAnnual || p.category === "기념일/생일") return false;
-            if (p.category !== "할일(To-Do)") return false;
+            if (!isTodoScheduleItem(p)) return false;
             if (todoStatusFilter === "active") return !p.done;
             if (todoStatusFilter === "completed") return Boolean(p.done);
             return true;
@@ -12073,12 +12114,12 @@ function MainApp() {
       (s) =>
         s.category !== "기념일/생일" &&
         !s.isAnnual &&
-        (todoIncludeOtherCats || s.category === "할일(To-Do)") &&
+        (todoIncludeOtherCats || isTodoScheduleItem(s)) &&
         matchesScheduleMemberFilter(s.members, scheduleMemberFilter)
     );
     const privNonAnniv = isAdminUnlocked
       ? privateSchedules.filter(
-          (p) => (p.owner || "수혁") === currentAdminOwner && !p.isAnnual && p.category === "할일(To-Do)"
+          (p) => (p.owner || "수혁") === currentAdminOwner && !p.isAnnual && isTodoScheduleItem(p)
         )
       : [];
     const nonAnniv = [...famNonAnniv, ...privNonAnniv];
@@ -12086,12 +12127,12 @@ function MainApp() {
     const doneCount = nonAnniv.filter((s) => s.done).length;
     const activeCount = total - doneCount;
     return { total, doneCount, activeCount };
-  }, [schedules, scheduleMemberFilter, todoIncludeOtherCats]);
+  }, [schedules, privateSchedules, isAdminUnlocked, currentAdminOwner, scheduleMemberFilter, todoIncludeOtherCats]);
 
 
   const globalTodoBadgeStats = useMemo(() => {
     const todayStr = currentDayKey;
-    const activeTodos = schedules.filter((s) => s.category === "할일(To-Do)" && !s.done);
+    const activeTodos = schedules.filter((s) => isTodoScheduleItem(s) && !s.done);
     const urgentCount = activeTodos.filter((s) => s.date && String(s.date) <= todayStr).length;
     return {
       activeCount: activeTodos.length,
@@ -15739,9 +15780,9 @@ const priceStr = exportIncludePrice && safeItPrice > 0 ? `${safeItPrice.toLocale
       const a = r.assignee || "공통";
       return targetIds.some((cid) => a === cid || a === "시목·시율" || a === "공통");
     });
-    const daySchedules = (schedules || []).filter((s) => s.date === targetDate && s.category !== "할일" && !s.isTodo);
+    const daySchedules = (schedules || []).filter((s) => s.date === targetDate && !isTodoScheduleItem(s));
     const dayTodos = (schedules || []).filter(
-      (t) => (t.category === "할일" || t.isTodo) && (t.date === targetDate || t.dueDate === targetDate)
+      (t) => isTodoScheduleItem(t) && (t.date === targetDate || t.dueDate === targetDate)
     );
 
 
@@ -18338,7 +18379,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
     if (kind === "recipe" || kind === "recipe_difficulties") return "recipes";
     if (kind === "bucket") return "bucket";
     if (kind === "schedule" || kind === "schedule_places" || kind === "schedule_quick_times") return "schedule";
-    if (kind === "routine_time_presets") return "routines";
+    if (kind === "routine_time_presets" || kind === "routine_assignees") return "routines";
     if (kind === "meal_source_types" || kind === "export_meal_goals") return "daily";
     if (kind === "budget_presets") return "monthly";
     if (kind === "ai_meal_styles" || kind === "ai_meal_targets") return "ai";
@@ -18511,6 +18552,16 @@ ${item.memo}` : `${item.title} 다녀옴!`,
             await batch.commit();
           }
         } catch (e) {}
+      }
+    } else if (kind === "routine_assignees") {
+      if (routineTargetFilter === oldName) setRoutineTargetFilter(nextName);
+      if (homeRoutineTargetFilter === oldName) setHomeRoutineTargetFilter(nextName);
+      if (newRoutineAssignee === oldName) setNewRoutineAssignee(nextName);
+      const affected = familyRoutines.filter((r) => (r.assignee || "공통") === oldName);
+      if (affected.length > 0) {
+        const nextRoutines = familyRoutines.map((r) => ((r.assignee || "공통") === oldName ? { ...r, assignee: nextName } : r));
+        setFamilyRoutines(nextRoutines);
+        syncRoutinesToCloud(nextRoutines, { type: "replace" });
       }
     } else if (kind === "notice") {
       if (noticeCatFilter === oldName) setNoticeCatFilter(nextName);
@@ -18717,6 +18768,19 @@ ${item.memo}` : `${item.title} 다녀옴!`,
         }
       }
     }
+    if (kind === "routine_assignees") {
+      const affectedRts = familyRoutines.filter((r) => (r.assignee || "공통") === targetName);
+      if (affectedRts.length > 0) {
+        if (!await askConfirm(`'${targetName}' 담당자로 등록된 루틴 ${affectedRts.length}건이 있습니다.\n삭제 시 '${fallbackCat}'(으)로 자동 변경됩니다. 계속할까요?`, "변경 후 삭제")) return;
+        migratedCnt = affectedRts.length;
+        const nextRoutines = familyRoutines.map((r) => ((r.assignee || "공통") === targetName ? { ...r, assignee: fallbackCat } : r));
+        setFamilyRoutines(nextRoutines);
+        syncRoutinesToCloud(nextRoutines, { type: "replace" });
+      }
+      if (routineTargetFilter === targetName) setRoutineTargetFilter("전체");
+      if (homeRoutineTargetFilter === targetName) setHomeRoutineTargetFilter("전체");
+      if (newRoutineAssignee === targetName) setNewRoutineAssignee(fallbackCat);
+    }
     const nextCats = { ...customCategories, [kind]: nextList };
     if (kind === "fridge" && fridgeCatFilter === targetName) setFridgeCatFilter("전체");
     if (kind === "fridge_locations" && fridgeLocFilter === targetName) setFridgeLocFilter("전체");
@@ -18828,6 +18892,8 @@ ${item.memo}` : `${item.title} 다녀옴!`,
         ? [...DEFAULT_FRIDGE_UNITS]
         : kind === "recipe_difficulties"
         ? [...DEFAULT_RECIPE_DIFFICULTIES]
+        : kind === "routine_assignees"
+        ? [...DEFAULT_ROUTINE_ASSIGNEES]
         : [...NOTICE_CATEGORIES];
     await saveCustomCategoriesToCloud({ ...customCategories, [kind]: defaults }, "↺ 기본 분류 목록으로 복원했습니다.");
   };
@@ -23556,10 +23622,10 @@ ${item.memo}` : `${item.title} 다녀옴!`,
         const actionFeedSize = blockSizes.action_feed || "normal";
         const previewLimit = actionFeedSize === "compact" ? 2 : actionFeedSize === "large" ? 5 : 3;
         const previewTodos = [
-          ...schedules.filter((s) => s.category === "할일(To-Do)" && !s.done).map((s) => ({ ...s, _isPrivate: false })),
+          ...schedules.filter((s) => isTodoScheduleItem(s) && !s.done).map((s) => ({ ...s, _isPrivate: false })),
           ...(isAdminUnlocked
             ? privateSchedules
-                .filter((p) => (p.owner || "수혁") === currentAdminOwner && p.category === "할일(To-Do)" && !p.done)
+                .filter((p) => (p.owner || "수혁") === currentAdminOwner && isTodoScheduleItem(p) && !p.done)
                 .map((p) => ({ ...p, _isPrivate: true }))
             : [])
         ]
@@ -23771,7 +23837,7 @@ time: "", location: "",
                               ...visibleRoutineList.map((r) => {
                                 const cInfo = homeRoutineDayOffset === 0 ? getRoutineCarryOverInfo(r, currentDayKey) : null;
                                 const tag = cInfo?.isCarryOver ? `📌${cInfo.label} ` : isPastHomeTimeSlot(r.timeSlot || "상시") ? "⏰지난시간대 " : "";
-                                return `• ${tag}[${r.timeSlot || "상시"}${r.scheduledTime ? ` ${formatRoutineTimeLabel(r.scheduledTime)}` : ""}] ${r.title}${r.assignee && r.assignee !== "공통" ? ` (${r.assignee})` : ""}`;
+                                return `• ${tag}[${r.timeSlot || "상시"}${r.scheduledTime ? ` ${formatRoutineTimeLabel(r.scheduledTime)}` : ""}] ${r.title}${r.assignee && r.assignee !== "공통" ? ` (${r.assignee})` : ""}${String(r.memo || "").trim() ? ` — 📝 ${String(r.memo).trim().replace(/\n+/g, " / ")}` : ""}`;
                               })
                             ];
                             await copyTextSafe(lines.join("\n"), `📋 루틴 ${visibleRoutineList.length}건을 복사했습니다!`);
@@ -24133,7 +24199,7 @@ time: "", location: "",
                                     {isOverdue && (
                                       <span className="text-amber-800 font-bold whitespace-nowrap">· 시간 지남</span>
                                     )}
-                                    {carryInfo?.isCarryOver && canEditTab("schedule") && (
+                                    {carryInfo?.isCarryOver && canEditTab("routines") && (
                                       <button
                                         type="button"
                                         onClick={(e) => {
@@ -24147,6 +24213,24 @@ time: "", location: "",
                                       </button>
                                     )}
                                   </div>
+                                  {String(rt.memo || "").trim() && (
+                                    <div className="mt-1 flex items-center justify-between gap-1.5 px-2 py-1 rounded-lg bg-[#FAF8F3] border border-stone-200/80 min-w-0">
+                                      <span className="text-[11px] font-semibold text-stone-700 truncate min-w-0 flex-1">
+                                        📝 {String(rt.memo).trim().replace(/\n+/g, " · ")}
+                                      </span>
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          copyTextSafe(String(rt.memo).trim(), "📋 루틴 메모를 복사했습니다!");
+                                        }}
+                                        className="px-1.5 py-0.5 rounded-md bg-white hover:bg-[#EEF3EE] text-[#35503C] border border-[#C9D8CC] text-[10px] font-extrabold whitespace-nowrap shrink-0"
+                                        title="루틴 메모 복사"
+                                      >
+                                        📋 복사
+                                      </button>
+                                    </div>
+                                  )}
                                 </div>
 
                                 {/* 다단계 루틴: 미완료 단계는 단순 목록으로 즉시 표시, 완료 단계는 '완료 N개 보기'로 기본 접기 */}
@@ -24238,7 +24322,7 @@ time: "", location: "",
                           type="button"
                           onClick={async () => {
                             const allOpenTodos = schedules
-                              .filter((s) => s.category === "할일(To-Do)" && !s.done)
+                              .filter((s) => isTodoScheduleItem(s) && !s.done)
                               .sort((a, b) => String(a.date || "9999-99-99").localeCompare(String(b.date || "9999-99-99")));
                             const lines = [
                               `✅ 남은 할 일 (${allOpenTodos.length}건)`,
@@ -28009,7 +28093,7 @@ time: "", location: "",
                       ...sortedRem.map((r, i) => {
                         const br = i === 0 ? "┌" : i === sortedRem.length - 1 ? "└" : "├";
                         const tLbl = r.scheduledTime ? formatRoutineTimeLabel(r.scheduledTime) : (r.timeSlot || "상시");
-                        return `${br} ${tLbl} │ ${r.title}`;
+                        return `${br} ${tLbl} │ ${r.title}${String(r.memo || "").trim() ? ` (📝 ${String(r.memo).trim().replace(/\n+/g, " / ")})` : ""}`;
                       })
                     ];
                     await copyTextSafe(lines.join("\n"), `📋 남은 루틴 시간표 ${sortedRem.length}건을 복사했습니다!`);
@@ -28551,20 +28635,27 @@ time: "", location: "",
                             <button
                               type="button"
                               onClick={() => {
-                                if (canEditTab("schedule")) handleStartEditRoutine(rt);
+                                if (canEditTab("routines")) handleStartEditRoutine(rt);
                               }}
                               className="flex-1 min-w-0 text-left hover:bg-stone-100/70 rounded-lg px-1 py-0.5 -mx-1 -my-0.5 transition"
                               title="눌러서 상세 내역 보기 · 편집"
                             >
                               <div className="flex items-start justify-between gap-1">
-                                <div
-                                  className={`text-[10.5px] leading-[1.35] font-bold break-keep ${
-                                    doneNow ? "line-through text-stone-400" : "text-stone-900"
-                                  }`}
-                                >
-                                  {steps.length >= 2
-                                    ? steps.map((st, sIdx) => `${sIdx + 1}.${st}`).join(" · ")
-                                    : rt.title}
+                                <div className="min-w-0 flex-1">
+                                  <div
+                                    className={`text-[10.5px] leading-[1.35] font-bold break-keep ${
+                                      doneNow ? "line-through text-stone-400" : "text-stone-900"
+                                    }`}
+                                  >
+                                    {steps.length >= 2
+                                      ? steps.map((st, sIdx) => `${sIdx + 1}.${st}`).join(" · ")
+                                      : rt.title}
+                                  </div>
+                                  {String(rt.memo || "").trim() && (
+                                    <div className="text-[10px] font-semibold text-stone-500 truncate mt-0.5">
+                                      📝 {String(rt.memo).trim().replace(/\n+/g, " · ")}
+                                    </div>
+                                  )}
                                 </div>
                                 <div className="flex items-center gap-0.5 shrink-0 pt-0.5">
                                   {!doneNow && getRoutineCarryOverInfo(rt, currentDayKey)?.isCarryOver && (
@@ -28585,6 +28676,19 @@ time: "", location: "",
                                 </div>
                               </div>
                             </button>
+                            {String(rt.memo || "").trim() && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  copyTextSafe(String(rt.memo).trim(), "📋 루틴 메모를 복사했습니다!");
+                                }}
+                                className="px-1.5 py-0.5 rounded-md bg-[#EEF3EE] hover:bg-[#DFE9E0] text-[#35503C] border border-[#C9D8CC] text-[10px] font-extrabold whitespace-nowrap shrink-0 self-center"
+                                title="루틴 메모 복사"
+                              >
+                                📋
+                              </button>
+                            )}
                           </div>
                         </div>
                       );
@@ -28848,9 +28952,40 @@ time: "", location: "",
                                 );
                               })}
                             </div>
+                            {String(rt.memo || "").trim() && (
+                              <div className="mt-1.5 flex items-start justify-between gap-2 px-2.5 py-1.5 rounded-xl bg-[#FAF8F3] border border-stone-200/80 min-w-0">
+                                <div className="text-[11.5px] font-semibold text-stone-700 whitespace-pre-wrap break-words min-w-0 flex-1 leading-relaxed">
+                                  📝 {String(rt.memo).trim()}
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    copyTextSafe(String(rt.memo).trim(), "📋 루틴 메모를 복사했습니다!");
+                                  }}
+                                  className="px-2 py-0.5 rounded-lg bg-white hover:bg-[#EEF3EE] text-[#35503C] border border-[#C9D8CC] text-[10.5px] font-extrabold whitespace-nowrap shrink-0 mt-0.5"
+                                  title="루틴 메모 복사"
+                                >
+                                  📋 복사
+                                </button>
+                              </div>
+                            )}
                           </div>
                         </div>
                         <div className="flex items-center gap-0.5 shrink-0">
+                          {canEditTab("alarm") && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setActiveTab("alarm");
+                                openQuickAlarmModal({ presetMin: 60, memo: rt.title });
+                              }}
+                              className="p-1 text-stone-400 hover:text-[#3F624D] text-[12px] leading-none"
+                              title="모닝콜·알람 예약"
+                            >
+                              ⏰
+                            </button>
+                          )}
                           <button
                             type="button"
                             onClick={() => handleStartEditRoutine(rt)}
@@ -28861,7 +28996,10 @@ time: "", location: "",
                           </button>
                           <button
                             type="button"
-                            onClick={() => handleDeleteRoutine(rt.id)}
+                            onClick={async () => {
+                              if (!await askConfirm(`'${rt.title}' 반복 루틴을 삭제할까요?`, "삭제")) return;
+                              handleDeleteRoutine(rt.id);
+                            }}
                             className="p-1 text-stone-400 hover:text-rose-600"
                             title="루틴 삭제"
                           >
@@ -28918,7 +29056,7 @@ time: "", location: "",
                     type="button"
                     onClick={async () => {
                       const activeList = schedules
-                        .filter((s) => s.category === "할일(To-Do)" && !s.done)
+                        .filter((s) => isTodoScheduleItem(s) && !s.done)
                         .sort((a, b) => String(a.date || "9999-99-99").localeCompare(String(b.date || "9999-99-99")));
                       if (activeList.length === 0) {
                         showToast("🎉 남은 할 일이 없습니다!");
@@ -29180,7 +29318,7 @@ time: "", location: "",
                           <span className="shrink-0">
                             {String(todo.date || "").slice(5)}({getDayName(todo.date)}){!todo.done && todo.date ? (() => { const d = getDaysDiff(todo.date); return d < 0 ? ` · ${Math.abs(d)}일 지남` : d === 0 ? " · 오늘" : ""; })() : ""}
                           </span>
-                          {todo.category && todo.category !== "할일(To-Do)" && (
+                          {todo.category && !isTodoScheduleItem(todo) && (
                             <span className="px-1 py-0.5 rounded bg-amber-50 text-amber-800 text-[10px] font-bold whitespace-nowrap shrink-0">
                               {todo.category}
                             </span>
@@ -42663,7 +42801,7 @@ time: "", location: "",
                         📌 공지 올리기
                       </button>
                     )}
-                    {activeDetail._isFamily && activeDetail.category === "할일(To-Do)" && !activeDetail.done && canEditTab("shopping") && (
+                    {activeDetail._isFamily && isTodoScheduleItem(activeDetail) && !activeDetail.done && canEditTab("shopping") && (
                       <button
                         type="button"
                         onClick={() => handleTodoToShopping(activeDetail)}
@@ -43349,27 +43487,45 @@ time: "", location: "",
             <div>
               <label className="text-[11.5px] font-extrabold text-stone-500 block mb-1">대상</label>
               <div className="flex flex-wrap gap-1.5">
-                {[
-                  { id: "공통", label: "👨‍👩‍👧‍👦 공통" },
-                  { id: "시목", label: "👦 시목" },
-                  { id: "시율", label: "👶 시율" },
-                  { id: "시목·시율", label: "👦👶 시목·시율" },
-                  { id: "수혁", label: "👨 수혁" },
-                  { id: "아리나", label: "👩 아리" }
-                ].map((opt) => (
+                {(routineAssignees.includes(newRoutineAssignee) || !newRoutineAssignee
+                  ? routineAssignees
+                  : [...routineAssignees, newRoutineAssignee]
+                ).map((assigneeId) => {
+                  const iconMap = {
+                    공통: "👨‍👩‍👧‍👦 ",
+                    시목: "👦 ",
+                    시율: "👶 ",
+                    "시목·시율": "👦👶 ",
+                    수혁: "👨 ",
+                    아리나: "👩 ",
+                    아리: "👩 "
+                  };
+                  const dispLabel = `${iconMap[assigneeId] || "👤 "}${assigneeId === "아리나" ? "아리" : assigneeId}`;
+                  return (
+                    <button
+                      key={assigneeId}
+                      type="button"
+                      onClick={() => setNewRoutineAssignee(assigneeId)}
+                      className={`px-2.5 py-1.5 rounded-xl text-[12.5px] font-extrabold border transition whitespace-nowrap ${
+                        newRoutineAssignee === assigneeId
+                          ? "bg-[#3F624D] text-white border-[#3F624D] shadow-sm"
+                          : "bg-stone-50 text-stone-600 border-stone-200 hover:bg-stone-100"
+                      }`}
+                    >
+                      {dispLabel}
+                    </button>
+                  );
+                })}
+                {isEditorUnlocked && (
                   <button
-                    key={opt.id}
                     type="button"
-                    onClick={() => setNewRoutineAssignee(opt.id)}
-                    className={`px-2.5 py-1.5 rounded-xl text-[12.5px] font-extrabold border transition whitespace-nowrap ${
-                      newRoutineAssignee === opt.id
-                        ? "bg-stone-900 text-white border-stone-900"
-                        : "bg-stone-50 text-stone-600 border-stone-200"
-                    }`}
+                    onClick={() => openCategoryManager("routine_assignees")}
+                    className="px-2 py-1.5 rounded-xl bg-stone-100 hover:bg-[#EEF3EE] text-stone-600 border border-stone-200 text-[11.5px] font-extrabold whitespace-nowrap transition"
+                    title="루틴 대상·담당자 자유편집"
                   >
-                    {opt.label}
+                    ⚙️
                   </button>
-                ))}
+                )}
               </div>
             </div>
 
@@ -43400,12 +43556,8 @@ time: "", location: "",
                     }}
                     className={`px-2.5 py-1.5 rounded-xl text-[12.5px] font-extrabold border transition whitespace-nowrap ${
                       newRoutineCycle === c.id
-                        ? c.id === "weekdays"
-                          ? "bg-[#3F624D] text-white border-[#3F624D]"
-                          : c.id === "weekend_holiday"
-                          ? "bg-[#3F624D] text-white border-[#3F624D]"
-                          : "bg-stone-900 text-white border-stone-900"
-                        : "bg-stone-50 text-stone-600 border-stone-200"
+                        ? "bg-[#3F624D] text-white border-[#3F624D] shadow-sm"
+                        : "bg-stone-50 text-stone-600 border-stone-200 hover:bg-stone-100"
                     }`}
                   >
                     {c.label}
@@ -43448,8 +43600,8 @@ time: "", location: "",
                       onClick={() => setNewRoutineTimeSlot(ts)}
                       className={`px-2.5 py-1.5 rounded-xl text-[12.5px] font-extrabold border transition whitespace-nowrap ${
                         newRoutineTimeSlot === ts
-                          ? "bg-stone-900 text-white border-stone-900"
-                          : "bg-stone-50 text-stone-600 border-stone-200"
+                          ? "bg-[#3F624D] text-white border-[#3F624D] shadow-sm"
+                          : "bg-stone-50 text-stone-600 border-stone-200 hover:bg-stone-100"
                       }`}
                     >
                       {ts}
@@ -43571,6 +43723,42 @@ time: "", location: "",
             </div>
 
 
+            <div className="p-2.5 rounded-2xl bg-[#FAF8F3] border border-stone-200 space-y-1.5">
+              <div className="flex items-center justify-between gap-2">
+                <label className="text-[12px] font-extrabold text-stone-700 whitespace-nowrap">
+                  📝 루틴 메모 (계좌번호 · 참고사항)
+                </label>
+                <div className="flex items-center gap-1 shrink-0">
+                  {String(newRoutineMemo || "").trim() && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => copyTextSafe(String(newRoutineMemo).trim(), "📋 루틴 메모를 복사했습니다!")}
+                        className="px-2 py-0.5 rounded-lg bg-white hover:bg-[#EEF3EE] text-[#35503C] border border-[#C9D8CC] text-[11px] font-extrabold whitespace-nowrap"
+                      >
+                        📋 복사
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setNewRoutineMemo("")}
+                        className="px-1.5 py-0.5 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-500 text-[11px] font-extrabold whitespace-nowrap"
+                      >
+                        지우기
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+              <textarea
+                rows={3}
+                value={newRoutineMemo}
+                onChange={(e) => setNewRoutineMemo(e.target.value)}
+                placeholder="예) 관리비 계좌: 국민 123-45-678901 (예금주: 아파트관리사무소)"
+                className="w-full min-w-0 px-3 py-2 rounded-xl border border-stone-200 bg-white text-[12.5px] font-medium text-stone-800 placeholder:text-stone-400 focus:outline-none focus:ring-2 focus:ring-[#3F624D]/30 resize-y leading-relaxed"
+              />
+            </div>
+
+
             <div className="p-2.5 rounded-2xl bg-stone-50 border border-stone-200 space-y-2">
               <div className="flex items-center justify-between gap-2">
                 <span className="text-[12px] font-extrabold text-stone-700 whitespace-nowrap">
@@ -43660,31 +43848,49 @@ time: "", location: "",
                 >
                   🗑️ 삭제
                 </button>
-                {canEditTab("notices") && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (!requireEditorAccess("notices")) return;
-                      const rtTitle = String(routineTitleLiveRef.current || newRoutineTitle || "").trim();
-                      handleCancelEditRoutine();
-                      setEditingNotice(null);
-                      setNoticeForm({
-                        title: `🔄 [루틴 공유] ${rtTitle}`,
-                        content: [
-                          `시간대: ${newRoutineTimeSlot}${newRoutineScheduledTime ? ` (${formatRoutineTimeLabel(newRoutineScheduledTime)})` : ""}`,
-                          `대상: ${newRoutineAssignee}`
-                        ].join("\n"),
-                        category: noticeCategories.includes("집안일") ? "집안일" : (noticeCategories[0] || "일반"),
-                        author: actorName || "수혁",
-                        pinned: false
-                      });
-                      setIsNoticeModalOpen(true);
-                    }}
-                    className="px-3 py-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 text-[12px] font-extrabold whitespace-nowrap"
-                  >
-                    📌 공지 공유
-                  </button>
-                )}
+                <div className="flex items-center gap-1.5">
+                  {canEditTab("alarm") && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const rtTitle = String(routineTitleLiveRef.current || newRoutineTitle || "").trim();
+                        handleCancelEditRoutine();
+                        setActiveTab("alarm");
+                        openQuickAlarmModal({ presetMin: 60, memo: rtTitle });
+                      }}
+                      className="px-2.5 py-1.5 rounded-xl bg-[#EEF3EE] hover:bg-[#DFE9E0] text-[#35503C] border border-[#C9D8CC] text-[12px] font-extrabold whitespace-nowrap"
+                    >
+                      ⏰ 알람
+                    </button>
+                  )}
+                  {canEditTab("notices") && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!requireEditorAccess("notices")) return;
+                        const rtTitle = String(routineTitleLiveRef.current || newRoutineTitle || "").trim();
+                        const rtMemo = String(newRoutineMemo || "").trim();
+                        handleCancelEditRoutine();
+                        setEditingNotice(null);
+                        setNoticeForm({
+                          title: `🔄 [루틴 공유] ${rtTitle}`,
+                          content: [
+                            `시간대: ${newRoutineTimeSlot}${newRoutineScheduledTime ? ` (${formatRoutineTimeLabel(newRoutineScheduledTime)})` : ""}`,
+                            `대상: ${newRoutineAssignee === "아리나" ? "아리" : newRoutineAssignee}`,
+                            ...(rtMemo ? [`메모: ${rtMemo}`] : [])
+                          ].join("\n"),
+                          category: noticeCategories.includes("집안일") ? "집안일" : (noticeCategories[0] || "일반"),
+                          author: actorName || "수혁",
+                          pinned: false
+                        });
+                        setIsNoticeModalOpen(true);
+                      }}
+                      className="px-2.5 py-1.5 rounded-xl bg-[#EEF3EE] hover:bg-[#DFE9E0] text-[#35503C] border border-[#C9D8CC] text-[12px] font-extrabold whitespace-nowrap"
+                    >
+                      📌 공지 공유
+                    </button>
+                  )}
+                </div>
               </div>
             )}
 
@@ -43692,14 +43898,14 @@ time: "", location: "",
               <button
                 type="button"
                 onClick={handleCancelEditRoutine}
-                className="flex-1 py-2.5 rounded-xl bg-stone-100 text-stone-600 text-[13.5px] font-extrabold whitespace-nowrap"
+                className="flex-1 py-2.5 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-600 text-[13.5px] font-extrabold whitespace-nowrap transition"
               >
                 취소
               </button>
               <button
                 type="button"
                 onClick={() => handleAddRoutine()}
-                className="flex-1 py-2.5 rounded-xl bg-stone-900 text-white text-[13.5px] font-extrabold whitespace-nowrap"
+                className="flex-1 py-2.5 rounded-xl bg-[#3F624D] hover:bg-[#33513F] text-white text-[13.5px] font-extrabold whitespace-nowrap transition shadow-sm"
               >
                 {editingRoutineId ? "수정 저장" : "저장하기"}
               </button>
@@ -46273,7 +46479,8 @@ time: "", location: "",
           baby_diaper_types: { title: "🧷 기저귀 배변 구분", placeholder: "새 배변 구분 (예: 묽은변, 녹변)" },
           baby_sleep_types: { title: "😴 아기 수면 구분", placeholder: "새 수면 구분 (예: 쪽잠, 유모차잠)" },
           fridge_units: { title: "⚖️ 냉장고 단위 프리셋", placeholder: "새 단위 (예: 망, 포기, 컵, 줄)" },
-          recipe_difficulties: { title: "👩‍🍳 레시피 난이도", placeholder: "새 난이도 (예: 초간단, 5분컷, 특식)" }
+          recipe_difficulties: { title: "👩‍🍳 레시피 난이도", placeholder: "새 난이도 (예: 초간단, 5분컷, 특식)" },
+          routine_assignees: { title: "🔄 루틴 대상·담당자", placeholder: "새 담당자 (예: 산후도우미, 친정, 시댁)" }
         }[categoryManageKind] || { title: "⚙️ 분류 관리", placeholder: "새 분류 입력" };
         return (
           <div
@@ -46319,6 +46526,7 @@ time: "", location: "",
                   { id: "notice", label: "📌 공지", cnt: (customCategories.notice || []).length },
                   { id: "bucket", label: "🌟 버킷", cnt: (customCategories.bucket || []).length },
                   { id: "schedule", label: "🗓️ 일정", cnt: (customCategories.schedule || []).length },
+                  { id: "routine_assignees", label: "🔄 루틴대상", cnt: routineAssignees.length },
                   { id: "house_room", label: "🏠 수납", cnt: houseStorageRooms.length },
                   { id: "house_med_target", label: "💊 약대상", cnt: houseMedTargets.length },
                   { id: "house_warranty_brands", label: "🏷️ 브랜드", cnt: houseWarrantyBrands.length },
@@ -50078,7 +50286,7 @@ time: "", location: "",
                   defBody: "{목록}",
                   vars: ["건수", "목록", "회차"],
                   getSample: () => {
-                    const dueTodos = schedules.filter((s) => s.category === "할일(To-Do)" && !s.done && s.notifEnabled !== false && s.date && s.date <= todayStrPreview);
+                    const dueTodos = schedules.filter((s) => isTodoScheduleItem(s) && !s.done && s.notifEnabled !== false && s.date && s.date <= todayStrPreview);
                     return dueTodos.length > 0
                       ? { real: true, vars: { 건수: dueTodos.length, 목록: dueTodos.slice(0, 3).map((t) => t.title).join(" · "), 회차: (smartNotifPrefs.todosDueRepeatCount || 1) > 1 ? `[1/${smartNotifPrefs.todosDueRepeatCount}회]` : "" } }
                       : { real: false, vars: { 건수: 2, 목록: "기저귀 주문하기 · 소아과 예약", 회차: "[1/2회]" } };

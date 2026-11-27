@@ -1186,7 +1186,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v14.45";
+export const APP_CODE_VERSION = "v14.46";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1204,7 +1204,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-27 01:00";
+export const APP_BUILD_DATE = "2026-11-27 09:50";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1274,6 +1274,19 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v14.46",
+    version: "v14.46",
+    date: "2026-11-27",
+    title: "📝 루틴 메모(관리비 계좌 등)·1탭 복사 추가 + 🐛 루틴 권한·할일 식별·todoStats 의존성 버그 수정 + ⚙️ 루틴 담당자 자유편집 + ☁️ 예정루틴/병원포함 Firebase 이관 + 🔗 루틴→알람·공지 연계",
+    items: [
+      "📝 [루틴 메모 · 1탭 복사 신설] 반복 루틴 등록·수정 모달에 다중줄 메모 입력칸(예: 관리비 이체 계좌·참고사항)과 1탭 [📋 복사]/[지우기] 버튼을 추가했습니다. 홈 화면·루틴 시간표·루틴 카드 모두에서 메모를 바로 확인하고 1탭으로 계좌번호 등을 복사할 수 있으며, 루틴 복사·공지 공유·Firebase 동기화·JSON 백업/복원에 완전 연동됩니다.",
+      "🐛 [전반 버그 4종 수정] ① 루틴 추가 모달(openNewRoutineModal)·홈 이월 건너뛰기·루틴 시간표 클릭 편집에서 권한 키가 누락되거나 'schedule'로 오매핑되어 있던 버그를 'routines'로 교정 ② isTodoScheduleItem() 헬퍼와 isTodo 플래그를 전역 15곳(육아일기 불러오기의 '할일' 오매칭 포함)에 적용해 '할일(To-Do)' 분류명 변경 후에도 할 일 기능이 유지되도록 보강 ③ todoStats useMemo 의존성 배열에 privateSchedules·isAdminUnlocked·currentAdminOwner 누락 수정 ④ 루틴 카드 삭제 버튼에 실수 방지 확인창(askConfirm) 및 루틴 수정 활동로그 기록 추가",
+      "⚙️ [시스템 자유도 확장] 하드코딩되어 있던 루틴 대상/담당자(공통·시목·시율·시목·시율·수혁·아리 등)를 통합 세부 분류 관리(routine_assignees)로 승격해 도우미·친정 등 새 담당자 추가·이름변경(기존 루틴 자동 일괄 갱신)·삭제(기본 담당자로 안전 이관)·순서이동·Firebase 실시간 동기화 지원",
+      "☁️ [로컬→Firebase 이관] 새로고침·기기 전환 시 초기화되던 루틴 [예정 포함(routineShowFuture)]과 할 일 [병원·행사 포함(todoIncludeOtherCats)] 설정을 Firestore(family_meta_v4/home_layout) 실시간 동기화 및 JSON 백업/복원으로 이관했습니다.",
+      "🔗 [메뉴 연계 · 디자인 통일] ① 루틴 카드와 루틴 수정 모달에 [⏰ 알람] 1탭 버튼을 추가해 모닝콜·알람으로 바로 예약 연계 ② 루틴 모달의 혼재된 검정(bg-stone-900)·주황 버튼을 앱 공통 세이지그린(#3F624D/#EEF3EE)으로 통일 및 모바일 줄바꿈·잘림 방지 보강 (과거 패치노트 483건 100% 보존)"
+    ]
+  },
   {
     id: "patch-v14.45",
     version: "v14.45",
@@ -7387,6 +7400,7 @@ export const DEFAULT_BABY_DIAPER_TYPES = ["소변", "대변", "혼합"];
 export const DEFAULT_BABY_SLEEP_TYPES = ["낮잠", "밤잠"];
 export const DEFAULT_FRIDGE_UNITS = ["개", "팩", "봉", "모", "캔", "병", "단", "통", "알", "g", "kg", "ml", "L"];
 export const DEFAULT_RECIPE_DIFFICULTIES = ["쉬움", "보통", "어려움"];
+export const DEFAULT_ROUTINE_ASSIGNEES = ["공통", "시목", "시율", "시목·시율", "수혁", "아리나"];
 
 export const APP_FEATURE_GUIDES = [
   {
@@ -7430,7 +7444,7 @@ export const APP_FEATURE_GUIDES = [
     steps: [
       "📅 달력: 가족 일정(🏠)과 내 개인일정·다이어리(🔒, 관리자 본인 전용)를 함께 보고, 한국 공휴일·음력·기간 범위(시작~종료일)·시간·장소(네이버지도 연결)를 지원해요.",
       "✅ 할 일(To-Do): 마감일별 할 일을 빠르게 추가·검색하고 1탭 완료 체크, 🛒 장보기, ⏰ 모닝콜 알람 예약으로 바로 보낼 수 있어요.",
-      "🔄 루틴: 아침·점심·하원후·오후·저녁·자기전·상시 시간대별 루틴을 관리해요. 제목을 쉼표(,)로 적으면 단계별 칩으로 쪼개져 개별 체크가 돼요.",
+      "🔄 루틴: 시간대별 루틴과 함께 계좌번호·참고사항 메모(1탭 복사) 및 파일 첨부를 관리해요. 제목을 쉼표(,)로 적으면 단계별 칩으로 쪼개져 개별 체크가 돼요.",
       "⭐ D-Day: 기념일·생일 카운트다운을 모아보고, [📌 홈] 토글로 홈 상단 미니바에 고정할 수 있어요."
     ],
     tips: "루틴 상단 [🕒 시간표] 버튼을 누르면 시간순 2열 표로 한눈에 볼 수 있고, 어제 미완료 항목은 [📌 이월]로 자동 표시돼요."
