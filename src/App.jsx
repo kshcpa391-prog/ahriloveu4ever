@@ -200,6 +200,7 @@ import {
   parseScheduleDurationPresetToken,
   DEFAULT_BABY_TEMP_PRESETS,
   DEFAULT_BUDGET_PRESETS,
+  DEFAULT_EXPENSE_CATEGORIES,
   DEFAULT_CONDOLENCE_AMOUNTS,
   DEFAULT_BABY_FEED_AMOUNTS,
   DEFAULT_BABY_DIAPER_TYPES,
@@ -5239,6 +5240,7 @@ function MainApp() {
           baby_temp_presets: Array.isArray(saved.baby_temp_presets) && saved.baby_temp_presets.length > 0 ? saved.baby_temp_presets.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_BABY_TEMP_PRESETS],
           export_meal_goals: Array.isArray(saved.export_meal_goals) && saved.export_meal_goals.length > 0 ? saved.export_meal_goals.map((s) => String(s || "").trim()).filter(Boolean) : [...EXPORT_MEAL_GOALS],
           budget_presets: Array.isArray(saved.budget_presets) && saved.budget_presets.length > 0 ? saved.budget_presets.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_BUDGET_PRESETS],
+          expense_categories: Array.isArray(saved.expense_categories) && saved.expense_categories.length > 0 ? saved.expense_categories.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_EXPENSE_CATEGORIES],
           condolence_amounts: Array.isArray(saved.condolence_amounts) && saved.condolence_amounts.length > 0 ? saved.condolence_amounts.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_CONDOLENCE_AMOUNTS],
           baby_feed_amounts: Array.isArray(saved.baby_feed_amounts) && saved.baby_feed_amounts.length > 0 ? saved.baby_feed_amounts.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_BABY_FEED_AMOUNTS],
           baby_diaper_types: Array.isArray(saved.baby_diaper_types) && saved.baby_diaper_types.length > 0 ? saved.baby_diaper_types.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_BABY_DIAPER_TYPES],
@@ -5282,6 +5284,7 @@ function MainApp() {
       baby_temp_presets: [...DEFAULT_BABY_TEMP_PRESETS],
       export_meal_goals: [...EXPORT_MEAL_GOALS],
       budget_presets: [...DEFAULT_BUDGET_PRESETS],
+      expense_categories: [...DEFAULT_EXPENSE_CATEGORIES],
       condolence_amounts: [...DEFAULT_CONDOLENCE_AMOUNTS],
       baby_feed_amounts: [...DEFAULT_BABY_FEED_AMOUNTS],
       baby_diaper_types: [...DEFAULT_BABY_DIAPER_TYPES],
@@ -5323,6 +5326,7 @@ function MainApp() {
   const babyTempPresets = customCategories.baby_temp_presets || DEFAULT_BABY_TEMP_PRESETS;
   const exportMealGoals = customCategories.export_meal_goals || EXPORT_MEAL_GOALS;
   const budgetPresets = customCategories.budget_presets || DEFAULT_BUDGET_PRESETS;
+  const expenseCategories = customCategories.expense_categories || DEFAULT_EXPENSE_CATEGORIES;
   const condolenceAmounts = customCategories.condolence_amounts || DEFAULT_CONDOLENCE_AMOUNTS;
   const babyFeedAmounts = customCategories.baby_feed_amounts || DEFAULT_BABY_FEED_AMOUNTS;
   const babyDiaperTypes = customCategories.baby_diaper_types || DEFAULT_BABY_DIAPER_TYPES;
@@ -10060,6 +10064,7 @@ function MainApp() {
               baby_temp_presets: Array.isArray(d.baby_temp_presets) && d.baby_temp_presets.length > 0 ? d.baby_temp_presets.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_BABY_TEMP_PRESETS],
               export_meal_goals: Array.isArray(d.export_meal_goals) && d.export_meal_goals.length > 0 ? d.export_meal_goals.map((s) => String(s || "").trim()).filter(Boolean) : [...EXPORT_MEAL_GOALS],
               budget_presets: Array.isArray(d.budget_presets) && d.budget_presets.length > 0 ? d.budget_presets.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_BUDGET_PRESETS],
+              expense_categories: Array.isArray(d.expense_categories) && d.expense_categories.length > 0 ? d.expense_categories.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_EXPENSE_CATEGORIES],
               condolence_amounts: Array.isArray(d.condolence_amounts) && d.condolence_amounts.length > 0 ? d.condolence_amounts.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_CONDOLENCE_AMOUNTS],
               baby_feed_amounts: Array.isArray(d.baby_feed_amounts) && d.baby_feed_amounts.length > 0 ? d.baby_feed_amounts.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_BABY_FEED_AMOUNTS],
               baby_diaper_types: Array.isArray(d.baby_diaper_types) && d.baby_diaper_types.length > 0 ? d.baby_diaper_types.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_BABY_DIAPER_TYPES],
@@ -11171,6 +11176,7 @@ function MainApp() {
           baby_temp_presets: Array.isArray(payload.customCategories.baby_temp_presets) && payload.customCategories.baby_temp_presets.length > 0 ? payload.customCategories.baby_temp_presets.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_BABY_TEMP_PRESETS],
           export_meal_goals: Array.isArray(payload.customCategories.export_meal_goals) && payload.customCategories.export_meal_goals.length > 0 ? payload.customCategories.export_meal_goals.map((s) => String(s || "").trim()).filter(Boolean) : [...EXPORT_MEAL_GOALS],
           budget_presets: Array.isArray(payload.customCategories.budget_presets) && payload.customCategories.budget_presets.length > 0 ? payload.customCategories.budget_presets.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_BUDGET_PRESETS],
+          expense_categories: Array.isArray(payload.customCategories.expense_categories) && payload.customCategories.expense_categories.length > 0 ? payload.customCategories.expense_categories.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_EXPENSE_CATEGORIES],
           condolence_amounts: Array.isArray(payload.customCategories.condolence_amounts) && payload.customCategories.condolence_amounts.length > 0 ? payload.customCategories.condolence_amounts.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_CONDOLENCE_AMOUNTS],
           baby_feed_amounts: Array.isArray(payload.customCategories.baby_feed_amounts) && payload.customCategories.baby_feed_amounts.length > 0 ? payload.customCategories.baby_feed_amounts.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_BABY_FEED_AMOUNTS],
           baby_diaper_types: Array.isArray(payload.customCategories.baby_diaper_types) && payload.customCategories.baby_diaper_types.length > 0 ? payload.customCategories.baby_diaper_types.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_BABY_DIAPER_TYPES],
@@ -11533,6 +11539,7 @@ function MainApp() {
                 baby_temp_presets: Array.isArray(payload.customCategories.baby_temp_presets) && payload.customCategories.baby_temp_presets.length > 0 ? payload.customCategories.baby_temp_presets : [...DEFAULT_BABY_TEMP_PRESETS],
                 export_meal_goals: Array.isArray(payload.customCategories.export_meal_goals) && payload.customCategories.export_meal_goals.length > 0 ? payload.customCategories.export_meal_goals : [...EXPORT_MEAL_GOALS],
                 budget_presets: Array.isArray(payload.customCategories.budget_presets) && payload.customCategories.budget_presets.length > 0 ? payload.customCategories.budget_presets : [...DEFAULT_BUDGET_PRESETS],
+                expense_categories: Array.isArray(payload.customCategories.expense_categories) && payload.customCategories.expense_categories.length > 0 ? payload.customCategories.expense_categories : [...DEFAULT_EXPENSE_CATEGORIES],
                 condolence_amounts: Array.isArray(payload.customCategories.condolence_amounts) && payload.customCategories.condolence_amounts.length > 0 ? payload.customCategories.condolence_amounts : [...DEFAULT_CONDOLENCE_AMOUNTS],
                 baby_feed_amounts: Array.isArray(payload.customCategories.baby_feed_amounts) && payload.customCategories.baby_feed_amounts.length > 0 ? payload.customCategories.baby_feed_amounts : [...DEFAULT_BABY_FEED_AMOUNTS],
                 baby_diaper_types: Array.isArray(payload.customCategories.baby_diaper_types) && payload.customCategories.baby_diaper_types.length > 0 ? payload.customCategories.baby_diaper_types : [...DEFAULT_BABY_DIAPER_TYPES],
@@ -19174,7 +19181,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
     if (kind === "schedule" || kind === "schedule_places" || kind === "schedule_quick_times" || kind === "schedule_duration_presets") return "schedule";
     if (kind === "routine_time_presets" || kind === "routine_assignees") return "routines";
     if (kind === "meal_source_types" || kind === "export_meal_goals") return "daily";
-    if (kind === "budget_presets") return "monthly";
+    if (kind === "budget_presets" || kind === "expense_categories") return "monthly";
     if (kind === "ai_meal_styles" || kind === "ai_meal_targets") return "ai";
     if (kind === "timer_presets" || kind === "quick_alarm_presets") return "alarm";
     if (kind === "baby_memo_tags" || kind === "baby_health_tags" || kind === "baby_diary_moods" || kind === "baby_temp_presets" || kind === "baby_feed_amounts" || kind === "baby_diaper_types" || kind === "baby_sleep_types") return "baby";
@@ -19543,6 +19550,23 @@ ${item.memo}` : `${item.title} 다녀옴!`,
           } catch (e) {}
         }
       }
+    } else if (kind === "expense_categories") {
+      if (expenseCatFilter === oldName) setExpenseCatFilter(nextName);
+      const affected = expenses.filter((ex) => ex.category === oldName);
+      if (affected.length > 0) {
+        setExpenses((prev) => prev.map((ex) => (ex.category === oldName ? { ...ex, category: nextName } : ex)));
+        if (user && db) {
+          try {
+            for (let i = 0; i < affected.length; i += 200) {
+              const batch = writeBatch(db);
+              affected.slice(i, i + 200).forEach((ex) => {
+                batch.set(getDocRef("family_expenses_v4", ex.id), { ...ex, category: nextName }, { merge: true });
+              });
+              await batch.commit();
+            }
+          } catch (e) {}
+        }
+      }
     }
     showToast(`✏️ '${oldName}' → '${nextName}' 분류로 변경했습니다.`);
   };
@@ -19589,28 +19613,48 @@ ${item.memo}` : `${item.title} 다녀옴!`,
     const nextList = curList.filter((c) => c !== targetName);
     const fallbackCat = nextList[0];
     const migrateSpecs = {
-      fridge: { list: fridge.filter((x) => x.category === targetName), col: "family_fridge_v4", field: "category" },
-      fridge_locations: { list: fridge.filter((x) => x.location === targetName), col: "family_fridge_v4", field: "location" },
-      recipe: { list: recipes.filter((x) => x.category === targetName), col: "family_recipes_v8", field: "category" },
-      recipe_difficulties: { list: recipes.filter((x) => x.difficulty === targetName), col: "family_recipes_v8", field: "difficulty" },
-      notice: { list: notices.filter((x) => x.category === targetName), col: "family_notices_v4", field: "category" },
-      bucket: { list: bucketList.filter((x) => x.category === targetName), col: "family_bucket_v1", field: "category" },
-      schedule: { list: schedules.filter((x) => x.category === targetName), col: "family_schedules_v4", field: "category" },
-      condolence_cat: { list: condolenceList.filter((x) => x.category === targetName), col: "family_condolence_v1", field: "category" },
-      condolence_group: { list: condolenceList.filter((x) => x.group === targetName), col: "family_condolence_v1", field: "group" }
+      fridge: [{ list: fridge.filter((x) => x.category === targetName), col: "family_fridge_v4", field: "category" }],
+      fridge_locations: [
+        { list: fridge.filter((x) => x.location === targetName), col: "family_fridge_v4", field: "location" },
+        { list: cookedPortions.filter((x) => x.location === targetName), col: "family_cooked_portions_v1", field: "location" }
+      ],
+      cooked_categories: [{ list: cookedBatches.filter((x) => x.category === targetName), col: "family_cooked_batches_v1", field: "category" }],
+      cooked_units: [
+        { list: cookedBatches.filter((x) => x.unit === targetName), col: "family_cooked_batches_v1", field: "unit" },
+        { list: cookedPortions.filter((x) => x.unit === targetName), col: "family_cooked_portions_v1", field: "unit" }
+      ],
+      recipe: [{ list: recipes.filter((x) => x.category === targetName), col: "family_recipes_v8", field: "category" }],
+      recipe_difficulties: [{ list: recipes.filter((x) => x.difficulty === targetName), col: "family_recipes_v8", field: "difficulty" }],
+      notice: [{ list: notices.filter((x) => x.category === targetName), col: "family_notices_v4", field: "category" }],
+      bucket: [{ list: bucketList.filter((x) => x.category === targetName), col: "family_bucket_v1", field: "category" }],
+      schedule: [{ list: schedules.filter((x) => x.category === targetName), col: "family_schedules_v4", field: "category" }],
+      house_med_target: [{ list: houseItems.filter((x) => (x.kind || x.type) === "medicine" && x.target === targetName), col: "family_house_items_v1", field: "target" }],
+      house_warranty_brands: [{ list: houseItems.filter((x) => (x.kind || x.type) === "warranty" && x.brand === targetName), col: "family_house_items_v1", field: "brand" }],
+      condolence_cat: [{ list: condolenceList.filter((x) => x.category === targetName), col: "family_condolence_v1", field: "category" }],
+      condolence_group: [{ list: condolenceList.filter((x) => x.group === targetName), col: "family_condolence_v1", field: "group" }],
+      condolence_pay: [{ list: condolenceList.filter((x) => x.paymentMethod === targetName), col: "family_condolence_v1", field: "paymentMethod" }],
+      expense_categories: [{ list: expenses.filter((x) => x.category === targetName), col: "family_expenses_v4", field: "category" }]
     };
-    const spec = migrateSpecs[kind];
+    const specList = migrateSpecs[kind] || [];
+    const totalAffected = specList.reduce((acc, sp) => acc + sp.list.length, 0);
     let migratedCnt = 0;
-    if (spec && spec.list.length > 0) {
-      if (!await askConfirm(`'${targetName}' 분류를 사용 중인 기록 ${spec.list.length}건이 있습니다.\n삭제 시 '${fallbackCat}' 분류로 자동 이동됩니다. 계속할까요?`, "이동 후 삭제")) return;
-      migratedCnt = spec.list.length;
+    if (totalAffected > 0) {
+      if (!await askConfirm(`'${targetName}' 분류를 사용 중인 기록 ${totalAffected}건이 있습니다.\n삭제 시 '${fallbackCat}' 분류로 자동 이동됩니다. 계속할까요?`, "이동 후 삭제")) return;
+      migratedCnt = totalAffected;
       if (user && db) {
-        for (let i = 0; i < spec.list.length; i += 200) {
-          const batch = writeBatch(db);
-          spec.list.slice(i, i + 200).forEach((item) => {
-            batch.set(getDocRef(spec.col, item.id), { ...item, [spec.field]: fallbackCat }, { merge: true });
-          });
-          await batch.commit().catch(() => {});
+        try {
+          for (const sp of specList) {
+            for (let i = 0; i < sp.list.length; i += 200) {
+              const batch = writeBatch(db);
+              sp.list.slice(i, i + 200).forEach((item) => {
+                batch.set(getDocRef(sp.col, item.id), { ...item, [sp.field]: fallbackCat }, { merge: true });
+              });
+              await batch.commit();
+            }
+          }
+        } catch (migErr) {
+          showToast(`⚠️ 연결 항목 이관 실패로 삭제를 중단했습니다: ${migErr?.message || "네트워크 오류"}`);
+          return;
         }
       }
     }
@@ -19726,6 +19770,8 @@ ${item.memo}` : `${item.title} 다녀옴!`,
         ? [...EXPORT_MEAL_GOALS]
         : kind === "budget_presets"
         ? [...DEFAULT_BUDGET_PRESETS]
+        : kind === "expense_categories"
+        ? [...DEFAULT_EXPENSE_CATEGORIES]
         : kind === "condolence_amounts"
         ? [...DEFAULT_CONDOLENCE_AMOUNTS]
         : kind === "baby_feed_amounts"
@@ -28888,7 +28934,7 @@ time: "", location: "",
                               setTimeout(() => { try { URL.revokeObjectURL(url); } catch (e) {} }, 1000);
                               showToast(`📊 ${currentMonth}월 식비 원장(${filteredLedger.length}건) CSV를 저장했습니다.`);
                             }}
-                            className="px-2 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-800 text-[11px] font-extrabold whitespace-nowrap shrink-0"
+                            className="px-2 py-1 rounded-lg bg-[#EEF3EE] hover:bg-[#DFE9E0] border border-[#C9D8CC] text-[#35503C] text-[11px] font-extrabold whitespace-nowrap shrink-0"
                             title="현재 필터 식비 원장을 엑셀(.csv)로 내보내기"
                           >
                             📊 CSV
@@ -28911,18 +28957,16 @@ time: "", location: "",
                               onChange={(e) => setManualExpenseForm((p) => ({ ...p, category: e.target.value }))}
                               className="flex-1 px-2 py-1.5 rounded-lg border border-stone-200 bg-white text-[12px] font-bold min-w-0 truncate"
                             >
-                              {fridgeCategories.map((c) => (
+                              {Array.from(new Set([...expenseCategories, ...fridgeCategories, ...(manualExpenseForm.category ? [manualExpenseForm.category] : []), "기타"])).map((c) => (
                                 <option key={c} value={c}>{c}</option>
                               ))}
-                              <option value="외식/배달">외식/배달</option>
-                              {!fridgeCategories.includes("기타") && <option value="기타">기타</option>}
                             </select>
                             <button
                               type="button"
-                              onClick={() => openCategoryManager("fridge")}
+                              onClick={() => openCategoryManager("expense_categories")}
                               className="h-8 w-7 shrink-0 rounded-lg border border-stone-200 bg-white hover:bg-stone-100 text-stone-500 text-[11px] font-extrabold flex items-center justify-center"
-                              title="지출/재료 분류 자유 관리"
-                              aria-label="지출/재료 분류 자유 관리"
+                              title="지출 분류 자유 관리"
+                              aria-label="지출 분류 자유 관리"
                             >
                               ⚙️
                             </button>
@@ -28934,6 +28978,12 @@ time: "", location: "",
                             placeholder="지출 내용 (예: 동네마트 과일, 카페)"
                             value={manualExpenseForm.title}
                             onChange={(e) => setManualExpenseForm((p) => ({ ...p, title: e.target.value }))}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                e.preventDefault();
+                                document.getElementById("manual-expense-save-btn")?.click();
+                              }
+                            }}
                             className="flex-1 min-w-0 px-2.5 py-1.5 rounded-lg border border-stone-200 bg-white text-[12px] font-bold"
                           />
                           <input
@@ -28942,6 +28992,12 @@ time: "", location: "",
                             placeholder="금액(원)"
                             value={manualExpenseForm.amount}
                             onChange={(e) => setManualExpenseForm((p) => ({ ...p, amount: e.target.value }))}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                e.preventDefault();
+                                document.getElementById("manual-expense-save-btn")?.click();
+                              }
+                            }}
                             className="w-24 shrink-0 px-2 py-1.5 rounded-lg border border-stone-200 bg-white text-[12px] font-bold"
                           />
                         </div>
@@ -28949,11 +29005,12 @@ time: "", location: "",
                           <button
                             type="button"
                             onClick={() => setIsManualExpenseOpen(false)}
-                            className="px-2.5 py-1 rounded-lg bg-stone-200 hover:bg-stone-300 text-stone-700 text-[11px] font-extrabold whitespace-nowrap"
+                            className="px-2.5 py-1 rounded-lg bg-stone-200 hover:bg-stone-300 text-stone-700 text-[11px] font-extrabold whitespace-nowrap shrink-0"
                           >
                             취소
                           </button>
                           <button
+                            id="manual-expense-save-btn"
                             type="button"
                             onClick={async () => {
                               const title = String(manualExpenseForm.title || "").trim();
@@ -28968,18 +29025,21 @@ time: "", location: "",
                               }
                               const expId = `exp-man-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
                               const expDate = manualExpenseForm.date || getTodayStr();
+                              const expPayload = {
+                                id: expId,
+                                title,
+                                amount,
+                                category: manualExpenseForm.category || "기타",
+                                date: expDate,
+                                source: "manual",
+                                createdAtMs: Date.now()
+                              };
                               beginWrite();
                               try {
-                                await setDoc(getDocRef("family_expenses_v4", expId), {
-                                  id: expId,
-                                  title,
-                                  amount,
-                                  category: manualExpenseForm.category || "기타",
-                                  date: expDate,
-                                  source: "manual",
-                                  createdAtMs: Date.now()
-                                });
+                                await setDoc(getDocRef("family_expenses_v4", expId), expPayload);
+                                recordItemRevisionSafe("expense", expId, null, expPayload, "create", "직접 지출 등록");
                                 recordActivity("월간·식비", "지출등록", `${title} (${amount.toLocaleString()}원)`, { targetSubTab: "expense" });
+                                setManualExpenseForm((p) => ({ ...p, title: "", amount: "" }));
                                 setIsManualExpenseOpen(false);
                                 showToast(`💰 '${title}' ${amount.toLocaleString()}원을 원장에 기록했습니다!`);
                               } catch (e) {
@@ -28989,7 +29049,7 @@ time: "", location: "",
                                 endWrite();
                               }
                             }}
-                            className="px-3 py-1 rounded-lg bg-[#3F624D] hover:bg-[#324F3E] text-white text-[11px] font-extrabold whitespace-nowrap"
+                            className="px-3 py-1 rounded-lg bg-[#3F624D] hover:bg-[#324F3E] text-white text-[11px] font-extrabold whitespace-nowrap shrink-0"
                           >
                             저장
                           </button>
@@ -29086,6 +29146,7 @@ time: "", location: "",
                                     beginWrite();
                                     try {
                                       await deleteDoc(getDocRef("family_expenses_v4", exp.id));
+                                      recordItemRevisionSafe("expense", exp.id, exp, null, "delete", "수동 지출 삭제");
                                       showToast("🗑️ 지출 기록을 삭제했습니다.");
                                     } catch (e) {
                                       setSyncErrorMsg(e?.message || "지출 삭제 오류");
@@ -29123,10 +29184,42 @@ time: "", location: "",
                                     });
                                     setIsHouseModalOpen(true);
                                   }}
-                                  className="px-1.5 py-0.5 rounded-lg bg-stone-100 hover:bg-emerald-50 text-stone-500 hover:text-emerald-700 text-[10.5px] font-extrabold whitespace-nowrap"
+                                  className="px-1.5 py-0.5 rounded-lg bg-stone-100 hover:bg-[#EEF3EE] text-stone-500 hover:text-[#35503C] text-[10.5px] font-extrabold whitespace-nowrap"
                                   title="살림수첩 보증·A/S에 등록"
                                 >
                                   🛠️ 보증
+                                </button>
+                              )}
+                              {canEditTab("shopping") && exp.title && (
+                                <button
+                                  type="button"
+                                  onClick={async () => {
+                                    if (!requireEditorAccess("shopping")) return;
+                                    const cleanName = String(exp.title || "").trim();
+                                    if (!cleanName) return;
+                                    const dup = shoppingList.some((s) => !s.checked && String(s.name || "").trim().toLowerCase() === cleanName.toLowerCase());
+                                    if (dup) {
+                                      showToast(`🛒 '${cleanName}'은(는) 이미 장보기 목록에 있어요!`);
+                                      return;
+                                    }
+                                    const sid = `sh-exp-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+                                    const shCat = fridgeCategories.includes(exp.category) ? exp.category : (fridgeCategories[0] || "기타");
+                                    const shItem = { id: sid, name: cleanName, quantity: "1개", category: shCat, urgent: false, checked: false, memo: `월간식비 재구매 (${exp.date || ""})` };
+                                    setShoppingList((p) => [shItem, ...p]);
+                                    if (user && db) {
+                                      try {
+                                        await setDoc(getDocRef("family_shopping_v4", sid), shItem);
+                                      } catch (e) {
+                                        setSyncErrorMsg(e?.message || "장보기 담기 오류");
+                                      }
+                                    }
+                                    recordActivity("장보기", "추가", cleanName);
+                                    showToast(`🛒 '${cleanName}'을(를) 장보기에 담았습니다!`);
+                                  }}
+                                  className="px-1.5 py-0.5 rounded-lg bg-stone-100 hover:bg-[#EEF3EE] text-stone-500 hover:text-[#35503C] text-[10.5px] font-extrabold whitespace-nowrap"
+                                  title="장보기 목록에 다시 담기"
+                                >
+                                  🛒
                                 </button>
                               )}
                               <span className="font-extrabold text-stone-900 whitespace-nowrap">
@@ -34227,7 +34320,7 @@ time: "", location: "",
                                         )
                                       );
                                     }}
-                                    className="w-full px-2.5 py-1.5 rounded-lg bg-white border border-stone-200 text-[15px] font-extrabold text-stone-900"
+                                    className="w-full px-2.5 py-1.5 rounded-lg bg-white border border-stone-200 text-[13.5px] font-extrabold text-stone-900"
                                   />
                                   {it.completeness && !it.completeness.ok && (
                                     <div className="text-[12.5px] font-bold text-rose-700">
@@ -39697,7 +39790,7 @@ time: "", location: "",
                             <span className="inline-block px-2 py-0.5 rounded-md bg-rose-50 text-rose-700 text-[11.5px] font-extrabold mb-1 whitespace-nowrap">
                               {r.category || "기타"}
                             </span>
-                            <div className="text-[15px] font-black text-stone-900 break-keep">{r.title}</div>
+                            <div className="text-[13.5px] font-black text-stone-900 break-keep">{r.title}</div>
                           </div>
                           <div className="flex items-center gap-0.5 shrink-0">
                             {canEditTab("pages") && (
@@ -44117,10 +44210,7 @@ time: "", location: "",
       )}
 
 
-      {showScrollTop && !isQuickFabOpen && !isPageVisualEditMode && !isNoteBodyFocused && !isPagePasteModalOpen && !activeTableTaskModal && !isBucketModalOpen && (() => {
-        const isTimerPillVisibleAtDefault =
-          !kitchenTimer.open && !timerPillHidden && !timerPillPos && (kitchenTimer.running || (Number(kitchenTimer.elapsedSec) || 0) > 0 || (Number(kitchenTimer.remainingSec) || 0) > 0 || Boolean(kitchenTimer.cookStartTimeStr));
-        return (
+      {showScrollTop && !isQuickFabOpen && !isPageVisualEditMode && !isNoteBodyFocused && !isPagePasteModalOpen && !activeTableTaskModal && !isBucketModalOpen && (
         <button
           type="button"
           onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
@@ -44131,8 +44221,7 @@ time: "", location: "",
         >
           ↑
         </button>
-        );
-      })()}
+      )}
 
       {isEditorUnlocked && !isQuickFabOpen && !isPageVisualEditMode && !isNoteBodyFocused && !isPagePasteModalOpen && !activeTableTaskModal && !editingBlockId && !(activeTab === "bucket" && bucketViewMode === "map") && activeTab !== "condolence" && activeTab !== "alarm" && activeTab !== "fridge" && (
         <button
@@ -44964,7 +45053,7 @@ time: "", location: "",
               {activeDetail ? (
                 <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3 bg-white">
                   <div className="pb-2.5 border-b border-stone-300">
-                    <div className={`text-[15px] font-black text-stone-900 break-keep leading-snug ${activeDetail.done ? "line-through opacity-50" : ""}`}>
+                    <div className={`text-[13.5px] font-black text-stone-900 break-keep leading-snug ${activeDetail.done ? "line-through opacity-50" : ""}`}>
                       {activeDetail.title}
                     </div>
                   </div>
@@ -48948,6 +49037,7 @@ time: "", location: "",
           baby_temp_presets: { title: "🌡️ 체온 프리셋", placeholder: "예: 37.2|미열주의 또는 39.0|응급고열" },
           export_meal_goals: { title: "🎯 AI 내보내기 목표", placeholder: "새 식단 목표 (예: 이유식 병행, 저염 건강식)" },
           budget_presets: { title: "💰 식비 예산 프리셋", placeholder: "예: 90만 또는 950000" },
+          expense_categories: { title: "💳 지출 분류", placeholder: "새 지출 분류 (예: 외식/배달, 카페/간식, 육아용품)" },
           condolence_cat: { title: "💌 경조사 카테고리", placeholder: "새 경조사 분류 (예: 칠순/팔순, 집들이, 승진)" },
           condolence_group: { title: "👥 경조사 그룹", placeholder: "새 경조사 그룹 (예: 동호회, 대학동기, 거래처)" },
           condolence_pay: { title: "💳 경조사 결제수단", placeholder: "새 결제수단 (예: 카카오페이, 토스, 상품권, 화환)" },
@@ -49037,6 +49127,7 @@ time: "", location: "",
                   { id: "schedule_quick_times", label: "🕒 일정시간", cnt: scheduleQuickTimes.length },
                   { id: "export_meal_goals", label: "🎯 내보내기목표", cnt: exportMealGoals.length },
                   { id: "budget_presets", label: "💰 예산프리셋", cnt: budgetPresets.length },
+                  { id: "expense_categories", label: "💳 지출분류", cnt: expenseCategories.length },
                   ...(isSuhyeokAdmin && isCondolenceUnlocked ? [
                     { id: "condolence_cat", label: "💌 경조분류", cnt: condolenceCategories.length },
                     { id: "condolence_group", label: "👥 경조그룹", cnt: condolenceGroups.length },
@@ -54359,10 +54450,10 @@ time: "", location: "",
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-start justify-between gap-2">
-              <div>
-                <div className="flex items-center gap-1.5">
-                  <span className="text-lg">{getFridgeCategoryIcon(quickFridgeItem.category)}</span>
-                  <span className="text-[15px] font-black text-stone-900 truncate min-w-0">{quickFridgeItem.name}</span>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <span className="text-lg shrink-0">{getFridgeCategoryIcon(quickFridgeItem.category)}</span>
+                  <span className="text-[13.5px] font-black text-stone-900 truncate min-w-0">{quickFridgeItem.name}</span>
                 </div>
                 <div className="text-[12.5px] font-bold text-stone-500 mt-0.5">
                   {resolveItemShelfZone(quickFridgeItem)} ·{" "}
