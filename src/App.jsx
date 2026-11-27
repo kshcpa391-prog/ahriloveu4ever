@@ -205,6 +205,24 @@ import {
   DEFAULT_FRIDGE_UNITS,
   DEFAULT_RECIPE_DIFFICULTIES,
   DEFAULT_ROUTINE_ASSIGNEES,
+  extractKoreanChosung,
+  normalizeSearchText,
+  stripHtmlToPlainText,
+  matchesSearchQuery,
+  scoreSearchMatch,
+  GLOBAL_SEARCH_CATEGORIES,
+  REVISION_ENTITY_TYPES,
+  REVISION_EXCLUDED_STATES,
+  REVISION_PROTECTED_FIELDS,
+  sanitizeSnapshotForRevision,
+  computeRevisionDiff,
+  buildRestoredEntityPayload,
+  COOKED_UNITS,
+  COOKED_DISH_CATEGORIES,
+  roundQty2,
+  validatePortionOperation,
+  splitPortionForMove,
+  computeCookedBatchLedger,
   APP_FEATURE_GUIDES
 } from "./Constants";
 
@@ -5213,7 +5231,9 @@ function MainApp() {
           baby_sleep_types: Array.isArray(saved.baby_sleep_types) && saved.baby_sleep_types.length > 0 ? saved.baby_sleep_types.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_BABY_SLEEP_TYPES],
           fridge_units: Array.isArray(saved.fridge_units) && saved.fridge_units.length > 0 ? saved.fridge_units.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_FRIDGE_UNITS],
           recipe_difficulties: Array.isArray(saved.recipe_difficulties) && saved.recipe_difficulties.length > 0 ? saved.recipe_difficulties.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_RECIPE_DIFFICULTIES],
-          routine_assignees: Array.isArray(saved.routine_assignees) && saved.routine_assignees.length > 0 ? saved.routine_assignees.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_ROUTINE_ASSIGNEES]
+          routine_assignees: Array.isArray(saved.routine_assignees) && saved.routine_assignees.length > 0 ? saved.routine_assignees.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_ROUTINE_ASSIGNEES],
+          cooked_categories: Array.isArray(saved.cooked_categories) && saved.cooked_categories.length > 0 ? saved.cooked_categories.map((s) => String(s || "").trim()).filter(Boolean) : [...COOKED_DISH_CATEGORIES],
+          cooked_units: Array.isArray(saved.cooked_units) && saved.cooked_units.length > 0 ? saved.cooked_units.map((s) => String(s || "").trim()).filter(Boolean) : [...COOKED_UNITS]
         };
       }
     } catch (e) {}
@@ -5250,7 +5270,9 @@ function MainApp() {
       baby_sleep_types: [...DEFAULT_BABY_SLEEP_TYPES],
       fridge_units: [...DEFAULT_FRIDGE_UNITS],
       recipe_difficulties: [...DEFAULT_RECIPE_DIFFICULTIES],
-      routine_assignees: [...DEFAULT_ROUTINE_ASSIGNEES]
+      routine_assignees: [...DEFAULT_ROUTINE_ASSIGNEES],
+      cooked_categories: [...COOKED_DISH_CATEGORIES],
+      cooked_units: [...COOKED_UNITS]
     };
   });
   const fridgeCategories = customCategories.fridge;
@@ -5286,6 +5308,8 @@ function MainApp() {
   const fridgeUnits = customCategories.fridge_units || DEFAULT_FRIDGE_UNITS;
   const recipeDifficulties = customCategories.recipe_difficulties || DEFAULT_RECIPE_DIFFICULTIES;
   const routineAssignees = customCategories.routine_assignees || DEFAULT_ROUTINE_ASSIGNEES;
+  const cookedDishCategories = customCategories.cooked_categories || COOKED_DISH_CATEGORIES;
+  const cookedUnits = customCategories.cooked_units || COOKED_UNITS;
   const [isManualExpenseOpen, setIsManualExpenseOpen] = useState(false);
   const [manualExpenseForm, setManualExpenseForm] = useState(() => ({
     date: getTodayStr(),
@@ -6249,6 +6273,8 @@ function MainApp() {
   const isTodoScheduleItem = (item) =>
     Boolean(item && (item.isTodo === true || item.category === "할일(To-Do)" || item.category === "할일"));
 
+
+
   const handleStartEditRoutine = (rt) => {
     if (!requireEditorAccess("routines") || !rt) return;
     setEditingRoutineId(rt.id);
@@ -6527,6 +6553,148 @@ function MainApp() {
   });
   const [newRoutineAttachments, setNewRoutineAttachments] = useState([]);
   const [newRoutineMemo, setNewRoutineMemo] = useState("");
+
+  // ==========================================================================
+  // v14.47 ① 메뉴 통합검색 · ② 영구 수정이력/복원 · ③ 만든 반찬·소분 음식 상태
+  // ==========================================================================
+  const [isGlobalSearchOpen, setIsGlobalSearchOpen] = useState(false);
+  const [globalSearchInput, setGlobalSearchInput] = useState("");
+  const [globalSearchQuery, setGlobalSearchQuery] = useState("");
+  const isGlobalSearchComposingRef = useRef(false);
+  const [globalSearchCat, setGlobalSearchCat] = useState("all");
+  const [globalSearchPeriod, setGlobalSearchPeriod] = useState("all");
+  const [globalSearchMember, setGlobalSearchMember] = useState("전체");
+  const [globalSearchReturnReady, setGlobalSearchReturnReady] = useState(false);
+  const globalSearchScrollRef = useRef(null);
+  const globalSearchSavedScrollTopRef = useRef(0);
+  const [recentGlobalSearches, setRecentGlobalSearches] = useState([]);
+
+  // ② 항목별 영구 수정 이력 · 오프라인 대기 큐
+  const [itemRevisions, setItemRevisions] = useState([]);
+  const [revisionModalState, setRevisionModalState] = useState({
+    open: false,
+    entityType: "",
+    entityId: "",
+    entityTitle: "",
+    currentItem: null,
+    tabKey: "",
+    pageSize: 15,
+    selectedRevId: "",
+    restorePreviewRev: null,
+    conflictError: ""
+  });
+  const [offlineMutationQueue, setOfflineMutationQueue] = useState(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem("kim_offline_mutation_queue_v1") || "[]");
+      return Array.isArray(saved) ? saved : [];
+    } catch (e) {
+      return [];
+    }
+  });
+  const [pendingRetryAction, setPendingRetryAction] = useState(null);
+
+  // ③ 만든 반찬 · 소분 음식 관리 (기존 냉장고 탭 내부 통합)
+  const [fridgeSectionMode, setFridgeSectionMode] = useState(() => {
+    try {
+      const v = localStorage.getItem("kim_fridge_section_mode_v1");
+      return ["all", "raw", "cooked"].includes(v) ? v : "all";
+    } catch (e) { return "all"; }
+  });
+  const [cookedBatches, setCookedBatches] = useState([]);
+  const [cookedPortions, setCookedPortions] = useState([]);
+  const [cookedLogs, setCookedLogs] = useState([]);
+  const [showDepletedCooked, setShowDepletedCooked] = useState(() => {
+    try { return localStorage.getItem("kim_show_depleted_cooked_v1") === "true"; } catch (e) { return false; }
+  });
+  const [activeCookedBatchId, setActiveCookedBatchId] = useState("");
+  const cookedViewPrefsInitRef = useRef(false);
+  useEffect(() => {
+    try {
+      localStorage.setItem("kim_fridge_section_mode_v1", fridgeSectionMode);
+      localStorage.setItem("kim_show_depleted_cooked_v1", String(showDepletedCooked));
+    } catch (e) {}
+    if (!cookedViewPrefsInitRef.current) {
+      cookedViewPrefsInitRef.current = true;
+      return;
+    }
+    if (isApplyingRemoteViewPrefsRef.current || !user || !db) return;
+    const tid = setTimeout(() => {
+      setDoc(
+        getDocRef("family_meta_v4", "home_layout"),
+        { fridgeSectionMode, showDepletedCooked, updatedAtMs: Date.now() },
+        { merge: true }
+      ).catch(() => {});
+    }, 450);
+    return () => clearTimeout(tid);
+  }, [fridgeSectionMode, showDepletedCooked, user]);
+  const [isCookedModalOpen, setIsCookedModalOpen] = useState(false);
+  const [cookedForm, setCookedForm] = useState({
+    name: "",
+    cookedAt: getTodayStr(),
+    totalQty: "4",
+    unit: "인분",
+    category: "국·찌개",
+    immediateEatQty: "0",
+    immediateEatMember: "온가족",
+    portions: [{ qty: "2", location: "냉장실", plannedEatDate: "", expiryDate: "" }, { qty: "2", location: "메인 냉동실", plannedEatDate: "", expiryDate: "" }],
+    recipeId: "",
+    recipeTitle: "",
+    members: ["수혁", "아리나"],
+    photoUrl: "",
+    memo: "",
+    deductRawIngredients: false,
+    rawDeductPreview: []
+  });
+  const [cookedActionModal, setCookedActionModal] = useState({
+    open: false,
+    type: "consume", // consume | move | discard | adjust
+    portion: null,
+    qty: "1",
+    member: "온가족",
+    targetLocation: "냉장실",
+    reason: "",
+    linkToMeal: true,
+    mealSlot: "저녁",
+    mealDate: getTodayStr()
+  });
+
+  // 한글 IME 조합 안전 디바운스 검색어 반영
+  useEffect(() => {
+    if (isGlobalSearchComposingRef.current) return;
+    const tid = setTimeout(() => {
+      setGlobalSearchQuery(globalSearchInput);
+    }, 110);
+    return () => clearTimeout(tid);
+  }, [globalSearchInput]);
+
+  // 계정 전환 · 로그아웃 · 권한 변경 시 검색 캐시/상태 자동 정리 + 사용자별 최근 검색어 분리
+  useEffect(() => {
+    setGlobalSearchInput("");
+    setGlobalSearchQuery("");
+    setGlobalSearchCat("all");
+    setGlobalSearchPeriod("all");
+    setGlobalSearchMember("전체");
+    setGlobalSearchReturnReady(false);
+    const key = `kim_global_search_recent_v1_${user?.uid || "guest"}`;
+    try {
+      const saved = JSON.parse(localStorage.getItem(key) || "[]");
+      setRecentGlobalSearches(Array.isArray(saved) ? saved.slice(0, 10) : []);
+    } catch (e) {
+      setRecentGlobalSearches([]);
+    }
+  }, [user?.uid, accessRole, isCondolenceUnlocked]);
+
+  const saveRecentGlobalSearch = (term) => {
+    const clean = String(term || "").trim();
+    if (!clean || clean.length < 1) return;
+    const key = `kim_global_search_recent_v1_${user?.uid || "guest"}`;
+    setRecentGlobalSearches((prev) => {
+      const next = [clean, ...prev.filter((x) => x !== clean)].slice(0, 10);
+      try { localStorage.setItem(key, JSON.stringify(next)); } catch (e) {}
+      return next;
+    });
+  };
+
 
 
   // 식단 모달 상태
@@ -9476,6 +9644,51 @@ function MainApp() {
         (err) => setSyncErrorMsg(err?.message || "레시피 동기화 오류")
       )
     );
+    unsubscribers.push(
+      onSnapshot(
+        getColRef("family_cooked_batches_v1"),
+        (snap) => {
+          const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+          list.sort((a, b) => String(b.cookedAt || "").localeCompare(String(a.cookedAt || "")) || (b.updatedAtMs || 0) - (a.updatedAtMs || 0));
+          setCookedBatches(list);
+        },
+        (err) => setSyncErrorMsg(err?.message || "만든 음식 동기화 오류")
+      )
+    );
+    unsubscribers.push(
+      onSnapshot(
+        getColRef("family_cooked_portions_v1"),
+        (snap) => {
+          const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+          list.sort((a, b) => (b.updatedAtMs || 0) - (a.updatedAtMs || 0));
+          setCookedPortions(list);
+        },
+        (err) => setSyncErrorMsg(err?.message || "소분 음식 동기화 오류")
+      )
+    );
+    unsubscribers.push(
+      onSnapshot(
+        getColRef("family_cooked_logs_v1"),
+        (snap) => {
+          const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+          list.sort((a, b) => (b.createdAtMs || 0) - (a.createdAtMs || 0));
+          setCookedLogs(list);
+        },
+        (err) => setSyncErrorMsg(err?.message || "음식 섭취이력 동기화 오류")
+      )
+    );
+    unsubscribers.push(
+      onSnapshot(
+        getColRef("family_revisions_v1"),
+        (snap) => {
+          const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+          list.sort((a, b) => (b.createdAtMs || 0) - (a.createdAtMs || 0));
+          setItemRevisions(list);
+        },
+        () => {}
+      )
+    );
+
 
 
     unsubscribers.push(
@@ -9607,6 +9820,14 @@ function MainApp() {
           if (typeof d?.todoIncludeOtherCats === "boolean") {
             setTodoIncludeOtherCats(d.todoIncludeOtherCats);
             try { localStorage.setItem("kim_todo_include_other_v1", String(d.todoIncludeOtherCats)); } catch (e) {}
+          }
+          if (["all", "raw", "cooked"].includes(d?.fridgeSectionMode)) {
+            setFridgeSectionMode(d.fridgeSectionMode);
+            try { localStorage.setItem("kim_fridge_section_mode_v1", d.fridgeSectionMode); } catch (e) {}
+          }
+          if (typeof d?.showDepletedCooked === "boolean") {
+            setShowDepletedCooked(d.showDepletedCooked);
+            try { localStorage.setItem("kim_show_depleted_cooked_v1", String(d.showDepletedCooked)); } catch (e) {}
           }
           setTimeout(() => { isApplyingRemoteViewPrefsRef.current = false; }, 120);
         },
@@ -9789,7 +10010,9 @@ function MainApp() {
               baby_sleep_types: Array.isArray(d.baby_sleep_types) && d.baby_sleep_types.length > 0 ? d.baby_sleep_types.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_BABY_SLEEP_TYPES],
               fridge_units: Array.isArray(d.fridge_units) && d.fridge_units.length > 0 ? d.fridge_units.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_FRIDGE_UNITS],
               recipe_difficulties: Array.isArray(d.recipe_difficulties) && d.recipe_difficulties.length > 0 ? d.recipe_difficulties.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_RECIPE_DIFFICULTIES],
-              routine_assignees: Array.isArray(d.routine_assignees) && d.routine_assignees.length > 0 ? d.routine_assignees.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_ROUTINE_ASSIGNEES]
+              routine_assignees: Array.isArray(d.routine_assignees) && d.routine_assignees.length > 0 ? d.routine_assignees.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_ROUTINE_ASSIGNEES],
+              cooked_categories: Array.isArray(d.cooked_categories) && d.cooked_categories.length > 0 ? d.cooked_categories.map((s) => String(s || "").trim()).filter(Boolean) : [...COOKED_DISH_CATEGORIES],
+              cooked_units: Array.isArray(d.cooked_units) && d.cooked_units.length > 0 ? d.cooked_units.map((s) => String(s || "").trim()).filter(Boolean) : [...COOKED_UNITS]
             };
             setCustomCategories(nextCats);
             try { localStorage.setItem("kim_custom_categories_v1", JSON.stringify(nextCats)); } catch (e) {}
@@ -10613,6 +10836,10 @@ function MainApp() {
         customAlarms,
         customAlarmSounds,
         alarmDefaultVolume,
+        cookedBatches,
+        cookedPortions,
+        cookedLogs,
+        itemRevisions,
         ...(isAdminUnlocked ? { babyDiaryEntries: safeDiaryEntries, privateSchedules } : {}),
         ...(isSuhyeokAdmin ? { condolenceList } : {}),
         ...(isSuhyeokAdmin ? { condolencePin } : {})
@@ -10882,7 +11109,9 @@ function MainApp() {
           baby_sleep_types: Array.isArray(payload.customCategories.baby_sleep_types) && payload.customCategories.baby_sleep_types.length > 0 ? payload.customCategories.baby_sleep_types.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_BABY_SLEEP_TYPES],
           fridge_units: Array.isArray(payload.customCategories.fridge_units) && payload.customCategories.fridge_units.length > 0 ? payload.customCategories.fridge_units.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_FRIDGE_UNITS],
           recipe_difficulties: Array.isArray(payload.customCategories.recipe_difficulties) && payload.customCategories.recipe_difficulties.length > 0 ? payload.customCategories.recipe_difficulties.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_RECIPE_DIFFICULTIES],
-          routine_assignees: Array.isArray(payload.customCategories.routine_assignees) && payload.customCategories.routine_assignees.length > 0 ? payload.customCategories.routine_assignees.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_ROUTINE_ASSIGNEES]
+          routine_assignees: Array.isArray(payload.customCategories.routine_assignees) && payload.customCategories.routine_assignees.length > 0 ? payload.customCategories.routine_assignees.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_ROUTINE_ASSIGNEES],
+          cooked_categories: Array.isArray(payload.customCategories.cooked_categories) && payload.customCategories.cooked_categories.length > 0 ? payload.customCategories.cooked_categories.map((s) => String(s || "").trim()).filter(Boolean) : [...COOKED_DISH_CATEGORIES],
+          cooked_units: Array.isArray(payload.customCategories.cooked_units) && payload.customCategories.cooked_units.length > 0 ? payload.customCategories.cooked_units.map((s) => String(s || "").trim()).filter(Boolean) : [...COOKED_UNITS]
         };
         setCustomCategories(nextCats);
         try { localStorage.setItem("kim_custom_categories_v1", JSON.stringify(nextCats)); } catch (e) {}
@@ -11208,6 +11437,8 @@ function MainApp() {
                 fridge_units: Array.isArray(payload.customCategories.fridge_units) && payload.customCategories.fridge_units.length > 0 ? payload.customCategories.fridge_units : [...DEFAULT_FRIDGE_UNITS],
                 recipe_difficulties: Array.isArray(payload.customCategories.recipe_difficulties) && payload.customCategories.recipe_difficulties.length > 0 ? payload.customCategories.recipe_difficulties : [...DEFAULT_RECIPE_DIFFICULTIES],
                 routine_assignees: Array.isArray(payload.customCategories.routine_assignees) && payload.customCategories.routine_assignees.length > 0 ? payload.customCategories.routine_assignees : [...DEFAULT_ROUTINE_ASSIGNEES],
+                cooked_categories: Array.isArray(payload.customCategories.cooked_categories) && payload.customCategories.cooked_categories.length > 0 ? payload.customCategories.cooked_categories : [...COOKED_DISH_CATEGORIES],
+                cooked_units: Array.isArray(payload.customCategories.cooked_units) && payload.customCategories.cooked_units.length > 0 ? payload.customCategories.cooked_units : [...COOKED_UNITS],
                 updatedAtMs: Date.now()
               },
               { merge: true }
@@ -11222,6 +11453,26 @@ function MainApp() {
               { merge: true }
             )
           );
+        }
+        if (Array.isArray(payload.cookedBatches)) {
+          payload.cookedBatches.forEach((b) => {
+            if (b?.id) writePromises.push(setDoc(getDocRef("family_cooked_batches_v1", b.id), b, { merge: true }));
+          });
+        }
+        if (Array.isArray(payload.cookedPortions)) {
+          payload.cookedPortions.forEach((p) => {
+            if (p?.id) writePromises.push(setDoc(getDocRef("family_cooked_portions_v1", p.id), p, { merge: true }));
+          });
+        }
+        if (Array.isArray(payload.cookedLogs)) {
+          payload.cookedLogs.forEach((l) => {
+            if (l?.id) writePromises.push(setDoc(getDocRef("family_cooked_logs_v1", l.id), l, { merge: true }));
+          });
+        }
+        if (Array.isArray(payload.itemRevisions)) {
+          payload.itemRevisions.forEach((rv) => {
+            if (rv?.id) writePromises.push(setDoc(getDocRef("family_revisions_v1", rv.id), rv, { merge: true }));
+          });
         }
         if (Array.isArray(payload.deletedIds) && payload.deletedIds.length > 0) {
           writePromises.push(
@@ -14533,6 +14784,11 @@ const priceStr = exportIncludePrice && safeItPrice > 0 ? `${safeItPrice.toLocale
       sourceType: mealForm.sourceType || "집밥/온가족식",
       cost: Number(mealForm.cost) || 0,
       mealStatus: mealForm.mealStatus || (mealForm.date > getTodayStr() ? "planned" : "recorded"),
+      ...(mealForm.cookedPortionId ? {
+        cookedPortionId: mealForm.cookedPortionId,
+        cookedBatchId: mealForm.cookedBatchId || "",
+        cookedQty: roundQty2(mealForm.cookedQty || 1)
+      } : {}),
       updatedAt: new Date().toISOString()
     };
 
@@ -14668,18 +14924,64 @@ const priceStr = exportIncludePrice && safeItPrice > 0 ? `${safeItPrice.toLocale
     e.stopPropagation();
     if (!requireEditorAccess("daily")) return;
     if (!user || !db) return;
-    const updated = { ...meal, mealStatus: "recorded", updatedAt: new Date().toISOString() };
+    const nowMs = Date.now();
+    const consumeOpId = `op-meal-eat-${meal.id}`;
+    const updated = {
+      ...meal,
+      mealStatus: "recorded",
+      ...(meal.cookedPortionId ? { cookedConsumedOpId: consumeOpId } : {}),
+      updatedAt: new Date(nowMs).toISOString(),
+      updatedAtMs: nowMs
+    };
     try {
-      await setDoc(getDocRef("family_meals_v3", meal.id), updated);
-      await setDoc(getDocRef("family_meals_v4", meal.id), updated);
+      await runTransaction(db, async (tx) => {
+        if (meal.cookedPortionId && !meal.cookedConsumedOpId) {
+          const pRef = getDocRef("family_cooked_portions_v1", meal.cookedPortionId);
+          const pSnap = await tx.get(pRef);
+          if (pSnap.exists()) {
+            const pCur = pSnap.data();
+            if (pCur.lastOpId !== consumeOpId) {
+              const eatQ = Math.min(roundQty2(pCur.remainingQty), roundQty2(meal.cookedQty || 1));
+              if (eatQ > 0) {
+                const nextRem = roundQty2(roundQty2(pCur.remainingQty) - eatQ);
+                tx.set(pRef, {
+                  ...pCur,
+                  remainingQty: nextRem,
+                  status: nextRem <= 0 ? "depleted" : "active",
+                  version: (Number(pCur.version) || 1) + 1,
+                  lastOpId: consumeOpId,
+                  updatedAtMs: nowMs
+                }, { merge: true });
+                const logId = `cl-${nowMs}-meal`;
+                tx.set(getDocRef("family_cooked_logs_v1", logId), {
+                  id: logId,
+                  batchId: pCur.batchId,
+                  portionId: pCur.id,
+                  type: "consume",
+                  qty: eatQ,
+                  unit: pCur.unit,
+                  member: toSafeArray(meal.members).join("·") || "온가족",
+                  mealId: meal.id,
+                  reason: "계획 식단 완료 섭취",
+                  opId: consumeOpId,
+                  actorName: actorName || "가족",
+                  createdAtMs: nowMs
+                });
+              }
+            }
+          }
+        }
+        tx.set(getDocRef("family_meals_v3", meal.id), updated);
+        tx.set(getDocRef("family_meals_v4", meal.id), updated);
+      });
       setMealsMap((prev) => ({ ...prev, local: { ...(prev.local || {}), [meal.id]: updated } }));
       recordActivity("식단", "기록전환", `${meal.date} ${meal.slot} · ${meal.menu}`, {
         beforeText: "계획 식단",
         afterText: "실제 기록"
       });
-      showToast("✅ 실제 먹은 식단으로 기록되었습니다!");
+      showToast(meal.cookedPortionId ? "✅ 먹음 기록 완료! (연결된 만든 음식 잔량 1회 차감)" : "✅ 실제 먹은 식단으로 기록되었습니다!");
     } catch (err) {
-      showToast("⚠️ 상태 변경 실패");
+      showToast(`⚠️ 상태 변경 실패: ${err?.message || "네트워크 오류"}`);
     }
   };
 
@@ -14687,6 +14989,10 @@ const priceStr = exportIncludePrice && safeItPrice > 0 ? `${safeItPrice.toLocale
   const handleCopyTodayBriefing = async () => {
     const today = getTodayStr();
     const linesOut = [`🏡 [우리 가족 오늘 브리핑 · ${today}]`];
+    const activeCooked = cookedPortions.filter((p) => roundQty2(p.remainingQty) > 0);
+    if (activeCooked.length > 0) {
+      linesOut.push(`🍲 남은 만든 음식: ${activeCooked.slice(0, 5).map((p) => `${p.dishName} ${p.remainingQty}${p.unit}(${p.location})`).join(", ")}`);
+    }
     if (weatherInfo) {
       linesOut.push(`🌤️ 날씨: ${weatherInfo.temp}°C (${weatherInfo.min}°/${weatherInfo.max}°) · ${weatherInfo.rainBarText || "☔ 0%"} · 미세 ${weatherInfo.pm10}(${weatherInfo.dust?.label || "-"})`);
       if (weatherInfo.hasUpcomingRain && weatherInfo.rainAlertText) {
@@ -16090,6 +16396,13 @@ const priceStr = exportIncludePrice && safeItPrice > 0 ? `${safeItPrice.toLocale
       showToast("⚠️ 서버 연결 후 삭제할 수 있습니다.");
       return;
     }
+    let restorePortionQty = false;
+    if (meal?.cookedPortionId && meal?.cookedConsumedOpId && roundQty2(meal.cookedQty) > 0) {
+      restorePortionQty = await askConfirm(
+        `이 식단은 만든 음식(${meal.cookedQty}) 섭취와 연결되어 있습니다.\n삭제 시 차감되었던 만든 음식 잔량도 함께 복구할까요?`,
+        "잔량 함께 복구"
+      );
+    }
     const entry = createLogEntryPayload("meal", meal.menu || "식단", meal, "delete");
     beginWrite();
     let ok = false;
@@ -16098,6 +16411,35 @@ const priceStr = exportIncludePrice && safeItPrice > 0 ? `${safeItPrice.toLocale
       const batch = writeBatch(db);
       batch.set(getDocRef("family_deleted_logs_v8", entry.logId), entry);
       batch.set(getDocRef("family_meta_v4", "deleted_tracker"), { ids: arrayUnion(meal.id) }, { merge: true });
+      if (restorePortionQty && meal?.cookedPortionId) {
+        const linkedP = cookedPortions.find((p) => p.id === meal.cookedPortionId);
+        if (linkedP) {
+          const nextRem = roundQty2(roundQty2(linkedP.remainingQty) + roundQty2(meal.cookedQty || 0));
+          batch.set(getDocRef("family_cooked_portions_v1", linkedP.id), {
+            ...linkedP,
+            remainingQty: nextRem,
+            status: nextRem > 0 ? "active" : "depleted",
+            version: (Number(linkedP.version) || 1) + 1,
+            updatedAtMs: Date.now()
+          }, { merge: true });
+          const adjLogId = `cl-${Date.now()}-mealdel`;
+          batch.set(getDocRef("family_cooked_logs_v1", adjLogId), {
+            id: adjLogId,
+            batchId: linkedP.batchId,
+            portionId: linkedP.id,
+            type: "adjust",
+            qty: roundQty2(meal.cookedQty || 0),
+            delta: roundQty2(meal.cookedQty || 0),
+            unit: linkedP.unit,
+            member: actorName || "가족",
+            mealId: meal.id,
+            reason: "연결 식단 삭제로 인한 잔량 복구",
+            opId: `op-mealdel-${meal.id}`,
+            actorName: actorName || "가족",
+            createdAtMs: Date.now()
+          });
+        }
+      }
       batch.delete(getDocRef("family_meals_v3", meal.id));
       batch.delete(getDocRef("family_meals_v4", meal.id));
       await batch.commit();
@@ -16473,36 +16815,37 @@ const priceStr = exportIncludePrice && safeItPrice > 0 ? `${safeItPrice.toLocale
     };
 
 
+    const revRes = await commitEntityWithRevision({
+      colName: "family_recipes_v8",
+      docId: id,
+      entityType: "recipe",
+      entityTitle: payload.title,
+      tabKey: "recipes",
+      nextData: payload,
+      prevData: editingRecipe || null,
+      action: editingRecipe ? "update" : "create"
+    });
+    if (!revRes.ok) {
+      // 실패 시 모달과 입력 내용 100% 보존 + 재시도 가능
+      setPendingRetryAction(() => () => handleSaveRecipe());
+      showToast(`⚠️ ${revRes.error || "레시피 저장 실패 — 입력 내용이 유지되었습니다. 다시 시도해 주세요."}`);
+      return;
+    }
+    setPendingRetryAction(null);
+    const savedPayload = revRes.payload || payload;
     setRecipes((prev) => {
       const exists = prev.some((r) => r.id === id);
-      return exists ? prev.map((r) => (r.id === id ? payload : r)) : [payload, ...prev];
+      return exists ? prev.map((r) => (r.id === id ? savedPayload : r)) : [savedPayload, ...prev];
     });
     setIsRecipeModalOpen(false);
     setEditingRecipe(null);
-
-
-    if (user && db) {
-      beginWrite();
-      let ok = false;
-      let errMsg = "";
-      try {
-        await setDoc(getDocRef("family_recipes_v8", id), payload);
-        ok = true;
-      } catch (e) {
-        errMsg = e?.message || "레시피 저장 오류";
-        showToast("⚠️ 레시피 서버 저장 실패 — 로컬에는 반영되었습니다.");
-        return;
-      } finally {
-        endWrite(ok, errMsg);
-      }
-    }
-    recordActivity("레시피", editingRecipe ? "수정" : "등록", `${recipeForm.title || ""}`);
+    recordActivity("레시피", editingRecipe ? "수정" : "등록", `${savedPayload.title || ""}`);
     showToast("📖 가족 레시피북에 저장되었습니다!");
   };
 
 
   const handleDeleteRecipe = async (recipeId) => {
-    if (!requireEditorAccess()) return;
+    if (!requireEditorAccess("recipes")) return;
     if (!await askConfirm("이 레시피를 가족 레시피북에서 삭제할까요?")) return;
     setRecipes((prev) => prev.filter((r) => r.id !== recipeId));
     if (user && db) {
@@ -18094,31 +18437,29 @@ const priceStr = exportIncludePrice && safeItPrice > 0 ? `${safeItPrice.toLocale
 
   const savePageToCloud = async (pageObj) => {
     const prevSnapshot = familyPages.find((p) => p.id === pageObj.id) || null;
-    setFamilyPages((prev) => {
-      const exists = prev.some((p) => p.id === pageObj.id);
-      return exists ? prev.map((p) => (p.id === pageObj.id ? pageObj : p)) : [...prev, pageObj];
+    const revRes = await commitEntityWithRevision({
+      colName: "family_pages_v1",
+      docId: pageObj.id,
+      entityType: "page",
+      entityTitle: pageObj.title || "공유노트",
+      tabKey: "pages",
+      nextData: pageObj,
+      prevData: prevSnapshot,
+      action: prevSnapshot ? "update" : "create"
     });
-    if (user && db) {
-      beginWrite();
-      try {
-        await setDoc(getDocRef("family_pages_v1", pageObj.id), pageObj, { merge: true });
-        endWrite(true, "");
-        return { ok: true };
-      } catch (err) {
-        setFamilyPages((prev) =>
-          prevSnapshot
-            ? prev.map((p) => (p.id === pageObj.id ? prevSnapshot : p))
-            : prev.filter((p) => p.id !== pageObj.id)
-        );
-        const msg = err?.message?.includes("exceeds")
-          ? "⚠️ 첨부 용량이 너무 커서 저장하지 못했습니다."
-          : "⚠️ 공유노트 클라우드 저장에 실패했습니다.";
-        endWrite(false, msg);
-        showToast(msg);
-        return { ok: false, error: msg };
-      }
+    if (!revRes.ok) {
+      const msg = revRes.error?.includes("exceeds")
+        ? "⚠️ 첨부 용량이 너무 커서 저장하지 못했습니다."
+        : `⚠️ ${revRes.error || "공유노트 클라우드 저장에 실패했습니다."}`;
+      showToast(msg);
+      return { ok: false, queued: Boolean(revRes.queued), error: msg };
     }
-    return { ok: true };
+    const saved = revRes.payload || pageObj;
+    setFamilyPages((prev) => {
+      const exists = prev.some((p) => p.id === saved.id);
+      return exists ? prev.map((p) => (p.id === saved.id ? saved : p)) : [...prev, saved];
+    });
+    return { ok: true, payload: saved };
   };
   // === 메뉴 간 원탭 연계 헬퍼 (v12.65) ===
   const handleSendPageTodosToShopping = async (page) => {
@@ -18374,7 +18715,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
 
   // === ⚙️ 통합 세부 카테고리 자유 관리 (재료 · 레시피 · 가족공지) ===
   const getCategoryTabKey = (kind) => {
-    if (kind === "fridge" || kind === "fridge_locations" || kind === "fridge_units") return "fridge";
+    if (kind === "fridge" || kind === "fridge_locations" || kind === "fridge_units" || kind === "cooked_categories" || kind === "cooked_units") return "fridge";
     if (kind === "shopping_presets") return "shopping";
     if (kind === "recipe" || kind === "recipe_difficulties") return "recipes";
     if (kind === "bucket") return "bucket";
@@ -18894,6 +19235,10 @@ ${item.memo}` : `${item.title} 다녀옴!`,
         ? [...DEFAULT_RECIPE_DIFFICULTIES]
         : kind === "routine_assignees"
         ? [...DEFAULT_ROUTINE_ASSIGNEES]
+        : kind === "cooked_categories"
+        ? [...COOKED_DISH_CATEGORIES]
+        : kind === "cooked_units"
+        ? [...COOKED_UNITS]
         : [...NOTICE_CATEGORIES];
     await saveCustomCategoriesToCloud({ ...customCategories, [kind]: defaults }, "↺ 기본 분류 목록으로 복원했습니다.");
   };
@@ -21126,7 +21471,11 @@ ${item.memo}` : `${item.title} 다녀옴!`,
       !isPageEmojiPickerOpen &&
       !showAdminInboxModal &&
       !showRolePermModal &&
-      !showSendAdminNoteModal
+      !showSendAdminNoteModal &&
+      !isGlobalSearchOpen &&
+      !revisionModalState.open &&
+      !isCookedModalOpen &&
+      !cookedActionModal.open
     ) return;
     const onEsc = (e) => {
       if (e.key === "Escape") {
@@ -21138,6 +21487,10 @@ ${item.memo}` : `${item.title} 다녀옴!`,
         setIsRoutineRangeEditOpen(false);
         setIsQuickFabOpen(false);
         setIsRoutineModalOpen(false);
+        setIsGlobalSearchOpen(false);
+        setRevisionModalState((p) => ({ ...p, open: false, restorePreviewRev: null }));
+        setIsCookedModalOpen(false);
+        setCookedActionModal((p) => ({ ...p, open: false }));
         setIsActivityModalOpen(false);
         setIsEditorUnlockModalOpen(false);
         setIsMealCopyModalOpen(false);
@@ -21240,6 +21593,1128 @@ ${item.memo}` : `${item.title} 다녀옴!`,
     return `#${parts.join("&")}`;
   };
 
+  // ==========================================================================
+  // v14.47 ② 항목별 영구 수정 이력 · 원자적 저장 · 버전 충돌 감지 · 안전 복원
+  // ==========================================================================
+  const enqueueOfflineMutation = (entry) => {
+    setOfflineMutationQueue((prev) => {
+      if (prev.some((x) => x.opId === entry.opId)) return prev;
+      const next = [...prev, { ...entry, queuedAtMs: Date.now() }];
+      try { localStorage.setItem("kim_offline_mutation_queue_v1", JSON.stringify(next)); } catch (e) {}
+      return next;
+    });
+  };
+
+  const commitEntityWithRevision = async ({
+    colName,
+    extraColName = "",
+    docId,
+    entityType,
+    entityTitle = "",
+    tabKey = "",
+    nextData,
+    prevData = null,
+    action = "update",
+    opId = "",
+    linkedEffectNote = ""
+  }) => {
+    const cleanOpId = opId || `op-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    const nowMs = Date.now();
+    const nowIso = new Date(nowMs).toISOString();
+    const baseVersion = Number(prevData?.version) || 0;
+    const nextVersion = baseVersion + 1;
+    const payload = {
+      ...nextData,
+      id: docId,
+      version: nextVersion,
+      lastOpId: cleanOpId,
+      updatedAt: nowIso,
+      updatedAtMs: nowMs
+    };
+
+    if (!navigator.onLine || !user || !db) {
+      enqueueOfflineMutation({
+        opId: cleanOpId,
+        colName,
+        extraColName,
+        docId,
+        entityType,
+        entityTitle,
+        tabKey,
+        payload,
+        prevData: prevData ? sanitizeSnapshotForRevision(prevData) : null,
+        baseVersion,
+        action,
+        linkedEffectNote
+      });
+      return { ok: false, queued: true, error: "오프라인 상태입니다. 대기열에 보관했으며 온라인 복귀 시 버전·권한 확인 후 반영됩니다.", payload };
+    }
+
+    const hasExistingRevision = itemRevisions.some((r) => r.entityType === entityType && r.entityId === docId);
+    const prevSanitized = prevData ? sanitizeSnapshotForRevision(prevData) : null;
+    const nextSanitized = sanitizeSnapshotForRevision(payload);
+    const diffs = prevSanitized ? computeRevisionDiff(prevSanitized, nextSanitized) : [];
+    const diffSummary =
+      action === "create"
+        ? "신규 등록"
+        : action === "restore"
+        ? `과거 버전 복원 (${diffs.length}개 항목 변경)`
+        : action === "delete"
+        ? "삭제"
+        : diffs.length > 0
+        ? diffs.slice(0, 3).map((d) => `${d.label}`).join(", ") + (diffs.length > 3 ? ` 외 ${diffs.length - 3}건` : "") + " 수정"
+        : "내용 저장";
+
+    beginWrite();
+    let ok = false;
+    let errMsg = "";
+    let conflictServerDoc = null;
+    try {
+      await runTransaction(db, async (tx) => {
+        const targetRef = getDocRef(colName, docId);
+        const snap = await tx.get(targetRef);
+        if (snap.exists()) {
+          const srv = snap.data();
+          if (srv.lastOpId && srv.lastOpId === cleanOpId) {
+            return; // Idempotent retry
+          }
+          const srvVer = Number(srv.version) || 0;
+          if (prevData && srvVer > 0 && baseVersion > 0 && srvVer !== baseVersion) {
+            conflictServerDoc = srv;
+            throw new Error("VERSION_CONFLICT");
+          }
+        }
+        // Baseline preservation: before first edit of an existing item without prior revision
+        if (prevSanitized && !hasExistingRevision && action !== "create") {
+          const baseRevId = `rev-${entityType}-${docId}-base-${nowMs - 1}`;
+          tx.set(getDocRef("family_revisions_v1", baseRevId), {
+            id: baseRevId,
+            entityType,
+            entityId: docId,
+            entityTitle: String(entityTitle || prevData?.title || prevData?.name || prevData?.menu || ""),
+            tabKey: tabKey || REVISION_ENTITY_TYPES[entityType]?.tabKey || "",
+            version: baseVersion || 1,
+            action: "baseline",
+            actorUid: user?.uid || "",
+            actorName: actorName || "가족",
+            createdAtMs: nowMs - 1,
+            createdAt: new Date(nowMs - 1).toISOString(),
+            diffSummary: "최초 수정 전 기준본 보존",
+            changedFields: [],
+            snapshot: prevSanitized,
+            opId: `${cleanOpId}-base`,
+            baseVersion: 0,
+            immutable: true
+          });
+        }
+        const revId = `rev-${entityType}-${docId}-${nowMs}-${Math.random().toString(36).slice(2, 5)}`;
+        tx.set(targetRef, payload, { merge: true });
+        if (extraColName) {
+          tx.set(getDocRef(extraColName, docId), payload, { merge: true });
+        }
+        tx.set(getDocRef("family_revisions_v1", revId), {
+          id: revId,
+          entityType,
+          entityId: docId,
+          entityTitle: String(entityTitle || payload?.title || payload?.name || payload?.menu || ""),
+          tabKey: tabKey || REVISION_ENTITY_TYPES[entityType]?.tabKey || "",
+          version: nextVersion,
+          action,
+          actorUid: user?.uid || "",
+          actorName: actorName || "가족",
+          createdAtMs: nowMs,
+          createdAt: nowIso,
+          diffSummary,
+          changedFields: diffs,
+          snapshot: nextSanitized,
+          opId: cleanOpId,
+          baseVersion,
+          ...(linkedEffectNote ? { linkedEffectNote } : {}),
+          immutable: true
+        });
+      });
+      ok = true;
+      return { ok: true, payload };
+    } catch (e) {
+      if (e?.message === "VERSION_CONFLICT") {
+        errMsg = "다른 기기에서 먼저 수정되었습니다. 최신 내용을 확인해 주세요.";
+        return { ok: false, conflict: true, serverDoc: conflictServerDoc, error: errMsg };
+      }
+      errMsg = e?.message || "서버 저장 실패";
+      return { ok: false, error: errMsg };
+    } finally {
+      endWrite(ok, errMsg);
+    }
+  };
+
+  // 온라인 복귀 시 오프라인 대기열 버전·권한 재검증 안내
+  useEffect(() => {
+    const onOnline = async () => {
+      if (offlineMutationQueue.length === 0 || !user || !db) return;
+      const pending = [...offlineMutationQueue];
+      const remaining = [];
+      let syncedCnt = 0;
+      let conflictCnt = 0;
+      for (const item of pending) {
+        if (item.tabKey && !canEditTab(item.tabKey)) {
+          continue;
+        }
+        const res = await commitEntityWithRevision({
+          colName: item.colName,
+          extraColName: item.extraColName,
+          docId: item.docId,
+          entityType: item.entityType,
+          entityTitle: item.entityTitle,
+          tabKey: item.tabKey,
+          nextData: item.payload,
+          prevData: item.prevData ? { ...item.prevData, version: item.baseVersion } : null,
+          action: item.action,
+          opId: item.opId,
+          linkedEffectNote: item.linkedEffectNote
+        });
+        if (res.ok) syncedCnt += 1;
+        else if (res.conflict) conflictCnt += 1;
+        else remaining.push(item);
+      }
+      setOfflineMutationQueue(remaining);
+      try { localStorage.setItem("kim_offline_mutation_queue_v1", JSON.stringify(remaining)); } catch (e) {}
+      if (syncedCnt > 0) showToast(`☁️ 온라인 복귀: 대기 중이던 ${syncedCnt}건을 동기화했습니다.`);
+      if (conflictCnt > 0) showToast(`⚠️ ${conflictCnt}건은 다른 기기와 버전 충돌이 발생해 덮어쓰기를 중단했습니다.`);
+    };
+    window.addEventListener("online", onOnline);
+    return () => window.removeEventListener("online", onOnline);
+  }, [offlineMutationQueue, user]);
+
+  const openRevisionHistory = (entityType, item) => {
+    if (!item?.id) return;
+    const meta = REVISION_ENTITY_TYPES[entityType];
+    if (!meta) return;
+    if (meta.tabKey === "condolence" && (!isSuhyeokAdmin || !isCondolenceUnlocked)) return;
+    if (meta.tabKey && meta.tabKey !== "condolence" && !canViewTab(meta.tabKey)) return;
+    const entityTitle = String(item.title || item.name || item.dishName || item.menu || meta.label);
+    setRevisionModalState({
+      open: true,
+      entityType,
+      entityId: item.id,
+      entityTitle,
+      currentItem: item,
+      tabKey: meta.tabKey,
+      pageSize: 15,
+      selectedRevId: "",
+      restorePreviewRev: null,
+      conflictError: ""
+    });
+  };
+
+  const handleConfirmRestoreRevision = async (rev) => {
+    const { entityType, entityId, entityTitle, currentItem, tabKey } = revisionModalState;
+    const meta = REVISION_ENTITY_TYPES[entityType];
+    if (!meta || !rev?.snapshot) return;
+    if (tabKey === "condolence" ? !isSuhyeokAdmin : !requireEditorAccess(tabKey)) return;
+    const nextVersion = (Number(currentItem?.version) || 1) + 1;
+    const restoredPayload = buildRestoredEntityPayload(currentItem, rev.snapshot, nextVersion, rev.id);
+    const linkedNote = meta.hasLinkedEffect ? meta.effectHint : "";
+    const extraCol = entityType === "meal" ? "family_meals_v3" : "";
+    const res = await commitEntityWithRevision({
+      colName: meta.col,
+      extraColName: extraCol,
+      docId: entityId,
+      entityType,
+      entityTitle,
+      tabKey,
+      nextData: restoredPayload,
+      prevData: currentItem,
+      action: "restore",
+      linkedEffectNote: linkedNote
+    });
+    if (res.conflict) {
+      setRevisionModalState((prev) => ({ ...prev, conflictError: res.error }));
+      showToast(`⚠️ ${res.error}`);
+      return;
+    }
+    if (!res.ok) {
+      showToast(`⚠️ 복원 실패: ${res.error || "네트워크 오류"}`);
+      return;
+    }
+    setRevisionModalState((prev) => ({
+      ...prev,
+      currentItem: res.payload,
+      restorePreviewRev: null,
+      conflictError: ""
+    }));
+    recordActivity(meta.label, "복원", `${entityTitle} (v${rev.version} → v${res.payload.version})`);
+    showToast(`↩️ '${entityTitle}'을(를) 새 버전(v${res.payload.version})으로 안전 복원했습니다! (복원 직전 상태도 이력에 보존됨)`);
+  };
+
+  // ==========================================================================
+  // v14.47 ③ 만든 반찬 · 소분 음식 관리 핸들러 (보존 방정식 · 트랜잭션 · 식단 연계)
+  // ==========================================================================
+  const openNewCookedModal = (fromRecipe = null) => {
+    if (!requireEditorAccess("fridge")) return;
+    const rawPreview = [];
+    if (fromRecipe && Array.isArray(fromRecipe.ingredients)) {
+      fromRecipe.ingredients.forEach((ing) => {
+        const matched = fridge.find((f) => normalizeSearchText(f.name).includes(normalizeSearchText(ing.name)) && Number(f.quantity) > 0);
+        if (matched) {
+          rawPreview.push({
+            fridgeId: matched.id,
+            name: matched.name,
+            currentQty: Number(matched.quantity) || 0,
+            deductQty: Math.min(Number(matched.quantity) || 0, Number(ing.qty) || 1),
+            unit: matched.unit || ing.unit || "개",
+            selected: true
+          });
+        }
+      });
+    }
+    setCookedForm({
+      name: fromRecipe?.title || "",
+      cookedAt: getTodayStr(),
+      totalQty: "4",
+      unit: "인분",
+      category: COOKED_DISH_CATEGORIES.includes(fromRecipe?.category) ? fromRecipe.category : "국·찌개",
+      immediateEatQty: "0",
+      immediateEatMember: "온가족",
+      portions: [
+        { qty: "2", location: "냉장실", plannedEatDate: "", expiryDate: "" },
+        { qty: "2", location: "메인 냉동실", plannedEatDate: "", expiryDate: "" }
+      ],
+      recipeId: fromRecipe?.id || "",
+      recipeTitle: fromRecipe?.title || "",
+      members: ["수혁", "아리나"],
+      photoUrl: fromRecipe?.photoDataUrl || "",
+      memo: fromRecipe?.memo || "",
+      deductRawIngredients: false,
+      rawDeductPreview: rawPreview
+    });
+    setIsCookedModalOpen(true);
+  };
+
+  const handleSaveCookedBatch = async () => {
+    if (!requireEditorAccess("fridge")) return;
+    const dishName = String(cookedForm.name || "").trim();
+    if (!dishName) {
+      showToast("음식명을 입력해 주세요.");
+      return;
+    }
+    const unit = cookedForm.unit || "인분";
+    const totalQty = roundQty2(cookedForm.totalQty);
+    const eatNowQty = roundQty2(cookedForm.immediateEatQty || 0);
+    if (totalQty <= 0) {
+      showToast("총 조리량은 0보다 커야 합니다.");
+      return;
+    }
+    if (eatNowQty < 0 || eatNowQty > totalQty) {
+      showToast("바로 섭취량은 0 이상, 총 조리량 이하로 입력해 주세요.");
+      return;
+    }
+    const validPortions = (cookedForm.portions || [])
+      .map((p) => ({ ...p, qty: roundQty2(p.qty) }))
+      .filter((p) => p.qty > 0);
+    const portionSum = roundQty2(validPortions.reduce((acc, p) => acc + p.qty, 0));
+    const expectedRemaining = roundQty2(totalQty - eatNowQty);
+    if (Math.abs(portionSum - expectedRemaining) > 0.01) {
+      showToast(`⚠️ 수량 불일치: 조리량(${totalQty}) - 바로섭취(${eatNowQty}) = 남은 양(${expectedRemaining}${unit})과 소분 합계(${portionSum}${unit})가 일치해야 합니다.`);
+      return;
+    }
+    if (!user || !db || !navigator.onLine) {
+      showToast("⚠️ 서버 연결 후 저장할 수 있습니다. 입력 내용은 그대로 유지됩니다.");
+      return;
+    }
+
+    const nowMs = Date.now();
+    const batchId = `cb-${nowMs}-${Math.random().toString(36).slice(2, 5)}`;
+    const opId = `op-cook-${nowMs}`;
+    const batchPayload = {
+      id: batchId,
+      name: dishName,
+      cookedAt: cookedForm.cookedAt || getTodayStr(),
+      totalQty,
+      unit,
+      category: cookedForm.category || "국·찌개",
+      recipeId: cookedForm.recipeId || "",
+      recipeTitle: cookedForm.recipeTitle || "",
+      members: toSafeArray(cookedForm.members),
+      photoUrl: cookedForm.photoUrl || "",
+      memo: String(cookedForm.memo || "").trim(),
+      ingredientDeducted: Boolean(cookedForm.deductRawIngredients && (cookedForm.rawDeductPreview || []).some((x) => x.selected && x.deductQty > 0)),
+      version: 1,
+      lastOpId: opId,
+      createdAtMs: nowMs,
+      updatedAtMs: nowMs
+    };
+
+    const portionDocs = validPortions.map((p, idx) => ({
+      id: `cp-${nowMs}-${idx}-${Math.random().toString(36).slice(2, 5)}`,
+      batchId,
+      dishName,
+      qty: p.qty,
+      remainingQty: p.qty,
+      unit,
+      location: p.location || "냉장실",
+      shelfZone: "",
+      cookedAt: batchPayload.cookedAt,
+      storedAt: batchPayload.cookedAt,
+      thawedAt: "",
+      plannedEatDate: p.plannedEatDate || "",
+      expiryDate: p.expiryDate || "",
+      status: "active",
+      memo: "",
+      version: 1,
+      lastOpId: opId,
+      updatedAtMs: nowMs
+    }));
+
+    const initLog =
+      eatNowQty > 0
+        ? {
+            id: `cl-${nowMs}-init`,
+            batchId,
+            portionId: "",
+            type: "consume",
+            qty: eatNowQty,
+            unit,
+            member: cookedForm.immediateEatMember || "온가족",
+            mealId: "",
+            reason: "조리 직후 바로 섭취",
+            opId: `${opId}-eat`,
+            actorName: actorName || "가족",
+            createdAtMs: nowMs
+          }
+        : null;
+
+    beginWrite();
+    let ok = false;
+    let errMsg = "";
+    try {
+      await runTransaction(db, async (tx) => {
+        // Optional raw ingredient deduction ONLY when user explicitly checked & confirmed preview
+        const selectedRaw = batchPayload.ingredientDeducted
+          ? (cookedForm.rawDeductPreview || []).filter((x) => x.selected && roundQty2(x.deductQty) > 0)
+          : [];
+        const rawSnaps = [];
+        for (const rItem of selectedRaw) {
+          const ref = getDocRef("family_fridge_v4", rItem.fridgeId);
+          const s = await tx.get(ref);
+          if (s.exists()) rawSnaps.push({ ref, data: s.data(), deduct: roundQty2(rItem.deductQty) });
+        }
+        tx.set(getDocRef("family_cooked_batches_v1", batchId), batchPayload);
+        portionDocs.forEach((pd) => {
+          tx.set(getDocRef("family_cooked_portions_v1", pd.id), pd);
+        });
+        if (initLog) {
+          tx.set(getDocRef("family_cooked_logs_v1", initLog.id), initLog);
+        }
+        for (const rs of rawSnaps) {
+          const nextQ = Math.max(0, roundQty2((Number(rs.data.quantity) || 0) - rs.deduct));
+          tx.set(rs.ref, { ...rs.data, quantity: nextQ, updatedAt: new Date(nowMs).toISOString() }, { merge: true });
+        }
+        const revId = `rev-cooked_batch-${batchId}-${nowMs}`;
+        tx.set(getDocRef("family_revisions_v1", revId), {
+          id: revId,
+          entityType: "cooked_batch",
+          entityId: batchId,
+          entityTitle: dishName,
+          tabKey: "fridge",
+          version: 1,
+          action: "create",
+          actorUid: user?.uid || "",
+          actorName: actorName || "가족",
+          createdAtMs: nowMs,
+          createdAt: new Date(nowMs).toISOString(),
+          diffSummary: `조리 ${totalQty}${unit} (바로섭취 ${eatNowQty}${unit} · 소분 ${portionDocs.length}건 · 잔량 ${portionSum}${unit})`,
+          changedFields: [],
+          snapshot: sanitizeSnapshotForRevision(batchPayload),
+          opId,
+          baseVersion: 0,
+          immutable: true
+        });
+      });
+      ok = true;
+      setIsCookedModalOpen(false);
+      setFridgeSectionMode("cooked");
+      recordActivity("만든음식", "등록", `${dishName} (${totalQty}${unit} · 잔량 ${portionSum}${unit})`);
+      showToast(`🍲 '${dishName}' 등록 완료! (남은 양 ${portionSum}${unit})`);
+    } catch (e) {
+      errMsg = e?.message || "만든 음식 저장 실패";
+      showToast(`⚠️ 저장 실패: ${errMsg} (입력 내용이 유지되었습니다)`);
+    } finally {
+      endWrite(ok, errMsg);
+    }
+  };
+
+  const handleCookedPortionAction = async () => {
+    if (!requireEditorAccess("fridge")) return;
+    const { type, portion, qty, member, targetLocation, reason, linkToMeal, mealSlot, mealDate } = cookedActionModal;
+    if (!portion) return;
+    if (!user || !db || !navigator.onLine) {
+      showToast("⚠️ 오프라인 상태에서는 재고 변동 작업을 확정할 수 없습니다. 온라인 연결 후 다시 시도해 주세요.");
+      return;
+    }
+
+    const nowMs = Date.now();
+    const opId = `op-cp-${type}-${portion.id}-${nowMs}`;
+
+    if (type === "adjust") {
+      const targetQty = roundQty2(qty);
+      if (!Number.isFinite(targetQty) || targetQty < 0) {
+        showToast("0 이상의 올바른 정정 수량을 입력해 주세요.");
+        return;
+      }
+      if (!String(reason || "").trim()) {
+        showToast("수량 정정 사유를 입력해 주세요.");
+        return;
+      }
+      beginWrite();
+      let ok = false;
+      let errMsg = "";
+      try {
+        await runTransaction(db, async (tx) => {
+          const ref = getDocRef("family_cooked_portions_v1", portion.id);
+          const snap = await tx.get(ref);
+          if (!snap.exists()) throw new Error("소분 항목을 찾을 수 없습니다.");
+          const cur = snap.data();
+          const delta = roundQty2(targetQty - roundQty2(cur.remainingQty));
+          const updated = {
+            ...cur,
+            remainingQty: targetQty,
+            status: targetQty <= 0 ? "depleted" : "active",
+            version: (Number(cur.version) || 1) + 1,
+            lastOpId: opId,
+            updatedAtMs: nowMs
+          };
+          tx.set(ref, updated, { merge: true });
+          const logId = `cl-${nowMs}-adj`;
+          tx.set(getDocRef("family_cooked_logs_v1", logId), {
+            id: logId,
+            batchId: cur.batchId,
+            portionId: cur.id,
+            type: "adjust",
+            qty: Math.abs(delta),
+            delta,
+            unit: cur.unit,
+            member: actorName || "가족",
+            reason: String(reason).trim(),
+            opId,
+            actorName: actorName || "가족",
+            createdAtMs: nowMs
+          });
+          const revId = `rev-cooked_portion-${cur.id}-${nowMs}`;
+          tx.set(getDocRef("family_revisions_v1", revId), {
+            id: revId,
+            entityType: "cooked_portion",
+            entityId: cur.id,
+            entityTitle: cur.dishName,
+            tabKey: "fridge",
+            version: updated.version,
+            action: "update",
+            actorUid: user?.uid || "",
+            actorName: actorName || "가족",
+            createdAtMs: nowMs,
+            createdAt: new Date(nowMs).toISOString(),
+            diffSummary: `수량 정정 (${cur.remainingQty} → ${targetQty}${cur.unit} · 사유: ${String(reason).trim()})`,
+            changedFields: computeRevisionDiff(sanitizeSnapshotForRevision(cur), sanitizeSnapshotForRevision(updated)),
+            snapshot: sanitizeSnapshotForRevision(updated),
+            opId,
+            baseVersion: Number(cur.version) || 1,
+            immutable: true
+          });
+        });
+        ok = true;
+        setCookedActionModal((p) => ({ ...p, open: false }));
+        showToast(`⚖️ '${portion.dishName}' 수량이 ${targetQty}${portion.unit}(으)로 정정되었습니다.`);
+      } catch (e) {
+        errMsg = e?.message || "수량 정정 실패";
+        showToast(`⚠️ ${errMsg}`);
+      } finally {
+        endWrite(ok, errMsg);
+      }
+      return;
+    }
+
+    if (type === "move") {
+      if (!targetLocation) {
+        showToast("이동할 보관 위치를 선택해 주세요.");
+        return;
+      }
+      beginWrite();
+      let ok = false;
+      let errMsg = "";
+      let moveSummary = "";
+      try {
+        await runTransaction(db, async (tx) => {
+          const ref = getDocRef("family_cooked_portions_v1", portion.id);
+          const snap = await tx.get(ref);
+          if (!snap.exists()) throw new Error("소분 항목을 찾을 수 없습니다.");
+          const cur = snap.data();
+          const splitRes = splitPortionForMove(cur, qty, targetLocation, "", getTodayStr());
+          if (!splitRes.ok) throw new Error(splitRes.error);
+          const srcUpdated = {
+            ...splitRes.updatedSource,
+            version: (Number(cur.version) || 1) + 1,
+            lastOpId: opId
+          };
+          tx.set(ref, srcUpdated, { merge: true });
+          if (splitRes.newPortion) {
+            tx.set(getDocRef("family_cooked_portions_v1", splitRes.newPortion.id), { ...splitRes.newPortion, lastOpId: opId });
+          }
+          const logId = `cl-${nowMs}-mv`;
+          tx.set(getDocRef("family_cooked_logs_v1", logId), {
+            id: logId,
+            batchId: cur.batchId,
+            portionId: cur.id,
+            type: splitRes.isThawing ? "thaw" : "move",
+            qty: roundQty2(qty),
+            unit: cur.unit,
+            member: actorName || "가족",
+            reason: `${cur.location} → ${targetLocation}${splitRes.mode === "split" ? " (일부 분할 이동)" : ""}`,
+            opId,
+            actorName: actorName || "가족",
+            createdAtMs: nowMs
+          });
+          moveSummary = `${roundQty2(qty)}${cur.unit} ${targetLocation}${splitRes.isThawing ? " (해동 시작)" : ""}`;
+        });
+        ok = true;
+        setCookedActionModal((p) => ({ ...p, open: false }));
+        showToast(`📦 '${portion.dishName}' ${moveSummary} 이동 완료!`);
+      } catch (e) {
+        errMsg = e?.message || "보관 이동 실패";
+        showToast(`⚠️ ${errMsg}`);
+      } finally {
+        endWrite(ok, errMsg);
+      }
+      return;
+    }
+
+    // consume or discard
+    const valCheck = validatePortionOperation({ portion, opType: type, qty, unit: portion.unit });
+    if (!valCheck.ok) {
+      showToast(`⚠️ ${valCheck.error}`);
+      return;
+    }
+    const q = valCheck.qty;
+    const mealId = type === "consume" && linkToMeal ? `m-cook-${nowMs}` : "";
+    beginWrite();
+    let ok = false;
+    let errMsg = "";
+    try {
+      await runTransaction(db, async (tx) => {
+        const ref = getDocRef("family_cooked_portions_v1", portion.id);
+        const snap = await tx.get(ref);
+        if (!snap.exists()) throw new Error("소분 항목을 찾을 수 없습니다.");
+        const cur = snap.data();
+        const curRem = roundQty2(cur.remainingQty);
+        if (q > curRem) throw new Error(`다른 기기에서 먼저 변동되어 남은 양(${curRem}${cur.unit})이 부족합니다.`);
+        const nextRem = roundQty2(curRem - q);
+        const updated = {
+          ...cur,
+          remainingQty: nextRem,
+          status: nextRem <= 0 ? "depleted" : "active",
+          version: (Number(cur.version) || 1) + 1,
+          lastOpId: opId,
+          updatedAtMs: nowMs
+        };
+        tx.set(ref, updated, { merge: true });
+        const logId = `cl-${nowMs}-${type}`;
+        tx.set(getDocRef("family_cooked_logs_v1", logId), {
+          id: logId,
+          batchId: cur.batchId,
+          portionId: cur.id,
+          type,
+          qty: q,
+          unit: cur.unit,
+          member: member || "온가족",
+          mealId,
+          reason: String(reason || "").trim(),
+          opId,
+          actorName: actorName || "가족",
+          createdAtMs: nowMs
+        });
+        if (mealId) {
+          const mealMembers = member === "온가족" ? ["수혁", "아리나", "시목"] : [member === "아리" ? "아리나" : member];
+          const mealPayload = {
+            id: mealId,
+            date: mealDate || getTodayStr(),
+            slot: mealSlot || "저녁",
+            menu: cur.dishName,
+            members: mealMembers,
+            ingredients: [],
+            note: `🍲 만든 음식 섭취 (${q}${cur.unit} · ${cur.location})`,
+            sourceType: "집밥/온가족식",
+            cost: 0,
+            mealStatus: "recorded",
+            cookedBatchId: cur.batchId,
+            cookedPortionId: cur.id,
+            cookedQty: q,
+            cookedConsumedOpId: opId,
+            version: 1,
+            updatedAt: new Date(nowMs).toISOString(),
+            updatedAtMs: nowMs
+          };
+          tx.set(getDocRef("family_meals_v3", mealId), mealPayload);
+          tx.set(getDocRef("family_meals_v4", mealId), mealPayload);
+        }
+      });
+      ok = true;
+      setCookedActionModal((p) => ({ ...p, open: false }));
+      recordActivity("만든음식", type === "consume" ? "섭취" : "폐기", `${portion.dishName} ${q}${portion.unit}`);
+      showToast(type === "consume" ? `🍽️ '${portion.dishName}' ${q}${portion.unit} 섭취 기록 완료!` : `🗑️ '${portion.dishName}' ${q}${portion.unit} 폐기 기록 완료`);
+    } catch (e) {
+      errMsg = e?.message || "처리 실패";
+      showToast(`⚠️ ${errMsg}`);
+    } finally {
+      endWrite(ok, errMsg);
+    }
+  };
+
+
+  // ==========================================================================
+  // v14.47 ① 메뉴 통합검색 인메모리 인덱스 (권한·비공개 격리 · 중복 제거)
+  // ==========================================================================
+  const globalSearchCorpus = useMemo(() => {
+    const docs = [];
+    const pushDoc = (d) => { if (d && d.id) docs.push(d); };
+
+    // 메뉴 바로가기
+    [
+      { id: "menu-home", title: "홈 화면", subtitle: "오늘 브리핑·행동 피드", tab: "home" },
+      { id: "menu-daily", title: "식단표 (일별·주간)", subtitle: "아침·점심·저녁 식단 관리", tab: "daily" },
+      { id: "menu-schedule", title: "일정 · 달력 · 할 일", subtitle: "가족·개인 일정 및 D-Day", tab: "schedule" },
+      { id: "menu-routines", title: "반복 루틴", subtitle: "매일·주간·월간 루틴 및 계좌 메모", tab: "schedule", sub: "routine" },
+      { id: "menu-fridge", title: "냉장고 · 만든 음식", subtitle: "식재료 재고 및 소분 반찬 관리", tab: "fridge" },
+      { id: "menu-shopping", title: "장보기 목록", subtitle: "구매 체크리스트", tab: "shopping" },
+      { id: "menu-recipes", title: "레시피북", subtitle: "우리 가족 요리 레시피", tab: "recipes" },
+      { id: "menu-notices", title: "가족공지", subtitle: "공지·전달사항", tab: "notices" },
+      { id: "menu-pages", title: "공유노트", subtitle: "계층형 페이지·체크리스트·표", tab: "pages" },
+      { id: "menu-baby", title: "육아수첩", subtitle: "수유·일기·성장·진료·접종·발달", tab: "baby" },
+      { id: "menu-house", title: "살림수첩", subtitle: "수납지도·보증A/S·상비약함", tab: "house" },
+      { id: "menu-monthly", title: "월간 · 식비 가계부", subtitle: "월간 식단 및 지출 원장", tab: "monthly" },
+      { id: "menu-bucket", title: "버킷리스트", subtitle: "나들이·맛집·지도", tab: "bucket" },
+      { id: "menu-alarm", title: "모닝콜 · 알람", subtitle: "기상 알람·퀵 알람", tab: "alarm" }
+    ].forEach((m) => {
+      if (m.tab === "home" || canViewTab(m.tab)) {
+        pushDoc({ id: m.id, cat: "menu", title: m.title, subtitle: m.subtitle, body: "", tags: m.title, date: "", members: [], nav: { type: "menu", tab: m.tab, sub: m.sub || "" } });
+      }
+    });
+
+    if (canViewTab("daily")) {
+      meals.forEach((m) => {
+        pushDoc({
+          id: `meal:${m.id}`,
+          cat: "daily",
+          title: m.menu || "식단",
+          subtitle: `${m.date || ""} ${m.slot || ""}`,
+          body: `${toSafeArray(m.ingredients).join(" ")} ${m.note || ""}`,
+          tags: `${m.sourceType || ""} ${toSafeArray(m.members).join(" ")}`,
+          date: m.date || "",
+          members: toSafeArray(m.members),
+          nav: { type: "meal", id: m.id, date: m.date }
+        });
+      });
+    }
+    if (canViewTab("schedule")) {
+      schedules.forEach((s) => {
+        pushDoc({
+          id: `sched:${s.id}`,
+          cat: "schedule",
+          title: s.title || "일정",
+          subtitle: `${s.date || ""}${s.time ? ` ${s.time}` : ""}${s.location ? ` · ${s.location}` : ""}`,
+          body: s.memo || "",
+          tags: `${s.category || ""} ${toSafeArray(s.members).join(" ")}`,
+          date: s.date || "",
+          members: toSafeArray(s.members),
+          nav: { type: "schedule", id: s.id, date: s.date, isTodo: isTodoScheduleItem(s) }
+        });
+      });
+      if (isAdminUnlocked) {
+        privateSchedules
+          .filter((p) => (p.owner || "수혁") === currentAdminOwner)
+          .forEach((p) => {
+            pushDoc({
+              id: `priv:${p.id}`,
+              cat: "schedule",
+              title: `🔒 ${p.title || "개인일정"}`,
+              subtitle: `${p.date || ""}${p.time ? ` ${p.time}` : ""}`,
+              body: p.memo || "",
+              tags: `개인일정 ${p.category || ""}`,
+              date: p.date || "",
+              members: [p.owner || currentAdminOwner],
+              nav: { type: "private_schedule", id: p.id, date: p.date }
+            });
+          });
+      }
+    }
+    if (canViewTab("routines")) {
+      familyRoutines.forEach((r) => {
+        pushDoc({
+          id: `rt:${r.id}`,
+          cat: "routines",
+          title: r.title || "루틴",
+          subtitle: `${r.timeSlot || "상시"}${r.scheduledTime ? ` ${r.scheduledTime}` : ""} · ${r.assignee === "아리나" ? "아리" : (r.assignee || "공통")}`,
+          body: r.memo || "",
+          tags: `${r.assignee || ""} ${r.timeSlot || ""}`,
+          date: r.startDate || "",
+          members: r.assignee && r.assignee !== "공통" ? [r.assignee] : [],
+          nav: { type: "routine", id: r.id }
+        });
+      });
+    }
+    if (canViewTab("fridge")) {
+      fridge.forEach((f) => {
+        pushDoc({
+          id: `fr:${f.id}`,
+          cat: "fridge",
+          title: f.name || "재료",
+          subtitle: `${f.quantity ?? 0}${f.unit || "개"} · ${f.location || ""}${f.expiryDate ? ` · ~${f.expiryDate}` : ""}`,
+          body: f.memo || "",
+          tags: `${f.category || ""} ${f.location || ""} ${f.shelfZone || ""}`,
+          date: f.purchaseDate || f.expiryDate || "",
+          members: [],
+          nav: { type: "fridge", id: f.id, name: f.name }
+        });
+      });
+      cookedPortions.forEach((p) => {
+        const b = cookedBatches.find((x) => x.id === p.batchId);
+        pushDoc({
+          id: `cp:${p.id}`,
+          cat: "cooked",
+          title: p.dishName || b?.name || "만든 음식",
+          subtitle: `남은 ${p.remainingQty}${p.unit || "인분"} · ${p.location || ""} · 조리 ${p.cookedAt || b?.cookedAt || ""}`,
+          body: `${b?.memo || ""} ${p.memo || ""}`,
+          tags: `만든음식 소분 반찬 ${b?.category || ""} ${toSafeArray(b?.members).join(" ")}`,
+          date: p.cookedAt || b?.cookedAt || "",
+          members: toSafeArray(b?.members),
+          nav: { type: "cooked", id: p.id, batchId: p.batchId }
+        });
+      });
+    }
+    if (canViewTab("shopping")) {
+      shoppingList.forEach((sh) => {
+        pushDoc({
+          id: `sh:${sh.id}`,
+          cat: "shopping",
+          title: sh.name || "장보기",
+          subtitle: `${sh.quantity || ""} · ${sh.category || ""}${sh.checked ? " (완료)" : ""}`,
+          body: sh.memo || "",
+          tags: `${sh.category || ""} ${sh.urgent ? "급함" : ""}`,
+          date: "",
+          members: [],
+          nav: { type: "shopping", id: sh.id, name: sh.name }
+        });
+      });
+    }
+    if (canViewTab("recipes")) {
+      recipes.forEach((r) => {
+        pushDoc({
+          id: `rcp:${r.id}`,
+          cat: "recipes",
+          title: r.title || "레시피",
+          subtitle: `${r.category || ""} · ${r.cookTime || ""} · ${r.difficulty || ""}`,
+          body: `${r.ingredientsText || ""} ${r.stepsText || ""} ${r.memo || ""}`,
+          tags: `${r.category || ""} ${r.difficulty || ""}`,
+          date: String(r.updatedAt || r.createdAt || "").slice(0, 10),
+          members: [],
+          nav: { type: "recipe", id: r.id, title: r.title }
+        });
+      });
+    }
+    if (canViewTab("notices")) {
+      notices.forEach((n) => {
+        pushDoc({
+          id: `nt:${n.id}`,
+          cat: "notices",
+          title: n.title || "공지",
+          subtitle: `${n.category || ""} · ${n.createdAt || ""}${n.pinned ? " 📌" : ""}`,
+          body: n.content || "",
+          tags: `${n.category || ""} ${n.author || ""}`,
+          date: n.createdAt || "",
+          members: n.author ? [n.author] : [],
+          nav: { type: "notice", id: n.id, title: n.title }
+        });
+      });
+    }
+    if (canViewTab("pages")) {
+      familyPages.forEach((pg) => {
+        // Process both noteBody (HTML/text) and blocks, deduplicating overlapping snippets
+        const htmlPlain = stripHtmlToPlainText(pg.noteBody || "");
+        const blockText = (Array.isArray(pg.blocks) ? pg.blocks : [])
+          .map((b) => {
+            if (!b) return "";
+            if (b.type === "md_table") return [...(b.headers || []), ...(b.rows || []).flat()].join(" ");
+            if (b.type === "table") return (b.rows || []).map((row) => Object.values(row?.values || {}).join(" ")).join(" ");
+            return b.text || "";
+          })
+          .filter(Boolean)
+          .join(" ");
+        const mergedBody = htmlPlain && blockText && blockText.includes(htmlPlain.slice(0, 30))
+          ? blockText
+          : `${htmlPlain} ${blockText}`.trim();
+        pushDoc({
+          id: `pg:${pg.id}`,
+          cat: "pages",
+          title: `${pg.icon || "📄"} ${pg.title || "제목 없음"}`,
+          subtitle: `공유노트 · ${String(pg.updatedAt || "").slice(0, 10)}`,
+          body: mergedBody,
+          tags: "공유노트 페이지",
+          date: String(pg.updatedAt || "").slice(0, 10),
+          members: [],
+          nav: { type: "page", id: pg.id }
+        });
+      });
+    }
+    if (canViewTab("baby")) {
+      babyMedicalNotes.forEach((h) => {
+        pushDoc({
+          id: `bh:${h.id}`,
+          cat: "baby",
+          title: `[진료·체온] ${h.childId || ""} ${h.temp ? `${h.temp}°C` : ""}`,
+          subtitle: `${h.date || ""} · ${h.hospital || ""}`,
+          body: h.memo || "",
+          tags: `진료 체온 소아과 ${h.childId || ""}`,
+          date: h.date || "",
+          members: h.childId ? [h.childId] : [],
+          nav: { type: "baby", sub: "health", childId: h.childId, id: h.id }
+        });
+      });
+      babyGrowthLogs.forEach((g) => {
+        pushDoc({
+          id: `bg:${g.id}`,
+          cat: "baby",
+          title: `[성장] ${g.childId || ""} ${g.height ? `${g.height}cm` : ""} ${g.weight ? `${g.weight}kg` : ""}`.trim(),
+          subtitle: g.date || "",
+          body: g.memo || "",
+          tags: `성장 키 몸무게 ${g.childId || ""}`,
+          date: g.date || "",
+          members: g.childId ? [g.childId] : [],
+          nav: { type: "baby", sub: "growth", childId: g.childId, id: g.id }
+        });
+      });
+      if (isAdminUnlocked) {
+        babyDiaryEntries.forEach((d) => {
+          pushDoc({
+            id: `bd:${d.id}`,
+            cat: "baby",
+            title: `[육아일기] ${d.title || d.date || ""}`,
+            subtitle: `${d.date || ""} · ${d.childId || ""}`,
+            body: stripHtmlToPlainText(d.content || ""),
+            tags: `육아일기 ${d.mood || ""} ${d.childId || ""}`,
+            date: d.date || "",
+            members: d.childId === "함께" ? ["시목", "시율"] : d.childId ? [d.childId] : [],
+            nav: { type: "baby", sub: "diary", childId: d.childId === "함께" ? "시목" : d.childId, id: d.id }
+          });
+        });
+      }
+    }
+    if (canViewTab("house")) {
+      houseItems.forEach((hi) => {
+        pushDoc({
+          id: `hs:${hi.id}`,
+          cat: "house",
+          title: hi.name || "살림 기록",
+          subtitle: `${hi.type === "medicine" ? "💊 상비약" : hi.type === "warranty" ? "🛠️ 보증·A/S" : "🔎 수납"} · ${hi.room || hi.target || hi.brand || ""}`,
+          body: `${hi.detailLocation || ""} ${hi.memo || ""}`,
+          tags: `${hi.room || ""} ${hi.target || ""} ${hi.brand || ""}`,
+          date: hi.expiryDate || hi.purchaseDate || "",
+          members: hi.target ? [hi.target] : [],
+          nav: { type: "house", sub: hi.type || "storage", id: hi.id, name: hi.name }
+        });
+      });
+    }
+    if (canViewTab("monthly")) {
+      expenses.forEach((ex) => {
+        pushDoc({
+          id: `ex:${ex.id}`,
+          cat: "monthly",
+          title: ex.item || "식비 지출",
+          subtitle: `${ex.date || ""} · ${(Number(ex.amount) || 0).toLocaleString()}원`,
+          body: ex.memo || "",
+          tags: `${ex.category || ""}`,
+          date: ex.date || "",
+          members: [],
+          nav: { type: "expense", id: ex.id, date: ex.date, item: ex.item }
+        });
+      });
+    }
+    // 경조사비는 수혁 관리자 + 비밀번호 잠금 해제 시에만 노출 (권한·비공개 엄격 격리)
+    if (isSuhyeokAdmin && isCondolenceUnlocked) {
+      condolenceList.forEach((c) => {
+        pushDoc({
+          id: `cd:${c.id}`,
+          cat: "condolence",
+          title: `💌 ${c.personName || "경조사"} (${c.type === "in" ? "입금" : "출금"} ${(Number(c.amount) || 0).toLocaleString()}원)`,
+          subtitle: `${c.date || ""} · ${c.category || ""} · ${c.group || ""}`,
+          body: c.memo || "",
+          tags: `${c.category || ""} ${c.group || ""} ${c.payMethod || ""}`,
+          date: c.date || "",
+          members: [],
+          nav: { type: "condolence", id: c.id, name: c.personName }
+        });
+      });
+    }
+    if (canViewTab("bucket")) {
+      bucketList.forEach((bk) => {
+        pushDoc({
+          id: `bk:${bk.id}`,
+          cat: "bucket",
+          title: bk.title || "버킷리스트",
+          subtitle: `${bk.category || ""} · ${bk.done ? "다녀옴" : "갈 곳"}`,
+          body: `${bk.address || ""} ${bk.memo || ""}`,
+          tags: `${bk.category || ""} ${bk.weather || ""}`,
+          date: bk.targetDate || "",
+          members: toSafeArray(bk.members),
+          nav: { type: "bucket", id: bk.id, title: bk.title }
+        });
+      });
+    }
+    return docs;
+  }, [
+    accessRole, isAdminUnlocked, isSuhyeokAdmin, isCondolenceUnlocked, currentAdminOwner,
+    meals, schedules, privateSchedules, familyRoutines, fridge, cookedBatches, cookedPortions,
+    shoppingList, recipes, notices, familyPages, babyMedicalNotes, babyGrowthLogs, babyDiaryEntries,
+    houseItems, expenses, condolenceList, bucketList
+  ]);
+
+  const globalSearchResults = useMemo(() => {
+    const q = String(globalSearchQuery || "").trim();
+    if (!q) return { total: 0, groups: [] };
+    const todayStr = getTodayStr();
+    const minDate =
+      globalSearchPeriod === "today"
+        ? todayStr
+        : globalSearchPeriod === "7d"
+        ? getOffsetDateStr(todayStr, -7)
+        : globalSearchPeriod === "30d"
+        ? getOffsetDateStr(todayStr, -30)
+        : globalSearchPeriod === "year"
+        ? `${todayStr.slice(0, 4)}-01-01`
+        : "";
+
+    const matched = [];
+    for (const item of globalSearchCorpus) {
+      if (globalSearchCat !== "all" && item.cat !== globalSearchCat) continue;
+      if (minDate && item.date && item.date < minDate) continue;
+      if (globalSearchMember !== "전체") {
+        const memNorm = globalSearchMember === "아리" ? ["아리", "아리나"] : [globalSearchMember];
+        const hasMem =
+          (Array.isArray(item.members) && item.members.some((m) => memNorm.includes(m))) ||
+          memNorm.some((m) => `${item.title} ${item.tags} ${item.body}`.includes(m));
+        if (!hasMem) continue;
+      }
+      const score = scoreSearchMatch(item, q);
+      if (score > 0) matched.push({ ...item, _score: score });
+    }
+    matched.sort((a, b) => b._score - a._score || String(b.date || "").localeCompare(String(a.date || "")));
+
+    const groupMap = new Map();
+    for (const m of matched) {
+      if (!groupMap.has(m.cat)) groupMap.set(m.cat, []);
+      groupMap.get(m.cat).push(m);
+    }
+    const groups = GLOBAL_SEARCH_CATEGORIES.filter((c) => c.id !== "all" && groupMap.has(c.id)).map((c) => ({
+      catId: c.id,
+      label: c.label,
+      items: groupMap.get(c.id)
+    }));
+    return { total: matched.length, groups };
+  }, [globalSearchCorpus, globalSearchQuery, globalSearchCat, globalSearchPeriod, globalSearchMember]);
+
+  const handleGlobalSearchSelect = (item) => {
+    if (!item?.nav) return;
+    if (globalSearchScrollRef.current) {
+      globalSearchSavedScrollTopRef.current = globalSearchScrollRef.current.scrollTop;
+    }
+    saveRecentGlobalSearch(globalSearchQuery);
+    setIsGlobalSearchOpen(false);
+    setGlobalSearchReturnReady(true);
+
+    const n = item.nav;
+    if (n.type === "menu") {
+      if (n.sub) setScheduleSubTab(n.sub);
+      setActiveTab(n.tab);
+      return;
+    }
+    if (n.type === "meal") {
+      if (n.date) setSelectedDate(n.date);
+      setActiveTab("daily");
+      return;
+    }
+    if (n.type === "schedule" || n.type === "private_schedule") {
+      if (n.date) setScheduleMonth(String(n.date).slice(0, 7));
+      setScheduleSubTab(n.isTodo ? "todo" : "calendar");
+      setActiveTab("schedule");
+      return;
+    }
+    if (n.type === "routine") {
+      setScheduleSubTab("routine");
+      setActiveTab("schedule");
+      const rt = familyRoutines.find((r) => r.id === n.id);
+      if (rt && canEditTab("routines")) handleStartEditRoutine(rt);
+      return;
+    }
+    if (n.type === "fridge") {
+      setFridgeSectionMode("raw");
+      setFridgeSearch(n.name || "");
+      setActiveTab("fridge");
+      return;
+    }
+    if (n.type === "cooked") {
+      setFridgeSectionMode("cooked");
+      setActiveCookedBatchId(n.batchId || "");
+      setActiveTab("fridge");
+      return;
+    }
+    if (n.type === "shopping") {
+      setShoppingSearchQuery(n.name || "");
+      setActiveTab("shopping");
+      return;
+    }
+    if (n.type === "recipe") {
+      setRecipeCatFilter("전체");
+      setRecipeSearch(n.title || "");
+      setActiveTab("recipes");
+      return;
+    }
+    if (n.type === "notice") {
+      setNoticeSearchQuery(n.title || "");
+      setActiveTab("notices");
+      return;
+    }
+    if (n.type === "page") {
+      setSelectedPageId(n.id);
+      setActiveTab("pages");
+      return;
+    }
+    if (n.type === "baby") {
+      if (n.childId === "시목" || n.childId === "시율") setSelectedChildId(n.childId);
+      setBabySubTab(n.sub || "health");
+      setActiveTab("baby");
+      return;
+    }
+    if (n.type === "house") {
+      setHouseSubTab(n.sub || "storage");
+      setHouseSearch(n.name || "");
+      setActiveTab("house");
+      return;
+    }
+    if (n.type === "expense") {
+      if (n.date) setCurrentMonth(String(n.date).slice(0, 7));
+      setMonthlySubTab("expense");
+      setExpenseSearchQuery(n.item || "");
+      setActiveTab("monthly");
+      return;
+    }
+    if (n.type === "condolence") {
+      setCondolenceSearch(n.name || "");
+      setActiveTab("condolence");
+      return;
+    }
+    if (n.type === "bucket") {
+      setBucketSearchQuery(n.title || "");
+      setActiveTab("bucket");
+    }
+  };
+
+
   const anyOverlayModalOpen = Boolean(
     confirmDialog ||
     isMoreNavOpen ||
@@ -21273,6 +22748,10 @@ ${item.memo}` : `${item.title} 다녀옴!`,
     isGuideModalOpen ||
     isSettingsOpen ||
     isRoutineModalOpen ||
+    isGlobalSearchOpen ||
+    revisionModalState.open ||
+    isCookedModalOpen ||
+    cookedActionModal.open ||
     isActivityModalOpen ||
     isEditorUnlockModalOpen ||
     isMealCopyModalOpen ||
@@ -21356,6 +22835,10 @@ ${item.memo}` : `${item.title} 다녀옴!`,
       setCookingConfirmModal(null);
       setIsHouseModalOpen(false);
       setIsHandoverModalOpen(false);
+      setIsGlobalSearchOpen(false);
+      setRevisionModalState((p) => ({ ...p, open: false, restorePreviewRev: null }));
+      setIsCookedModalOpen(false);
+      setCookedActionModal((p) => ({ ...p, open: false }));
       setIsHomeDdayPickerOpen(false);
       setCategoryManageKind("");
       setAlarmSheetMode("");
@@ -22601,6 +24084,22 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                 )}
               </button>
             )}
+            <button
+              type="button"
+              onClick={() => {
+                setIsGlobalSearchOpen(true);
+                setTimeout(() => {
+                  if (globalSearchScrollRef.current && globalSearchSavedScrollTopRef.current > 0) {
+                    globalSearchScrollRef.current.scrollTop = globalSearchSavedScrollTopRef.current;
+                  }
+                }, 40);
+              }}
+              className="relative w-6 h-6 rounded-full hover:bg-[#EEF3EE] text-stone-600 hover:text-[#35503C] flex items-center justify-center shrink-0 transition"
+              title="메뉴 통합검색"
+              aria-label="메뉴 통합검색"
+            >
+              <Search className="w-3.5 h-3.5" />
+            </button>
             <button
               type="button"
               onClick={() => setIsGuideModalOpen(true)}
@@ -29770,6 +31269,260 @@ time: "", location: "",
       ========================================== */}
       {activeTab === "fridge" && (!canViewTab("fridge") ? renderLockedTabScreen("❄️ 냉장고") : (
         <div className="p-3 space-y-2.5">
+          {/* v14.47 ③ 냉장고 상단 구분: 전체 / 식재료 / 만든 음식 (재고 합계 중복 없음) */}
+          <div className="flex items-center justify-between gap-2 bg-white p-1.5 rounded-2xl border border-stone-200 shadow-sm">
+            <div className="grid grid-cols-3 gap-1 flex-1 min-w-0">
+              {[
+                { id: "all", label: `전체 (${fridge.length + cookedPortions.filter((p) => roundQty2(p.remainingQty) > 0).length})` },
+                { id: "raw", label: `🥬 식재료 (${fridge.length})` },
+                { id: "cooked", label: `🍲 만든음식 (${cookedPortions.filter((p) => roundQty2(p.remainingQty) > 0).length})` }
+              ].map((seg) => (
+                <button
+                  key={seg.id}
+                  type="button"
+                  onClick={() => setFridgeSectionMode(seg.id)}
+                  className={`py-1.5 px-1.5 rounded-xl text-[11px] font-extrabold transition whitespace-nowrap truncate ${
+                    fridgeSectionMode === seg.id
+                      ? "bg-[#3F624D] text-white shadow-sm"
+                      : "bg-stone-50 text-stone-600 hover:bg-stone-100"
+                  }`}
+                >
+                  {seg.label}
+                </button>
+              ))}
+            </div>
+            {canEditTab("fridge") && (
+              <button
+                type="button"
+                onClick={() => openNewCookedModal(null)}
+                className="px-2.5 py-1.5 rounded-xl bg-[#EEF3EE] hover:bg-[#DFE9E0] text-[#35503C] border border-[#C9D8CC] text-[11px] font-extrabold whitespace-nowrap shrink-0"
+              >
+                + 만든음식
+              </button>
+            )}
+          </div>
+
+          {/* 만든 반찬 · 소분 음식 관리 섹션 */}
+          {(fridgeSectionMode === "all" || fridgeSectionMode === "cooked") && (
+            <div className="bg-white rounded-2xl border border-stone-200 shadow-sm p-3 space-y-2.5">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <span className="text-[13.5px] font-black text-stone-900 truncate">🍲 만든 반찬 · 소분 음식</span>
+                  <span className="px-1.5 py-0.5 rounded-full bg-[#EEF3EE] text-[#35503C] text-[10.5px] font-extrabold whitespace-nowrap shrink-0">
+                    남음 {cookedPortions.filter((p) => roundQty2(p.remainingQty) > 0).length}건
+                  </span>
+                </div>
+                {cookedPortions.some((p) => roundQty2(p.remainingQty) <= 0) && (
+                  <button
+                    type="button"
+                    onClick={() => setShowDepletedCooked((v) => !v)}
+                    className="px-2 py-1 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-600 text-[10.5px] font-extrabold whitespace-nowrap shrink-0"
+                  >
+                    {showDepletedCooked ? "소진 숨김" : `소진 ${cookedPortions.filter((p) => roundQty2(p.remainingQty) <= 0).length}건`}
+                  </button>
+                )}
+              </div>
+
+              {cookedPortions.filter((p) => showDepletedCooked || roundQty2(p.remainingQty) > 0).length === 0 ? (
+                <div className="text-center py-5 text-[12px] text-stone-400 font-bold">
+                  등록된 만든 음식·소분 반찬이 없습니다. [+ 만든음식] 또는 레시피북에서 바로 추가해 보세요.
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {cookedPortions
+                    .filter((p) => showDepletedCooked || roundQty2(p.remainingQty) > 0)
+                    .map((p) => {
+                      const batch = cookedBatches.find((b) => b.id === p.batchId);
+                      const ledger = batch ? computeCookedBatchLedger(batch, cookedPortions, cookedLogs, meals) : null;
+                      const portionReserved = roundQty2(
+                        meals
+                          .filter((m) => m.mealStatus === "planned" && m.cookedPortionId === p.id)
+                          .reduce((acc, m) => acc + Math.max(0, roundQty2(m.cookedQty || 0)), 0)
+                      );
+                      const isDepleted = roundQty2(p.remainingQty) <= 0;
+                      const isHighlighted = activeCookedBatchId && p.batchId === activeCookedBatchId;
+                      return (
+                        <div
+                          key={p.id}
+                          className={`p-2.5 rounded-xl border transition space-y-1.5 ${
+                            isHighlighted
+                              ? "bg-[#EEF3EE]/70 border-[#3F624D] ring-1 ring-[#3F624D]/30"
+                              : isDepleted
+                              ? "bg-stone-50/80 border-stone-200 opacity-75"
+                              : "bg-[#FAF8F3]/70 border-stone-200"
+                          }`}
+                        >
+                          <div className="flex items-start justify-between gap-2 min-w-0">
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className={`text-[13.5px] font-black truncate ${isDepleted ? "line-through text-stone-400" : "text-stone-900"}`}>
+                                  {p.dishName}
+                                </span>
+                                <span className="px-1.5 py-0.5 rounded-md bg-[#3F624D] text-white text-[10.5px] font-black whitespace-nowrap">
+                                  남은 {p.remainingQty}{p.unit}
+                                </span>
+                                {portionReserved > 0 && (
+                                  <span className="px-1.5 py-0.5 rounded-md bg-amber-50 text-amber-800 border border-amber-200 text-[10px] font-extrabold whitespace-nowrap">
+                                    예약 {portionReserved}{p.unit}
+                                  </span>
+                                )}
+                                <span className="px-1.5 py-0.5 rounded-md bg-white text-stone-700 border border-stone-200 text-[10.5px] font-extrabold whitespace-nowrap">
+                                  {p.location}
+                                </span>
+                              </div>
+                              <div className="text-[11px] font-semibold text-stone-500 mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                                <span>조리 {p.cookedAt || batch?.cookedAt || "-"}</span>
+                                {p.thawedAt && <span className="text-sky-700">· 해동 {p.thawedAt}</span>}
+                                {p.plannedEatDate && <span className="text-[#35503C]">· 예정 {p.plannedEatDate}</span>}
+                                <span>· 기한 {p.expiryDate || "미설정"}</span>
+                                {ledger && (
+                                  <span className="text-stone-400">
+                                    · 묶음 총 {ledger.initialQty}{ledger.unit} (섭취 {ledger.consumedQty} / 잔량 {ledger.remainingQty})
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => openRevisionHistory("cooked_portion", p)}
+                              className="px-1.5 py-1 rounded-lg bg-white hover:bg-stone-100 border border-stone-200 text-stone-500 text-[10.5px] font-extrabold whitespace-nowrap shrink-0"
+                              title="수정 이력 · 복원"
+                            >
+                              🕒 이력
+                            </button>
+                          </div>
+
+                          {!isDepleted && canEditTab("fridge") && (
+                            <div className="flex flex-wrap items-center gap-1 pt-0.5">
+                              <button
+                                type="button"
+                                onClick={() => setCookedActionModal({
+                                  open: true,
+                                  type: "consume",
+                                  portion: p,
+                                  qty: String(Math.min(1, roundQty2(p.remainingQty))),
+                                  member: "온가족",
+                                  targetLocation: p.location,
+                                  reason: "",
+                                  linkToMeal: true,
+                                  mealSlot: "저녁",
+                                  mealDate: getTodayStr()
+                                })}
+                                className="px-2.5 py-1 rounded-lg bg-[#3F624D] hover:bg-[#33513F] text-white text-[11px] font-extrabold whitespace-nowrap"
+                              >
+                                🍽️ 먹었어요
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setCookedActionModal({
+                                  open: true,
+                                  type: "move",
+                                  portion: p,
+                                  qty: String(roundQty2(p.remainingQty)),
+                                  member: "온가족",
+                                  targetLocation: String(p.location || "").includes("냉동") ? "냉장실" : "메인 냉동실",
+                                  reason: "",
+                                  linkToMeal: false,
+                                  mealSlot: "저녁",
+                                  mealDate: getTodayStr()
+                                })}
+                                className="px-2.5 py-1 rounded-lg bg-[#EEF3EE] hover:bg-[#DFE9E0] text-[#35503C] border border-[#C9D8CC] text-[11px] font-extrabold whitespace-nowrap"
+                              >
+                                📦 보관 이동
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setCookedActionModal({
+                                  open: true,
+                                  type: "discard",
+                                  portion: p,
+                                  qty: String(roundQty2(p.remainingQty)),
+                                  member: "온가족",
+                                  targetLocation: p.location,
+                                  reason: "",
+                                  linkToMeal: false,
+                                  mealSlot: "저녁",
+                                  mealDate: getTodayStr()
+                                })}
+                                className="px-2 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-[11px] font-extrabold whitespace-nowrap"
+                              >
+                                🗑️ 폐기
+                              </button>
+                              {canEditTab("daily") && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setEditingMeal(null);
+                                    setMealForm({
+                                      date: p.plannedEatDate || getTodayStr(),
+                                      slot: "저녁",
+                                      menu: p.dishName,
+                                      members: toSafeArray(batch?.members).length > 0 ? toSafeArray(batch?.members) : ["수혁", "아리나"],
+                                      ingredients: [],
+                                      note: `🍲 만든 음식 예약 (${p.location})`,
+                                      sourceType: "집밥/온가족식",
+                                      cost: "",
+                                      mealStatus: "planned",
+                                      cookedPortionId: p.id,
+                                      cookedBatchId: p.batchId,
+                                      cookedQty: String(Math.min(1, roundQty2(p.remainingQty)))
+                                    });
+                                    setIsMealModalOpen(true);
+                                  }}
+                                  className="px-2 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 text-[11px] font-extrabold whitespace-nowrap"
+                                  title="계획 식단으로 예약 (잔량 미차감)"
+                                >
+                                  📅 식단예약
+                                </button>
+                              )}
+                              {canEditTab("notices") && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setEditingNotice(null);
+                                    setNoticeForm({
+                                      title: `🍲 [남은 반찬] ${p.dishName} (${p.remainingQty}${p.unit})`,
+                                      content: `보관 위치: ${p.location}\n조리일: ${p.cookedAt || batch?.cookedAt || "-"}\n보관 기한: ${p.expiryDate || "미설정"}`,
+                                      category: noticeCategories.includes("집안일") ? "집안일" : (noticeCategories[0] || "일반"),
+                                      author: actorName || "수혁",
+                                      pinned: false
+                                    });
+                                    setIsNoticeModalOpen(true);
+                                  }}
+                                  className="px-2 py-1 rounded-lg bg-[#EEF3EE] hover:bg-[#DFE9E0] text-[#35503C] border border-[#C9D8CC] text-[11px] font-extrabold whitespace-nowrap"
+                                  title="가족공지로 공유"
+                                >
+                                  📌 공지
+                                </button>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => setCookedActionModal({
+                                  open: true,
+                                  type: "adjust",
+                                  portion: p,
+                                  qty: String(roundQty2(p.remainingQty)),
+                                  member: "온가족",
+                                  targetLocation: p.location,
+                                  reason: "",
+                                  linkToMeal: false,
+                                  mealSlot: "저녁",
+                                  mealDate: getTodayStr()
+                                })}
+                                className="px-2 py-1 rounded-lg bg-white hover:bg-stone-100 text-stone-600 border border-stone-200 text-[11px] font-extrabold whitespace-nowrap"
+                              >
+                                ⚖️ 정정
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="grid grid-cols-2 gap-1.5">
             <button
               type="button"
@@ -29792,8 +31545,8 @@ time: "", location: "",
             </button>
           </div>
 
-          {/* 임박·경과 재료 컴팩트 배너 */}
-          {expiringItems.length > 0 && (
+          {/* 임박·경과 재료 컴팩트 배너 (만든 음식 전용 보기에서는 숨김) */}
+          {fridgeSectionMode !== "cooked" && expiringItems.length > 0 && (
             <div className="bg-amber-50/80 border border-amber-200/90 rounded-2xl p-2.5 space-y-1.5">
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-1 text-[12px] font-black text-amber-900 whitespace-nowrap">
@@ -37588,28 +39341,45 @@ time: "", location: "",
                     })()}
 
 
-                    <div className="grid grid-cols-3 gap-1.5 pt-1">
+                    <div className="grid grid-cols-2 gap-1.5 pt-1">
                       <button
                         type="button"
                         onClick={() => handleApplyRecipeToMeal(r)}
-                        className="py-2 px-1 rounded-xl bg-stone-900 text-white text-[11.5px] font-extrabold whitespace-nowrap"
+                        className="py-1.5 px-2 rounded-xl bg-[#3F624D] hover:bg-[#33513F] text-white text-[11.5px] font-extrabold whitespace-nowrap"
                       >
                         🍽️ 식단 재현
                       </button>
                       <button
                         type="button"
-                        onClick={() => startRecipeCookTimer(r)}
-                        className="py-2 px-1 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 text-[11.5px] font-extrabold whitespace-nowrap"
+                        onClick={() => openNewCookedModal(r)}
+                        className="py-1.5 px-2 rounded-xl bg-[#EEF3EE] hover:bg-[#DFE9E0] text-[#35503C] border border-[#C9D8CC] text-[11.5px] font-extrabold whitespace-nowrap"
                       >
-                        ⏱️ {r.cookTime || "10분"}
+                        🍲 만든 음식 저장
                       </button>
                       <button
                         type="button"
-                        onClick={() => handleAddMissingRecipeIngredientsToShopping(r)}
-                        className="py-2 px-1 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-[11.5px] font-extrabold whitespace-nowrap"
+                        onClick={() => startRecipeCookTimer(r)}
+                        className="py-1.5 px-2 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 text-[11px] font-extrabold whitespace-nowrap"
                       >
-                        🛒 부족 재료
+                        ⏱️ {r.cookTime || "10분"}
                       </button>
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => handleAddMissingRecipeIngredientsToShopping(r)}
+                          className="flex-1 py-1.5 px-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-[11px] font-extrabold whitespace-nowrap truncate"
+                        >
+                          🛒 부족재료
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => openRevisionHistory("recipe", r)}
+                          className="py-1.5 px-2 rounded-xl bg-stone-50 hover:bg-stone-100 text-stone-600 border border-stone-200 text-[11px] font-extrabold whitespace-nowrap shrink-0"
+                          title="레시피 수정 이력"
+                        >
+                          🕒
+                        </button>
+                      </div>
                     </div>
                   </div>
                 );
@@ -45326,6 +47096,61 @@ time: "", location: "",
             </div>
 
 
+            {cookedPortions.some((p) => roundQty2(p.remainingQty) > 0) && (
+              <div className="p-2 rounded-xl bg-[#FAF8F3] border border-stone-200 space-y-1.5">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[11px] font-extrabold text-stone-700 whitespace-nowrap">🍲 만든 음식 연결 (계획 시 예약 · 먹음 시 1회 차감)</span>
+                  {mealForm.cookedPortionId && (
+                    <button
+                      type="button"
+                      onClick={() => setMealForm({ ...mealForm, cookedPortionId: "", cookedBatchId: "", cookedQty: "" })}
+                      className="text-[10.5px] font-bold text-stone-400 hover:text-stone-700 whitespace-nowrap"
+                    >
+                      해제
+                    </button>
+                  )}
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <select
+                    value={mealForm.cookedPortionId || ""}
+                    onChange={(e) => {
+                      const p = cookedPortions.find((x) => x.id === e.target.value);
+                      if (!p) {
+                        setMealForm({ ...mealForm, cookedPortionId: "", cookedBatchId: "", cookedQty: "" });
+                      } else {
+                        setMealForm({
+                          ...mealForm,
+                          menu: mealForm.menu ? mealForm.menu : p.dishName,
+                          cookedPortionId: p.id,
+                          cookedBatchId: p.batchId,
+                          cookedQty: String(Math.min(1, roundQty2(p.remainingQty)))
+                        });
+                      }
+                    }}
+                    className="flex-1 min-w-0 truncate px-2.5 py-1.5 rounded-lg border border-stone-200 bg-white text-[12px] font-bold text-stone-800"
+                  >
+                    <option value="">선택 안 함</option>
+                    {cookedPortions.filter((p) => roundQty2(p.remainingQty) > 0).map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.dishName} ({p.remainingQty}{p.unit} · {p.location})
+                      </option>
+                    ))}
+                  </select>
+                  {mealForm.cookedPortionId && (
+                    <input
+                      type="number"
+                      step="0.5"
+                      min="0.1"
+                      value={mealForm.cookedQty || "1"}
+                      onChange={(e) => setMealForm({ ...mealForm, cookedQty: e.target.value })}
+                      className="w-16 px-2 py-1.5 rounded-lg border border-stone-200 bg-white text-[12px] font-extrabold text-center"
+                      placeholder="수량"
+                    />
+                  )}
+                </div>
+              </div>
+            )}
+
             <input
               type="text"
               placeholder="메모"
@@ -46480,7 +48305,9 @@ time: "", location: "",
           baby_sleep_types: { title: "😴 아기 수면 구분", placeholder: "새 수면 구분 (예: 쪽잠, 유모차잠)" },
           fridge_units: { title: "⚖️ 냉장고 단위 프리셋", placeholder: "새 단위 (예: 망, 포기, 컵, 줄)" },
           recipe_difficulties: { title: "👩‍🍳 레시피 난이도", placeholder: "새 난이도 (예: 초간단, 5분컷, 특식)" },
-          routine_assignees: { title: "🔄 루틴 대상·담당자", placeholder: "새 담당자 (예: 산후도우미, 친정, 시댁)" }
+          routine_assignees: { title: "🔄 루틴 대상·담당자", placeholder: "새 담당자 (예: 산후도우미, 친정, 시댁)" },
+          cooked_categories: { title: "🍲 만든 음식 분류", placeholder: "새 분류 (예: 찜·조림, 아이반찬, 국물)" },
+          cooked_units: { title: "🥄 만든 음식 단위", placeholder: "새 단위 (예: 국자, 팩, 병, 큐브)" }
         }[categoryManageKind] || { title: "⚙️ 분류 관리", placeholder: "새 분류 입력" };
         return (
           <div
@@ -46521,6 +48348,8 @@ time: "", location: "",
                   { id: "fridge", label: "❄️ 재료", cnt: (customCategories.fridge || []).length },
                   { id: "fridge_locations", label: "🧊 보관위치", cnt: fridgeLocations.length },
                   { id: "fridge_units", label: "⚖️ 단위", cnt: fridgeUnits.length },
+                  { id: "cooked_categories", label: "🍲 음식분류", cnt: cookedDishCategories.length },
+                  { id: "cooked_units", label: "🥄 음식단위", cnt: cookedUnits.length },
                   { id: "recipe", label: "📖 레시피", cnt: (customCategories.recipe || []).length },
                   { id: "recipe_difficulties", label: "👩‍🍳 난이도", cnt: recipeDifficulties.length },
                   { id: "notice", label: "📌 공지", cnt: (customCategories.notice || []).length },
@@ -55327,6 +57156,18 @@ time: "", location: "",
                   <span>가족공지로 공유하기</span>
                 </button>
               )}
+              <button
+                type="button"
+                onClick={() => {
+                  const pg = targetPg;
+                  setPageOptionModalId(null);
+                  openRevisionHistory("page", pg);
+                }}
+                className="w-full py-2.5 px-3 rounded-xl hover:bg-stone-50 text-left text-[13.5px] font-extrabold text-stone-800 flex items-center gap-2"
+              >
+                <span>🕒</span>
+                <span>수정 이력 · 비교 · 복원</span>
+              </button>
               {accessRole !== "guest" && (
                 <button
                   type="button"
@@ -55824,6 +57665,732 @@ time: "", location: "",
                 }`}
               >
                 {confirmDialog.confirmLabel || "확인"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+
+      {/* ← 🔍 검색 화면으로 복귀 칩 (검색어·필터·스크롤 유지) */}
+      {globalSearchReturnReady && !isGlobalSearchOpen && globalSearchQuery && (
+        <button
+          type="button"
+          onClick={() => {
+            setIsGlobalSearchOpen(true);
+            setTimeout(() => {
+              if (globalSearchScrollRef.current && globalSearchSavedScrollTopRef.current > 0) {
+                globalSearchScrollRef.current.scrollTop = globalSearchSavedScrollTopRef.current;
+              }
+            }, 40);
+          }}
+          className="fixed top-12 right-3 z-[47] px-2.5 py-1 rounded-full bg-[#3F624D] text-white text-[11px] font-extrabold shadow-lg border border-white/20 flex items-center gap-1 whitespace-nowrap"
+        >
+          <span>← 🔍 검색</span>
+          <span
+            role="button"
+            tabIndex={0}
+            onClick={(e) => { e.stopPropagation(); setGlobalSearchReturnReady(false); }}
+            className="ml-0.5 opacity-80 hover:opacity-100"
+          >
+            ✕
+          </span>
+        </button>
+      )}
+
+      {/* ① 메뉴 통합검색 모달 */}
+      {isGlobalSearchOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-[72] flex items-end sm:items-center justify-center sm:p-4"
+          onClick={() => setIsGlobalSearchOpen(false)}
+        >
+          <div
+            className="bg-[#FAF8F3] w-full sm:max-w-lg rounded-t-3xl sm:rounded-3xl border border-stone-200 shadow-2xl flex flex-col max-h-[90dvh] overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-3 bg-white border-b border-stone-200 space-y-2 shrink-0">
+              <div className="flex items-center gap-2">
+                <div className="relative flex-1 min-w-0">
+                  <Search className="w-4 h-4 text-[#3F624D] absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <input
+                    type="text"
+                    autoFocus
+                    enterKeyHint="search"
+                    value={globalSearchInput}
+                    onCompositionStart={() => { isGlobalSearchComposingRef.current = true; }}
+                    onCompositionEnd={(e) => {
+                      isGlobalSearchComposingRef.current = false;
+                      setGlobalSearchInput(e.target.value);
+                      setGlobalSearchQuery(e.target.value);
+                    }}
+                    onChange={(e) => setGlobalSearchInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Escape") {
+                        if (globalSearchInput) { setGlobalSearchInput(""); setGlobalSearchQuery(""); }
+                        else setIsGlobalSearchOpen(false);
+                      } else if (e.key === "Enter" && globalSearchInput.trim()) {
+                        saveRecentGlobalSearch(globalSearchInput.trim());
+                      }
+                    }}
+                    placeholder="통합검색 (예: 시목, 닭고기, 미역국, ㅁㅇㄱ 초성)"
+                    className="w-full h-10 pl-9 pr-8 rounded-xl border border-[#C9D8CC] bg-[#FAF8F3] text-[13.5px] font-bold text-stone-900 placeholder:text-stone-400 focus:outline-none focus:ring-2 focus:ring-[#3F624D]/30"
+                  />
+                  {globalSearchInput && (
+                    <button
+                      type="button"
+                      onClick={() => { setGlobalSearchInput(""); setGlobalSearchQuery(""); }}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full bg-stone-200/80 text-stone-600 text-[11px] font-black flex items-center justify-center"
+                      aria-label="검색어 지우기"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsGlobalSearchOpen(false)}
+                  className="h-10 px-3 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-[12px] font-extrabold whitespace-nowrap shrink-0"
+                >
+                  닫기
+                </button>
+              </div>
+
+              {/* 메뉴 · 기간 · 대상 가족 필터 */}
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 no-scrollbar">
+                {GLOBAL_SEARCH_CATEGORIES.map((c) => (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() => setGlobalSearchCat(c.id)}
+                    className={`px-2 py-1 rounded-lg text-[11px] font-extrabold border whitespace-nowrap shrink-0 transition ${
+                      globalSearchCat === c.id
+                        ? "bg-[#3F624D] text-white border-[#3F624D]"
+                        : "bg-stone-50 text-stone-600 border-stone-200"
+                    }`}
+                  >
+                    {c.label}
+                  </button>
+                ))}
+              </div>
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <div className="flex items-center gap-1">
+                  {[
+                    { id: "all", label: "전체기간" },
+                    { id: "today", label: "오늘" },
+                    { id: "7d", label: "7일" },
+                    { id: "30d", label: "30일" },
+                    { id: "year", label: "올해" }
+                  ].map((p) => (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => setGlobalSearchPeriod(p.id)}
+                      className={`px-1.5 py-0.5 rounded-md text-[10.5px] font-extrabold whitespace-nowrap ${
+                        globalSearchPeriod === p.id ? "bg-[#EEF3EE] text-[#35503C] border border-[#C9D8CC]" : "text-stone-500 hover:bg-stone-100"
+                      }`}
+                    >
+                      {p.label}
+                    </button>
+                  ))}
+                </div>
+                <select
+                  value={globalSearchMember}
+                  onChange={(e) => setGlobalSearchMember(e.target.value)}
+                  className="px-2 py-0.5 rounded-lg border border-stone-200 bg-stone-50 text-[11px] font-extrabold text-stone-700"
+                >
+                  {["전체", "수혁", "아리", "시목", "시율"].map((m) => (
+                    <option key={m} value={m}>가족: {m}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex items-center justify-between text-[10.5px] font-bold text-stone-500">
+                <span>
+                  조회 범위: 현재 동기화된 기록 {globalSearchCorpus.length}건
+                  {isSuhyeokAdmin && !isCondolenceUnlocked ? " (경조사 잠금 제외)" : ""}
+                </span>
+                {globalSearchQuery && (
+                  <span className="text-[#35503C] font-black">검색 결과 {globalSearchResults.total}건</span>
+                )}
+              </div>
+            </div>
+
+            <div ref={globalSearchScrollRef} className="flex-1 overflow-y-auto p-3 space-y-3">
+              {!globalSearchQuery.trim() ? (
+                <div className="space-y-3">
+                  {recentGlobalSearches.length > 0 && (
+                    <div className="bg-white rounded-2xl border border-stone-200 p-3 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11.5px] font-black text-stone-700">🕒 내 최근 검색어 (기기·계정 전용)</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setRecentGlobalSearches([]);
+                            try { localStorage.removeItem(`kim_global_search_recent_v1_${user?.uid || "guest"}`); } catch (e) {}
+                          }}
+                          className="text-[10.5px] font-bold text-stone-400 hover:text-stone-700"
+                        >
+                          지우기
+                        </button>
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {recentGlobalSearches.map((term) => (
+                          <button
+                            key={term}
+                            type="button"
+                            onClick={() => { setGlobalSearchInput(term); setGlobalSearchQuery(term); }}
+                            className="px-2.5 py-1 rounded-full bg-stone-100 hover:bg-[#EEF3EE] text-stone-700 text-[11.5px] font-bold whitespace-nowrap"
+                          >
+                            {term}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  <div className="text-center py-6 text-[12px] text-stone-400 font-bold">
+                    검색어를 입력하면 식단·일정·루틴·냉장고·만든음식·레시피·공유노트·육아·살림을 한 번에 찾습니다.
+                  </div>
+                </div>
+              ) : globalSearchResults.total === 0 ? (
+                <div className="text-center py-10 space-y-2">
+                  <div className="text-[13px] font-extrabold text-stone-500">‘{globalSearchQuery}’ 검색 결과가 없습니다.</div>
+                  <button
+                    type="button"
+                    onClick={() => { setGlobalSearchCat("all"); setGlobalSearchPeriod("all"); setGlobalSearchMember("전체"); }}
+                    className="px-3 py-1.5 rounded-xl bg-white border border-stone-200 text-stone-700 text-[11.5px] font-extrabold"
+                  >
+                    🔄 필터 초기화
+                  </button>
+                </div>
+              ) : (
+                globalSearchResults.groups.map((grp) => (
+                  <div key={grp.catId} className="bg-white rounded-2xl border border-stone-200 overflow-hidden">
+                    <div className="px-3 py-1.5 bg-stone-50 border-b border-stone-100 flex items-center justify-between">
+                      <span className="text-[11.5px] font-black text-stone-700">{grp.label}</span>
+                      <span className="text-[10.5px] font-extrabold text-[#35503C]">{grp.items.length}건</span>
+                    </div>
+                    <div className="divide-y divide-stone-100">
+                      {grp.items.slice(0, 12).map((item) => (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() => handleGlobalSearchSelect(item)}
+                          className="w-full text-left px-3 py-2 hover:bg-[#FAF8F3] transition flex items-start justify-between gap-2"
+                        >
+                          <div className="min-w-0 flex-1">
+                            <div className="text-[12.5px] font-extrabold text-stone-900 truncate">{item.title}</div>
+                            {item.subtitle && (
+                              <div className="text-[11px] font-semibold text-stone-500 truncate">{item.subtitle}</div>
+                            )}
+                            {item.body && (
+                              <div className="text-[10.5px] text-stone-400 truncate mt-0.5">{item.body.slice(0, 90)}</div>
+                            )}
+                          </div>
+                          <ChevronRight className="w-4 h-4 text-stone-300 shrink-0 mt-1" />
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ② 항목별 영구 수정 이력 · 비교 · 안전 복원 모달 */}
+      {revisionModalState.open && (() => {
+        const meta = REVISION_ENTITY_TYPES[revisionModalState.entityType] || { label: "항목", icon: "🕒" };
+        const allEntityRevs = itemRevisions.filter(
+          (r) => r.entityType === revisionModalState.entityType && r.entityId === revisionModalState.entityId
+        );
+        const visibleRevs = allEntityRevs.slice(0, revisionModalState.pageSize);
+        const selectedRev = allEntityRevs.find((r) => r.id === revisionModalState.selectedRevId) || visibleRevs[0] || null;
+        const previewRev = revisionModalState.restorePreviewRev;
+        const compareDiffs = selectedRev && revisionModalState.currentItem
+          ? computeRevisionDiff(selectedRev.snapshot, sanitizeSnapshotForRevision(revisionModalState.currentItem))
+          : [];
+        return (
+          <div
+            className="fixed inset-0 bg-black/50 z-[74] flex items-end sm:items-center justify-center sm:p-4"
+            onClick={() => setRevisionModalState((p) => ({ ...p, open: false, restorePreviewRev: null }))}
+          >
+            <div
+              className="bg-white w-full sm:max-w-lg rounded-t-3xl sm:rounded-3xl border border-stone-200 shadow-2xl flex flex-col max-h-[88dvh] overflow-hidden"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="px-4 py-3 border-b border-stone-200 flex items-center justify-between gap-2 bg-[#FAF8F3]">
+                <div className="min-w-0 flex-1">
+                  <h3 className="text-[13.5px] font-black text-stone-900 truncate">
+                    🕒 {meta.icon} {revisionModalState.entityTitle} 수정 이력
+                  </h3>
+                  <div className="text-[10.5px] font-bold text-stone-500">
+                    영구 보관 {allEntityRevs.length}건 · 복원 시 새 버전 생성 (과거 이력 보존)
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setRevisionModalState((p) => ({ ...p, open: false, restorePreviewRev: null }))}
+                  className="w-7 h-7 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-600 flex items-center justify-center shrink-0"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {revisionModalState.conflictError && (
+                <div className="mx-3 mt-2 p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-[11.5px] font-bold">
+                  ⚠️ {revisionModalState.conflictError}
+                </div>
+              )}
+
+              <div className="flex-1 overflow-y-auto p-3 space-y-2.5">
+                {allEntityRevs.length === 0 ? (
+                  <div className="text-center py-8 text-[12px] text-stone-400 font-bold">
+                    아직 기록된 수정 이력이 없습니다. 다음 수정부터 기존 내용이 기준본(baseline)으로 자동 보존됩니다.
+                  </div>
+                ) : previewRev ? (
+                  <div className="space-y-2.5">
+                    <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-[11.5px] font-bold space-y-1">
+                      <div>↩️ v{previewRev.version} ({String(previewRev.createdAt || "").slice(0, 16).replace("T", " ")}) 내용으로 복원 미리보기</div>
+                      <div className="text-[10.5px] font-semibold">• 복원은 과거 이력을 덮어쓰지 않고 새 버전을 생성하며, 복원 직전 상태도 이력에 남아 다시 되돌릴 수 있습니다.</div>
+                      {meta.hasLinkedEffect && <div className="text-rose-700">⚠️ {meta.effectHint}</div>}
+                    </div>
+                    <div className="space-y-1.5">
+                      {computeRevisionDiff(sanitizeSnapshotForRevision(revisionModalState.currentItem), previewRev.snapshot).map((d) => (
+                        <div key={d.field} className="p-2 rounded-xl bg-stone-50 border border-stone-200 text-[11px]">
+                          <div className="font-black text-stone-700 mb-0.5">{d.label}</div>
+                          <div className="text-rose-700 line-through break-words">현재: {d.before}</div>
+                          <div className="text-[#35503C] font-bold break-words">복원 후: {d.after}</div>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="flex gap-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => setRevisionModalState((p) => ({ ...p, restorePreviewRev: null }))}
+                        className="flex-1 py-2 rounded-xl bg-stone-100 text-stone-700 text-[12px] font-extrabold whitespace-nowrap"
+                      >
+                        취소
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleConfirmRestoreRevision(previewRev)}
+                        className="flex-1 py-2 rounded-xl bg-[#3F624D] hover:bg-[#33513F] text-white text-[12px] font-extrabold whitespace-nowrap"
+                      >
+                        ↩️ 새 버전으로 복원 확정
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <div className="space-y-1.5">
+                      {visibleRevs.map((rev) => {
+                        const isSel = selectedRev?.id === rev.id;
+                        const actLbl = rev.action === "baseline" ? "기준본" : rev.action === "create" ? "생성" : rev.action === "restore" ? "복원" : rev.action === "delete" ? "삭제" : "수정";
+                        return (
+                          <div
+                            key={rev.id}
+                            onClick={() => setRevisionModalState((p) => ({ ...p, selectedRevId: rev.id }))}
+                            className={`p-2.5 rounded-xl border cursor-pointer transition ${
+                              isSel ? "bg-[#EEF3EE]/70 border-[#3F624D]" : "bg-stone-50/70 border-stone-200 hover:bg-stone-50"
+                            }`}
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="flex items-center gap-1.5 min-w-0">
+                                <span className="px-1.5 py-0.5 rounded bg-white border border-stone-200 text-[10px] font-black text-stone-700 whitespace-nowrap">
+                                  v{rev.version} · {actLbl}
+                                </span>
+                                <span className="text-[11px] font-bold text-stone-600 truncate">{rev.actorName}</span>
+                              </div>
+                              <span className="text-[10px] font-semibold text-stone-400 whitespace-nowrap">
+                                {String(rev.createdAt || "").slice(0, 16).replace("T", " ")}
+                              </span>
+                            </div>
+                            <div className="text-[11.5px] font-bold text-stone-800 mt-1">{rev.diffSummary || "변경 기록"}</div>
+                            {isSel && (
+                              <div className="mt-2 pt-2 border-t border-stone-200/80 space-y-1.5">
+                                {compareDiffs.length === 0 ? (
+                                  <div className="text-[11px] font-bold text-stone-500">현재 저장된 값과 동일합니다.</div>
+                                ) : (
+                                  <>
+                                    <div className="text-[10.5px] font-extrabold text-stone-500">현재 값과 비교 ({compareDiffs.length}개 차이)</div>
+                                    {compareDiffs.slice(0, 6).map((d) => (
+                                      <div key={d.field} className="p-1.5 rounded-lg bg-white border border-stone-200 text-[10.5px]">
+                                        <span className="font-black text-stone-700">{d.label}: </span>
+                                        <span className="text-stone-500">과거({d.before})</span>
+                                        <span className="mx-1 text-stone-400">→</span>
+                                        <span className="text-[#35503C] font-bold">현재({d.after})</span>
+                                      </div>
+                                    ))}
+                                    {canEditTab(revisionModalState.tabKey) && (
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setRevisionModalState((p) => ({ ...p, restorePreviewRev: rev }));
+                                        }}
+                                        className="w-full py-1.5 rounded-lg bg-[#3F624D] text-white text-[11.5px] font-extrabold"
+                                      >
+                                        ↩️ 이 버전(v{rev.version})으로 복원 미리보기
+                                      </button>
+                                    )}
+                                  </>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                    {allEntityRevs.length > revisionModalState.pageSize && (
+                      <button
+                        type="button"
+                        onClick={() => setRevisionModalState((p) => ({ ...p, pageSize: p.pageSize + 15 }))}
+                        className="w-full py-2 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-[11.5px] font-extrabold"
+                      >
+                        이전 이력 더 보기 ({allEntityRevs.length - revisionModalState.pageSize}건 남음)
+                      </button>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* ③ 만든 음식 · 소분 등록 모달 */}
+      {isCookedModalOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-[73] flex items-end sm:items-center justify-center sm:p-4"
+          onClick={() => setIsCookedModalOpen(false)}
+        >
+          <div
+            className="bg-white w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl border border-stone-200 shadow-2xl p-4 space-y-3 max-h-[88dvh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between">
+              <h3 className="text-[14px] font-black text-stone-900">🍲 만든 음식 · 소분 등록</h3>
+              <button
+                type="button"
+                onClick={() => setIsCookedModalOpen(false)}
+                className="w-7 h-7 rounded-lg bg-stone-100 text-stone-600 flex items-center justify-center"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-2">
+              <input
+                type="text"
+                value={cookedForm.name}
+                onChange={(e) => setCookedForm({ ...cookedForm, name: e.target.value })}
+                placeholder="음식명 (예: 소고기 미역국, 메추리알 장조림)"
+                className="w-full px-3 py-2 rounded-xl border border-stone-200 text-[13px] font-extrabold"
+              />
+              <div className="grid grid-cols-3 gap-1.5">
+                <input
+                  type="date"
+                  value={cookedForm.cookedAt}
+                  onChange={(e) => setCookedForm({ ...cookedForm, cookedAt: e.target.value })}
+                  className="px-2 py-1.5 rounded-xl border border-stone-200 text-[11.5px] font-bold"
+                />
+                <input
+                  type="number"
+                  step="0.5"
+                  min="0.5"
+                  value={cookedForm.totalQty}
+                  onChange={(e) => setCookedForm({ ...cookedForm, totalQty: e.target.value })}
+                  placeholder="총 조리량"
+                  className="px-2.5 py-1.5 rounded-xl border border-stone-200 text-[12.5px] font-extrabold"
+                />
+                <select
+                  value={cookedForm.unit}
+                  onChange={(e) => setCookedForm({ ...cookedForm, unit: e.target.value })}
+                  className="px-2 py-1.5 rounded-xl border border-stone-200 bg-stone-50 text-[12px] font-extrabold"
+                >
+                  {cookedUnits.map((u) => <option key={u} value={u}>{u}</option>)}
+                </select>
+              </div>
+              <div className="grid grid-cols-2 gap-1.5">
+                <div className="p-2 rounded-xl bg-stone-50 border border-stone-200">
+                  <label className="text-[10.5px] font-extrabold text-stone-500 block mb-0.5">조리 직후 바로 섭취량</label>
+                  <input
+                    type="number"
+                    step="0.5"
+                    min="0"
+                    value={cookedForm.immediateEatQty}
+                    onChange={(e) => setCookedForm({ ...cookedForm, immediateEatQty: e.target.value })}
+                    className="w-full px-2 py-1 rounded-lg border border-stone-200 bg-white text-[12px] font-extrabold"
+                  />
+                </div>
+                <div className="p-2 rounded-xl bg-stone-50 border border-stone-200">
+                  <div className="flex items-center justify-between mb-0.5">
+                    <label className="text-[10.5px] font-extrabold text-stone-500">분류</label>
+                    {isEditorUnlocked && (
+                      <button
+                        type="button"
+                        onClick={() => openCategoryManager("cooked_categories")}
+                        className="text-[10px] font-extrabold text-stone-500 hover:text-[#35503C] whitespace-nowrap"
+                        title="만든 음식 분류 자유편집"
+                      >
+                        ⚙️ 편집
+                      </button>
+                    )}
+                  </div>
+                  <select
+                    value={cookedForm.category}
+                    onChange={(e) => setCookedForm({ ...cookedForm, category: e.target.value })}
+                    className="w-full min-w-0 truncate px-2 py-1 rounded-lg border border-stone-200 bg-white text-[12px] font-bold"
+                  >
+                    {cookedDishCategories.map((c) => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </div>
+              </div>
+
+              {/* 소분 보관 목록 */}
+              <div className="p-2.5 rounded-2xl bg-[#FAF8F3] border border-stone-200 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11.5px] font-black text-stone-700">
+                    📦 소분 보관 (합계 {roundQty2((cookedForm.portions || []).reduce((a, b) => a + roundQty2(b.qty), 0))}{cookedForm.unit} / 남은 {roundQty2(roundQty2(cookedForm.totalQty) - roundQty2(cookedForm.immediateEatQty))}{cookedForm.unit})
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setCookedForm({
+                      ...cookedForm,
+                      portions: [...(cookedForm.portions || []), { qty: "1", location: "냉장실", plannedEatDate: "", expiryDate: "" }]
+                    })}
+                    className="px-2 py-0.5 rounded-lg bg-white border border-stone-200 text-[10.5px] font-extrabold text-[#35503C]"
+                  >
+                    + 소분 추가
+                  </button>
+                </div>
+                {(cookedForm.portions || []).map((p, idx) => (
+                  <div key={idx} className="grid grid-cols-12 gap-1 items-center bg-white p-1.5 rounded-xl border border-stone-200">
+                    <input
+                      type="number"
+                      step="0.5"
+                      min="0"
+                      value={p.qty}
+                      onChange={(e) => {
+                        const next = [...cookedForm.portions];
+                        next[idx] = { ...next[idx], qty: e.target.value };
+                        setCookedForm({ ...cookedForm, portions: next });
+                      }}
+                      className="col-span-3 px-1.5 py-1 rounded-lg border border-stone-200 text-[11.5px] font-extrabold text-center"
+                      placeholder="양"
+                    />
+                    <select
+                      value={p.location}
+                      onChange={(e) => {
+                        const next = [...cookedForm.portions];
+                        next[idx] = { ...next[idx], location: e.target.value };
+                        setCookedForm({ ...cookedForm, portions: next });
+                      }}
+                      className="col-span-4 px-1 py-1 rounded-lg border border-stone-200 text-[11px] font-bold"
+                    >
+                      {fridgeLocations.map((loc) => <option key={loc} value={loc}>{loc}</option>)}
+                    </select>
+                    <input
+                      type="date"
+                      value={p.expiryDate || ""}
+                      onChange={(e) => {
+                        const next = [...cookedForm.portions];
+                        next[idx] = { ...next[idx], expiryDate: e.target.value };
+                        setCookedForm({ ...cookedForm, portions: next });
+                      }}
+                      title="사용자 보관 기한 (선택)"
+                      className="col-span-4 px-1 py-1 rounded-lg border border-stone-200 text-[10.5px] font-bold"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setCookedForm({ ...cookedForm, portions: cookedForm.portions.filter((_, i) => i !== idx) })}
+                      className="col-span-1 text-stone-400 hover:text-rose-600 font-black text-[12px]"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ))}
+              </div>
+
+              {/* 레시피 연결 시 선택적 원재료 차감 미리보기 */}
+              {cookedForm.rawDeductPreview?.length > 0 && (
+                <div className="p-2.5 rounded-xl bg-amber-50/70 border border-amber-200 space-y-1.5">
+                  <label className="flex items-center gap-1.5 text-[11.5px] font-extrabold text-amber-900 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(cookedForm.deductRawIngredients)}
+                      onChange={(e) => setCookedForm({ ...cookedForm, deductRawIngredients: e.target.checked })}
+                    />
+                    <span>냉장고 원재료 함께 차감 (선택 · 확인 후 차감)</span>
+                  </label>
+                  {cookedForm.deductRawIngredients && (
+                    <div className="space-y-1">
+                      {cookedForm.rawDeductPreview.map((rItem, rIdx) => (
+                        <div key={rItem.fridgeId} className="flex items-center justify-between text-[11px] bg-white px-2 py-1 rounded-lg border border-amber-200/70">
+                          <label className="flex items-center gap-1.5 font-bold text-stone-800">
+                            <input
+                              type="checkbox"
+                              checked={rItem.selected}
+                              onChange={(e) => {
+                                const next = [...cookedForm.rawDeductPreview];
+                                next[rIdx] = { ...next[rIdx], selected: e.target.checked };
+                                setCookedForm({ ...cookedForm, rawDeductPreview: next });
+                              }}
+                            />
+                            <span>{rItem.name} (보유 {rItem.currentQty}{rItem.unit})</span>
+                          </label>
+                          <span className="font-extrabold text-rose-700">-{rItem.deductQty}{rItem.unit}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <input
+                type="text"
+                value={cookedForm.memo}
+                onChange={(e) => setCookedForm({ ...cookedForm, memo: e.target.value })}
+                placeholder="메모 (간·재료·보관 팁)"
+                className="w-full px-3 py-2 rounded-xl border border-stone-200 text-[12.5px]"
+              />
+            </div>
+
+            <div className="flex gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => setIsCookedModalOpen(false)}
+                className="flex-1 py-2.5 rounded-xl bg-stone-100 text-stone-600 text-[13px] font-extrabold whitespace-nowrap"
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveCookedBatch}
+                className="flex-1 py-2.5 rounded-xl bg-[#3F624D] hover:bg-[#33513F] text-white text-[13px] font-extrabold whitespace-nowrap"
+              >
+                🍲 저장하기
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ③ 소분 음식 액션 모달 (먹었어요 · 보관 이동/분할 · 폐기 · 수량 정정) */}
+      {cookedActionModal.open && cookedActionModal.portion && (
+        <div
+          className="fixed inset-0 bg-black/50 z-[74] flex items-end sm:items-center justify-center sm:p-4"
+          onClick={() => setCookedActionModal((p) => ({ ...p, open: false }))}
+        >
+          <div
+            className="bg-white w-full sm:max-w-sm rounded-t-3xl sm:rounded-3xl border border-stone-200 shadow-2xl p-4 space-y-3"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between">
+              <h3 className="text-[13.5px] font-black text-stone-900">
+                {cookedActionModal.type === "consume"
+                  ? "🍽️ 먹었어요 기록"
+                  : cookedActionModal.type === "move"
+                  ? "📦 보관 위치 이동 · 분할"
+                  : cookedActionModal.type === "discard"
+                  ? "🗑️ 음식 폐기 기록"
+                  : "⚖️ 남은 수량 정정"}
+              </h3>
+              <button
+                type="button"
+                onClick={() => setCookedActionModal((p) => ({ ...p, open: false }))}
+                className="w-7 h-7 rounded-lg bg-stone-100 text-stone-600 flex items-center justify-center"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-2.5 rounded-xl bg-[#FAF8F3] border border-stone-200 text-[12px] font-bold text-stone-800">
+              {cookedActionModal.portion.dishName} · 현재 남은 양 <span className="text-[#35503C] font-black">{cookedActionModal.portion.remainingQty}{cookedActionModal.portion.unit}</span> ({cookedActionModal.portion.location})
+            </div>
+
+            <div className="space-y-2">
+              <div>
+                <label className="text-[11px] font-extrabold text-stone-500 block mb-1">
+                  {cookedActionModal.type === "adjust" ? `정정 후 최종 남은 양 (${cookedActionModal.portion.unit})` : `수량 (${cookedActionModal.portion.unit})`}
+                </label>
+                <input
+                  type="number"
+                  step="0.5"
+                  min={cookedActionModal.type === "adjust" ? "0" : "0.1"}
+                  value={cookedActionModal.qty}
+                  onChange={(e) => setCookedActionModal((p) => ({ ...p, qty: e.target.value }))}
+                  className="w-full px-3 py-2 rounded-xl border border-stone-200 text-[13.5px] font-extrabold"
+                />
+              </div>
+
+              {cookedActionModal.type === "consume" && (
+                <>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    <select
+                      value={cookedActionModal.member}
+                      onChange={(e) => setCookedActionModal((p) => ({ ...p, member: e.target.value }))}
+                      className="px-2.5 py-2 rounded-xl border border-stone-200 text-[12px] font-bold"
+                    >
+                      {["온가족", "수혁", "아리", "시목", "시율"].map((m) => <option key={m} value={m}>{m}</option>)}
+                    </select>
+                    <select
+                      value={cookedActionModal.mealSlot}
+                      onChange={(e) => setCookedActionModal((p) => ({ ...p, mealSlot: e.target.value }))}
+                      className="px-2.5 py-2 rounded-xl border border-stone-200 text-[12px] font-bold"
+                    >
+                      {["아침", "점심", "저녁", "오전간식", "오후간식", "야식"].map((s) => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                  </div>
+                  <label className="flex items-center gap-1.5 text-[11.5px] font-bold text-stone-700 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(cookedActionModal.linkToMeal)}
+                      onChange={(e) => setCookedActionModal((p) => ({ ...p, linkToMeal: e.target.checked }))}
+                    />
+                    <span>오늘 식단표에도 함께 기록 (중복 차감 방지)</span>
+                  </label>
+                </>
+              )}
+
+              {cookedActionModal.type === "move" && (
+                <div>
+                  <label className="text-[11px] font-extrabold text-stone-500 block mb-1">이동할 보관 위치 (일부 입력 시 자동 분할 · 조리일/기한 유지)</label>
+                  <select
+                    value={cookedActionModal.targetLocation}
+                    onChange={(e) => setCookedActionModal((p) => ({ ...p, targetLocation: e.target.value }))}
+                    className="w-full px-3 py-2 rounded-xl border border-stone-200 text-[12.5px] font-extrabold"
+                  >
+                    {fridgeLocations.map((loc) => <option key={loc} value={loc}>{loc}</option>)}
+                  </select>
+                </div>
+              )}
+
+              {(cookedActionModal.type === "discard" || cookedActionModal.type === "adjust") && (
+                <input
+                  type="text"
+                  value={cookedActionModal.reason}
+                  onChange={(e) => setCookedActionModal((p) => ({ ...p, reason: e.target.value }))}
+                  placeholder={cookedActionModal.type === "adjust" ? "수량 정정 사유 (필수)" : "폐기 사유 (선택)"}
+                  className="w-full px-3 py-2 rounded-xl border border-stone-200 text-[12.5px]"
+                />
+              )}
+            </div>
+
+            <div className="flex gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => setCookedActionModal((p) => ({ ...p, open: false }))}
+                className="flex-1 py-2.5 rounded-xl bg-stone-100 text-stone-600 text-[13px] font-extrabold whitespace-nowrap"
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                onClick={handleCookedPortionAction}
+                className="flex-1 py-2.5 rounded-xl bg-[#3F624D] hover:bg-[#33513F] text-white text-[13px] font-extrabold whitespace-nowrap"
+              >
+                확인
               </button>
             </div>
           </div>

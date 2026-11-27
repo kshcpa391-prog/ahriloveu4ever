@@ -1186,7 +1186,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v14.46";
+export const APP_CODE_VERSION = "v14.48";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1204,7 +1204,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-27 09:50";
+export const APP_BUILD_DATE = "2026-11-27 11:45";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1274,6 +1274,29 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v14.48",
+    version: "v14.48",
+    date: "2026-11-27",
+    title: "🛡️ 통합검색 TDZ·미선언 변수 6건·모달 ESC/뒤로가기 치명 버그 수정 + ⚙️ 만든음식 분류·단위 자유편집 + ☁️ 냉장고 탭모드/소진표시 Firebase 이관 + 🔗 만든음식→식단예약/공지 연계 + 📱 버튼 줄바꿈 일괄 교정",
+    items: [
+      "🛡️ [1. 치명 런타임 버그 3종 수정] ① 통합검색 인덱스(globalSearchCorpus·globalSearchResults)가 meals·fridge·canViewTab·cookedBatches 선언보다 위에 위치해 발생하던 TDZ(Cannot access before initialization) 오류를 선언 이후 위치로 이동해 완전 해결 ② 통합검색 내 미선언 상태·세터 6건(babyHealthNotes→babyMedicalNotes, babyGrowth→babyGrowthLogs, setShoppingSearch→setShoppingSearchQuery, setNoticeSearch→setNoticeSearchQuery, setExpenseSearch→setExpenseSearchQuery, setBucketSearch→setBucketSearchQuery) 교정 ③ 통합검색·수정이력·만든음식 등록·액션 모달 4종을 전역 ESC 키 및 안드로이드 뒤로가기(popstate) 닫기에 완전 연동",
+      "⚙️ [3. 시스템 자유도 확장] 하드코딩되어 있던 만든 음식 분류(cooked_categories)와 만든 음식 단위(cooked_units)를 통합 세부 분류 관리(custom_categories_v1)로 승격해 추가·수정·삭제·순서변경·기본복원·Firebase 실시간 동기화·JSON 백업/복원 및 등록 모달 내 ⚙️ 바로가기 지원",
+      "☁️ [5. 로컬 전용 설정 Firebase 이관] 냉장고 상단 구분(fridgeSectionMode: 전체/식재료/만든음식)과 소진 음식 표시(showDepletedCooked)를 Firestore(family_meta_v4/home_layout) 실시간 동기화 및 JSON 백업으로 이관해 기기 간 선호 화면 유지",
+      "🔗 [2·6·7. 메뉴 연계 · 줄바꿈 · 가이드 통합] ① 만든 음식 카드에 [📅 식단예약](계획 식단 모달 즉시 연결) 및 [📌 공지](남은 반찬 가족공지 공유) 1탭 연계 버튼 추가 ② 통합검색·수정이력·만든음식 모달의 모든 버튼에 whitespace-nowrap·min-w-0을 보강해 360px 모바일 줄바꿈·잘림 방지 ③ 사용 가이드(홈·냉장고)에 통합검색·만든음식 안내를 중복 없이 간결 통합 (과거 패치노트 485건 100% 보존)"
+    ]
+  },
+  {
+    id: "patch-v14.47",
+    version: "v14.47",
+    date: "2026-11-27",
+    title: "🔍 전 메뉴 통합검색(초성·띄어쓰기·권한격리) + 🕒 항목별 영구 수정이력·비교·안전복원(기준본·충돌감지·오프라인대기) + 🍲 만든 반찬·소분 음식 관리(보존방정식·식단예약·중복차감방지)",
+    items: [
+      "🔍 [① 메뉴 통합검색 신설] 상단 공통 헤더에 통합검색(🔍) 버튼을 추가해 식단·일정·할일·루틴·냉장고·장보기·레시피·공지·공유노트(noteHtml+blocks 중복제거)·육아/의료·살림·지출·경조사·버킷·만든 음식·메뉴 바로가기를 실시간 인메모리 인덱스로 검색합니다. 한글 초성(ㅁㅇㄱ)·띄어쓰기 무시·영문 대소문자·다중 검색어·IME 조합 안전 입력, 메뉴/기간/가족 필터, 정확한 ID 기반 이동 및 검색 상태 복귀, 권한/비공개 격리(경조사 잠금·개인일정·인증키 제외), 사용자별 최근 검색어를 지원합니다.",
+      "🕒 [② 항목별 수정 이력·비교·안전 복원] Firestore 전용 컬렉션(family_revisions_v1)에 최초 수정 전 기준본(baseline)과 신규·수정·삭제·복원 이력을 원본과 함께 원자적(writeBatch/트랜잭션) 저장합니다. 항목별 [🕒 이력]에서 변경 전/후 필드 비교·페이지네이션 조회·복원 전 미리보기·버전 충돌 감지·새 버전 복원(복원 직전 상태 재복원 가능)·보호필드(ID/소유권/권한) 유지·이미지 참조 보존·삭제 기록 복원 연계를 지원하며, 레시피 저장 실패 시 입력 유지 및 재시도 보강을 반영했습니다.",
+      "🍲 [③ 만든 반찬·소분 음식 관리] 기존 냉장고 상단에 [전체 / 🥬 식재료 / 🍲 만든 음식] 구분을 통합하고 조리 묶음(family_cooked_batches_v1)·소분(family_cooked_portions_v1)·이력로그(family_cooked_logs_v1)를 분리 관리합니다. 조리량+보정=잔량+섭취+폐기 보존 방정식, 일부 먹기/보관 이동(분할)/해동(조리일·기한 비변조)/폐기/사유 필수 수량정정, 레시피→만든 음식 저장(선택적 원재료 차감 미리보기 확인), 식단 계획 예약량 분리 및 실제 섭취 시 opId 1회 차감, AI/인수인계 연계, 전체 JSON 백업·복원 통합을 구현했습니다. (과거 패치노트 484건 100% 보존)"
+    ]
+  },
   {
     id: "patch-v14.46",
     version: "v14.46",
@@ -7411,6 +7434,7 @@ export const APP_FEATURE_GUIDES = [
     audience: "공통",
     summary: "시간대별 브리핑, 오늘의 행동 피드, 시율 케어, 핵심 메뉴를 한 화면에서 확인합니다.",
     steps: [
+      "상단 유틸 바 & 통합검색(🔍): 어느 메뉴에서나 상단 🔍 버튼으로 식단·일정·루틴·냉장고·만든음식·레시피·공유노트·육아 기록을 초성·키워드로 즉시 찾고 돌아올 수 있어요.",
       "상단 가족사진·미니 D-Day: 사진을 누르면 교체·위치·문구 편집이 가능하고, D-Day 설정에서 원하는 기념일·생후일을 고정·순서변경할 수 있어요.",
       "시간대별 브리핑: 오전·오후·밤에 맞춰 날씨·일정·임박 재료를 보여주며, [📋 브리핑]으로 카톡 공유용 요약을 1탭 복사해요.",
       "오늘의 행동 피드: 3일 내 일정·지금 루틴·남은 할 일을 한 카드에서 보고 체크·복사·추가할 수 있어요.",
@@ -7472,7 +7496,7 @@ export const APP_FEATURE_GUIDES = [
     audience: "공통",
     summary: "보관 위치별 재고와 소비기한 D-Day를 관리하고 마트 영수증을 AI로 자동 입고합니다.",
     steps: [
-      "📋 리스트 뷰와 우리 집 실제 구조(냉장 3단·채소칸·하부냉동 4칸·별도냉동 4칸·팬트리) 기반 🧊 칸별 뷰를 전환해 볼 수 있어요.",
+      "상단 [전체 / 🥬 식재료 / 🍲 만든음식] 탭으로 원재료와 소분 반찬을 분리 관리하고, 📋 리스트 뷰와 🧊 칸별 뷰를 전환해 볼 수 있어요.",
       "칸별 뷰에서 재료 칩을 길게 눌러 드래그하거나 [☑️ 다중 이동]으로 여러 재료를 한 번에 다른 칸으로 옮길 수 있어요.",
       "재료 카드에서 [- / +], [🌗 반만], [다먹음], [+장보기], [🗑️ 폐기]를 처리하고, 소비기한은 [1일·3일·1주·한달] 버튼으로 빠르게 맞춰요.",
       "[🧾 영수증 AI 스캔]에서 카메라로 바로 촬영하거나 앨범 이미지를 올려 품목·수량·금액·보관위치를 자동 분석하고 일괄 입고·식비 기록까지 처리해요."
@@ -7656,3 +7680,444 @@ export const APP_FEATURE_GUIDES = [
     tips: "상단 [🗂️ 노트]로 현재 필터 기준 집계·내역을 공유노트에 바로 저장하고, 가족행사/경조사 일정이나 공지에서도 1탭으로 기록을 열 수 있어요."
   }
 ];
+
+
+// ============================================================================
+// v14.47 ① 메뉴 통합검색 엔진 (한글 초성 · 띄어쓰기 무시 · HTML 정제 · 스코어링)
+// ============================================================================
+export const KOREAN_CHOSUNG = [
+  "ㄱ", "ㄲ", "ㄴ", "ㄷ", "ㄸ", "ㄹ", "ㅁ", "ㅂ", "ㅃ", "ㅅ",
+  "ㅆ", "ㅇ", "ㅈ", "ㅉ", "ㅊ", "ㅋ", "ㅌ", "ㅍ", "ㅎ"
+];
+
+export const extractKoreanChosung = (str) => {
+  const s = String(str || "");
+  let out = "";
+  for (let i = 0; i < s.length; i++) {
+    const code = s.charCodeAt(i);
+    if (code >= 0xac00 && code <= 0xd7a3) {
+      out += KOREAN_CHOSUNG[Math.floor((code - 0xac00) / 588)];
+    } else if (!/\s/.test(s[i])) {
+      out += s[i].toLowerCase();
+    }
+  }
+  return out;
+};
+
+export const normalizeSearchText = (str) =>
+  String(str || "").toLowerCase().replace(/\s+/g, "").trim();
+
+export const isChosungOnlyToken = (token) =>
+  /^[ㄱ-ㅎ]+$/.test(String(token || "").trim());
+
+export const stripHtmlToPlainText = (html) => {
+  if (!html) return "";
+  return String(html)
+    .replace(/<br\s*\/?>/gi, " ")
+    .replace(/<\/(?:div|p|li|tr|h[1-6])>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, '"')
+    .replace(/\s+/g, " ")
+    .trim();
+};
+
+export const matchesSearchToken = (haystackRaw, tokenRaw) => {
+  const tokenNorm = normalizeSearchText(tokenRaw);
+  if (!tokenNorm) return true;
+  const hayNorm = normalizeSearchText(haystackRaw);
+  if (hayNorm.includes(tokenNorm)) return true;
+  if (isChosungOnlyToken(tokenNorm)) {
+    const hayCho = extractKoreanChosung(haystackRaw);
+    if (hayCho.includes(tokenNorm)) return true;
+  }
+  return false;
+};
+
+export const matchesSearchQuery = (haystackRaw, queryRaw) => {
+  const tokens = String(queryRaw || "").trim().split(/\s+/).filter(Boolean);
+  if (tokens.length === 0) return false;
+  return tokens.every((tk) => matchesSearchToken(haystackRaw, tk));
+};
+
+export const scoreSearchMatch = ({ title = "", subtitle = "", body = "", tags = "", date = "" }, queryRaw) => {
+  const tokens = String(queryRaw || "").trim().split(/\s+/).filter(Boolean);
+  if (tokens.length === 0) return 0;
+  const combined = `${title} ${subtitle} ${body} ${tags}`;
+  if (!tokens.every((tk) => matchesSearchToken(combined, tk))) return 0;
+
+  const qNorm = normalizeSearchText(queryRaw);
+  const tNorm = normalizeSearchText(title);
+  const tCho = extractKoreanChosung(title);
+  let score = 10;
+
+  if (tNorm === qNorm) score += 120;
+  else if (tNorm.startsWith(qNorm)) score += 80;
+  else if (tNorm.includes(qNorm)) score += 55;
+  else if (isChosungOnlyToken(qNorm) && tCho.includes(qNorm)) score += 45;
+
+  for (const tk of tokens) {
+    if (matchesSearchToken(title, tk)) score += 20;
+    else if (matchesSearchToken(tags, tk) || matchesSearchToken(subtitle, tk)) score += 10;
+    else if (matchesSearchToken(body, tk)) score += 6;
+  }
+
+  // Recency boost (up to +15)
+  const dStr = String(date || "").slice(0, 10);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dStr)) {
+    const diffDays = Math.abs(Math.round((Date.now() - new Date(dStr + "T00:00:00").getTime()) / 86400000));
+    if (Number.isFinite(diffDays)) {
+      if (diffDays <= 7) score += 15;
+      else if (diffDays <= 30) score += 10;
+      else if (diffDays <= 90) score += 5;
+    }
+  }
+  return score;
+};
+
+export const GLOBAL_SEARCH_CATEGORIES = [
+  { id: "all", label: "전체" },
+  { id: "daily", label: "🍽️ 식단" },
+  { id: "schedule", label: "🗓️ 일정·할일" },
+  { id: "routines", label: "🔄 루틴" },
+  { id: "fridge", label: "❄️ 냉장고" },
+  { id: "cooked", label: "🍲 만든음식" },
+  { id: "shopping", label: "🛒 장보기" },
+  { id: "recipes", label: "📖 레시피" },
+  { id: "notices", label: "📌 공지" },
+  { id: "pages", label: "🗂️ 공유노트" },
+  { id: "baby", label: "👶 육아·의료" },
+  { id: "house", label: "🏠 살림" },
+  { id: "monthly", label: "💰 지출" },
+  { id: "condolence", label: "💌 경조사" },
+  { id: "bucket", label: "🌟 버킷" },
+  { id: "menu", label: "🧭 메뉴" }
+];
+
+
+// ============================================================================
+// v14.47 ② 항목별 영구 수정 이력 · 비교 · 안전 복원 엔진
+// ============================================================================
+export const REVISION_ENTITY_TYPES = {
+  recipe: { label: "레시피", icon: "📖", col: "family_recipes_v8", tabKey: "recipes", hasLinkedEffect: false },
+  page: { label: "공유노트", icon: "🗂️", col: "family_pages_v1", tabKey: "pages", hasLinkedEffect: false },
+  notice: { label: "가족공지", icon: "📌", col: "family_notices_v4", tabKey: "notices", hasLinkedEffect: false },
+  schedule: { label: "일정·할일", icon: "🗓️", col: "family_schedules_v4", tabKey: "schedule", hasLinkedEffect: false },
+  meal: { label: "식단", icon: "🍽️", col: "family_meals_v4", tabKey: "daily", hasLinkedEffect: true, effectHint: "연결된 만든 음식 섭취량·원재료 차감 여부를 함께 확인하세요." },
+  fridge: { label: "냉장고 재고", icon: "❄️", col: "family_fridge_v4", tabKey: "fridge", hasLinkedEffect: true, effectHint: "수량 변경은 가계부·소비 이력과 차이가 생길 수 있어 보정 사유가 함께 기록됩니다." },
+  shopping: { label: "장보기", icon: "🛒", col: "family_shopping_v4", tabKey: "shopping", hasLinkedEffect: false },
+  routine: { label: "반복 루틴", icon: "🔄", col: "family_meta_v4", tabKey: "routines", hasLinkedEffect: false },
+  baby_activity: { label: "육아 생활기록", icon: "🍼", col: "family_baby_activities_v1", tabKey: "baby", hasLinkedEffect: false },
+  baby_growth: { label: "성장기록", icon: "📏", col: "family_baby_growth_v7", tabKey: "baby", hasLinkedEffect: false },
+  baby_health: { label: "진료·체온", icon: "🩺", col: "family_baby_health_v7", tabKey: "baby", hasLinkedEffect: false },
+  baby_diary: { label: "육아일기", icon: "📖", col: "family_baby_diary_v8", tabKey: "baby", hasLinkedEffect: false },
+  house: { label: "살림수첩", icon: "🏠", col: "family_house_items_v1", tabKey: "house", hasLinkedEffect: false },
+  expense: { label: "식비 지출", icon: "💰", col: "family_expenses_v4", tabKey: "monthly", hasLinkedEffect: true, effectHint: "금액 변경 시 월간 식비 합계와 예산 잔액이 즉시 변동됩니다." },
+  condolence: { label: "경조사비", icon: "💌", col: "family_condolence_v1", tabKey: "condolence", hasLinkedEffect: true, effectHint: "금액·구분 변경 시 경조사 부분합·총계가 변동됩니다." },
+  cooked_batch: { label: "만든 음식 묶음", icon: "🍲", col: "family_cooked_batches_v1", tabKey: "fridge", hasLinkedEffect: true, effectHint: "조리량 복원 시 소분 잔량과 차이가 발생할 수 있어 보정 기록이 함께 남습니다." },
+  cooked_portion: { label: "소분 음식", icon: "🥡", col: "family_cooked_portions_v1", tabKey: "fridge", hasLinkedEffect: true, effectHint: "잔량 복원 시 기존 섭취·폐기 기록은 유지되고 수량 정정 로그가 함께 기록됩니다." }
+};
+
+export const REVISION_EXCLUDED_STATES = [
+  "스크롤 위치",
+  "화면 필터·정렬·탭 전환",
+  "작성 중인 미저장 초안(타이핑 중간 상태)",
+  "최근 검색어·열림/접힘 UI 상태"
+];
+
+export const REVISION_PROTECTED_FIELDS = [
+  "id",
+  "uid",
+  "owner",
+  "createdBy",
+  "createdAt",
+  "createdAtMs",
+  "role",
+  "permissions",
+  "version",
+  "lastOpId"
+];
+
+export const REVISION_FIELD_LABELS = {
+  title: "제목",
+  name: "이름",
+  dishName: "음식명",
+  category: "분류",
+  menu: "메뉴",
+  date: "날짜",
+  endDate: "종료일",
+  time: "시간",
+  location: "위치/장소",
+  shelfZone: "보관 칸",
+  slot: "끼니",
+  timeSlot: "시간대",
+  scheduledTime: "수행시각",
+  assignee: "담당자",
+  cycle: "반복주기",
+  members: "대상 가족",
+  quantity: "수량",
+  remainingQty: "남은 양",
+  totalQty: "총 조리량",
+  unit: "단위",
+  price: "금액",
+  cost: "비용",
+  amount: "금액",
+  expiryDate: "소비/보관기한",
+  plannedEatDate: "먹을 예정일",
+  cookedAt: "조리일",
+  thawedAt: "해동일",
+  ingredientsText: "재료",
+  stepsText: "조리 순서",
+  cookTime: "조리시간",
+  difficulty: "난이도",
+  content: "내용",
+  memo: "메모",
+  note: "메모",
+  noteBody: "본문",
+  blocks: "블록/표/체크리스트",
+  attachments: "첨부파일",
+  pinned: "상단고정",
+  done: "완료여부",
+  checked: "체크여부",
+  urgent: "급함",
+  status: "상태",
+  mealStatus: "식사상태",
+  sourceType: "식사구분",
+  photoDataUrl: "사진",
+  photoUrl: "사진"
+};
+
+export const sanitizeSnapshotForRevision = (item) => {
+  if (!item || typeof item !== "object") return {};
+  const out = {};
+  for (const [k, v] of Object.entries(item)) {
+    if (v === undefined) continue;
+    if (typeof v === "string" && v.startsWith("data:image/")) {
+      out[k] = `[image-ref:${k}:len=${v.length}]`;
+    } else if (k === "attachments" && Array.isArray(v)) {
+      out[k] = v.map((att) => ({
+        id: att?.id || "",
+        name: att?.name || "첨부파일",
+        mimeType: att?.mimeType || "",
+        size: att?.size || (typeof att?.dataUrl === "string" ? att.dataUrl.length : 0),
+        hasRef: Boolean(att?.dataUrl || att?.url)
+      }));
+    } else if (k === "photoUrls" && Array.isArray(v)) {
+      out[k] = v.map((u, idx) =>
+        typeof u === "string" && u.startsWith("data:image/") ? `[image-ref:photo_${idx}:len=${u.length}]` : u
+      );
+    } else if (Array.isArray(v)) {
+      try {
+        out[k] = JSON.parse(JSON.stringify(v));
+      } catch {
+        out[k] = v;
+      }
+    } else if (v && typeof v === "object") {
+      try {
+        out[k] = JSON.parse(JSON.stringify(v));
+      } catch {
+        out[k] = v;
+      }
+    } else {
+      out[k] = v;
+    }
+  }
+  return out;
+};
+
+const formatRevisionValueForDiff = (val) => {
+  if (val === null || val === undefined || val === "") return "(비어 있음)";
+  if (typeof val === "boolean") return val ? "예" : "아니오";
+  if (Array.isArray(val)) {
+    if (val.length === 0) return "(비어 있음)";
+    if (typeof val[0] === "object") return `${val.length}건`;
+    return val.join(", ");
+  }
+  if (typeof val === "object") {
+    try {
+      const s = JSON.stringify(val);
+      return s.length > 90 ? s.slice(0, 90) + "…" : s;
+    } catch {
+      return "[객체]";
+    }
+  }
+  const str = String(val);
+  if (str.startsWith("[image-ref:")) return "🖼️ 첨부 이미지(참조 유지)";
+  if (str.includes("<") && str.includes(">")) {
+    const plain = stripHtmlToPlainText(str);
+    return plain.length > 100 ? plain.slice(0, 100) + "…" : plain || "(서식 본문)";
+  }
+  return str.length > 120 ? str.slice(0, 120) + "…" : str;
+};
+
+export const computeRevisionDiff = (beforeObj, afterObj) => {
+  const b = beforeObj && typeof beforeObj === "object" ? beforeObj : {};
+  const a = afterObj && typeof afterObj === "object" ? afterObj : {};
+  const ignore = new Set(["updatedAt", "updatedAtMs", "version", "lastOpId", "restoredFromRevisionId", "createdAt", "createdAtMs"]);
+  const keys = Array.from(new Set([...Object.keys(b), ...Object.keys(a)])).filter((k) => !ignore.has(k));
+  const diffs = [];
+  for (const k of keys) {
+    const bv = b[k];
+    const av = a[k];
+    if (JSON.stringify(bv ?? null) === JSON.stringify(av ?? null)) continue;
+    diffs.push({
+      field: k,
+      label: REVISION_FIELD_LABELS[k] || k,
+      before: formatRevisionValueForDiff(bv),
+      after: formatRevisionValueForDiff(av)
+    });
+  }
+  return diffs;
+};
+
+export const buildRestoredEntityPayload = (currentItem, targetSnapshot, nextVersion, revisionId = "") => {
+  const base = currentItem && typeof currentItem === "object" ? { ...currentItem } : {};
+  const snap = targetSnapshot && typeof targetSnapshot === "object" ? targetSnapshot : {};
+  const restored = { ...base };
+  for (const [k, v] of Object.entries(snap)) {
+    if (REVISION_PROTECTED_FIELDS.includes(k)) continue;
+    // Preserve existing image/attachment binary if snapshot stored a lightweight reference placeholder
+    if (typeof v === "string" && v.startsWith("[image-ref:") && typeof base[k] === "string" && base[k]) {
+      continue;
+    }
+    if (k === "attachments" && Array.isArray(v) && v.every((x) => !x?.dataUrl) && Array.isArray(base.attachments)) {
+      continue;
+    }
+    restored[k] = v;
+  }
+  restored.version = Number(nextVersion) || (Number(base.version) || 1) + 1;
+  restored.updatedAt = new Date().toISOString();
+  restored.updatedAtMs = Date.now();
+  if (revisionId) restored.restoredFromRevisionId = revisionId;
+  return restored;
+};
+
+
+// ============================================================================
+// v14.47 ③ 만든 반찬 · 소분 음식 관리 엔진 (보존 방정식 · 분할 이동 · 예약 분리)
+// ============================================================================
+export const COOKED_UNITS = ["인분", "g", "mL", "개", "용기"];
+export const COOKED_DISH_CATEGORIES = ["국·찌개", "밑반찬", "메인요리", "유아식·이유식", "밥·죽·면", "소스·육수", "간식·기타"];
+
+export const roundQty2 = (n) => {
+  const num = Number(n);
+  if (!Number.isFinite(num)) return 0;
+  return Math.round(num * 100) / 100;
+};
+
+export const validatePortionOperation = ({ portion, opType, qty, unit }) => {
+  if (!portion) return { ok: false, error: "소분 항목을 찾을 수 없습니다." };
+  const q = roundQty2(qty);
+  if (!Number.isFinite(q) || q <= 0) {
+    return { ok: false, error: "0보다 큰 올바른 수량을 입력해 주세요." };
+  }
+  if (unit && portion.unit && unit !== portion.unit) {
+    return { ok: false, error: `단위가 다릅니다 (${portion.unit} ≠ ${unit}). 같은 단위로 입력해 주세요.` };
+  }
+  const curRem = roundQty2(portion.remainingQty);
+  if ((opType === "consume" || opType === "discard" || opType === "move") && q > curRem) {
+    return { ok: false, error: `남은 양(${curRem}${portion.unit || ""})보다 큰 수량은 처리할 수 없습니다.` };
+  }
+  return { ok: true, qty: q };
+};
+
+export const splitPortionForMove = (portion, moveQty, targetLocation, targetShelfZone = "", nowDateStr = getTodayStr()) => {
+  const check = validatePortionOperation({ portion, opType: "move", qty: moveQty, unit: portion?.unit });
+  if (!check.ok) return { ok: false, error: check.error };
+  const q = check.qty;
+  const curRem = roundQty2(portion.remainingQty);
+  const fromFrozen = String(portion.location || "").includes("냉동");
+  const toFrozen = String(targetLocation || "").includes("냉동");
+  const isThawing = fromFrozen && !toFrozen;
+  // Moving/thawing NEVER resets cookedAt and NEVER auto-extends expiryDate
+  const nextThawedAt = isThawing ? (portion.thawedAt || nowDateStr) : (portion.thawedAt || "");
+  const leftAfter = roundQty2(curRem - q);
+
+  if (leftAfter <= 0) {
+    // Full move: keep same portion id & batch link
+    return {
+      ok: true,
+      mode: "full",
+      updatedSource: {
+        ...portion,
+        location: targetLocation,
+        shelfZone: targetShelfZone || portion.shelfZone || "",
+        thawedAt: nextThawedAt,
+        updatedAtMs: Date.now()
+      },
+      newPortion: null,
+      isThawing
+    };
+  }
+
+  // Partial split move: source keeps remaining, new portion gets moved qty & same batchId/cookedAt/expiryDate
+  return {
+    ok: true,
+    mode: "split",
+    updatedSource: {
+      ...portion,
+      remainingQty: leftAfter,
+      updatedAtMs: Date.now()
+    },
+    newPortion: {
+      id: `cp-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      batchId: portion.batchId,
+      parentPortionId: portion.id,
+      dishName: portion.dishName,
+      qty: q,
+      remainingQty: q,
+      unit: portion.unit,
+      location: targetLocation,
+      shelfZone: targetShelfZone || "",
+      cookedAt: portion.cookedAt || "",
+      storedAt: nowDateStr,
+      thawedAt: nextThawedAt,
+      plannedEatDate: portion.plannedEatDate || "",
+      expiryDate: portion.expiryDate || "",
+      status: "active",
+      memo: portion.memo || "",
+      version: 1,
+      updatedAtMs: Date.now()
+    },
+    isThawing
+  };
+};
+
+export const computeCookedBatchLedger = (batch, portions = [], logs = [], plannedMeals = []) => {
+  const unit = batch?.unit || "인분";
+  const initialQty = roundQty2(batch?.totalQty || 0);
+  const bPortions = (Array.isArray(portions) ? portions : []).filter((p) => p && p.batchId === batch?.id && p.unit === unit);
+  const bLogs = (Array.isArray(logs) ? logs : []).filter((l) => l && l.batchId === batch?.id && (!l.unit || l.unit === unit));
+
+  const remainingQty = roundQty2(bPortions.reduce((acc, p) => acc + Math.max(0, roundQty2(p.remainingQty)), 0));
+  const consumedQty = roundQty2(bLogs.filter((l) => l.type === "consume").reduce((acc, l) => acc + roundQty2(l.qty), 0));
+  const discardedQty = roundQty2(bLogs.filter((l) => l.type === "discard").reduce((acc, l) => acc + roundQty2(l.qty), 0));
+  const adjustmentQty = roundQty2(bLogs.filter((l) => l.type === "adjust").reduce((acc, l) => acc + roundQty2(l.delta ?? l.qty), 0));
+
+  const portionIds = new Set(bPortions.map((p) => p.id));
+  const reservedQty = roundQty2(
+    (Array.isArray(plannedMeals) ? plannedMeals : [])
+      .filter((m) => m && m.mealStatus === "planned" && (m.cookedBatchId === batch?.id || portionIds.has(m.cookedPortionId)))
+      .reduce((acc, m) => acc + Math.max(0, roundQty2(m.cookedQty || 0)), 0)
+  );
+  const availableQty = roundQty2(Math.max(0, remainingQty - reservedQty));
+  const lhs = roundQty2(initialQty + adjustmentQty);
+  const rhs = roundQty2(remainingQty + consumedQty + discardedQty);
+  const balanced = Math.abs(lhs - rhs) < 0.01;
+
+  return {
+    unit,
+    initialQty,
+    adjustmentQty,
+    remainingQty,
+    consumedQty,
+    discardedQty,
+    reservedQty,
+    availableQty,
+    balanced,
+    discrepancy: roundQty2(lhs - rhs)
+  };
+};
