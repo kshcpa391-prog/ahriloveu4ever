@@ -1186,7 +1186,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v14.52";
+export const APP_CODE_VERSION = "v14.53";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1204,7 +1204,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-27 12:25";
+export const APP_BUILD_DATE = "2026-11-27 13:05";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1274,6 +1274,18 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v14.53",
+    version: "v14.53",
+    date: "2026-11-27",
+    title: "🚨 Vercel 배포 빌드 오류 3종 완전 복구(HTML 엔티티 374줄·구글맵 파서·장보기 일괄입고 선언) + 🐛 미사용 임포트·직접지출 모달 뒤로가기 수정 + ⚙️ 일정 기간 프리셋 자유편집 + ☁️ 통합검색 최근검색어 Firebase 이관 + 🎨 세이지그린 통일",
+    items: [
+      "🚨 [배포 빌드 오류 3종 완전 복구] ① App.jsx 내 손상된 HTML 엔티티 374줄(L1655 Unexpected token 포함)을 전수 복구하면서 정당한 이스케이프 코드 16줄과 JSX 텍스트 엔티티 11줄을 100% 보존했습니다. ② 구글맵 URL 좌표 파서(L2197)와 장보기→냉장고 일괄입고 함수 선언(handleMoveCheckedShoppingToFridge, L17273)에 삽입된 URL 오염 2건을 복원했습니다.",
+      "🐛 [버그 수정 · 코드 위생 · 장보기 일괄입고 고도화] ① 미사용 Constants 임포트 5건을 정리해 엄격 빌드 경고를 제거했습니다. ② 월간·식비 직접 지출 모달(isManualExpenseOpen)을 전역 ESC·안드로이드 뒤로가기(popstate)·배경 스크롤 잠금에 연동했습니다. ③ 장보기 일괄 입고 시 보관 칸(shelfZone) 자동 배정과 중복 입고 정책(auto_merge 시 동일 위치·단위 기존 재고 자동 수량 합산) 연계를 추가했습니다.",
+      "☁️ [로컬→Firebase 이관] 통합검색의 계정별 최근 검색어(recentGlobalSearches)를 Firestore(users/{uid}.recentGlobalSearches) 실시간 동기화로 이관해 휴대폰·태블릿 간 최근 검색 이력이 자동 공유되도록 개선했습니다.",
+      "⚙️🎨 [시스템 자유도 · 디자인 통일] 일정 등록 모달의 기간 프리셋(하루·2일간·3일간·5일간·1주)을 통합 세부 분류 관리(schedule_duration_presets)로 승격해 자유 편집·클라우드 동기화·JSON 백업을 연동했고, 잔여 이질 색상 버튼 3곳(일정 매년반복·재고 공유·퀵시트 다먹음)을 앱 공통 세이지그린(#3F624D)으로 통일했습니다. (과거 패치노트 490건 100% 보존)"
+    ]
+  },
   {
     id: "patch-v14.52",
     version: "v14.52",
@@ -7463,6 +7475,23 @@ export const DEFAULT_AI_MEAL_TARGETS = ["온가족 한끼", "부부 (수혁 & �
 export const DEFAULT_ROUTINE_TIME_PRESETS = ["07:30", "09:00", "12:00", "17:30", "20:00", "21:30"];
 export const DEFAULT_MEAL_SOURCE_TYPES = ["집밥/온가족식", "유아식/이유식", "어린이집 급식", "외식/배달"];
 export const DEFAULT_SCHEDULE_QUICK_TIMES = ["09:30", "11:00", "14:00", "16:30", "18:30"];
+export const DEFAULT_SCHEDULE_DURATION_PRESETS = ["하루|0", "2일간|1", "3일간|2", "5일간|4", "1주|6"];
+export const parseScheduleDurationPresetToken = (raw) => {
+  const s = String(raw || "").trim();
+  if (!s) return null;
+  if (s.includes("|")) {
+    const [lbl, addStr] = s.split("|").map((x) => x.trim());
+    const add = Math.max(0, Number(addStr));
+    if (!lbl || !Number.isFinite(add)) return null;
+    return { label: lbl, add };
+  }
+  if (s === "하루" || s === "당일") return { label: s, add: 0 };
+  const mWeek = s.match(/(\d+)\s*주/);
+  if (mWeek) return { label: s, add: Math.max(0, (Number(mWeek[1]) || 1) * 7 - 1) };
+  const mDay = s.match(/(\d+)\s*일/);
+  if (mDay) return { label: s, add: Math.max(0, (Number(mDay[1]) || 1) - 1) };
+  return null;
+};
 export const DEFAULT_BABY_TEMP_PRESETS = ["36.8|정상", "37.5|미열", "38.0|발열", "38.5|고열"];
 export const DEFAULT_BUDGET_PRESETS = ["80만", "100만", "120만", "150만"];
 export const DEFAULT_CONDOLENCE_AMOUNTS = ["3만", "5만", "10만", "20만", "30만", "50만"];
