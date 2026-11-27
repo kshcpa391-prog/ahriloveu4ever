@@ -1186,7 +1186,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v14.57";
+export const APP_CODE_VERSION = "v14.58";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1204,15 +1204,15 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-27 15:05";
+export const APP_BUILD_DATE = "2026-11-27 19:30";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
-  sageBtn: "bg-[#5E7A65] hover:bg-[#4E6855] text-white",
+  sageBtn: "bg-[#3F624D] hover:bg-[#35503C] text-white",
   sageSoft: "bg-[#EEF3EE] text-[#35503C] border-[#C9D8CC]",
   cardBase: "bg-white rounded-2xl border border-stone-200 shadow-sm",
-  btnPrimary: "h-9 px-3.5 rounded-xl text-[13.5px] font-extrabold transition",
-  btnCompact: "h-7 px-2.5 rounded-lg text-[11.5px] font-extrabold transition"
+  btnPrimary: "h-9 px-3.5 rounded-xl text-[13.5px] font-extrabold transition whitespace-nowrap",
+  btnCompact: "h-7 px-2.5 rounded-lg text-[11.5px] font-extrabold transition whitespace-nowrap"
 };
 export const EDITOR_INVITE_CODE = "0402";
 export const DEFAULT_HELPER_CODE = "1234";
@@ -1238,7 +1238,7 @@ export const HELPER_CONFIGURABLE_TABS = [
 export const BABY_ACTIVITY_TYPES = [
   { id: "모유", label: "모유", emoji: "🤱", timed: true, isFeed: true, bg: "bg-[#F46A6A]", soft: "bg-rose-50 text-[#E85B5B] border-rose-200", text: "text-[#E85B5B]" },
   { id: "분유", label: "분유", emoji: "🍼", timed: true, isFeed: true, hasMl: true, bg: "bg-[#F4B400]", soft: "bg-amber-50 text-[#E5A000] border-amber-200", text: "text-[#E5A000]" },
-  { id: "이유식", label: "이유식", emoji: "🥣", timed: true, hasMl: true, unit: "g", bg: "bg-[#2BBBAD]", soft: "bg-teal-50 text-[#25A99B] border-teal-200", text: "text-[#25A99B]" },
+  { id: "이유식", label: "이유식", emoji: "🥣", timed: true, hasMl: true, unit: "g", bg: "bg-emerald-500", soft: "bg-emerald-50 text-emerald-700 border-emerald-200", text: "text-emerald-700" },
   { id: "기저귀", label: "기저귀", emoji: "🧷", timed: false, bg: "bg-[#B67B48]", soft: "bg-amber-50 text-[#A86D3B] border-amber-200", text: "text-[#A86D3B]" },
   { id: "수면", label: "수면", emoji: "😴", timed: true, bg: "bg-[#6C6CB4]", soft: "bg-violet-50 text-[#6464AC] border-violet-200", text: "text-[#6464AC]" },
   { id: "유축", label: "유축", emoji: "🧴", timed: true, hasMl: true, bg: "bg-[#F078B8]", soft: "bg-rose-50 text-[#E065A7] border-rose-200", text: "text-[#E065A7]" },
@@ -1274,6 +1274,17 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v14.58",
+    version: "v14.58",
+    date: "2026-11-27",
+    title: "🛡️ 오프라인 대기열 무손실·수정이력/소분보정 원자화·백업/복원(즐겨찾기·전체실패재시도·raw모드) 수정 + 단위삭제 안전가드·장보기 분류이관·UI_TOKENS 연결",
+    items: [
+      "🛡️ [치명적 데이터 정합성 7종 수정] ① enqueueOfflineMutation의 .slice(-50) 제거로 50건 초과 시 미전송 작업 유실 차단 및 저장공간 초과 알림 보강 ② 수동 지출 등록·삭제의 recordItemRevisionSafe 위치 인자 호출 오류 수정 및 writeBatch 원자적 동시 저장 ③ buildFullBackupJsonString에 즐겨찾기 식단(mealFavorites) 포함 ④ JSON 복원 fridgeSectionMode 'ingredients'→'raw' 교정(구형 호환 유지) ⑤ JSON 복원 시 전 컬렉션·메타 쓰기를 writeTasks로 통합해 부분 실패 시 [🔄 실패 항목 재시도]가 모든 실패 건을 정확히 재전송하도록 수정 ⑥ 냉장고 분류 삭제 시 연결된 장보기(family_shopping_v4) 함께 이관 ⑦ 소분/배치 이력 복원 시 수량 보정 로그(family_cooked_logs_v1)를 동일 runTransaction에 포함하고 일반 저장(일정·공지·식단·냉장고·수동지출)도 수정이력과 원자적 커밋·실패 시 입력 보존",
+      "⚙️ [단위 삭제 안전 가드 · 수량 정규화] 냉장고 단위(fridge_units)·만든 음식 단위(cooked_units) 삭제 시 사용 중인 항목이 있으면 환산 없이 g→인분으로 바뀌지 않도록 차단·안내하고, 잔여 수량표기 6곳에 formatFridgeQtyUnit()을 일괄 적용했습니다.",
+      "🧹🎨 [UI_TOKENS 연결 · 데드코드 13건 정리 · 색상/폰트 통일] UI_TOKENS를 App.jsx 루트/공통 카드에 연결하고, 레시피 부족재료 동적 분류·중복안내 보강, 미사용 데드코드 13건 정리, Constants.js 이유식 잔여 teal 색상 에메랄드 통일 및 불규칙 15px 폰트를 정돈했습니다. (과거 패치노트 495건 100% 보존)"
+    ]
+  },
   {
     id: "patch-v14.57",
     version: "v14.57",

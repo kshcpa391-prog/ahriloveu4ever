@@ -144,6 +144,7 @@ import {
   formatRoutineTimeLabel,
   isRoutineTimeOverdue,
   APP_BUILD_DATE,
+  UI_TOKENS,
   EDITOR_INVITE_CODE,
   DEFAULT_HELPER_CODE,
   GUEST_ALLOWED_TABS,
@@ -4400,11 +4401,6 @@ function MainApp() {
     }
   });
   const [accessRole, setAccessRole] = useState("guest");
-  const isOwnerVerifiedEmail = Boolean(
-    user?.email &&
-      user?.emailVerified &&
-      String(user.email).trim().toLowerCase() === "kshcpa391@gmail.com"
-  );
   const isApprovedUser =
     userProfile?.role === "admin" || userProfile?.role === "helper";
   const [actorName, setActorName] = useState(() => {
@@ -5681,7 +5677,6 @@ function MainApp() {
   const [pagePasteMode, setPagePasteMode] = useState("append");
   const [isPageVisualEditMode, setIsPageVisualEditMode] = useState(false);
   const [isNoteBodyFocused, setIsNoteBodyFocused] = useState(false);
-  const pageNoteTextareaRef = useRef(null);
   const [isPageMultiSelectMode, setIsPageMultiSelectMode] = useState(false);
   const [babyDreamLinks, setBabyDreamLinks] = useState(() => {
     try {
@@ -10880,6 +10875,7 @@ function MainApp() {
         homeShowCarryOver,
         activityPopupEnabled,
         homeMiniDdayIds,
+        mealFavorites: { combos: favoriteMealCombos, singles: favoriteSingleMenus },
         babyDreamLinks,
         houseStorageRooms,
         customCategories,
@@ -11258,10 +11254,11 @@ function MainApp() {
         try { localStorage.setItem("kim_todo_include_other_v1", payload.todoIncludeOtherCats ? "1" : "0"); } catch (e) {}
         syncHomeSettingsToCloud(null, null, null, null, null, null, null, { todoIncludeOtherCats: payload.todoIncludeOtherCats });
       }
-      if (payload.fridgeSectionMode === "all" || payload.fridgeSectionMode === "ingredients" || payload.fridgeSectionMode === "cooked") {
-        setFridgeSectionMode(payload.fridgeSectionMode);
-        try { localStorage.setItem("kim_fridge_section_mode_v1", payload.fridgeSectionMode); } catch (e) {}
-        syncHomeSettingsToCloud(null, null, null, null, null, null, null, { fridgeSectionMode: payload.fridgeSectionMode });
+      if (payload.fridgeSectionMode === "all" || payload.fridgeSectionMode === "raw" || payload.fridgeSectionMode === "ingredients" || payload.fridgeSectionMode === "cooked") {
+        const normSecMode = payload.fridgeSectionMode === "ingredients" ? "raw" : payload.fridgeSectionMode;
+        setFridgeSectionMode(normSecMode);
+        try { localStorage.setItem("kim_fridge_section_mode_v1", normSecMode); } catch (e) {}
+        syncHomeSettingsToCloud(null, null, null, null, null, null, null, { fridgeSectionMode: normSecMode });
       }
       if (typeof payload.showDepletedCooked === "boolean") {
         setShowDepletedCooked(payload.showDepletedCooked);
@@ -11352,133 +11349,109 @@ function MainApp() {
             }, false);
           });
         }
-        const writePromises = writeTasks.map((t) =>
-          t.merge ? setDoc(getDocRef(t.col, t.docId), t.data, { merge: true }) : setDoc(getDocRef(t.col, t.docId), t.data)
-        );
         if (isAdminUnlocked && Array.isArray(payload.babyDiaryEntries)) {
           payload.babyDiaryEntries.forEach((bd) => {
-            if (bd?.id) writePromises.push(setDoc(getDocRef("family_baby_diary_v8", bd.id), bd));
+            if (bd?.id) enqueueWriteTask("family_baby_diary_v8", bd.id, bd);
           });
         }
         (payload.meals || []).forEach((m) => {
           if (m?.id) {
-            writePromises.push(setDoc(getDocRef("family_meals_v3", m.id), m));
-            writePromises.push(setDoc(getDocRef("family_meals_v4", m.id), m));
+            enqueueWriteTask("family_meals_v3", m.id, m);
+            enqueueWriteTask("family_meals_v4", m.id, m);
           }
         });
         (payload.fridge || []).forEach((f) => {
           if (f?.id) {
-            writePromises.push(setDoc(getDocRef("family_fridge_v3", f.id), f));
-            writePromises.push(setDoc(getDocRef("family_fridge_v4", f.id), f));
+            enqueueWriteTask("family_fridge_v3", f.id, f);
+            enqueueWriteTask("family_fridge_v4", f.id, f);
           }
         });
         (payload.expenses || []).forEach((ex) => {
-          if (ex?.id) writePromises.push(setDoc(getDocRef("family_expenses_v4", ex.id), ex));
+          if (ex?.id) enqueueWriteTask("family_expenses_v4", ex.id, ex);
         });
         (payload.shoppingList || []).forEach((sh) => {
-          if (sh?.id) writePromises.push(setDoc(getDocRef("family_shopping_v4", sh.id), sh));
+          if (sh?.id) enqueueWriteTask("family_shopping_v4", sh.id, sh);
         });
         (payload.houseItems || []).forEach((hi) => {
-          if (hi?.id) writePromises.push(setDoc(getDocRef("family_house_items_v1", hi.id), hi));
+          if (hi?.id) enqueueWriteTask("family_house_items_v1", hi.id, hi);
         });
         (payload.recipes || []).forEach((rc) => {
-          if (rc?.id) writePromises.push(setDoc(getDocRef("family_recipes_v8", rc.id), rc));
+          if (rc?.id) enqueueWriteTask("family_recipes_v8", rc.id, rc);
         });
         (payload.notices || []).forEach((nt) => {
-          if (nt?.id) writePromises.push(setDoc(getDocRef("family_notices_v4", nt.id), nt));
+          if (nt?.id) enqueueWriteTask("family_notices_v4", nt.id, nt);
         });
         (payload.schedules || []).forEach((sc) => {
-          if (sc?.id) writePromises.push(setDoc(getDocRef("family_schedules_v4", sc.id), sc));
+          if (sc?.id) enqueueWriteTask("family_schedules_v4", sc.id, sc);
         });
         (payload.patchNotes || []).forEach((pt) => {
-          if (pt?.id) writePromises.push(setDoc(getDocRef("family_patchnotes_v4", pt.id), pt));
+          if (pt?.id) enqueueWriteTask("family_patchnotes_v4", pt.id, pt);
         });
         (payload.wasteEvents || []).forEach((we) => {
-          if (we?.id) writePromises.push(setDoc(getDocRef("family_inventory_events_v7", we.id), we));
+          if (we?.id) enqueueWriteTask("family_inventory_events_v7", we.id, we);
         });
         Object.entries(payload.babyChecks || {}).forEach(([ckId, ckVal]) => {
-          if (ckId && ckVal) writePromises.push(setDoc(getDocRef("family_baby_checks_v7", ckId), ckVal));
+          if (ckId && ckVal) enqueueWriteTask("family_baby_checks_v7", ckId, ckVal);
         });
         (payload.babyGrowthLogs || []).forEach((bg) => {
-          if (bg?.id) writePromises.push(setDoc(getDocRef("family_baby_growth_v7", bg.id), bg));
+          if (bg?.id) enqueueWriteTask("family_baby_growth_v7", bg.id, bg);
         });
         (payload.babyActivities || []).forEach((ba) => {
-          if (ba?.id) writePromises.push(setDoc(getDocRef("family_baby_activities_v1", ba.id), ba));
+          if (ba?.id) enqueueWriteTask("family_baby_activities_v1", ba.id, ba);
         });
         (payload.babyMedicalNotes || []).forEach((bm) => {
-          if (bm?.id) writePromises.push(setDoc(getDocRef("family_baby_notes_v7", bm.id), bm));
+          if (bm?.id) enqueueWriteTask("family_baby_notes_v7", bm.id, bm);
         });
         (payload.bucketList || []).forEach((bk) => {
-          if (bk?.id) writePromises.push(setDoc(getDocRef("family_bucket_v1", bk.id), bk));
+          if (bk?.id) enqueueWriteTask("family_bucket_v1", bk.id, bk);
         });
         (payload.familyPages || []).forEach((pg) => {
-          if (pg?.id) writePromises.push(setDoc(getDocRef("family_pages_v1", pg.id), pg));
+          if (pg?.id) enqueueWriteTask("family_pages_v1", pg.id, pg);
         });
         if (payload.handoverProfile && typeof payload.handoverProfile === "object") {
-          writePromises.push(
-            setDoc(
-              getDocRef("family_meta_v4", "handover_profile_v1"),
-              { ...payload.handoverProfile, updatedAtMs: Date.now() },
-              { merge: true }
-            )
-          );
+          enqueueWriteTask("family_meta_v4", "handover_profile_v1", { ...payload.handoverProfile, updatedAtMs: Date.now() }, true);
         }
         if (Array.isArray(payload.homeMiniDdayIds)) {
-          writePromises.push(
-            setDoc(
-              getDocRef("family_meta_v4", "home_mini_ddays_v1"),
-              { ids: payload.homeMiniDdayIds, updatedAtMs: Date.now() },
-              { merge: true }
-            )
-          );
+          enqueueWriteTask("family_meta_v4", "home_mini_ddays_v1", { ids: payload.homeMiniDdayIds, updatedAtMs: Date.now() }, true);
         }
         if (Array.isArray(payload.babyDreamLinks) && payload.babyDreamLinks.length > 0) {
-          writePromises.push(
-            setDoc(
-              getDocRef("family_meta_v4", "baby_dream_links"),
-              { items: payload.babyDreamLinks, updatedAtMs: Date.now() },
-              { merge: true }
-            )
-          );
+          enqueueWriteTask("family_meta_v4", "baby_dream_links", { items: payload.babyDreamLinks, updatedAtMs: Date.now() }, true);
         }
         if ((payload.smartNotifPrefs && typeof payload.smartNotifPrefs === "object") || typeof payload.notifSilentMode === "boolean") {
-          writePromises.push(
-            setDoc(
-              getDocRef("family_meta_v4", "notif_prefs_v1"),
-              {
-                ...(payload.smartNotifPrefs && typeof payload.smartNotifPrefs === "object" ? { smartPrefs: { ...DEFAULT_SMART_NOTIF_PREFS, ...payload.smartNotifPrefs } } : {}),
-                ...(typeof payload.notifSilentMode === "boolean" ? { silentMode: payload.notifSilentMode } : {}),
-                updatedAtMs: Date.now()
-              },
-              { merge: true }
-            )
+          enqueueWriteTask(
+            "family_meta_v4",
+            "notif_prefs_v1",
+            {
+              ...(payload.smartNotifPrefs && typeof payload.smartNotifPrefs === "object" ? { smartPrefs: { ...DEFAULT_SMART_NOTIF_PREFS, ...payload.smartNotifPrefs } } : {}),
+              ...(typeof payload.notifSilentMode === "boolean" ? { silentMode: payload.notifSilentMode } : {}),
+              updatedAtMs: Date.now()
+            },
+            true
           );
         }
         if (Array.isArray(payload.customAlarms) || Array.isArray(payload.customAlarmSounds)) {
-          writePromises.push(
-            setDoc(
-              getDocRef("family_meta_v4", "timer_alarms_v1"),
-              {
-                ...(Array.isArray(payload.customAlarms) ? { alarms: payload.customAlarms } : {}),
-                ...(Array.isArray(payload.customAlarmSounds) ? { sounds: payload.customAlarmSounds } : {}),
-                ...(typeof payload.alarmDefaultVolume === "number" ? { defaultVolume: payload.alarmDefaultVolume } : {}),
-                updatedAtMs: Date.now()
-              },
-              { merge: true }
-            )
+          enqueueWriteTask(
+            "family_meta_v4",
+            "timer_alarms_v1",
+            {
+              ...(Array.isArray(payload.customAlarms) ? { alarms: payload.customAlarms } : {}),
+              ...(Array.isArray(payload.customAlarmSounds) ? { sounds: payload.customAlarmSounds } : {}),
+              ...(typeof payload.alarmDefaultVolume === "number" ? { defaultVolume: payload.alarmDefaultVolume } : {}),
+              updatedAtMs: Date.now()
+            },
+            true
           );
         }
         if (typeof payload.handoverNote === "string" || typeof payload.handoverAttachedPageId === "string") {
-          writePromises.push(
-            setDoc(
-              getDocRef("family_meta_v4", "handover_profile_v1"),
-              {
-                ...(typeof payload.handoverNote === "string" ? { sharedNote: payload.handoverNote } : {}),
-                ...(typeof payload.handoverAttachedPageId === "string" ? { attachedPageId: payload.handoverAttachedPageId } : {}),
-                updatedAtMs: Date.now()
-              },
-              { merge: true }
-            )
+          enqueueWriteTask(
+            "family_meta_v4",
+            "handover_profile_v1",
+            {
+              ...(typeof payload.handoverNote === "string" ? { sharedNote: payload.handoverNote } : {}),
+              ...(typeof payload.handoverAttachedPageId === "string" ? { attachedPageId: payload.handoverAttachedPageId } : {}),
+              updatedAtMs: Date.now()
+            },
+            true
           );
         }
         if (
@@ -11486,32 +11459,25 @@ function MainApp() {
           typeof payload.activityPopupEnabled === "boolean" ||
           (payload.expandedPageIds && typeof payload.expandedPageIds === "object" && !Array.isArray(payload.expandedPageIds))
         ) {
-          writePromises.push(
-            setDoc(
-              getDocRef("family_meta_v4", "home_layout"),
-              {
-                ...(typeof payload.homeShowCarryOver === "boolean" ? { showCarryOver: payload.homeShowCarryOver } : {}),
-                ...(typeof payload.activityPopupEnabled === "boolean" ? { activityPopupEnabled: payload.activityPopupEnabled } : {}),
-                ...(payload.expandedPageIds && typeof payload.expandedPageIds === "object" && !Array.isArray(payload.expandedPageIds) ? { expandedPageIds: payload.expandedPageIds } : {}),
-                updatedAtMs: Date.now()
-              },
-              { merge: true }
-            )
+          enqueueWriteTask(
+            "family_meta_v4",
+            "home_layout",
+            {
+              ...(typeof payload.homeShowCarryOver === "boolean" ? { showCarryOver: payload.homeShowCarryOver } : {}),
+              ...(typeof payload.activityPopupEnabled === "boolean" ? { activityPopupEnabled: payload.activityPopupEnabled } : {}),
+              ...(payload.expandedPageIds && typeof payload.expandedPageIds === "object" && !Array.isArray(payload.expandedPageIds) ? { expandedPageIds: payload.expandedPageIds } : {}),
+              updatedAtMs: Date.now()
+            },
+            true
           );
         }
         if (Number(payload.monthlyBudget) > 0) {
-          writePromises.push(
-            setDoc(
-              getDocRef("family_meta_v4", "monthly_budget_v1"),
-              { amount: Math.round(Number(payload.monthlyBudget)), updatedAtMs: Date.now() },
-              { merge: true }
-            )
-          );
+          enqueueWriteTask("family_meta_v4", "monthly_budget_v1", { amount: Math.round(Number(payload.monthlyBudget)), updatedAtMs: Date.now() }, true);
         }
         if (payload.customCategories && typeof payload.customCategories === "object") {
-          writePromises.push(
-            setDoc(
-              getDocRef("family_meta_v4", "custom_categories_v1"),
+          enqueueWriteTask(
+            "family_meta_v4",
+            "custom_categories_v1",
               {
                 fridge: Array.isArray(payload.customCategories.fridge) && payload.customCategories.fridge.length > 0 ? payload.customCategories.fridge : [...FRIDGE_CATEGORIES],
                 recipe: Array.isArray(payload.customCategories.recipe) && payload.customCategories.recipe.length > 0 ? payload.customCategories.recipe : [...RECIPE_CATEGORIES],
@@ -11553,48 +11519,42 @@ function MainApp() {
                 house_warranty_presets: Array.isArray(payload.customCategories.house_warranty_presets) && payload.customCategories.house_warranty_presets.length > 0 ? payload.customCategories.house_warranty_presets : [...DEFAULT_HOUSE_WARRANTY_PRESETS],
                 house_med_expiry_presets: Array.isArray(payload.customCategories.house_med_expiry_presets) && payload.customCategories.house_med_expiry_presets.length > 0 ? payload.customCategories.house_med_expiry_presets : [...DEFAULT_HOUSE_MED_EXPIRY_PRESETS],
                 schedule_duration_presets: Array.isArray(payload.customCategories.schedule_duration_presets) && payload.customCategories.schedule_duration_presets.length > 0 ? payload.customCategories.schedule_duration_presets : [...DEFAULT_SCHEDULE_DURATION_PRESETS],
-                updatedAtMs: Date.now()
-              },
-              { merge: true }
-            )
+              updatedAtMs: Date.now()
+            },
+            true
           );
         }
         if (Array.isArray(payload.houseStorageRooms) && payload.houseStorageRooms.length > 0) {
-          writePromises.push(
-            setDoc(
-              getDocRef("family_meta_v4", "house_rooms_v1"),
-              { rooms: payload.houseStorageRooms, updatedAtMs: Date.now() },
-              { merge: true }
-            )
-          );
+          enqueueWriteTask("family_meta_v4", "house_rooms_v1", { rooms: payload.houseStorageRooms, updatedAtMs: Date.now() }, true);
         }
         if (Array.isArray(payload.cookedBatches)) {
           payload.cookedBatches.forEach((b) => {
-            if (b?.id) writePromises.push(setDoc(getDocRef("family_cooked_batches_v1", b.id), b, { merge: true }));
+            if (b?.id) enqueueWriteTask("family_cooked_batches_v1", b.id, b, true);
           });
         }
         if (Array.isArray(payload.cookedPortions)) {
           payload.cookedPortions.forEach((p) => {
-            if (p?.id) writePromises.push(setDoc(getDocRef("family_cooked_portions_v1", p.id), p, { merge: true }));
+            if (p?.id) enqueueWriteTask("family_cooked_portions_v1", p.id, p, true);
           });
         }
         if (Array.isArray(payload.cookedLogs)) {
           payload.cookedLogs.forEach((l) => {
-            if (l?.id) writePromises.push(setDoc(getDocRef("family_cooked_logs_v1", l.id), l, { merge: true }));
+            if (l?.id) enqueueWriteTask("family_cooked_logs_v1", l.id, l, true);
           });
         }
         if (Array.isArray(payload.itemRevisions)) {
           payload.itemRevisions.forEach((rv) => {
-            if (rv?.id) writePromises.push(setDoc(getDocRef("family_revisions_v1", rv.id), rv, { merge: true }));
+            if (rv?.id) enqueueWriteTask("family_revisions_v1", rv.id, rv, true);
           });
         }
         if (Array.isArray(payload.deletedIds) && payload.deletedIds.length > 0) {
-          writePromises.push(
-            setDoc(getDocRef("family_meta_v4", "deleted_tracker"), { ids: payload.deletedIds }, { merge: true })
-          );
+          enqueueWriteTask("family_meta_v4", "deleted_tracker", { ids: payload.deletedIds }, true);
         }
 
 
+        const writePromises = writeTasks.map((t) =>
+          t.merge ? setDoc(getDocRef(t.col, t.docId), t.data, { merge: true }) : setDoc(getDocRef(t.col, t.docId), t.data)
+        );
         const results = await Promise.allSettled(writePromises);
         const succeededCount = results.filter((r) => r.status === "fulfilled").length;
         const failedIndices = results.map((r, idx) => (r.status === "rejected" ? idx : -1)).filter((i) => i >= 0);
@@ -12262,6 +12222,25 @@ function MainApp() {
     };
 
 
+    if (user && db) {
+      try {
+        const batch = writeBatch(db);
+        batch.set(getDocRef("family_schedules_v4", id), payload);
+        buildRevisionWriteOps({
+          entityType: "schedule",
+          entityId: id,
+          entityTitle: payload.title,
+          prevData: editingSchedule || null,
+          nextData: payload,
+          action: editingSchedule ? "update" : "create"
+        }).forEach((op) => batch.set(getDocRef("family_revisions_v1", op.id), op.data));
+        await batch.commit();
+      } catch (e) {
+        setSyncErrorMsg(e?.message || "일정 서버 저장 오류");
+        showToast("⚠️ 일정 서버 저장 실패: 입력 내용은 유지되었으니 다시 시도해 주세요.");
+        return;
+      }
+    }
     setSchedules((prev) => {
       const idx = prev.findIndex((s) => s.id === id);
       if (idx >= 0) {
@@ -12271,21 +12250,8 @@ function MainApp() {
       }
       return [payload, ...prev];
     });
-
-
     setIsScheduleModalOpen(false);
     setEditingSchedule(null);
-
-
-    if (user && db) {
-      try {
-        await setDoc(getDocRef("family_schedules_v4", id), payload);
-      } catch (e) {
-        setSyncErrorMsg(e?.message || "일정 서버 저장 오류");
-        showToast("⚠️ 일정 서버 저장 실패: 네트워크 상태를 확인해 주세요.");
-        return;
-      }
-    }
     recordActivity("일정", editingSchedule ? "수정" : "등록", `${payload.title || ""}`);
     showToast(editingSchedule ? "일정이 수정되었습니다." : "새 가족 일정이 등록되었습니다.");
   };
@@ -13206,7 +13172,6 @@ ${validText}
 
   const computeAggregatedPlanShortage = (selectedPlans) => {
     const validFridge = fridge.filter((f) => Number(f.quantity || 0) > 0 && getDaysDiff(f.expiryDate) >= 0);
-    const shopNamesLower = shoppingList.map((s) => String(s.name || "").toLowerCase());
     const demandMap = new Map();
 
 
@@ -14529,6 +14494,14 @@ const priceStr = exportIncludePrice && safeItPrice > 0 ? `${safeItPrice.toLocale
           }
           tx.set(getDocRef("family_fridge_v3", id), payload);
           tx.set(getDocRef("family_fridge_v4", id), payload);
+          buildRevisionWriteOps({
+            entityType: "fridge",
+            entityId: payload.id,
+            entityTitle: payload.name,
+            prevData: editingFridge || null,
+            nextData: payload,
+            action: editingFridge ? "update" : "create"
+          }).forEach((op) => tx.set(getDocRef("family_revisions_v1", op.id), op.data));
         });
         if (conflictFound) {
           setFridgeConflictData({ serverItem: serverSnapData, localPayload: payload });
@@ -14551,6 +14524,14 @@ const priceStr = exportIncludePrice && safeItPrice > 0 ? `${safeItPrice.toLocale
             type: "장보기/식재료"
           });
         }
+        buildRevisionWriteOps({
+          entityType: "fridge",
+          entityId: payload.id,
+          entityTitle: payload.name,
+          prevData: editingFridge || null,
+          nextData: payload,
+          action: editingFridge ? "update" : "create"
+        }).forEach((op) => batch.set(getDocRef("family_revisions_v1", op.id), op.data));
         await batch.commit();
       }
 
@@ -14566,14 +14547,6 @@ const priceStr = exportIncludePrice && safeItPrice > 0 ? `${safeItPrice.toLocale
       const qtyInfo = editingFridge
         ? `${cleanName} (${editingFridge.quantity}${editingFridge.unit || "개"} → ${parsedQty}${payload.unit})`
         : `${cleanName} (0 → ${parsedQty}${payload.unit})`;
-      recordItemRevisionSafe({
-        entityType: "fridge",
-        entityId: payload.id,
-        entityTitle: payload.name,
-        prevData: editingFridge || null,
-        nextData: payload,
-        action: editingFridge ? "update" : "create"
-      });
       recordActivity("냉장고", editingFridge ? "수정" : "입고", qtyInfo, {
         beforeText: editingFridge
           ? `${editingFridge.name} · ${editingFridge.quantity}${editingFridge.unit || "개"} · ${editingFridge.location}${editingFridge.expiryDate ? ` · 기한 ${editingFridge.expiryDate}` : " · 기한 미확인"}`
@@ -15180,18 +15153,32 @@ const priceStr = exportIncludePrice && safeItPrice > 0 ? `${safeItPrice.toLocale
           }
           tx.set(getDocRef("family_meals_v3", id), payload);
           tx.set(getDocRef("family_meals_v4", id), payload);
+          buildRevisionWriteOps({
+            entityType: "meal",
+            entityId: payload.id,
+            entityTitle: `${payload.date} ${payload.slot} · ${payload.menu}`,
+            prevData: editingMeal || null,
+            nextData: payload,
+            action: editingMeal ? "update" : "create"
+          }).forEach((op) => tx.set(getDocRef("family_revisions_v1", op.id), op.data));
         });
         if (mealConflict) {
+          errMsg = "식단 수정 충돌";
           showToast("⚠️ 다른 기기에서 먼저 수정된 식단입니다. 최신 내용을 확인 후 다시 수정해 주세요.");
-          setIsMealModalOpen(false);
-          setEditingMeal(null);
-          ok = true;
           return;
         }
       } else {
         const batch = writeBatch(db);
         batch.set(getDocRef("family_meals_v3", id), payload);
         batch.set(getDocRef("family_meals_v4", id), payload);
+        buildRevisionWriteOps({
+          entityType: "meal",
+          entityId: payload.id,
+          entityTitle: `${payload.date} ${payload.slot} · ${payload.menu}`,
+          prevData: editingMeal || null,
+          nextData: payload,
+          action: editingMeal ? "update" : "create"
+        }).forEach((op) => batch.set(getDocRef("family_revisions_v1", op.id), op.data));
         await batch.commit();
       }
 
@@ -15203,14 +15190,6 @@ const priceStr = exportIncludePrice && safeItPrice > 0 ? `${safeItPrice.toLocale
       setIsMealModalOpen(false);
       setEditingMeal(null);
       ok = true;
-      recordItemRevisionSafe({
-        entityType: "meal",
-        entityId: payload.id,
-        entityTitle: `${payload.date} ${payload.slot} · ${payload.menu}`,
-        prevData: editingMeal || null,
-        nextData: payload,
-        action: editingMeal ? "update" : "create"
-      });
       recordActivity("식단", editingMeal ? "수정" : "등록", `${payload.date} ${payload.slot} · ${payload.menu}`, {
         beforeText: editingMeal ? `${editingMeal.date} ${editingMeal.slot} · ${editingMeal.menu || ""}` : "",
         afterText: `${payload.date} ${payload.slot} · ${payload.menu} (${payload.mealStatus === "planned" ? "계획" : "기록"})`
@@ -17351,12 +17330,13 @@ const priceStr = exportIncludePrice && safeItPrice > 0 ? `${safeItPrice.toLocale
       showToast("부족한 재료가 이미 장보기 목록에 모두 담겨 있습니다.");
       return;
     }
+    const fallbackShopCat = fridgeCategories.includes("기타") ? "기타" : (fridgeCategories[0] || "기타");
     const newPayloads = toAdd.map(({ n, q }, idx) => {
       return {
         id: `sh-rcp-${Date.now()}-${idx}`,
         name: n,
         quantity: q,
-        category: "기타",
+        category: fallbackShopCat,
         urgent: false,
         checked: false,
         memo: `레시피(${recipe.title}) 필요 재료`
@@ -17372,7 +17352,7 @@ const priceStr = exportIncludePrice && safeItPrice > 0 ? `${safeItPrice.toLocale
         setSyncErrorMsg(e?.message || "레시피 부족 재료 장보기 저장 오류");
       }
     }
-    showToast(`🛒 냉장고에 없는 재료 ${newPayloads.length}건을 장보기에 추가했습니다!`);
+    showToast(`🛒 냉장고에 없는 재료 ${newPayloads.length}건을 장보기에 추가했습니다!${skippedDup > 0 ? ` (이미 담긴 ${skippedDup}건 제외)` : ""}`);
   };
 
 
@@ -17797,6 +17777,25 @@ const priceStr = exportIncludePrice && safeItPrice > 0 ? `${safeItPrice.toLocale
       done: editingNotice ? Boolean(editingNotice.done) : false,
       createdAt: selectedDate
     };
+    if (user && db) {
+      try {
+        const batch = writeBatch(db);
+        batch.set(getDocRef("family_notices_v4", id), payload);
+        buildRevisionWriteOps({
+          entityType: "notice",
+          entityId: id,
+          entityTitle: payload.title,
+          prevData: editingNotice || null,
+          nextData: payload,
+          action: editingNotice ? "update" : "create"
+        }).forEach((op) => batch.set(getDocRef("family_revisions_v1", op.id), op.data));
+        await batch.commit();
+      } catch (e) {
+        setSyncErrorMsg(e?.message || "공지 추가 동기화 오류");
+        showToast("⚠️ 공지 저장 실패: 입력 내용은 유지되었으니 다시 시도해 주세요.");
+        return;
+      }
+    }
     setNotices((prev) => {
       const idx = prev.findIndex((n) => n.id === id);
       if (idx >= 0) {
@@ -17808,42 +17807,52 @@ const priceStr = exportIncludePrice && safeItPrice > 0 ? `${safeItPrice.toLocale
     });
     setIsNoticeModalOpen(false);
     setEditingNotice(null);
-    if (user && db) {
-      try {
-        await setDoc(getDocRef("family_notices_v4", id), payload);
-      } catch (e) {
-        setSyncErrorMsg(e?.message || "공지 추가 동기화 오류");
-      }
-    }
     recordActivity("공지", editingNotice ? "수정" : "등록", `${payload.title || ""}`);
     showToast("가족 공지사항이 등록되었습니다.");
   };
 
 
   const handleToggleNoticeDone = async (notice) => {
-    if (!requireEditorAccess()) return;
+    if (!requireEditorAccess("notices")) return;
     const updated = { ...notice, done: !notice.done };
     setNotices((prev) => prev.map((n) => (n.id === notice.id ? updated : n)));
     if (user && db) {
       try {
         await setDoc(getDocRef("family_notices_v4", notice.id), updated);
       } catch (e) {
+        setNotices((prev) => prev.map((n) => (n.id === notice.id ? notice : n)));
         setSyncErrorMsg(e?.message || "공지 상태 동기화 오류");
+        showToast("⚠️ 공지 상태 변경 실패: 다시 시도해 주세요.");
       }
     }
   };
 
 
   const handleDeleteNotice = async (id) => {
-    if (!requireEditorAccess()) return;
-    setNotices((prev) => prev.filter((n) => n.id !== id));
+    if (!requireEditorAccess("notices")) return;
+    const prevNotice = notices.find((n) => n.id === id);
     if (user && db) {
       try {
-        await deleteDoc(getDocRef("family_notices_v4", id));
+        const batch = writeBatch(db);
+        batch.delete(getDocRef("family_notices_v4", id));
+        if (prevNotice) {
+          buildRevisionWriteOps({
+            entityType: "notice",
+            entityId: id,
+            entityTitle: prevNotice.title,
+            prevData: prevNotice,
+            nextData: null,
+            action: "delete"
+          }).forEach((op) => batch.set(getDocRef("family_revisions_v1", op.id), op.data));
+        }
+        await batch.commit();
       } catch (e) {
         setSyncErrorMsg(e?.message || "공지 삭제 동기화 오류");
+        showToast("⚠️ 공지 삭제 실패: 다시 시도해 주세요.");
+        return;
       }
     }
+    setNotices((prev) => prev.filter((n) => n.id !== id));
     showToast("공지사항이 삭제되었습니다.");
   };
 
@@ -18849,18 +18858,11 @@ const priceStr = exportIncludePrice && safeItPrice > 0 ? `${safeItPrice.toLocale
     };
   }, []);
 
-  useEffect(() => {
-    const cur = familyPages.find((p) => p.id === selectedPageId);
-    if (!isNoteBodyFocused) {
-    }
-  }, [selectedPageId, familyPages, isNoteBodyFocused]);
-
   const openFamilyPage = (pageId) => {
     setSelectedPageId(pageId);
     setEditingBlockId(null);
     setIsEditingPageTitle(false);
     setIsNoteBodyFocused(false);
-    const targetPg = familyPages.find((p) => p.id === pageId);
     setIsPageEmojiPickerOpen(false);
     setIsPageVisualEditMode(false);
     setIsPageMultiSelectMode(false);
@@ -19610,19 +19612,32 @@ ${item.memo}` : `${item.title} 다녀옴!`,
       showToast("최소 1개 이상의 분류는 유지해야 합니다.");
       return;
     }
+    if (kind === "fridge_units") {
+      const usedFridge = fridge.filter((x) => (x.unit || "개") === targetName);
+      if (usedFridge.length > 0) {
+        showToast(`⚠️ '${targetName}' 단위를 사용 중인 냉장고 재고 ${usedFridge.length}건이 있어 삭제할 수 없습니다. 수량 환산 오류 방지를 위해 먼저 재고 단위를 변경해 주세요.`);
+        return;
+      }
+    }
+    if (kind === "cooked_units") {
+      const usedCooked = cookedBatches.filter((x) => x.unit === targetName).length + cookedPortions.filter((x) => x.unit === targetName).length;
+      if (usedCooked > 0) {
+        showToast(`⚠️ '${targetName}' 단위를 사용 중인 만든 음식 ${usedCooked}건이 있어 삭제할 수 없습니다. 수량 환산 오류 방지를 위해 먼저 단위를 변경해 주세요.`);
+        return;
+      }
+    }
     const nextList = curList.filter((c) => c !== targetName);
     const fallbackCat = nextList[0];
     const migrateSpecs = {
-      fridge: [{ list: fridge.filter((x) => x.category === targetName), col: "family_fridge_v4", field: "category" }],
+      fridge: [
+        { list: fridge.filter((x) => x.category === targetName), col: "family_fridge_v4", field: "category" },
+        { list: shoppingList.filter((x) => x.category === targetName), col: "family_shopping_v4", field: "category" }
+      ],
       fridge_locations: [
         { list: fridge.filter((x) => x.location === targetName), col: "family_fridge_v4", field: "location" },
         { list: cookedPortions.filter((x) => x.location === targetName), col: "family_cooked_portions_v1", field: "location" }
       ],
       cooked_categories: [{ list: cookedBatches.filter((x) => x.category === targetName), col: "family_cooked_batches_v1", field: "category" }],
-      cooked_units: [
-        { list: cookedBatches.filter((x) => x.unit === targetName), col: "family_cooked_batches_v1", field: "unit" },
-        { list: cookedPortions.filter((x) => x.unit === targetName), col: "family_cooked_portions_v1", field: "unit" }
-      ],
       recipe: [{ list: recipes.filter((x) => x.category === targetName), col: "family_recipes_v8", field: "category" }],
       recipe_difficulties: [{ list: recipes.filter((x) => x.difficulty === targetName), col: "family_recipes_v8", field: "difficulty" }],
       notice: [{ list: notices.filter((x) => x.category === targetName), col: "family_notices_v4", field: "category" }],
@@ -19674,7 +19689,10 @@ ${item.memo}` : `${item.title} 다녀옴!`,
     const nextCats = { ...customCategories, [kind]: nextList };
     if (kind === "fridge" && fridgeCatFilter === targetName) setFridgeCatFilter("전체");
     if (kind === "fridge_locations" && fridgeLocFilter === targetName) setFridgeLocFilter("전체");
-    if (kind === "fridge" && shoppingCatFilter === targetName) setShoppingCatFilter("전체");
+    if (kind === "fridge") {
+      setShoppingList((prev) => prev.map((x) => (x.category === targetName ? { ...x, category: fallbackCat } : x)));
+      if (shoppingCatFilter === targetName) setShoppingCatFilter("전체");
+    }
     if (kind === "recipe" && recipeCatFilter === targetName) setRecipeCatFilter("전체");
     if (kind === "recipe_difficulties" && recipeDiffFilter === targetName) setRecipeDiffFilter("전체");
     if (kind === "bucket" && bucketCatFilter === targetName) setBucketCatFilter("전체");
@@ -21285,25 +21303,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
   };
 
 
-  const handleAddPageBlock = async (page) => {
-    if (!requireEditorAccess("pages") || !page) return;
-    const clean = String(pageQuickAddText || "").trim();
-    if (!clean) return;
-    const nowMs = Date.now();
-    const newBlock = {
-      id: `blk-${nowMs}-${Math.random().toString(36).slice(2, 5)}`,
-      type: "todo",
-      text: clean,
-      checked: false
-    };
-    const updated = {
-      ...page,
-      blocks: [...(Array.isArray(page.blocks) ? page.blocks : []), newBlock],
-      updatedAtMs: nowMs
-    };
-    setPageQuickAddText("");
-    await savePageToCloud(updated);
-  };
+  
 
 
   const handleTogglePageBlockTodo = async (page, blockId) => {
@@ -21360,14 +21360,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
 
 
 
-  const handleMovePageBlock = async (page, blockIdx, delta) => {
-    if (!requireEditorAccess("pages") || !page) return;
-    const arr = [...(Array.isArray(page.blocks) ? page.blocks : [])];
-    const targetIdx = blockIdx + delta;
-    if (targetIdx < 0 || targetIdx >= arr.length) return;
-    [arr[blockIdx], arr[targetIdx]] = [arr[targetIdx], arr[blockIdx]];
-    await savePageToCloud({ ...page, blocks: arr, updatedAtMs: Date.now() });
-  };
+  
 
 
   const handleDeletePageBlock = async (page, blockId) => {
@@ -21502,20 +21495,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
     await savePageToCloud({ ...page, blocks: curBlocks, updatedAtMs: nowMs });
   };
 
-  const handleFinishPageVisualEdit = async (page) => {
-    if (editingBlockId && page) {
-      const clean = String(editingBlockText || "").trim();
-      const curBlocks = Array.isArray(page.blocks) ? page.blocks : [];
-      const nextBlocks = clean
-        ? curBlocks.map((b) => (b.id === editingBlockId ? { ...b, text: clean } : b))
-        : curBlocks.filter((b) => b.id !== editingBlockId);
-      await savePageToCloud({ ...page, blocks: nextBlocks, updatedAtMs: Date.now() });
-    }
-    setEditingBlockId(null);
-    setIsPageVisualEditMode(false);
-    setIsPageMultiSelectMode(false);
-    setSelectedPageBlockIds([]);
-  };
+  
 
   const handleSelectOrSwitchPageBlock = async (page, targetBlk) => {
     if (!canEditTab("pages") || !page || !targetBlk) return;
@@ -21541,27 +21521,9 @@ ${item.memo}` : `${item.title} 다녀옴!`,
     setEditingBlockText(targetBlk.text || "");
   };
 
-  const handleApplyPageBlocksStyle = async (page, targetIds, stylePatch) => {
-    if (!requireEditorAccess("pages") || !page || !Array.isArray(targetIds) || targetIds.length === 0) return;
-    const idSet = new Set(targetIds);
-    const nextBlocks = (Array.isArray(page.blocks) ? page.blocks : []).map((b) => {
-      if (!idSet.has(b.id)) return b;
-      const patch = typeof stylePatch === "function" ? stylePatch(b) : stylePatch;
-      return { ...b, ...patch };
-    });
-    await savePageToCloud({ ...page, blocks: nextBlocks, updatedAtMs: Date.now() });
-  };
+  
 
-  const handleBulkIndentPageBlocks = async (page, targetIds, delta) => {
-    if (!requireEditorAccess("pages") || !page || !Array.isArray(targetIds) || targetIds.length === 0) return;
-    const idSet = new Set(targetIds);
-    const nextBlocks = (Array.isArray(page.blocks) ? page.blocks : []).map((b) => {
-      if (!idSet.has(b.id) || b.type === "heading") return b;
-      const nextIndent = Math.max(0, Math.min(3, (Number(b.indent) || 0) + delta));
-      return { ...b, indent: nextIndent };
-    });
-    await savePageToCloud({ ...page, blocks: nextBlocks, updatedAtMs: Date.now() });
-  };
+  
 
   const handleBulkDeletePageBlocks = async (page, targetIds) => {
     if (!requireEditorAccess("pages") || !page || !Array.isArray(targetIds) || targetIds.length === 0) return;
@@ -21668,30 +21630,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
 
 
 
-  const handleAddTableBlock = async (page) => {
-    if (!requireEditorAccess("pages") || !page) return;
-    const now = Date.now();
-    const newTable = {
-      id: `tbl-${now}`,
-      type: "table",
-      title: "All Tasks",
-      columns: [{ id: "desc", name: "비고" }],
-      rows: [
-        {
-          id: `row-${now}-1`,
-          priority: "High",
-          taskName: "새 항목",
-          values: { desc: "" },
-          memo: "",
-          attachments: []
-        }
-      ]
-    };
-    const nextBlocks = [...(Array.isArray(page.blocks) ? page.blocks : []), newTable];
-    await savePageToCloud({ ...page, blocks: nextBlocks, updatedAtMs: Date.now() });
-    recordActivity("노트", "표추가", page.title);
-    showToast("📊 노션 스타일 표를 추가했습니다!");
-  };
+  
 
   const handleUpdateTableBlock = async (page, blockId, updater) => {
     if (!requireEditorAccess("pages") || !page) return;
@@ -22173,8 +22112,12 @@ ${item.memo}` : `${item.title} 다녀옴!`,
   const enqueueOfflineMutation = (entry) => {
     setOfflineMutationQueue((prev) => {
       if (prev.some((x) => x.opId === entry.opId)) return prev;
-      const next = [...prev, { ...entry, ownerUid: user?.uid || "guest", status: "pending", queuedAtMs: Date.now() }].slice(-50);
-      try { localStorage.setItem(`kim_offline_mutation_queue_v1_${user?.uid || "guest"}`, JSON.stringify(next)); } catch (e) {}
+      const next = [...prev, { ...entry, ownerUid: user?.uid || "guest", status: "pending", queuedAtMs: Date.now() }];
+      try {
+        localStorage.setItem(`kim_offline_mutation_queue_v1_${user?.uid || "guest"}`, JSON.stringify(next));
+      } catch (e) {
+        showToast("⚠️ 기기 오프라인 저장공간이 부족해 대기열 일부가 저장되지 않았습니다.");
+      }
       return next;
     });
   };
@@ -22190,7 +22133,8 @@ ${item.memo}` : `${item.title} 다녀옴!`,
     prevData = null,
     action = "update",
     opId = "",
-    linkedEffectNote = ""
+    linkedEffectNote = "",
+    extraWrites = []
   }) => {
     const cleanOpId = opId || `op-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
     const nowMs = Date.now();
@@ -22306,6 +22250,13 @@ ${item.memo}` : `${item.title} 다녀옴!`,
           ...(linkedEffectNote ? { linkedEffectNote } : {}),
           immutable: true
         });
+        if (Array.isArray(extraWrites)) {
+          extraWrites.forEach((ew) => {
+            if (ew?.col && ew?.docId && ew?.data) {
+              tx.set(getDocRef(ew.col, ew.docId), ew.data, ew.merge ? { merge: true } : undefined);
+            }
+          });
+        }
       });
       ok = true;
       return { ok: true, payload };
@@ -22425,52 +22376,88 @@ ${item.memo}` : `${item.title} 다녀옴!`,
     return () => window.removeEventListener("online", onOnline);
   }, [offlineMutationQueue, user, db, offlineQueueStorageKey]);
 
-  // 일반 저장 경로(식단·냉장고·공지·일정 등)에서도 영구 수정이력(기준본 + 변경 diff) 자동 보존
-  const recordItemRevisionSafe = ({ entityType, entityId, entityTitle, prevData = null, nextData = null, action = "update" }) => {
-    if (!user || user.isAnonymous || !db || !entityType || !entityId) return;
-    try {
-      const nowMs = Date.now();
-      const actor = actorName || userProfile?.actorName || "가족";
-      const prevSnap = prevData ? sanitizeSnapshotForRevision(prevData) : null;
-      const nextSnap = nextData ? sanitizeSnapshotForRevision(nextData) : null;
-      const diffFields = prevSnap && nextSnap ? computeRevisionDiff(prevSnap, nextSnap) : [];
-      if (action === "update" && prevSnap && nextSnap && diffFields.length === 0) return;
-
-      const batch = writeBatch(db);
-      const hasExisting = itemRevisions.some((r) => r.entityType === entityType && r.entityId === entityId);
-      if (prevSnap && !hasExisting) {
-        const baseRevId = `rev-${entityType}-${entityId}-base-${nowMs}`;
-        batch.set(getDocRef("family_revisions_v1", baseRevId), {
+  const buildRevisionWriteOps = ({ entityType, entityId, entityTitle, prevData = null, nextData = null, action = "update" }) => {
+    if (!user || user.isAnonymous || !entityType || !entityId) return [];
+    const nowMs = Date.now();
+    const nowIso = new Date(nowMs).toISOString();
+    const actor = actorName || userProfile?.actorName || "가족";
+    const tabKey = REVISION_ENTITY_TYPES[entityType]?.tabKey || "";
+    const prevSnap = prevData ? sanitizeSnapshotForRevision(prevData) : null;
+    const nextSnap = nextData ? sanitizeSnapshotForRevision(nextData) : null;
+    const changedFields = prevSnap && nextSnap ? computeRevisionDiff(prevSnap, nextSnap) : [];
+    if (action === "update" && prevSnap && nextSnap && changedFields.length === 0) return [];
+    const ops = [];
+    const hasExisting = itemRevisions.some((r) => r.entityType === entityType && r.entityId === entityId);
+    if (prevSnap && !hasExisting && action !== "create") {
+      const baseRevId = `rev-${entityType}-${entityId}-base-${nowMs - 1}`;
+      ops.push({
+        id: baseRevId,
+        data: {
           id: baseRevId,
           entityType,
           entityId,
           entityTitle: String(entityTitle || ""),
+          tabKey,
           version: Math.max(1, Number(prevData?.version) || 1),
           action: "baseline",
           actorName: actor,
           actorUid: user.uid,
           createdAtMs: nowMs - 1,
-          diffFields: [],
-          snapshot: prevSnap
-        });
-      }
-      const nextVer = Math.max(1, Number(nextData?.version) || (Number(prevData?.version) || 1) + 1);
-      const revId = `rev-${entityType}-${entityId}-v${nextVer}-${nowMs}-${Math.random().toString(36).slice(2, 5)}`;
-      batch.set(getDocRef("family_revisions_v1", revId), {
+          createdAt: new Date(nowMs - 1).toISOString(),
+          diffSummary: "최초 수정 전 기준본 보존",
+          changedFields: [],
+          snapshot: prevSnap,
+          immutable: true
+        }
+      });
+    }
+    const nextVer = Math.max(1, Number(nextData?.version) || (Number(prevData?.version) || 1) + 1);
+    const revId = `rev-${entityType}-${entityId}-v${nextVer}-${nowMs}-${Math.random().toString(36).slice(2, 5)}`;
+    const diffSummary =
+      action === "create"
+        ? "신규 등록"
+        : action === "restore"
+        ? `과거 버전 복원 (${changedFields.length}개 항목 변경)`
+        : action === "delete"
+        ? "삭제"
+        : changedFields.length > 0
+        ? changedFields.slice(0, 3).map((d) => d.label).join(", ") + (changedFields.length > 3 ? ` 외 ${changedFields.length - 3}건` : "") + " 수정"
+        : "내용 저장";
+    ops.push({
+      id: revId,
+      data: {
         id: revId,
         entityType,
         entityId,
         entityTitle: String(entityTitle || ""),
+        tabKey,
         version: nextVer,
         action,
         actorName: actor,
         actorUid: user.uid,
         createdAtMs: nowMs,
-        diffFields,
-        snapshot: nextSnap || prevSnap || {}
-      });
-      batch.commit().catch(() => {});
-    } catch (e) {}
+        createdAt: nowIso,
+        diffSummary,
+        changedFields,
+        snapshot: nextSnap || prevSnap || {},
+        immutable: true
+      }
+    });
+    return ops;
+  };
+
+  // 일반 저장 경로(식단·냉장고·공지·일정 등)에서도 영구 수정이력(기준본 + 변경 diff) 자동 보존
+  const recordItemRevisionSafe = async ({ entityType, entityId, entityTitle, prevData = null, nextData = null, action = "update" }) => {
+    if (!user || user.isAnonymous || !db || !entityType || !entityId) return;
+    try {
+      const ops = buildRevisionWriteOps({ entityType, entityId, entityTitle, prevData, nextData, action });
+      if (ops.length === 0) return;
+      const batch = writeBatch(db);
+      ops.forEach((op) => batch.set(getDocRef("family_revisions_v1", op.id), op.data));
+      await batch.commit();
+    } catch (e) {
+      setSyncErrorMsg(e?.message || "수정이력 저장 오류");
+    }
   };
 
   const openRevisionHistory = (entityType, item) => {
@@ -22526,6 +22513,31 @@ ${item.memo}` : `${item.title} 다녀옴!`,
     }
     const linkedNote = meta.hasLinkedEffect ? meta.effectHint : "";
     const extraCol = entityType === "meal" ? "family_meals_v3" : "";
+    const extraWrites = [];
+    if (entityType === "cooked_portion" || entityType === "cooked_batch") {
+      const beforeQty = entityType === "cooked_portion" ? roundQty2(currentItem?.remainingQty) : roundQty2(currentItem?.totalQty);
+      const afterQty = entityType === "cooked_portion" ? roundQty2(restoredPayload?.remainingQty) : roundQty2(restoredPayload?.totalQty);
+      const delta = roundQty2(afterQty - beforeQty);
+      if (Math.abs(delta) >= 0.01) {
+        const adjId = `cl-restore-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`;
+        extraWrites.push({
+          col: "family_cooked_logs_v1",
+          docId: adjId,
+          data: {
+            id: adjId,
+            batchId: entityType === "cooked_batch" ? entityId : (restoredPayload?.batchId || currentItem?.batchId || ""),
+            portionId: entityType === "cooked_portion" ? entityId : "",
+            type: "adjust",
+            qty: Math.abs(delta),
+            delta,
+            unit: restoredPayload?.unit || currentItem?.unit || "인분",
+            reason: `수정이력 복원 보정 (v${rev.version} → v${nextVersion})`,
+            actorName: actorName || "가족",
+            createdAtMs: Date.now()
+          }
+        });
+      }
+    }
     const res = await commitEntityWithRevision({
       colName: meta.col,
       extraColName: extraCol,
@@ -22536,7 +22548,8 @@ ${item.memo}` : `${item.title} 다녀옴!`,
       nextData: restoredPayload,
       prevData: currentItem,
       action: "restore",
-      linkedEffectNote: linkedNote
+      linkedEffectNote: linkedNote,
+      extraWrites
     });
     if (res.conflict) {
       setRevisionModalState((prev) => ({ ...prev, conflictError: res.error }));
@@ -22546,26 +22559,6 @@ ${item.memo}` : `${item.title} 다녀옴!`,
     if (!res.ok) {
       showToast(`⚠️ 복원 실패: ${res.error || "네트워크 오류"}`);
       return;
-    }
-    if ((entityType === "cooked_portion" || entityType === "cooked_batch") && user && db) {
-      const beforeQty = entityType === "cooked_portion" ? roundQty2(currentItem?.remainingQty) : roundQty2(currentItem?.totalQty);
-      const afterQty = entityType === "cooked_portion" ? roundQty2(res.payload?.remainingQty) : roundQty2(res.payload?.totalQty);
-      const delta = roundQty2(afterQty - beforeQty);
-      if (Math.abs(delta) >= 0.01) {
-        const adjId = `cl-restore-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`;
-        setDoc(getDocRef("family_cooked_logs_v1", adjId), {
-          id: adjId,
-          batchId: entityType === "cooked_batch" ? entityId : (res.payload?.batchId || currentItem?.batchId || ""),
-          portionId: entityType === "cooked_portion" ? entityId : "",
-          type: "adjust",
-          qty: Math.abs(delta),
-          delta,
-          unit: res.payload?.unit || currentItem?.unit || "인분",
-          reason: `수정이력 복원 보정 (v${rev.version} → v${res.payload.version})`,
-          actorName: actorName || "가족",
-          createdAtMs: Date.now()
-        }).catch(() => {});
-      }
     }
     setRevisionModalState((prev) => ({
       ...prev,
@@ -23096,7 +23089,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
           id: `fr:${f.id}`,
           cat: "fridge",
           title: f.name || "재료",
-          subtitle: `${f.quantity ?? 0}${f.unit || "개"} · ${f.location || ""}${f.expiryDate ? ` · ~${f.expiryDate}` : ""}`,
+          subtitle: `${formatFridgeQtyUnit(f.quantity, f.unit)} · ${f.location || ""}${f.expiryDate ? ` · ~${f.expiryDate}` : ""}`,
           body: f.memo || "",
           tags: `${f.category || ""} ${f.location || ""} ${f.shelfZone || ""}`,
           date: f.purchaseDate || f.expiryDate || "",
@@ -24102,7 +24095,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
 
   if (authLoading || (user && profileLoading && !userProfile)) {
     return (
-      <div className="min-h-screen bg-[#FAF8F3] text-stone-800 max-w-md mx-auto flex items-center justify-center p-6 font-sans">
+      <div className={`min-h-screen ${UI_TOKENS.ivoryBg} text-stone-800 max-w-md mx-auto flex items-center justify-center p-6 font-sans`}>
         <div className="bg-white rounded-3xl border border-stone-200 p-6 w-full text-center space-y-2 shadow-sm">
           <div className="text-2xl animate-pulse">🔐</div>
           <div className="text-[15px] font-black text-stone-900">인증 상태 확인 중...</div>
@@ -24117,7 +24110,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
     const isInAppBrowser = /KAKAOTALK|NAVER|Instagram|FBAN|FBAV|Line/i.test(ua);
     const isAndroidUa = /Android/i.test(ua);
     return (
-      <div className="min-h-screen bg-[#FAF8F3] text-stone-800 max-w-md mx-auto flex items-center justify-center p-4 font-sans">
+      <div className={`min-h-screen ${UI_TOKENS.ivoryBg} text-stone-800 max-w-md mx-auto flex items-center justify-center p-4 font-sans`}>
         {toastBannerEl}
         <div className="bg-white rounded-2xl border border-stone-200 p-5 w-full space-y-3 shadow-lg">
           <div className="text-center space-y-0.5">
@@ -24343,7 +24336,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
   if (userProfile?.needsNameSetup || userProfile?.displayName === "새 사용자") {
     const suggestedName = googleNameSetupInput || (userProfile?.displayName && userProfile.displayName !== "새 사용자" ? userProfile.displayName : user.displayName || "");
     return (
-      <div className="min-h-screen bg-[#FAF8F3] text-stone-800 max-w-md mx-auto flex items-center justify-center p-4 font-sans">
+      <div className={`min-h-screen ${UI_TOKENS.ivoryBg} text-stone-800 max-w-md mx-auto flex items-center justify-center p-4 font-sans`}>
         {toastBannerEl}
         <div className="bg-white rounded-2xl border border-stone-200 p-5 w-full space-y-3 shadow-lg">
           <div className="text-center space-y-0.5">
@@ -24531,7 +24524,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
     const isRejected = userProfile?.role === "rejected";
     if (isWithdrawn) {
       return (
-        <div className="min-h-screen bg-[#FAF8F3] text-stone-800 max-w-md mx-auto flex items-center justify-center p-4 font-sans">
+        <div className={`min-h-screen ${UI_TOKENS.ivoryBg} text-stone-800 max-w-md mx-auto flex items-center justify-center p-4 font-sans`}>
           {toastBannerEl}
           <div className="bg-white rounded-2xl border border-stone-200 p-5 w-full text-center space-y-3 shadow-lg">
             <div className="text-3xl">👋</div>
@@ -24569,7 +24562,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
       );
     }
     return (
-      <div className="min-h-screen bg-[#FAF8F3] text-stone-800 max-w-md mx-auto flex items-center justify-center p-4 font-sans">
+      <div className={`min-h-screen ${UI_TOKENS.ivoryBg} text-stone-800 max-w-md mx-auto flex items-center justify-center p-4 font-sans`}>
         {toastBannerEl}
         <div className="bg-white rounded-2xl border border-stone-200 p-5 w-full text-center space-y-3 shadow-lg">
           <div className="text-2xl">{isRejected ? "🚫" : "⏳"}</div>
@@ -24652,7 +24645,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
   }
 
   return (
-    <div className="min-h-screen bg-[#FAF8F3] text-stone-800 pb-24 max-w-md mx-auto shadow-xl border-x border-stone-200 relative font-sans">
+    <div className={`min-h-screen ${UI_TOKENS.ivoryBg} text-stone-800 pb-24 max-w-md mx-auto shadow-xl border-x border-stone-200 relative font-sans`}>
       {diaryUploadProgress && (
         <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[9998] w-[88%] max-w-xs bg-stone-900/95 text-white px-4 py-2.5 rounded-2xl shadow-xl space-y-1.5">
           <div className="flex items-center justify-between text-[12.5px] font-extrabold">
@@ -25900,7 +25893,6 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                 : effHomeSlotFilter === "전체"
                 ? "시간대 전체"
                 : `선택: ${effHomeSlotFilter}`;
-            const isNonDefaultFilter = homeRoutineDayOffset !== 0 || effHomeSlotFilter !== "auto" || homeRoutineTargetFilter !== "전체";
 
             return (
               <div key="action_feed" className="space-y-3">
@@ -29036,8 +29028,17 @@ time: "", location: "",
                               };
                               beginWrite();
                               try {
-                                await setDoc(getDocRef("family_expenses_v4", expId), expPayload);
-                                recordItemRevisionSafe("expense", expId, null, expPayload, "create", "직접 지출 등록");
+                                const batch = writeBatch(db);
+                                batch.set(getDocRef("family_expenses_v4", expId), expPayload);
+                                buildRevisionWriteOps({
+                                  entityType: "expense",
+                                  entityId: expId,
+                                  entityTitle: `${title} (${amount.toLocaleString()}원)`,
+                                  prevData: null,
+                                  nextData: expPayload,
+                                  action: "create"
+                                }).forEach((op) => batch.set(getDocRef("family_revisions_v1", op.id), op.data));
+                                await batch.commit();
                                 recordActivity("월간·식비", "지출등록", `${title} (${amount.toLocaleString()}원)`, { targetSubTab: "expense" });
                                 setManualExpenseForm((p) => ({ ...p, title: "", amount: "" }));
                                 setIsManualExpenseOpen(false);
@@ -29145,8 +29146,17 @@ time: "", location: "",
                                     if (!await askConfirm(`'${exp.title}' (${Number(exp.amount || 0).toLocaleString()}원) 지출 기록을 삭제할까요?`, "삭제")) return;
                                     beginWrite();
                                     try {
-                                      await deleteDoc(getDocRef("family_expenses_v4", exp.id));
-                                      recordItemRevisionSafe("expense", exp.id, exp, null, "delete", "수동 지출 삭제");
+                                      const batch = writeBatch(db);
+                                      batch.delete(getDocRef("family_expenses_v4", exp.id));
+                                      buildRevisionWriteOps({
+                                        entityType: "expense",
+                                        entityId: exp.id,
+                                        entityTitle: `${exp.title || "지출"} (${Number(exp.amount || 0).toLocaleString()}원)`,
+                                        prevData: exp,
+                                        nextData: null,
+                                        action: "delete"
+                                      }).forEach((op) => batch.set(getDocRef("family_revisions_v1", op.id), op.data));
+                                      await batch.commit();
                                       showToast("🗑️ 지출 기록을 삭제했습니다.");
                                     } catch (e) {
                                       setSyncErrorMsg(e?.message || "지출 삭제 오류");
@@ -32629,7 +32639,7 @@ time: "", location: "",
                             <span>{getFridgeCategoryIcon(it.category)}</span>
                             <span className={`max-w-[84px] truncate ${Number(it.quantity) === 0 ? "line-through" : ""}`}>{it.name}</span>
                             <span className={`font-bold ${Number(it.quantity) === 0 ? "text-stone-400" : "text-stone-500"}`}>
-                              {Number(it.quantity) === 0 ? "소진" : `${Number(it.quantity) || 0}${it.unit}`}
+                              {Number(it.quantity) === 0 ? "소진" : formatFridgeQtyUnit(it.quantity, it.unit)}
                             </span>
                             {isUrgent && (
                               <span className="text-[10.5px] font-black text-rose-600">
@@ -38220,34 +38230,6 @@ time: "", location: "",
             tokens.push(<React.Fragment key={`e-${keyIdx++}`}>{str.slice(lastIdx)}</React.Fragment>);
           }
           return tokens;
-        };
-
-        const renderHeadingContent = (block) => {
-          const colorDef = PAGE_HEADING_COLORS.find((c) => c.id === block.color) || PAGE_HEADING_COLORS[0];
-          const raw = String(block.text || "");
-          const hSizeCls = PAGE_TEXT_SIZES.find((s) => s.id === block.fontSize)?.cls || "text-[16px]";
-          const hTxtCls = block.textColor && block.textColor !== "default"
-            ? (PAGE_TEXT_COLORS.find((c) => c.id === block.textColor)?.cls || "text-stone-900")
-            : "text-stone-900";
-          const bulletDot = block.isBullet ? (
-            <span className="inline-block w-1.5 h-1.5 rounded-full bg-stone-900 mr-2 shrink-0" />
-          ) : null;
-          const arrowMatch = raw.match(/^(.*?)(\s*(?:->|→)\s*.*)$/);
-          if (arrowMatch && arrowMatch[1].trim()) {
-            return (
-              <div className={`${hSizeCls} font-black ${hTxtCls} leading-snug flex flex-wrap items-center gap-1`}>
-                {bulletDot}
-                <span className={`px-1.5 py-0.5 rounded-md ${colorDef.badge}`}>{arrowMatch[1].trim()}</span>
-                <span>{arrowMatch[2].trim()}</span>
-              </div>
-            );
-          }
-          return (
-            <div className={`${hSizeCls} font-black ${hTxtCls} leading-snug flex items-center`}>
-              {bulletDot}
-              <span className={`px-1.5 py-0.5 rounded-md ${colorDef.badge}`}>{raw}</span>
-            </div>
-          );
         };
 
         const renderTreeNodes = (parentId, depth = 0) => {
@@ -49345,7 +49327,7 @@ time: "", location: "",
                   <div>
                     <div className="font-extrabold text-stone-900">{entry.item.name}</div>
                     <div className="text-[11.5px] text-stone-500">
-                      현재고: {entry.item.quantity}{entry.item.unit}
+                      현재고: {formatFridgeQtyUnit(entry.item.quantity, entry.item.unit)}
                     </div>
                   </div>
                   <div className="flex items-center gap-1.5">
@@ -51556,7 +51538,7 @@ time: "", location: "",
                       : "bg-stone-50 border-stone-200"
                   }`}
                 >
-                  <div className="text-[15px] font-black text-stone-900">{ch.label}</div>
+                  <div className="text-[14px] font-black text-stone-900">{ch.label}</div>
                   <div className="text-[11.5px] font-bold text-stone-500 mt-0.5">{ch.sub}</div>
                 </button>
               ))}
@@ -51699,7 +51681,7 @@ time: "", location: "",
                         });
                       }
                     }}
-                    className="text-[15px] font-black text-stone-900 bg-stone-50 px-2 py-1 rounded-lg border border-stone-200"
+                    className="text-[13.5px] font-black text-stone-900 bg-stone-50 px-2 py-1 rounded-lg border border-stone-200"
                   />
                   <button
                     type="button"
@@ -54497,8 +54479,8 @@ time: "", location: "",
                 >
                   -
                 </button>
-                <span className="text-[15px] font-black px-2">
-                  {Number(quickFridgeItem.quantity) || 0}{quickFridgeItem.unit}
+                <span className="text-[14px] font-black px-2">
+                  {formatFridgeQtyUnit(quickFridgeItem.quantity, quickFridgeItem.unit)}
                 </span>
                 <button
                   type="button"
@@ -54697,7 +54679,7 @@ time: "", location: "",
         >
           <span>{getFridgeCategoryIcon(draggingChip.item.category)}</span>
           <span>{draggingChip.item.name}</span>
-          <span className="text-amber-300">{Number(draggingChip.item.quantity) || 0}{draggingChip.item.unit}</span>
+          <span className="text-amber-300">{formatFridgeQtyUnit(draggingChip.item.quantity, draggingChip.item.unit)}</span>
         </div>
       )}
 
@@ -59428,7 +59410,7 @@ time: "", location: "",
                 const lines = [
                   `❄️ 냉장고 재고 (${fridge.length}종 · 만든 음식 ${cookedPortions.filter((p) => roundQty2(p.remainingQty) > 0).length}종)`,
                   ...cookedPortions.filter((p) => roundQty2(p.remainingQty) > 0).map((p) => `• [만든음식] ${p.dishName} ${p.remainingQty}${p.unit} (${p.location})`),
-                  ...fridge.map((i) => `• ${i.name} ${roundQty2(Number(i.quantity) || 0)}${i.unit} (${i.location}${i.expiryDate ? ` · ~${i.expiryDate}` : ""})`)
+                  ...fridge.map((i) => `• ${i.name} ${formatFridgeQtyUnit(i.quantity, i.unit)} (${i.location}${i.expiryDate ? ` · ~${i.expiryDate}` : ""})`)
                 ];
                 await copyTextSafe(lines.join("\n"), "📋 냉장고 재고 목록을 복사했습니다!");
               }}
