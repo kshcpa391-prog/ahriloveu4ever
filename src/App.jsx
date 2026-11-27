@@ -5435,17 +5435,17 @@ function MainApp() {
   const [condolenceListLimit, setCondolenceListLimit] = useState(40);
   const [isCondolenceFormOpen, setIsCondolenceFormOpen] = useState(false);
   const [editingCondolenceId, setEditingCondolenceId] = useState(null);
-  const [condolenceForm, setCondolenceForm] = useState({
+  const [condolenceForm, setCondolenceForm] = useState(() => ({
     date: getTodayStr(),
-    type: "out",
-    category: CONDOLENCE_CATEGORIES[0],
-    group: CONDOLENCE_GROUPS[0],
+    type: "out", // out(출금/보냄) | in(입금/받음)
+    category: condolenceCategories[0] || CONDOLENCE_CATEGORIES[0],
+    group: condolenceGroups[0] || CONDOLENCE_GROUPS[0],
     person: "",
-    owner: "공통",
+    owner: "공통", // 공통 | 수혁 | 아리
     amount: "",
-    paymentMethod: CONDOLENCE_PAY_METHODS[0],
+    paymentMethod: condolencePayMethods[0] || CONDOLENCE_PAY_METHODS[0],
     memo: ""
-  });
+  }));
   const [isCondolenceExcelModalOpen, setIsCondolenceExcelModalOpen] = useState(false);
   const [condolenceImportPreview, setCondolenceImportPreview] = useState(null);
   const [condolenceImportBusy, setCondolenceImportBusy] = useState(false);
@@ -5665,7 +5665,6 @@ function MainApp() {
   const [isPageModalOpen, setIsPageModalOpen] = useState(false);
   const [editingPageMeta, setEditingPageMeta] = useState(null);
   const [pageMetaForm, setPageMetaForm] = useState({ title: "", icon: "📄", parentId: null });
-  const [pageQuickAddText, setPageQuickAddText] = useState("");
   const [editingBlockId, setEditingBlockId] = useState(null);
   const [editingBlockText, setEditingBlockText] = useState("");
   const [isEditingPageTitle, setIsEditingPageTitle] = useState(false);
@@ -19916,7 +19915,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
         person: item.person || "",
         owner: item.owner || "공통",
         amount: String(Number(item.amount) || ""),
-        paymentMethod: item.paymentMethod || CONDOLENCE_PAY_METHODS[0],
+        paymentMethod: item.paymentMethod || condolencePayMethods[0] || CONDOLENCE_PAY_METHODS[0],
         memo: item.memo || ""
       });
     } else {
@@ -19929,7 +19928,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
         person: prefill?.person || (condolencePersonFilter !== "전체" ? condolencePersonFilter : ""),
         owner: prefill?.owner || "공통",
         amount: prefill?.amount ? String(prefill.amount) : "",
-        paymentMethod: CONDOLENCE_PAY_METHODS[0],
+        paymentMethod: prefill?.paymentMethod || condolencePayMethods[0] || CONDOLENCE_PAY_METHODS[0],
         memo: prefill?.memo || ""
       });
     }
@@ -19949,6 +19948,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
       showToast("⚠️ 올바른 금액을 입력해 주세요.");
       return;
     }
+    const prevCondolence = editingCondolenceId ? condolenceList.find((x) => x.id === editingCondolenceId) || null : null;
     const id = editingCondolenceId || `cond-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
     const record = {
       id,
@@ -19959,8 +19959,9 @@ ${item.memo}` : `${item.title} 다녀옴!`,
       person,
       owner: condolenceForm.owner || "공통",
       amount: amountNum,
-      paymentMethod: condolenceForm.paymentMethod || CONDOLENCE_PAY_METHODS[0],
+      paymentMethod: condolenceForm.paymentMethod || condolencePayMethods[0] || CONDOLENCE_PAY_METHODS[0],
       memo: String(condolenceForm.memo || "").trim(),
+      version: prevCondolence ? (Number(prevCondolence.version) || 1) + 1 : 1,
       updatedAtMs: Date.now(),
       updatedBy: actorName || "수혁"
     };
@@ -19973,6 +19974,15 @@ ${item.memo}` : `${item.title} 다녀옴!`,
       beginWrite();
       try {
         await setDoc(getDocRef("family_condolence_v1", id), record, { merge: true });
+        recordItemRevisionSafe({
+          entityType: "condolence",
+          entityId: id,
+          entityTitle: `${person} (${record.category})`,
+          action: editingCondolenceId ? "update" : "create",
+          beforeData: prevCondolence,
+          afterData: record,
+          version: record.version
+        });
       } catch (err) {
         setSyncErrorMsg(`경조사비 저장 오류: ${err?.message || "네트워크 확인"}`);
       } finally {
@@ -19995,6 +20005,15 @@ ${item.memo}` : `${item.title} 다녀옴!`,
       beginWrite();
       try {
         await deleteDoc(getDocRef("family_condolence_v1", item.id));
+        recordItemRevisionSafe({
+          entityType: "condolence",
+          entityId: item.id,
+          entityTitle: `${item.person || ""} (${item.category || "경조사"})`,
+          action: "delete",
+          beforeData: item,
+          afterData: null,
+          version: (Number(item.version) || 1) + 1
+        });
       } catch (err) {
         setCondolenceList(prev);
         try { localStorage.setItem("kim_condolence_cache_v1", JSON.stringify(prev)); } catch (e2) {}
@@ -29473,7 +29492,7 @@ time: "", location: "",
                         >
                           <span className="text-[13.5px] font-black text-stone-800">{uYear}</span>
                           <span className="text-[10px] font-bold text-stone-500 mr-0.5">년</span>
-                          <span className="text-[17px] font-black text-stone-900">{uMonth}</span>
+                          <span className="text-[15px] font-black text-stone-900">{uMonth}</span>
                           <span className="text-[10.5px] font-bold text-stone-500">월</span>
                           <span className="text-[10px] font-bold text-stone-400 ml-0.5">▾</span>
                           <input
@@ -33318,7 +33337,7 @@ time: "", location: "",
                           await handleQuickAddFridgeItemToShopping(fc);
                         }
                       }}
-                      className="px-2 py-0.5 rounded-lg bg-sky-700 hover:bg-sky-800 text-white text-[10.5px] font-extrabold whitespace-nowrap"
+                      className="px-2 py-0.5 rounded-lg bg-[#3F624D] hover:bg-[#35503C] text-white text-[10.5px] font-extrabold whitespace-nowrap"
                     >
                       + 모두 담기
                     </button>
@@ -34792,7 +34811,7 @@ time: "", location: "",
             {platingResult && (
               <div className="p-3.5 rounded-2xl bg-rose-50/60 border border-rose-200 space-y-2.5">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-[15px] font-black text-stone-900">
+                  <span className="text-[13.5px] font-black text-stone-900">
                     🍽️ {platingResult.dishName}
                   </span>
                   <div className="flex items-center gap-1 shrink-0">
@@ -37528,7 +37547,7 @@ time: "", location: "",
                     <button
                       type="button"
                       onClick={() => openCondolenceForm(null, { person: condolencePersonFilter })}
-                      className="h-6 px-2 rounded-lg bg-sky-700 text-white text-[10.5px] font-extrabold whitespace-nowrap"
+                      className="h-6 px-2 rounded-lg bg-[#3F624D] hover:bg-[#35503C] text-white text-[10.5px] font-extrabold whitespace-nowrap"
                     >
                       + {condolencePersonFilter} 추가
                     </button>
@@ -38074,6 +38093,14 @@ time: "", location: "",
                           className="h-7 px-2 rounded-lg bg-stone-50 hover:bg-stone-100 border border-stone-200 text-stone-600 text-[11px] font-extrabold whitespace-nowrap"
                         >
                           🗓️ 일정
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => openRevisionHistory("condolence", item)}
+                          className="h-7 px-2 rounded-lg bg-stone-50 hover:bg-stone-100 border border-stone-200 text-stone-600 text-[11px] font-extrabold whitespace-nowrap"
+                          title="수정 이력 보기"
+                        >
+                          🕒
                         </button>
                         <button
                           type="button"
@@ -39970,7 +39997,7 @@ time: "", location: "",
                         <button
                           type="button"
                           onClick={() => handleAddMissingRecipeIngredientsToShopping(r)}
-                          className="flex-1 py-1.5 px-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-[11px] font-extrabold whitespace-nowrap truncate"
+                          className="flex-1 min-w-0 py-1.5 px-1.5 rounded-xl bg-[#EEF3EE] hover:bg-[#E1EAE1] text-[#35503C] border border-[#C9D8CC] text-[11px] font-extrabold whitespace-nowrap truncate"
                         >
                           🛒 부족재료
                         </button>
@@ -48614,7 +48641,7 @@ time: "", location: "",
                   <button
                     type="button"
                     onClick={() => handleExportCondolenceExcel(modalFilteredRows, "필터")}
-                    className="h-8 px-2 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white text-[11px] font-extrabold whitespace-nowrap"
+                    className="h-8 px-2 rounded-xl bg-[#3F624D] hover:bg-[#35503C] text-white text-[11px] font-extrabold whitespace-nowrap"
                   >
                     🔍 필터 {modalFilteredRows.length}건 엑셀
                   </button>
@@ -50595,7 +50622,7 @@ time: "", location: "",
             <button
               type="button"
               onClick={handleExportCsv}
-              className="w-full py-2.5 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white text-[13.5px] font-extrabold flex items-center justify-center gap-1.5"
+              className="w-full py-2.5 rounded-xl bg-[#3F624D] hover:bg-[#35503C] text-white text-[13.5px] font-extrabold flex items-center justify-center gap-1.5"
             >
               <Download className="w-4 h-4" />
               <span>엑셀 열람용(CSV) 통합 파일 다운로드</span>
@@ -53963,17 +53990,26 @@ time: "", location: "",
               <h3 className="text-[13.5px] font-black text-stone-900">
                 📖 {editingRecipe ? "가족 레시피 수정" : "새 가족 레시피 등록"}
               </h3>
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-1.5 shrink-0">
+                {pendingRetryAction && (
+                  <button
+                    type="button"
+                    onClick={() => pendingRetryAction()}
+                    className="px-2.5 py-1.5 rounded-xl bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300 text-[12px] font-extrabold whitespace-nowrap"
+                  >
+                    🔄 재시도
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={handleSaveRecipe}
-                  className="px-3 py-1.5 rounded-xl bg-stone-900 text-white text-[13.5px] font-extrabold whitespace-nowrap"
+                  className="px-3 py-1.5 rounded-xl bg-[#3F624D] hover:bg-[#35503C] text-white text-[13.5px] font-extrabold whitespace-nowrap"
                 >
                   💾 저장
                 </button>
                 <button
                   type="button"
-                  onClick={() => setIsRecipeModalOpen(false)}
+                  onClick={() => { setIsRecipeModalOpen(false); setPendingRetryAction(null); }}
                   className="p-1.5 rounded-xl bg-stone-100 text-stone-600"
                 >
                   <X className="w-4 h-4" />
@@ -54259,7 +54295,7 @@ time: "", location: "",
             <button
               type="button"
               onClick={handleSaveRecipe}
-              className="w-full py-2.5 rounded-xl bg-stone-900 text-white text-[13.5px] font-extrabold"
+              className="w-full py-2.5 rounded-xl bg-[#3F624D] hover:bg-[#35503C] text-white text-[13.5px] font-extrabold"
             >
               💾 가족 레시피북에 저장
             </button>
@@ -56922,7 +56958,7 @@ time: "", location: "",
                 <button
                   type="button"
                   onClick={handleDownloadHandoverCard}
-                  className="py-2.5 px-2 rounded-2xl bg-sky-600 hover:bg-sky-700 text-white text-[12px] font-black whitespace-nowrap shadow-sm"
+                  className="py-2.5 px-2 rounded-2xl bg-[#EEF3EE] hover:bg-[#E1EAE1] text-[#35503C] border border-[#C9D8CC] text-[12px] font-black whitespace-nowrap shadow-sm"
                 >
                   🖼️ 카드저장
                 </button>
@@ -58142,7 +58178,7 @@ time: "", location: "",
                   readOnly={!canEdit}
                   onChange={(e) => setTaskModalDraft((p) => ({ ...p, taskName: e.target.value }))}
                   placeholder="Task 이름"
-                  className="flex-1 min-w-0 text-[15px] font-black text-stone-900 bg-transparent border-b border-transparent focus:border-stone-300 focus:outline-none pb-0.5"
+                  className="flex-1 min-w-0 text-[13.5px] font-black text-stone-900 bg-transparent border-b border-transparent focus:border-stone-300 focus:outline-none pb-0.5"
                 />
                 <button
                   type="button"

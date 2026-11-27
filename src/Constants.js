@@ -1186,7 +1186,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v14.58";
+export const APP_CODE_VERSION = "v14.59";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1204,7 +1204,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-27 19:30";
+export const APP_BUILD_DATE = "2026-11-27 20:15";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1274,6 +1274,17 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v14.59",
+    version: "v14.59",
+    date: "2026-11-27",
+    title: "🐛 레시피 저장 재시도 버튼 실동작 연결 · 경조사비 동적 분류 기본값 & 수정이력 연동 · 데드코드/모바일 잘림/색상·폰트 일괄 정돈",
+    items: [
+      "🐛 [버그 수정 4종] ① 레시피 저장 실패 시 pendingRetryAction만 저장되고 UI에 버튼이 없던 문제를 해결해 모달 상단에 [🔄 재시도] 버튼을 노출하고 닫기 시 자동 초기화 ② 경조사비 등록·수정·초기화에서 하드코딩된 CONDOLENCE_CATEGORIES/GROUPS/PAY_METHODS[0] 대신 사용자 맞춤 목록(condolenceCategories/Groups/PayMethods[0])을 사용하도록 교정 ③ 미사용 상태(pageQuickAddText) 제거 ④ 레시피 카드 [🛒 부족재료] 버튼(flex-1 truncate)에 min-w-0을 보강해 360px 모바일 넘침 방지",
+      "🕒🔗 [경조사비 수정이력 · 메뉴 연계 완성] 경조사비 등록·수정·삭제 시 family_revisions_v1 영구 수정이력을 자동 기록하고, 각 경조사 카드에 [🕒] 이력 조회·복원 버튼을 추가했습니다.",
+      "🎨 [디자인·색상·폰트 통일] 장보기(+ 모두 담기)·경조사비(+ 인물 추가 · 필터 엑셀)·CSV 내보내기·레시피 저장 버튼의 혼재 색상(sky-700/emerald-600·700/stone-900)을 앱 공통 세이지그린(#3F624D/#35503C)으로 통일하고, 달력 월(17px→15px)·AI 플레이팅·공유노트 표 상세 입력(15px→13.5px) 폰트를 정돈했습니다. (과거 패치노트 496건 100% 보존)"
+    ]
+  },
   {
     id: "patch-v14.58",
     version: "v14.58",
