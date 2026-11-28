@@ -3874,55 +3874,6 @@ function MainApp() {
   const [adminNoteSending, setAdminNoteSending] = useState(false);
   const [showAdminInboxModal, setShowAdminInboxModal] = useState(false);
 
-  useEffect(() => {
-    const p = carNotebook?.parking || {};
-    setCarParkingDraft({
-      floor: p.floor || "",
-      spot: p.spot || "",
-      memo: p.memo || "",
-      photoUrl: p.photoUrl || ""
-    });
-  }, [carNotebook?.parking?.floor, carNotebook?.parking?.spot, carNotebook?.parking?.memo, carNotebook?.parking?.photoUrl]);
-
-  const saveCarNotebookToCloud = async (nextCar, toastMsg = "") => {
-    setCarNotebook(nextCar);
-    try { localStorage.setItem("kim_car_notebook_v1", JSON.stringify(nextCar)); } catch (e) {}
-    if (user && db) {
-      beginWrite();
-      try {
-        await setDoc(
-          getDocRef("family_meta_v4", "car_notebook_v1"),
-          { ...nextCar, updatedAtMs: Date.now() },
-          { merge: true }
-        );
-      } catch (e) {
-        setSyncErrorMsg(e?.message || "우리차수첩 동기화 오류");
-        showToast("⚠️ 우리차수첩 저장에 실패했습니다.");
-      } finally {
-        endWrite();
-      }
-    }
-    if (toastMsg) showToast(toastMsg);
-  };
-
-  const savePersonalDataToCloud = async (patchObj, toastMsg = "") => {
-    if (!user || !db || user.isAnonymous) {
-      showToast("⚠️ 로그인 후 개인 공간에 저장할 수 있습니다.");
-      return false;
-    }
-    beginWrite();
-    try {
-      await setDoc(doc(db, "users", user.uid), { ...patchObj, updatedAtMs: Date.now() }, { merge: true });
-      if (toastMsg) showToast(toastMsg);
-      return true;
-    } catch (e) {
-      setSyncErrorMsg(e?.message || "개인 데이터 저장 오류");
-      showToast("⚠️ 개인 공간 저장에 실패했습니다.");
-      return false;
-    } finally {
-      endWrite();
-    }
-  };
 
   const [selectedPermRoleLabel, setSelectedPermRoleLabel] = useState("");
   const [editingRoleLabelMode, setEditingRoleLabelMode] = useState(false);
@@ -5560,6 +5511,55 @@ function MainApp() {
     memo: "",
     photoUrl: ""
   }));
+  useEffect(() => {
+    const p = carNotebook?.parking || {};
+    setCarParkingDraft({
+      floor: p.floor || "",
+      spot: p.spot || "",
+      memo: p.memo || "",
+      photoUrl: p.photoUrl || ""
+    });
+  }, [carNotebook?.parking?.floor, carNotebook?.parking?.spot, carNotebook?.parking?.memo, carNotebook?.parking?.photoUrl]);
+
+  const saveCarNotebookToCloud = async (nextCar, toastMsg = "") => {
+    setCarNotebook(nextCar);
+    try { localStorage.setItem("kim_car_notebook_v1", JSON.stringify(nextCar)); } catch (e) {}
+    if (user && db) {
+      beginWrite();
+      try {
+        await setDoc(
+          getDocRef("family_meta_v4", "car_notebook_v1"),
+          { ...nextCar, updatedAtMs: Date.now() },
+          { merge: true }
+        );
+      } catch (e) {
+        setSyncErrorMsg(e?.message || "우리차수첩 동기화 오류");
+        showToast("⚠️ 우리차수첩 저장에 실패했습니다.");
+      } finally {
+        endWrite();
+      }
+    }
+    if (toastMsg) showToast(toastMsg);
+  };
+
+  const savePersonalDataToCloud = async (patchObj, toastMsg = "") => {
+    if (!user || !db || user.isAnonymous) {
+      showToast("⚠️ 로그인 후 개인 공간에 저장할 수 있습니다.");
+      return false;
+    }
+    beginWrite();
+    try {
+      await setDoc(doc(db, "users", user.uid), { ...patchObj, updatedAtMs: Date.now() }, { merge: true });
+      if (toastMsg) showToast(toastMsg);
+      return true;
+    } catch (e) {
+      setSyncErrorMsg(e?.message || "개인 데이터 저장 오류");
+      showToast("⚠️ 개인 공간 저장에 실패했습니다.");
+      return false;
+    } finally {
+      endWrite();
+    }
+  };
   const [isCarRecordFormOpen, setIsCarRecordFormOpen] = useState(false);
   const [carRecordForm, setCarRecordForm] = useState(() => ({
     type: DEFAULT_CAR_RECORD_TYPES[0],

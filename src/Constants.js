@@ -1186,7 +1186,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v14.66";
+export const APP_CODE_VERSION = "v14.67";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1204,7 +1204,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-28 12:50";
+export const APP_BUILD_DATE = "2026-11-28 13:45";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1274,6 +1274,17 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v14.67",
+    version: "v14.67",
+    date: "2026-11-28",
+    title: "🛠️ 런타임 초기화 오류(TDZ: carNotebook 선언 전 useEffect 참조) 해결",
+    category: "긴급 수정",
+    items: [
+      "🛠️ 화면 자동 복구 오류('Cannot access mp before initialization') 근본 해결: MainApp 상단에서 carNotebook 선언 전에 실행되던 주차 위치 동기화 useEffect 및 저장 함수를 carNotebook·carParkingDraft 선언 이후로 재배치",
+      "🔍 전체 MainApp 의존성 배열·useState 초기값 선언 전 참조(TDZ) 전수 재스캔 0건 확인 완료"
+    ]
+  },
   {
     id: "patch-v14.66",
     version: "v14.66",
