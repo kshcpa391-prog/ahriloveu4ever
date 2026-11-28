@@ -272,6 +272,8 @@ import {
   filterSensitiveTextForAi,
   validateAiStructuredResponse,
   buildChunkedBackupManifest,
+  reassembleChunkedBackup,
+  normalizeBackupPayloadSchema,
   normalizeSearchText,
   stripHtmlToPlainText,
   scoreSearchMatch,
@@ -4247,24 +4249,52 @@ function MainApp() {
   const [homeDragOverKey, setHomeDragOverKey] = useState("");
 
 
-  const syncHomeSettingsToCloud = async (nextLayout, nextRanges, nextRoutineRanges = null, nextSlotDefs = null, nextRoutineViewMode = null) => {
-    if (!user || !db || !isEditorUnlocked) return;
+  const syncHomeSettingsToCloud = async (
+    nextLayout,
+    nextRanges = null,
+    nextRoutineRanges = null,
+    nextSlotDefs = null,
+    nextRoutineViewMode = null,
+    extraArg6 = null,
+    extraArg7 = null,
+    extraArg8 = null
+  ) => {
+    if (!user || !db || !isEditorUnlocked) return { ok: false, skipped: true };
     homeLayoutLocalWriteAtRef.current = Date.now();
-    try {
-      await setDoc(
-        getDocRef("family_meta_v4", "home_layout"),
-        {
+    const isOptionsObj =
+      nextLayout &&
+      typeof nextLayout === "object" &&
+      !nextLayout.morning &&
+      !nextLayout.afternoon &&
+      !nextLayout.night &&
+      nextRanges === null &&
+      nextRoutineRanges === null &&
+      nextSlotDefs === null &&
+      nextRoutineViewMode === null;
+    const mergedExtras = {
+      ...(extraArg6 && typeof extraArg6 === "object" ? extraArg6 : {}),
+      ...(extraArg7 && typeof extraArg7 === "object" ? extraArg7 : {}),
+      ...(extraArg8 && typeof extraArg8 === "object" ? extraArg8 : {})
+    };
+    const payload = isOptionsObj
+      ? { ...nextLayout, updatedAt: new Date().toISOString(), updatedAtMs: Date.now() }
+      : {
           ...(nextLayout ? { layout: nextLayout } : {}),
           ...(nextRanges ? { timeRanges: nextRanges } : {}),
           ...(nextRoutineRanges ? { routineRanges: nextRoutineRanges } : {}),
           ...(Array.isArray(nextSlotDefs) ? { routineSlotDefs: nextSlotDefs } : {}),
           ...(nextRoutineViewMode === "card" || nextRoutineViewMode === "timetable" ? { routineViewMode: nextRoutineViewMode } : {}),
-          updatedAt: new Date().toISOString()
-        },
-        { merge: true }
-      );
+          ...mergedExtras,
+          updatedAt: new Date().toISOString(),
+          updatedAtMs: Date.now()
+        };
+    try {
+      await setDoc(getDocRef("family_meta_v4", "home_layout"), payload, { merge: true });
+      return { ok: true };
     } catch (e) {
-      setSyncErrorMsg(e?.message || "홈 설정 동기화 오류");
+      const errMsg = e?.message || "홈 설정 동기화 오류";
+      setSyncErrorMsg(errMsg);
+      return { ok: false, error: errMsg };
     }
   };
   const [homeTimeRanges, setHomeTimeRanges] = useState(() => {
@@ -5671,7 +5701,26 @@ function MainApp() {
   const [isSavingCar, setIsSavingCar] = useState(false);
   const [carSaveError, setCarSaveError] = useState("");
   const [carSubError, setCarSubError] = useState("");
-  const [carPendingRetryOp, setCarPendingRetryOp] = useState(null);
+  const carPendingStorageKey = `kim_car_pending_retry_v1_${user?.uid || "guest"}`;
+  const [carPendingRetryOp, setCarPendingRetryOp] = useState(() => {
+    try {
+      const raw = JSON.parse(localStorage.getItem(`kim_car_pending_retry_v1_${user?.uid || "guest"}`) || "null");
+      if (raw && raw.candidate && (!raw.ownerUid || !user?.uid || raw.ownerUid === user.uid)) return raw;
+    } catch (e) {}
+    return null;
+  });
+  useEffect(() => {
+    try {
+      const raw = JSON.parse(localStorage.getItem(carPendingStorageKey) || "null");
+      if (raw && raw.candidate && (!raw.ownerUid || !user?.uid || raw.ownerUid === user.uid)) {
+        setCarPendingRetryOp(raw);
+      } else {
+        setCarPendingRetryOp(null);
+      }
+    } catch (e) {
+      setCarPendingRetryOp(null);
+    }
+  }, [carPendingStorageKey, user?.uid]);
   const [carParkingHistoryPage, setCarParkingHistoryPage] = useState(1);
   const [carNaturalInput, setCarNaturalInput] = useState("");
   const [isCarFuelFormOpen, setIsCarFuelFormOpen] = useState(false);
@@ -5778,6 +5827,7 @@ function MainApp() {
         });
         setCarNotebook(committed);
         setCarPendingRetryOp(null);
+        try { localStorage.removeItem(carPendingStorageKey); } catch (e) {}
         setCarSubError("");
         try { localStorage.setItem("kim_car_notebook_v1", JSON.stringify(committed)); } catch (e) {}
         if (toastMsg) showToast(toastMsg);
@@ -5788,8 +5838,17 @@ function MainApp() {
         const msg = e?.message || "우리차수첩 동기화 오류";
         setSyncErrorMsg(msg);
         setCarSaveError(msg);
-        // 실패한 실제 변경 연산을 별도 보존하여 재시도 시 이전 값이 아닌 실패 변경을 재적용
-        setCarPendingRetryOp({ candidate, tombstones, toastMsg });
+        // 실패한 실제 변경 연산을 계정별 로컬 대기열에 영속 보존하여 새로고침 후에도 재시도 가능
+        const pendingEntry = {
+          ownerUid: user?.uid || "guest",
+          savedAtMs: Date.now(),
+          errorMsg: msg,
+          candidate,
+          tombstones,
+          toastMsg
+        };
+        setCarPendingRetryOp(pendingEntry);
+        try { localStorage.setItem(carPendingStorageKey, JSON.stringify(pendingEntry)); } catch (err) {}
         showToast("⚠️ 우리차수첩 저장에 실패했습니다. [재시도]로 방금 변경사항을 다시 저장할 수 있습니다.");
         return false;
       } finally {
@@ -5799,6 +5858,7 @@ function MainApp() {
     }
     setIsSavingCar(false);
     setCarPendingRetryOp(null);
+    try { localStorage.removeItem(carPendingStorageKey); } catch (e) {}
     if (toastMsg) showToast(toastMsg);
     return true;
   };
@@ -6354,17 +6414,35 @@ function MainApp() {
       }
       const snaps = await getDocs(getColRef("family_backups_v4")).catch(() => null);
       if (snaps) {
+        const allDocsById = {};
+        const manifestDocs = [];
         snaps.forEach((d) => {
           const raw = d.data() || {};
-          const list = raw?.data?.familyRoutines;
+          allDocsById[d.id] = raw;
+          if (!d.id.includes("_chunk_")) {
+            manifestDocs.push({ id: d.id, raw });
+          }
+        });
+        for (const { id: docId, raw } of manifestDocs) {
+          let resolvedData = null;
+          if (raw.isChunked) {
+            const reassembled = reassembleChunkedBackup(raw, allDocsById);
+            if (reassembled.ok && reassembled.data) {
+              resolvedData = reassembled.data;
+            }
+          } else if (raw?.data && typeof raw.data === "object") {
+            const singleCheck = reassembleChunkedBackup(raw, {});
+            resolvedData = singleCheck.ok ? singleCheck.data : raw.data;
+          }
+          const list = resolvedData?.familyRoutines;
           if (Array.isArray(list) && list.length > 0) {
             candidates.push({
-              label: raw.slot || d.id,
+              label: `${raw.slot || docId}${raw.isChunked ? " (분할)" : ""}`,
               at: raw.createdAt || "",
               items: list
             });
           }
-        });
+        }
       }
       if (candidates.length === 0) {
         showToast("복원 가능한 클라우드 루틴 스냅샷이 없습니다.");
@@ -11319,18 +11397,33 @@ function MainApp() {
       onSnapshot(
         getColRef("family_patchnotes_v4"),
         async (snap) => {
-          const loaded = snap.docs.map((d) => {
-            const raw = d.data() || {};
-            return {
-              ...raw,
-              id: d.id,
-              ...(Array.isArray(raw.changes) ? { changes: raw.changes } : {}),
-              ...(Array.isArray(raw.items) ? { items: raw.items } : {}),
-              ...(Array.isArray(raw.highlights) ? { highlights: raw.highlights } : {})
-            };
-          });
+          let hiddenIds = [];
+          try {
+            const cachedHidden = JSON.parse(localStorage.getItem("kim_hidden_patchnote_ids_v1") || "[]");
+            if (Array.isArray(cachedHidden)) hiddenIds = cachedHidden;
+          } catch (e) {}
+          try {
+            const metaSnap = await getDoc(getDocRef("family_meta_v4", "patchnotes_meta_v1"));
+            if (metaSnap.exists() && Array.isArray(metaSnap.data()?.hiddenDefaultIds)) {
+              hiddenIds = Array.from(new Set([...hiddenIds, ...metaSnap.data().hiddenDefaultIds]));
+              try { localStorage.setItem("kim_hidden_patchnote_ids_v1", JSON.stringify(hiddenIds)); } catch (e) {}
+            }
+          } catch (e) {}
+          const hiddenSet = new Set(hiddenIds);
+          const loaded = snap.docs
+            .map((d) => {
+              const raw = d.data() || {};
+              return {
+                ...raw,
+                id: d.id,
+                ...(Array.isArray(raw.changes) ? { changes: raw.changes } : {}),
+                ...(Array.isArray(raw.items) ? { items: raw.items } : {}),
+                ...(Array.isArray(raw.highlights) ? { highlights: raw.highlights } : {})
+              };
+            })
+            .filter((p) => !hiddenSet.has(p.id));
           const loadedIds = new Set(loaded.map((p) => p.id));
-          const missingDefaults = INITIAL_PATCH_NOTES.filter((p) => !loadedIds.has(p.id));
+          const missingDefaults = INITIAL_PATCH_NOTES.filter((p) => !loadedIds.has(p.id) && !hiddenSet.has(p.id));
           if (missingDefaults.length > 0 && userProfile?.role === "admin") {
             for (const p of missingDefaults) {
               try {
@@ -11355,7 +11448,7 @@ function MainApp() {
           });
           setPatchNotes(combined);
         },
-        () => {}
+        (err) => setSyncErrorMsg(err?.message || "패치노트 동기화 오류")
       )
     );
 
@@ -11565,13 +11658,15 @@ function MainApp() {
           const snapshotPayload = {
             ...chunked.manifest,
             byteSize: chunked.manifest.totalBytes,
+            isChunked: false,
             data: backupDataObj
           };
           await setDoc(getDocRef("family_backups_v4", currentSlot), snapshotPayload);
         } else {
-          // 900KB 초과 대용량 시 분할 청크 문서 + manifest 저장 (첨부 원본 바이너리는 URL/메타 참조만 포함)
+          // 650KB 초과 대용량 시 고유 backupId 청크를 먼저 전부 작성·검증한 뒤 마지막에 manifest 확정 (기존 완료 백업 청크 덮어쓰기 방지)
           for (const ch of chunked.chunks) {
-            await setDoc(getDocRef("family_backups_v4", `${currentSlot}_chunk_${ch.index}`), {
+            await setDoc(getDocRef("family_backups_v4", ch.docId), {
+              backupId: chunked.backupId,
               slot: currentSlot,
               index: ch.index,
               dataHash: dataSig,
@@ -11583,7 +11678,8 @@ function MainApp() {
             ...chunked.manifest,
             byteSize: chunked.manifest.totalBytes,
             isChunked: true,
-            chunkDocIds: chunked.chunks.map((c) => `${currentSlot}_chunk_${c.index}`)
+            chunkDocIds: chunked.chunks.map((c) => c.docId),
+            complete: true
           });
         }
         await setDoc(
@@ -11681,28 +11777,53 @@ function MainApp() {
     };
 
 
-    setPatchNotes((prev) => [newPatch, ...prev]);
-    setPatchForm({ version: "", title: "", changesText: "" });
-
-
     if (user && db) {
       try {
         await setDoc(getDocRef("family_patchnotes_v4", id), newPatch);
-      } catch (e) {}
+      } catch (e) {
+        const msg = e?.message || "패치노트 저장 오류";
+        setSyncErrorMsg(msg);
+        showToast(`⚠️ 패치노트 저장에 실패했습니다 (입력 내용은 유지됩니다): ${msg}`);
+        return;
+      }
     }
+    setPatchNotes((prev) => [newPatch, ...prev]);
+    setPatchForm({ version: "", title: "", changesText: "" });
     showToast(`패치노트(${ver})가 기록되었습니다!`);
   };
 
 
   const handleDeletePatchNote = async (id) => {
     if (!isAdminUnlocked) { showToast("🔒 관리자 전용 기능입니다."); setIsEditorUnlockModalOpen(true); return; }
-    setPatchNotes((prev) => prev.filter((p) => p.id !== id));
+    const prevList = patchNotes;
+    const isDefaultNote = INITIAL_PATCH_NOTES.some((p) => p.id === id);
     if (user && db) {
       try {
         await deleteDoc(getDocRef("family_patchnotes_v4", id));
+        if (isDefaultNote) {
+          await setDoc(
+            getDocRef("family_meta_v4", "patchnotes_meta_v1"),
+            { hiddenDefaultIds: arrayUnion(id), updatedAtMs: Date.now() },
+            { merge: true }
+          );
+        }
+      } catch (e) {
+        setPatchNotes(prevList);
+        const msg = e?.message || "패치노트 삭제 오류";
+        setSyncErrorMsg(msg);
+        showToast(`⚠️ 패치노트 삭제에 실패했습니다: ${msg}`);
+        return;
+      }
+    }
+    if (isDefaultNote) {
+      try {
+        const cur = JSON.parse(localStorage.getItem("kim_hidden_patchnote_ids_v1") || "[]");
+        const nextHidden = Array.from(new Set([...(Array.isArray(cur) ? cur : []), id]));
+        localStorage.setItem("kim_hidden_patchnote_ids_v1", JSON.stringify(nextHidden));
       } catch (e) {}
     }
-    showToast("패치노트 항목이 삭제되었습니다.");
+    setPatchNotes((prev) => prev.filter((p) => p.id !== id));
+    showToast(isDefaultNote ? "기본 패치노트를 숨김·삭제했습니다 (새로고침 후에도 유지)." : "패치노트 항목이 삭제되었습니다.");
   };
 
 
@@ -11961,7 +12082,8 @@ function MainApp() {
     try {
       const text = await file.text();
       const parsed = JSON.parse(text);
-      const payload = parsed?.data || parsed;
+      const normSchema = normalizeBackupPayloadSchema(parsed);
+      const payload = normSchema.ok ? normSchema.payload : null;
 
 
       if (!payload || typeof payload !== "object") {
@@ -11978,12 +12100,20 @@ function MainApp() {
       const totalConflicts = mealConflicts + fridgeConflicts + schConflicts;
 
 
+      const carVehCount = Array.isArray(payload.carNotebook?.vehicles) ? payload.carNotebook.vehicles.length : (payload.carNotebook?.parking ? 1 : 0);
+      const carRecCount = Array.isArray(payload.carNotebook?.records) ? payload.carNotebook.records.length : 0;
+      const cookedCount = toSafeArray(payload.cookedBatches).length + toSafeArray(payload.cookedPortions).length;
+      const attachNote = normSchema.meta?.attachmentMode === "metadata_and_urls_only"
+        ? "첨부파일: URL/메타 참조만 포함(원본 바이너리 제외)"
+        : "첨부파일: 인라인/URL 참조 포함";
       const confirmRestore = await askConfirm(
-        `백업 파일을 복원할까요?\n` +
+        `백업 파일을 복원할까요? [${normSchema.backupType}]\n` +
         `• 식단 ${toSafeArray(payload.meals).length}건 (기존 충돌 ${mealConflicts}건)\n` +
-        `• 냉장고 ${toSafeArray(payload.fridge).length}건 (기존 충돌 ${fridgeConflicts}건)\n` +
-        `• 일정 ${toSafeArray(payload.schedules).length}건 (기존 충돌 ${schConflicts}건)\n` +
-        (totalConflicts > 0 ? `⚠️ 기존 충돌 ${totalConflicts}건은 백업 내용으로 덮어써집니다. 복원 직전 현재 상태를 안전 백업합니다.` : `복원 직전 현재 상태를 안전 백업합니다.`)
+        `• 냉장고 ${toSafeArray(payload.fridge).length}건 (기존 충돌 ${fridgeConflicts}건) · 만든음식 ${cookedCount}건\n` +
+        `• 일정 ${toSafeArray(payload.schedules).length}건 (기존 충돌 ${schConflicts}건) · 루틴 ${toSafeArray(payload.familyRoutines).length}건\n` +
+        `• 차량 ${carVehCount}대 / 정비 ${carRecCount}건 · 공유노트 ${toSafeArray(payload.familyPages).length}건\n` +
+        `• ${attachNote}${normSchema.meta?.recipesFromMetaOnly ? " · 레시피 메타만 포함(사진 제외)" : ""}\n` +
+        (totalConflicts > 0 ? `⚠️ 기존 충돌 ${totalConflicts}건은 백업 내용으로 덮어써집니다. 복원 직전 현재 상태를 무손실 안전 백업합니다.` : `복원 직전 현재 상태를 무손실 안전 백업합니다.`)
       );
       if (!confirmRestore) {
         if (jsonRestoreInputRef.current) jsonRestoreInputRef.current.value = "";
@@ -11995,25 +12125,54 @@ function MainApp() {
       if (user && db) {
         try {
           const fullPreRestoreData = {
-            meals, fridge, expenses, shoppingList, notices, schedules,
-            babyChecks, babyGrowthLogs, babyMedicalNotes, familyRoutines,
-            bucketList, houseItems, carNotebook, customCategories, houseStorageRooms,
-            favoriteSingleMenus, favoriteMealCombos, handoverProfile,
-            babyDreamLinks, monthlyBudget,
+            meals, fridge, expenses, shoppingList,
+            recipesMeta: recipes.map(({ photoDataUrl, ...rest }) => rest),
+            notices, schedules, patchNotes, deletedIds, wasteEvents,
+            babyChecks, babyGrowthLogs, babyMedicalNotes, babyActivities,
+            familyRoutines, routineLogs, routineLogTrackingStartDate,
+            bucketList, houseItems, familyPages, carNotebook,
+            customCategories, houseStorageRooms,
+            mealFavorites: { combos: favoriteMealCombos, singles: favoriteSingleMenus },
+            handoverProfile, homeMiniDdayIds, babyDreamLinks, monthlyBudget,
             cookedBatches, cookedPortions, cookedLogs
           };
-          const preBytes = new Blob([JSON.stringify(fullPreRestoreData)]).size;
-          const safePreData = preBytes <= 880000
-            ? fullPreRestoreData
-            : { meals, fridge, expenses, shoppingList, notices, schedules, familyRoutines, customCategories, houseStorageRooms, monthlyBudget };
-          await setDoc(getDocRef("family_backups_v4", `pre_restore_${Date.now()}`), {
-            slot: "pre_restore",
-            createdAt: new Date().toISOString(),
-            byteSize: new Blob([JSON.stringify(safePreData)]).size,
-            data: safePreData
+          const preDocId = `pre_restore_${Date.now()}`;
+          const preChunked = buildChunkedBackupManifest(fullPreRestoreData, {
+            slot: preDocId,
+            scope: "family",
+            backupType: "pre_restore",
+            ownerUid: user.uid,
+            chunkMaxBytes: 650000,
+            backupId: preDocId
           });
+          if (!preChunked.isChunked) {
+            await setDoc(getDocRef("family_backups_v4", preDocId), {
+              ...preChunked.manifest,
+              byteSize: preChunked.manifest.totalBytes,
+              isChunked: false,
+              data: fullPreRestoreData
+            });
+          } else {
+            for (const ch of preChunked.chunks) {
+              await setDoc(getDocRef("family_backups_v4", ch.docId), {
+                backupId: preChunked.backupId,
+                slot: preDocId,
+                index: ch.index,
+                dataHash: preChunked.manifest.dataHash,
+                payload: ch.payload,
+                createdAt: preChunked.manifest.createdAt
+              });
+            }
+            await setDoc(getDocRef("family_backups_v4", preDocId), {
+              ...preChunked.manifest,
+              byteSize: preChunked.manifest.totalBytes,
+              isChunked: true,
+              chunkDocIds: preChunked.chunks.map((c) => c.docId),
+              complete: true
+            });
+          }
         } catch (bkErr) {
-          throw new Error("복원 전 안전 백업 생성에 실패하여 복원을 중단했습니다.");
+          throw new Error(`복원 전 안전 백업 생성에 실패하여 복원을 중단했습니다 (${bkErr?.message || "오류"}).`);
         }
       }
 
@@ -12155,16 +12314,25 @@ function MainApp() {
           }
         }
       if (Array.isArray(payload.recipes)) setRecipes(payload.recipes);
+      const restoredHomeLayoutPatch = {};
+      let restoredMealFavorites = null;
+      let restoredRoutinesList = null;
+      let restoredRoutineLogsDoc = null;
+      let restoredTimerRecords = null;
+      let restoredCondolencePin = "";
       if (payload.mealFavorites && typeof payload.mealFavorites === "object") {
         const rCombos = toSafeArray(payload.mealFavorites.combos);
         const rSingles = toSafeArray(payload.mealFavorites.singles);
         setFavoriteMealCombos(rCombos);
         setFavoriteSingleMenus(rSingles);
-        syncMealFavoritesToCloud(rCombos, rSingles);
+        try { localStorage.setItem("kim_favorite_meal_combos_v1", JSON.stringify(rCombos)); } catch (e) {}
+        try { localStorage.setItem("kim_favorite_single_menus_v1", JSON.stringify(rSingles)); } catch (e) {}
+        restoredMealFavorites = { combos: rCombos, singles: rSingles, updatedAtMs: Date.now() };
       }
       if (Array.isArray(payload.familyRoutines)) {
         setFamilyRoutines(payload.familyRoutines);
-        syncRoutinesToCloud(payload.familyRoutines);
+        try { localStorage.setItem("kim_family_routines_v1", JSON.stringify(payload.familyRoutines)); } catch (e) {}
+        restoredRoutinesList = payload.familyRoutines;
       }
       if (payload.routineLogs && typeof payload.routineLogs === "object" && !Array.isArray(payload.routineLogs)) {
         const restoredStart = payload.routineLogTrackingStartDate && /^\d{4}-\d{2}-\d{2}$/.test(String(payload.routineLogTrackingStartDate))
@@ -12172,29 +12340,32 @@ function MainApp() {
           : routineLogTrackingStartDate;
         setRoutineLogs(payload.routineLogs);
         setRoutineLogTrackingStartDate(restoredStart);
-        syncRoutineLogsToCloud(payload.routineLogs, null, restoredStart);
+        try { localStorage.setItem("kim_routine_logs_v1", JSON.stringify(payload.routineLogs)); } catch (e) {}
+        try { localStorage.setItem("kim_routine_log_start_v1", restoredStart); } catch (e) {}
+        restoredRoutineLogsDoc = { logs: payload.routineLogs, trackingStartDate: restoredStart, updatedAtMs: Date.now() };
       }
       if (payload.homeLayoutConfig && typeof payload.homeLayoutConfig === "object") {
         const norm = normalizeHomeLayout(payload.homeLayoutConfig);
         setHomeLayoutConfig(norm);
         try { localStorage.setItem("kim_home_layout_v1", JSON.stringify(norm)); } catch (e) {}
-        syncHomeSettingsToCloud(norm, null, null);
+        restoredHomeLayoutPatch.layout = norm;
       }
       if (payload.homeTimeRanges && typeof payload.homeTimeRanges.morningStart === "number") {
         setHomeTimeRanges(payload.homeTimeRanges);
         try { localStorage.setItem("kim_home_time_ranges_v1", JSON.stringify(payload.homeTimeRanges)); } catch (e) {}
-        syncHomeSettingsToCloud(null, payload.homeTimeRanges, null);
+        restoredHomeLayoutPatch.timeRanges = payload.homeTimeRanges;
       }
       if (payload.routineTimeRanges && typeof payload.routineTimeRanges === "object") {
         const normR = { ...DEFAULT_ROUTINE_TIME_RANGES, ...payload.routineTimeRanges };
         setRoutineTimeRanges(normR);
         try { localStorage.setItem("kim_routine_time_ranges_v1", JSON.stringify(normR)); } catch (e) {}
+        restoredHomeLayoutPatch.routineRanges = normR;
         const normDefs = Array.isArray(payload.routineSlotDefs) ? normalizeRoutineSlotDefs(payload.routineSlotDefs, normR) : null;
         if (normDefs) {
           setRoutineSlotDefs(normDefs);
           try { localStorage.setItem("kim_routine_slot_defs_v1", JSON.stringify(normDefs)); } catch (e) {}
+          restoredHomeLayoutPatch.routineSlotDefs = normDefs;
         }
-        syncHomeSettingsToCloud(null, null, normR, normDefs);
       }
       if (Array.isArray(payload.notices)) setNotices(payload.notices);
       if (Array.isArray(payload.schedules)) setSchedules(payload.schedules);
@@ -12207,58 +12378,74 @@ function MainApp() {
       if (payload.routineViewMode === "card" || payload.routineViewMode === "timetable") {
         setRoutineViewMode(payload.routineViewMode);
         try { localStorage.setItem("kim_routine_view_mode_v1", payload.routineViewMode); } catch (e) {}
-        syncHomeSettingsToCloud(null, null, null, null, payload.routineViewMode);
+        restoredHomeLayoutPatch.routineViewMode = payload.routineViewMode;
       }
       if (typeof payload.routineShowFuture === "boolean") {
         setRoutineShowFuture(payload.routineShowFuture);
         try { localStorage.setItem("kim_routine_show_future_v1", payload.routineShowFuture ? "1" : "0"); } catch (e) {}
-        syncHomeSettingsToCloud(null, null, null, null, null, null, null, { routineShowFuture: payload.routineShowFuture });
+        restoredHomeLayoutPatch.routineShowFuture = payload.routineShowFuture;
       }
       if (typeof payload.todoIncludeOtherCats === "boolean") {
         setTodoIncludeOtherCats(payload.todoIncludeOtherCats);
         try { localStorage.setItem("kim_todo_include_other_v1", payload.todoIncludeOtherCats ? "1" : "0"); } catch (e) {}
-        syncHomeSettingsToCloud(null, null, null, null, null, null, null, { todoIncludeOtherCats: payload.todoIncludeOtherCats });
+        restoredHomeLayoutPatch.todoIncludeOtherCats = payload.todoIncludeOtherCats;
       }
       if (payload.fridgeSectionMode === "all" || payload.fridgeSectionMode === "raw" || payload.fridgeSectionMode === "ingredients" || payload.fridgeSectionMode === "cooked") {
         const normSecMode = payload.fridgeSectionMode === "ingredients" ? "raw" : payload.fridgeSectionMode;
         setFridgeSectionMode(normSecMode);
         try { localStorage.setItem("kim_fridge_section_mode_v1", normSecMode); } catch (e) {}
-        syncHomeSettingsToCloud(null, null, null, null, null, null, null, { fridgeSectionMode: normSecMode });
+        restoredHomeLayoutPatch.fridgeSectionMode = normSecMode;
       }
       if (typeof payload.showDepletedCooked === "boolean") {
         setShowDepletedCooked(payload.showDepletedCooked);
         try { localStorage.setItem("kim_show_depleted_cooked_v1", payload.showDepletedCooked ? "1" : "0"); } catch (e) {}
-        syncHomeSettingsToCloud(null, null, null, null, null, null, null, { showDepletedCooked: payload.showDepletedCooked });
+        restoredHomeLayoutPatch.showDepletedCooked = payload.showDepletedCooked;
       }
       if (payload.fridgeDuplicatePolicy === "ask" || payload.fridgeDuplicatePolicy === "auto_merge" || payload.fridgeDuplicatePolicy === "warn_only") {
         setFridgeDuplicatePolicy(payload.fridgeDuplicatePolicy);
         try { localStorage.setItem("kim_fridge_dup_policy_v1", payload.fridgeDuplicatePolicy); } catch (e) {}
-        syncHomeSettingsToCloud(null, null, null, null, null, null, null, { fridgeDuplicatePolicy: payload.fridgeDuplicatePolicy });
+        restoredHomeLayoutPatch.fridgeDuplicatePolicy = payload.fridgeDuplicatePolicy;
       }
       if (Array.isArray(payload.kitchenTimerRecords) && payload.kitchenTimerRecords.length > 0) {
-        setKitchenTimer((prev) => ({ ...prev, records: payload.kitchenTimerRecords.slice(0, 10) }));
-        if (user && db) {
-          setDoc(getDocRef("family_meta_v4", "timer_alarms_v1"), { stopwatchRecords: payload.kitchenTimerRecords.slice(0, 10), updatedAtMs: Date.now() }, { merge: true }).catch(() => {});
-        }
+        const sliced = payload.kitchenTimerRecords.slice(0, 10);
+        setKitchenTimer((prev) => ({ ...prev, records: sliced }));
+        restoredTimerRecords = sliced;
       }
       if (payload.fridgeViewMode === "list" || payload.fridgeViewMode === "visual") {
-        updateFridgeViewMode(payload.fridgeViewMode);
+        setFridgeViewMode(payload.fridgeViewMode);
+        try { localStorage.setItem("kim_fridge_view_mode_v1", payload.fridgeViewMode); } catch (e) {}
+        restoredHomeLayoutPatch.fridgeViewMode = payload.fridgeViewMode;
       }
       if (payload.recipeViewMode === "cards" || payload.recipeViewMode === "summary") {
-        updateRecipeViewMode(payload.recipeViewMode);
+        setRecipeViewMode(payload.recipeViewMode);
+        try { localStorage.setItem("kim_recipe_view_mode_v1", payload.recipeViewMode); } catch (e) {}
+        restoredHomeLayoutPatch.recipeViewMode = payload.recipeViewMode;
       }
-      if (payload.bucketViewMode === "map" || payload.bucketViewMode === "list") setBucketViewMode(payload.bucketViewMode);
-      if (payload.monthlyCalViewMode === "calendar" || payload.monthlyCalViewMode === "list") setMonthlyCalViewMode(payload.monthlyCalViewMode);
-      if (typeof payload.hideEmptyMealSlots === "boolean") setHideEmptyMealSlots(payload.hideEmptyMealSlots);
-      if (["expiry", "recent", "name"].includes(payload.fridgeSort)) setFridgeSort(payload.fridgeSort);
-      if (["latest", "rating", "time"].includes(payload.recipeSort)) setRecipeSort(payload.recipeSort);
+      if (payload.bucketViewMode === "map" || payload.bucketViewMode === "list") {
+        setBucketViewMode(payload.bucketViewMode);
+        restoredHomeLayoutPatch.bucketViewMode = payload.bucketViewMode;
+      }
+      if (payload.monthlyCalViewMode === "calendar" || payload.monthlyCalViewMode === "list") {
+        setMonthlyCalViewMode(payload.monthlyCalViewMode);
+        restoredHomeLayoutPatch.monthlyCalViewMode = payload.monthlyCalViewMode;
+      }
+      if (typeof payload.hideEmptyMealSlots === "boolean") {
+        setHideEmptyMealSlots(payload.hideEmptyMealSlots);
+        restoredHomeLayoutPatch.hideEmptyMealSlots = payload.hideEmptyMealSlots;
+      }
+      if (["expiry", "recent", "name"].includes(payload.fridgeSort)) {
+        setFridgeSort(payload.fridgeSort);
+        restoredHomeLayoutPatch.fridgeSort = payload.fridgeSort;
+      }
+      if (["latest", "rating", "time"].includes(payload.recipeSort)) {
+        setRecipeSort(payload.recipeSort);
+        restoredHomeLayoutPatch.recipeSort = payload.recipeSort;
+      }
       if (isSuhyeokAdmin && typeof payload.condolencePin === "string" && payload.condolencePin.trim().length >= 4) {
         const rp = payload.condolencePin.trim();
         setCondolencePin(rp);
         try { localStorage.setItem("kim_condolence_pin_v1", rp); } catch (e) {}
-        if (user && db) {
-          setDoc(getDocRef("family_meta_v4", "condolence_config_v1"), { pin: rp, updatedAtMs: Date.now(), updatedBy: "김수혁" }, { merge: true }).catch(() => {});
-        }
+        restoredCondolencePin = rp;
       }
       if (isSuhyeokAdmin && Array.isArray(payload.condolenceList)) {
         const cleanCond = payload.condolenceList.filter((c) => c && c.id);
@@ -12494,13 +12681,28 @@ function MainApp() {
           enqueueWriteTask("family_meta_v4", "house_rooms_v1", { rooms: payload.houseStorageRooms, updatedAtMs: Date.now() }, true);
         }
         if (payload.carNotebook && typeof payload.carNotebook === "object") {
-          const cleanCar = {
-            parking: { spot: "", floor: "", memo: "", photoUrl: "", updatedAtMs: 0, updatedBy: "", ...(payload.carNotebook.parking || {}) },
-            records: Array.isArray(payload.carNotebook.records) ? payload.carNotebook.records : []
-          };
+          const cleanCar = normalizeCarNotebook(payload.carNotebook);
           setCarNotebook(cleanCar);
           try { localStorage.setItem("kim_car_notebook_v1", JSON.stringify(cleanCar)); } catch (e) {}
-          enqueueWriteTask("family_meta_v4", "car_notebook_v1", { ...cleanCar, updatedAtMs: Date.now() }, true);
+          enqueueWriteTask("family_meta_v4", "car_notebook_v1", { ...cleanCar, updatedAtMs: Date.now() }, false);
+        }
+        if (restoredMealFavorites) {
+          enqueueWriteTask("family_meta_v4", "meal_favorites", restoredMealFavorites, true);
+        }
+        if (restoredRoutinesList) {
+          enqueueWriteTask("family_meta_v4", "daily_routines", { items: restoredRoutinesList, updatedAtMs: Date.now() }, false);
+        }
+        if (restoredRoutineLogsDoc) {
+          enqueueWriteTask("family_meta_v4", "routine_logs_v1", restoredRoutineLogsDoc, true);
+        }
+        if (Object.keys(restoredHomeLayoutPatch).length > 0) {
+          enqueueWriteTask("family_meta_v4", "home_layout", { ...restoredHomeLayoutPatch, updatedAt: new Date().toISOString(), updatedAtMs: Date.now() }, true);
+        }
+        if (restoredTimerRecords) {
+          enqueueWriteTask("family_meta_v4", "timer_alarms_v1", { stopwatchRecords: restoredTimerRecords, updatedAtMs: Date.now() }, true);
+        }
+        if (restoredCondolencePin) {
+          enqueueWriteTask("family_meta_v4", "condolence_config_v1", { pin: restoredCondolencePin, updatedAtMs: Date.now(), updatedBy: "김수혁" }, true);
         }
         if (Array.isArray(payload.cookedBatches)) {
           payload.cookedBatches.forEach((b) => {
@@ -12527,10 +12729,18 @@ function MainApp() {
         }
 
 
-        const writePromises = writeTasks.map((t) =>
-          t.merge ? setDoc(getDocRef(t.col, t.docId), t.data, { merge: true }) : setDoc(getDocRef(t.col, t.docId), t.data)
-        );
-        const results = await Promise.allSettled(writePromises);
+        // 대용량 복원 시 동시성 제한(20건씩 순차 배치)으로 안정 처리
+        const results = [];
+        const CONCURRENCY = 20;
+        for (let i = 0; i < writeTasks.length; i += CONCURRENCY) {
+          const slice = writeTasks.slice(i, i + CONCURRENCY);
+          const batchRes = await Promise.allSettled(
+            slice.map((t) =>
+              t.merge ? setDoc(getDocRef(t.col, t.docId), t.data, { merge: true }) : setDoc(getDocRef(t.col, t.docId), t.data)
+            )
+          );
+          results.push(...batchRes);
+        }
         const succeededCount = results.filter((r) => r.status === "fulfilled").length;
         const failedIndices = results.map((r, idx) => (r.status === "rejected" ? idx : -1)).filter((i) => i >= 0);
         const failedCount = failedIndices.length;
@@ -19001,6 +19211,16 @@ const priceStr = exportIncludePrice && safeItPrice > 0 ? `${safeItPrice.toLocale
       createdAt: existing?.createdAt || getTodayStr(),
       updatedAtMs: Date.now()
     };
+    if (user && db) {
+      try {
+        await setDoc(getDocRef("family_bucket_v1", id), payload, { merge: true });
+      } catch (e) {
+        const msg = e?.message || "버킷리스트 저장 오류";
+        setSyncErrorMsg(msg);
+        showToast(`⚠️ 버킷리스트 저장에 실패했습니다 (입력 내용은 유지됩니다): ${msg}`);
+        return;
+      }
+    }
     if (existing) {
       setBucketList((prev) => prev.map((b) => (b.id === id ? payload : b)));
     } else {
@@ -19009,9 +19229,6 @@ const priceStr = exportIncludePrice && safeItPrice > 0 ? `${safeItPrice.toLocale
     if (payload.lat && payload.lng) setSelectedBucketMapItem(payload);
     setIsBucketModalOpen(false);
     setEditingBucketId(null);
-    if (user && db) {
-      await setDoc(getDocRef("family_bucket_v1", id), payload, { merge: true }).catch(() => {});
-    }
     recordActivity("버킷", existing ? "수정" : "추가", title);
     showToast(
       existing
@@ -19024,6 +19241,8 @@ const priceStr = exportIncludePrice && safeItPrice > 0 ? `${safeItPrice.toLocale
 
   const handleToggleBucketDone = async (item) => {
     if (!requireEditorAccess("bucket")) return;
+    const prevList = bucketList;
+    const prevSelected = selectedBucketMapItem;
     const nextDone = !item.done;
     const updated = {
       ...item,
@@ -19036,19 +19255,39 @@ const priceStr = exportIncludePrice && safeItPrice > 0 ? `${safeItPrice.toLocale
       setSelectedBucketMapItem(updated);
     }
     if (user && db) {
-      await setDoc(getDocRef("family_bucket_v1", item.id), updated, { merge: true }).catch(() => {});
+      try {
+        await setDoc(getDocRef("family_bucket_v1", item.id), updated, { merge: true });
+      } catch (e) {
+        setBucketList(prevList);
+        setSelectedBucketMapItem(prevSelected);
+        const msg = e?.message || "버킷리스트 상태 저장 오류";
+        setSyncErrorMsg(msg);
+        showToast(`⚠️ 버킷리스트 상태 변경에 실패했습니다: ${msg}`);
+        return;
+      }
     }
     showToast(nextDone ? `🎉 '${item.title}' 버킷리스트 달성!` : "미완료 상태로 되돌렸습니다.");
   };
 
   const handleDeleteBucketItem = async (id) => {
     if (!requireEditorAccess("bucket")) return;
+    const prevList = bucketList;
+    const prevSelected = selectedBucketMapItem;
     setBucketList((prev) => prev.filter((b) => b.id !== id));
     if (selectedBucketMapItem?.id === id) {
       setSelectedBucketMapItem(null);
     }
     if (user && db) {
-      await deleteDoc(getDocRef("family_bucket_v1", id)).catch(() => {});
+      try {
+        await deleteDoc(getDocRef("family_bucket_v1", id));
+      } catch (e) {
+        setBucketList(prevList);
+        setSelectedBucketMapItem(prevSelected);
+        const msg = e?.message || "버킷리스트 삭제 오류";
+        setSyncErrorMsg(msg);
+        showToast(`⚠️ 버킷리스트 삭제에 실패했습니다: ${msg}`);
+        return;
+      }
     }
     showToast("버킷리스트 항목을 삭제했습니다.");
   };
@@ -19179,22 +19418,29 @@ const priceStr = exportIncludePrice && safeItPrice > 0 ? `${safeItPrice.toLocale
     const nextAll = existing
       ? privateSchedules.map((x) => (x.id === id ? statePayload : x))
       : [statePayload, ...privateSchedules];
+    if (user && db) {
+      try {
+        if (prevBucketId) {
+          await syncPrivateBucketInCloud(prevBucketId, nextAll);
+          if (nextBucketId && nextBucketId !== prevBucketId) {
+            await syncPrivateBucketInCloud(nextBucketId, nextAll);
+          }
+        } else {
+          await setDoc(getDocRef("admin_private_schedules_v1", id), payload, { merge: true });
+        }
+      } catch (e) {
+        const msg = e?.message || "개인 일정 저장 오류";
+        setSyncErrorMsg(msg);
+        showToast(`⚠️ 개인 일정 저장에 실패했습니다 (입력 내용은 유지됩니다): ${msg}`);
+        return;
+      }
+    }
     setPrivateSchedules(nextAll);
     try { localStorage.setItem("kim_private_schedules_cache_v1", JSON.stringify(nextAll)); } catch (e) {}
     setScheduleSelectedDate(dateVal);
     setScheduleMonth(dateVal.slice(0, 7));
     setIsScheduleModalOpen(false);
     setEditingPrivateCalId(null);
-    if (user && db) {
-      if (prevBucketId) {
-        await syncPrivateBucketInCloud(prevBucketId, nextAll);
-        if (nextBucketId && nextBucketId !== prevBucketId) {
-          await syncPrivateBucketInCloud(nextBucketId, nextAll);
-        }
-      } else {
-        await setDoc(getDocRef("admin_private_schedules_v1", id), payload, { merge: true }).catch(() => {});
-      }
-    }
     showToast(existing ? "✏️ 개인 일정을 수정했습니다." : `🔒 ${ownerVal} 개인 일정에 등록했습니다.`);
   };
 
@@ -19233,8 +19479,23 @@ const priceStr = exportIncludePrice && safeItPrice > 0 ? `${safeItPrice.toLocale
       attachments: []
     };
 
-    setSchedules((prev) => [famPayload, ...prev]);
     const nextPrivAll = privateSchedules.filter((x) => x.id !== editingPrivateCalId);
+    if (user && db) {
+      try {
+        await setDoc(getDocRef("family_schedules_v4", famId), famPayload);
+        if (existing?._bucketDocId) {
+          await syncPrivateBucketInCloud(existing._bucketDocId, nextPrivAll);
+        } else {
+          await deleteDoc(getDocRef("admin_private_schedules_v1", editingPrivateCalId));
+        }
+      } catch (e) {
+        const msg = e?.message || "개인→가족 일정 이동 오류";
+        setSyncErrorMsg(msg);
+        showToast(`⚠️ 가족 일정 이동에 실패했습니다 (기존 개인 일정 유지): ${msg}`);
+        return;
+      }
+    }
+    setSchedules((prev) => [famPayload, ...prev]);
     setPrivateSchedules(nextPrivAll);
     try {
       localStorage.setItem("kim_private_schedules_cache_v1", JSON.stringify(nextPrivAll));
@@ -19244,15 +19505,6 @@ const priceStr = exportIncludePrice && safeItPrice > 0 ? `${safeItPrice.toLocale
     setEditingPrivateCalId(null);
     setScheduleSelectedDate(dateVal);
     setScheduleMonth(dateVal.slice(0, 7));
-
-    if (user && db) {
-      await setDoc(getDocRef("family_schedules_v4", famId), famPayload).catch(() => {});
-      if (existing?._bucketDocId) {
-        await syncPrivateBucketInCloud(existing._bucketDocId, nextPrivAll);
-      } else {
-        await deleteDoc(getDocRef("admin_private_schedules_v1", editingPrivateCalId)).catch(() => {});
-      }
-    }
     recordActivity("일정", "등록", title);
     showToast("🏠 개인 일정을 가족 공유 일정으로 이동했습니다!");
   };
@@ -20198,8 +20450,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
   };
 
   const saveCustomCategoriesToCloud = async (nextCats, toastMsg = "") => {
-    setCustomCategories(nextCats);
-    try { localStorage.setItem("kim_custom_categories_v1", JSON.stringify(nextCats)); } catch (e) {}
+    const prevCats = customCategories;
     if (user && db) {
       try {
         await setDoc(
@@ -20208,10 +20459,17 @@ ${item.memo}` : `${item.title} 다녀옴!`,
           { merge: true }
         );
       } catch (e) {
-        setSyncErrorMsg(e?.message || "맞춤 분류 클라우드 동기화 오류");
+        const msg = e?.message || "맞춤 분류 클라우드 동기화 오류";
+        setCustomCategories(prevCats);
+        setSyncErrorMsg(msg);
+        showToast(`⚠️ 분류 저장에 실패했습니다: ${msg}`);
+        return false;
       }
     }
+    setCustomCategories(nextCats);
+    try { localStorage.setItem("kim_custom_categories_v1", JSON.stringify(nextCats)); } catch (e) {}
     if (toastMsg) showToast(toastMsg);
+    return true;
   };
 
   const handleAddCustomCategory = async (kind, rawName) => {
@@ -23192,7 +23450,8 @@ ${item.memo}` : `${item.title} 다녀옴!`,
         prevData: prevData ? sanitizeSnapshotForRevision(prevData) : null,
         baseVersion,
         action,
-        linkedEffectNote
+        linkedEffectNote,
+        extraWrites: Array.isArray(extraWrites) ? extraWrites : []
       });
       return { ok: false, queued: true, error: "오프라인 상태입니다. 대기열에 보관했으며 온라인 복귀 시 버전·권한 확인 후 반영됩니다.", payload };
     }
@@ -23352,7 +23611,8 @@ ${item.memo}` : `${item.title} 다녀옴!`,
         prevData: item.prevData ? { ...item.prevData, version: item.baseVersion } : null,
         action: item.action,
         opId: item.opId,
-        linkedEffectNote: item.linkedEffectNote
+        linkedEffectNote: item.linkedEffectNote,
+        extraWrites: Array.isArray(item.extraWrites) ? item.extraWrites : []
       });
       if (res.ok) {
         syncedCnt += 1;
@@ -37345,27 +37605,45 @@ time: "", location: "",
                     </div>
                   )}
 
-                  {carSaveError && (
+                  {(carSaveError || carPendingRetryOp) && (
                     <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-200 flex items-center justify-between gap-2 text-[11.5px] font-bold text-rose-700">
-                      <span className="min-w-0 break-words">⚠️ 저장 오류: {carSaveError}</span>
-                      <button
-                        type="button"
-                        disabled={isSavingCar}
-                        onClick={() => {
-                          if (carPendingRetryOp) {
-                            saveCarNotebookToCloud(
-                              carPendingRetryOp.candidate,
-                              carPendingRetryOp.toastMsg || "🚗 보류 중이던 차량 변경사항을 저장했습니다.",
-                              { tombstones: carPendingRetryOp.tombstones || {} }
-                            );
-                          } else {
-                            saveCarNotebookToCloud(carNotebook, "🚗 차량 데이터를 다시 저장했습니다.");
-                          }
-                        }}
-                        className="px-2 py-1 rounded-lg bg-rose-600 text-white text-[11px] font-extrabold whitespace-nowrap shrink-0"
-                      >
-                        {isSavingCar ? "저장 중..." : "실패 변경 재시도"}
-                      </button>
+                      <span className="min-w-0 break-words">
+                        ⚠️ {carSaveError ? `저장 오류: ${carSaveError}` : `미전송 차량 변경 대기 중: ${carPendingRetryOp?.errorMsg || "네트워크 오류"}`}
+                      </span>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button
+                          type="button"
+                          disabled={isSavingCar}
+                          onClick={() => {
+                            if (carPendingRetryOp) {
+                              saveCarNotebookToCloud(
+                                carPendingRetryOp.candidate,
+                                carPendingRetryOp.toastMsg || "🚗 보류 중이던 차량 변경사항을 저장했습니다.",
+                                { tombstones: carPendingRetryOp.tombstones || {} }
+                              );
+                            } else {
+                              saveCarNotebookToCloud(carNotebook, "🚗 차량 데이터를 다시 저장했습니다.");
+                            }
+                          }}
+                          className="px-2 py-1 rounded-lg bg-rose-600 text-white text-[11px] font-extrabold whitespace-nowrap shrink-0"
+                        >
+                          {isSavingCar ? "저장 중..." : "실패 변경 재시도"}
+                        </button>
+                        {carPendingRetryOp && !isSavingCar && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setCarPendingRetryOp(null);
+                              setCarSaveError("");
+                              try { localStorage.removeItem(carPendingStorageKey); } catch (e) {}
+                              showToast("보류 중이던 차량 변경 대기 항목을 비웠습니다.");
+                            }}
+                            className="px-1.5 py-1 rounded-lg bg-white border border-rose-200 text-rose-600 text-[10.5px] font-bold whitespace-nowrap shrink-0"
+                          >
+                            폐기
+                          </button>
+                        )}
+                      </div>
                     </div>
                   )}
 
@@ -37906,11 +38184,12 @@ time: "", location: "",
 
                   {/* 2-1. 주유·충전·연비 & 자연어 빠른 정비 입력 */}
                   {(() => {
+                    const carTodayStr = getKstTodayStr();
                     const vehFuelLogs = Array.isArray(activeVeh?.fuelLogs) ? activeVeh.fuelLogs : [];
                     const fuelEff = computeVehicleFuelEfficiency(vehFuelLogs, activeVeh?.fuelType || "가솔린");
                     const costSum = computeVehicleCostSummary(allCarRecords, vehFuelLogs, { vehicleId: activeVehId, yearMonth: getCurrentYearMonth(), curYear });
                     return (
-                      <div className="bg-white rounded-2xl border border-stone-200 p-3.5 space-y-2.5 shadow-sm">
+                      <div className={`${UI_TOKENS.cardBase} p-3.5 space-y-2.5`}>
                         <div className="flex items-center justify-between gap-2 flex-wrap">
                           <span className="text-[13px] font-black text-stone-900">⛽ 주유·충전 · 유지비 요약</span>
                           <div className="flex items-center gap-1.5 shrink-0">
@@ -37954,7 +38233,7 @@ time: "", location: "",
                             <button
                               type="button"
                               onClick={() => {
-                                const parsed = parseNaturalCarMaintenanceInput(carNaturalInput, { todayStr, activeVehicleId: activeVehId });
+                                const parsed = parseNaturalCarMaintenanceInput(carNaturalInput, { todayStr: carTodayStr, activeVehicleId: activeVehId });
                                 if (!parsed) { showToast("정비 내용을 입력해 주세요."); return; }
                                 const dupes = detectDuplicateCarRecords(allCarRecords, parsed);
                                 setEditingCarRecordId(null);
@@ -37962,7 +38241,7 @@ time: "", location: "",
                                   ...prev,
                                   vehicleId: activeVehId,
                                   title: parsed.title || prev.title,
-                                  date: parsed.date || todayStr,
+                                  date: parsed.date || carTodayStr,
                                   mileage: parsed.mileage || "",
                                   nextMileage: parsed.nextMileage || "",
                                   nextDate: parsed.nextDate || "",
@@ -38012,7 +38291,7 @@ time: "", location: "",
                                   const newFuel = {
                                     id: `fuel-${nowMs}`,
                                     vehicleId: activeVehId,
-                                    date: carFuelForm.date || todayStr,
+                                    date: carFuelForm.date || carTodayStr,
                                     energyType: carFuelForm.energyType,
                                     volume: vol,
                                     totalCost: hasCost ? Number(carFuelForm.totalCost) : null,
@@ -38036,7 +38315,7 @@ time: "", location: "",
                                   const ok = await saveCarNotebookToCloud({ ...carNotebook, vehicles: nextVehicles }, "⛽ 주유/충전 기록을 저장했습니다.");
                                   if (ok) {
                                     setIsCarFuelFormOpen(false);
-                                    setCarFuelForm({ date: todayStr, energyType: carFuelForm.energyType, volume: "", unitPrice: "", totalCost: "", odometerKm: "", isFullTank: true, memo: "" });
+                                    setCarFuelForm({ date: carTodayStr, energyType: carFuelForm.energyType, volume: "", unitPrice: "", totalCost: "", odometerKm: "", isFullTank: true, memo: "" });
                                   }
                                 }}
                                 className="px-3 py-1 rounded-xl bg-[#3F624D] text-white text-[11.5px] font-extrabold whitespace-nowrap"
@@ -54527,7 +54806,7 @@ time: "", location: "",
               <button
                 type="button"
                 onClick={() => heroPhotoInputRef.current?.click()}
-                className="py-2 px-2 rounded-xl bg-stone-900 hover:bg-stone-800 text-white text-[12px] font-extrabold flex items-center justify-center gap-1 whitespace-nowrap"
+                className={`py-2 px-2 rounded-xl ${UI_TOKENS.sageBtn} text-[12px] font-extrabold flex items-center justify-center gap-1 whitespace-nowrap`}
               >
                 <Camera className="w-3.5 h-3.5" />
                 <span>새 사진 선택</span>

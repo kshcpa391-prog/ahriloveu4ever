@@ -20,10 +20,7 @@ export const toSafeArray = (val) => {
 // ==========================================
 export const formatDate = (dateObj) => {
   if (!dateObj || isNaN(dateObj.getTime())) {
-    const now = new Date();
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(
-      now.getDate()
-    ).padStart(2, "0")}`;
+    return getKstTodayStr();
   }
   const y = dateObj.getFullYear();
   const m = String(dateObj.getMonth() + 1).padStart(2, "0");
@@ -193,13 +190,13 @@ export const ROUTINE_WEEKEND_SLOTS = ["아침", "오후", "저녁", "자기전"]
 export const ROUTINE_ORDERED_SLOTS = ["아침", "점심", "하원후", "오후", "저녁", "자기전"];
 
 
-export const isWeekendNow = () => [0, 6].includes(new Date().getDay());
+export const isWeekendNow = () => [0, 6].includes(getKstDayOfWeek(getKstTodayStr()));
 
 
 export const getCurrentRoutineTimeSlot = (ranges = DEFAULT_ROUTINE_TIME_RANGES, minuteOverride = null, slotDefs = null, forceDayOff = null) => {
-  const now = new Date();
-  const curMin = typeof minuteOverride === "number" ? minuteOverride : now.getHours() * 60 + now.getMinutes();
-  const isWknd = typeof forceDayOff === "boolean" ? forceDayOff : [0, 6].includes(now.getDay());
+  const kstNow = getKstNowParts();
+  const curMin = typeof minuteOverride === "number" ? minuteOverride : kstNow.hour * 60 + kstNow.minute;
+  const isWknd = typeof forceDayOff === "boolean" ? forceDayOff : [0, 6].includes(getKstDayOfWeek(kstNow.dateStr));
   if (Array.isArray(slotDefs) && slotDefs.length > 0) {
     const active = slotDefs
       .filter((s) => (isWknd ? s.weekend : s.weekday))
@@ -264,7 +261,7 @@ export const DEFAULT_HOME_TIME_RANGES = {
 
 
 export const getAutoHomeTimeMode = (ranges = DEFAULT_HOME_TIME_RANGES, hourOverride = null) => {
-  const h = typeof hourOverride === "number" ? hourOverride : new Date().getHours();
+  const h = typeof hourOverride === "number" ? hourOverride : getKstNowParts().hour;
   const mS = ranges?.morningStart ?? 5;
   const aS = ranges?.afternoonStart ?? 11;
   const nS = ranges?.nightStart ?? 20;
@@ -408,9 +405,9 @@ export const INITIAL_FAMILY_ROUTINES = [
 
 
 export const getTwiceDailySlotKey = () => {
-  const now = new Date();
-  const half = now.getHours() < 12 ? "AM(오전)" : "PM(오후)";
-  return `${formatDate(now)}_${half}`;
+  const kst = getKstNowParts();
+  const half = kst.hour < 12 ? "AM(오전)" : "PM(오후)";
+  return `${kst.dateStr}_${half}`;
 };
 
 
@@ -1309,7 +1306,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v14.70";
+export const APP_CODE_VERSION = "v14.71";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1323,11 +1320,10 @@ export const formatRoutineTimeLabel = (hhmm) => {
 
 export const isRoutineTimeOverdue = (hhmm) => {
   if (!/^\d{2}:\d{2}$/.test(String(hhmm || "").trim())) return false;
-  const now = new Date();
-  const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+  const cur = getKstNowParts().hhmm;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-28 18:00";
+export const APP_BUILD_DATE = "2026-11-28 22:30";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1397,6 +1393,19 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v14.71",
+    version: "v14.71",
+    date: "2026-11-28",
+    title: "🛡️ P0·P1 데이터 정합성·복원·백업·동기화 전면 보완 (차량 todayStr·무손실 차량복원·청크 백업 재조립·오프라인 extraWrites·설정 동기화·쓰기 실패 가드·패치노트 숨김 보존)",
+    changes: [
+      "🚗 차량 자연어 정비 입력·주유 저장/폼 초기화의 미정의 todayStr 4곳을 KST 기준 날짜(getKstTodayStr)로 수정하고, 저장 성공 후 폼 초기화 예외로 인한 중복 등록 위험을 차단했습니다.",
+      "🔄 차량 JSON 복원을 parking/records 축소 재구성 대신 normalizeCarNotebook 전체 스키마 무손실 복원(다중 차량·층수 프리셋·분류·삭제 표식·주차이력·주유로그·주행거리·첨부)으로 교체하고, 실패한 차량 변경 대기열(carPendingRetryOp)을 계정별 localStorage에 영속화했습니다.",
+      "💾 복원 전 안전 백업의 880KB 초과 축소(safePreData)를 제거해 자동 백업과 동일한 공통 무손실 청크+manifest 경로(고유 backupId · 해시/순서/개수 검증 · reassembleChunkedBackup 재조립)로 통합하고, 루틴 스냅샷 복원에도 청크 재조립 소비를 연결했습니다.",
+      "📦 오프라인 대기열(commitEntityWithRevision / flushOfflineMutationQueue)에 extraWrites를 함께 저장·재전송해 만든 음식·소분 복원 보정 로그 유실을 방지하고, syncHomeSettingsToCloud 객체 인자 지원 및 JSON 복원 비동기 쓰기 통합 집계·배치 동시성 제어·recipesMeta 호환을 적용했습니다.",
+      "🛡️ 버킷·개인일정·분류·패치노트 쓰기 실패 삼킴(.catch 무시)과 조기 성공 토스트를 교정하고, 의도적 삭제 기본 패치노트 부활 방지(hiddenDefaultIds) · KST 시간 유틸 일관화 · 잔여 비표준 색상/폰트 정돈을 반영했습니다. (기존 패치노트 508건 100% 보존)"
+    ]
+  },
   {
     id: "patch-v14.70",
     version: "v14.70",
@@ -10209,26 +10218,39 @@ export const validateAiStructuredResponse = (raw, schemaType) => {
   return { ok: true, data: raw };
 };
 
-export const buildChunkedBackupManifest = (backupDataObj, { slot = "", scope = "family", ownerUid = "", chunkMaxBytes = 650000 } = {}) => {
-  const serialized = JSON.stringify(backupDataObj || {});
+export const computeBackupDataHash = (serializedStr) => {
+  const s = String(serializedStr || "");
   let h = 2166136261;
-  for (let i = 0; i < serialized.length; i++) {
-    h ^= serialized.charCodeAt(i);
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
     h = Math.imul(h, 16777619);
   }
-  const dataHash = `${(h >>> 0).toString(16)}_${serialized.length}`;
+  return `${(h >>> 0).toString(16)}_${s.length}`;
+};
+
+export const buildChunkedBackupManifest = (
+  backupDataObj,
+  { slot = "", scope = "family", backupType = "auto", ownerUid = "", chunkMaxBytes = 650000, backupId = "" } = {}
+) => {
+  const serialized = JSON.stringify(backupDataObj || {});
+  const dataHash = computeBackupDataHash(serialized);
   const totalBytes = typeof Blob !== "undefined" ? new Blob([serialized]).size : Buffer.byteLength(serialized, "utf8");
   const counts = {};
   Object.entries(backupDataObj || {}).forEach(([k, v]) => {
     if (Array.isArray(v)) counts[k] = v.length;
     else if (v && typeof v === "object") counts[k] = Object.keys(v).length;
   });
+  const safeSlot = String(slot || backupType || "bk").replace(/[^a-zA-Z0-9가-힣_-]/g, "_");
+  const uniqueBackupId = backupId || `${safeSlot}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
 
   if (totalBytes <= chunkMaxBytes) {
     return {
       isChunked: false,
+      backupId: uniqueBackupId,
       manifest: {
-        schemaVersion: 2,
+        schemaVersion: 3,
+        backupId: uniqueBackupId,
+        backupType,
         slot,
         scope,
         ownerUid,
@@ -10236,24 +10258,32 @@ export const buildChunkedBackupManifest = (backupDataObj, { slot = "", scope = "
         dataHash,
         totalBytes,
         chunkCount: 1,
+        chunkDocIds: [],
         counts,
         attachmentMode: "metadata_and_urls_only",
         complete: true
       },
-      chunks: [{ index: 0, payload: serialized }]
+      chunks: [{ index: 0, docId: `${uniqueBackupId}_chunk_0`, payload: serialized }]
     };
   }
 
-  // Split serialized JSON string into UTF-16 safe chunks under chunkMaxBytes
+  // Split serialized JSON string into UTF-16 safe chunks under chunkMaxBytes with immutable backupId
   const safeCharLen = Math.max(50000, Math.floor(chunkMaxBytes / 3));
   const chunks = [];
   for (let offset = 0, idx = 0; offset < serialized.length; offset += safeCharLen, idx++) {
-    chunks.push({ index: idx, payload: serialized.slice(offset, offset + safeCharLen) });
+    chunks.push({
+      index: idx,
+      docId: `${uniqueBackupId}_chunk_${idx}`,
+      payload: serialized.slice(offset, offset + safeCharLen)
+    });
   }
   return {
     isChunked: true,
+    backupId: uniqueBackupId,
     manifest: {
-      schemaVersion: 2,
+      schemaVersion: 3,
+      backupId: uniqueBackupId,
+      backupType,
       slot,
       scope,
       ownerUid,
@@ -10261,11 +10291,105 @@ export const buildChunkedBackupManifest = (backupDataObj, { slot = "", scope = "
       dataHash,
       totalBytes,
       chunkCount: chunks.length,
+      chunkDocIds: chunks.map((c) => c.docId),
       counts,
       attachmentMode: "metadata_and_urls_only",
       complete: true
     },
     chunks
+  };
+};
+
+export const reassembleChunkedBackup = (manifestDoc, chunkDocsById = {}) => {
+  if (!manifestDoc || typeof manifestDoc !== "object") {
+    return { ok: false, error: "백업 매니페스트가 비어 있습니다.", data: null };
+  }
+  if (manifestDoc.complete === false) {
+    return { ok: false, error: "업로드가 중단된 미완료 백업입니다.", data: null };
+  }
+  if (!manifestDoc.isChunked) {
+    if (!manifestDoc.data || typeof manifestDoc.data !== "object") {
+      return { ok: false, error: "단일 백업 본문(data)이 누락되었습니다.", data: null };
+    }
+    if (manifestDoc.dataHash) {
+      const actualHash = computeBackupDataHash(JSON.stringify(manifestDoc.data));
+      if (actualHash !== manifestDoc.dataHash) {
+        return { ok: false, error: `백업 해시 불일치(예상 ${manifestDoc.dataHash} ≠ 실제 ${actualHash})`, data: null };
+      }
+    }
+    return { ok: true, data: manifestDoc.data, manifest: manifestDoc };
+  }
+
+  const chunkIds = Array.isArray(manifestDoc.chunkDocIds) ? manifestDoc.chunkDocIds : [];
+  const expectedCount = Number(manifestDoc.chunkCount) || chunkIds.length;
+  if (expectedCount <= 0 || chunkIds.length !== expectedCount) {
+    return { ok: false, error: `청크 목록 불일치(매니페스트 ${expectedCount}개 ≠ ID ${chunkIds.length}개)`, data: null };
+  }
+
+  const parts = [];
+  for (let i = 0; i < expectedCount; i++) {
+    const cid = chunkIds[i];
+    const ch = chunkDocsById[cid];
+    if (!ch || typeof ch.payload !== "string") {
+      return { ok: false, error: `청크 누락(${i + 1}/${expectedCount}: ${cid})`, data: null };
+    }
+    if (Number(ch.index) !== i) {
+      return { ok: false, error: `청크 순서 불일치(기대 ${i} ≠ 실제 ${ch.index})`, data: null };
+    }
+    if (manifestDoc.backupId && ch.backupId && ch.backupId !== manifestDoc.backupId) {
+      return { ok: false, error: `오래된/다른 백업 청크 혼입(${cid})`, data: null };
+    }
+    if (manifestDoc.dataHash && ch.dataHash && ch.dataHash !== manifestDoc.dataHash) {
+      return { ok: false, error: `청크 해시 불일치(${cid})`, data: null };
+    }
+    parts.push(ch.payload);
+  }
+
+  const joined = parts.join("");
+  const computedHash = computeBackupDataHash(joined);
+  if (manifestDoc.dataHash && computedHash !== manifestDoc.dataHash) {
+    return { ok: false, error: `재조립 데이터 해시 불일치(예상 ${manifestDoc.dataHash} ≠ 실제 ${computedHash})`, data: null };
+  }
+  const actualBytes = typeof Blob !== "undefined" ? new Blob([joined]).size : Buffer.byteLength(joined, "utf8");
+  if (Number(manifestDoc.totalBytes) > 0 && actualBytes !== Number(manifestDoc.totalBytes)) {
+    return { ok: false, error: `재조립 데이터 크기 불일치(예상 ${manifestDoc.totalBytes}B ≠ 실제 ${actualBytes}B)`, data: null };
+  }
+  try {
+    const parsed = JSON.parse(joined);
+    if (!parsed || typeof parsed !== "object") {
+      return { ok: false, error: "재조립 결과가 유효한 백업 객체가 아닙니다.", data: null };
+    }
+    return { ok: true, data: parsed, manifest: manifestDoc };
+  } catch (e) {
+    return { ok: false, error: `재조립 JSON 파싱 손상: ${e?.message || "오류"}`, data: null };
+  }
+};
+
+export const normalizeBackupPayloadSchema = (rawInput) => {
+  if (!rawInput || typeof rawInput !== "object") {
+    return { ok: false, error: "유효한 백업 객체가 아닙니다.", backupType: "unknown", payload: null, meta: {} };
+  }
+  const hasEnvelope = rawInput.data && typeof rawInput.data === "object";
+  const rawPayload = hasEnvelope ? rawInput.data : rawInput;
+  const backupType = rawInput.backupType || (rawInput.slot === "pre_restore" ? "pre_restore" : rawInput.slot ? "auto" : rawInput.backupVersion ? "manual" : "legacy");
+  const normalized = { ...rawPayload };
+  let recipesFromMetaOnly = false;
+  if (!Array.isArray(normalized.recipes) && Array.isArray(normalized.recipesMeta)) {
+    normalized.recipes = normalized.recipesMeta;
+    recipesFromMetaOnly = true;
+  }
+  return {
+    ok: true,
+    backupType,
+    payload: normalized,
+    meta: {
+      backupVersion: rawInput.backupVersion || "",
+      schemaVersion: rawInput.schemaVersion || 1,
+      exportedAt: rawInput.exportedAt || rawInput.createdAt || "",
+      scope: rawInput.scope || "family",
+      attachmentMode: rawInput.attachmentMode || (String(rawInput.backupVersion || "").includes("lite") ? "metadata_and_urls_only" : "inline_and_urls"),
+      recipesFromMetaOnly
+    }
   };
 };
 
