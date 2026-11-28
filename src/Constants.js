@@ -1306,7 +1306,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v14.71";
+export const APP_CODE_VERSION = "v14.72";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1323,7 +1323,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = getKstNowParts().hhmm;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-28 22:30";
+export const APP_BUILD_DATE = "2026-11-28 23:00";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1393,6 +1393,18 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v14.72",
+    version: "v14.72",
+    date: "2026-11-28",
+    title: "☁️ 비밀메뉴(비밀메모·경조사비) 및 전 메뉴 파일·사진 클라우드(Firebase Storage) 첨부 통합 + 경조사비 저장 롤백 버그 수정 & UI 통일",
+    changes: [
+      "☁️ [공통 클라우드 첨부 업로드 엔진] readAttachmentsFromFiles를 Firebase Storage 우선 업로드(최대 10MB/파일 · 이미지 1280px 고화질 압축 · 12초 타임아웃 고아파일 정리 · 오프라인/미연결 시 경량 Base64 폴백)로 업그레이드해 일정·루틴·공유노트·관리자 쪽지까지 자동으로 클라우드 스토리지 업로드를 지원합니다.",
+      "🔒 [비밀메뉴 파일·사진 첨부 신설] ① 나만의 공간 비밀 메모·스크랩(private_attachments/{uid}/...) ② 비밀메뉴 경조사비 입출금내역(condolence_attachments/{uid}/...)에 사진·PDF·문서 다중 첨부(최대 5개), 썸네일 확대 라이트박스, 파일 다운로드 및 삭제 시 스토리지 정리 기능을 추가했습니다.",
+      "📌🌟🚗 [가족공지·버킷리스트·차량정비 클라우드 첨부 확장] 공통 CloudAttachmentEditor/CloudAttachmentChips 컴포넌트를 가족공지(NoticeFormModal), 버킷리스트(bucketForm), 차량 정비·검사·보험 기록(carRecordForm)에도 일괄 적용해 대부분의 메뉴에서 파일·사진 클라우드 첨부를 일관되게 사용할 수 있습니다.",
+      "🐛🎨 [버그 수정 · 메뉴 연계 · 디자인 통일] handleSaveCondolence 서버 저장 실패 시 로컬 상태 롤백·입력 보존·모달 유지 가드를 추가하고, 비밀메모→개인일정 연계 시 첨부파일을 함께 전달하며, 버킷리스트 저장 버튼을 세이지그린(UI_TOKENS.sageBtn)으로 통일했습니다. (기존 패치노트 509건 100% 보존)"
+    ]
+  },
   {
     id: "patch-v14.71",
     version: "v14.71",

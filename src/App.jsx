@@ -2983,12 +2983,165 @@ const ScheduleFormModal = React.memo(({
 
 
 // 입력 렉 완전 제거용 독립 메모이즈드 가족공지 모달
+// 공통 클라우드 파일·사진 첨부 편집기 및 카드 미리보기 칩 (v14.72)
+const CloudAttachmentChips = React.memo(({ attachments = [], onPreviewImage = null, compact = false }) => {
+  const list = Array.isArray(attachments) ? attachments.filter((a) => a && (a.url || a.dataUrl)) : [];
+  if (list.length === 0) return null;
+  return (
+    <div className={`flex items-center gap-1.5 flex-wrap ${compact ? "mt-1" : "mt-1.5"}`} onClick={(e) => e.stopPropagation()}>
+      {list.map((att, idx) => {
+        const href = att.url || att.dataUrl || "";
+        const isImg = Boolean(String(att.mimeType || "").startsWith("image/") || /^data:image\//i.test(href));
+        if (isImg) {
+          return (
+            <button
+              key={att.id || `att-img-${idx}`}
+              type="button"
+              onClick={() => onPreviewImage && onPreviewImage({ title: att.name || "첨부 사진", url: href })}
+              className="relative group rounded-lg overflow-hidden border border-stone-200 bg-stone-50 shrink-0"
+              title={`${att.name || "사진"} 크게 보기`}
+            >
+              <img
+                src={href}
+                alt={att.name || "첨부 사진"}
+                loading="lazy"
+                className={compact ? "w-11 h-11 object-cover" : "w-14 h-14 object-cover"}
+              />
+              {att.isCloud && (
+                <span className="absolute bottom-0.5 right-0.5 px-1 rounded bg-black/55 text-white text-[8.5px] font-bold">☁️</span>
+              )}
+            </button>
+          );
+        }
+        return (
+          <a
+            key={att.id || `att-file-${idx}`}
+            href={href}
+            target="_blank"
+            rel="noopener noreferrer"
+            download={att.name || "첨부파일"}
+            className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-[#FAF8F3] hover:bg-[#EEF3EE] border border-stone-200 text-[11px] font-bold text-stone-700 max-w-[180px]"
+            title={`${att.name || "첨부파일"} 열기/다운로드`}
+          >
+            <span className="shrink-0">{att.isCloud ? "☁️" : "📎"}</span>
+            <span className="truncate min-w-0">{att.name || "첨부파일"}</span>
+          </a>
+        );
+      })}
+    </div>
+  );
+});
+
+const CloudAttachmentEditor = React.memo(({
+  attachments = [],
+  onChange,
+  onUploadFiles,
+  onPreviewImage = null,
+  onDeleteStoragePath = null,
+  scope = "family",
+  maxFiles = 5,
+  disabled = false,
+  label = "파일·사진 클라우드 첨부"
+}) => {
+  const [isUploading, setIsUploading] = useState(false);
+  const photoRef = useRef(null);
+  const fileRef = useRef(null);
+  const list = Array.isArray(attachments) ? attachments : [];
+
+  const handleFiles = async (e) => {
+    const rawFiles = e.target.files;
+    if (!rawFiles || rawFiles.length === 0 || !onUploadFiles) return;
+    setIsUploading(true);
+    try {
+      const res = await onUploadFiles(rawFiles, list, 520000, { scope, maxFiles });
+      if (res && Array.isArray(res.nextList)) {
+        onChange(res.nextList);
+      }
+    } finally {
+      setIsUploading(false);
+      e.target.value = "";
+    }
+  };
+
+  const handleRemove = (att) => {
+    if (att?.storagePath && onDeleteStoragePath) {
+      onDeleteStoragePath(att.storagePath);
+    }
+    onChange(list.filter((x) => x.id !== att.id));
+  };
+
+  return (
+    <div className="space-y-1.5 p-2.5 rounded-xl bg-[#FAF8F3] border border-stone-200">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <span className="text-[11px] font-extrabold text-stone-600">
+          ☁️ {label} ({list.length}/{maxFiles})
+        </span>
+        <div className="flex items-center gap-1.5 shrink-0">
+          <input ref={photoRef} type="file" accept="image/*" multiple onChange={handleFiles} className="hidden" />
+          <input ref={fileRef} type="file" multiple onChange={handleFiles} className="hidden" />
+          <button
+            type="button"
+            disabled={disabled || isUploading || list.length >= maxFiles}
+            onClick={() => photoRef.current?.click()}
+            className="px-2 py-1 rounded-lg bg-white hover:bg-[#EEF3EE] border border-stone-200 text-[#35503C] text-[11px] font-extrabold whitespace-nowrap disabled:opacity-40"
+          >
+            {isUploading ? "업로드 중..." : "📷 사진"}
+          </button>
+          <button
+            type="button"
+            disabled={disabled || isUploading || list.length >= maxFiles}
+            onClick={() => fileRef.current?.click()}
+            className="px-2 py-1 rounded-lg bg-white hover:bg-[#EEF3EE] border border-stone-200 text-[#35503C] text-[11px] font-extrabold whitespace-nowrap disabled:opacity-40"
+          >
+            📎 파일
+          </button>
+        </div>
+      </div>
+      {list.length > 0 && (
+        <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+          {list.map((att, idx) => {
+            const href = att.url || att.dataUrl || "";
+            const isImg = Boolean(String(att.mimeType || "").startsWith("image/") || /^data:image\//i.test(href));
+            return (
+              <div key={att.id || `ed-att-${idx}`} className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg bg-white border border-stone-200 max-w-full">
+                {isImg && href ? (
+                  <button
+                    type="button"
+                    onClick={() => onPreviewImage && onPreviewImage({ title: att.name || "첨부 사진", url: href })}
+                    className="shrink-0 rounded overflow-hidden border border-stone-100"
+                  >
+                    <img src={href} alt={att.name || "사진"} className="w-7 h-7 object-cover" />
+                  </button>
+                ) : (
+                  <span className="text-[11px] shrink-0">{att.isCloud ? "☁️" : "📎"}</span>
+                )}
+                <span className="text-[11px] font-bold text-stone-700 truncate max-w-[130px]">{att.name || "첨부파일"}</span>
+                <button
+                  type="button"
+                  onClick={() => handleRemove(att)}
+                  className="text-stone-400 hover:text-rose-600 text-[12px] font-black px-0.5 shrink-0"
+                  aria-label="첨부 삭제"
+                >
+                  ×
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+});
+
 const NoticeFormModal = React.memo(({
   initialForm,
   isEditing,
   noticeCategories = NOTICE_CATEGORIES,
   onClose,
-  onSubmitForm
+  onSubmitForm,
+  onUploadAttachments = null,
+  onPreviewImage = null,
+  onDeleteStoragePath = null
 }) => {
   const [draft, setDraft] = useState(() => ({
     ...initialForm,
@@ -3078,6 +3231,18 @@ const NoticeFormModal = React.memo(({
           />
           <span>📌 앱 상단 배너에 중요 공지로 고정하기</span>
         </label>
+
+        {onUploadAttachments && (
+          <CloudAttachmentEditor
+            attachments={draft.attachments || []}
+            onChange={(nextAtts) => setDraft((p) => ({ ...p, attachments: nextAtts }))}
+            onUploadFiles={onUploadAttachments}
+            onPreviewImage={onPreviewImage}
+            onDeleteStoragePath={onDeleteStoragePath}
+            scope="notices"
+            label="공지 파일·사진 첨부"
+          />
+        )}
 
         <div className="flex gap-2 pt-2">
           <button
@@ -5269,7 +5434,8 @@ function MainApp() {
     address: "",
     mapUrl: "",
     lat: null,
-    lng: null
+    lng: null,
+    attachments: []
   });
   const [bucketViewMode, setBucketViewMode] = useState(() => {
     try { const v = localStorage.getItem("kim_bucket_view_v1"); if (v === "map" || v === "list") return v; } catch (e) {}
@@ -5535,7 +5701,8 @@ function MainApp() {
     owner: "공통", // 공통 | 수혁 | 아리
     amount: "",
     paymentMethod: condolencePayMethods[0] || CONDOLENCE_PAY_METHODS[0],
-    memo: ""
+    memo: "",
+    attachments: []
   }));
   const [isCondolenceExcelModalOpen, setIsCondolenceExcelModalOpen] = useState(false);
   const [condolenceImportPreview, setCondolenceImportPreview] = useState(null);
@@ -6007,7 +6174,8 @@ function MainApp() {
     category: DEFAULT_SECRET_NOTE_CATS[0],
     url: "",
     content: "",
-    pinned: false
+    pinned: false,
+    attachments: []
   }));
   const [newSecretCatInput, setNewSecretCatInput] = useState("");
   const [isSecretCatComposing, setIsSecretCatComposing] = useState(false);
@@ -7251,27 +7419,108 @@ function MainApp() {
   };
   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
   const [editingSchedule, setEditingSchedule] = useState(null);
-  const readAttachmentsFromFiles = async (fileList, currentList = [], maxPerFileBytes = 520000) => {
+  const deleteAttachmentFromStorageSafe = (storagePath) => {
+    if (!storagePath || !storage || !user || user.isAnonymous) return;
+    try {
+      deleteObject(storageRef(storage, storagePath)).catch(() => {});
+    } catch (e) {}
+  };
+
+  const readAttachmentsFromFiles = async (fileList, currentList = [], maxPerFileBytes = 520000, opts = {}) => {
     const files = Array.from(fileList || []);
-    if (files.length === 0) return { nextList: currentList, addedCount: 0, skippedLarge: 0 };
+    if (files.length === 0) return { nextList: currentList, addedCount: 0, skippedLarge: 0, cloudCount: 0 };
+    const maxFiles = Math.max(1, Number(opts?.maxFiles) || 5);
+    const maxCloudBytes = Math.max(maxPerFileBytes, Number(opts?.maxCloudBytes) || 10 * 1024 * 1024);
+    const scopeRaw = String(opts?.scope || "family").replace(/[^a-zA-Z0-9_-]/g, "");
     const nextList = Array.isArray(currentList) ? [...currentList] : [];
     let addedCount = 0;
     let skippedLarge = 0;
+    let cloudCount = 0;
+    const canCloudUpload = Boolean(storage && user && !user.isAnonymous && navigator.onLine);
+
     for (const file of files) {
-      if (nextList.length >= 5) break;
+      if (nextList.length >= maxFiles) break;
       const isImgFile = String(file.type || "").startsWith("image/");
+      const safeFileName = String(file.name || (isImgFile ? "image.jpg" : "file"))
+        .replace(/[^a-zA-Z0-9가-힣._-]/g, "_")
+        .slice(0, 60);
+      const attId = `att-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+
+      // 1) Firebase Storage 클라우드 우선 업로드 (개인 비밀/경조사/가족 범위 분리)
+      if (canCloudUpload && file.size <= maxCloudBytes) {
+        try {
+          let uploadBlob = file;
+          let uploadMime = file.type || "application/octet-stream";
+          if (isImgFile) {
+            try {
+              const { previewUrl, base64, mimeType } = await fileToBase64(file, { maxSide: 1280, quality: 0.78 });
+              const dUrl = previewUrl || (base64 ? `data:${mimeType || "image/jpeg"};base64,${base64}` : "");
+              if (dUrl) {
+                const resp = await fetch(dUrl);
+                uploadBlob = await resp.blob();
+                uploadMime = mimeType || "image/jpeg";
+              }
+            } catch (imgErr) {}
+          }
+          const folderPrefix =
+            scopeRaw === "private_secret"
+              ? `private_attachments/${user.uid}`
+              : scopeRaw === "condolence"
+              ? `condolence_attachments/${user.uid}`
+              : `family_attachments/${scopeRaw || "general"}`;
+          const storagePath = `${folderPrefix}/${Date.now()}-${Math.random().toString(36).slice(2, 6)}-${safeFileName}`;
+          const sRef = storageRef(storage, storagePath);
+          let timedOut = false;
+          const upPromise = (async () => {
+            await uploadBytes(sRef, uploadBlob, { contentType: uploadMime });
+            if (timedOut) {
+              deleteObject(sRef).catch(() => {});
+              return "";
+            }
+            return await getDownloadURL(sRef);
+          })();
+          const toPromise = new Promise((_, rej) =>
+            setTimeout(() => {
+              timedOut = true;
+              rej(new Error("클라우드 업로드 시간 초과"));
+            }, 12000)
+          );
+          const downloadUrl = await Promise.race([upPromise, toPromise]);
+          if (downloadUrl) {
+            nextList.push({
+              id: attId,
+              name: file.name || (isImgFile ? "이미지" : "첨부파일"),
+              mimeType: uploadMime,
+              size: Number(uploadBlob.size || file.size) || 0,
+              url: downloadUrl,
+              storagePath,
+              dataUrl: "",
+              isCloud: true,
+              uploadedAt: getKstTodayStr()
+            });
+            addedCount += 1;
+            cloudCount += 1;
+            continue;
+          }
+        } catch (cloudErr) {
+          // Storage 미설정/권한/네트워크 오류 시 아래 경량 Base64 폴백 시도
+        }
+      }
+
+      // 2) 오프라인·Storage 미사용 환경 폴백 (경량 인라인 Base64)
       if (isImgFile) {
         try {
           const { previewUrl, base64, mimeType } = await fileToBase64(file, { maxSide: 960, quality: 0.72 });
           const dataUrl = previewUrl || (base64 ? `data:${mimeType || "image/jpeg"};base64,${base64}` : "");
           if (dataUrl && dataUrl.length <= 720000) {
             nextList.push({
-              id: `att-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+              id: attId,
               name: file.name || "이미지",
               mimeType: mimeType || "image/jpeg",
               size: Math.round(dataUrl.length * 0.75),
               dataUrl,
-              uploadedAt: getTodayStr()
+              isCloud: false,
+              uploadedAt: getKstTodayStr()
             });
             addedCount += 1;
             continue;
@@ -7290,17 +7539,23 @@ function MainApp() {
       });
       if (dataUrl) {
         nextList.push({
-          id: `att-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          id: attId,
           name: file.name || "첨부파일",
           mimeType: file.type || "application/octet-stream",
           size: Number(file.size) || 0,
           dataUrl,
-          uploadedAt: getTodayStr()
+          isCloud: false,
+          uploadedAt: getKstTodayStr()
         });
         addedCount += 1;
       }
     }
-    return { nextList, addedCount, skippedLarge };
+    if (skippedLarge > 0) {
+      showToast(`⚠️ 용량 초과 파일 ${skippedLarge}건은 제외되었습니다.`);
+    } else if (cloudCount > 0) {
+      showToast(`☁️ 파일 ${cloudCount}건을 클라우드에 업로드했습니다.`);
+    }
+    return { nextList, addedCount, skippedLarge, cloudCount };
   };
 
 
@@ -18969,6 +19224,7 @@ const priceStr = exportIncludePrice && safeItPrice > 0 ? `${safeItPrice.toLocale
       author: src.author || "김수혁",
       pinned: Boolean(src.pinned),
       done: editingNotice ? Boolean(editingNotice.done) : false,
+      attachments: Array.isArray(src.attachments) ? src.attachments : (Array.isArray(editingNotice?.attachments) ? editingNotice.attachments : []),
       createdAt: selectedDate
     };
     if (user && db) {
@@ -19207,6 +19463,7 @@ const priceStr = exportIncludePrice && safeItPrice > 0 ? `${safeItPrice.toLocale
       lng: Number.isFinite(Number(lng)) && Number(lng) !== 0 ? Number(lng) : null,
       done: Boolean(bucketForm.done),
       doneDate: bucketForm.done ? (existing?.doneDate || getTodayStr()) : "",
+      attachments: Array.isArray(bucketForm.attachments) ? bucketForm.attachments : (Array.isArray(existing?.attachments) ? existing.attachments : []),
       author: existing?.author || actorName || "수혁",
       createdAt: existing?.createdAt || getTodayStr(),
       updatedAtMs: Date.now()
@@ -21169,7 +21426,8 @@ ${item.memo}` : `${item.title} 다녀옴!`,
         owner: item.owner || "공통",
         amount: String(Number(item.amount) || ""),
         paymentMethod: item.paymentMethod || condolencePayMethods[0] || CONDOLENCE_PAY_METHODS[0],
-        memo: item.memo || ""
+        memo: item.memo || "",
+        attachments: Array.isArray(item.attachments) ? item.attachments : []
       });
     } else {
       setEditingCondolenceId(null);
@@ -21182,7 +21440,8 @@ ${item.memo}` : `${item.title} 다녀옴!`,
         owner: prefill?.owner || "공통",
         amount: prefill?.amount ? String(prefill.amount) : "",
         paymentMethod: prefill?.paymentMethod || condolencePayMethods[0] || CONDOLENCE_PAY_METHODS[0],
-        memo: prefill?.memo || ""
+        memo: prefill?.memo || "",
+        attachments: Array.isArray(prefill?.attachments) ? prefill.attachments : []
       });
     }
     setIsCondolenceFormOpen(true);
@@ -21214,15 +21473,15 @@ ${item.memo}` : `${item.title} 다녀옴!`,
       amount: amountNum,
       paymentMethod: condolenceForm.paymentMethod || condolencePayMethods[0] || CONDOLENCE_PAY_METHODS[0],
       memo: String(condolenceForm.memo || "").trim(),
+      attachments: Array.isArray(condolenceForm.attachments) ? condolenceForm.attachments : [],
       version: prevCondolence ? (Number(prevCondolence.version) || 1) + 1 : 1,
       updatedAtMs: Date.now(),
       updatedBy: actorName || "수혁"
     };
+    const prevList = condolenceList;
     const nextList = editingCondolenceId
       ? condolenceList.map((x) => (x.id === id ? record : x))
       : [record, ...condolenceList];
-    setCondolenceList(nextList);
-    try { localStorage.setItem("kim_condolence_cache_v1", JSON.stringify(nextList)); } catch (err) {}
     if (user && db) {
       beginWrite();
       try {
@@ -21237,11 +21496,17 @@ ${item.memo}` : `${item.title} 다녀옴!`,
           version: record.version
         });
       } catch (err) {
-        setSyncErrorMsg(`경조사비 저장 오류: ${err?.message || "네트워크 확인"}`);
+        setCondolenceList(prevList);
+        const msg = err?.message || "네트워크 확인";
+        setSyncErrorMsg(`경조사비 저장 오류: ${msg}`);
+        showToast(`⚠️ 경조사비 저장에 실패했습니다 (입력 내용은 유지됩니다): ${msg}`);
+        return;
       } finally {
         endWrite();
       }
     }
+    setCondolenceList(nextList);
+    try { localStorage.setItem("kim_condolence_cache_v1", JSON.stringify(nextList)); } catch (err) {}
     setIsCondolenceFormOpen(false);
     setEditingCondolenceId(null);
     showToast(editingCondolenceId ? "✏️ 경조사비 내역을 수정했습니다." : `💌 ${person} (${record.type === "in" ? "입금" : "출금"} ${amountNum.toLocaleString()}원) 등록 완료!`);
@@ -35813,6 +36078,7 @@ time: "", location: "",
                 {n.content && (
                   <div className="text-[13.5px] text-stone-600 mt-1 whitespace-pre-line">{n.content}</div>
                 )}
+                <CloudAttachmentChips attachments={n.attachments} onPreviewImage={setZoomedRecipePhoto} compact />
               </div>
               ));
             })()}
@@ -38719,6 +38985,7 @@ time: "", location: "",
                                 cost: costNum,
                                 hasExplicitZeroCost: rawCost === "0",
                                 memo: carRecordForm.memo.trim(),
+                                attachments: Array.isArray(carRecordForm.attachments) ? carRecordForm.attachments : [],
                                 updatedAtMs: Date.now()
                               };
                               const nextRecs = editingCarRecordId
@@ -38740,7 +39007,8 @@ time: "", location: "",
                                   nextMileage: "",
                                   mileage: "",
                                   cost: "",
-                                  memo: ""
+                                  memo: "",
+                                  attachments: []
                                 });
                                 setIsCarRecordFormOpen(false);
                               }
@@ -38750,6 +39018,15 @@ time: "", location: "",
                             {isSavingCar ? "저장 중..." : editingCarRecordId ? "수정 저장" : "저장"}
                           </button>
                         </div>
+                        <CloudAttachmentEditor
+                          attachments={carRecordForm.attachments || []}
+                          onChange={(nextAtts) => setCarRecordForm((p) => ({ ...p, attachments: nextAtts }))}
+                          onUploadFiles={readAttachmentsFromFiles}
+                          onPreviewImage={setZoomedRecipePhoto}
+                          onDeleteStoragePath={deleteAttachmentFromStorageSafe}
+                          scope="car"
+                          label="정비명세서·영수증·보험증권 첨부"
+                        />
                       </div>
                     )}
 
@@ -38845,7 +39122,8 @@ time: "", location: "",
                                               nextMileage: rec.nextMileage || "",
                                               mileage: rec.mileage || "",
                                               cost: rec.cost > 0 || rec.hasExplicitZeroCost ? String(rec.cost) : "",
-                                              memo: rec.memo || ""
+                                              memo: rec.memo || "",
+                                              attachments: Array.isArray(rec.attachments) ? rec.attachments : []
                                             });
                                             setIsCarRecordFormOpen(true);
                                           }}
@@ -38872,6 +39150,7 @@ time: "", location: "",
                                   )}
                                 </div>
                               </div>
+                              <CloudAttachmentChips attachments={rec.attachments} onPreviewImage={setZoomedRecipePhoto} compact />
                             </div>
                           );
                         })}
@@ -39892,6 +40171,18 @@ time: "", location: "",
                       placeholder="나만 보는 메모 내용을 입력하세요..."
                       className="w-full px-2.5 py-1.5 rounded-xl border border-stone-200 text-[12.5px]"
                     />
+                    <CloudAttachmentEditor
+                      attachments={secretNoteForm.attachments || []}
+                      onChange={(nextAtts) => {
+                        personalSpaceDirtyRef.current.noteForm = true;
+                        setSecretNoteForm((p) => ({ ...p, attachments: nextAtts }));
+                      }}
+                      onUploadFiles={readAttachmentsFromFiles}
+                      onPreviewImage={setZoomedRecipePhoto}
+                      onDeleteStoragePath={deleteAttachmentFromStorageSafe}
+                      scope="private_secret"
+                      label="비밀 메모 사진·파일 첨부 (본인 전용)"
+                    />
                     <div className="flex items-center justify-between gap-2">
                       <button
                         type="button"
@@ -39913,7 +40204,8 @@ time: "", location: "",
                             showToast(`⚠️ ${urlCheck.error}`);
                             return;
                           }
-                          if (!title && !content && !urlCheck.url) { showToast("제목 또는 내용을 입력해 주세요."); return; }
+                          const formAtts = Array.isArray(secretNoteForm.attachments) ? secretNoteForm.attachments : [];
+                          if (!title && !content && !urlCheck.url && formAtts.length === 0) { showToast("제목, 내용 또는 첨부파일을 입력해 주세요."); return; }
                           const nowMs = Date.now();
                           const prevExisting = editingSecretNoteId ? personalSecretNotes.find((x) => x.id === editingSecretNoteId) : null;
                           const nextRevisions = prevExisting
@@ -39936,6 +40228,7 @@ time: "", location: "",
                               url: urlCheck.url,
                               content,
                               pinned: Boolean(secretNoteForm.pinned),
+                              attachments: formAtts,
                               revisions: nextRevisions,
                               updatedAtMs: nowMs
                             },
@@ -40009,6 +40302,7 @@ time: "", location: "",
                                   🔗 {n.url}
                                 </a>
                               )}
+                              <CloudAttachmentChips attachments={n.attachments} onPreviewImage={setZoomedRecipePhoto} />
                             </div>
                             <div className="flex items-center gap-1 shrink-0">
                               {showSecretTrash ? (
@@ -40071,7 +40365,7 @@ time: "", location: "",
                                           showDday: false,
                                           hasOriginYear: false,
                                           memo: existingPriv?.memo || [n.content, n.url].filter(Boolean).join("\n"),
-                                          attachments: [],
+                                          attachments: Array.isArray(existingPriv?.attachments) && existingPriv.attachments.length > 0 ? existingPriv.attachments : (Array.isArray(n.attachments) ? n.attachments : []),
                                           sourceType: "secret_note",
                                           sourceId: n.id,
                                           scope: "private",
@@ -40091,7 +40385,7 @@ time: "", location: "",
                                     onClick={() => {
                                       personalSpaceDirtyRef.current.noteForm = true;
                                       setEditingSecretNoteId(n.id);
-                                      setSecretNoteForm({ title: n.title || "", category: n.category || "메모", url: n.url || "", content: n.content || "", pinned: Boolean(n.pinned) });
+                                      setSecretNoteForm({ title: n.title || "", category: n.category || "메모", url: n.url || "", content: n.content || "", pinned: Boolean(n.pinned), attachments: Array.isArray(n.attachments) ? n.attachments : [] });
                                       setIsSecretNoteFormOpen(true);
                                     }}
                                     className="p-1 rounded-lg text-stone-400 hover:text-stone-700"
@@ -43288,6 +43582,7 @@ time: "", location: "",
                           {item.memo}
                         </div>
                       )}
+                      <CloudAttachmentChips attachments={item.attachments} onPreviewImage={setZoomedRecipePhoto} compact />
                       <div className="flex items-center justify-end gap-1 pt-0.5" onClick={(e) => e.stopPropagation()}>
                         <button
                           type="button"
@@ -50887,6 +51182,16 @@ time: "", location: "",
                 className="w-full px-3 py-2 rounded-xl border border-stone-200 text-[12.5px] font-semibold bg-white"
               />
 
+              <CloudAttachmentEditor
+                attachments={bucketForm.attachments || []}
+                onChange={(nextAtts) => setBucketForm((p) => ({ ...p, attachments: nextAtts }))}
+                onUploadFiles={readAttachmentsFromFiles}
+                onPreviewImage={setZoomedRecipePhoto}
+                onDeleteStoragePath={deleteAttachmentFromStorageSafe}
+                scope="bucket"
+                label="장소 사진·티켓/파일 첨부"
+              />
+
               <div className="flex items-center gap-2 pt-1">
                 <button
                   type="button"
@@ -50897,7 +51202,7 @@ time: "", location: "",
                 </button>
                 <button
                   type="submit"
-                  className="flex-[2] py-2.5 rounded-xl bg-stone-900 hover:bg-stone-800 text-white text-[13px] font-extrabold"
+                  className={`flex-[2] py-2.5 rounded-xl ${UI_TOKENS.sageBtn} text-[13px] font-extrabold whitespace-nowrap`}
                 >
                   {editingBucketId
                     ? "수정 저장"
@@ -53875,6 +54180,16 @@ time: "", location: "",
                 />
               </div>
 
+              <CloudAttachmentEditor
+                attachments={condolenceForm.attachments || []}
+                onChange={(nextAtts) => setCondolenceForm((p) => ({ ...p, attachments: nextAtts }))}
+                onUploadFiles={readAttachmentsFromFiles}
+                onPreviewImage={setZoomedRecipePhoto}
+                onDeleteStoragePath={deleteAttachmentFromStorageSafe}
+                scope="condolence"
+                label="청첩장·부고·이체확인증 사진/파일 첨부"
+              />
+
               <div className="flex items-center gap-2 pt-1">
                 <button
                   type="button"
@@ -54608,6 +54923,9 @@ time: "", location: "",
           noticeCategories={noticeCategories}
           onClose={() => setIsNoticeModalOpen(false)}
           onSubmitForm={(draft) => handleSaveNotice(draft)}
+          onUploadAttachments={readAttachmentsFromFiles}
+          onPreviewImage={setZoomedRecipePhoto}
+          onDeleteStoragePath={deleteAttachmentFromStorageSafe}
         />
       )}
 
