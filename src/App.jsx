@@ -232,7 +232,27 @@ import {
   validateSafeHttpUrl,
   parseBodyCompositionCsvDetailed,
   BODY_METRIC_DEFS,
+  BODY_CSV_29_COLUMNS,
+  decodeBodyCsvBuffer,
+  mergeBodyCompositionLogs,
+  revertBodyImportBatch,
+  exportBodyCompositionCsv29,
   parseBodyCompositionCsv,
+  DEFAULT_CAR_ALERT_THRESHOLDS,
+  DEFAULT_SECRET_NOTE_TEMPLATES,
+  normalizeSecretNoteItem,
+  mergeCarNotebookSnapshots,
+  mergePersonalSpaceData,
+  mergeLegacyProfileIntoPrivateSpace,
+  computeVehicleFuelEfficiency,
+  computeVehicleCostSummary,
+  computeMaintenanceScheduleStatus,
+  estimateParkingFee,
+  parseNaturalCarMaintenanceInput,
+  detectDuplicateCarRecords,
+  filterSensitiveTextForAi,
+  validateAiStructuredResponse,
+  buildChunkedBackupManifest,
   normalizeSearchText,
   stripHtmlToPlainText,
   scoreSearchMatch,
@@ -5525,34 +5545,71 @@ function MainApp() {
     const legacyParking = { ...DEFAULT_CAR_PARKING, ...(base.parking || {}) };
     const rawVehicles = Array.isArray(base.vehicles) && base.vehicles.length > 0
       ? base.vehicles.map((v, idx) => ({
+          ...v,
           id: String(v?.id || (idx === 0 ? "default-car" : `veh-${idx + 1}`)),
           name: String(v?.name || (idx === 0 ? "우리차" : `차량 ${idx + 1}`)),
           plate: String(v?.plate || ""),
+          make: String(v?.make || ""),
+          model: String(v?.model || ""),
+          year: String(v?.year || ""),
+          fuelType: String(v?.fuelType || "가솔린"),
+          acquiredDate: String(v?.acquiredDate || ""),
+          currentMileage: v?.currentMileage !== undefined && v?.currentMileage !== null ? v.currentMileage : "",
+          mileageUpdatedAt: String(v?.mileageUpdatedAt || ""),
+          insuranceExpiry: String(v?.insuranceExpiry || ""),
+          inspectionExpiry: String(v?.inspectionExpiry || ""),
+          warrantyExpiry: String(v?.warrantyExpiry || ""),
           archived: Boolean(v?.archived),
           parking: { ...DEFAULT_CAR_PARKING, ...(v?.parking || (idx === 0 ? legacyParking : {})) },
-          parkingHistory: Array.isArray(v?.parkingHistory) ? v.parkingHistory : []
+          parkingHistory: Array.isArray(v?.parkingHistory) ? v.parkingHistory : [],
+          fuelLogs: Array.isArray(v?.fuelLogs) ? v.fuelLogs : [],
+          odometerHistory: Array.isArray(v?.odometerHistory) ? v.odometerHistory : [],
+          documents: Array.isArray(v?.documents) ? v.documents : [],
+          favoriteLots: Array.isArray(v?.favoriteLots) ? v.favoriteLots : [],
+          alertThresholds: v?.alertThresholds && typeof v.alertThresholds === "object"
+            ? { days: Number(v.alertThresholds.days) || DEFAULT_CAR_ALERT_THRESHOLDS.days, km: Number(v.alertThresholds.km) || DEFAULT_CAR_ALERT_THRESHOLDS.km }
+            : { ...DEFAULT_CAR_ALERT_THRESHOLDS },
+          updatedAtMs: Number(v?.updatedAtMs || base.updatedAtMs || 0)
         }))
       : [{
           id: "default-car",
           name: "우리차",
           plate: "",
+          make: "",
+          model: "",
+          year: "",
+          fuelType: "가솔린",
+          acquiredDate: "",
+          currentMileage: "",
+          mileageUpdatedAt: "",
+          insuranceExpiry: "",
+          inspectionExpiry: "",
+          warrantyExpiry: "",
           archived: false,
           parking: legacyParking,
-          parkingHistory: Array.isArray(base.parkingHistory) ? base.parkingHistory : []
+          parkingHistory: Array.isArray(base.parkingHistory) ? base.parkingHistory : [],
+          fuelLogs: [],
+          odometerHistory: [],
+          documents: [],
+          favoriteLots: [],
+          alertThresholds: { ...DEFAULT_CAR_ALERT_THRESHOLDS },
+          updatedAtMs: Number(base.updatedAtMs || 0)
         }];
     const activeVehicleId = rawVehicles.some((v) => v.id === base.activeVehicleId)
       ? base.activeVehicleId
       : (rawVehicles.find((v) => !v.archived)?.id || rawVehicles[0].id);
     const activeVeh = rawVehicles.find((v) => v.id === activeVehicleId) || rawVehicles[0];
-    const floorPresets = Array.isArray(base.floorPresets) && base.floorPresets.length > 0
-      ? base.floorPresets.map((x) => String(x || "").trim()).filter(Boolean)
+    const floorPresets = Array.isArray(base.floorPresets)
+      ? (base.floorPresets.length > 0 || base.floorPresetsInitialized ? base.floorPresets.map((x) => String(x || "").trim()).filter(Boolean) : [...CAR_PARKING_FLOOR_PRESETS])
       : [...CAR_PARKING_FLOOR_PRESETS];
-    const recordTypes = Array.isArray(base.recordTypes) && base.recordTypes.length > 0
-      ? base.recordTypes.map((t, idx) =>
-          typeof t === "string"
-            ? { id: `ct-s-${idx}`, label: t, archived: false }
-            : { id: String(t?.id || `ct-${idx}`), label: String(t?.label || "기타"), archived: Boolean(t?.archived) }
-        )
+    const recordTypes = Array.isArray(base.recordTypes)
+      ? (base.recordTypes.length > 0 || base.recordTypesInitialized
+          ? base.recordTypes.map((t, idx) =>
+              typeof t === "string"
+                ? { id: `ct-s-${idx}`, label: t, archived: false }
+                : { ...t, id: String(t?.id || `ct-${idx}`), label: String(t?.label || "기타"), archived: Boolean(t?.archived) }
+            )
+          : DEFAULT_CAR_RECORD_TYPE_OBJS.map((x) => ({ ...x })))
       : DEFAULT_CAR_RECORD_TYPE_OBJS.map((x) => ({ ...x }));
     const records = (Array.isArray(base.records) ? base.records : []).map((r) => ({
       ...r,
@@ -5561,12 +5618,21 @@ function MainApp() {
       type: r?.type || "기타"
     }));
     return {
+      ...base,
+      schemaVersion: 2,
       vehicles: rawVehicles,
       activeVehicleId,
       floorPresets,
+      floorPresetsInitialized: Boolean(base.floorPresetsInitialized || Array.isArray(base.floorPresets)),
       recordTypes,
+      recordTypesInitialized: Boolean(base.recordTypesInitialized || Array.isArray(base.recordTypes)),
       parking: activeVeh.parking || legacyParking,
-      records
+      records,
+      deletedRecordIds: Array.isArray(base.deletedRecordIds) ? base.deletedRecordIds : [],
+      deletedVehicleIds: Array.isArray(base.deletedVehicleIds) ? base.deletedVehicleIds : [],
+      deletedParkingHistoryIds: Array.isArray(base.deletedParkingHistoryIds) ? base.deletedParkingHistoryIds : [],
+      deletedFuelLogIds: Array.isArray(base.deletedFuelLogIds) ? base.deletedFuelLogIds : [],
+      deletedRecordTypeIds: Array.isArray(base.deletedRecordTypeIds) ? base.deletedRecordTypeIds : []
     };
   };
 
@@ -5582,6 +5648,12 @@ function MainApp() {
   const [isCarParkingFormOpen, setIsCarParkingFormOpen] = useState(false);
   const [isSavingCar, setIsSavingCar] = useState(false);
   const [carSaveError, setCarSaveError] = useState("");
+  const [carSubError, setCarSubError] = useState("");
+  const [carPendingRetryOp, setCarPendingRetryOp] = useState(null);
+  const [carParkingHistoryPage, setCarParkingHistoryPage] = useState(1);
+  const [carNaturalInput, setCarNaturalInput] = useState("");
+  const [isCarFuelFormOpen, setIsCarFuelFormOpen] = useState(false);
+  const [carFuelForm, setCarFuelForm] = useState(() => ({ date: getTodayStr(), energyType: "fuel", volume: "", unitPrice: "", totalCost: "", odometerKm: "", isFullTank: true, memo: "" }));
   const [isCarVehicleManagerOpen, setIsCarVehicleManagerOpen] = useState(false);
   const [carVehicleForm, setCarVehicleForm] = useState({ id: "", name: "", plate: "" });
   const [isCarFloorPresetOpen, setIsCarFloorPresetOpen] = useState(false);
@@ -5619,26 +5691,44 @@ function MainApp() {
     const dataUrl = baseRes?.previewUrl || "";
     if (!dataUrl) throw new Error("이미지 변환 실패");
     if (storage && user && !user.isAnonymous) {
+      const resp = await fetch(dataUrl);
+      const blob = await resp.blob();
+      const path = `car_parking/${vehicleId}/${Date.now()}-${Math.random().toString(36).slice(2, 6)}.jpg`;
+      const sRef = storageRef(storage, path);
+      let timedOut = false;
+      const uploadPromise = (async () => {
+        await uploadBytes(sRef, blob, { contentType: "image/jpeg" });
+        if (timedOut) {
+          // 늦게 완료된 고아 객체 정리
+          deleteObject(sRef).catch(() => {});
+          return "";
+        }
+        return await getDownloadURL(sRef);
+      })();
+      const timeoutPromise = new Promise((_, rej) =>
+        setTimeout(() => {
+          timedOut = true;
+          rej(new Error("사진 업로드 시간이 초과되었습니다. 네트워크 상태를 확인 후 다시 시도해 주세요."));
+        }, 8000)
+      );
       try {
-        const resp = await fetch(dataUrl);
-        const blob = await resp.blob();
-        const path = `car_parking/${vehicleId}/${Date.now()}-${Math.random().toString(36).slice(2, 6)}.jpg`;
-        const sRef = storageRef(storage, path);
-        const uploadPromise = (async () => {
-          await uploadBytes(sRef, blob, { contentType: "image/jpeg" });
-          return await getDownloadURL(sRef);
-        })();
-        const timeoutPromise = new Promise((_, rej) => setTimeout(() => rej(new Error("Storage timeout")), 5000));
         const url = await Promise.race([uploadPromise, timeoutPromise]);
         if (url) return { photoUrl: url, photoStoragePath: path, isStorage: true };
       } catch (stErr) {
-        // Storage 미설정/타임아웃 시 압축된 data URL 호환 폴백
+        // 대용량 이미지를 Firestore에 조용히 넣지 않고 120KB 이하 초경량만 허용하거나 명확히 실패 반환
+        if (dataUrl.length <= 120000) {
+          return { photoUrl: dataUrl, photoStoragePath: "", isStorage: false, fallbackReason: stErr?.message || "Storage 폴백" };
+        }
+        throw new Error(stErr?.message || "Storage 사진 업로드에 실패했습니다. 다시 시도해 주세요.");
       }
+    }
+    if (dataUrl.length > 120000) {
+      throw new Error("사진 용량이 커서 Storage 연결이 필요합니다. 로그인·Storage 설정을 확인해 주세요.");
     }
     return { photoUrl: dataUrl, photoStoragePath: "", isStorage: false };
   };
 
-  const saveCarNotebookToCloud = async (nextCarOrUpdater, toastMsg = "") => {
+  const saveCarNotebookToCloud = async (nextCarOrUpdater, toastMsg = "", { tombstones = {} } = {}) => {
     if (isSavingCar) return false;
     setIsSavingCar(true);
     setCarSaveError("");
@@ -5658,25 +5748,15 @@ function MainApp() {
           const snap = await tx.get(docRef);
           if (snap.exists()) {
             const serverNorm = normalizeCarNotebook(snap.data());
-            // 레코드 ID 기준 병합 (서버에만 있는 타 기기 신규/수정 레코드 보존)
-            const recMap = new Map();
-            serverNorm.records.forEach((r) => { if (r?.id) recMap.set(r.id, r); });
-            candidate.records.forEach((r) => {
-              if (!r?.id) return;
-              const srv = recMap.get(r.id);
-              if (!srv || (Number(r.updatedAtMs) || 0) >= (Number(srv.updatedAtMs) || 0)) {
-                recMap.set(r.id, r);
-              }
-            });
-            committed = normalizeCarNotebook({
-              ...serverNorm,
-              ...candidate,
-              records: Array.from(recMap.values())
-            });
+            committed = normalizeCarNotebook(mergeCarNotebookSnapshots(serverNorm, candidate, tombstones));
+          } else {
+            committed = normalizeCarNotebook(mergeCarNotebookSnapshots({}, candidate, tombstones));
           }
           tx.set(docRef, { ...committed, updatedAtMs: Date.now() }, { merge: true });
         });
         setCarNotebook(committed);
+        setCarPendingRetryOp(null);
+        setCarSubError("");
         try { localStorage.setItem("kim_car_notebook_v1", JSON.stringify(committed)); } catch (e) {}
         if (toastMsg) showToast(toastMsg);
         return true;
@@ -5686,7 +5766,9 @@ function MainApp() {
         const msg = e?.message || "우리차수첩 동기화 오류";
         setSyncErrorMsg(msg);
         setCarSaveError(msg);
-        showToast("⚠️ 우리차수첩 저장에 실패했습니다. 입력 내용은 유지됩니다.");
+        // 실패한 실제 변경 연산을 별도 보존하여 재시도 시 이전 값이 아닌 실패 변경을 재적용
+        setCarPendingRetryOp({ candidate, tombstones, toastMsg });
+        showToast("⚠️ 우리차수첩 저장에 실패했습니다. [재시도]로 방금 변경사항을 다시 저장할 수 있습니다.");
         return false;
       } finally {
         endWrite();
@@ -5694,39 +5776,97 @@ function MainApp() {
       }
     }
     setIsSavingCar(false);
+    setCarPendingRetryOp(null);
     if (toastMsg) showToast(toastMsg);
     return true;
   };
 
   const [isSavingPersonal, setIsSavingPersonal] = useState(false);
   const [personalSaveError, setPersonalSaveError] = useState("");
+  const [personalSubError, setPersonalSubError] = useState("");
+  const [personalSpaceLoaded, setPersonalSpaceLoaded] = useState(false);
   const [personalPendingPatch, setPersonalPendingPatch] = useState(null);
+  const [personalBodyImportBatches, setPersonalBodyImportBatches] = useState([]);
+  const [bodyCsvEncoding, setBodyCsvEncoding] = useState("auto");
+  const [bodyInvalidOptMode, setBodyInvalidOptMode] = useState("skip_field");
+  const [secretTrashPage, setSecretTrashPage] = useState(1);
+  const [secretNoteAiLoading, setSecretNoteAiLoading] = useState(false);
+  const [secretNoteAiProposal, setSecretNoteAiProposal] = useState(null);
+  const [secretNoteQaQuery, setSecretNoteQaQuery] = useState("");
+  const [secretNoteQaResult, setSecretNoteQaResult] = useState(null);
+  const [secretNoteHistoryTargetId, setSecretNoteHistoryTargetId] = useState(null);
   const personalSpaceDirtyRef = useRef({ goal: false, condition: false, noteForm: false });
+  const personalUidRef = useRef("");
 
-  const savePersonalDataToCloud = async (patchObj, toastMsg = "", { rollbackFn = null } = {}) => {
-    if (!user || !db || user.isAnonymous) {
+  const classifyPersonalCloudError = (err) => {
+    const code = String(err?.code || "").toLowerCase();
+    const msg = String(err?.message || "");
+    if (code.includes("permission-denied") || /permission/i.test(msg)) {
+      return { kind: "permission-denied", label: "권한 거부 (users/{uid}/private_space/data Firestore 규칙 확인 필요)" };
+    }
+    if (code.includes("unauthenticated") || /auth/i.test(code)) {
+      return { kind: "unauthenticated", label: "로그인 세션이 만료되었습니다. 다시 로그인해 주세요." };
+    }
+    if (code.includes("unavailable") || !navigator.onLine || /network|offline/i.test(msg)) {
+      return { kind: "offline", label: "오프라인 또는 네트워크 장애로 저장이 대기 중입니다." };
+    }
+    if (code.includes("resource-exhausted") || /size|1048576|exceeds/i.test(msg)) {
+      return { kind: "size-limit", label: "문서 크기 한도(1MB)를 초과했습니다. 개인 백업 후 정리가 필요합니다." };
+    }
+    return { kind: "unknown", label: msg || "개인 데이터 저장 중 오류가 발생했습니다." };
+  };
+
+  const savePersonalDataToCloud = async (patchObj, toastMsg = "", { rollbackFn = null, tombstones = {}, requireLoaded = false } = {}) => {
+    const activeUid = user?.uid || "";
+    if (!activeUid || !db || user.isAnonymous) {
       showToast("⚠️ 로그인 후 개인 공간에 저장할 수 있습니다.");
+      return false;
+    }
+    if (requireLoaded && !personalSpaceLoaded) {
+      const msg = "초기 개인 데이터 로딩이 완료되지 않아 덮어쓰기 방지를 위해 저장을 보류했습니다.";
+      setPersonalSaveError(msg);
+      showToast(`⚠️ ${msg}`);
+      return false;
+    }
+    if (personalUidRef.current && personalUidRef.current !== activeUid) {
+      showToast("⚠️ 계정이 전환되어 이전 계정의 저장 요청을 중단했습니다.");
       return false;
     }
     setIsSavingPersonal(true);
     setPersonalSaveError("");
     beginWrite();
     try {
-      const privRef = firestoreDoc(db, "users", user.uid, "private_space", "data");
-      await setDoc(privRef, { ...patchObj, ownerUid: user.uid, updatedAtMs: Date.now() }, { merge: true });
+      const privRef = firestoreDoc(db, "users", activeUid, "private_space", "data");
+      let committed = null;
+      await runTransaction(db, async (tx) => {
+        const snap = await tx.get(privRef);
+        const srv = snap.exists() ? (snap.data() || {}) : {};
+        if (srv.ownerUid && srv.ownerUid !== activeUid) {
+          throw Object.assign(new Error("계정 소유자가 일치하지 않습니다."), { code: "permission-denied" });
+        }
+        committed = mergePersonalSpaceData(srv, patchObj, tombstones);
+        tx.set(privRef, { ...committed, ownerUid: activeUid, schemaVersion: 2, updatedAtMs: Date.now() }, { merge: true });
+      });
+      if (personalUidRef.current !== activeUid) {
+        return false;
+      }
       setPersonalPendingPatch(null);
+      try { localStorage.removeItem(`kim_personal_pending_v1_${activeUid}`); } catch (e) {}
       if (toastMsg) showToast(toastMsg);
       return true;
     } catch (e) {
-      const msg = e?.message || "개인 데이터 저장 오류";
-      setSyncErrorMsg(msg);
-      setPersonalSaveError(msg);
+      const classified = classifyPersonalCloudError(e);
+      setSyncErrorMsg(classified.label);
+      setPersonalSaveError(`[${classified.kind}] ${classified.label}`);
       if (typeof rollbackFn === "function") {
         try { rollbackFn(); } catch (err) {}
-      } else {
-        setPersonalPendingPatch((prev) => ({ ...(prev || {}), ...patchObj }));
       }
-      showToast("⚠️ 개인 공간 저장에 실패했습니다. 변경사항은 보류·보존됩니다.");
+      setPersonalPendingPatch((prev) => {
+        const nextPending = { ...(prev || {}), ...patchObj, _tombstones: { ...(prev?._tombstones || {}), ...tombstones }, _uid: activeUid };
+        try { localStorage.setItem(`kim_personal_pending_v1_${activeUid}`, JSON.stringify(nextPending)); } catch (err) {}
+        return nextPending;
+      });
+      showToast(`⚠️ 저장 실패(${classified.kind}): ${classified.label}`);
       return false;
     } finally {
       endWrite();
@@ -9622,46 +9762,43 @@ function MainApp() {
           (data.personalSelfCare && typeof data.personalSelfCare === "object") ||
           Array.isArray(data.personalBodyLogs) ||
           (data.personalBodyGoal && typeof data.personalBodyGoal === "object");
-        if (hasLegacyPersonal && !data.personalMigratedV1) {
+        if (hasLegacyPersonal && !data.personalMigratedV2) {
           (async () => {
             try {
               const privRef = firestoreDoc(db, "users", user.uid, "private_space", "data");
               const privSnap = await getDoc(privRef);
-              if (!privSnap.exists() || !privSnap.data()?.migratedFromProfileV1) {
-                const existingPriv = privSnap.exists() ? privSnap.data() || {} : {};
-                await setDoc(privRef, {
-                  ownerUid: user.uid,
-                  migratedFromProfileV1: true,
-                  migratedAtMs: Date.now(),
-                  personalSecretNotes: Array.isArray(existingPriv.personalSecretNotes) && existingPriv.personalSecretNotes.length > 0
-                    ? existingPriv.personalSecretNotes
-                    : (Array.isArray(data.personalSecretNotes) ? data.personalSecretNotes : []),
-                  personalSecretCats: Array.isArray(existingPriv.personalSecretCats) && existingPriv.personalSecretCats.length > 0
-                    ? existingPriv.personalSecretCats
-                    : (Array.isArray(data.personalSecretCats) && data.personalSecretCats.length > 0 ? data.personalSecretCats : [...DEFAULT_SECRET_NOTE_CATS]),
-                  personalSelfCare: existingPriv.personalSelfCare || data.personalSelfCare || {
-                    items: DEFAULT_SELF_CARE_ITEMS.map((x) => ({ ...x, days: [0,1,2,3,4,5,6], paused: false })),
-                    types: [...DEFAULT_SELF_CARE_TYPES],
-                    waterDate: "", waterCount: 0, waterGoal: 8, waterUnitMl: DEFAULT_BODY_WATER_UNIT_ML,
-                    conditionDate: "", conditionMemo: "", dailyHistory: {}
-                  },
-                  personalBodyLogs: Array.isArray(existingPriv.personalBodyLogs) && existingPriv.personalBodyLogs.length > 0
-                    ? existingPriv.personalBodyLogs
-                    : (Array.isArray(data.personalBodyLogs) ? data.personalBodyLogs : []),
-                  personalBodyGoal: existingPriv.personalBodyGoal || data.personalBodyGoal || { weight: "", bodyFatPct: "" }
+              const existingPriv = privSnap.exists() ? privSnap.data() || {} : {};
+              // 합집합 병합: 양쪽(레거시 프로필 + private_space)에 서로 다른 기록이 있어도 모두 보존
+              const mergedMig = mergeLegacyProfileIntoPrivateSpace(existingPriv, data, user.uid);
+              const v = mergedMig.verification;
+              const notesOk = v.mergedNoteCount >= Math.max(v.legacyNoteCount, v.existingNoteCount);
+              const bodyOk = v.mergedBodyCount >= Math.max(v.legacyBodyCount, v.existingBodyCount);
+              if (!notesOk || !bodyOk) {
+                console.warn("Personal space migration verification failed; legacy fields kept.", v);
+                return;
+              }
+              const { verification: _migVer, ...payloadToSave } = mergedMig;
+              await setDoc(privRef, payloadToSave, { merge: true });
+              // 목적지 기록 재조회 검증 후 원본 필드 정리
+              const verifySnap = await getDoc(privRef);
+              const verifiedData = verifySnap.exists() ? verifySnap.data() || {} : {};
+              if (
+                (Array.isArray(verifiedData.personalSecretNotes) ? verifiedData.personalSecretNotes.length : 0) >= v.mergedNoteCount &&
+                (Array.isArray(verifiedData.personalBodyLogs) ? verifiedData.personalBodyLogs.length : 0) >= v.mergedBodyCount
+              ) {
+                await setDoc(userRef, {
+                  personalSecretNotes: deleteField(),
+                  personalSecretCats: deleteField(),
+                  personalSelfCare: deleteField(),
+                  personalBodyLogs: deleteField(),
+                  personalBodyGoal: deleteField(),
+                  personalMigratedV1: true,
+                  personalMigratedV2: true,
+                  updatedAtMs: Date.now()
                 }, { merge: true });
               }
-              await setDoc(userRef, {
-                personalSecretNotes: deleteField(),
-                personalSecretCats: deleteField(),
-                personalSelfCare: deleteField(),
-                personalBodyLogs: deleteField(),
-                personalBodyGoal: deleteField(),
-                personalMigratedV1: true,
-                updatedAtMs: Date.now()
-              }, { merge: true });
             } catch (migErr) {
-              console.warn("Personal space migration deferred:", migErr);
+              setPersonalSubError(`이관 보류: ${migErr?.message || "권한/네트워크 확인 필요"}`);
             }
           })();
         }
@@ -9717,18 +9854,41 @@ function MainApp() {
     setBodyImportPreview(null);
     setIsBodyManualOpen(false);
     setEditingBodyRowId(null);
-    setPersonalPendingPatch(null);
+    const activeUid = user && !user.isAnonymous ? user.uid : "";
+    personalUidRef.current = activeUid;
+    setPersonalSpaceLoaded(false);
+    setPersonalSubError("");
     setPersonalSaveError("");
+    setPersonalBodyImportBatches([]);
+    setSecretNoteAiProposal(null);
+    setSecretNoteQaResult(null);
+    setSecretNoteHistoryTargetId(null);
     personalSpaceDirtyRef.current = { goal: false, condition: false, noteForm: false };
+    if (activeUid) {
+      try {
+        const savedPending = JSON.parse(localStorage.getItem(`kim_personal_pending_v1_${activeUid}`) || "null");
+        setPersonalPendingPatch(savedPending && savedPending._uid === activeUid ? savedPending : null);
+      } catch (e) {
+        setPersonalPendingPatch(null);
+      }
+    } else {
+      setPersonalPendingPatch(null);
+    }
 
-    if (!user || !db || user.isAnonymous) return;
-    const privRef = firestoreDoc(db, "users", user.uid, "private_space", "data");
+    if (!activeUid || !db) return;
+    const privRef = firestoreDoc(db, "users", activeUid, "private_space", "data");
     const unsubPriv = onSnapshot(
       privRef,
       (snap) => {
+        if (personalUidRef.current !== activeUid) return;
+        setPersonalSubError("");
+        setPersonalSpaceLoaded(true);
         if (!snap.exists()) return;
         const d = snap.data() || {};
-        if (d.ownerUid && d.ownerUid !== user.uid) return;
+        if (d.ownerUid && d.ownerUid !== activeUid) return;
+        if (Array.isArray(d.personalBodyImportBatches)) {
+          setPersonalBodyImportBatches(d.personalBodyImportBatches.slice(-10));
+        }
         if (!personalSpaceDirtyRef.current.noteForm) {
           setPersonalSecretNotes(Array.isArray(d.personalSecretNotes) ? d.personalSecretNotes : []);
         }
@@ -9777,7 +9937,10 @@ function MainApp() {
         }
       },
       (err) => {
-        console.warn("Private space snapshot error:", err);
+        if (personalUidRef.current !== activeUid) return;
+        const classified = classifyPersonalCloudError(err);
+        setPersonalSpaceLoaded(false);
+        setPersonalSubError(`[${classified.kind}] ${classified.label}`);
       }
     );
     return () => unsubPriv();
@@ -10635,12 +10798,15 @@ function MainApp() {
       onSnapshot(
         getDocRef("family_meta_v4", "car_notebook_v1"),
         (snap) => {
+          setCarSubError("");
           if (!snap.exists()) return;
           const next = normalizeCarNotebook(snap.data() || {});
           setCarNotebook(next);
           try { localStorage.setItem("kim_car_notebook_v1", JSON.stringify(next)); } catch (e) {}
         },
-        () => {}
+        (err) => {
+          setCarSubError(err?.code === "permission-denied" ? "차량 데이터 접근 권한이 부족합니다." : (err?.message || "차량 데이터 구독 오류"));
+        }
       )
     );
 
@@ -11112,9 +11278,20 @@ function MainApp() {
   }, [fridge, shoppingList, recipes]);
 
 
-  // 하루 2번(오전 AM / 오후 PM) + 전체 컬렉션 내용 해시(FNV-1a) 변경 감지 자동 클라우드 스냅샷 백업 엔진
+  // 하루 2번(오전 AM / 오후 PM) + 전체 컬렉션 내용 해시(FNV-1a) 변경 감지 자동 클라우드 스냅샷 백업 엔진 (대용량 분할 청크+manifest 지원)
   useEffect(() => {
-    if (!isAdminUnlocked || !isApprovedUser || !user || !db || meals.length === 0 || (fridge.length === 0 && schedules.length === 0)) return;
+    if (!isAdminUnlocked || !isApprovedUser || !user || !db) return;
+    const hasAnyFamilyData =
+      meals.length > 0 ||
+      fridge.length > 0 ||
+      schedules.length > 0 ||
+      notices.length > 0 ||
+      familyPages.length > 0 ||
+      houseItems.length > 0 ||
+      (carNotebook?.records?.length || 0) > 0 ||
+      (carNotebook?.vehicles?.some((v) => v?.parking?.floor || v?.parking?.lotName || (v?.parkingHistory?.length || 0) > 0)) ||
+      cookedBatches.length > 0;
+    if (!hasAnyFamilyData) return;
     const currentSlot = getTwiceDailySlotKey();
     const backupDataObj = {
       meals,
@@ -11141,44 +11318,51 @@ function MainApp() {
       cookedPortions,
       cookedLogs
     };
-    const serialized = JSON.stringify(backupDataObj);
-    let h = 2166136261;
-    for (let i = 0; i < serialized.length; i++) {
-      h ^= serialized.charCodeAt(i);
-      h = Math.imul(h, 16777619);
-    }
-    const dataSig = `${(h >>> 0).toString(16)}_${serialized.length}`;
+    const chunked = buildChunkedBackupManifest(backupDataObj, { slot: currentSlot, scope: "family", ownerUid: user.uid, chunkMaxBytes: 650000 });
+    const dataSig = chunked.manifest.dataHash;
     const lastSig = (() => {
       try { return localStorage.getItem("kim_last_backup_sig_v1") || ""; } catch (e) { return ""; }
     })();
     if (lastAutoBackupSlot === currentSlot && lastSig === dataSig) return;
 
-
     const timer = setTimeout(async () => {
       try {
-        const byteSize = new Blob([serialized]).size;
-        if (byteSize > 900000) {
-          console.warn("Auto snapshot skipped: payload exceeds 900KB Firestore safety limit", byteSize);
-          showToast("⚠️ 자동 백업 용량이 900KB를 초과해 설정에서 JSON 파일 백업을 권장합니다.");
-          return;
+        if (!chunked.isChunked) {
+          const snapshotPayload = {
+            ...chunked.manifest,
+            byteSize: chunked.manifest.totalBytes,
+            data: backupDataObj
+          };
+          await setDoc(getDocRef("family_backups_v4", currentSlot), snapshotPayload);
+        } else {
+          // 900KB 초과 대용량 시 분할 청크 문서 + manifest 저장 (첨부 원본 바이너리는 URL/메타 참조만 포함)
+          for (const ch of chunked.chunks) {
+            await setDoc(getDocRef("family_backups_v4", `${currentSlot}_chunk_${ch.index}`), {
+              slot: currentSlot,
+              index: ch.index,
+              dataHash: dataSig,
+              payload: ch.payload,
+              createdAt: chunked.manifest.createdAt
+            });
+          }
+          await setDoc(getDocRef("family_backups_v4", currentSlot), {
+            ...chunked.manifest,
+            byteSize: chunked.manifest.totalBytes,
+            isChunked: true,
+            chunkDocIds: chunked.chunks.map((c) => `${currentSlot}_chunk_${c.index}`)
+          });
         }
-        const snapshotPayload = {
-          slot: currentSlot,
-          createdAt: new Date().toISOString(),
-          dataHash: dataSig,
-          byteSize,
-          counts: {
-            meals: meals.length,
-            fridge: fridge.length,
-            expenses: expenses.length,
-            schedules: schedules.length
-          },
-          data: backupDataObj
-        };
-        await setDoc(getDocRef("family_backups_v4", currentSlot), snapshotPayload);
         await setDoc(
           getDocRef("family_meta_v4", "backup_status"),
-          { lastSlot: currentSlot, dataHash: dataSig, updatedAt: new Date().toISOString(), email: backupEmail },
+          {
+            lastSlot: currentSlot,
+            dataHash: dataSig,
+            totalBytes: chunked.manifest.totalBytes,
+            chunkCount: chunked.manifest.chunkCount,
+            attachmentMode: chunked.manifest.attachmentMode,
+            updatedAt: new Date().toISOString(),
+            email: backupEmail
+          },
           { merge: true }
         );
         setLastAutoBackupSlot(currentSlot);
@@ -11190,22 +11374,35 @@ function MainApp() {
       }
     }, 3500);
 
-
     return () => clearTimeout(timer);
   }, [
     user,
     isAdminUnlocked,
+    isApprovedUser,
     meals,
     fridge,
     expenses,
     shoppingList,
     recipes,
+    familyRoutines,
+    bucketList,
+    houseItems,
+    familyPages,
+    handoverProfile,
+    homeMiniDdayIds,
+    favoriteMealCombos,
+    favoriteSingleMenus,
     notices,
     schedules,
+    patchNotes,
     wasteEvents,
     babyChecks,
     babyGrowthLogs,
     babyMedicalNotes,
+    carNotebook,
+    cookedBatches,
+    cookedPortions,
+    cookedLogs,
     lastAutoBackupSlot,
     backupEmail
   ]);
@@ -36392,15 +36589,32 @@ time: "", location: "",
                     )}
                   </div>
 
+                  {carSubError && (
+                    <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-[11.5px] font-bold text-amber-900">
+                      ⚠️ 차량 구독 상태: {carSubError}
+                    </div>
+                  )}
+
                   {carSaveError && (
                     <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-200 flex items-center justify-between gap-2 text-[11.5px] font-bold text-rose-700">
                       <span className="min-w-0 break-words">⚠️ 저장 오류: {carSaveError}</span>
                       <button
                         type="button"
-                        onClick={() => saveCarNotebookToCloud(carNotebook, "🚗 차량 데이터를 다시 저장했습니다.")}
+                        disabled={isSavingCar}
+                        onClick={() => {
+                          if (carPendingRetryOp) {
+                            saveCarNotebookToCloud(
+                              carPendingRetryOp.candidate,
+                              carPendingRetryOp.toastMsg || "🚗 보류 중이던 차량 변경사항을 저장했습니다.",
+                              { tombstones: carPendingRetryOp.tombstones || {} }
+                            );
+                          } else {
+                            saveCarNotebookToCloud(carNotebook, "🚗 차량 데이터를 다시 저장했습니다.");
+                          }
+                        }}
                         className="px-2 py-1 rounded-lg bg-rose-600 text-white text-[11px] font-extrabold whitespace-nowrap shrink-0"
                       >
-                        재시도
+                        {isSavingCar ? "저장 중..." : "실패 변경 재시도"}
                       </button>
                     </div>
                   )}
@@ -36530,13 +36744,27 @@ time: "", location: "",
                             type="button"
                             disabled={isSavingCar}
                             onClick={async () => {
-                              if (!await askConfirm("현재 주차 표시만 비울까요? (과거 주차 이력은 보존됩니다)", "출차/비우기", false)) return;
+                              if (!await askConfirm("출차 처리하고 현재 주차 위치를 이력에 기록할까요?", "출차/비우기", false)) return;
+                              const exitNow = Date.now();
+                              const archivedEntry = {
+                                ...curPark,
+                                id: `pk-exit-${exitNow}`,
+                                eventType: "checkout",
+                                enteredAtMs: curPark.enteredAtMs || curPark.updatedAtMs || exitNow,
+                                exitedAtMs: exitNow,
+                                updatedAtMs: exitNow
+                              };
                               const nextVehicles = vehicles.map((v) =>
                                 v.id === activeVehId
-                                  ? { ...v, parking: { ...DEFAULT_CAR_PARKING } }
+                                  ? {
+                                      ...v,
+                                      parking: { ...DEFAULT_CAR_PARKING, updatedAtMs: exitNow },
+                                      parkingHistory: [archivedEntry, ...(Array.isArray(v.parkingHistory) ? v.parkingHistory : [])],
+                                      updatedAtMs: exitNow
+                                    }
                                   : v
                               );
-                              const ok = await saveCarNotebookToCloud({ ...carNotebook, vehicles: nextVehicles }, "🚗 출차 처리(현재 위치 해제)했습니다. 이력은 보존됩니다.");
+                              const ok = await saveCarNotebookToCloud({ ...carNotebook, vehicles: nextVehicles }, "🚗 출차 처리했습니다. 직전 주차 위치가 이력에 보존되었습니다.");
                               if (ok) setCarParkingDirty(false);
                             }}
                             className="px-2 py-1 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-600 text-[11px] font-extrabold whitespace-nowrap"
@@ -36577,7 +36805,7 @@ time: "", location: "",
                           🕘 최근 주차 이력 ({parkHistory.length}건) · 되돌리기
                         </summary>
                         <div className="mt-1.5 space-y-1">
-                          {parkHistory.slice(0, 5).map((h, hIdx) => {
+                          {parkHistory.slice((carParkingHistoryPage - 1) * 5, carParkingHistoryPage * 5).map((h, hIdx) => {
                             const lbl = [h.lotName, h.floor, h.zone, h.pillar || h.spot].filter(Boolean).join(" · ") || "사진 기록";
                             return (
                               <div key={h.id || hIdx} className="flex items-center justify-between gap-2 px-2 py-1 rounded-lg bg-[#FAF8F3] text-[11px]">
@@ -36606,9 +36834,13 @@ time: "", location: "",
                                       onClick={async () => {
                                         if (!await askConfirm("이 과거 주차 이력을 영구 삭제할까요?")) return;
                                         const nextVehicles = vehicles.map((v) =>
-                                          v.id === activeVehId ? { ...v, parkingHistory: parkHistory.filter((_, idx) => idx !== hIdx) } : v
+                                          v.id === activeVehId ? { ...v, parkingHistory: parkHistory.filter((x) => x.id !== h.id) } : v
                                         );
-                                        saveCarNotebookToCloud({ ...carNotebook, vehicles: nextVehicles }, "🗑️ 과거 주차 이력을 영구 삭제했습니다.");
+                                        saveCarNotebookToCloud(
+                                          { ...carNotebook, vehicles: nextVehicles },
+                                          "🗑️ 과거 주차 이력을 영구 삭제했습니다.",
+                                          { tombstones: { deletedParkingHistoryIds: h.id ? [h.id] : [] } }
+                                        );
                                       }}
                                       className="text-stone-400 hover:text-rose-600 p-0.5"
                                     >
@@ -36619,6 +36851,27 @@ time: "", location: "",
                               </div>
                             );
                           })}
+                          {parkHistory.length > 5 && (
+                            <div className="flex items-center justify-between pt-1 text-[10.5px] font-bold text-stone-500">
+                              <button
+                                type="button"
+                                disabled={carParkingHistoryPage <= 1}
+                                onClick={() => setCarParkingHistoryPage((p) => Math.max(1, p - 1))}
+                                className="px-2 py-0.5 rounded bg-stone-100 disabled:opacity-40"
+                              >
+                                이전
+                              </button>
+                              <span>{carParkingHistoryPage} / {Math.ceil(parkHistory.length / 5)} 페이지 (전체 {parkHistory.length}건 보존)</span>
+                              <button
+                                type="button"
+                                disabled={carParkingHistoryPage >= Math.ceil(parkHistory.length / 5)}
+                                onClick={() => setCarParkingHistoryPage((p) => Math.min(Math.ceil(parkHistory.length / 5), p + 1))}
+                                className="px-2 py-0.5 rounded bg-stone-100 disabled:opacity-40"
+                              >
+                                다음
+                              </button>
+                            </div>
+                          )}
                         </div>
                       </details>
                     )}
@@ -36836,11 +37089,13 @@ time: "", location: "",
                                 updatedAtMs: Date.now(),
                                 updatedBy: actorName || "가족"
                               };
+                              const saveNow = Date.now();
+                              nextPark.enteredAtMs = nextPark.enteredAtMs || saveNow;
                               const nextHistory = hasParked
-                                ? [{ id: `pk-${Date.now()}`, ...curPark }, ...parkHistory].slice(0, 10)
+                                ? [{ ...curPark, id: curPark.id || `pk-${saveNow}`, eventType: "updated", updatedAtMs: saveNow }, ...parkHistory]
                                 : parkHistory;
                               const nextVehicles = vehicles.map((v) =>
-                                v.id === activeVehId ? { ...v, parking: nextPark, parkingHistory: nextHistory } : v
+                                v.id === activeVehId ? { ...v, parking: nextPark, parkingHistory: nextHistory, updatedAtMs: saveNow } : v
                               );
                               const ok = await saveCarNotebookToCloud({ ...carNotebook, vehicles: nextVehicles }, "🚗 주차 위치를 저장했습니다.");
                               if (ok) {
@@ -36898,6 +37153,152 @@ time: "", location: "",
                       </div>
                     )}
                   </div>
+
+                  {/* 2-1. 주유·충전·연비 & 자연어 빠른 정비 입력 */}
+                  {(() => {
+                    const vehFuelLogs = Array.isArray(activeVeh?.fuelLogs) ? activeVeh.fuelLogs : [];
+                    const fuelEff = computeVehicleFuelEfficiency(vehFuelLogs, activeVeh?.fuelType || "가솔린");
+                    const costSum = computeVehicleCostSummary(allCarRecords, vehFuelLogs, { vehicleId: activeVehId, yearMonth: getCurrentYearMonth(), curYear });
+                    return (
+                      <div className="bg-white rounded-2xl border border-stone-200 p-3.5 space-y-2.5 shadow-sm">
+                        <div className="flex items-center justify-between gap-2 flex-wrap">
+                          <span className="text-[13px] font-black text-stone-900">⛽ 주유·충전 · 유지비 요약</span>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <span className="text-[11px] font-bold text-stone-500 whitespace-nowrap">
+                              {fuelEff.efficiency !== null ? `연비 ${fuelEff.efficiency} ${fuelEff.unit} (${fuelEff.segments}구간)` : "연비: 구간 부족"}
+                            </span>
+                            {canEditTab("house") && (
+                              <button
+                                type="button"
+                                onClick={() => setIsCarFuelFormOpen((v) => !v)}
+                                className="px-2 py-1 rounded-lg bg-[#EEF3EE] text-[#35503C] text-[10.5px] font-extrabold whitespace-nowrap"
+                              >
+                                {isCarFuelFormOpen ? "닫기" : "+ 주유/충전"}
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-3 gap-1.5 text-center">
+                          <div className="p-2 rounded-xl bg-[#FAF8F3] border border-stone-100">
+                            <div className="text-[10px] font-bold text-stone-400">이번 달 차량비</div>
+                            <div className="text-[12px] font-black text-stone-900">{costSum.monthCost.toLocaleString()}원</div>
+                          </div>
+                          <div className="p-2 rounded-xl bg-[#FAF8F3] border border-stone-100">
+                            <div className="text-[10px] font-bold text-stone-400">전월 대비</div>
+                            <div className="text-[12px] font-black text-stone-800">{costSum.monthDelta > 0 ? `+${costSum.monthDelta.toLocaleString()}원` : `${costSum.monthDelta.toLocaleString()}원`}</div>
+                          </div>
+                          <div className="p-2 rounded-xl bg-[#FAF8F3] border border-stone-100">
+                            <div className="text-[10px] font-bold text-stone-400">km당 비용</div>
+                            <div className="text-[12px] font-black text-stone-900">{costSum.costPerKm !== null ? `${costSum.costPerKm.toLocaleString()}원/km` : "산출 대기"}</div>
+                          </div>
+                        </div>
+                        {canEditTab("house") && (
+                          <div className="flex items-center gap-1.5">
+                            <input
+                              type="text"
+                              value={carNaturalInput}
+                              onChange={(e) => setCarNaturalInput(e.target.value)}
+                              placeholder="예: 오늘 18,400km에서 엔진오일 12만원, 다음 28,000km"
+                              className="flex-1 min-w-0 px-2.5 py-1.5 rounded-xl border border-stone-200 bg-[#FAF8F3] text-[11.5px] font-semibold"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const parsed = parseNaturalCarMaintenanceInput(carNaturalInput, { todayStr, activeVehicleId: activeVehId });
+                                if (!parsed) { showToast("정비 내용을 입력해 주세요."); return; }
+                                const dupes = detectDuplicateCarRecords(allCarRecords, parsed);
+                                setEditingCarRecordId(null);
+                                setCarRecordForm((prev) => ({
+                                  ...prev,
+                                  vehicleId: activeVehId,
+                                  title: parsed.title || prev.title,
+                                  date: parsed.date || todayStr,
+                                  mileage: parsed.mileage || "",
+                                  nextMileage: parsed.nextMileage || "",
+                                  nextDate: parsed.nextDate || "",
+                                  cost: parsed.cost || "",
+                                  memo: parsed.memo || ""
+                                }));
+                                setIsCarRecordFormOpen(true);
+                                const warnParts = [];
+                                if (parsed.uncertainFields.length > 0) warnParts.push(`확인 필요: ${parsed.uncertainFields.join(", ")}`);
+                                if (dupes.length > 0) warnParts.push(`중복 후보 ${dupes.length}건 감지`);
+                                showToast(warnParts.length > 0 ? `📝 정비 입력창에 반영했습니다 (${warnParts.join(" · ")})` : "📝 자연어 정비 내용을 입력창에 채웠습니다. 확인 후 저장하세요.");
+                              }}
+                              className="px-2.5 py-1.5 rounded-xl bg-[#3F624D] text-white text-[11px] font-extrabold whitespace-nowrap shrink-0"
+                            >
+                              해석 입력
+                            </button>
+                          </div>
+                        )}
+                        {isCarFuelFormOpen && canEditTab("house") && (
+                          <div className="p-2.5 rounded-xl bg-[#FAF8F3] border border-stone-200 space-y-2">
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+                              <input type="date" value={carFuelForm.date} onChange={(e) => setCarFuelForm((p) => ({ ...p, date: e.target.value }))} className="min-w-0 px-2 py-1 rounded-lg border border-stone-200 bg-white text-[11.5px]" />
+                              <select value={carFuelForm.energyType} onChange={(e) => setCarFuelForm((p) => ({ ...p, energyType: e.target.value }))} className="min-w-0 px-2 py-1 rounded-lg border border-stone-200 bg-white text-[11.5px] font-bold">
+                                <option value="fuel">주유 (L)</option>
+                                <option value="electric">충전 (kWh)</option>
+                              </select>
+                              <input type="number" step="0.01" value={carFuelForm.volume} onChange={(e) => setCarFuelForm((p) => ({ ...p, volume: e.target.value }))} placeholder={carFuelForm.energyType === "electric" ? "충전량(kWh)" : "주유량(L)"} className="min-w-0 px-2 py-1 rounded-lg border border-stone-200 bg-white text-[11.5px]" />
+                              <input type="number" value={carFuelForm.totalCost} onChange={(e) => setCarFuelForm((p) => ({ ...p, totalCost: e.target.value }))} placeholder="총액(원)" className="min-w-0 px-2 py-1 rounded-lg border border-stone-200 bg-white text-[11.5px]" />
+                            </div>
+                            <div className="flex items-center justify-between gap-2 flex-wrap">
+                              <div className="flex items-center gap-2">
+                                <input type="number" value={carFuelForm.odometerKm} onChange={(e) => setCarFuelForm((p) => ({ ...p, odometerKm: e.target.value }))} placeholder="누적거리(km)" className="w-28 px-2 py-1 rounded-lg border border-stone-200 bg-white text-[11.5px]" />
+                                <label className="inline-flex items-center gap-1 text-[11px] font-bold text-stone-600">
+                                  <input type="checkbox" checked={carFuelForm.isFullTank} onChange={(e) => setCarFuelForm((p) => ({ ...p, isFullTank: e.target.checked }))} />
+                                  가득 주유/완충
+                                </label>
+                              </div>
+                              <button
+                                type="button"
+                                disabled={isSavingCar}
+                                onClick={async () => {
+                                  const vol = Number(carFuelForm.volume);
+                                  const odo = Number(carFuelForm.odometerKm);
+                                  const hasCost = carFuelForm.totalCost !== "" && Number.isFinite(Number(carFuelForm.totalCost));
+                                  if (!Number.isFinite(vol) || vol <= 0) { showToast("주유/충전량을 입력해 주세요."); return; }
+                                  const nowMs = Date.now();
+                                  const newFuel = {
+                                    id: `fuel-${nowMs}`,
+                                    vehicleId: activeVehId,
+                                    date: carFuelForm.date || todayStr,
+                                    energyType: carFuelForm.energyType,
+                                    volume: vol,
+                                    totalCost: hasCost ? Number(carFuelForm.totalCost) : null,
+                                    hasExplicitZeroCost: hasCost && Number(carFuelForm.totalCost) === 0,
+                                    odometerKm: Number.isFinite(odo) && odo > 0 ? odo : null,
+                                    isFullTank: Boolean(carFuelForm.isFullTank),
+                                    memo: carFuelForm.memo || "",
+                                    updatedAtMs: nowMs
+                                  };
+                                  const nextVehicles = vehicles.map((v) =>
+                                    v.id === activeVehId
+                                      ? {
+                                          ...v,
+                                          fuelLogs: [newFuel, ...(Array.isArray(v.fuelLogs) ? v.fuelLogs : [])],
+                                          currentMileage: newFuel.odometerKm && newFuel.odometerKm > Number(v.currentMileage || 0) ? newFuel.odometerKm : v.currentMileage,
+                                          odometerHistory: newFuel.odometerKm ? [...(Array.isArray(v.odometerHistory) ? v.odometerHistory : []), { id: `odo-${nowMs}`, date: newFuel.date, km: newFuel.odometerKm, updatedAtMs: nowMs }] : (v.odometerHistory || []),
+                                          updatedAtMs: nowMs
+                                        }
+                                      : v
+                                  );
+                                  const ok = await saveCarNotebookToCloud({ ...carNotebook, vehicles: nextVehicles }, "⛽ 주유/충전 기록을 저장했습니다.");
+                                  if (ok) {
+                                    setIsCarFuelFormOpen(false);
+                                    setCarFuelForm({ date: todayStr, energyType: carFuelForm.energyType, volume: "", unitPrice: "", totalCost: "", odometerKm: "", isFullTank: true, memo: "" });
+                                  }
+                                }}
+                                className="px-3 py-1 rounded-xl bg-[#3F624D] text-white text-[11.5px] font-extrabold whitespace-nowrap"
+                              >
+                                저장
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
 
                   {/* 3. 관리 이력 (정비 · 검사 · 보험 수첩) */}
                   <div className="bg-white rounded-2xl border border-stone-200 p-3.5 space-y-2.5 shadow-sm">
@@ -37376,7 +37777,11 @@ time: "", location: "",
                                           aria-label="영구 삭제"
                                           onClick={async () => {
                                             if (!await askConfirm(`'${rec.title}' 기록을 영구 삭제할까요?`)) return;
-                                            saveCarNotebookToCloud({ ...carNotebook, records: allCarRecords.filter((x) => x.id !== rec.id) }, "🗑️ 영구 삭제했습니다.");
+                                            saveCarNotebookToCloud(
+                                              { ...carNotebook, records: allCarRecords.filter((x) => x.id !== rec.id) },
+                                              "🗑️ 영구 삭제했습니다.",
+                                              { tombstones: { deletedRecordIds: [rec.id] } }
+                                            );
                                           }}
                                           className="p-1 rounded-lg text-stone-400 hover:text-rose-600"
                                         >
@@ -38082,14 +38487,41 @@ time: "", location: "",
               showToast("⚠️ 올바른 나만의 공간 백업 파일이 아닙니다.");
               return;
             }
-            if (parsed?.ownerUid && user?.uid && parsed.ownerUid !== user.uid) {
-              const okOther = await askConfirm(
-                `이 백업은 다른 계정(${parsed.ownerName || parsed.ownerUid})의 데이터입니다. 현재 계정에 덮어쓰지 않고 계속할까요?`,
-                "계정 불일치 확인",
+            const isUidMismatch = Boolean(parsed?.ownerUid && user?.uid && parsed.ownerUid !== user.uid);
+            const incomingNoteCnt = Array.isArray(d.personalSecretNotes) ? d.personalSecretNotes.length : 0;
+            const incomingBodyCnt = Array.isArray(d.personalBodyLogs) ? d.personalBodyLogs.length : 0;
+            if (isUidMismatch) {
+              const okMergeImport = await askConfirm(
+                `다른 계정(${parsed.ownerName || parsed.ownerUid})의 백업입니다. 자동 교체 복원은 차단됩니다. 기존 내 기록을 유지한 채 백업 항목(노트 ${incomingNoteCnt}건 · 체성분 ${incomingBodyCnt}건)을 [병합 가져오기] 하시겠습니까?`,
+                "다른 계정 백업 병합 가져오기",
                 true
               );
-              if (!okOther) return;
+              if (!okMergeImport) return;
+              handleExportPersonalBackup();
+              const mergedImport = mergePersonalSpaceData(
+                { personalSecretNotes, personalSecretTrash, personalBodyLogs },
+                {
+                  personalSecretNotes: Array.isArray(d.personalSecretNotes) ? d.personalSecretNotes : [],
+                  personalSecretTrash: Array.isArray(d.personalSecretTrash) ? d.personalSecretTrash : [],
+                  personalBodyLogs: Array.isArray(d.personalBodyLogs) ? d.personalBodyLogs : []
+                }
+              );
+              setPersonalSecretNotes(mergedImport.personalSecretNotes || personalSecretNotes);
+              setPersonalSecretTrash(mergedImport.personalSecretTrash || personalSecretTrash);
+              setPersonalBodyLogs(mergedImport.personalBodyLogs || personalBodyLogs);
+              await savePersonalDataToCloud({
+                personalSecretNotes: mergedImport.personalSecretNotes || personalSecretNotes,
+                personalSecretTrash: mergedImport.personalSecretTrash || personalSecretTrash,
+                personalBodyLogs: mergedImport.personalBodyLogs || personalBodyLogs
+              }, `✅ 병합 완료: 노트 ${(mergedImport.personalSecretNotes || []).length}건 · 체성분 ${(mergedImport.personalBodyLogs || []).length}건 (복원 전 안전 사본 저장됨)`);
+              return;
             }
+            const okSame = await askConfirm(
+              `본인 백업(노트 ${incomingNoteCnt}건 · 체성분 ${incomingBodyCnt}건)으로 복원할까요? 복원 직전 현재 데이터의 안전 사본이 자동 저장됩니다.`,
+              "개인 백업 복원 확인",
+              false
+            );
+            if (!okSame) return;
             // 복원 직전 안전 사본 다운로드
             handleExportPersonalBackup();
             const nextNotes = Array.isArray(d.personalSecretNotes) ? d.personalSecretNotes : personalSecretNotes;
@@ -38114,7 +38546,7 @@ time: "", location: "",
               personalSelfCare: nextSc,
               personalBodyLogs: nextBody,
               personalBodyGoal: nextGoal
-            }, "✅ 개인 전용 백업에서 복원했습니다 (복원 전 안전 사본 저장됨).");
+            }, `✅ 개인 백업 복원 완료: 노트 ${nextNotes.length}건 · 체성분 ${nextBody.length}건 (복원 전 안전 사본 저장됨).`);
           } catch {
             showToast("⚠️ 손상되었거나 읽을 수 없는 JSON 백업 파일입니다.");
           }
@@ -38150,13 +38582,28 @@ time: "", location: "",
               </div>
             </div>
 
+            {(personalSubError || personalSaveError) && (
+              <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-[11.5px] font-bold text-rose-800 break-words">
+                ⚠️ {personalSubError || personalSaveError}
+              </div>
+            )}
+
+            {!personalSpaceLoaded && !personalSubError && user && !user.isAnonymous && (
+              <div className="p-2 rounded-xl bg-stone-100 border border-stone-200 text-[11px] font-bold text-stone-600">
+                ⏳ 개인 공간 클라우드 데이터를 불러오는 중입니다... (로딩 완료 전 덮어쓰기 차단됨)
+              </div>
+            )}
+
             {personalPendingPatch && (
               <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 flex items-center justify-between gap-2 text-[11.5px] font-bold text-amber-900">
-                <span className="min-w-0">⏳ 오프라인/오류로 저장 대기 중인 개인 변경사항이 있습니다.</span>
+                <span className="min-w-0">⏳ 오프라인/오류로 저장 대기 중인 개인 변경사항이 있습니다 (UID 격리 보관).</span>
                 <button
                   type="button"
                   disabled={isSavingPersonal}
-                  onClick={() => savePersonalDataToCloud(personalPendingPatch, "✅ 대기 중이던 개인 데이터를 저장했습니다.")}
+                  onClick={() => {
+                    const { _tombstones, _uid, ...cleanPatch } = personalPendingPatch;
+                    savePersonalDataToCloud(cleanPatch, "✅ 대기 중이던 개인 데이터를 저장했습니다.", { tombstones: _tombstones || {} });
+                  }}
                   className="px-2.5 py-1 rounded-lg bg-[#3F624D] text-white text-[11px] font-extrabold whitespace-nowrap shrink-0"
                 >
                   {isSavingPersonal ? "저장 중..." : "재시도"}
@@ -38439,15 +38886,32 @@ time: "", location: "",
                           }
                           if (!title && !content && !urlCheck.url) { showToast("제목 또는 내용을 입력해 주세요."); return; }
                           const nowMs = Date.now();
-                          const itemPayload = {
-                            id: editingSecretNoteId || `sec-${nowMs}-${Math.random().toString(36).slice(2, 5)}`,
-                            title: title || "비밀 메모",
-                            category: secretNoteForm.category || "메모",
-                            url: urlCheck.url,
-                            content,
-                            pinned: Boolean(secretNoteForm.pinned),
-                            updatedAtMs: nowMs
-                          };
+                          const prevExisting = editingSecretNoteId ? personalSecretNotes.find((x) => x.id === editingSecretNoteId) : null;
+                          const nextRevisions = prevExisting
+                            ? [
+                                {
+                                  revAtMs: prevExisting.updatedAtMs || nowMs,
+                                  title: prevExisting.title || "",
+                                  content: prevExisting.content || "",
+                                  category: prevExisting.category || "메모",
+                                  url: prevExisting.url || ""
+                                },
+                                ...(Array.isArray(prevExisting.revisions) ? prevExisting.revisions : [])
+                              ].slice(0, 20)
+                            : [];
+                          const itemPayload = normalizeSecretNoteItem(
+                            {
+                              id: editingSecretNoteId || `sec-${nowMs}-${Math.random().toString(36).slice(2, 5)}`,
+                              title,
+                              category: secretNoteForm.category || "메모",
+                              url: urlCheck.url,
+                              content,
+                              pinned: Boolean(secretNoteForm.pinned),
+                              revisions: nextRevisions,
+                              updatedAtMs: nowMs
+                            },
+                            prevExisting
+                          );
                           const prevNotes = personalSecretNotes;
                           const nextNotes = editingSecretNoteId
                             ? personalSecretNotes.map((x) => (x.id === editingSecretNoteId ? itemPayload : x))
@@ -38610,11 +39074,13 @@ time: "", location: "",
                                     aria-label={`${n.title} 삭제`}
                                     onClick={async () => {
                                       if (!await askConfirm(`'${n.title}' 비밀 메모를 휴지통으로 옮길까요?`)) return;
+                                      const nowDel = Date.now();
                                       const nextNotes = personalSecretNotes.filter((x) => x.id !== n.id);
-                                      const nextTrash = [{ ...n, deletedAtMs: Date.now() }, ...personalSecretTrash].slice(0, 30);
+                                      // 휴지통 30건 절단 제거: 모든 삭제 기록을 보존하고 화면 표시만 페이지네이션
+                                      const nextTrash = [{ ...n, deletedAtMs: nowDel, updatedAtMs: nowDel }, ...personalSecretTrash];
                                       setPersonalSecretNotes(nextNotes);
                                       setPersonalSecretTrash(nextTrash);
-                                      savePersonalDataToCloud({ personalSecretNotes: nextNotes, personalSecretTrash: nextTrash }, "🗑️ 휴지통으로 이동했습니다.");
+                                      savePersonalDataToCloud({ personalSecretNotes: nextNotes, personalSecretTrash: nextTrash }, "🗑️ 휴지통으로 이동했습니다 (전체 이력 보존).");
                                     }}
                                     className="p-1 rounded-lg text-stone-400 hover:text-rose-600"
                                   >
@@ -39186,45 +39652,41 @@ time: "", location: "",
                               const file = e.target.files?.[0];
                               e.target.value = "";
                               if (!file) return;
+                              const uploadUid = user?.uid || "";
                               try {
                                 const buf = await file.arrayBuffer();
-                                let text = new TextDecoder("utf-8").decode(buf);
-                                let detail = parseBodyCompositionCsvDetailed(text);
-                                if (!detail.headerMatched || detail.rows.length === 0) {
-                                  try {
-                                    const eucText = new TextDecoder("euc-kr").decode(buf);
-                                    const eucDetail = parseBodyCompositionCsvDetailed(eucText);
-                                    if (eucDetail.rows.length > detail.rows.length || (eucDetail.headerMatched && !detail.headerMatched)) {
-                                      detail = eucDetail;
-                                    }
-                                  } catch (decErr) {}
-                                }
+                                if (personalUidRef.current && personalUidRef.current !== uploadUid) return;
+                                const decoded = decodeBodyCsvBuffer(buf, bodyCsvEncoding);
+                                const detail = parseBodyCompositionCsvDetailed(decoded.text, {
+                                  invalidOptionalMode: bodyInvalidOptMode,
+                                  timezoneOffsetMinutes: 540,
+                                  timezoneLabel: "Asia/Seoul"
+                                });
                                 if (!detail.headerMatched && detail.rows.length === 0) {
                                   showToast(detail.errors[0]?.reason || "인식 가능한 체성분 CSV 헤더(측정일시·몸무게)를 찾을 수 없습니다.");
                                   return;
                                 }
-                                const existingMap = new Map(sortedLogs.map((row) => [row.measuredAt, row]));
-                                let newCnt = 0;
-                                let sameCnt = 0;
-                                let conflictCnt = 0;
-                                detail.rows.forEach((r) => {
-                                  const ex = existingMap.get(r.measuredAt);
-                                  if (!ex) newCnt += 1;
-                                  else {
-                                    const hasDiff = ["weight", "bodyFatPct", "skeletalMuscle", "bmi", "bmr", "bodyFatMass", "visceralFat", "water"].some(
-                                      (k) => r[k] !== undefined && ex[k] !== undefined && Number(r[k]) !== Number(ex[k])
-                                    );
-                                    if (hasDiff) conflictCnt += 1;
-                                    else sameCnt += 1;
-                                  }
+                                const dryMerge = mergeBodyCompositionLogs(sortedLogs, detail.rows, {
+                                  policy: bodyImportConflictPolicy,
+                                  uid: uploadUid,
+                                  fileName: file.name
                                 });
                                 setBodyImportPreview({
+                                  uploadUid,
                                   fileName: file.name,
+                                  encoding: decoded.encoding,
+                                  delimiter: detail.delimiter,
                                   rows: detail.rows,
                                   errors: detail.errors,
-                                  newCnt,
-                                  sameCnt,
-                                  conflictCnt
+                                  warnings: detail.warnings || [],
+                                  inFileDuplicates: detail.inFileDuplicates || [],
+                                  unmappedHeaders: detail.unmappedHeaders || [],
+                                  newCnt: dryMerge.summary.newCnt,
+                                  filledCnt: dryMerge.summary.filledCnt,
+                                  updatedCnt: dryMerge.summary.updatedCnt,
+                                  sameCnt: dryMerge.summary.sameCnt,
+                                  conflictCnt: dryMerge.summary.conflictCnt,
+                                  candidateConflictCnt: dryMerge.summary.candidateConflictCnt
                                 });
                               } catch (err) {
                                 showToast("CSV 파일을 읽는 중 오류가 발생했습니다.");
@@ -39246,23 +39708,94 @@ time: "", location: "",
                       </div>
                     </div>
 
-                    {/* CSV 미리보기 및 충돌 정책 확인 */}
+                    {/* 총 저장 / 현재 기간 표시 안내 & 최근 가져오기 되돌리기 */}
+                    {sortedLogs.length > 0 && (
+                      <div className="flex items-center justify-between gap-2 flex-wrap text-[11px] font-bold text-stone-600 bg-[#FAF8F3] px-2.5 py-1.5 rounded-xl border border-stone-200">
+                        <span>총 저장 {sortedLogs.length}건 · 현재 기간 표시 {rangedLogs.length}건</span>
+                        {personalBodyImportBatches.length > 0 && (
+                          <button
+                            type="button"
+                            disabled={isSavingPersonal}
+                            onClick={async () => {
+                              const latestBatch = personalBodyImportBatches[personalBodyImportBatches.length - 1];
+                              if (!await askConfirm(`최근 CSV 가져오기('${latestBatch.fileName || latestBatch.batchId}')를 되돌릴까요? 이후 직접 수정한 기록은 보호됩니다.`)) return;
+                              const rev = revertBodyImportBatch(personalBodyLogs, latestBatch);
+                              const nextBatches = personalBodyImportBatches.slice(0, -1);
+                              const prevLogs = personalBodyLogs;
+                              setPersonalBodyLogs(rev.nextLogs);
+                              setPersonalBodyImportBatches(nextBatches);
+                              await savePersonalDataToCloud(
+                                { personalBodyLogs: rev.nextLogs, personalBodyImportBatches: nextBatches },
+                                `↩️ ${rev.revertedCount}건 되돌림 완료${rev.skippedModifiedCount > 0 ? ` (이후 수정 ${rev.skippedModifiedCount}건 보호)` : ""}`,
+                                { rollbackFn: () => { setPersonalBodyLogs(prevLogs); setPersonalBodyImportBatches(personalBodyImportBatches); }, requireLoaded: true }
+                              );
+                            }}
+                            className="px-2 py-0.5 rounded-lg bg-white border border-stone-200 text-[#35503C] text-[10.5px] font-extrabold whitespace-nowrap"
+                          >
+                            ↩️ 이번 가져오기 되돌리기
+                          </button>
+                        )}
+                      </div>
+                    )}
+
+                    {/* CSV 미리보기 및 충돌 정책 확인 (상단 주동작 배치) */}
                     {bodyImportPreview && (
                       <div className="p-3 rounded-xl bg-[#FAF8F3] border border-[#C9D8CC] space-y-2">
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="text-[12px] font-black text-stone-900 truncate">📄 {bodyImportPreview.fileName} 미리보기</span>
-                          <button type="button" onClick={() => setBodyImportPreview(null)} className="text-[11px] font-bold text-stone-500">닫기</button>
+                        <div className="flex items-center justify-between gap-2 flex-wrap">
+                          <span className="text-[12px] font-black text-stone-900 truncate min-w-0">
+                            📄 {bodyImportPreview.fileName} ({bodyImportPreview.encoding || "utf-8"})
+                          </span>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <button
+                              type="button"
+                              disabled={bodyImportPreview.rows.length === 0 || isSavingPersonal || !personalSpaceLoaded}
+                              onClick={async () => {
+                                if (bodyImportPreview.uploadUid && personalUidRef.current && bodyImportPreview.uploadUid !== personalUidRef.current) {
+                                  showToast("⚠️ 계정이 변경되어 이전 계정의 CSV를 반영할 수 없습니다.");
+                                  setBodyImportPreview(null);
+                                  return;
+                                }
+                                // 저장 직전 최신 personalBodyLogs 기준으로 재계산
+                                const res = mergeBodyCompositionLogs(personalBodyLogs, bodyImportPreview.rows, {
+                                  policy: bodyImportConflictPolicy,
+                                  uid: user?.uid || "",
+                                  fileName: bodyImportPreview.fileName
+                                });
+                                const prevLogs = personalBodyLogs;
+                                const nextBatches = [...personalBodyImportBatches, res.batchRecord].slice(-10);
+                                setPersonalBodyLogs(res.mergedLogs);
+                                setBodySelectedIdx(null);
+                                const ok = await savePersonalDataToCloud(
+                                  { personalBodyLogs: res.mergedLogs, personalBodyImportBatches: nextBatches },
+                                  `✅ 신규 ${res.summary.newCnt} · 보충 ${res.summary.filledCnt} · 갱신 ${res.summary.updatedCnt}건 반영 (총 ${res.mergedLogs.length}건 저장 완료)`,
+                                  { rollbackFn: () => setPersonalBodyLogs(prevLogs), requireLoaded: true }
+                                );
+                                if (ok) {
+                                  setPersonalBodyImportBatches(nextBatches);
+                                  setBodyImportPreview(null);
+                                }
+                              }}
+                              className="px-3 py-1.5 rounded-xl bg-[#3F624D] hover:bg-[#35503C] disabled:opacity-50 text-white text-[11.5px] font-extrabold whitespace-nowrap"
+                            >
+                              {isSavingPersonal ? "클라우드 저장 중..." : `${bodyImportPreview.rows.length}건 확인 · 반영하기`}
+                            </button>
+                            <button type="button" onClick={() => setBodyImportPreview(null)} className="text-[11px] font-bold text-stone-500 whitespace-nowrap">닫기</button>
+                          </div>
                         </div>
                         <div className="flex flex-wrap gap-1.5 text-[11px] font-extrabold">
                           <span className="px-2 py-0.5 rounded bg-[#EEF3EE] text-[#35503C]">신규 {bodyImportPreview.newCnt}건</span>
-                          <span className="px-2 py-0.5 rounded bg-stone-100 text-stone-600">기존 동일 {bodyImportPreview.sameCnt}건</span>
-                          <span className="px-2 py-0.5 rounded bg-amber-100 text-amber-800">충돌 {bodyImportPreview.conflictCnt}건</span>
+                          <span className="px-2 py-0.5 rounded bg-sky-50 text-sky-800">보충 {bodyImportPreview.filledCnt || 0}건</span>
+                          <span className="px-2 py-0.5 rounded bg-amber-100 text-amber-800">충돌/갱신 {bodyImportPreview.conflictCnt}건</span>
+                          <span className="px-2 py-0.5 rounded bg-stone-100 text-stone-600">동일 {bodyImportPreview.sameCnt}건</span>
                           <span className="px-2 py-0.5 rounded bg-rose-100 text-rose-700">오류 {bodyImportPreview.errors.length}건</span>
+                          {(bodyImportPreview.warnings?.length || 0) > 0 && (
+                            <span className="px-2 py-0.5 rounded bg-amber-50 text-amber-700">선택지표 경고 {bodyImportPreview.warnings.length}건</span>
+                          )}
                         </div>
                         {bodyImportPreview.errors.length > 0 && (
                           <div className="max-h-24 overflow-y-auto text-[10.5px] text-rose-700 bg-rose-50/70 p-2 rounded-lg space-y-0.5">
                             {bodyImportPreview.errors.slice(0, 10).map((err, eIdx) => (
-                              <div key={eIdx}>• {err.row}행: {err.reason}</div>
+                              <div key={eIdx}>• {err.row}행 {err.column ? `[${err.column}]` : ""}: {err.reason}</div>
                             ))}
                             {bodyImportPreview.errors.length > 10 && <div>외 {bodyImportPreview.errors.length - 10}건 오류</div>}
                           </div>
@@ -39273,48 +39806,29 @@ time: "", location: "",
                             onChange={(e) => setBodyImportConflictPolicy(e.target.value)}
                             className="px-2 py-1 rounded-lg border border-stone-200 bg-white text-[11px] font-bold"
                           >
-                            <option value="merge_non_empty">충돌 시: 빈 열 제외하고 병합 (권장)</option>
+                            <option value="fill_empty">충돌 시: 기존의 빈 항목만 보충 (권장)</option>
                             <option value="keep_existing">충돌 시: 기존 기록 유지</option>
-                            <option value="overwrite">충돌 시: 새 CSV 값으로 덮어쓰기</option>
+                            <option value="update_non_empty">충돌 시: CSV 값 있는 항목으로 갱신</option>
                           </select>
-                          <button
-                            type="button"
-                            disabled={bodyImportPreview.rows.length === 0 || isSavingPersonal}
-                            onClick={async () => {
-                              const map = new Map();
-                              sortedLogs.forEach((row) => map.set(row.measuredAt, row));
-                              bodyImportPreview.rows.forEach((incoming) => {
-                                const prev = map.get(incoming.measuredAt);
-                                if (!prev) {
-                                  map.set(incoming.measuredAt, incoming);
-                                } else if (bodyImportConflictPolicy === "keep_existing") {
-                                  // keep prev
-                                } else if (bodyImportConflictPolicy === "overwrite") {
-                                  // 빈 열로 기존 정상 지표를 지우지 않도록 undefined가 아닌 값만 덮어씀
-                                  map.set(incoming.measuredAt, { ...prev, ...incoming, id: prev.id || incoming.id });
-                                } else {
-                                  const mergedRow = { ...prev };
-                                  Object.entries(incoming).forEach(([k, v]) => {
-                                    if (v !== undefined && v !== null && v !== "") mergedRow[k] = v;
-                                  });
-                                  map.set(incoming.measuredAt, mergedRow);
-                                }
-                              });
-                              const merged = Array.from(map.values()).sort((a, b) => (a.timestampMs || 0) - (b.timestampMs || 0) || String(a.measuredAt || "").localeCompare(String(b.measuredAt || "")));
-                              const prevLogs = personalBodyLogs;
-                              setPersonalBodyLogs(merged);
-                              setBodySelectedIdx(null);
-                              const ok = await savePersonalDataToCloud(
-                                { personalBodyLogs: merged },
-                                `✅ 신규 ${bodyImportPreview.newCnt}건 포함 총 ${merged.length}건을 반영했습니다.`,
-                                { rollbackFn: () => setPersonalBodyLogs(prevLogs) }
-                              );
-                              if (ok) setBodyImportPreview(null);
-                            }}
-                            className="px-3 py-1 rounded-xl bg-[#3F624D] text-white text-[11.5px] font-extrabold whitespace-nowrap"
-                          >
-                            반영하기
-                          </button>
+                          <div className="flex items-center gap-1.5">
+                            <select
+                              value={bodyCsvEncoding}
+                              onChange={(e) => setBodyCsvEncoding(e.target.value)}
+                              className="px-2 py-1 rounded-lg border border-stone-200 bg-white text-[10.5px] font-bold"
+                            >
+                              <option value="auto">인코딩: 자동</option>
+                              <option value="utf-8">UTF-8</option>
+                              <option value="euc-kr">EUC-KR</option>
+                            </select>
+                            <select
+                              value={bodyInvalidOptMode}
+                              onChange={(e) => setBodyInvalidOptMode(e.target.value)}
+                              className="px-2 py-1 rounded-lg border border-stone-200 bg-white text-[10.5px] font-bold"
+                            >
+                              <option value="skip_field">선택지표 오류: 정상 필드만 반영</option>
+                              <option value="reject_row">선택지표 오류: 해당 행 제외</option>
+                            </select>
+                          </div>
                         </div>
                       </div>
                     )}
@@ -39709,34 +40223,17 @@ time: "", location: "",
                           <button
                             type="button"
                             onClick={() => {
-                              const header = ["측정일시", "기기명", "몸무게(kg)", "체지방률(%)", "골격근량(kg)", "BMI", "비만도(%)", "근육량(kg)", "체지방량(kg)", "기초대사량(kcal)", "내장지방", "체수분(kg)", "신체나이", "복부비만율"];
-                              const rows = sortedLogs.map((r) => [
-                                r.measuredAt || "",
-                                r.device || "",
-                                r.weight ?? "",
-                                r.bodyFatPct ?? "",
-                                r.skeletalMuscle ?? "",
-                                r.bmi ?? "",
-                                r.obesityPct ?? "",
-                                r.muscleMass ?? "",
-                                r.bodyFatMass ?? "",
-                                r.bmr ?? "",
-                                r.visceralFat ?? "",
-                                r.water ?? "",
-                                r.bodyAge ?? "",
-                                r.whr ?? ""
-                              ].map((c) => sanitizeCsvCell(c)).join(","));
-                              const csvOut = "﻿" + [header.map((h) => sanitizeCsvCell(h)).join(","), ...rows].join("\n");
-                              const blob = new Blob([csvOut], { type: "text/csv;charset=utf-8;" });
+                              const csvText = exportBodyCompositionCsv29(sortedLogs);
+                              const blob = new Blob([csvText], { type: "text/csv;charset=utf-8;" });
                               const url = URL.createObjectURL(blob);
                               const a = document.createElement("a");
                               a.href = url;
-                              a.download = `body-composition-${todayStr}.csv`;
+                              a.download = `체성분_29열전체_${todayStr}.csv`;
                               document.body.appendChild(a);
                               a.click();
                               a.remove();
                               setTimeout(() => URL.revokeObjectURL(url), 1500);
-                              showToast("📤 전체 지표 포함 체성분 CSV를 내보냈습니다.");
+                              showToast("📥 체성분 29열 전체 지표 CSV를 내보냈습니다.");
                             }}
                             className="px-2.5 py-1 rounded-lg bg-[#EEF3EE] text-[#35503C] border border-[#C9D8CC] text-[11px] font-extrabold whitespace-nowrap"
                           >

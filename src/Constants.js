@@ -609,6 +609,9 @@ export async function callOpenAiEngine({ openaiKey, promptText, imagePart = null
 }
 
 
+const _aiInFlightRequests = new Map();
+const _aiResponseCache = new Map();
+
 export async function callReliableAiEngine({
   apiKey,
   openaiApiKey = "",
@@ -617,8 +620,33 @@ export async function callReliableAiEngine({
   imagePart = null,
   temperature = 0.5,
   expectObject = false,
-  onProviderUsed = null
+  onProviderUsed = null,
+  signal = null,
+  timeoutMs = 28000,
+  maxRetries = 1,
+  requestKey = "",
+  cacheKey = "",
+  cacheTtlMs = 0,
+  taskType = "general",
+  onAuditLog = null
 }) {
+  if (signal?.aborted) {
+    throw new DOMException("요청이 취소되었습니다.", "AbortError");
+  }
+  const nowStart = Date.now();
+  if (cacheKey && cacheTtlMs > 0) {
+    const cached = _aiResponseCache.get(cacheKey);
+    if (cached && nowStart - cached.ts < cacheTtlMs) {
+      if (onAuditLog) {
+        try { onAuditLog({ taskType, provider: cached.provider || aiProvider, status: "cached", errorCode: "", durationMs: 0 }); } catch {}
+      }
+      return cached.data;
+    }
+  }
+  if (requestKey && _aiInFlightRequests.has(requestKey)) {
+    return _aiInFlightRequests.get(requestKey);
+  }
+  const _executeCore = async () => {
   const effectiveGeminiKey = String(apiKey || EMBEDDED_GEMINI_KEY || "").trim();
   const effectiveOpenaiKey = String(openaiApiKey || "").trim();
 
@@ -805,7 +833,51 @@ export async function callReliableAiEngine({
     }
   }
   throw new Error(`AI 호출 오류: ${errors.join(" / ")} (⚙️설정에서 API 키를 확인해 주세요)`);
+
+  };
+
+  const runWithRetry = async () => {
+    let lastErr = null;
+    for (let attempt = 0; attempt <= Math.max(0, Number(maxRetries) || 0); attempt++) {
+      if (signal?.aborted) throw new DOMException("요청이 취소되었습니다.", "AbortError");
+      try {
+        const res = await _executeCore();
+        if (cacheKey && cacheTtlMs > 0) {
+          _aiResponseCache.set(cacheKey, { ts: Date.now(), data: res, provider: aiProvider });
+          if (_aiResponseCache.size > 40) {
+            const firstK = _aiResponseCache.keys().next().value;
+            if (firstK) _aiResponseCache.delete(firstK);
+          }
+        }
+        if (onAuditLog) {
+          try { onAuditLog({ taskType, provider: aiProvider, status: "ok", errorCode: "", durationMs: Date.now() - nowStart }); } catch {}
+        }
+        return res;
+      } catch (err) {
+        lastErr = err;
+        const msg = String(err?.message || "");
+        const retryable = /(429|500|502|503|504)/.test(msg) && err?.name !== "AbortError";
+        if (!retryable || attempt >= (Number(maxRetries) || 0)) {
+          if (onAuditLog) {
+            const codeMatch = msg.match(/(400|401|403|404|429|500|502|503|504)/);
+            try { onAuditLog({ taskType, provider: aiProvider, status: "error", errorCode: err?.name === "AbortError" ? "ABORTED" : (codeMatch?.[1] || "ERR"), durationMs: Date.now() - nowStart }); } catch {}
+          }
+          throw err;
+        }
+        await new Promise((r) => setTimeout(r, 600 * (attempt + 1)));
+      }
+    }
+    throw lastErr;
+  };
+
+  const promise = runWithRetry();
+  if (requestKey) {
+    _aiInFlightRequests.set(requestKey, promise);
+    promise.finally(() => { _aiInFlightRequests.delete(requestKey); }).catch(() => {});
+  }
+  return promise;
 }
+
 
 
 // 서울 중구 날씨 코드 & 환경부 기준 미세먼지(PM10/PM2.5) 등급 판별 유틸리티
@@ -1186,7 +1258,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v14.68";
+export const APP_CODE_VERSION = "v14.69";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1204,7 +1276,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-28 16:30";
+export const APP_BUILD_DATE = "2026-11-28 18:00";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1274,6 +1346,19 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v14.69",
+    version: "v14.69",
+    date: "2026-11-28",
+    title: "⚖️ 체성분 29열 완전 매핑·반영 안정화 · 🔒 비밀노트/개인공간 이관·이력·AI · 🚗 차량 삭제/동시수정/주차이력/유지비·주기 · 💾 대용량 분할 백업",
+    category: "고도화 · 안정화 · 오류수정",
+    items: [
+      "⚖️ 체성분 CSV 29열 전체(골질량·피하지방·제지방량·무기질·체단백질·부위별 10열 포함) 파싱·매핑·왕복 내보내기, UTF-16/EUC-KR/구분자 자동 감지, UTC offset 정규화, lb 환산 후 범위 검증, 배치 되돌리기 및 로그인·초기구독·UID 세션 검증 강화",
+      "🔒 개인공간·비밀노트 안정화: 레거시 프로필 합집합 이관, 항목 단위 병합·오프라인 UID 대기열, 구독 오류 분리 표시, 휴지통 30건 절단 제거, 노트 수정 시 확장필드·수정이력·템플릿·체크리스트·태그 보존, AI 정리/실행항목/질의·민감정보 필터 및 개인 백업 UID 불일치 덮어쓰기 차단",
+      "🚗 차량관리 고도화: 영구삭제 서버병합 부활 방지(삭제 표식), 차량/주차/분류 항목 단위 동시수정 병합, 실패 변경 별도 대기 재시도, 주차이력 10건 절단 제거·출차 이력 보존, 사진 업로드 실패/취소 정리, 주유·충전·연비·유지비·정비주기·자연어/OCR 입력 보조 추가",
+      "💾 백업·공통: 자동백업 의존성(차량·공유노트·패치노트 등) 및 식단 0건 조건 수정, 900KB 초과 시 분할 청크+manifest 저장, AI 공통 어댑터 취소·재시도·중복차단·응답 검증·최소 로그 적용 (기존 패치노트 506건 100% 보존)"
+    ]
+  },
   {
     id: "patch-v14.68",
     version: "v14.68",
@@ -7648,21 +7733,183 @@ export const validateSafeHttpUrl = (rawUrl) => {
 };
 
 export const BODY_METRIC_DEFS = [
-  { id: "weight", label: "몸무게", unit: "kg", digits: 2, lowerIsGood: true },
-  { id: "bodyFatPct", label: "체지방률", unit: "%", digits: 2, lowerIsGood: true },
-  { id: "skeletalMuscle", label: "골격근량", unit: "kg", digits: 2, lowerIsGood: false },
+  { id: "weight", label: "몸무게", unit: "kg", digits: 2, lowerIsGood: true, core: true },
+  { id: "bodyFatPct", label: "체지방률", unit: "%", digits: 2, lowerIsGood: true, core: true },
+  { id: "skeletalMuscle", label: "골격근량", unit: "kg", digits: 2, lowerIsGood: false, core: true },
   { id: "bmi", label: "BMI", unit: "", digits: 2, lowerIsGood: true },
   { id: "bodyFatMass", label: "체지방량", unit: "kg", digits: 2, lowerIsGood: true },
   { id: "bmr", label: "기초대사량", unit: "kcal", digits: 0, lowerIsGood: false },
   { id: "visceralFat", label: "내장지방", unit: "", digits: 0, lowerIsGood: true },
-  { id: "water", label: "체수분", unit: "kg", digits: 2, lowerIsGood: false }
+  { id: "water", label: "체수분", unit: "kg", digits: 2, lowerIsGood: false },
+  { id: "muscleMass", label: "근육량", unit: "kg", digits: 2, lowerIsGood: false },
+  { id: "boneMass", label: "골질량", unit: "kg", digits: 2, lowerIsGood: false },
+  { id: "subcutaneousFatPct", label: "피하지방", unit: "%", digits: 2, lowerIsGood: true },
+  { id: "leanBodyMass", label: "제지방량", unit: "kg", digits: 2, lowerIsGood: false },
+  { id: "mineralMass", label: "무기질", unit: "kg", digits: 2, lowerIsGood: false },
+  { id: "proteinMass", label: "체단백질", unit: "kg", digits: 2, lowerIsGood: false },
+  { id: "obesityPct", label: "비만도", unit: "%", digits: 2, lowerIsGood: true },
+  { id: "bodyAge", label: "신체나이", unit: "세", digits: 0, lowerIsGood: true },
+  { id: "whr", label: "복부비만율", unit: "", digits: 2, lowerIsGood: true }
 ];
 
-export const parseBodyCompositionCsvDetailed = (rawText) => {
-  const cleanText = String(rawText || "").replace(/^\uFEFF/, "").trim();
-  if (!cleanText) return { rows: [], errors: [{ row: 0, reason: "빈 파일입니다." }], totalDataRows: 0, headerMatched: false };
+export const BODY_CSV_29_COLUMNS = [
+  { header: "측정일시", key: "measuredAt", type: "datetime" },
+  { header: "기기명", key: "device", type: "string" },
+  { header: "몸무게(kg)", key: "weight", type: "number", unit: "kg", maxVal: 400 },
+  { header: "BMI", key: "bmi", type: "number", unit: "", maxVal: 100 },
+  { header: "비만도(%)", key: "obesityPct", type: "number", unit: "%", maxVal: 500 },
+  { header: "체지방률(%)", key: "bodyFatPct", type: "number", unit: "%", maxVal: 85 },
+  { header: "골격근량(kg)", key: "skeletalMuscle", type: "number", unit: "kg", maxVal: 200 },
+  { header: "근육량(kg)", key: "muscleMass", type: "number", unit: "kg", maxVal: 200 },
+  { header: "골질량(kg)", key: "boneMass", type: "number", unit: "kg", maxVal: 30 },
+  { header: "기초대사량(kcal)", key: "bmr", type: "number", unit: "kcal", maxVal: 10000 },
+  { header: "내장지방지수", key: "visceralFat", type: "number", unit: "", maxVal: 60 },
+  { header: "피하지방(%)", key: "subcutaneousFatPct", type: "number", unit: "%", maxVal: 85 },
+  { header: "제지방량(kg)", key: "leanBodyMass", type: "number", unit: "kg", maxVal: 300 },
+  { header: "무기질(kg)", key: "mineralMass", type: "number", unit: "kg", maxVal: 30 },
+  { header: "체지방량(kg)", key: "bodyFatMass", type: "number", unit: "kg", maxVal: 300 },
+  { header: "체수분(kg)", key: "water", type: "number", unit: "kg", maxVal: 200 },
+  { header: "체단백질(kg)", key: "proteinMass", type: "number", unit: "kg", maxVal: 100 },
+  { header: "신체나이", key: "bodyAge", type: "number", unit: "", maxVal: 150 },
+  { header: "복부비만율(WHR)", key: "whr", type: "number", unit: "", maxVal: 3 },
+  { header: "왼팔 체지방률(%)", key: "segments.leftArm.fatPct", type: "segment", seg: "leftArm", sub: "fatPct", unit: "%", maxVal: 95 },
+  { header: "왼팔 골격근량(kg)", key: "segments.leftArm.skeletalMuscle", type: "segment", seg: "leftArm", sub: "skeletalMuscle", unit: "kg", maxVal: 60 },
+  { header: "오른팔 체지방률(%)", key: "segments.rightArm.fatPct", type: "segment", seg: "rightArm", sub: "fatPct", unit: "%", maxVal: 95 },
+  { header: "오른팔 골격근량(kg)", key: "segments.rightArm.skeletalMuscle", type: "segment", seg: "rightArm", sub: "skeletalMuscle", unit: "kg", maxVal: 60 },
+  { header: "왼다리 체지방률(%)", key: "segments.leftLeg.fatPct", type: "segment", seg: "leftLeg", sub: "fatPct", unit: "%", maxVal: 95 },
+  { header: "왼다리 골격근량(kg)", key: "segments.leftLeg.skeletalMuscle", type: "segment", seg: "leftLeg", sub: "skeletalMuscle", unit: "kg", maxVal: 100 },
+  { header: "오른다리 체지방률(%)", key: "segments.rightLeg.fatPct", type: "segment", seg: "rightLeg", sub: "fatPct", unit: "%", maxVal: 95 },
+  { header: "오른다리 골격근량(kg)", key: "segments.rightLeg.skeletalMuscle", type: "segment", seg: "rightLeg", sub: "skeletalMuscle", unit: "kg", maxVal: 100 },
+  { header: "복부 체지방률(%)", key: "segments.trunk.fatPct", type: "segment", seg: "trunk", sub: "fatPct", unit: "%", maxVal: 95 },
+  { header: "복부 골격근량(kg)", key: "segments.trunk.skeletalMuscle", type: "segment", seg: "trunk", sub: "skeletalMuscle", unit: "kg", maxVal: 120 }
+];
 
-  // RFC 4180 표준 CSV 파서 (따옴표 내 쉼표·줄바꿈·이중따옴표 지원)
+const _normalizeBodyCsvHeader = (raw) => {
+  const s = String(raw || "")
+    .replace(/^\uFEFF/, "")
+    .replace(/[\uFF01-\uFF5E]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) - 0xfee0))
+    .replace(/[\r\n\t]+/g, " ")
+    .trim()
+    .toLowerCase();
+  const noUnit = s
+    .replace(/\((?:kg|lbs?|%|kcal|cm|세|whr|지수|비율)\)/gi, "")
+    .replace(/[^a-z0-9가-힣_]+/g, "")
+    .replace(/_+/g, "_")
+    .replace(/^_|_$/g, "");
+  return { raw: s, norm: noUnit, compact: noUnit.replace(/_/g, "") };
+};
+
+const _BODY_HEADER_ALIAS_MAP = {
+  measuredAt: ["측정일시", "측정시간", "측정일", "일시", "measuredat", "datetime", "timestamp", "measurementdate", "date_time"],
+  dateOnly: ["날짜", "일자", "date"],
+  timeOnly: ["시간", "시각", "time"],
+  device: ["기기명", "기기", "측정기기", "device", "devicename", "scale", "model"],
+  weight: ["몸무게", "체중", "weight", "bodyweight", "body_weight"],
+  bmi: ["bmi", "체질량지수", "bodymassindex"],
+  obesityPct: ["비만도", "obesity", "obesitypct", "obesityrate"],
+  bodyFatPct: ["체지방률", "bodyfatpercentage", "body_fat_percentage", "bodyfatpct", "bodyfat", "fatpercentage", "bfp", "pbf"],
+  skeletalMuscle: ["골격근량", "skeletalmuscle", "skeletal_muscle", "skeletalmusclemass", "smm"],
+  muscleMass: ["근육량", "musclemass", "muscle_mass", "muscle"],
+  boneMass: ["골질량", "골량", "bonemass", "bone_mass", "bone"],
+  bmr: ["기초대사량", "bmr", "basalmetabolicrate"],
+  visceralFat: ["내장지방지수", "내장지방레벨", "내장지방", "visceralfat", "visceral_fat", "visceralfatindex", "vfl"],
+  subcutaneousFatPct: ["피하지방", "피하지방률", "subcutaneousfat", "subcutaneous_fat", "subcutaneousfatpct"],
+  leanBodyMass: ["제지방량", "제지방", "leanbodymass", "lean_body_mass", "lbm", "fatfreemass"],
+  mineralMass: ["무기질", "무기질량", "mineral", "mineralmass", "minerals"],
+  bodyFatMass: ["체지방량", "bodyfatmass", "body_fat_mass", "fatmass"],
+  water: ["체수분", "체수분량", "체수분률", "water", "bodywater", "body_water", "tbw"],
+  proteinMass: ["체단백질", "단백질", "단백질량", "protein", "proteinmass", "bodyprotein"],
+  bodyAge: ["신체나이", "체내나이", "bodyage", "body_age", "metabolicage"],
+  whr: ["복부비만율", "복부비만율whr", "whr", "waisthipratio"],
+  "segments.leftArm.fatPct": ["왼팔체지방률", "좌팔체지방률", "leftarmfatpct", "leftarmfat", "left_arm_fat_percentage"],
+  "segments.leftArm.skeletalMuscle": ["왼팔골격근량", "좌팔골격근량", "왼팔근육량", "leftarmskeletalmuscle", "leftarmmuscle", "left_arm_muscle"],
+  "segments.rightArm.fatPct": ["오른팔체지방률", "우팔체지방률", "rightarmfatpct", "rightarmfat", "right_arm_fat_percentage"],
+  "segments.rightArm.skeletalMuscle": ["오른팔골격근량", "우팔골격근량", "오른팔근육량", "rightarmskeletalmuscle", "rightarmmuscle", "right_arm_muscle"],
+  "segments.leftLeg.fatPct": ["왼다리체지방률", "좌다리체지방률", "leftlegfatpct", "leftlegfat", "left_leg_fat_percentage"],
+  "segments.leftLeg.skeletalMuscle": ["왼다리골격근량", "좌다리골격근량", "왼다리근육량", "leftlegskeletalmuscle", "leftlegmuscle", "left_leg_muscle"],
+  "segments.rightLeg.fatPct": ["오른다리체지방률", "우다리체지방률", "rightlegfatpct", "rightlegfat", "right_leg_fat_percentage"],
+  "segments.rightLeg.skeletalMuscle": ["오른다리골격근량", "우다리골격근량", "오른다리근육량", "rightlegskeletalmuscle", "rightlegmuscle", "right_leg_muscle"],
+  "segments.trunk.fatPct": ["복부체지방률", "몸통체지방률", "trunkfatpct", "trunkfat", "abdomenfatpct", "trunk_fat_percentage"],
+  "segments.trunk.skeletalMuscle": ["복부골격근량", "몸통골격근량", "복부근육량", "trunkskeletalmuscle", "trunkmuscle", "abdomenmuscle", "trunk_muscle"]
+};
+
+const _SEGMENT_PREFIX_RE = /(왼팔|오른팔|좌팔|우팔|왼다리|오른다리|좌다리|우다리|복부|몸통|leftarm|rightarm|leftleg|rightleg|trunk|abdomen|left_arm|right_arm|left_leg|right_leg)/i;
+
+export const detectCsvDelimiter = (rawText) => {
+  const sample = String(rawText || "").replace(/^\uFEFF/, "").split(/\r?\n/).slice(0, 6).join("\n");
+  const counts = { ",": 0, ";": 0, "\t": 0 };
+  let inQ = false;
+  for (let i = 0; i < sample.length; i++) {
+    const ch = sample[i];
+    if (ch === '"') {
+      if (inQ && sample[i + 1] === '"') { i++; continue; }
+      inQ = !inQ;
+    } else if (!inQ && counts[ch] !== undefined) {
+      counts[ch] += 1;
+    }
+  }
+  const best = Object.entries(counts).sort((a, b) => b[1] - a[1])[0];
+  return best && best[1] > 0 ? best[0] : ",";
+};
+
+export const decodeBodyCsvBuffer = (arrayBuffer, preferredEncoding = "auto") => {
+  const bytes = arrayBuffer instanceof Uint8Array ? arrayBuffer : new Uint8Array(arrayBuffer || 0);
+  if (bytes.length === 0) return { text: "", encoding: "utf-8", candidates: [] };
+  if (preferredEncoding && preferredEncoding !== "auto") {
+    try {
+      return { text: new TextDecoder(preferredEncoding).decode(bytes), encoding: preferredEncoding, candidates: [preferredEncoding] };
+    } catch {}
+  }
+  // BOM detection: UTF-16LE, UTF-16BE, UTF-8
+  if (bytes.length >= 2 && bytes[0] === 0xff && bytes[1] === 0xfe) {
+    return { text: new TextDecoder("utf-16le").decode(bytes), encoding: "utf-16le", candidates: ["utf-16le"] };
+  }
+  if (bytes.length >= 2 && bytes[0] === 0xfe && bytes[1] === 0xff) {
+    return { text: new TextDecoder("utf-16be").decode(bytes), encoding: "utf-16be", candidates: ["utf-16be"] };
+  }
+  if (bytes.length >= 3 && bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf) {
+    return { text: new TextDecoder("utf-8").decode(bytes), encoding: "utf-8-bom", candidates: ["utf-8-bom"] };
+  }
+  const tryEncodings = ["utf-8", "euc-kr"];
+  const scored = [];
+  for (const enc of tryEncodings) {
+    try {
+      const txt = new TextDecoder(enc).decode(bytes);
+      const repCount = (txt.match(/\uFFFD/g) || []).length;
+      const preview = parseBodyCompositionCsvDetailed(txt, { quickScoreOnly: true });
+      const ratio = preview.totalDataRows > 0 ? preview.rows.length / preview.totalDataRows : 0;
+      const score = (preview.headerMatched ? 1000 : 0) + ratio * 500 + preview.rows.length * 2 - repCount * 80;
+      scored.push({ encoding: enc, text: txt, score, headerMatched: preview.headerMatched, validRows: preview.rows.length, repCount });
+    } catch {}
+  }
+  scored.sort((a, b) => b.score - a.score);
+  const best = scored[0] || { encoding: "utf-8", text: new TextDecoder("utf-8").decode(bytes) };
+  return { text: best.text, encoding: best.encoding, candidates: scored.map((s) => ({ encoding: s.encoding, validRows: s.validRows, headerMatched: s.headerMatched })) };
+};
+
+export const formatTzOffsetLabel = (offsetMin = 540) => {
+  const sign = offsetMin >= 0 ? "+" : "-";
+  const abs = Math.abs(Math.round(offsetMin));
+  return `${sign}${String(Math.floor(abs / 60)).padStart(2, "0")}:${String(abs % 60).padStart(2, "0")}`;
+};
+
+export const parseBodyCompositionCsvDetailed = (rawText, options = {}) => {
+  const {
+    delimiter: forcedDelimiter = "",
+    columnMapping = null,
+    timezoneOffsetMinutes = 540,
+    timezoneLabel = "Asia/Seoul",
+    invalidOptionalMode = "skip_field" // "skip_field" | "reject_row"
+  } = options || {};
+
+  const cleanText = String(rawText || "").replace(/^\uFEFF/, "").trim();
+  if (!cleanText) {
+    return { rows: [], errors: [{ row: 0, column: "", rawValue: "", reason: "빈 파일입니다.", severity: "error" }], warnings: [], totalDataRows: 0, headerMatched: false, delimiter: ",", rawHeaders: [], detectedMapping: {}, unmappedHeaders: [], inFileDuplicates: [] };
+  }
+
+  const delimiter = forcedDelimiter || detectCsvDelimiter(cleanText);
+
+  // RFC 4180 CSV parser with configurable delimiter (comma / semicolon / tab)
   const records = [];
   let row = [];
   let cur = "";
@@ -7683,7 +7930,7 @@ export const parseBodyCompositionCsvDetailed = (rawText) => {
     } else {
       if (ch === '"') {
         inQ = true;
-      } else if (ch === ",") {
+      } else if (ch === delimiter) {
         row.push(cur.trim());
         cur = "";
       } else if (ch === "\r" || ch === "\n") {
@@ -7701,156 +7948,603 @@ export const parseBodyCompositionCsvDetailed = (rawText) => {
   if (row.some((c) => c !== "")) records.push(row);
 
   if (inQ) {
-    return { rows: [], errors: [{ row: records.length + 1, reason: '닫히지 않은 따옴표(")가 있습니다.' }], totalDataRows: 0, headerMatched: false };
+    return { rows: [], errors: [{ row: records.length + 1, column: "", rawValue: "", reason: '닫히지 않은 따옴표(")가 있습니다.', severity: "error" }], warnings: [], totalDataRows: 0, headerMatched: false, delimiter, rawHeaders: [], detectedMapping: {}, unmappedHeaders: [], inFileDuplicates: [] };
   }
   if (records.length < 2) {
-    return { rows: [], errors: [{ row: 0, reason: "헤더와 데이터 행이 최소 2줄 이상 필요합니다." }], totalDataRows: 0, headerMatched: false };
+    return { rows: [], errors: [{ row: 0, column: "", rawValue: "", reason: "헤더와 데이터 행이 최소 2줄 이상 필요합니다.", severity: "error" }], warnings: [], totalDataRows: 0, headerMatched: false, delimiter, rawHeaders: records[0] || [], detectedMapping: {}, unmappedHeaders: [], inFileDuplicates: [] };
   }
 
   const rawHeaders = records[0];
-  const headers = rawHeaders.map((h) => String(h || "").replace(/\s+/g, "").toLowerCase());
-  const findCol = (preds) => headers.findIndex((h) => preds.some((p) => h.includes(p)));
+  const normHeaders = rawHeaders.map((h) => _normalizeBodyCsvHeader(h));
 
-  const idxDate = findCol(["측정일시", "측정일", "날짜", "일자", "date", "time"]);
-  const idxDevice = findCol(["기기명", "기기", "device"]);
-  const idxWeight = findCol(["몸무게", "체중", "weight"]);
-  const idxBmi = findCol(["bmi"]);
-  const idxObesity = findCol(["비만도"]);
-  const idxFatPct = findCol(["체지방률"]);
-  const idxMuscle = findCol(["골격근량"]);
-  const idxMuscleMass = findCol(["근육량"]);
-  const idxBmr = findCol(["기초대사량", "bmr"]);
-  const idxVisceral = findCol(["내장지방"]);
-  const idxFatMass = findCol(["체지방량"]);
-  const idxWater = findCol(["체수분"]);
-  const idxBodyAge = findCol(["신체나이"]);
-  const idxWhr = findCol(["복부비만율", "whr"]);
+  // Build field -> column index map: exact alias match first, strict segment vs whole-body separation
+  const detectedMapping = {};
+  const usedCols = new Set();
 
-  if (idxDate < 0 && idxWeight < 0) {
-    return { rows: [], errors: [{ row: 1, reason: "측정일시 또는 몸무게 헤더를 찾을 수 없습니다." }], totalDataRows: records.length - 1, headerMatched: false };
+  if (columnMapping && typeof columnMapping === "object") {
+    Object.entries(columnMapping).forEach(([fieldKey, colIdx]) => {
+      const idx = Number(colIdx);
+      if (Number.isInteger(idx) && idx >= 0 && idx < rawHeaders.length) {
+        detectedMapping[fieldKey] = idx;
+        usedCols.add(idx);
+      }
+    });
+  }
+
+  const allFieldKeys = Object.keys(_BODY_HEADER_ALIAS_MAP);
+  // Pass 1: exact normalized match (segments first so segment headers never collide with whole-body)
+  const orderedKeys = [
+    ...allFieldKeys.filter((k) => k.startsWith("segments.")),
+    ...allFieldKeys.filter((k) => !k.startsWith("segments."))
+  ];
+  for (const fieldKey of orderedKeys) {
+    if (detectedMapping[fieldKey] !== undefined) continue;
+    const aliases = _BODY_HEADER_ALIAS_MAP[fieldKey].map((a) => a.toLowerCase());
+    const compactAliases = aliases.map((a) => a.replace(/_/g, ""));
+    const idx = normHeaders.findIndex((nh, cIdx) => {
+      if (usedCols.has(cIdx)) return false;
+      return aliases.includes(nh.norm) || compactAliases.includes(nh.compact);
+    });
+    if (idx >= 0) {
+      detectedMapping[fieldKey] = idx;
+      usedCols.add(idx);
+    }
+  }
+
+  // Pass 2: safe fallback substring match ONLY for non-segment whole-body fields, strictly excluding segment-prefixed headers
+  for (const fieldKey of orderedKeys) {
+    if (detectedMapping[fieldKey] !== undefined) continue;
+    const isSeg = fieldKey.startsWith("segments.");
+    const aliases = _BODY_HEADER_ALIAS_MAP[fieldKey].map((a) => a.toLowerCase().replace(/_/g, "")).filter((a) => a.length >= 2);
+    const idx = normHeaders.findIndex((nh, cIdx) => {
+      if (usedCols.has(cIdx)) return false;
+      if (!isSeg && _SEGMENT_PREFIX_RE.test(nh.raw)) return false;
+      if (isSeg && !_SEGMENT_PREFIX_RE.test(nh.raw)) return false;
+      return aliases.some((a) => nh.compact.includes(a));
+    });
+    if (idx >= 0) {
+      detectedMapping[fieldKey] = idx;
+      usedCols.add(idx);
+    }
+  }
+
+  const unmappedHeaders = rawHeaders
+    .map((h, idx) => ({ index: idx, header: h }))
+    .filter((x) => !usedCols.has(x.index) && String(x.header || "").trim() !== "");
+
+  const idxDateTime = detectedMapping.measuredAt ?? -1;
+  const idxDateOnly = detectedMapping.dateOnly ?? -1;
+  const idxTimeOnly = detectedMapping.timeOnly ?? -1;
+  const idxWeight = detectedMapping.weight ?? -1;
+  const hasDateCol = idxDateTime >= 0 || idxDateOnly >= 0;
+
+  if (!hasDateCol && idxWeight < 0) {
+    return {
+      rows: [],
+      errors: [{ row: 1, column: "", rawValue: rawHeaders.join(", "), reason: "측정일시(또는 날짜) 및 몸무게 헤더를 찾을 수 없습니다.", severity: "error" }],
+      warnings: [],
+      totalDataRows: records.length - 1,
+      headerMatched: false,
+      delimiter,
+      rawHeaders,
+      detectedMapping,
+      unmappedHeaders,
+      inFileDuplicates: []
+    };
   }
 
   const weightHeaderLb = idxWeight >= 0 && /\b(lb|lbs|파운드)\b/i.test(rawHeaders[idxWeight] || "");
+  const waterIdx = detectedMapping.water ?? -1;
+  const waterHeaderUnit = waterIdx >= 0 && /%|퍼센트|률|율/i.test(rawHeaders[waterIdx] || "") ? "%" : "kg";
+  const allowDecimalComma = delimiter === ";" || delimiter === "\t";
 
-  const parseDateTimeStrict = (rawDt) => {
-    const s = String(rawDt || "").trim();
-    if (!s) return { ok: false, reason: "측정일시가 비어 있습니다." };
-    const m = s.match(/^(\d{4})[-./](\d{1,2})[-./](\d{1,2})(?:[T\s]+(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?)?$/i);
-    if (!m) return { ok: false, reason: `지원하지 않는 날짜 형식(${s})` };
+  const parseDateTimeStrict = (rawDt, rawTime = "") => {
+    const sRaw = String(rawDt || "").trim();
+    const tRaw = String(rawTime || "").trim();
+    const combined = tRaw && sRaw && !/[T\s]\d{1,2}:\d{2}/.test(sRaw) ? `${sRaw} ${tRaw}` : sRaw;
+    if (!combined) return { ok: false, reason: "측정일시가 비어 있습니다." };
+    const m = combined.match(
+      /^(\d{4})[-./](\d{1,2})[-./](\d{1,2})(?:[T\s]+(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?(?:\.(\d+))?(Z|[+-]\d{2}:?\d{2})?)?$/i
+    );
+    if (!m) return { ok: false, reason: `지원하지 않는 날짜 형식(${combined})` };
     const y = Number(m[1]);
     const mo = Number(m[2]);
     const d = Number(m[3]);
-    const dt = new Date(y, mo - 1, d);
-    if (dt.getFullYear() !== y || dt.getMonth() !== mo - 1 || dt.getDate() !== d) {
+    const checkCal = new Date(Date.UTC(y, mo - 1, d));
+    if (checkCal.getUTCFullYear() !== y || checkCal.getUTCMonth() !== mo - 1 || checkCal.getUTCDate() !== d) {
       return { ok: false, reason: `존재하지 않는 날짜(${y}-${String(mo).padStart(2, "0")}-${String(d).padStart(2, "0")})` };
     }
-    const datePart = `${y}-${String(mo).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
-    let timePart = "";
+    let hh = 0;
+    let mm = 0;
+    let ss = 0;
+    let hasTime = false;
+    let hasSec = false;
     if (m[4] !== undefined && m[5] !== undefined) {
-      const hh = Number(m[4]);
-      const mm = Number(m[5]);
-      const ss = m[6] !== undefined ? Number(m[6]) : null;
-      if (hh < 0 || hh > 23 || mm < 0 || mm > 59 || (ss !== null && (ss < 0 || ss > 59))) {
+      hasTime = true;
+      hh = Number(m[4]);
+      mm = Number(m[5]);
+      if (m[6] !== undefined) {
+        hasSec = true;
+        ss = Number(m[6]);
+      }
+      if (hh < 0 || hh > 23 || mm < 0 || mm > 59 || ss < 0 || ss > 59) {
         return { ok: false, reason: `잘못된 시각(${m[4]}:${m[5]}${m[6] !== undefined ? `:${m[6]}` : ""})` };
       }
-      timePart = `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}${ss !== null ? `:${String(ss).padStart(2, "0")}` : ""}`;
     }
+    const tzToken = m[8] || "";
+    let effectiveOffsetMin = Number.isFinite(Number(timezoneOffsetMinutes)) ? Number(timezoneOffsetMinutes) : 540;
+    let effectiveTz = timezoneLabel || formatTzOffsetLabel(effectiveOffsetMin);
+    if (tzToken) {
+      if (tzToken.toUpperCase() === "Z") {
+        effectiveOffsetMin = 0;
+        effectiveTz = "UTC";
+      } else {
+        const tm = tzToken.match(/^([+-])(\d{2}):?(\d{2})$/);
+        if (!tm) return { ok: false, reason: `잘못된 시간대 오프셋(${tzToken})` };
+        const oh = Number(tm[2]);
+        const om = Number(tm[3]);
+        if (oh > 14 || om > 59) return { ok: false, reason: `허용 범위를 벗어난 시간대 오프셋(${tzToken})` };
+        effectiveOffsetMin = (tm[1] === "-" ? -1 : 1) * (oh * 60 + om);
+        effectiveTz = formatTzOffsetLabel(effectiveOffsetMin);
+      }
+    }
+    const utcMs = Date.UTC(y, mo - 1, d, hh, mm, ss) - effectiveOffsetMin * 60000;
+    const measuredAtUtc = new Date(utcMs).toISOString();
+    // Display measuredAt normalized in user's configured timezoneOffsetMinutes so identical instants display consistently
+    const displayOffsetMin = Number.isFinite(Number(timezoneOffsetMinutes)) ? Number(timezoneOffsetMinutes) : 540;
+    const localView = new Date(utcMs + displayOffsetMin * 60000);
+    const dy = localView.getUTCFullYear();
+    const dmo = String(localView.getUTCMonth() + 1).padStart(2, "0");
+    const dd = String(localView.getUTCDate()).padStart(2, "0");
+    const datePart = `${dy}-${dmo}-${dd}`;
+    const timePart = hasTime
+      ? `${String(localView.getUTCHours()).padStart(2, "0")}:${String(localView.getUTCMinutes()).padStart(2, "0")}${hasSec ? `:${String(localView.getUTCSeconds()).padStart(2, "0")}` : ""}`
+      : "";
     const measuredAt = timePart ? `${datePart} ${timePart}` : datePart;
-    const timestampMs = new Date(`${datePart}T${timePart ? (timePart.length === 5 ? `${timePart}:00` : timePart) : "00:00:00"}`).getTime();
-    return { ok: true, datePart, timePart, measuredAt, timestampMs };
+    return {
+      ok: true,
+      datePart,
+      timePart,
+      hasTime,
+      hasSec,
+      measuredAt,
+      measuredAtUtc,
+      timezone: effectiveTz,
+      sourceDateTime: combined,
+      timestampMs: utcMs
+    };
   };
 
-  const parseNumStrict = (rawVal, fieldLabel, { allowLb = false, minVal = 0.0001, maxVal = 10000 } = {}) => {
+  const parseNumStrict = (rawVal, fieldLabel, { allowLb = false, minVal = 0, maxVal = 10000, allowZero = true } = {}) => {
     if (rawVal === undefined || rawVal === null) return { ok: true, val: undefined };
     const s0 = String(rawVal).trim();
-    if (s0 === "" || s0 === "-" || s0 === "--") return { ok: true, val: undefined };
-    const hasLb = /\b(lb|lbs)\b/i.test(s0) || (allowLb && !/kg/i.test(s0));
-    const cleaned = s0.replace(/,/g, "").replace(/\s*(kg|lbs?|%|kcal|g|세)\s*$/i, "").trim();
+    if (s0 === "" || s0 === "-" || s0 === "--" || s0.toLowerCase() === "n/a" || s0.toLowerCase() === "null") {
+      return { ok: true, val: undefined };
+    }
+    const hasLb = /\b(lb|lbs|파운드)\b/i.test(s0) || (allowLb && !/kg/i.test(s0));
+    let cleaned = s0.replace(/\s*(kg|lbs?|파운드|%|kcal|g|세)\s*$/i, "").trim();
+    if (allowDecimalComma && /^-?\d+,\d+$/.test(cleaned)) {
+      cleaned = cleaned.replace(",", ".");
+    } else {
+      cleaned = cleaned.replace(/,/g, "");
+    }
     if (!/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/.test(cleaned)) {
       return { ok: false, reason: `${fieldLabel} 숫자 형식 오류(${s0})` };
     }
     let n = Number(cleaned);
-    if (!Number.isFinite(n) || n < minVal || n > maxVal) {
-      return { ok: false, reason: `${fieldLabel} 허용 범위 초과(${s0})` };
+    if (!Number.isFinite(n)) {
+      return { ok: false, reason: `${fieldLabel} 유효하지 않은 숫자(${s0})` };
     }
-    if (hasLb) n = Number((n * 0.45359237).toFixed(2));
-    return { ok: true, val: n };
+    // Convert lb -> kg BEFORE range check so e.g. 500 lb (226.80 kg) passes <= 400 kg!
+    if (hasLb) {
+      n = Number((n * 0.45359237).toFixed(2));
+    }
+    if ((!allowZero && n <= 0) || n < minVal || n > maxVal) {
+      return { ok: false, reason: `${fieldLabel} 허용 범위(${minVal}~${maxVal}) 초과(${s0}${hasLb ? ` -> ${n}kg` : ""})` };
+    }
+    return { ok: true, val: n, convertedFromLb: hasLb };
   };
 
   const parsed = [];
   const errors = [];
+  const warnings = [];
+  const inFileDuplicates = [];
+  const seenKeyMap = new Map();
+
   for (let r = 1; r < records.length; r++) {
     const cols = records[r];
     if (cols.length < 2) {
-      errors.push({ row: r + 1, reason: "열 개수가 부족합니다." });
+      errors.push({ row: r + 1, column: "", rawValue: cols.join(delimiter), reason: "열 개수가 부족합니다.", severity: "error" });
       continue;
     }
-    const dtRes = parseDateTimeStrict(idxDate >= 0 ? cols[idxDate] : "");
+    const rawDtVal = idxDateTime >= 0 ? cols[idxDateTime] : (idxDateOnly >= 0 ? cols[idxDateOnly] : "");
+    const rawTmVal = idxDateTime < 0 && idxTimeOnly >= 0 ? cols[idxTimeOnly] : "";
+    const dtRes = parseDateTimeStrict(rawDtVal, rawTmVal);
     if (!dtRes.ok) {
-      errors.push({ row: r + 1, reason: dtRes.reason });
+      errors.push({ row: r + 1, column: rawHeaders[idxDateTime >= 0 ? idxDateTime : idxDateOnly] || "측정일시", rawValue: rawDtVal, reason: dtRes.reason, severity: "error" });
       continue;
     }
 
-    const wRes = idxWeight >= 0 ? parseNumStrict(cols[idxWeight], "몸무게", { allowLb: weightHeaderLb, maxVal: 400 }) : { ok: true, val: undefined };
-    const fRes = idxFatPct >= 0 ? parseNumStrict(cols[idxFatPct], "체지방률", { maxVal: 85 }) : { ok: true, val: undefined };
-    const mRes = idxMuscle >= 0 ? parseNumStrict(cols[idxMuscle], "골격근량", { maxVal: 200 }) : { ok: true, val: undefined };
+    const wRes = idxWeight >= 0 ? parseNumStrict(cols[idxWeight], "몸무게", { allowLb: weightHeaderLb, minVal: 0.5, maxVal: 400, allowZero: false }) : { ok: true, val: undefined };
+    const fIdx = detectedMapping.bodyFatPct ?? -1;
+    const mIdx = detectedMapping.skeletalMuscle ?? -1;
+    const fRes = fIdx >= 0 ? parseNumStrict(cols[fIdx], "체지방률", { minVal: 0.1, maxVal: 85, allowZero: false }) : { ok: true, val: undefined };
+    const mRes = mIdx >= 0 ? parseNumStrict(cols[mIdx], "골격근량", { minVal: 0.1, maxVal: 200, allowZero: false }) : { ok: true, val: undefined };
 
-    const coreErr = [wRes, fRes, mRes].find((x) => !x.ok);
+    const coreErr = [
+      { res: wRes, col: rawHeaders[idxWeight] || "몸무게", raw: cols[idxWeight] },
+      { res: fRes, col: rawHeaders[fIdx] || "체지방률", raw: cols[fIdx] },
+      { res: mRes, col: rawHeaders[mIdx] || "골격근량", raw: cols[mIdx] }
+    ].find((x) => !x.res.ok);
     if (coreErr) {
-      errors.push({ row: r + 1, reason: coreErr.reason });
+      errors.push({ row: r + 1, column: coreErr.col, rawValue: coreErr.raw || "", reason: coreErr.res.reason, severity: "error" });
       continue;
     }
     if (wRes.val === undefined && fRes.val === undefined && mRes.val === undefined) {
-      errors.push({ row: r + 1, reason: "몸무게·체지방률·골격근량 값이 모두 비어 있습니다." });
+      errors.push({ row: r + 1, column: "몸무게/체지방률/골격근량", rawValue: "", reason: "몸무게·체지방률·골격근량 값이 모두 비어 있습니다.", severity: "error" });
       continue;
     }
 
-    const optNum = (idx, lbl, opts = {}) => {
-      if (idx < 0) return undefined;
-      const res = parseNumStrict(cols[idx], lbl, opts);
-      return res.ok ? res.val : undefined;
-    };
-
+    const deviceVal = detectedMapping.device !== undefined ? String(cols[detectedMapping.device] || "").trim() : "";
     const rowObj = {
-      id: `body-${dtRes.measuredAt.replace(/[^0-9]/g, "") || r}`,
+      id: `body-${dtRes.timestampMs}-${deviceVal ? deviceVal.replace(/[^a-zA-Z0-9가-힣]/g, "").slice(0, 12) : "d"}`,
       measuredAt: dtRes.measuredAt,
+      measuredAtUtc: dtRes.measuredAtUtc,
+      timezone: dtRes.timezone,
+      sourceDateTime: dtRes.sourceDateTime,
       date: dtRes.datePart,
+      hasSec: dtRes.hasSec,
       timestampMs: dtRes.timestampMs,
-      device: idxDevice >= 0 ? String(cols[idxDevice] || "").trim() : ""
+      device: deviceVal,
+      waterUnit: waterHeaderUnit
     };
     if (wRes.val !== undefined) rowObj.weight = wRes.val;
     if (fRes.val !== undefined) rowObj.bodyFatPct = fRes.val;
     if (mRes.val !== undefined) rowObj.skeletalMuscle = mRes.val;
-    const bmi = optNum(idxBmi, "BMI", { maxVal: 100 });
-    if (bmi !== undefined) rowObj.bmi = bmi;
-    const obesityPct = optNum(idxObesity, "비만도", { maxVal: 500 });
-    if (obesityPct !== undefined) rowObj.obesityPct = obesityPct;
-    const muscleMass = optNum(idxMuscleMass, "근육량", { maxVal: 200 });
-    if (muscleMass !== undefined) rowObj.muscleMass = muscleMass;
-    const bmr = optNum(idxBmr, "기초대사량", { maxVal: 10000 });
-    if (bmr !== undefined) rowObj.bmr = bmr;
-    const visceralFat = optNum(idxVisceral, "내장지방", { maxVal: 60 });
-    if (visceralFat !== undefined) rowObj.visceralFat = visceralFat;
-    const bodyFatMass = optNum(idxFatMass, "체지방량", { maxVal: 300 });
-    if (bodyFatMass !== undefined) rowObj.bodyFatMass = bodyFatMass;
-    const water = optNum(idxWater, "체수분", { maxVal: 200 });
-    if (water !== undefined) rowObj.water = water;
-    const bodyAge = optNum(idxBodyAge, "신체나이", { maxVal: 150 });
-    if (bodyAge !== undefined) rowObj.bodyAge = bodyAge;
-    const whr = optNum(idxWhr, "복부비만율", { maxVal: 3 });
-    if (whr !== undefined) rowObj.whr = whr;
+
+    let rowRejectedByOptional = false;
+    const optionalScalarDefs = BODY_CSV_29_COLUMNS.filter((c) => c.type === "number" && !["weight", "bodyFatPct", "skeletalMuscle"].includes(c.key));
+    for (const def of optionalScalarDefs) {
+      const cIdx = detectedMapping[def.key];
+      if (cIdx === undefined || cIdx < 0) continue;
+      const res = parseNumStrict(cols[cIdx], def.header, { minVal: 0, maxVal: def.maxVal, allowZero: true });
+      if (!res.ok) {
+        const issue = { row: r + 1, column: rawHeaders[cIdx] || def.header, rawValue: cols[cIdx] || "", reason: res.reason, severity: invalidOptionalMode === "reject_row" ? "error" : "warning" };
+        if (invalidOptionalMode === "reject_row") {
+          errors.push(issue);
+          rowRejectedByOptional = true;
+          break;
+        } else {
+          warnings.push(issue);
+        }
+      } else if (res.val !== undefined) {
+        rowObj[def.key] = res.val;
+      }
+    }
+    if (rowRejectedByOptional) continue;
+
+    // Segment columns (10 columns) — preserve empty as undefined, never fill with 0
+    const segDefs = BODY_CSV_29_COLUMNS.filter((c) => c.type === "segment");
+    let segmentsObj = null;
+    for (const def of segDefs) {
+      const cIdx = detectedMapping[def.key];
+      if (cIdx === undefined || cIdx < 0) continue;
+      const res = parseNumStrict(cols[cIdx], def.header, { minVal: 0, maxVal: def.maxVal, allowZero: true });
+      if (!res.ok) {
+        const issue = { row: r + 1, column: rawHeaders[cIdx] || def.header, rawValue: cols[cIdx] || "", reason: res.reason, severity: invalidOptionalMode === "reject_row" ? "error" : "warning" };
+        if (invalidOptionalMode === "reject_row") {
+          errors.push(issue);
+          rowRejectedByOptional = true;
+          break;
+        } else {
+          warnings.push(issue);
+        }
+      } else if (res.val !== undefined) {
+        if (!segmentsObj) segmentsObj = {};
+        if (!segmentsObj[def.seg]) segmentsObj[def.seg] = {};
+        segmentsObj[def.seg][def.sub] = res.val;
+      }
+    }
+    if (rowRejectedByOptional) continue;
+    if (segmentsObj) rowObj.segments = segmentsObj;
+
+    // Preserve unknown/unmapped columns verbatim
+    if (unmappedHeaders.length > 0) {
+      const extras = {};
+      for (const uh of unmappedHeaders) {
+        const val = cols[uh.index];
+        if (val !== undefined && String(val).trim() !== "") {
+          extras[uh.header] = String(val).trim();
+        }
+      }
+      if (Object.keys(extras).length > 0) rowObj.extraColumns = extras;
+    }
+
+    // Track in-file duplicates (same UTC instant + device)
+    const dupKey = `${rowObj.measuredAtUtc}__${(rowObj.device || "").toLowerCase()}`;
+    if (seenKeyMap.has(dupKey)) {
+      const firstRowIdx = seenKeyMap.get(dupKey);
+      inFileDuplicates.push({ row: r + 1, firstRow: firstRowIdx, measuredAt: rowObj.measuredAt, device: rowObj.device });
+    } else {
+      seenKeyMap.set(dupKey, r + 1);
+    }
 
     parsed.push(rowObj);
   }
+
   return {
     rows: parsed.sort((a, b) => (a.timestampMs || 0) - (b.timestampMs || 0) || a.measuredAt.localeCompare(b.measuredAt)),
     errors,
+    warnings,
     totalDataRows: records.length - 1,
-    headerMatched: true
+    headerMatched: true,
+    delimiter,
+    rawHeaders,
+    detectedMapping,
+    unmappedHeaders,
+    inFileDuplicates
   };
 };
 
-export const parseBodyCompositionCsv = (rawText) => parseBodyCompositionCsvDetailed(rawText).rows;
+export const parseBodyCompositionCsv = (rawText, options = {}) => parseBodyCompositionCsvDetailed(rawText, options).rows;
+
+const _getBodyKey = (row) => {
+  const utc = row?.measuredAtUtc || (Number.isFinite(Number(row?.timestampMs)) ? new Date(Number(row.timestampMs)).toISOString() : String(row?.measuredAt || ""));
+  const dev = String(row?.device || "").trim().toLowerCase();
+  return `${utc}__${dev}`;
+};
+
+const _getBodyMinuteKey = (row) => {
+  const ts = Number(row?.timestampMs);
+  if (!Number.isFinite(ts)) return "";
+  const minBucket = Math.floor(ts / 60000);
+  const dev = String(row?.device || "").trim().toLowerCase();
+  return `${minBucket}__${dev}`;
+};
+
+const _BODY_COMPARE_KEYS = [
+  "weight", "bmi", "obesityPct", "bodyFatPct", "skeletalMuscle", "muscleMass",
+  "boneMass", "bmr", "visceralFat", "subcutaneousFatPct", "leanBodyMass",
+  "mineralMass", "bodyFatMass", "water", "proteinMass", "bodyAge", "whr"
+];
+
+const _mergeBodySegments = (prevSeg, incSeg, policy) => {
+  if (!prevSeg && !incSeg) return undefined;
+  const out = prevSeg ? JSON.parse(JSON.stringify(prevSeg)) : {};
+  if (!incSeg) return policy === "overwrite_with_empty" ? undefined : out;
+  for (const [part, vals] of Object.entries(incSeg)) {
+    if (!vals || typeof vals !== "object") continue;
+    if (!out[part]) out[part] = {};
+    for (const [k, v] of Object.entries(vals)) {
+      if (v === undefined || v === null || v === "") continue;
+      if (policy === "fill_empty") {
+        if (out[part][k] === undefined || out[part][k] === null || out[part][k] === "") out[part][k] = v;
+      } else if (policy !== "keep_existing") {
+        out[part][k] = v;
+      }
+    }
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
+};
+
+export const mergeBodyCompositionLogs = (
+  existingLogs = [],
+  incomingRows = [],
+  { policy = "fill_empty", uid = "", batchId = "", fileName = "", fileHash = "", mappingVersion = "v2-29col" } = {}
+) => {
+  // Normalize legacy policy alias
+  const effPolicy = policy === "merge_non_empty" ? "update_non_empty" : policy === "overwrite" ? "update_non_empty" : policy;
+  const nowMs = Date.now();
+  const effBatchId = batchId || `batch-${nowMs}-${Math.random().toString(36).slice(2, 6)}`;
+  const map = new Map();
+  const minIndex = new Map();
+
+  (Array.isArray(existingLogs) ? existingLogs : []).forEach((row) => {
+    if (!row) return;
+    const k = _getBodyKey(row);
+    map.set(k, row);
+    const mk = _getBodyMinuteKey(row);
+    if (mk) {
+      if (!minIndex.has(mk)) minIndex.set(mk, []);
+      minIndex.get(mk).push(row);
+    }
+  });
+
+  let newCnt = 0;
+  let filledCnt = 0;
+  let updatedCnt = 0;
+  let sameCnt = 0;
+  let conflictCnt = 0;
+  const candidateConflicts = [];
+  const createdIds = [];
+  const beforeSnapshots = {};
+
+  for (const inc of Array.isArray(incomingRows) ? incomingRows : []) {
+    if (!inc) continue;
+    const k = _getBodyKey(inc);
+    const prev = map.get(k);
+    if (!prev) {
+      // Check minute-level candidate conflict (e.g. legacy record without seconds vs incoming with seconds)
+      const mk = _getBodyMinuteKey(inc);
+      const minMatches = mk ? (minIndex.get(mk) || []) : [];
+      const secMismatch = minMatches.find((m) => Boolean(m.hasSec) !== Boolean(inc.hasSec) || (m.measuredAtUtc && inc.measuredAtUtc && m.measuredAtUtc !== inc.measuredAtUtc));
+      if (secMismatch) {
+        candidateConflicts.push({ existing: secMismatch, incoming: inc, reason: "분 단위 동일(초 정보 차이)" });
+      }
+      const nextRec = {
+        ...inc,
+        id: inc.id || `body-${inc.timestampMs || nowMs}-${Math.random().toString(36).slice(2, 5)}`,
+        ownerUid: uid || inc.ownerUid || "",
+        importBatchId: effBatchId,
+        updatedAtMs: nowMs
+      };
+      map.set(k, nextRec);
+      createdIds.push(nextRec.id);
+      newCnt += 1;
+      continue;
+    }
+
+    const diffFields = [];
+    const fillFields = [];
+    for (const fk of _BODY_COMPARE_KEYS) {
+      const iv = inc[fk];
+      const pv = prev[fk];
+      const hasInc = iv !== undefined && iv !== null && iv !== "";
+      const hasPrev = pv !== undefined && pv !== null && pv !== "";
+      if (hasInc && !hasPrev) fillFields.push(fk);
+      else if (hasInc && hasPrev && Number(iv) !== Number(pv)) diffFields.push(fk);
+    }
+    const segChanged = JSON.stringify(prev.segments || null) !== JSON.stringify(inc.segments || null) && Boolean(inc.segments);
+
+    if (diffFields.length === 0 && fillFields.length === 0 && !segChanged) {
+      sameCnt += 1;
+      continue;
+    }
+    if (diffFields.length > 0) conflictCnt += 1;
+
+    if (effPolicy === "keep_existing") {
+      continue;
+    }
+
+    beforeSnapshots[prev.id] = JSON.parse(JSON.stringify(prev));
+    if (effPolicy === "fill_empty") {
+      if (fillFields.length === 0 && !segChanged) continue;
+      const mergedRow = { ...prev };
+      fillFields.forEach((fk) => { mergedRow[fk] = inc[fk]; });
+      const mergedSeg = _mergeBodySegments(prev.segments, inc.segments, "fill_empty");
+      if (mergedSeg) mergedRow.segments = mergedSeg;
+      if (inc.extraColumns) mergedRow.extraColumns = { ...(inc.extraColumns || {}), ...(prev.extraColumns || {}) };
+      if (!mergedRow.measuredAtUtc && inc.measuredAtUtc) mergedRow.measuredAtUtc = inc.measuredAtUtc;
+      if (!mergedRow.sourceDateTime && inc.sourceDateTime) mergedRow.sourceDateTime = inc.sourceDateTime;
+      mergedRow.importBatchId = effBatchId;
+      mergedRow.updatedAtMs = nowMs;
+      map.set(k, mergedRow);
+      filledCnt += 1;
+    } else if (effPolicy === "overwrite_with_empty") {
+      const replaced = {
+        ...inc,
+        id: prev.id || inc.id,
+        ownerUid: uid || prev.ownerUid || "",
+        importBatchId: effBatchId,
+        updatedAtMs: nowMs
+      };
+      map.set(k, replaced);
+      updatedCnt += 1;
+    } else {
+      // update_non_empty: update with non-empty incoming fields, never wipe existing fields with blank incoming cells
+      const mergedRow = { ...prev };
+      for (const fk of _BODY_COMPARE_KEYS) {
+        if (inc[fk] !== undefined && inc[fk] !== null && inc[fk] !== "") {
+          mergedRow[fk] = inc[fk];
+        }
+      }
+      if (inc.device) mergedRow.device = inc.device;
+      if (inc.measuredAtUtc) mergedRow.measuredAtUtc = inc.measuredAtUtc;
+      if (inc.sourceDateTime) mergedRow.sourceDateTime = inc.sourceDateTime;
+      if (inc.timezone) mergedRow.timezone = inc.timezone;
+      const mergedSeg = _mergeBodySegments(prev.segments, inc.segments, "update_non_empty");
+      if (mergedSeg) mergedRow.segments = mergedSeg;
+      if (inc.extraColumns) mergedRow.extraColumns = { ...(prev.extraColumns || {}), ...(inc.extraColumns || {}) };
+      mergedRow.importBatchId = effBatchId;
+      mergedRow.updatedAtMs = nowMs;
+      map.set(k, mergedRow);
+      if (diffFields.length > 0) updatedCnt += 1;
+      else filledCnt += 1;
+    }
+  }
+
+  const mergedLogs = Array.from(map.values()).sort(
+    (a, b) => (a.timestampMs || 0) - (b.timestampMs || 0) || String(a.measuredAt || "").localeCompare(String(b.measuredAt || ""))
+  );
+  const batchRecord = {
+    batchId: effBatchId,
+    fileName,
+    fileHash,
+    mappingVersion,
+    policy: effPolicy,
+    appliedAtMs: nowMs,
+    createdIds,
+    beforeSnapshots,
+    counts: { newCnt, filledCnt, updatedCnt, sameCnt, conflictCnt, candidateConflictCnt: candidateConflicts.length }
+  };
+  return {
+    mergedLogs,
+    summary: batchRecord.counts,
+    candidateConflicts,
+    batchRecord
+  };
+};
+
+export const revertBodyImportBatch = (currentLogs = [], batchRecord) => {
+  if (!batchRecord || !batchRecord.batchId) {
+    return { nextLogs: currentLogs, revertedCount: 0, skippedModifiedCount: 0 };
+  }
+  const createdSet = new Set(Array.isArray(batchRecord.createdIds) ? batchRecord.createdIds : []);
+  const beforeMap = batchRecord.beforeSnapshots || {};
+  const appliedAt = Number(batchRecord.appliedAtMs) || 0;
+  let revertedCount = 0;
+  let skippedModifiedCount = 0;
+  const nextLogs = [];
+
+  for (const row of Array.isArray(currentLogs) ? currentLogs : []) {
+    if (!row) continue;
+    const modifiedAfterBatch = Number(row.updatedAtMs || 0) > appliedAt && row.importBatchId !== batchRecord.batchId;
+    if (createdSet.has(row.id)) {
+      if (modifiedAfterBatch) {
+        nextLogs.push(row);
+        skippedModifiedCount += 1;
+      } else {
+        revertedCount += 1;
+      }
+      continue;
+    }
+    if (beforeMap[row.id]) {
+      if (modifiedAfterBatch) {
+        nextLogs.push(row);
+        skippedModifiedCount += 1;
+      } else {
+        nextLogs.push(beforeMap[row.id]);
+        revertedCount += 1;
+      }
+      continue;
+    }
+    nextLogs.push(row);
+  }
+  return { nextLogs, revertedCount, skippedModifiedCount };
+};
+
+export const exportBodyCompositionCsv29 = (logs = []) => {
+  const sorted = [...(Array.isArray(logs) ? logs : [])].sort(
+    (a, b) => (a.timestampMs || 0) - (b.timestampMs || 0) || String(a.measuredAt || "").localeCompare(String(b.measuredAt || ""))
+  );
+  const extraKeys = [];
+  const extraSet = new Set();
+  sorted.forEach((r) => {
+    if (r?.extraColumns && typeof r.extraColumns === "object") {
+      Object.keys(r.extraColumns).forEach((k) => {
+        if (!extraSet.has(k)) { extraSet.add(k); extraKeys.push(k); }
+      });
+    }
+  });
+  const headers = [...BODY_CSV_29_COLUMNS.map((c) => c.header), ...extraKeys];
+  const lines = [headers.map(sanitizeCsvCell).join(",")];
+  for (const r of sorted) {
+    const rowCells = BODY_CSV_29_COLUMNS.map((col) => {
+      if (col.key === "measuredAt") return r.sourceDateTime || r.measuredAt || "";
+      if (col.type === "segment") {
+        const v = r?.segments?.[col.seg]?.[col.sub];
+        return v === undefined || v === null ? "" : v;
+      }
+      const v = r?.[col.key];
+      return v === undefined || v === null ? "" : v;
+    });
+    for (const ek of extraKeys) {
+      rowCells.push(r?.extraColumns?.[ek] ?? "");
+    }
+    lines.push(rowCells.map(sanitizeCsvCell).join(","));
+  }
+  return "\uFEFF" + lines.join("\n");
+};
 
 export const DEFAULT_SELF_CARE_ITEMS = [
   { id: "sc-1", label: "비타민D", type: "영양제", timeHint: "아침", doneDate: "" },
@@ -8874,4 +9568,639 @@ export const matchUrgentFridgeRecipes = (fridgeList = [], recipesList = [], maxD
     if (Math.abs(b.matchRatio - a.matchRatio) > 0.01) return b.matchRatio - a.matchRatio;
     return a.minUrgentDiff - b.minUrgentDiff;
   });
+};
+
+// ============================================================================
+// v14.69 차량·비밀노트·개인공간 이관/병합·AI 구조검증·대용량 분할백업 공통 엔진
+// ============================================================================
+export const DEFAULT_CAR_ALERT_THRESHOLDS = { days: 30, km: 1000 };
+
+export const DEFAULT_SECRET_NOTE_TEMPLATES = [
+  { id: "tpl-memo", name: "기본 메모", category: "메모", titlePrefix: "", content: "", checklist: [] },
+  { id: "tpl-idea", name: "아이디어", category: "아이디어", titlePrefix: "[아이디어] ", content: "• 핵심 생각:\n• 기대 효과:\n• 다음 행동:", checklist: [{ id: "ck-1", text: "자료 조사하기", done: false }] },
+  { id: "tpl-meeting", name: "회의 기록", category: "메모", titlePrefix: "[회의] ", content: "• 참석자:\n• 주요 논의:\n• 결정 사항:", checklist: [{ id: "ck-1", text: "후속 액션 정리", done: false }] },
+  { id: "tpl-buy", name: "구매 검토", category: "쇼핑/선물", titlePrefix: "[구매검토] ", content: "• 후보 제품:\n• 가격 비교:\n• 장단점:", checklist: [{ id: "ck-1", text: "최저가 확인", done: false }] },
+  { id: "tpl-car", name: "차량 메모", category: "메모", titlePrefix: "[차량] ", content: "• 관련 차량:\n• 주행거리/증상:\n• 확인 필요:", checklist: [] }
+];
+
+export const normalizeSecretNoteItem = (raw, prevItem = null) => {
+  const base = prevItem && typeof prevItem === "object" ? { ...prevItem } : {};
+  const inc = raw && typeof raw === "object" ? raw : {};
+  const nowMs = Date.now();
+  const titleStr = String(inc.title ?? base.title ?? "").trim();
+  const contentStr = String(inc.content ?? base.content ?? "");
+  const fallbackTitle = contentStr.split(/\r?\n/).map((s) => s.trim()).find(Boolean)?.slice(0, 28) || "제목 없는 메모";
+  return {
+    ...base,
+    ...inc,
+    id: String(inc.id || base.id || `sec-${nowMs}-${Math.random().toString(36).slice(2, 6)}`),
+    title: titleStr || fallbackTitle,
+    categoryId: String(inc.categoryId ?? base.categoryId ?? ""),
+    category: String(inc.category ?? base.category ?? "메모"),
+    tags: Array.isArray(inc.tags) ? inc.tags : (Array.isArray(base.tags) ? base.tags : []),
+    url: String(inc.url ?? base.url ?? ""),
+    content: contentStr,
+    pinned: Boolean(inc.pinned ?? base.pinned ?? false),
+    archived: Boolean(inc.archived ?? base.archived ?? false),
+    favorite: Boolean(inc.favorite ?? base.favorite ?? false),
+    checklist: Array.isArray(inc.checklist) ? inc.checklist : (Array.isArray(base.checklist) ? base.checklist : []),
+    customFields: Array.isArray(inc.customFields) ? inc.customFields : (Array.isArray(base.customFields) ? base.customFields : []),
+    attachments: Array.isArray(inc.attachments) ? inc.attachments : (Array.isArray(base.attachments) ? base.attachments : []),
+    links: Array.isArray(inc.links) ? inc.links : (Array.isArray(base.links) ? base.links : []),
+    reviewDate: String(inc.reviewDate ?? base.reviewDate ?? ""),
+    revisions: Array.isArray(inc.revisions) ? inc.revisions : (Array.isArray(base.revisions) ? base.revisions : []),
+    createdAtMs: Number(inc.createdAtMs || base.createdAtMs || nowMs),
+    updatedAtMs: Number(inc.updatedAtMs || nowMs),
+    version: Math.max(1, Number(inc.version || (base.version ? Number(base.version) + 1 : 1)))
+  };
+};
+
+const _mergeByIdLatest = (serverArr = [], localArr = [], tombstoneIds = []) => {
+  const tombSet = new Set(Array.isArray(tombstoneIds) ? tombstoneIds : []);
+  const map = new Map();
+  (Array.isArray(serverArr) ? serverArr : []).forEach((item) => {
+    if (!item || !item.id || tombSet.has(item.id)) return;
+    map.set(item.id, item);
+  });
+  (Array.isArray(localArr) ? localArr : []).forEach((item) => {
+    if (!item || !item.id || tombSet.has(item.id)) return;
+    const srv = map.get(item.id);
+    if (!srv || (Number(item.updatedAtMs) || 0) >= (Number(srv.updatedAtMs) || 0)) {
+      map.set(item.id, item);
+    }
+  });
+  return Array.from(map.values());
+};
+
+export const mergeCarNotebookSnapshots = (serverNorm, candidateNorm, tombstones = {}) => {
+  const srv = serverNorm && typeof serverNorm === "object" ? serverNorm : {};
+  const cand = candidateNorm && typeof candidateNorm === "object" ? candidateNorm : {};
+  const delRecIds = Array.from(new Set([...(srv.deletedRecordIds || []), ...(cand.deletedRecordIds || []), ...(tombstones.deletedRecordIds || [])]));
+  const delVehIds = Array.from(new Set([...(srv.deletedVehicleIds || []), ...(cand.deletedVehicleIds || []), ...(tombstones.deletedVehicleIds || [])]));
+  const delParkIds = Array.from(new Set([...(srv.deletedParkingHistoryIds || []), ...(cand.deletedParkingHistoryIds || []), ...(tombstones.deletedParkingHistoryIds || [])]));
+  const delFuelIds = Array.from(new Set([...(srv.deletedFuelLogIds || []), ...(cand.deletedFuelLogIds || []), ...(tombstones.deletedFuelLogIds || [])]));
+  const delTypeIds = Array.from(new Set([...(srv.deletedRecordTypeIds || []), ...(cand.deletedRecordTypeIds || []), ...(tombstones.deletedRecordTypeIds || [])]));
+
+  // Item-level merge for vehicles (including per-vehicle parking, parkingHistory, fuelLogs, documents, odometerHistory)
+  const srvVehMap = new Map((Array.isArray(srv.vehicles) ? srv.vehicles : []).filter((v) => v?.id && !delVehIds.includes(v.id)).map((v) => [v.id, v]));
+  const candVehMap = new Map((Array.isArray(cand.vehicles) ? cand.vehicles : []).filter((v) => v?.id && !delVehIds.includes(v.id)).map((v) => [v.id, v]));
+  const allVehIds = Array.from(new Set([...srvVehMap.keys(), ...candVehMap.keys()]));
+  const mergedVehicles = allVehIds.map((vid) => {
+    const sv = srvVehMap.get(vid);
+    const cv = candVehMap.get(vid);
+    if (!sv) return cv;
+    if (!cv) return sv;
+    const newerVeh = (Number(cv.updatedAtMs) || 0) >= (Number(sv.updatedAtMs) || 0) ? cv : sv;
+    const olderVeh = newerVeh === cv ? sv : cv;
+    const srvParkTs = Number(sv.parking?.updatedAtMs) || 0;
+    const candParkTs = Number(cv.parking?.updatedAtMs) || 0;
+    const mergedParking = candParkTs >= srvParkTs ? (cv.parking || sv.parking) : (sv.parking || cv.parking);
+    const mergedParkHistory = _mergeByIdLatest(sv.parkingHistory, cv.parkingHistory, delParkIds)
+      .sort((a, b) => (Number(b.exitedAtMs || b.updatedAtMs || 0) - Number(a.exitedAtMs || a.updatedAtMs || 0)));
+    const mergedFuelLogs = _mergeByIdLatest(sv.fuelLogs, cv.fuelLogs, delFuelIds)
+      .sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")) || (Number(b.updatedAtMs) || 0) - (Number(a.updatedAtMs) || 0));
+    const mergedDocs = _mergeByIdLatest(sv.documents, cv.documents, []);
+    const mergedOdo = _mergeByIdLatest(sv.odometerHistory, cv.odometerHistory, [])
+      .sort((a, b) => String(a.date || "").localeCompare(String(b.date || "")) || (Number(a.updatedAtMs) || 0) - (Number(b.updatedAtMs) || 0));
+    return {
+      ...olderVeh,
+      ...newerVeh,
+      parking: mergedParking,
+      parkingHistory: mergedParkHistory,
+      fuelLogs: mergedFuelLogs,
+      documents: mergedDocs,
+      odometerHistory: mergedOdo
+    };
+  });
+
+  const mergedRecords = _mergeByIdLatest(srv.records, cand.records, delRecIds);
+  const mergedTypes = _mergeByIdLatest(srv.recordTypes, cand.recordTypes, delTypeIds);
+
+  return {
+    ...srv,
+    ...cand,
+    vehicles: mergedVehicles,
+    records: mergedRecords,
+    recordTypes: mergedTypes.length > 0 ? mergedTypes : (cand.recordTypes || srv.recordTypes || []),
+    deletedRecordIds: delRecIds.slice(-500),
+    deletedVehicleIds: delVehIds.slice(-200),
+    deletedParkingHistoryIds: delParkIds.slice(-500),
+    deletedFuelLogIds: delFuelIds.slice(-500),
+    deletedRecordTypeIds: delTypeIds.slice(-200)
+  };
+};
+
+export const mergePersonalSpaceData = (serverData = {}, localPatch = {}, tombstones = {}) => {
+  const srv = serverData && typeof serverData === "object" ? serverData : {};
+  const loc = localPatch && typeof localPatch === "object" ? localPatch : {};
+  const delNoteIds = Array.from(new Set([...(srv.deletedNoteIds || []), ...(loc.deletedNoteIds || []), ...(tombstones.deletedNoteIds || [])]));
+  const delTrashIds = Array.from(new Set([...(srv.deletedTrashIds || []), ...(loc.deletedTrashIds || []), ...(tombstones.deletedTrashIds || [])]));
+  const delBodyIds = Array.from(new Set([...(srv.deletedBodyIds || []), ...(loc.deletedBodyIds || []), ...(tombstones.deletedBodyIds || [])]));
+
+  const out = { ...srv, ...loc };
+  if (Array.isArray(loc.personalSecretNotes) || Array.isArray(srv.personalSecretNotes)) {
+    // Also exclude notes that were moved to trash more recently
+    const trashIdsLatest = new Map();
+    const mergedTrash = _mergeByIdLatest(srv.personalSecretTrash, loc.personalSecretTrash, delTrashIds);
+    mergedTrash.forEach((t) => { if (t?.id) trashIdsLatest.set(t.id, Number(t.deletedAtMs || t.updatedAtMs || 0)); });
+    const mergedNotesRaw = _mergeByIdLatest(srv.personalSecretNotes, loc.personalSecretNotes, delNoteIds);
+    const activeNoteMap = new Map(mergedNotesRaw.map((n) => [n.id, Number(n.updatedAtMs || 0)]));
+    out.personalSecretNotes = mergedNotesRaw.filter((n) => {
+      const trMs = trashIdsLatest.get(n.id);
+      return !trMs || Number(n.updatedAtMs || 0) > trMs;
+    });
+    out.personalSecretTrash = mergedTrash.filter((t) => {
+      const actMs = activeNoteMap.get(t.id);
+      return !actMs || Number(t.deletedAtMs || t.updatedAtMs || 0) >= actMs;
+    });
+  }
+  if (Array.isArray(loc.personalBodyLogs) || Array.isArray(srv.personalBodyLogs)) {
+    const mergedBody = _mergeByIdLatest(srv.personalBodyLogs, loc.personalBodyLogs, delBodyIds)
+      .sort((a, b) => (a.timestampMs || 0) - (b.timestampMs || 0) || String(a.measuredAt || "").localeCompare(String(b.measuredAt || "")));
+    out.personalBodyLogs = mergedBody;
+  }
+  out.deletedNoteIds = delNoteIds.slice(-500);
+  out.deletedTrashIds = delTrashIds.slice(-500);
+  out.deletedBodyIds = delBodyIds.slice(-500);
+  return out;
+};
+
+export const mergeLegacyProfileIntoPrivateSpace = (existingPriv = {}, legacyProfile = {}, uid = "") => {
+  const ex = existingPriv && typeof existingPriv === "object" ? existingPriv : {};
+  const leg = legacyProfile && typeof legacyProfile === "object" ? legacyProfile : {};
+  const mergedNotes = _mergeByIdLatest(leg.personalSecretNotes, ex.personalSecretNotes, ex.deletedNoteIds || []);
+  const mergedBody = _mergeByIdLatest(leg.personalBodyLogs, ex.personalBodyLogs, ex.deletedBodyIds || [])
+    .sort((a, b) => (a.timestampMs || 0) - (b.timestampMs || 0) || String(a.measuredAt || "").localeCompare(String(b.measuredAt || "")));
+  const mergedCats = Array.from(new Set([
+    ...(Array.isArray(ex.personalSecretCats) ? ex.personalSecretCats : []),
+    ...(Array.isArray(leg.personalSecretCats) ? leg.personalSecretCats : [])
+  ])).filter(Boolean);
+  const mergedGoal = {
+    weight: ex.personalBodyGoal?.weight || leg.personalBodyGoal?.weight || "",
+    bodyFatPct: ex.personalBodyGoal?.bodyFatPct || leg.personalBodyGoal?.bodyFatPct || ""
+  };
+  const exSc = ex.personalSelfCare && typeof ex.personalSelfCare === "object" ? ex.personalSelfCare : null;
+  const legSc = leg.personalSelfCare && typeof leg.personalSelfCare === "object" ? leg.personalSelfCare : null;
+  const mergedSc = exSc && legSc
+    ? {
+        ...legSc,
+        ...exSc,
+        items: _mergeByIdLatest(legSc.items, exSc.items, []),
+        dailyHistory: { ...(legSc.dailyHistory || {}), ...(exSc.dailyHistory || {}) }
+      }
+    : (exSc || legSc || {
+        items: DEFAULT_SELF_CARE_ITEMS.map((x) => ({ ...x, days: [0, 1, 2, 3, 4, 5, 6], paused: false })),
+        types: [...DEFAULT_SELF_CARE_TYPES],
+        waterDate: "", waterCount: 0, waterGoal: 8, waterUnitMl: DEFAULT_BODY_WATER_UNIT_ML,
+        conditionDate: "", conditionMemo: "", dailyHistory: {}
+      });
+  return {
+    ownerUid: uid || ex.ownerUid || "",
+    schemaVersion: 2,
+    migratedFromProfileV2: true,
+    migratedAtMs: Date.now(),
+    personalSecretNotes: mergedNotes,
+    personalSecretCats: mergedCats.length > 0 ? mergedCats : [...DEFAULT_SECRET_NOTE_CATS],
+    personalSelfCare: mergedSc,
+    personalBodyLogs: mergedBody,
+    personalBodyGoal: mergedGoal,
+    verification: {
+      legacyNoteCount: Array.isArray(leg.personalSecretNotes) ? leg.personalSecretNotes.length : 0,
+      existingNoteCount: Array.isArray(ex.personalSecretNotes) ? ex.personalSecretNotes.length : 0,
+      mergedNoteCount: mergedNotes.length,
+      legacyBodyCount: Array.isArray(leg.personalBodyLogs) ? leg.personalBodyLogs.length : 0,
+      existingBodyCount: Array.isArray(ex.personalBodyLogs) ? ex.personalBodyLogs.length : 0,
+      mergedBodyCount: mergedBody.length
+    }
+  };
+};
+
+export const computeVehicleFuelEfficiency = (fuelLogs = [], vehicleFuelType = "가솔린") => {
+  const valid = (Array.isArray(fuelLogs) ? fuelLogs : [])
+    .filter((f) => f && !f.deletedAtMs && Number(f.odometerKm) > 0 && Number(f.volume) > 0)
+    .sort((a, b) => Number(a.odometerKm) - Number(b.odometerKm) || String(a.date || "").localeCompare(String(b.date || "")));
+  if (valid.length < 2) {
+    return { efficiency: null, unit: vehicleFuelType === "전기" ? "km/kWh" : "km/L", segments: 0, totalDistanceKm: 0, totalVolume: 0, reason: "가득 주유/충전 구간이 2회 이상 필요합니다." };
+  }
+  const unit = vehicleFuelType === "전기" ? "km/kWh" : "km/L";
+  let totalDist = 0;
+  let totalVol = 0;
+  let segCount = 0;
+  let lastFullIdx = -1;
+  let accVol = 0;
+  let mixedPowertrain = false;
+
+  for (let i = 0; i < valid.length; i++) {
+    const cur = valid[i];
+    const curEnergy = cur.energyType || (vehicleFuelType === "전기" ? "electric" : "fuel");
+    if (lastFullIdx >= 0) {
+      const prevFull = valid[lastFullIdx];
+      const prevEnergy = prevFull.energyType || (vehicleFuelType === "전기" ? "electric" : "fuel");
+      if (curEnergy !== prevEnergy) {
+        mixedPowertrain = true;
+        lastFullIdx = cur.isFullTank ? i : -1;
+        accVol = 0;
+        continue;
+      }
+      if (cur.missedPrevious || Number(cur.odometerKm) <= Number(prevFull.odometerKm)) {
+        lastFullIdx = cur.isFullTank ? i : -1;
+        accVol = 0;
+        continue;
+      }
+      accVol += Number(cur.volume);
+      if (cur.isFullTank) {
+        const dist = Number(cur.odometerKm) - Number(prevFull.odometerKm);
+        if (dist > 0 && accVol > 0) {
+          totalDist += dist;
+          totalVol += accVol;
+          segCount += 1;
+        }
+        lastFullIdx = i;
+        accVol = 0;
+      }
+    } else if (cur.isFullTank) {
+      lastFullIdx = i;
+      accVol = 0;
+    }
+  }
+  if (segCount === 0 || totalVol <= 0) {
+    return {
+      efficiency: null,
+      unit,
+      segments: 0,
+      totalDistanceKm: 0,
+      totalVolume: 0,
+      reason: mixedPowertrain ? "혼합 동력원 구간은 단일 연비로 합산하지 않습니다." : "연속 가득 주유·충전 구간이 부족해 연비/전비를 산출하지 않았습니다."
+    };
+  }
+  return {
+    efficiency: Number((totalDist / totalVol).toFixed(2)),
+    unit,
+    segments: segCount,
+    totalDistanceKm: Math.round(totalDist),
+    totalVolume: Number(totalVol.toFixed(2)),
+    reason: ""
+  };
+};
+
+export const computeVehicleCostSummary = (records = [], fuelLogs = [], { vehicleId = "all", yearMonth = getCurrentYearMonth(), curYear = String(new Date().getFullYear()) } = {}) => {
+  const prevYm = shiftYearMonth(yearMonth, -1);
+  const filterVeh = (x) => x && !x.deletedAtMs && (vehicleId === "all" || x.vehicleId === vehicleId);
+  const activeRecs = (Array.isArray(records) ? records : []).filter(filterVeh);
+  const activeFuels = (Array.isArray(fuelLogs) ? fuelLogs : []).filter(filterVeh);
+
+  let monthCost = 0;
+  let prevMonthCost = 0;
+  let yearCost = 0;
+  let totalCost = 0;
+  const byCategory = {};
+  const odoVals = [];
+
+  const addItem = (dateStr, costVal, catLabel, odoVal) => {
+    const c = costVal === "" || costVal === null || costVal === undefined ? null : Number(costVal);
+    if (Number.isFinite(Number(odoVal)) && Number(odoVal) > 0) odoVals.push(Number(odoVal));
+    if (c === null || !Number.isFinite(c) || c < 0) return;
+    totalCost += c;
+    const d = String(dateStr || "");
+    if (d.startsWith(yearMonth)) {
+      monthCost += c;
+      byCategory[catLabel] = (byCategory[catLabel] || 0) + c;
+    }
+    if (d.startsWith(prevYm)) prevMonthCost += c;
+    if (d.startsWith(curYear)) yearCost += c;
+  };
+
+  activeRecs.forEach((r) => addItem(r.date, r.cost, r.type || "정비·기타", r.mileage));
+  activeFuels.forEach((f) => addItem(f.date, f.totalCost, f.energyType === "electric" ? "충전" : "주유", f.odometerKm));
+
+  const odoSpanKm = odoVals.length >= 2 ? Math.max(...odoVals) - Math.min(...odoVals) : 0;
+  const costPerKm = odoSpanKm >= 10 && totalCost > 0 ? Math.round(totalCost / odoSpanKm) : null;
+  return {
+    yearMonth,
+    prevYearMonth: prevYm,
+    curYear,
+    monthCost,
+    prevMonthCost,
+    monthDelta: monthCost - prevMonthCost,
+    yearCost,
+    totalCost,
+    byCategory,
+    odoSpanKm,
+    costPerKm,
+    includedCounts: { maintenance: activeRecs.length, fuel: activeFuels.length }
+  };
+};
+
+export const computeMaintenanceScheduleStatus = (record, vehicle = null, { todayStr = getTodayStr(), dueDays = 30, dueKm = 1000 } = {}) => {
+  if (!record || record.deletedAtMs || record.completedAtMs) return null;
+  const ruleMode = record.ruleMode || "either"; // "date" | "mileage" | "either"
+  const nDiff = record.nextDate ? getDaysDiff(record.nextDate) : null;
+  const nextKm = Number(record.nextMileage) || null;
+  const curKm = Number(vehicle?.currentMileage) || Number(record.mileage) || null;
+  const kmDiff = nextKm && curKm ? nextKm - curKm : null;
+
+  const dateDue = nDiff !== null && nDiff <= dueDays;
+  const kmDue = kmDiff !== null && kmDiff <= dueKm;
+  let isDueSoon = false;
+  let isOverdue = false;
+  if (ruleMode === "date") {
+    isDueSoon = dateDue;
+    isOverdue = nDiff !== null && nDiff < 0;
+  } else if (ruleMode === "mileage") {
+    isDueSoon = kmDue;
+    isOverdue = kmDiff !== null && kmDiff < 0;
+  } else {
+    isDueSoon = dateDue || kmDue;
+    isOverdue = (nDiff !== null && nDiff < 0) || (kmDiff !== null && kmDiff < 0);
+  }
+
+  // Estimate due date from odometer history ONLY if >=2 valid samples spanning >=7 days
+  let estimatedDueByMileage = null;
+  if (kmDiff !== null && kmDiff > 0 && Array.isArray(vehicle?.odometerHistory) && vehicle.odometerHistory.length >= 2) {
+    const odoSorted = [...vehicle.odometerHistory]
+      .filter((x) => x && x.date && Number(x.km) > 0)
+      .sort((a, b) => String(a.date).localeCompare(String(b.date)));
+    if (odoSorted.length >= 2) {
+      const first = odoSorted[0];
+      const last = odoSorted[odoSorted.length - 1];
+      const spanDays = Math.round((new Date(last.date + "T00:00:00") - new Date(first.date + "T00:00:00")) / 86400000);
+      const spanKm = Number(last.km) - Number(first.km);
+      if (spanDays >= 7 && spanKm > 0) {
+        const kmPerDay = spanKm / spanDays;
+        const estDays = Math.round(kmDiff / kmPerDay);
+        if (estDays > 0 && estDays <= 3650) {
+          estimatedDueByMileage = {
+            estimatedDate: getOffsetDateStr(todayStr, estDays),
+            sampleCount: odoSorted.length,
+            spanDays,
+            kmPerDay: Number(kmPerDay.toFixed(1)),
+            isEstimate: true
+          };
+        }
+      }
+    }
+  }
+
+  return {
+    ruleMode,
+    nDiff,
+    nextKm,
+    kmDiff,
+    isDueSoon,
+    isOverdue,
+    sourceBasis: record.sourceBasis || "user", // "user" | "shop" | "manual"
+    estimatedDueByMileage
+  };
+};
+
+export const estimateParkingFee = (entryMs, exitMs, feeRule = {}) => {
+  const start = Number(entryMs);
+  const end = Number(exitMs);
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return null;
+  const totalMin = Math.ceil((end - start) / 60000);
+  const freeMin = Math.max(0, Number(feeRule.freeMinutes) || 0);
+  const baseMin = Math.max(0, Number(feeRule.baseMinutes) || 0);
+  const baseFee = Math.max(0, Number(feeRule.baseFee) || 0);
+  const unitMin = Math.max(1, Number(feeRule.unitMinutes) || 10);
+  const unitFee = Math.max(0, Number(feeRule.unitFee) || 0);
+  const dailyCap = Math.max(0, Number(feeRule.dailyCap) || 0);
+  const discount = Math.max(0, Number(feeRule.discountAmount) || 0);
+
+  if (totalMin <= freeMin) return { totalMin, estimatedFee: 0, isEstimate: true };
+  let fee = baseFee;
+  const billableMin = Math.max(0, totalMin - Math.max(freeMin, baseMin));
+  if (billableMin > 0 && unitFee > 0) {
+    fee += Math.ceil(billableMin / unitMin) * unitFee;
+  }
+  if (dailyCap > 0) {
+    const days = Math.max(1, Math.ceil(totalMin / 1440));
+    fee = Math.min(fee, dailyCap * days);
+  }
+  fee = Math.max(0, fee - discount);
+  return { totalMin, estimatedFee: Math.round(fee), isEstimate: true };
+};
+
+export const parseNaturalCarMaintenanceInput = (rawText, { todayStr = getTodayStr(), activeVehicleId = "default-car" } = {}) => {
+  const s = String(rawText || "").trim();
+  if (!s) return null;
+  const uncertainFields = [];
+  let date = todayStr;
+  if (/어제/.test(s)) date = getOffsetDateStr(todayStr, -1);
+  else if (/그제/.test(s)) date = getOffsetDateStr(todayStr, -2);
+  else {
+    const dm = s.match(/(\d{4})[-./](\d{1,2})[-./](\d{1,2})/);
+    if (dm) date = `${dm[1]}-${String(dm[2]).padStart(2, "0")}-${String(dm[3]).padStart(2, "0")}`;
+    else if (!/오늘/.test(s)) uncertainFields.push("date");
+  }
+
+  // Current mileage vs next mileage
+  let mileage = "";
+  let nextMileage = "";
+  const kmMatches = [...s.matchAll(/(\d{1,3}(?:,\d{3})+|\d{3,6})\s*km/gi)];
+  if (kmMatches.length >= 1) mileage = kmMatches[0][1].replace(/,/g, "");
+  if (kmMatches.length >= 2) nextMileage = kmMatches[1][1].replace(/,/g, "");
+
+  // Cost (e.g., 12만원, 120,000원, 8.5만원)
+  let cost = "";
+  const manMatch = s.match(/(\d+(?:\.\d+)?)\s*만\s*원?/);
+  const wonMatch = s.match(/(\d{1,3}(?:,\d{3})+|\d{4,})\s*원/);
+  if (manMatch) cost = String(Math.round(Number(manMatch[1]) * 10000));
+  else if (wonMatch) cost = wonMatch[1].replace(/,/g, "");
+  else uncertainFields.push("cost");
+
+  // Next date (e.g., 내년 11월)
+  let nextDate = "";
+  const nextYearMon = s.match(/내년\s*(\d{1,2})\s*월(?:\s*(\d{1,2})\s*일)?/);
+  if (nextYearMon) {
+    const ny = Number(todayStr.slice(0, 4)) + 1;
+    const nm = String(Number(nextYearMon[1])).padStart(2, "0");
+    const nd = nextYearMon[2] ? String(Number(nextYearMon[2])).padStart(2, "0") : "01";
+    nextDate = `${ny}-${nm}-${nd}`;
+    if (!nextYearMon[2]) uncertainFields.push("nextDate");
+  }
+
+  // Known maintenance keywords
+  const titleKw = ["엔진오일", "타이어", "브레이크패드", "브레이크오일", "배터리", "와이퍼", "에어컨필터", "미션오일", "자동차검사", "보험갱신", "세차"];
+  const foundKw = titleKw.find((kw) => s.includes(kw));
+  const title = foundKw || "";
+  if (!title) uncertainFields.push("title");
+
+  return {
+    vehicleId: activeVehicleId,
+    date,
+    title,
+    mileage,
+    cost,
+    nextMileage,
+    nextDate,
+    memo: s,
+    uncertainFields
+  };
+};
+
+export const detectDuplicateCarRecords = (existingRecords = [], candidate = {}) => {
+  if (!candidate) return [];
+  const out = [];
+  for (const r of Array.isArray(existingRecords) ? existingRecords : []) {
+    if (!r || r.deletedAtMs || (candidate.id && r.id === candidate.id)) continue;
+    if (candidate.vehicleId && r.vehicleId && r.vehicleId !== candidate.vehicleId) continue;
+    const reasons = [];
+    if (candidate.docHash && r.docHash && candidate.docHash === r.docHash) reasons.push("동일 영수증 해시");
+    if (candidate.date && r.date === candidate.date) reasons.push("같은 날짜");
+    if (Number(candidate.cost) > 0 && Number(r.cost) === Number(candidate.cost)) reasons.push("같은 금액");
+    if (Number(candidate.mileage) > 0 && Number(r.mileage) === Number(candidate.mileage)) reasons.push("같은 주행거리");
+    if (reasons.length >= 2 || reasons.includes("동일 영수증 해시")) {
+      out.push({ record: r, reasons });
+    }
+  }
+  return out;
+};
+
+export const filterSensitiveTextForAi = (text = "") => {
+  let s = String(text || "");
+  let redactedCount = 0;
+  const rules = [
+    { re: /(?:비밀번호|패스워드|password|pw|pin|인증코드|otp)\s*[:=：]?\s*[^\s,;\n]{3,}/gi, rep: "[민감정보 제외됨]" },
+    { re: /\b\d{6}-?[1-4]\d{6}\b/g, rep: "[식별번호 제외됨]" },
+    { re: /\b(?:\d{4}[-\s]?){3}\d{4}\b/g, rep: "[카드번호 제외됨]" }
+  ];
+  for (const r of rules) {
+    s = s.replace(r.re, () => { redactedCount += 1; return r.rep; });
+  }
+  return { safeText: s, redactedCount };
+};
+
+export const validateAiStructuredResponse = (raw, schemaType) => {
+  if (!raw || typeof raw !== "object") {
+    return { ok: false, error: "AI 응답이 올바른 JSON 객체가 아닙니다.", data: null };
+  }
+  if (schemaType === "secret_organize") {
+    const summary = Array.isArray(raw.summary) ? raw.summary.map((x) => String(x || "").trim()).filter(Boolean).slice(0, 5) : (typeof raw.summary === "string" && raw.summary.trim() ? [raw.summary.trim()] : []);
+    const suggestedTags = Array.isArray(raw.suggestedTags) ? raw.suggestedTags.map((x) => String(x || "").trim()).filter(Boolean).slice(0, 8) : [];
+    const actions = Array.isArray(raw.actions) ? raw.actions.map((a) => ({
+      text: String(a?.text || a || "").trim(),
+      dueDate: String(a?.dueDate || "").trim(),
+      uncertainDate: Boolean(a?.uncertainDate || !a?.dueDate)
+    })).filter((a) => a.text) : [];
+    const uncertainFields = Array.isArray(raw.uncertainFields) ? raw.uncertainFields.map(String) : [];
+    const sourceNoteIds = Array.isArray(raw.sourceNoteIds) ? raw.sourceNoteIds.map(String) : [];
+    if (summary.length === 0 && !raw.suggestedTitle && actions.length === 0) {
+      return { ok: false, error: "AI 정리 응답에 필수 항목(요약/제목/실행항목)이 없습니다.", data: null };
+    }
+    return {
+      ok: true,
+      data: {
+        suggestedTitle: String(raw.suggestedTitle || "").trim(),
+        suggestedCategory: String(raw.suggestedCategory || "").trim(),
+        summary,
+        suggestedTags,
+        actions,
+        sourceNoteIds,
+        uncertainFields
+      }
+    };
+  }
+  if (schemaType === "secret_qa") {
+    const answer = String(raw.answer || "").trim();
+    const citations = Array.isArray(raw.citations) ? raw.citations.map((c) => ({
+      noteId: String(c?.noteId || ""),
+      title: String(c?.title || ""),
+      quote: String(c?.quote || "")
+    })).filter((c) => c.noteId || c.title) : [];
+    if (!answer) return { ok: false, error: "AI 답변이 비어 있습니다.", data: null };
+    return { ok: true, data: { answer, citations, notFound: Boolean(raw.notFound || citations.length === 0) } };
+  }
+  if (schemaType === "car_parking_ocr") {
+    return {
+      ok: true,
+      data: {
+        lotName: String(raw.lotName || "").trim(),
+        floor: String(raw.floor || "").trim(),
+        zone: String(raw.zone || "").trim(),
+        pillar: String(raw.pillar || "").trim(),
+        uncertainFields: Array.isArray(raw.uncertainFields) ? raw.uncertainFields.map(String) : []
+      }
+    };
+  }
+  if (schemaType === "car_receipt_ocr") {
+    const items = Array.isArray(raw.items) ? raw.items.map((it) => ({
+      title: String(it?.title || "").trim(),
+      cost: Number.isFinite(Number(it?.cost)) ? Number(it.cost) : null
+    })).filter((it) => it.title) : [];
+    return {
+      ok: true,
+      data: {
+        date: String(raw.date || "").trim(),
+        shopName: String(raw.shopName || "").trim(),
+        mileage: raw.mileage !== undefined && raw.mileage !== null && raw.mileage !== "" ? Number(raw.mileage) : null,
+        totalCost: Number.isFinite(Number(raw.totalCost)) ? Number(raw.totalCost) : null,
+        discount: Number.isFinite(Number(raw.discount)) ? Number(raw.discount) : 0,
+        tax: Number.isFinite(Number(raw.tax)) ? Number(raw.tax) : 0,
+        nextGuide: String(raw.nextGuide || "").trim(),
+        items,
+        uncertainFields: Array.isArray(raw.uncertainFields) ? raw.uncertainFields.map(String) : []
+      }
+    };
+  }
+  return { ok: true, data: raw };
+};
+
+export const buildChunkedBackupManifest = (backupDataObj, { slot = "", scope = "family", ownerUid = "", chunkMaxBytes = 650000 } = {}) => {
+  const serialized = JSON.stringify(backupDataObj || {});
+  let h = 2166136261;
+  for (let i = 0; i < serialized.length; i++) {
+    h ^= serialized.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  const dataHash = `${(h >>> 0).toString(16)}_${serialized.length}`;
+  const totalBytes = typeof Blob !== "undefined" ? new Blob([serialized]).size : Buffer.byteLength(serialized, "utf8");
+  const counts = {};
+  Object.entries(backupDataObj || {}).forEach(([k, v]) => {
+    if (Array.isArray(v)) counts[k] = v.length;
+    else if (v && typeof v === "object") counts[k] = Object.keys(v).length;
+  });
+
+  if (totalBytes <= chunkMaxBytes) {
+    return {
+      isChunked: false,
+      manifest: {
+        schemaVersion: 2,
+        slot,
+        scope,
+        ownerUid,
+        createdAt: new Date().toISOString(),
+        dataHash,
+        totalBytes,
+        chunkCount: 1,
+        counts,
+        attachmentMode: "metadata_and_urls_only",
+        complete: true
+      },
+      chunks: [{ index: 0, payload: serialized }]
+    };
+  }
+
+  // Split serialized JSON string into UTF-16 safe chunks under chunkMaxBytes
+  const safeCharLen = Math.max(50000, Math.floor(chunkMaxBytes / 3));
+  const chunks = [];
+  for (let offset = 0, idx = 0; offset < serialized.length; offset += safeCharLen, idx++) {
+    chunks.push({ index: idx, payload: serialized.slice(offset, offset + safeCharLen) });
+  }
+  return {
+    isChunked: true,
+    manifest: {
+      schemaVersion: 2,
+      slot,
+      scope,
+      ownerUid,
+      createdAt: new Date().toISOString(),
+      dataHash,
+      totalBytes,
+      chunkCount: chunks.length,
+      counts,
+      attachmentMode: "metadata_and_urls_only",
+      complete: true
+    },
+    chunks
+  };
 };
