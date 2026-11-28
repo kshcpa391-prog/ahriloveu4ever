@@ -1186,7 +1186,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v14.67";
+export const APP_CODE_VERSION = "v14.68";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1204,7 +1204,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-28 13:45";
+export const APP_BUILD_DATE = "2026-11-28 16:30";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1274,6 +1274,19 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v14.68",
+    version: "v14.68",
+    date: "2026-11-28",
+    title: "🚗 우리차 · 👤 나만의 공간 고도화 · 미정의 참조/저장오류 수정 · 개인데이터 분리 이관 · 체성분 CSV/그래프 정밀화 · 패치노트 highlights 호환",
+    category: "고도화 · 오류수정",
+    items: [
+      "🛠️ 미정의 식별자 4종(5곳) 수정(getDocRef, scheduleScope, Edit2, openWakeupAlarmModal), 저장 실패 시 입력 보존·중복클릭 차단·dirty 상태 보호·계정 전환 초기화 적용",
+      "🔒 나만의 공간 개인 데이터를 users/{uid}/private_space/data로 분리·멱등 이관하고 본인 전용 백업/복원(UID 검증) 및 소유자 전용 휴지통을 구축",
+      "🚗 주차·차량관리 고도화: 다중 차량·층수 프리셋 편집·주차장/구역/기둥 구분·사진 Storage 업로드/미리보기·주차 이력/출차 구분·정비 수정/필터/분류관리/월연 관리비·출처 기반 일정/알람 연계",
+      "⚖️ 체성분 CSV 표준 파서(따옴표 줄바꿈·T시각/초 보존·유효날짜·7.5e1·미리보기/충돌정책)·시간간격 그래프·%p 구분·수식방어 내보내기 및 패치노트 highlights 71건 표시·검색 복구"
+    ]
+  },
   {
     id: "patch-v14.67",
     version: "v14.67",
@@ -7589,6 +7602,50 @@ export const HOUSE_MEDICINE_TARGETS = ["공통", "시목", "시율", "어른"];
 export const DEFAULT_CAR_RECORD_TYPES = ["정비·오일", "타이어", "자동차검사", "보험·세금", "세차·소모품", "기타"];
 export const CAR_PARKING_FLOOR_PRESETS = ["B1", "B2", "B3", "지상", "야외"];
 export const DEFAULT_SECRET_NOTE_CATS = ["메모", "쇼핑/선물", "링크/스크랩", "아이디어", "기타"];
+export const DEFAULT_SELF_CARE_TYPES = ["영양제", "운동", "생활"];
+export const DEFAULT_BODY_WATER_UNIT_ML = 250;
+
+export const normalizePatchNoteBullets = (pn) => {
+  if (!pn || typeof pn !== "object") return [];
+  const combined = [
+    ...toSafeArray(pn.changes),
+    ...toSafeArray(pn.items),
+    ...toSafeArray(pn.highlights)
+  ];
+  const seen = new Set();
+  const out = [];
+  for (const line of combined) {
+    const s = String(line || "").trim();
+    if (!s || seen.has(s)) continue;
+    seen.add(s);
+    out.push(s);
+  }
+  return out;
+};
+
+export const sanitizeCsvCell = (val) => {
+  const s = String(val ?? "");
+  const escaped = /^[=+\-@\t\r]/.test(s) ? `'${s}` : s;
+  return `"${escaped.replace(/"/g, '""')}"`;
+};
+
+export const validateSafeHttpUrl = (rawUrl) => {
+  const s = String(rawUrl || "").trim();
+  if (!s) return { valid: true, url: "" };
+  const candidate = /^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(s) ? s : `https://${s}`;
+  try {
+    const parsed = new URL(candidate);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+      return { valid: false, url: "", error: `허용되지 않는 프로토콜(${parsed.protocol})입니다. http/https 링크만 사용할 수 있습니다.` };
+    }
+    if (!parsed.hostname || !parsed.hostname.includes(".")) {
+      return { valid: false, url: "", error: "올바른 도메인 형식의 URL을 입력해 주세요." };
+    }
+    return { valid: true, url: parsed.toString() };
+  } catch {
+    return { valid: false, url: "", error: "올바른 URL 형식이 아닙니다." };
+  }
+};
 
 export const BODY_METRIC_DEFS = [
   { id: "weight", label: "몸무게", unit: "kg", digits: 2, lowerIsGood: true },
@@ -7601,33 +7658,57 @@ export const BODY_METRIC_DEFS = [
   { id: "water", label: "체수분", unit: "kg", digits: 2, lowerIsGood: false }
 ];
 
-export const parseBodyCompositionCsv = (rawText) => {
+export const parseBodyCompositionCsvDetailed = (rawText) => {
   const cleanText = String(rawText || "").replace(/^\uFEFF/, "").trim();
-  if (!cleanText) return [];
-  const lines = cleanText.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
-  if (lines.length < 2) return [];
+  if (!cleanText) return { rows: [], errors: [{ row: 0, reason: "빈 파일입니다." }], totalDataRows: 0, headerMatched: false };
 
-  const splitCsvLine = (line) => {
-    const out = [];
-    let cur = "";
-    let inQ = false;
-    for (let i = 0; i < line.length; i++) {
-      const ch = line[i];
+  // RFC 4180 표준 CSV 파서 (따옴표 내 쉼표·줄바꿈·이중따옴표 지원)
+  const records = [];
+  let row = [];
+  let cur = "";
+  let inQ = false;
+  for (let i = 0; i < cleanText.length; i++) {
+    const ch = cleanText[i];
+    if (inQ) {
       if (ch === '"') {
-        if (inQ && line[i + 1] === '"') { cur += '"'; i++; }
-        else inQ = !inQ;
-      } else if (ch === "," && !inQ) {
-        out.push(cur.trim());
+        if (cleanText[i + 1] === '"') {
+          cur += '"';
+          i++;
+        } else {
+          inQ = false;
+        }
+      } else {
+        cur += ch;
+      }
+    } else {
+      if (ch === '"') {
+        inQ = true;
+      } else if (ch === ",") {
+        row.push(cur.trim());
+        cur = "";
+      } else if (ch === "\r" || ch === "\n") {
+        if (ch === "\r" && cleanText[i + 1] === "\n") i++;
+        row.push(cur.trim());
+        if (row.some((c) => c !== "")) records.push(row);
+        row = [];
         cur = "";
       } else {
         cur += ch;
       }
     }
-    out.push(cur.trim());
-    return out;
-  };
+  }
+  row.push(cur.trim());
+  if (row.some((c) => c !== "")) records.push(row);
 
-  const headers = splitCsvLine(lines[0]).map((h) => h.replace(/\s+/g, "").toLowerCase());
+  if (inQ) {
+    return { rows: [], errors: [{ row: records.length + 1, reason: '닫히지 않은 따옴표(")가 있습니다.' }], totalDataRows: 0, headerMatched: false };
+  }
+  if (records.length < 2) {
+    return { rows: [], errors: [{ row: 0, reason: "헤더와 데이터 행이 최소 2줄 이상 필요합니다." }], totalDataRows: 0, headerMatched: false };
+  }
+
+  const rawHeaders = records[0];
+  const headers = rawHeaders.map((h) => String(h || "").replace(/\s+/g, "").toLowerCase());
   const findCol = (preds) => headers.findIndex((h) => preds.some((p) => h.includes(p)));
 
   const idxDate = findCol(["측정일시", "측정일", "날짜", "일자", "date", "time"]);
@@ -7645,50 +7726,131 @@ export const parseBodyCompositionCsv = (rawText) => {
   const idxBodyAge = findCol(["신체나이"]);
   const idxWhr = findCol(["복부비만율", "whr"]);
 
-  if (idxDate < 0 && idxWeight < 0) return [];
+  if (idxDate < 0 && idxWeight < 0) {
+    return { rows: [], errors: [{ row: 1, reason: "측정일시 또는 몸무게 헤더를 찾을 수 없습니다." }], totalDataRows: records.length - 1, headerMatched: false };
+  }
 
-  const toNum = (val) => {
-    if (val === undefined || val === null || val === "") return null;
-    const n = Number(String(val).replace(/[^0-9.-]/g, ""));
-    return Number.isFinite(n) && n > 0 ? n : null;
+  const weightHeaderLb = idxWeight >= 0 && /\b(lb|lbs|파운드)\b/i.test(rawHeaders[idxWeight] || "");
+
+  const parseDateTimeStrict = (rawDt) => {
+    const s = String(rawDt || "").trim();
+    if (!s) return { ok: false, reason: "측정일시가 비어 있습니다." };
+    const m = s.match(/^(\d{4})[-./](\d{1,2})[-./](\d{1,2})(?:[T\s]+(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?)?$/i);
+    if (!m) return { ok: false, reason: `지원하지 않는 날짜 형식(${s})` };
+    const y = Number(m[1]);
+    const mo = Number(m[2]);
+    const d = Number(m[3]);
+    const dt = new Date(y, mo - 1, d);
+    if (dt.getFullYear() !== y || dt.getMonth() !== mo - 1 || dt.getDate() !== d) {
+      return { ok: false, reason: `존재하지 않는 날짜(${y}-${String(mo).padStart(2, "0")}-${String(d).padStart(2, "0")})` };
+    }
+    const datePart = `${y}-${String(mo).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+    let timePart = "";
+    if (m[4] !== undefined && m[5] !== undefined) {
+      const hh = Number(m[4]);
+      const mm = Number(m[5]);
+      const ss = m[6] !== undefined ? Number(m[6]) : null;
+      if (hh < 0 || hh > 23 || mm < 0 || mm > 59 || (ss !== null && (ss < 0 || ss > 59))) {
+        return { ok: false, reason: `잘못된 시각(${m[4]}:${m[5]}${m[6] !== undefined ? `:${m[6]}` : ""})` };
+      }
+      timePart = `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}${ss !== null ? `:${String(ss).padStart(2, "0")}` : ""}`;
+    }
+    const measuredAt = timePart ? `${datePart} ${timePart}` : datePart;
+    const timestampMs = new Date(`${datePart}T${timePart ? (timePart.length === 5 ? `${timePart}:00` : timePart) : "00:00:00"}`).getTime();
+    return { ok: true, datePart, timePart, measuredAt, timestampMs };
+  };
+
+  const parseNumStrict = (rawVal, fieldLabel, { allowLb = false, minVal = 0.0001, maxVal = 10000 } = {}) => {
+    if (rawVal === undefined || rawVal === null) return { ok: true, val: undefined };
+    const s0 = String(rawVal).trim();
+    if (s0 === "" || s0 === "-" || s0 === "--") return { ok: true, val: undefined };
+    const hasLb = /\b(lb|lbs)\b/i.test(s0) || (allowLb && !/kg/i.test(s0));
+    const cleaned = s0.replace(/,/g, "").replace(/\s*(kg|lbs?|%|kcal|g|세)\s*$/i, "").trim();
+    if (!/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/.test(cleaned)) {
+      return { ok: false, reason: `${fieldLabel} 숫자 형식 오류(${s0})` };
+    }
+    let n = Number(cleaned);
+    if (!Number.isFinite(n) || n < minVal || n > maxVal) {
+      return { ok: false, reason: `${fieldLabel} 허용 범위 초과(${s0})` };
+    }
+    if (hasLb) n = Number((n * 0.45359237).toFixed(2));
+    return { ok: true, val: n };
   };
 
   const parsed = [];
-  for (let r = 1; r < lines.length; r++) {
-    const cols = splitCsvLine(lines[r]);
-    if (cols.length < 2) continue;
-    const rawDt = idxDate >= 0 ? String(cols[idxDate] || "").trim() : "";
-    const normDt = rawDt.replace(/\./g, "-").replace(/\//g, "-");
-    const datePart = normDt.slice(0, 10);
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(datePart)) continue;
-    const timePart = /^\d{4}-\d{2}-\d{2}\s+(\d{2}:\d{2})/.test(normDt) ? normDt.slice(11, 16) : "";
-    const measuredAt = timePart ? `${datePart} ${timePart}` : datePart;
-    const weight = idxWeight >= 0 ? toNum(cols[idxWeight]) : null;
-    const bmi = idxBmi >= 0 ? toNum(cols[idxBmi]) : null;
-    const bodyFatPct = idxFatPct >= 0 ? toNum(cols[idxFatPct]) : null;
-    const skeletalMuscle = idxMuscle >= 0 ? toNum(cols[idxMuscle]) : null;
-    if (weight === null && bodyFatPct === null && skeletalMuscle === null) continue;
-    parsed.push({
-      id: `body-${measuredAt.replace(/[^0-9]/g, "") || r}`,
-      measuredAt,
-      date: datePart,
-      device: idxDevice >= 0 ? String(cols[idxDevice] || "").trim() : "",
-      weight,
-      bmi,
-      obesityPct: idxObesity >= 0 ? toNum(cols[idxObesity]) : null,
-      bodyFatPct,
-      skeletalMuscle,
-      muscleMass: idxMuscleMass >= 0 ? toNum(cols[idxMuscleMass]) : null,
-      bmr: idxBmr >= 0 ? toNum(cols[idxBmr]) : null,
-      visceralFat: idxVisceral >= 0 ? toNum(cols[idxVisceral]) : null,
-      bodyFatMass: idxFatMass >= 0 ? toNum(cols[idxFatMass]) : null,
-      water: idxWater >= 0 ? toNum(cols[idxWater]) : null,
-      bodyAge: idxBodyAge >= 0 ? toNum(cols[idxBodyAge]) : null,
-      whr: idxWhr >= 0 ? toNum(cols[idxWhr]) : null
-    });
+  const errors = [];
+  for (let r = 1; r < records.length; r++) {
+    const cols = records[r];
+    if (cols.length < 2) {
+      errors.push({ row: r + 1, reason: "열 개수가 부족합니다." });
+      continue;
+    }
+    const dtRes = parseDateTimeStrict(idxDate >= 0 ? cols[idxDate] : "");
+    if (!dtRes.ok) {
+      errors.push({ row: r + 1, reason: dtRes.reason });
+      continue;
+    }
+
+    const wRes = idxWeight >= 0 ? parseNumStrict(cols[idxWeight], "몸무게", { allowLb: weightHeaderLb, maxVal: 400 }) : { ok: true, val: undefined };
+    const fRes = idxFatPct >= 0 ? parseNumStrict(cols[idxFatPct], "체지방률", { maxVal: 85 }) : { ok: true, val: undefined };
+    const mRes = idxMuscle >= 0 ? parseNumStrict(cols[idxMuscle], "골격근량", { maxVal: 200 }) : { ok: true, val: undefined };
+
+    const coreErr = [wRes, fRes, mRes].find((x) => !x.ok);
+    if (coreErr) {
+      errors.push({ row: r + 1, reason: coreErr.reason });
+      continue;
+    }
+    if (wRes.val === undefined && fRes.val === undefined && mRes.val === undefined) {
+      errors.push({ row: r + 1, reason: "몸무게·체지방률·골격근량 값이 모두 비어 있습니다." });
+      continue;
+    }
+
+    const optNum = (idx, lbl, opts = {}) => {
+      if (idx < 0) return undefined;
+      const res = parseNumStrict(cols[idx], lbl, opts);
+      return res.ok ? res.val : undefined;
+    };
+
+    const rowObj = {
+      id: `body-${dtRes.measuredAt.replace(/[^0-9]/g, "") || r}`,
+      measuredAt: dtRes.measuredAt,
+      date: dtRes.datePart,
+      timestampMs: dtRes.timestampMs,
+      device: idxDevice >= 0 ? String(cols[idxDevice] || "").trim() : ""
+    };
+    if (wRes.val !== undefined) rowObj.weight = wRes.val;
+    if (fRes.val !== undefined) rowObj.bodyFatPct = fRes.val;
+    if (mRes.val !== undefined) rowObj.skeletalMuscle = mRes.val;
+    const bmi = optNum(idxBmi, "BMI", { maxVal: 100 });
+    if (bmi !== undefined) rowObj.bmi = bmi;
+    const obesityPct = optNum(idxObesity, "비만도", { maxVal: 500 });
+    if (obesityPct !== undefined) rowObj.obesityPct = obesityPct;
+    const muscleMass = optNum(idxMuscleMass, "근육량", { maxVal: 200 });
+    if (muscleMass !== undefined) rowObj.muscleMass = muscleMass;
+    const bmr = optNum(idxBmr, "기초대사량", { maxVal: 10000 });
+    if (bmr !== undefined) rowObj.bmr = bmr;
+    const visceralFat = optNum(idxVisceral, "내장지방", { maxVal: 60 });
+    if (visceralFat !== undefined) rowObj.visceralFat = visceralFat;
+    const bodyFatMass = optNum(idxFatMass, "체지방량", { maxVal: 300 });
+    if (bodyFatMass !== undefined) rowObj.bodyFatMass = bodyFatMass;
+    const water = optNum(idxWater, "체수분", { maxVal: 200 });
+    if (water !== undefined) rowObj.water = water;
+    const bodyAge = optNum(idxBodyAge, "신체나이", { maxVal: 150 });
+    if (bodyAge !== undefined) rowObj.bodyAge = bodyAge;
+    const whr = optNum(idxWhr, "복부비만율", { maxVal: 3 });
+    if (whr !== undefined) rowObj.whr = whr;
+
+    parsed.push(rowObj);
   }
-  return parsed.sort((a, b) => a.measuredAt.localeCompare(b.measuredAt));
+  return {
+    rows: parsed.sort((a, b) => (a.timestampMs || 0) - (b.timestampMs || 0) || a.measuredAt.localeCompare(b.measuredAt)),
+    errors,
+    totalDataRows: records.length - 1,
+    headerMatched: true
+  };
 };
+
+export const parseBodyCompositionCsv = (rawText) => parseBodyCompositionCsvDetailed(rawText).rows;
 
 export const DEFAULT_SELF_CARE_ITEMS = [
   { id: "sc-1", label: "비타민D", type: "영양제", timeHint: "아침", doneDate: "" },

@@ -73,11 +73,15 @@ import {
   onSnapshot,
   arrayUnion,
   arrayRemove,
+  doc as firestoreDoc,
+  deleteField,
   runTransaction,
   writeBatch
 } from "firebase/firestore";
 import {
   ref as storageRef,
+  uploadBytes,
+  getDownloadURL,
   deleteObject
 } from "firebase/storage";
 import {
@@ -221,6 +225,12 @@ import {
   CAR_PARKING_FLOOR_PRESETS,
   DEFAULT_SECRET_NOTE_CATS,
   DEFAULT_SELF_CARE_ITEMS,
+  DEFAULT_SELF_CARE_TYPES,
+  DEFAULT_BODY_WATER_UNIT_ML,
+  normalizePatchNoteBullets,
+  sanitizeCsvCell,
+  validateSafeHttpUrl,
+  parseBodyCompositionCsvDetailed,
   BODY_METRIC_DEFS,
   parseBodyCompositionCsv,
   normalizeSearchText,
@@ -5493,79 +5503,246 @@ function MainApp() {
 
   const [houseItems, setHouseItems] = useState([]);
   const [houseSubTab, setHouseSubTab] = useState("storage"); // storage | warranty | medicine | car
+  const DEFAULT_CAR_PARKING = {
+    floor: "",
+    lotName: "",
+    zone: "",
+    pillar: "",
+    spot: "",
+    memo: "",
+    photoUrl: "",
+    photoStoragePath: "",
+    updatedAtMs: 0,
+    updatedBy: ""
+  };
+  const DEFAULT_CAR_RECORD_TYPE_OBJS = DEFAULT_CAR_RECORD_TYPES.map((lbl, idx) => ({
+    id: `ct-${idx + 1}`,
+    label: lbl,
+    archived: false
+  }));
+  const normalizeCarNotebook = (raw) => {
+    const base = raw && typeof raw === "object" ? raw : {};
+    const legacyParking = { ...DEFAULT_CAR_PARKING, ...(base.parking || {}) };
+    const rawVehicles = Array.isArray(base.vehicles) && base.vehicles.length > 0
+      ? base.vehicles.map((v, idx) => ({
+          id: String(v?.id || (idx === 0 ? "default-car" : `veh-${idx + 1}`)),
+          name: String(v?.name || (idx === 0 ? "우리차" : `차량 ${idx + 1}`)),
+          plate: String(v?.plate || ""),
+          archived: Boolean(v?.archived),
+          parking: { ...DEFAULT_CAR_PARKING, ...(v?.parking || (idx === 0 ? legacyParking : {})) },
+          parkingHistory: Array.isArray(v?.parkingHistory) ? v.parkingHistory : []
+        }))
+      : [{
+          id: "default-car",
+          name: "우리차",
+          plate: "",
+          archived: false,
+          parking: legacyParking,
+          parkingHistory: Array.isArray(base.parkingHistory) ? base.parkingHistory : []
+        }];
+    const activeVehicleId = rawVehicles.some((v) => v.id === base.activeVehicleId)
+      ? base.activeVehicleId
+      : (rawVehicles.find((v) => !v.archived)?.id || rawVehicles[0].id);
+    const activeVeh = rawVehicles.find((v) => v.id === activeVehicleId) || rawVehicles[0];
+    const floorPresets = Array.isArray(base.floorPresets) && base.floorPresets.length > 0
+      ? base.floorPresets.map((x) => String(x || "").trim()).filter(Boolean)
+      : [...CAR_PARKING_FLOOR_PRESETS];
+    const recordTypes = Array.isArray(base.recordTypes) && base.recordTypes.length > 0
+      ? base.recordTypes.map((t, idx) =>
+          typeof t === "string"
+            ? { id: `ct-s-${idx}`, label: t, archived: false }
+            : { id: String(t?.id || `ct-${idx}`), label: String(t?.label || "기타"), archived: Boolean(t?.archived) }
+        )
+      : DEFAULT_CAR_RECORD_TYPE_OBJS.map((x) => ({ ...x }));
+    const records = (Array.isArray(base.records) ? base.records : []).map((r) => ({
+      ...r,
+      vehicleId: r?.vehicleId || activeVeh.id || "default-car",
+      typeId: r?.typeId || (recordTypes.find((t) => t.label === r?.type)?.id || ""),
+      type: r?.type || "기타"
+    }));
+    return {
+      vehicles: rawVehicles,
+      activeVehicleId,
+      floorPresets,
+      recordTypes,
+      parking: activeVeh.parking || legacyParking,
+      records
+    };
+  };
+
   const [carNotebook, setCarNotebook] = useState(() => {
     try {
       const saved = JSON.parse(localStorage.getItem("kim_car_notebook_v1") || "null");
-      if (saved && typeof saved === "object") {
-        return {
-          parking: { spot: "", floor: "", memo: "", photoUrl: "", updatedAtMs: 0, updatedBy: "", ...(saved.parking || {}) },
-          records: Array.isArray(saved.records) ? saved.records : []
-        };
-      }
+      if (saved && typeof saved === "object") return normalizeCarNotebook(saved);
     } catch (e) {}
-    return { parking: { spot: "", floor: "", memo: "", photoUrl: "", updatedAtMs: 0, updatedBy: "" }, records: [] };
+    return normalizeCarNotebook(null);
   });
-  const [carParkingDraft, setCarParkingDraft] = useState(() => ({
-    floor: "",
-    spot: "",
-    memo: "",
-    photoUrl: ""
-  }));
+  const [carParkingDraft, setCarParkingDraft] = useState(() => ({ ...DEFAULT_CAR_PARKING }));
+  const [carParkingDirty, setCarParkingDirty] = useState(false);
+  const [isCarParkingFormOpen, setIsCarParkingFormOpen] = useState(false);
+  const [isSavingCar, setIsSavingCar] = useState(false);
+  const [carSaveError, setCarSaveError] = useState("");
+  const [isCarVehicleManagerOpen, setIsCarVehicleManagerOpen] = useState(false);
+  const [carVehicleForm, setCarVehicleForm] = useState({ id: "", name: "", plate: "" });
+  const [isCarFloorPresetOpen, setIsCarFloorPresetOpen] = useState(false);
+  const [newCarFloorInput, setNewCarFloorInput] = useState("");
+  const [carRecordSearch, setCarRecordSearch] = useState("");
+  const [carRecordTypeFilter, setCarRecordTypeFilter] = useState("전체");
+  const [carRecordSort, setCarRecordSort] = useState("date_desc"); // date_desc | next_asc
+  const [carRecordPeriod, setCarRecordPeriod] = useState("all"); // all | year | 6m
+  const [showDeletedCarRecords, setShowDeletedCarRecords] = useState(false);
+  const [isCarTypeManagerOpen, setIsCarTypeManagerOpen] = useState(false);
+  const [newCarTypeInput, setNewCarTypeInput] = useState("");
+  const [editingCarTypeId, setEditingCarTypeId] = useState("");
+  const [editingCarTypeDraft, setEditingCarTypeDraft] = useState("");
+  const [carTypeDeleteTarget, setCarTypeDeleteTarget] = useState(null);
+  const [carTypeMoveTargetId, setCarTypeMoveTargetId] = useState("");
+
   useEffect(() => {
-    const p = carNotebook?.parking || {};
+    if (carParkingDirty) return;
+    const activeVeh = (carNotebook?.vehicles || []).find((v) => v.id === carNotebook?.activeVehicleId) || carNotebook?.vehicles?.[0];
+    const p = activeVeh?.parking || carNotebook?.parking || {};
     setCarParkingDraft({
       floor: p.floor || "",
+      lotName: p.lotName || "",
+      zone: p.zone || "",
+      pillar: p.pillar || "",
       spot: p.spot || "",
       memo: p.memo || "",
-      photoUrl: p.photoUrl || ""
+      photoUrl: p.photoUrl || "",
+      photoStoragePath: p.photoStoragePath || ""
     });
-  }, [carNotebook?.parking?.floor, carNotebook?.parking?.spot, carNotebook?.parking?.memo, carNotebook?.parking?.photoUrl]);
+  }, [carNotebook, carParkingDirty]);
 
-  const saveCarNotebookToCloud = async (nextCar, toastMsg = "") => {
-    setCarNotebook(nextCar);
-    try { localStorage.setItem("kim_car_notebook_v1", JSON.stringify(nextCar)); } catch (e) {}
+  const uploadCarParkingPhoto = async (file, vehicleId = "default-car") => {
+    const baseRes = await fileToBase64(file, { maxSide: 960, quality: 0.72 });
+    const dataUrl = baseRes?.previewUrl || "";
+    if (!dataUrl) throw new Error("이미지 변환 실패");
+    if (storage && user && !user.isAnonymous) {
+      try {
+        const resp = await fetch(dataUrl);
+        const blob = await resp.blob();
+        const path = `car_parking/${vehicleId}/${Date.now()}-${Math.random().toString(36).slice(2, 6)}.jpg`;
+        const sRef = storageRef(storage, path);
+        const uploadPromise = (async () => {
+          await uploadBytes(sRef, blob, { contentType: "image/jpeg" });
+          return await getDownloadURL(sRef);
+        })();
+        const timeoutPromise = new Promise((_, rej) => setTimeout(() => rej(new Error("Storage timeout")), 5000));
+        const url = await Promise.race([uploadPromise, timeoutPromise]);
+        if (url) return { photoUrl: url, photoStoragePath: path, isStorage: true };
+      } catch (stErr) {
+        // Storage 미설정/타임아웃 시 압축된 data URL 호환 폴백
+      }
+    }
+    return { photoUrl: dataUrl, photoStoragePath: "", isStorage: false };
+  };
+
+  const saveCarNotebookToCloud = async (nextCarOrUpdater, toastMsg = "") => {
+    if (isSavingCar) return false;
+    setIsSavingCar(true);
+    setCarSaveError("");
+    const prevSnapshot = carNotebook;
+    const candidate = normalizeCarNotebook(
+      typeof nextCarOrUpdater === "function" ? nextCarOrUpdater(carNotebook) : nextCarOrUpdater
+    );
+    setCarNotebook(candidate);
+    try { localStorage.setItem("kim_car_notebook_v1", JSON.stringify(candidate)); } catch (e) {}
+
     if (user && db) {
       beginWrite();
       try {
-        await setDoc(
-          getDocRef("family_meta_v4", "car_notebook_v1"),
-          { ...nextCar, updatedAtMs: Date.now() },
-          { merge: true }
-        );
+        const docRef = getDocRef("family_meta_v4", "car_notebook_v1");
+        let committed = candidate;
+        await runTransaction(db, async (tx) => {
+          const snap = await tx.get(docRef);
+          if (snap.exists()) {
+            const serverNorm = normalizeCarNotebook(snap.data());
+            // 레코드 ID 기준 병합 (서버에만 있는 타 기기 신규/수정 레코드 보존)
+            const recMap = new Map();
+            serverNorm.records.forEach((r) => { if (r?.id) recMap.set(r.id, r); });
+            candidate.records.forEach((r) => {
+              if (!r?.id) return;
+              const srv = recMap.get(r.id);
+              if (!srv || (Number(r.updatedAtMs) || 0) >= (Number(srv.updatedAtMs) || 0)) {
+                recMap.set(r.id, r);
+              }
+            });
+            committed = normalizeCarNotebook({
+              ...serverNorm,
+              ...candidate,
+              records: Array.from(recMap.values())
+            });
+          }
+          tx.set(docRef, { ...committed, updatedAtMs: Date.now() }, { merge: true });
+        });
+        setCarNotebook(committed);
+        try { localStorage.setItem("kim_car_notebook_v1", JSON.stringify(committed)); } catch (e) {}
+        if (toastMsg) showToast(toastMsg);
+        return true;
       } catch (e) {
-        setSyncErrorMsg(e?.message || "우리차수첩 동기화 오류");
-        showToast("⚠️ 우리차수첩 저장에 실패했습니다.");
+        setCarNotebook(prevSnapshot);
+        try { localStorage.setItem("kim_car_notebook_v1", JSON.stringify(prevSnapshot)); } catch (err) {}
+        const msg = e?.message || "우리차수첩 동기화 오류";
+        setSyncErrorMsg(msg);
+        setCarSaveError(msg);
+        showToast("⚠️ 우리차수첩 저장에 실패했습니다. 입력 내용은 유지됩니다.");
+        return false;
       } finally {
         endWrite();
+        setIsSavingCar(false);
       }
     }
+    setIsSavingCar(false);
     if (toastMsg) showToast(toastMsg);
+    return true;
   };
 
-  const savePersonalDataToCloud = async (patchObj, toastMsg = "") => {
+  const [isSavingPersonal, setIsSavingPersonal] = useState(false);
+  const [personalSaveError, setPersonalSaveError] = useState("");
+  const [personalPendingPatch, setPersonalPendingPatch] = useState(null);
+  const personalSpaceDirtyRef = useRef({ goal: false, condition: false, noteForm: false });
+
+  const savePersonalDataToCloud = async (patchObj, toastMsg = "", { rollbackFn = null } = {}) => {
     if (!user || !db || user.isAnonymous) {
       showToast("⚠️ 로그인 후 개인 공간에 저장할 수 있습니다.");
       return false;
     }
+    setIsSavingPersonal(true);
+    setPersonalSaveError("");
     beginWrite();
     try {
-      await setDoc(doc(db, "users", user.uid), { ...patchObj, updatedAtMs: Date.now() }, { merge: true });
+      const privRef = firestoreDoc(db, "users", user.uid, "private_space", "data");
+      await setDoc(privRef, { ...patchObj, ownerUid: user.uid, updatedAtMs: Date.now() }, { merge: true });
+      setPersonalPendingPatch(null);
       if (toastMsg) showToast(toastMsg);
       return true;
     } catch (e) {
-      setSyncErrorMsg(e?.message || "개인 데이터 저장 오류");
-      showToast("⚠️ 개인 공간 저장에 실패했습니다.");
+      const msg = e?.message || "개인 데이터 저장 오류";
+      setSyncErrorMsg(msg);
+      setPersonalSaveError(msg);
+      if (typeof rollbackFn === "function") {
+        try { rollbackFn(); } catch (err) {}
+      } else {
+        setPersonalPendingPatch((prev) => ({ ...(prev || {}), ...patchObj }));
+      }
+      showToast("⚠️ 개인 공간 저장에 실패했습니다. 변경사항은 보류·보존됩니다.");
       return false;
     } finally {
       endWrite();
+      setIsSavingPersonal(false);
     }
   };
   const [isCarRecordFormOpen, setIsCarRecordFormOpen] = useState(false);
+  const [editingCarRecordId, setEditingCarRecordId] = useState(null);
   const [carRecordForm, setCarRecordForm] = useState(() => ({
+    vehicleId: "default-car",
+    typeId: "ct-1",
     type: DEFAULT_CAR_RECORD_TYPES[0],
     title: "",
     date: getTodayStr(),
     nextDate: "",
+    nextMileage: "",
     mileage: "",
     cost: "",
     memo: ""
@@ -5575,19 +5752,32 @@ function MainApp() {
   const [personalBodyGoal, setPersonalBodyGoal] = useState({ weight: "", bodyFatPct: "" });
   const [bodyMetricId, setBodyMetricId] = useState("weight");
   const [bodyRangeDays, setBodyRangeDays] = useState("all");
+  const [bodyRangeBasis, setBodyRangeBasis] = useState("latest"); // latest | today
   const [bodySelectedIdx, setBodySelectedIdx] = useState(null);
   const [isBodyManualOpen, setIsBodyManualOpen] = useState(false);
+  const [editingBodyRowId, setEditingBodyRowId] = useState(null);
   const [bodyManualForm, setBodyManualForm] = useState(() => ({
     date: getTodayStr(),
+    time: "",
     weight: "",
     bodyFatPct: "",
     skeletalMuscle: ""
   }));
+  const [bodyImportPreview, setBodyImportPreview] = useState(null);
+  const [bodyImportConflictPolicy, setBodyImportConflictPolicy] = useState("merge_non_empty"); // merge_non_empty | overwrite | keep_existing
   const [showAllBodyRows, setShowAllBodyRows] = useState(false);
   const [personalSecretNotes, setPersonalSecretNotes] = useState([]);
+  const [personalSecretTrash, setPersonalSecretTrash] = useState([]);
   const [personalSecretCats, setPersonalSecretCats] = useState(() => [...DEFAULT_SECRET_NOTE_CATS]);
+  const [personalSecretArchivedCats, setPersonalSecretArchivedCats] = useState([]);
   const [secretNoteSearch, setSecretNoteSearch] = useState("");
   const [secretNoteCatFilter, setSecretNoteCatFilter] = useState("전체");
+  const [showSecretTrash, setShowSecretTrash] = useState(false);
+  const [isSecretCatManageOpen, setIsSecretCatManageOpen] = useState(false);
+  const [editingSecretCatOrig, setEditingSecretCatOrig] = useState("");
+  const [editingSecretCatDraft, setEditingSecretCatDraft] = useState("");
+  const [secretCatMoveTarget, setSecretCatMoveTarget] = useState("메모");
+  const [expandedSecretNoteId, setExpandedSecretNoteId] = useState(null);
   const [isSecretNoteFormOpen, setIsSecretNoteFormOpen] = useState(false);
   const [editingSecretNoteId, setEditingSecretNoteId] = useState(null);
   const [secretNoteForm, setSecretNoteForm] = useState(() => ({
@@ -5598,17 +5788,26 @@ function MainApp() {
     pinned: false
   }));
   const [newSecretCatInput, setNewSecretCatInput] = useState("");
+  const [isSecretCatComposing, setIsSecretCatComposing] = useState(false);
   const [personalSelfCare, setPersonalSelfCare] = useState(() => ({
-    items: DEFAULT_SELF_CARE_ITEMS.map((x) => ({ ...x })),
+    items: DEFAULT_SELF_CARE_ITEMS.map((x) => ({ ...x, days: [0, 1, 2, 3, 4, 5, 6], paused: false })),
+    types: [...DEFAULT_SELF_CARE_TYPES],
     waterDate: "",
     waterCount: 0,
     waterGoal: 8,
+    waterUnitMl: DEFAULT_BODY_WATER_UNIT_ML,
     conditionDate: "",
-    conditionMemo: ""
+    conditionMemo: "",
+    dailyHistory: {}
   }));
+  const [selfCareHistoryDays, setSelfCareHistoryDays] = useState(0); // 0 | 7 | 30
+  const [editingSelfCareId, setEditingSelfCareId] = useState(null);
   const [newSelfCareLabel, setNewSelfCareLabel] = useState("");
   const [newSelfCareType, setNewSelfCareType] = useState("영양제");
   const [newSelfCareTime, setNewSelfCareTime] = useState("아침");
+  const [newSelfCareDays, setNewSelfCareDays] = useState([0, 1, 2, 3, 4, 5, 6]);
+  const [isSelfCareTypeManageOpen, setIsSelfCareTypeManageOpen] = useState(false);
+  const [newSelfCareTypeInput, setNewSelfCareTypeInput] = useState("");
   const [houseSearch, setHouseSearch] = useState("");
   const [houseFilter, setHouseFilter] = useState("전체");
   const [isHouseModalOpen, setIsHouseModalOpen] = useState(false);
@@ -7561,7 +7760,8 @@ function MainApp() {
     return total;
   };
 
-  const openWakeupAlarmModal = (existing = null) => {
+  const [alarmSourceMetaDraft, setAlarmSourceMetaDraft] = useState(null);
+  const openWakeupAlarmModal = (existing = null, prefill = null) => {
     unlockAudioContext();
     if (existing) {
       const [hRaw, mRaw] = String(existing.time || "07:00").split(":").map(Number);
@@ -7576,20 +7776,33 @@ function MainApp() {
       setAlarmSoundIdDraft(existing.soundId || "morning");
       setAlarmVolDraft(typeof existing.volume === "number" ? existing.volume : alarmDefaultVolume);
       setAlarmVibDraft(existing.vibrate !== false);
+      setAlarmSourceMetaDraft(existing.sourceType ? {
+        sourceType: existing.sourceType,
+        sourceId: existing.sourceId || "",
+        scope: existing.scope || "family",
+        ownerUid: existing.ownerUid || ""
+      } : null);
     } else {
       const now = new Date();
       const next = new Date(now.getTime() + 60000);
-      const h = next.getHours();
-      const m = next.getMinutes();
+      const [pH, pM] = prefill?.time ? String(prefill.time).split(":").map(Number) : [NaN, NaN];
+      const h = Number.isFinite(pH) ? pH : next.getHours();
+      const m = Number.isFinite(pM) ? pM : next.getMinutes();
       setEditingAlarmId(null);
       setAlarmAmPmDraft(h < 12 ? "AM" : "PM");
       setAlarmHourDraft(h % 12 === 0 ? 12 : h % 12);
       setAlarmMinDraft(m);
-      setAlarmLabelDraft("");
-      setAlarmDaysDraft([0, 1, 2, 3, 4, 5, 6]);
-      setAlarmSoundIdDraft("morning");
-      setAlarmVolDraft(alarmDefaultVolume);
-      setAlarmVibDraft(timerVibrateEnabled);
+      setAlarmLabelDraft(prefill?.label || "");
+      setAlarmDaysDraft(Array.isArray(prefill?.days) ? prefill.days : [0, 1, 2, 3, 4, 5, 6]);
+      setAlarmSoundIdDraft(prefill?.soundId || "morning");
+      setAlarmVolDraft(typeof prefill?.volume === "number" ? prefill.volume : alarmDefaultVolume);
+      setAlarmVibDraft(prefill?.vibrate !== undefined ? Boolean(prefill.vibrate) : timerVibrateEnabled);
+      setAlarmSourceMetaDraft(prefill?.sourceType ? {
+        sourceType: prefill.sourceType,
+        sourceId: prefill.sourceId || "",
+        scope: prefill.scope || "family",
+        ownerUid: prefill.ownerUid || ""
+      } : null);
     }
     setAlarmMenuOpenId(null);
     setAlarmSheetMode("wakeup");
@@ -7635,7 +7848,13 @@ function MainApp() {
       volume: Math.max(0, Math.min(100, Number(alarmVolDraft) || 0)),
       vibrate: Boolean(alarmVibDraft),
       enabled: true,
-      lastFiredKey: ""
+      lastFiredKey: "",
+      ...(alarmSourceMetaDraft?.sourceType ? {
+        sourceType: alarmSourceMetaDraft.sourceType,
+        sourceId: alarmSourceMetaDraft.sourceId || "",
+        scope: alarmSourceMetaDraft.scope || "family",
+        ownerUid: alarmSourceMetaDraft.ownerUid || ""
+      } : {})
     };
     saveAlarmDefaultVolume(payload.volume);
     if (editingAlarmId) {
@@ -7646,6 +7865,7 @@ function MainApp() {
       showToast(`☀️ '${lbl}' (${hhmm}) 기상 알람이 저장되었습니다!`);
     }
     setEditingAlarmId(null);
+    setAlarmSourceMetaDraft(null);
     setAlarmSheetMode("");
   };
 
@@ -9395,38 +9615,55 @@ function MainApp() {
           setRecentGlobalSearches(cleanRecent);
           try { localStorage.setItem(`kim_global_search_recent_v1_${user.uid}`, JSON.stringify(cleanRecent)); } catch (e) {}
         }
-        if (Array.isArray(data.personalSecretNotes)) {
-          setPersonalSecretNotes(data.personalSecretNotes);
-        } else {
-          setPersonalSecretNotes([]);
-        }
-        if (Array.isArray(data.personalSecretCats) && data.personalSecretCats.length > 0) {
-          setPersonalSecretCats(data.personalSecretCats);
-        } else {
-          setPersonalSecretCats([...DEFAULT_SECRET_NOTE_CATS]);
-        }
-        if (data.personalSelfCare && typeof data.personalSelfCare === "object") {
-          setPersonalSelfCare({
-            items: Array.isArray(data.personalSelfCare.items) ? data.personalSelfCare.items : DEFAULT_SELF_CARE_ITEMS.map((x) => ({ ...x })),
-            waterDate: data.personalSelfCare.waterDate || "",
-            waterCount: Number(data.personalSelfCare.waterCount) || 0,
-            waterGoal: Math.max(1, Number(data.personalSelfCare.waterGoal) || 8),
-            conditionDate: data.personalSelfCare.conditionDate || "",
-            conditionMemo: data.personalSelfCare.conditionMemo || ""
-          });
-        }
-        if (Array.isArray(data.personalBodyLogs)) {
-          setPersonalBodyLogs([...data.personalBodyLogs].sort((a, b) => String(a.measuredAt || "").localeCompare(String(b.measuredAt || ""))));
-        } else {
-          setPersonalBodyLogs([]);
-        }
-        if (data.personalBodyGoal && typeof data.personalBodyGoal === "object") {
-          setPersonalBodyGoal({
-            weight: data.personalBodyGoal.weight ?? "",
-            bodyFatPct: data.personalBodyGoal.bodyFatPct ?? ""
-          });
-        } else {
-          setPersonalBodyGoal({ weight: "", bodyFatPct: "" });
+        // 레거시 users/{uid} 프로필 필드에 남아있는 개인 데이터를 private_space/data로 1회 멱등 이관 후 프로필 필드 정리
+        const hasLegacyPersonal =
+          Array.isArray(data.personalSecretNotes) ||
+          Array.isArray(data.personalSecretCats) ||
+          (data.personalSelfCare && typeof data.personalSelfCare === "object") ||
+          Array.isArray(data.personalBodyLogs) ||
+          (data.personalBodyGoal && typeof data.personalBodyGoal === "object");
+        if (hasLegacyPersonal && !data.personalMigratedV1) {
+          (async () => {
+            try {
+              const privRef = firestoreDoc(db, "users", user.uid, "private_space", "data");
+              const privSnap = await getDoc(privRef);
+              if (!privSnap.exists() || !privSnap.data()?.migratedFromProfileV1) {
+                const existingPriv = privSnap.exists() ? privSnap.data() || {} : {};
+                await setDoc(privRef, {
+                  ownerUid: user.uid,
+                  migratedFromProfileV1: true,
+                  migratedAtMs: Date.now(),
+                  personalSecretNotes: Array.isArray(existingPriv.personalSecretNotes) && existingPriv.personalSecretNotes.length > 0
+                    ? existingPriv.personalSecretNotes
+                    : (Array.isArray(data.personalSecretNotes) ? data.personalSecretNotes : []),
+                  personalSecretCats: Array.isArray(existingPriv.personalSecretCats) && existingPriv.personalSecretCats.length > 0
+                    ? existingPriv.personalSecretCats
+                    : (Array.isArray(data.personalSecretCats) && data.personalSecretCats.length > 0 ? data.personalSecretCats : [...DEFAULT_SECRET_NOTE_CATS]),
+                  personalSelfCare: existingPriv.personalSelfCare || data.personalSelfCare || {
+                    items: DEFAULT_SELF_CARE_ITEMS.map((x) => ({ ...x, days: [0,1,2,3,4,5,6], paused: false })),
+                    types: [...DEFAULT_SELF_CARE_TYPES],
+                    waterDate: "", waterCount: 0, waterGoal: 8, waterUnitMl: DEFAULT_BODY_WATER_UNIT_ML,
+                    conditionDate: "", conditionMemo: "", dailyHistory: {}
+                  },
+                  personalBodyLogs: Array.isArray(existingPriv.personalBodyLogs) && existingPriv.personalBodyLogs.length > 0
+                    ? existingPriv.personalBodyLogs
+                    : (Array.isArray(data.personalBodyLogs) ? data.personalBodyLogs : []),
+                  personalBodyGoal: existingPriv.personalBodyGoal || data.personalBodyGoal || { weight: "", bodyFatPct: "" }
+                }, { merge: true });
+              }
+              await setDoc(userRef, {
+                personalSecretNotes: deleteField(),
+                personalSecretCats: deleteField(),
+                personalSelfCare: deleteField(),
+                personalBodyLogs: deleteField(),
+                personalBodyGoal: deleteField(),
+                personalMigratedV1: true,
+                updatedAtMs: Date.now()
+              }, { merge: true });
+            } catch (migErr) {
+              console.warn("Personal space migration deferred:", migErr);
+            }
+          })();
         }
         if (data.role === "admin" || data.role === "helper") {
           setAccessRole(data.role);
@@ -9451,6 +9688,100 @@ function MainApp() {
     );
     return () => unsub();
   }, [user]);
+
+  // 🔒 계정 전환/로그아웃 시 나만의 공간 상태 즉시 초기화 + users/{uid}/private_space/data 전용 구독
+  useEffect(() => {
+    setPersonalSecretNotes([]);
+    setPersonalSecretTrash([]);
+    setPersonalSecretCats([...DEFAULT_SECRET_NOTE_CATS]);
+    setPersonalSecretArchivedCats([]);
+    setSecretNoteSearch("");
+    setSecretNoteCatFilter("전체");
+    setIsSecretNoteFormOpen(false);
+    setEditingSecretNoteId(null);
+    setSecretNoteForm({ title: "", category: DEFAULT_SECRET_NOTE_CATS[0], url: "", content: "", pinned: false });
+    setPersonalSelfCare({
+      items: DEFAULT_SELF_CARE_ITEMS.map((x) => ({ ...x, days: [0, 1, 2, 3, 4, 5, 6], paused: false })),
+      types: [...DEFAULT_SELF_CARE_TYPES],
+      waterDate: "",
+      waterCount: 0,
+      waterGoal: 8,
+      waterUnitMl: DEFAULT_BODY_WATER_UNIT_ML,
+      conditionDate: "",
+      conditionMemo: "",
+      dailyHistory: {}
+    });
+    setPersonalBodyLogs([]);
+    setPersonalBodyGoal({ weight: "", bodyFatPct: "" });
+    setBodySelectedIdx(null);
+    setBodyImportPreview(null);
+    setIsBodyManualOpen(false);
+    setEditingBodyRowId(null);
+    setPersonalPendingPatch(null);
+    setPersonalSaveError("");
+    personalSpaceDirtyRef.current = { goal: false, condition: false, noteForm: false };
+
+    if (!user || !db || user.isAnonymous) return;
+    const privRef = firestoreDoc(db, "users", user.uid, "private_space", "data");
+    const unsubPriv = onSnapshot(
+      privRef,
+      (snap) => {
+        if (!snap.exists()) return;
+        const d = snap.data() || {};
+        if (d.ownerUid && d.ownerUid !== user.uid) return;
+        if (!personalSpaceDirtyRef.current.noteForm) {
+          setPersonalSecretNotes(Array.isArray(d.personalSecretNotes) ? d.personalSecretNotes : []);
+        }
+        setPersonalSecretTrash(Array.isArray(d.personalSecretTrash) ? d.personalSecretTrash : []);
+        setPersonalSecretCats(
+          Array.isArray(d.personalSecretCats) && d.personalSecretCats.length > 0
+            ? d.personalSecretCats
+            : [...DEFAULT_SECRET_NOTE_CATS]
+        );
+        setPersonalSecretArchivedCats(Array.isArray(d.personalSecretArchivedCats) ? d.personalSecretArchivedCats : []);
+        if (d.personalSelfCare && typeof d.personalSelfCare === "object") {
+          setPersonalSelfCare((prev) => ({
+            items: Array.isArray(d.personalSelfCare.items)
+              ? d.personalSelfCare.items.map((x) => ({
+                  ...x,
+                  days: Array.isArray(x.days) ? x.days : [0, 1, 2, 3, 4, 5, 6],
+                  paused: Boolean(x.paused)
+                }))
+              : DEFAULT_SELF_CARE_ITEMS.map((x) => ({ ...x, days: [0, 1, 2, 3, 4, 5, 6], paused: false })),
+            types: Array.isArray(d.personalSelfCare.types) && d.personalSelfCare.types.length > 0
+              ? d.personalSelfCare.types
+              : [...DEFAULT_SELF_CARE_TYPES],
+            waterDate: d.personalSelfCare.waterDate || "",
+            waterCount: Number(d.personalSelfCare.waterCount) || 0,
+            waterGoal: Math.max(1, Number(d.personalSelfCare.waterGoal) || 8),
+            waterUnitMl: Math.max(50, Number(d.personalSelfCare.waterUnitMl) || DEFAULT_BODY_WATER_UNIT_ML),
+            conditionDate: personalSpaceDirtyRef.current.condition ? prev.conditionDate : (d.personalSelfCare.conditionDate || ""),
+            conditionMemo: personalSpaceDirtyRef.current.condition ? prev.conditionMemo : (d.personalSelfCare.conditionMemo || ""),
+            dailyHistory: d.personalSelfCare.dailyHistory && typeof d.personalSelfCare.dailyHistory === "object"
+              ? d.personalSelfCare.dailyHistory
+              : {}
+          }));
+        }
+        if (Array.isArray(d.personalBodyLogs)) {
+          setPersonalBodyLogs([...d.personalBodyLogs].sort((a, b) =>
+            (a.timestampMs || 0) - (b.timestampMs || 0) || String(a.measuredAt || "").localeCompare(String(b.measuredAt || ""))
+          ));
+        } else {
+          setPersonalBodyLogs([]);
+        }
+        if (!personalSpaceDirtyRef.current.goal && d.personalBodyGoal && typeof d.personalBodyGoal === "object") {
+          setPersonalBodyGoal({
+            weight: d.personalBodyGoal.weight ?? "",
+            bodyFatPct: d.personalBodyGoal.bodyFatPct ?? ""
+          });
+        }
+      },
+      (err) => {
+        console.warn("Private space snapshot error:", err);
+      }
+    );
+    return () => unsubPriv();
+  }, [user?.uid]);
 
   useEffect(() => {
     if (!user || !db || userProfile?.role !== "admin") {
@@ -10305,11 +10636,7 @@ function MainApp() {
         getDocRef("family_meta_v4", "car_notebook_v1"),
         (snap) => {
           if (!snap.exists()) return;
-          const d = snap.data() || {};
-          const next = {
-            parking: { spot: "", floor: "", memo: "", photoUrl: "", updatedAtMs: 0, updatedBy: "", ...(d.parking || {}) },
-            records: Array.isArray(d.records) ? d.records : []
-          };
+          const next = normalizeCarNotebook(snap.data() || {});
           setCarNotebook(next);
           try { localStorage.setItem("kim_car_notebook_v1", JSON.stringify(next)); } catch (e) {}
         },
@@ -10594,14 +10921,19 @@ function MainApp() {
       onSnapshot(
         getColRef("family_patchnotes_v4"),
         async (snap) => {
-          const loaded = snap.docs.map((d) => ({
-            ...d.data(),
-            id: d.id,
-            changes: toSafeArray(d.data().changes)
-          }));
+          const loaded = snap.docs.map((d) => {
+            const raw = d.data() || {};
+            return {
+              ...raw,
+              id: d.id,
+              ...(Array.isArray(raw.changes) ? { changes: raw.changes } : {}),
+              ...(Array.isArray(raw.items) ? { items: raw.items } : {}),
+              ...(Array.isArray(raw.highlights) ? { highlights: raw.highlights } : {})
+            };
+          });
           const loadedIds = new Set(loaded.map((p) => p.id));
           const missingDefaults = INITIAL_PATCH_NOTES.filter((p) => !loadedIds.has(p.id));
-          if (missingDefaults.length > 0) {
+          if (missingDefaults.length > 0 && userProfile?.role === "admin") {
             for (const p of missingDefaults) {
               try {
                 await setDoc(getDocRef("family_patchnotes_v4", p.id), p);
@@ -10804,6 +11136,7 @@ function MainApp() {
       babyChecks,
       babyGrowthLogs,
       babyMedicalNotes,
+      carNotebook,
       cookedBatches,
       cookedPortions,
       cookedLogs
@@ -12415,7 +12748,14 @@ function MainApp() {
       notifEnabled: srcForm.notifEnabled !== false,
       done: editingSchedule ? Boolean(editingSchedule.done) : false,
       memo: (srcForm.memo || "").trim(),
-      attachments: Array.isArray(srcForm.attachments) ? srcForm.attachments : []
+      attachments: Array.isArray(srcForm.attachments) ? srcForm.attachments : [],
+      ...(srcForm.sourceType || editingSchedule?.sourceType ? {
+        sourceType: srcForm.sourceType || editingSchedule?.sourceType || "",
+        sourceId: srcForm.sourceId || editingSchedule?.sourceId || "",
+        vehicleId: srcForm.vehicleId || editingSchedule?.vehicleId || "",
+        scope: srcForm.scope || editingSchedule?.scope || "family",
+        ownerUid: srcForm.ownerUid || editingSchedule?.ownerUid || ""
+      } : {})
     };
 
 
@@ -18381,6 +18721,13 @@ const priceStr = exportIncludePrice && safeItPrice > 0 ? `${safeItPrice.toLocale
       notifEnabled: srcForm.notifEnabled !== false,
       memo: String(srcForm.memo || "").trim(),
       done: Boolean(existing?.done),
+      ...(srcForm.sourceType || existing?.sourceType ? {
+        sourceType: srcForm.sourceType || existing?.sourceType || "",
+        sourceId: srcForm.sourceId || existing?.sourceId || "",
+        vehicleId: srcForm.vehicleId || existing?.vehicleId || "",
+        scope: "private",
+        ownerUid: user?.uid || ""
+      } : {}),
       updatedAtMs: Date.now()
     };
     const statePayload = nextBucketId ? { ...payload, _bucketDocId: nextBucketId } : payload;
@@ -35882,75 +36229,430 @@ time: "", location: "",
             </div>
 
             {houseSubTab === "car" ? (() => {
-              const curPark = carNotebook?.parking || {};
-              const carRecords = Array.isArray(carNotebook?.records) ? carNotebook.records : [];
-              const hasParked = Boolean(curPark.floor || curPark.spot || curPark.photoUrl || curPark.memo);
+              const vehicles = Array.isArray(carNotebook?.vehicles) ? carNotebook.vehicles : [];
+              const activeVehicles = vehicles.filter((v) => !v.archived);
+              const archivedVehicles = vehicles.filter((v) => v.archived);
+              const activeVeh = vehicles.find((v) => v.id === carNotebook?.activeVehicleId) || activeVehicles[0] || vehicles[0];
+              const activeVehId = activeVeh?.id || "default-car";
+              const curPark = activeVeh?.parking || carNotebook?.parking || {};
+              const parkHistory = Array.isArray(activeVeh?.parkingHistory) ? activeVeh.parkingHistory : [];
+              const floorPresets = Array.isArray(carNotebook?.floorPresets) && carNotebook.floorPresets.length > 0 ? carNotebook.floorPresets : CAR_PARKING_FLOOR_PRESETS;
+              const recordTypes = Array.isArray(carNotebook?.recordTypes) ? carNotebook.recordTypes : [];
+              const activeRecordTypes = recordTypes.filter((t) => !t.archived);
+              const allCarRecords = Array.isArray(carNotebook?.records) ? carNotebook.records : [];
+              const vehRecords = allCarRecords.filter((r) => (r.vehicleId || "default-car") === activeVehId);
+              const activeRecords = vehRecords.filter((r) => !r.deletedAtMs);
+              const deletedRecords = vehRecords.filter((r) => Boolean(r.deletedAtMs));
+              const hasParked = Boolean(curPark.floor || curPark.lotName || curPark.zone || curPark.pillar || curPark.spot || curPark.photoUrl || curPark.memo);
+
+              // 가까운 관리 일정 (날짜 또는 주행거리 기준 근거)
+              const latestMileage = activeRecords.reduce((mx, r) => {
+                const m = Number(String(r.mileage ?? "").replace(/[^0-9.]/g, ""));
+                return Number.isFinite(m) && m > mx ? m : mx;
+              }, 0);
+              const upcomingCarTasks = activeRecords
+                .map((r) => {
+                  const nDiff = r.nextDate ? getDaysDiff(r.nextDate) : null;
+                  const nextKm = Number(String(r.nextMileage ?? "").replace(/[^0-9.]/g, ""));
+                  const kmDiff = Number.isFinite(nextKm) && nextKm > 0 && latestMileage > 0 ? Math.round(nextKm - latestMileage) : null;
+                  const isDueSoon = (nDiff !== null && nDiff <= 30) || (kmDiff !== null && kmDiff <= 1000);
+                  return { rec: r, nDiff, nextKm, kmDiff, isDueSoon };
+                })
+                .filter((x) => x.nDiff !== null || (Number.isFinite(x.nextKm) && x.nextKm > 0))
+                .sort((a, b) => {
+                  const da = a.nDiff !== null ? a.nDiff : 9999;
+                  const db = b.nDiff !== null ? b.nDiff : 9999;
+                  return da - db;
+                });
+
+              // 월/연도 관리비 요약 (월간 식비와 완전 분리)
+              const curYm = getTodayStr().slice(0, 7);
+              const curYear = curYm.slice(0, 4);
+              const monthCarCost = activeRecords.filter((r) => String(r.date || "").startsWith(curYm)).reduce((s, r) => s + (Number(r.cost) || 0), 0);
+              const yearCarCost = activeRecords.filter((r) => String(r.date || "").startsWith(curYear)).reduce((s, r) => s + (Number(r.cost) || 0), 0);
+
+              // 검색/필터/정렬
+              const qCar = carRecordSearch.trim().toLowerCase();
+              const cutoff6m = getOffsetDateStr(getTodayStr(), -180);
+              const filteredRecords = (showDeletedCarRecords ? deletedRecords : activeRecords)
+                .filter((r) => carRecordTypeFilter === "전체" || r.typeId === carRecordTypeFilter || r.type === carRecordTypeFilter)
+                .filter((r) => {
+                  if (carRecordPeriod === "year") return String(r.date || "").startsWith(curYear);
+                  if (carRecordPeriod === "6m") return String(r.date || "") >= cutoff6m;
+                  return true;
+                })
+                .filter((r) => !qCar || `${r.title || ""} ${r.type || ""} ${r.memo || ""} ${r.date || ""}`.toLowerCase().includes(qCar))
+                .sort((a, b) => {
+                  if (carRecordSort === "next_asc") {
+                    const na = a.nextDate || "9999-12-31";
+                    const nb = b.nextDate || "9999-12-31";
+                    return na.localeCompare(nb);
+                  }
+                  return String(b.date || "").localeCompare(String(a.date || "")) || (Number(b.updatedAtMs) || 0) - (Number(a.updatedAtMs) || 0);
+                });
+
+              const parkSummaryParts = [curPark.lotName, curPark.floor, curPark.zone, curPark.pillar || curPark.spot].filter(Boolean);
+              const recentLotOptions = Array.from(new Set(
+                parkHistory.map((h) => h.lotName).filter(Boolean)
+              )).slice(0, 4);
+
+              const openCarLinkedSchedule = (rec) => {
+                if (!canEditTab("schedule")) { showToast("일정 편집 권한이 없습니다."); return; }
+                const existingFam = schedules.find((s) => s.sourceType === "car_record" && s.sourceId === rec.id);
+                if (existingFam) {
+                  setEditingPrivateCalId(null);
+                  setEditingSchedule(existingFam);
+                  setScheduleForm({
+                    scheduleScope: "family",
+                    title: existingFam.title || `🚗 ${rec.title} (${rec.type})`,
+                    date: existingFam.date || rec.nextDate || getTodayStr(),
+                    endDate: existingFam.endDate || "",
+                    time: existingFam.time || "",
+                    location: existingFam.location || "",
+                    category: existingFam.category || (scheduleCategories.includes("할일(To-Do)") ? "할일(To-Do)" : (scheduleCategories[0] || "가족행사/경조사")),
+                    members: existingFam.members || ["수혁", "아리나"],
+                    isAnnual: Boolean(existingFam.isAnnual),
+                    showDday: existingFam.showDday !== false,
+                    hasOriginYear: Boolean(existingFam.hasOriginYear),
+                    memo: existingFam.memo || rec.memo || "",
+                    attachments: existingFam.attachments || [],
+                    sourceType: "car_record",
+                    sourceId: rec.id,
+                    vehicleId: activeVehId,
+                    scope: "family"
+                  });
+                  setIsScheduleModalOpen(true);
+                  showToast("이미 연결된 차량 관리 일정을 열었습니다.");
+                  return;
+                }
+                setEditingPrivateCalId(null);
+                setEditingSchedule(null);
+                setScheduleForm({
+                  scheduleScope: "family",
+                  title: `🚗 ${activeVeh?.name ? `[${activeVeh.name}] ` : ""}${rec.title} (${rec.type})`,
+                  date: rec.nextDate || getTodayStr(),
+                  endDate: "",
+                  time: "",
+                  location: "",
+                  category: scheduleCategories.includes("할일(To-Do)") ? "할일(To-Do)" : (scheduleCategories[0] || "가족행사/경조사"),
+                  members: ["수혁", "아리나"],
+                  isAnnual: false,
+                  showDday: true,
+                  hasOriginYear: false,
+                  memo: rec.memo || "",
+                  attachments: [],
+                  sourceType: "car_record",
+                  sourceId: rec.id,
+                  vehicleId: activeVehId,
+                  scope: "family"
+                });
+                setIsScheduleModalOpen(true);
+              };
+
               return (
                 <div className="space-y-3">
-                  {/* 🚗 주차 위치 1초 기록 카드 */}
-                  <div className="bg-white rounded-2xl border border-stone-200 p-3.5 space-y-2.5 shadow-sm">
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-1.5 min-w-0">
-                        <span className="text-[13.5px] font-black text-stone-900">🚗 현재 주차 위치</span>
-                        {hasParked && curPark.updatedAtMs > 0 && (
-                          <span className="text-[10.5px] font-bold text-stone-400 truncate">
-                            {curPark.updatedBy ? `${curPark.updatedBy} · ` : ""}{formatActivityTime(curPark.updatedAtMs)}
-                          </span>
+                  {/* 차량 선택기 (1대일 때는 간소화) */}
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+                      {activeVehicles.length > 1 ? (
+                        activeVehicles.map((v) => (
+                          <button
+                            key={v.id}
+                            type="button"
+                            onClick={() => {
+                              setCarParkingDirty(false);
+                              saveCarNotebookToCloud({ ...carNotebook, activeVehicleId: v.id });
+                            }}
+                            className={`px-2.5 py-1 rounded-full text-[11.5px] font-extrabold border whitespace-nowrap transition ${
+                              v.id === activeVehId
+                                ? "bg-[#3F624D] text-white border-[#3F624D]"
+                                : "bg-white text-stone-600 border-stone-200 hover:bg-stone-50"
+                            }`}
+                          >
+                            🚗 {v.name}{v.plate ? ` (${v.plate})` : ""}
+                          </button>
+                        ))
+                      ) : (
+                        <span className="text-[12px] font-extrabold text-stone-600">
+                          🚗 {activeVeh?.name || "우리차"}{activeVeh?.plate ? ` · ${activeVeh.plate}` : ""}
+                        </span>
+                      )}
+                    </div>
+                    {canEditTab("house") && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCarVehicleForm({ id: "", name: "", plate: "" });
+                          setIsCarVehicleManagerOpen((v) => !v);
+                        }}
+                        className="px-2 py-1 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 text-[11px] font-extrabold whitespace-nowrap shrink-0"
+                      >
+                        ⚙️ 차량 관리
+                      </button>
+                    )}
+                  </div>
+
+                  {carSaveError && (
+                    <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-200 flex items-center justify-between gap-2 text-[11.5px] font-bold text-rose-700">
+                      <span className="min-w-0 break-words">⚠️ 저장 오류: {carSaveError}</span>
+                      <button
+                        type="button"
+                        onClick={() => saveCarNotebookToCloud(carNotebook, "🚗 차량 데이터를 다시 저장했습니다.")}
+                        className="px-2 py-1 rounded-lg bg-rose-600 text-white text-[11px] font-extrabold whitespace-nowrap shrink-0"
+                      >
+                        재시도
+                      </button>
+                    </div>
+                  )}
+
+                  {isCarVehicleManagerOpen && canEditTab("house") && (
+                    <div className="bg-white rounded-2xl border border-stone-200 p-3 space-y-2 shadow-sm">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[12.5px] font-black text-stone-900">차량 등록 · 수정 · 보관</span>
+                        <button type="button" onClick={() => setIsCarVehicleManagerOpen(false)} aria-label="차량 관리 닫기" className="text-stone-400 hover:text-stone-700">
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                      <div className="space-y-1.5">
+                        {vehicles.map((v) => (
+                          <div key={v.id} className="flex items-center justify-between gap-2 p-2 rounded-xl bg-[#FAF8F3] border border-stone-200">
+                            <span className={`text-[12px] font-bold truncate ${v.archived ? "line-through text-stone-400" : "text-stone-800"}`}>
+                              {v.name}{v.plate ? ` (${v.plate})` : ""}{v.archived ? " · 보관됨" : ""}
+                            </span>
+                            <div className="flex items-center gap-1 shrink-0">
+                              <button
+                                type="button"
+                                onClick={() => setCarVehicleForm({ id: v.id, name: v.name, plate: v.plate || "" })}
+                                className="px-2 py-0.5 rounded bg-white border border-stone-200 text-[10.5px] font-extrabold text-stone-600"
+                              >
+                                수정
+                              </button>
+                              {vehicles.length > 1 && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const nextV = vehicles.map((x) => x.id === v.id ? { ...x, archived: !x.archived } : x);
+                                    saveCarNotebookToCloud({ ...carNotebook, vehicles: nextV }, v.archived ? "차량을 복원했습니다." : "차량을 보관했습니다.");
+                                  }}
+                                  className="px-2 py-0.5 rounded bg-white border border-stone-200 text-[10.5px] font-extrabold text-stone-500"
+                                >
+                                  {v.archived ? "복원" : "보관"}
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                        {archivedVehicles.length > 0 && (
+                          <div className="text-[10.5px] text-stone-400 font-semibold">보관된 차량은 상단 선택에서 숨겨지며 과거 기록은 유지됩니다.</div>
                         )}
                       </div>
-                      {hasParked && (
-                        <div className="flex items-center gap-1 shrink-0">
+                      <div className="flex items-center gap-1.5 pt-1 flex-wrap">
+                        <input
+                          type="text"
+                          value={carVehicleForm.name}
+                          onChange={(e) => setCarVehicleForm((p) => ({ ...p, name: e.target.value }))}
+                          placeholder="차량 별칭 (예: 패밀리카)"
+                          className="flex-1 min-w-[110px] px-2.5 py-1.5 rounded-xl border border-stone-200 bg-[#FAF8F3] text-[12px] font-bold"
+                        />
+                        <input
+                          type="text"
+                          value={carVehicleForm.plate}
+                          onChange={(e) => setCarVehicleForm((p) => ({ ...p, plate: e.target.value }))}
+                          placeholder="번호판 (선택)"
+                          className="w-28 px-2.5 py-1.5 rounded-xl border border-stone-200 bg-[#FAF8F3] text-[12px] font-bold"
+                        />
+                        <button
+                          type="button"
+                          disabled={isSavingCar}
+                          onClick={async () => {
+                            const name = carVehicleForm.name.trim();
+                            if (!name) { showToast("차량 이름을 입력해 주세요."); return; }
+                            let nextVehicles;
+                            let nextActiveId = activeVehId;
+                            if (carVehicleForm.id) {
+                              nextVehicles = vehicles.map((v) => v.id === carVehicleForm.id ? { ...v, name, plate: carVehicleForm.plate.trim() } : v);
+                            } else {
+                              const newId = `veh-${Date.now().toString(36)}`;
+                              nextVehicles = [...vehicles, { id: newId, name, plate: carVehicleForm.plate.trim(), archived: false, parking: { ...DEFAULT_CAR_PARKING }, parkingHistory: [] }];
+                              nextActiveId = newId;
+                            }
+                            const ok = await saveCarNotebookToCloud({ ...carNotebook, vehicles: nextVehicles, activeVehicleId: nextActiveId }, carVehicleForm.id ? "차량 정보를 수정했습니다." : "새 차량을 등록했습니다.");
+                            if (ok) setCarVehicleForm({ id: "", name: "", plate: "" });
+                          }}
+                          className="px-3 py-1.5 rounded-xl bg-[#3F624D] hover:bg-[#35503C] text-white text-[11.5px] font-extrabold whitespace-nowrap"
+                        >
+                          {carVehicleForm.id ? "수정 저장" : "+ 추가"}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 1. 현재 주차 위치 */}
+                  <div className="bg-white rounded-2xl border border-stone-200 p-3.5 space-y-2.5 shadow-sm">
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <div className="min-w-0">
+                        <span className="text-[13.5px] font-black text-stone-900">🚗 현재 주차 위치</span>
+                        {hasParked && curPark.updatedAtMs > 0 && (
+                          <div className="text-[11px] font-semibold text-stone-500">
+                            {curPark.updatedBy ? `${curPark.updatedBy} · ` : ""}{formatActivityTime(curPark.updatedAtMs)}
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0 flex-wrap">
+                        {hasParked && (
                           <button
                             type="button"
-                            onClick={() => copyTextSafe(
-                              `🚗 주차 위치: ${[curPark.floor, curPark.spot].filter(Boolean).join(" ")}${curPark.memo ? `
-메모: ${curPark.memo}` : ""}`,
-                              "📋 주차 위치를 복사했습니다!"
-                            )}
+                            onClick={() => {
+                              const textParts = [
+                                `🚗 [${activeVeh?.name || "우리차"}] 주차 위치`,
+                                parkSummaryParts.length > 0 ? `위치: ${parkSummaryParts.join(" · ")}` : "",
+                                curPark.memo ? `메모: ${curPark.memo}` : "",
+                                curPark.photoUrl ? `사진: 저장됨${curPark.photoUrl.startsWith("http") ? ` (${curPark.photoUrl})` : " (앱 내 확인)"}` : ""
+                              ].filter(Boolean).join("\n");
+                              copyTextSafe(textParts, "📋 주차 위치 정보를 클립보드에 복사했습니다.");
+                            }}
                             className="px-2 py-1 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 text-[11px] font-extrabold whitespace-nowrap"
                           >
                             📋 복사
                           </button>
-                          {canEditTab("house") && (
-                            <button
-                              type="button"
-                              onClick={() => saveCarNotebookToCloud({ ...carNotebook, parking: { spot: "", floor: "", memo: "", photoUrl: "", updatedAtMs: 0, updatedBy: "" } }, "🧹 주차 위치를 초기화했습니다.")}
-                              className="px-2 py-1 rounded-lg bg-stone-100 hover:bg-rose-50 text-stone-500 hover:text-rose-600 text-[11px] font-extrabold whitespace-nowrap"
-                            >
-                              초기화
-                            </button>
-                          )}
-                        </div>
-                      )}
+                        )}
+                        {canEditTab("house") && (
+                          <button
+                            type="button"
+                            onClick={() => setIsCarParkingFormOpen((v) => !v)}
+                            className="px-2.5 py-1 rounded-lg bg-[#3F624D] hover:bg-[#35503C] text-white text-[11px] font-extrabold whitespace-nowrap"
+                          >
+                            {isCarParkingFormOpen ? "닫기" : hasParked ? "✏️ 수정" : "+ 주차 기록"}
+                          </button>
+                        )}
+                        {hasParked && canEditTab("house") && (
+                          <button
+                            type="button"
+                            disabled={isSavingCar}
+                            onClick={async () => {
+                              if (!await askConfirm("현재 주차 표시만 비울까요? (과거 주차 이력은 보존됩니다)", "출차/비우기", false)) return;
+                              const nextVehicles = vehicles.map((v) =>
+                                v.id === activeVehId
+                                  ? { ...v, parking: { ...DEFAULT_CAR_PARKING } }
+                                  : v
+                              );
+                              const ok = await saveCarNotebookToCloud({ ...carNotebook, vehicles: nextVehicles }, "🚗 출차 처리(현재 위치 해제)했습니다. 이력은 보존됩니다.");
+                              if (ok) setCarParkingDirty(false);
+                            }}
+                            className="px-2 py-1 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-600 text-[11px] font-extrabold whitespace-nowrap"
+                          >
+                            출차/비우기
+                          </button>
+                        )}
+                      </div>
                     </div>
 
-                    {hasParked && (
+                    {hasParked ? (
                       <div className="p-2.5 rounded-xl bg-[#EEF3EE]/75 border border-[#C9D8CC] flex items-center justify-between gap-2.5">
                         <div className="min-w-0 flex-1 space-y-0.5">
                           <div className="text-[14px] font-black text-[#2F523E] break-words">
-                            {[curPark.floor, curPark.spot].filter(Boolean).join(" · ") || "위치 메모"}
+                            {parkSummaryParts.join(" · ") || (curPark.photoUrl ? "📷 주차 사진 기록됨" : "주차 메모")}
                           </div>
                           {curPark.memo && <div className="text-[11.5px] font-semibold text-stone-600 break-words">{curPark.memo}</div>}
                         </div>
                         {curPark.photoUrl && (
                           <img
                             src={curPark.photoUrl}
-                            alt="주차 위치"
+                            alt="주차 위치 사진"
                             onClick={() => setZoomedRecipePhoto({ title: "주차 위치", url: curPark.photoUrl })}
                             className="w-14 h-14 rounded-xl object-cover border border-[#C9D8CC] shrink-0 cursor-pointer"
                           />
                         )}
                       </div>
+                    ) : (
+                      <div className="text-[12px] font-semibold text-stone-400 py-1">
+                        등록된 주차 위치가 없습니다. [+ 주차 기록]으로 층수·기둥·사진을 남겨 보세요.
+                      </div>
                     )}
 
-                    {canEditTab("house") && (
-                      <div className="space-y-2 pt-1">
+                    {/* 최근 주차 이력 & 되돌리기 */}
+                    {parkHistory.length > 0 && (
+                      <details className="pt-1 border-t border-stone-100">
+                        <summary className="text-[11px] font-extrabold text-stone-500 cursor-pointer select-none">
+                          🕘 최근 주차 이력 ({parkHistory.length}건) · 되돌리기
+                        </summary>
+                        <div className="mt-1.5 space-y-1">
+                          {parkHistory.slice(0, 5).map((h, hIdx) => {
+                            const lbl = [h.lotName, h.floor, h.zone, h.pillar || h.spot].filter(Boolean).join(" · ") || "사진 기록";
+                            return (
+                              <div key={h.id || hIdx} className="flex items-center justify-between gap-2 px-2 py-1 rounded-lg bg-[#FAF8F3] text-[11px]">
+                                <span className="min-w-0 truncate font-semibold text-stone-700">
+                                  {lbl} {h.updatedAtMs ? `(${formatActivityTime(h.updatedAtMs)})` : ""}
+                                </span>
+                                <div className="flex items-center gap-1 shrink-0">
+                                  {canEditTab("house") && (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const nextVehicles = vehicles.map((v) =>
+                                          v.id === activeVehId ? { ...v, parking: { ...DEFAULT_CAR_PARKING, ...h, updatedAtMs: Date.now(), updatedBy: actorName || "가족" } } : v
+                                        );
+                                        saveCarNotebookToCloud({ ...carNotebook, vehicles: nextVehicles }, "↩️ 선택한 주차 위치로 되돌렸습니다.");
+                                      }}
+                                      className="px-1.5 py-0.5 rounded bg-white border border-stone-200 text-[10px] font-extrabold text-[#35503C]"
+                                    >
+                                      되돌리기
+                                    </button>
+                                  )}
+                                  {canEditTab("house") && (
+                                    <button
+                                      type="button"
+                                      aria-label="이력 영구 삭제"
+                                      onClick={async () => {
+                                        if (!await askConfirm("이 과거 주차 이력을 영구 삭제할까요?")) return;
+                                        const nextVehicles = vehicles.map((v) =>
+                                          v.id === activeVehId ? { ...v, parkingHistory: parkHistory.filter((_, idx) => idx !== hIdx) } : v
+                                        );
+                                        saveCarNotebookToCloud({ ...carNotebook, vehicles: nextVehicles }, "🗑️ 과거 주차 이력을 영구 삭제했습니다.");
+                                      }}
+                                      className="text-stone-400 hover:text-rose-600 p-0.5"
+                                    >
+                                      <Trash2 className="w-3 h-3" />
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </details>
+                    )}
+
+                    {/* 주차 입력 폼 (열었을 때만 노출) */}
+                    {isCarParkingFormOpen && canEditTab("house") && (
+                      <div className="space-y-2 pt-2 border-t border-stone-100">
+                        {recentLotOptions.length > 0 && (
+                          <div className="flex items-center gap-1 flex-wrap">
+                            <span className="text-[10.5px] font-bold text-stone-400">최근 장소:</span>
+                            {recentLotOptions.map((lot) => (
+                              <button
+                                key={lot}
+                                type="button"
+                                onClick={() => {
+                                  setCarParkingDirty(true);
+                                  setCarParkingDraft((p) => ({ ...p, lotName: lot }));
+                                }}
+                                className="px-2 py-0.5 rounded-full bg-stone-100 hover:bg-stone-200 text-stone-700 text-[10.5px] font-bold"
+                              >
+                                📍 {lot}
+                              </button>
+                            ))}
+                          </div>
+                        )}
                         <div className="flex items-center gap-1 flex-wrap">
-                          {CAR_PARKING_FLOOR_PRESETS.map((fl) => (
+                          {floorPresets.map((fl) => (
                             <button
                               key={fl}
                               type="button"
-                              onClick={() => setCarParkingDraft((p) => ({ ...p, floor: p.floor === fl ? "" : fl }))}
+                              onClick={() => {
+                                setCarParkingDirty(true);
+                                setCarParkingDraft((p) => ({ ...p, floor: p.floor === fl ? "" : fl }));
+                              }}
                               className={`px-2.5 py-1 rounded-lg text-[11px] font-extrabold border whitespace-nowrap transition ${
                                 carParkingDraft.floor === fl
                                   ? "bg-[#3F624D] text-white border-[#3F624D]"
@@ -35960,95 +36662,527 @@ time: "", location: "",
                               {fl}
                             </button>
                           ))}
-                        </div>
-                        <div className="flex items-center gap-1.5">
                           <input
                             type="text"
-                            value={carParkingDraft.spot}
-                            onChange={(e) => setCarParkingDraft((p) => ({ ...p, spot: e.target.value }))}
-                            placeholder="기둥·구역 (예: 14번 기둥, 엘리베이터 앞)"
-                            className="flex-1 min-w-0 px-3 py-2 rounded-xl border border-stone-200 bg-[#FAF8F3] text-[12.5px] font-bold text-stone-800"
+                            value={carParkingDraft.floor}
+                            onChange={(e) => { setCarParkingDirty(true); setCarParkingDraft((p) => ({ ...p, floor: e.target.value })); }}
+                            placeholder="직접 층"
+                            className="w-16 px-2 py-1 rounded-lg border border-stone-200 bg-white text-[11px] font-bold"
                           />
-                          <label className="px-2.5 py-2 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-[11.5px] font-extrabold cursor-pointer whitespace-nowrap shrink-0">
-                            📷 사진
-                            <input
-                              type="file"
-                              accept="image/*"
-                              className="hidden"
-                              onChange={async (e) => {
-                                const f = e.target.files?.[0];
-                                if (e.target) e.target.value = "";
-                                if (!f) return;
-                                try {
-                                  const res = await fileToBase64(f, { maxSide: 720, quality: 0.65 });
-                                  setCarParkingDraft((p) => ({ ...p, photoUrl: res.previewUrl || "" }));
-                                  showToast("📷 주차 사진을 불러왔습니다. 저장을 눌러 주세요.");
-                                } catch {
-                                  showToast("사진 처리에 실패했습니다.");
-                                }
-                              }}
-                            />
-                          </label>
+                          <button
+                            type="button"
+                            onClick={() => setIsCarFloorPresetOpen((v) => !v)}
+                            className="px-2 py-1 rounded-lg bg-stone-100 text-stone-600 text-[10.5px] font-extrabold"
+                          >
+                            ⚙️ 층 편집
+                          </button>
                         </div>
+
+                        {isCarFloorPresetOpen && (
+                          <div className="p-2 rounded-xl bg-[#FAF8F3] border border-stone-200 space-y-1.5">
+                            <div className="flex flex-wrap gap-1">
+                              {floorPresets.map((fl) => (
+                                <span key={fl} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white border border-stone-200 text-[11px] font-bold">
+                                  {fl}
+                                  {floorPresets.length > 1 && (
+                                    <button
+                                      type="button"
+                                      aria-label={`${fl} 프리셋 삭제`}
+                                      onClick={() => saveCarNotebookToCloud({ ...carNotebook, floorPresets: floorPresets.filter((x) => x !== fl) })}
+                                      className="text-stone-400 hover:text-rose-600"
+                                    >
+                                      ×
+                                    </button>
+                                  )}
+                                </span>
+                              ))}
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              <input
+                                type="text"
+                                value={newCarFloorInput}
+                                onChange={(e) => setNewCarFloorInput(e.target.value)}
+                                placeholder="새 층 프리셋 (예: B4, 옥상)"
+                                className="flex-1 min-w-0 px-2 py-1 rounded-lg border border-stone-200 bg-white text-[11.5px]"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const f = newCarFloorInput.trim();
+                                  if (!f || floorPresets.includes(f)) return;
+                                  setNewCarFloorInput("");
+                                  saveCarNotebookToCloud({ ...carNotebook, floorPresets: [...floorPresets, f] });
+                                }}
+                                className="px-2.5 py-1 rounded-lg bg-[#3F624D] text-white text-[11px] font-extrabold whitespace-nowrap"
+                              >
+                                추가
+                              </button>
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="grid grid-cols-3 gap-1.5">
+                          <input
+                            type="text"
+                            value={carParkingDraft.lotName}
+                            onChange={(e) => { setCarParkingDirty(true); setCarParkingDraft((p) => ({ ...p, lotName: e.target.value })); }}
+                            placeholder="주차장명"
+                            className="min-w-0 px-2.5 py-1.5 rounded-xl border border-stone-200 bg-[#FAF8F3] text-[12px] font-bold"
+                          />
+                          <input
+                            type="text"
+                            value={carParkingDraft.zone}
+                            onChange={(e) => { setCarParkingDirty(true); setCarParkingDraft((p) => ({ ...p, zone: e.target.value })); }}
+                            placeholder="구역 (예: A존)"
+                            className="min-w-0 px-2.5 py-1.5 rounded-xl border border-stone-200 bg-[#FAF8F3] text-[12px] font-bold"
+                          />
+                          <input
+                            type="text"
+                            value={carParkingDraft.pillar || carParkingDraft.spot}
+                            onChange={(e) => { setCarParkingDirty(true); setCarParkingDraft((p) => ({ ...p, pillar: e.target.value, spot: e.target.value })); }}
+                            placeholder="기둥·칸번호"
+                            className="min-w-0 px-2.5 py-1.5 rounded-xl border border-stone-200 bg-[#FAF8F3] text-[12px] font-bold"
+                          />
+                        </div>
+
+                        {carParkingDraft.photoUrl && (
+                          <div className="flex items-center gap-2 p-2 rounded-xl bg-[#FAF8F3] border border-stone-200">
+                            <img src={carParkingDraft.photoUrl} alt="주차 사진 미리보기" className="w-16 h-16 rounded-lg object-cover border border-stone-200 shrink-0" />
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <label className="px-2 py-1 rounded-lg bg-white border border-stone-200 text-stone-700 text-[11px] font-extrabold cursor-pointer">
+                                🔄 교체
+                                <input
+                                  type="file"
+                                  accept="image/*"
+                                  className="hidden"
+                                  onChange={async (e) => {
+                                    const f = e.target.files?.[0];
+                                    if (e.target) e.target.value = "";
+                                    if (!f) return;
+                                    try {
+                                      const up = await uploadCarParkingPhoto(f, activeVehId);
+                                      setCarParkingDirty(true);
+                                      setCarParkingDraft((p) => ({ ...p, photoUrl: up.photoUrl, photoStoragePath: up.photoStoragePath }));
+                                      showToast("📷 새 주차 사진을 준비했습니다. 저장을 눌러 주세요.");
+                                    } catch {
+                                      showToast("사진 처리에 실패했습니다.");
+                                    }
+                                  }}
+                                />
+                              </label>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setCarParkingDirty(true);
+                                  setCarParkingDraft((p) => ({ ...p, photoUrl: "", photoStoragePath: "" }));
+                                }}
+                                className="px-2 py-1 rounded-lg bg-white border border-stone-200 text-rose-600 text-[11px] font-extrabold"
+                              >
+                                🗑️ 제거
+                              </button>
+                            </div>
+                          </div>
+                        )}
+
                         <div className="flex items-center gap-1.5">
                           <input
                             type="text"
                             value={carParkingDraft.memo}
-                            onChange={(e) => setCarParkingDraft((p) => ({ ...p, memo: e.target.value }))}
-                            placeholder="선택 메모 (예: 이마트 성수점 2층)"
+                            onChange={(e) => { setCarParkingDirty(true); setCarParkingDraft((p) => ({ ...p, memo: e.target.value })); }}
+                            placeholder="선택 메모 (예: 엘리베이터 바로 옆)"
                             className="flex-1 min-w-0 px-3 py-1.5 rounded-xl border border-stone-200 bg-white text-[12px] font-medium text-stone-700"
                           />
+                          {!carParkingDraft.photoUrl && (
+                            <label className="px-2.5 py-1.5 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-[11.5px] font-extrabold cursor-pointer whitespace-nowrap shrink-0">
+                              📷 사진
+                              <input
+                                type="file"
+                                accept="image/*"
+                                className="hidden"
+                                onChange={async (e) => {
+                                  const f = e.target.files?.[0];
+                                  if (e.target) e.target.value = "";
+                                  if (!f) return;
+                                  try {
+                                    const up = await uploadCarParkingPhoto(f, activeVehId);
+                                    setCarParkingDirty(true);
+                                    setCarParkingDraft((p) => ({ ...p, photoUrl: up.photoUrl, photoStoragePath: up.photoStoragePath }));
+                                    showToast("📷 주차 사진을 불러왔습니다. 저장을 눌러 주세요.");
+                                  } catch {
+                                    showToast("사진 처리에 실패했습니다.");
+                                  }
+                                }}
+                              />
+                            </label>
+                          )}
                           <button
                             type="button"
-                            onClick={() => {
-                              if (!carParkingDraft.floor && !carParkingDraft.spot.trim() && !carParkingDraft.photoUrl && !carParkingDraft.memo.trim()) {
-                                showToast("층수·기둥번호 또는 사진을 입력해 주세요.");
+                            disabled={isSavingCar}
+                            onClick={async () => {
+                              const pVal = carParkingDraft;
+                              if (!pVal.floor && !pVal.lotName.trim() && !pVal.zone.trim() && !pVal.pillar.trim() && !pVal.spot.trim() && !pVal.photoUrl && !pVal.memo.trim()) {
+                                showToast("위치, 층수 또는 사진을 입력해 주세요.");
                                 return;
                               }
                               const nextPark = {
-                                floor: carParkingDraft.floor || "",
-                                spot: carParkingDraft.spot.trim(),
-                                memo: carParkingDraft.memo.trim(),
-                                photoUrl: carParkingDraft.photoUrl || "",
+                                floor: pVal.floor.trim(),
+                                lotName: pVal.lotName.trim(),
+                                zone: pVal.zone.trim(),
+                                pillar: (pVal.pillar || pVal.spot || "").trim(),
+                                spot: (pVal.pillar || pVal.spot || "").trim(),
+                                memo: pVal.memo.trim(),
+                                photoUrl: pVal.photoUrl || "",
+                                photoStoragePath: pVal.photoStoragePath || "",
                                 updatedAtMs: Date.now(),
                                 updatedBy: actorName || "가족"
                               };
-                              saveCarNotebookToCloud({ ...carNotebook, parking: nextPark }, "🚗 주차 위치를 저장했습니다!");
+                              const nextHistory = hasParked
+                                ? [{ id: `pk-${Date.now()}`, ...curPark }, ...parkHistory].slice(0, 10)
+                                : parkHistory;
+                              const nextVehicles = vehicles.map((v) =>
+                                v.id === activeVehId ? { ...v, parking: nextPark, parkingHistory: nextHistory } : v
+                              );
+                              const ok = await saveCarNotebookToCloud({ ...carNotebook, vehicles: nextVehicles }, "🚗 주차 위치를 저장했습니다.");
+                              if (ok) {
+                                setCarParkingDirty(false);
+                                setIsCarParkingFormOpen(false);
+                              }
                             }}
-                            className="px-3 py-1.5 rounded-xl bg-[#3F624D] hover:bg-[#324F3E] text-white text-[12px] font-extrabold whitespace-nowrap shrink-0"
+                            className="px-3 py-1.5 rounded-xl bg-[#3F624D] hover:bg-[#35503C] disabled:opacity-50 text-white text-[12px] font-extrabold whitespace-nowrap shrink-0"
                           >
-                            💾 주차 저장
+                            {isSavingCar ? "저장 중..." : "💾 저장"}
                           </button>
                         </div>
                       </div>
                     )}
                   </div>
 
-                  {/* 🛠️ 차량 정비 · 검사 · 보험 이력 */}
-                  <div className="bg-white rounded-2xl border border-stone-200 p-3.5 space-y-2.5 shadow-sm">
+                  {/* 2. 가까운 관리 일정 */}
+                  <div className="bg-white rounded-2xl border border-stone-200 p-3.5 space-y-2 shadow-sm">
                     <div className="flex items-center justify-between gap-2">
-                      <span className="text-[13.5px] font-black text-stone-900">🛠️ 정비 · 검사 · 보험 수첩 ({carRecords.length})</span>
-                      {canEditTab("house") && (
+                      <span className="text-[13px] font-black text-stone-900">⏭️ 가까운 관리 일정</span>
+                      <span className="text-[11px] font-bold text-stone-500 whitespace-nowrap">
+                        이번 달 {monthCarCost.toLocaleString()}원 · {curYear}년 {yearCarCost.toLocaleString()}원
+                      </span>
+                    </div>
+                    {upcomingCarTasks.length === 0 ? (
+                      <div className="text-[11.5px] font-semibold text-stone-400">
+                        다음 예정일이나 다음 주행거리가 기록된 항목이 없습니다.
+                      </div>
+                    ) : (
+                      <div className="space-y-1.5">
+                        {upcomingCarTasks.slice(0, 3).map(({ rec, nDiff, nextKm, kmDiff, isDueSoon }) => (
+                          <div key={`up-${rec.id}`} className={`p-2 rounded-xl border flex items-center justify-between gap-2 ${isDueSoon ? "bg-amber-50/70 border-amber-200" : "bg-[#FAF8F3] border-stone-200"}`}>
+                            <div className="min-w-0 flex-1">
+                              <div className="text-[12px] font-extrabold text-stone-900 truncate">{rec.title} ({rec.type})</div>
+                              <div className="text-[10.5px] font-semibold text-stone-500 flex flex-wrap gap-x-2">
+                                {nDiff !== null && (
+                                  <span>{rec.nextDate} ({nDiff < 0 ? `${Math.abs(nDiff)}일 지남` : nDiff === 0 ? "오늘" : `D-${nDiff}`})</span>
+                                )}
+                                {Number.isFinite(nextKm) && nextKm > 0 && (
+                                  <span>목표 {nextKm.toLocaleString()}km{kmDiff !== null ? ` (잔여 ${kmDiff.toLocaleString()}km)` : ""}</span>
+                                )}
+                              </div>
+                            </div>
+                            {canEditTab("schedule") && (
+                              <button
+                                type="button"
+                                onClick={() => openCarLinkedSchedule(rec)}
+                                className="px-2 py-1 rounded-lg bg-white border border-stone-200 text-[#35503C] text-[10.5px] font-extrabold whitespace-nowrap shrink-0"
+                              >
+                                🗓️ 일정
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 3. 관리 이력 (정비 · 검사 · 보험 수첩) */}
+                  <div className="bg-white rounded-2xl border border-stone-200 p-3.5 space-y-2.5 shadow-sm">
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <span className="text-[13.5px] font-black text-stone-900">🛠️ 관리 이력 ({activeRecords.length})</span>
+                      <div className="flex items-center gap-1 shrink-0">
+                        {deletedRecords.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => setShowDeletedCarRecords((v) => !v)}
+                            className="px-2 py-1 rounded-lg bg-stone-100 text-stone-600 text-[10.5px] font-extrabold whitespace-nowrap"
+                          >
+                            {showDeletedCarRecords ? "목록 보기" : `🗑️ 휴지통 (${deletedRecords.length})`}
+                          </button>
+                        )}
+                        {canEditTab("house") && (
+                          <button
+                            type="button"
+                            onClick={() => setIsCarTypeManagerOpen((v) => !v)}
+                            className="px-2 py-1 rounded-lg bg-stone-100 text-stone-600 text-[10.5px] font-extrabold whitespace-nowrap"
+                          >
+                            ⚙️ 분류
+                          </button>
+                        )}
+                        {canEditTab("house") && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingCarRecordId(null);
+                              const defType = activeRecordTypes[0] || { id: "ct-1", label: "정비·오일" };
+                              setCarRecordForm({
+                                vehicleId: activeVehId,
+                                typeId: defType.id,
+                                type: defType.label,
+                                title: "",
+                                date: getTodayStr(),
+                                nextDate: "",
+                                nextMileage: "",
+                                mileage: "",
+                                cost: "",
+                                memo: ""
+                              });
+                              setIsCarRecordFormOpen((v) => !v);
+                            }}
+                            className="px-2.5 py-1 rounded-xl bg-[#3F624D] hover:bg-[#35503C] text-white text-[11px] font-extrabold whitespace-nowrap"
+                          >
+                            {isCarRecordFormOpen && !editingCarRecordId ? "닫기" : "+ 기록 추가"}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {isCarTypeManagerOpen && canEditTab("house") && (
+                      <div className="p-2.5 rounded-xl bg-[#FAF8F3] border border-stone-200 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[12px] font-black text-stone-800">정비 분류 관리</span>
+                          <button type="button" onClick={() => setIsCarTypeManagerOpen(false)} aria-label="분류 관리 닫기" className="text-stone-400">
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+                        <div className="space-y-1">
+                          {recordTypes.map((tp, tIdx) => (
+                            <div key={tp.id} className="flex items-center justify-between gap-1.5 bg-white px-2 py-1 rounded-lg border border-stone-200">
+                              {editingCarTypeId === tp.id ? (
+                                <div className="flex items-center gap-1 flex-1 min-w-0">
+                                  <input
+                                    type="text"
+                                    value={editingCarTypeDraft}
+                                    onChange={(e) => setEditingCarTypeDraft(e.target.value)}
+                                    className="flex-1 min-w-0 px-2 py-0.5 rounded border border-stone-300 text-[11.5px] font-bold"
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const nextLbl = editingCarTypeDraft.trim();
+                                      if (!nextLbl) return;
+                                      const nextTypes = recordTypes.map((x) => x.id === tp.id ? { ...x, label: nextLbl } : x);
+                                      const nextRecs = allCarRecords.map((r) => (r.typeId === tp.id || r.type === tp.label) ? { ...r, typeId: tp.id, type: nextLbl } : r);
+                                      saveCarNotebookToCloud({ ...carNotebook, recordTypes: nextTypes, records: nextRecs }, "분류 이름을 변경했습니다.");
+                                      setEditingCarTypeId("");
+                                    }}
+                                    className="px-2 py-0.5 rounded bg-[#3F624D] text-white text-[10.5px] font-extrabold"
+                                  >
+                                    저장
+                                  </button>
+                                </div>
+                              ) : (
+                                <>
+                                  <span className={`text-[11.5px] font-bold truncate ${tp.archived ? "line-through text-stone-400" : "text-stone-800"}`}>
+                                    {tp.label}
+                                  </span>
+                                  <div className="flex items-center gap-1 shrink-0">
+                                    <button
+                                      type="button"
+                                      disabled={tIdx === 0}
+                                      onClick={() => {
+                                        const arr = [...recordTypes];
+                                        [arr[tIdx - 1], arr[tIdx]] = [arr[tIdx], arr[tIdx - 1]];
+                                        saveCarNotebookToCloud({ ...carNotebook, recordTypes: arr });
+                                      }}
+                                      className="px-1 text-[10px] text-stone-500 disabled:opacity-30"
+                                    >
+                                      ▲
+                                    </button>
+                                    <button
+                                      type="button"
+                                      disabled={tIdx === recordTypes.length - 1}
+                                      onClick={() => {
+                                        const arr = [...recordTypes];
+                                        [arr[tIdx + 1], arr[tIdx]] = [arr[tIdx], arr[tIdx + 1]];
+                                        saveCarNotebookToCloud({ ...carNotebook, recordTypes: arr });
+                                      }}
+                                      className="px-1 text-[10px] text-stone-500 disabled:opacity-30"
+                                    >
+                                      ▼
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => { setEditingCarTypeId(tp.id); setEditingCarTypeDraft(tp.label); }}
+                                      className="px-1.5 py-0.5 rounded bg-stone-100 text-[10px] font-bold"
+                                    >
+                                      수정
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const nextTypes = recordTypes.map((x) => x.id === tp.id ? { ...x, archived: !x.archived } : x);
+                                        saveCarNotebookToCloud({ ...carNotebook, recordTypes: nextTypes });
+                                      }}
+                                      className="px-1.5 py-0.5 rounded bg-stone-100 text-[10px] font-bold"
+                                    >
+                                      {tp.archived ? "복원" : "보관"}
+                                    </button>
+                                    {recordTypes.length > 1 && (
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          const inUse = allCarRecords.some((r) => r.typeId === tp.id || r.type === tp.label);
+                                          const fallback = recordTypes.find((x) => x.id !== tp.id);
+                                          if (!inUse) {
+                                            saveCarNotebookToCloud({ ...carNotebook, recordTypes: recordTypes.filter((x) => x.id !== tp.id) }, "분류를 삭제했습니다.");
+                                          } else if (fallback) {
+                                            setCarTypeDeleteTarget(tp);
+                                            setCarTypeMoveTargetId(fallback.id);
+                                          }
+                                        }}
+                                        className="px-1.5 py-0.5 rounded bg-rose-50 text-rose-600 text-[10px] font-bold"
+                                      >
+                                        삭제
+                                      </button>
+                                    )}
+                                  </div>
+                                </>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                        {carTypeDeleteTarget && (
+                          <div className="p-2 rounded-lg bg-amber-50 border border-amber-200 space-y-1.5">
+                            <div className="text-[11px] font-bold text-amber-900">
+                              '{carTypeDeleteTarget.label}' 분류에 연결된 기록을 이동할 대상을 선택하세요:
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              <select
+                                value={carTypeMoveTargetId}
+                                onChange={(e) => setCarTypeMoveTargetId(e.target.value)}
+                                className="flex-1 min-w-0 px-2 py-1 rounded border border-amber-300 bg-white text-[11px] font-bold"
+                              >
+                                {recordTypes.filter((x) => x.id !== carTypeDeleteTarget.id).map((x) => (
+                                  <option key={x.id} value={x.id}>{x.label}</option>
+                                ))}
+                              </select>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const target = recordTypes.find((x) => x.id === carTypeMoveTargetId);
+                                  if (!target) return;
+                                  const nextTypes = recordTypes.filter((x) => x.id !== carTypeDeleteTarget.id);
+                                  const nextRecs = allCarRecords.map((r) =>
+                                    (r.typeId === carTypeDeleteTarget.id || r.type === carTypeDeleteTarget.label)
+                                      ? { ...r, typeId: target.id, type: target.label }
+                                      : r
+                                  );
+                                  saveCarNotebookToCloud({ ...carNotebook, recordTypes: nextTypes, records: nextRecs }, `기록을 '${target.label}'(으)로 이동 후 삭제했습니다.`);
+                                  setCarTypeDeleteTarget(null);
+                                }}
+                                className="px-2.5 py-1 rounded bg-[#3F624D] text-white text-[11px] font-extrabold whitespace-nowrap"
+                              >
+                                이동 후 삭제
+                              </button>
+                              <button type="button" onClick={() => setCarTypeDeleteTarget(null)} className="text-[11px] font-bold text-stone-500">취소</button>
+                            </div>
+                          </div>
+                        )}
+                        <div className="flex items-center gap-1.5">
+                          <input
+                            type="text"
+                            value={newCarTypeInput}
+                            onChange={(e) => setNewCarTypeInput(e.target.value)}
+                            placeholder="새 분류명 (예: 하이패스·통행료)"
+                            className="flex-1 min-w-0 px-2 py-1 rounded-lg border border-stone-200 bg-white text-[11.5px]"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const lbl = newCarTypeInput.trim();
+                              if (!lbl || recordTypes.some((x) => x.label === lbl)) return;
+                              const nextTypes = [...recordTypes, { id: `ct-${Date.now().toString(36)}`, label: lbl, archived: false }];
+                              setNewCarTypeInput("");
+                              saveCarNotebookToCloud({ ...carNotebook, recordTypes: nextTypes }, `'${lbl}' 분류를 추가했습니다.`);
+                            }}
+                            className="px-2.5 py-1 rounded-lg bg-[#3F624D] text-white text-[11px] font-extrabold whitespace-nowrap"
+                          >
+                            추가
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* 검색 · 유형/기간/정렬 필터 */}
+                    <div className="space-y-1.5">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <input
+                          type="text"
+                          value={carRecordSearch}
+                          onChange={(e) => setCarRecordSearch(e.target.value)}
+                          placeholder="🔍 정비명·메모 검색..."
+                          className="flex-1 min-w-[130px] px-2.5 py-1.5 rounded-xl border border-stone-200 bg-[#FAF8F3] text-[12px] font-semibold"
+                        />
+                        <select
+                          value={carRecordPeriod}
+                          onChange={(e) => setCarRecordPeriod(e.target.value)}
+                          className="px-2 py-1.5 rounded-xl border border-stone-200 bg-white text-[11px] font-bold"
+                        >
+                          <option value="all">전체 기간</option>
+                          <option value="6m">최근 6개월</option>
+                          <option value="year">올해 ({curYear})</option>
+                        </select>
+                        <select
+                          value={carRecordSort}
+                          onChange={(e) => setCarRecordSort(e.target.value)}
+                          className="px-2 py-1.5 rounded-xl border border-stone-200 bg-white text-[11px] font-bold"
+                        >
+                          <option value="date_desc">최근순</option>
+                          <option value="next_asc">예정일순</option>
+                        </select>
+                      </div>
+                      <div className="flex items-center gap-1 flex-wrap">
                         <button
                           type="button"
-                          onClick={() => setIsCarRecordFormOpen((v) => !v)}
-                          className="px-2.5 py-1 rounded-xl bg-[#3F624D] hover:bg-[#324F3E] text-white text-[11px] font-extrabold whitespace-nowrap shrink-0"
+                          onClick={() => setCarRecordTypeFilter("전체")}
+                          className={`px-2 py-0.5 rounded-full text-[10.5px] font-extrabold border whitespace-nowrap ${
+                            carRecordTypeFilter === "전체" ? "bg-[#3F624D] text-white border-[#3F624D]" : "bg-white text-stone-600 border-stone-200"
+                          }`}
                         >
-                          {isCarRecordFormOpen ? "닫기" : "+ 기록 추가"}
+                          전체
                         </button>
-                      )}
+                        {activeRecordTypes.map((tp) => (
+                          <button
+                            key={tp.id}
+                            type="button"
+                            onClick={() => setCarRecordTypeFilter(tp.id)}
+                            className={`px-2 py-0.5 rounded-full text-[10.5px] font-extrabold border whitespace-nowrap ${
+                              carRecordTypeFilter === tp.id ? "bg-[#3F624D] text-white border-[#3F624D]" : "bg-white text-stone-600 border-stone-200"
+                            }`}
+                          >
+                            {tp.label}
+                          </button>
+                        ))}
+                      </div>
                     </div>
 
                     {isCarRecordFormOpen && canEditTab("house") && (
                       <div className="p-2.5 rounded-xl bg-[#FAF8F3] border border-stone-200 space-y-2">
                         <div className="grid grid-cols-2 gap-1.5">
                           <select
-                            value={carRecordForm.type}
-                            onChange={(e) => setCarRecordForm((p) => ({ ...p, type: e.target.value }))}
+                            value={carRecordForm.typeId || carRecordForm.type}
+                            onChange={(e) => {
+                              const sel = recordTypes.find((t) => t.id === e.target.value || t.label === e.target.value);
+                              setCarRecordForm((p) => ({ ...p, typeId: sel?.id || "", type: sel?.label || e.target.value }));
+                            }}
                             className="min-w-0 px-2.5 py-1.5 rounded-xl border border-stone-200 bg-white text-[12px] font-bold"
                           >
-                            {DEFAULT_CAR_RECORD_TYPES.map((t) => (
-                              <option key={t} value={t}>{t}</option>
+                            {activeRecordTypes.map((t) => (
+                              <option key={t.id} value={t.id}>{t.label}</option>
                             ))}
                           </select>
                           <input
@@ -36066,7 +37200,7 @@ time: "", location: "",
                               type="date"
                               value={carRecordForm.date}
                               onChange={(e) => setCarRecordForm((p) => ({ ...p, date: e.target.value }))}
-                              className="w-full px-2 py-1.5 rounded-xl border border-stone-200 bg-white text-[11.5px] font-bold"
+                              className="w-full min-w-0 px-2 py-1.5 rounded-xl border border-stone-200 bg-white text-[11.5px] font-bold"
                             />
                           </div>
                           <div>
@@ -36075,26 +37209,35 @@ time: "", location: "",
                               type="date"
                               value={carRecordForm.nextDate}
                               onChange={(e) => setCarRecordForm((p) => ({ ...p, nextDate: e.target.value }))}
-                              className="w-full px-2 py-1.5 rounded-xl border border-stone-200 bg-white text-[11.5px] font-bold"
+                              className="w-full min-w-0 px-2 py-1.5 rounded-xl border border-stone-200 bg-white text-[11.5px] font-bold"
                             />
                           </div>
                         </div>
-                        <div className="grid grid-cols-2 gap-1.5">
+                        <div className="grid grid-cols-3 gap-1.5">
                           <input
                             type="text"
                             inputMode="numeric"
                             value={carRecordForm.mileage}
                             onChange={(e) => setCarRecordForm((p) => ({ ...p, mileage: e.target.value }))}
-                            placeholder="주행거리 km (선택)"
-                            className="min-w-0 px-2.5 py-1.5 rounded-xl border border-stone-200 bg-white text-[12px] font-bold"
+                            placeholder="현재 km"
+                            className="min-w-0 px-2 py-1.5 rounded-xl border border-stone-200 bg-white text-[11.5px] font-bold"
+                          />
+                          <input
+                            type="text"
+                            inputMode="numeric"
+                            value={carRecordForm.nextMileage}
+                            onChange={(e) => setCarRecordForm((p) => ({ ...p, nextMileage: e.target.value }))}
+                            placeholder="다음 km"
+                            className="min-w-0 px-2 py-1.5 rounded-xl border border-stone-200 bg-white text-[11.5px] font-bold"
                           />
                           <input
                             type="number"
+                            min="0"
                             inputMode="numeric"
                             value={carRecordForm.cost}
                             onChange={(e) => setCarRecordForm((p) => ({ ...p, cost: e.target.value }))}
-                            placeholder="비용 원 (선택)"
-                            className="min-w-0 px-2.5 py-1.5 rounded-xl border border-stone-200 bg-white text-[12px] font-bold"
+                            placeholder="비용 (원)"
+                            className="min-w-0 px-2 py-1.5 rounded-xl border border-stone-200 bg-white text-[11.5px] font-bold"
                           />
                         </div>
                         <div className="flex items-center gap-1.5">
@@ -36107,38 +37250,88 @@ time: "", location: "",
                           />
                           <button
                             type="button"
-                            onClick={() => {
+                            disabled={isSavingCar}
+                            onClick={async () => {
                               const title = carRecordForm.title.trim();
                               if (!title) { showToast("항목명을 입력해 주세요."); return; }
+                              if (!/^\d{4}-\d{2}-\d{2}$/.test(String(carRecordForm.date || ""))) {
+                                showToast("실시일을 올바른 날짜(YYYY-MM-DD)로 입력해 주세요.");
+                                return;
+                              }
+                              const rawCost = String(carRecordForm.cost ?? "").trim();
+                              const costNum = rawCost === "" ? 0 : Number(rawCost);
+                              if (!Number.isFinite(costNum) || costNum < 0) {
+                                showToast("비용은 0 이상 숫자로 입력해 주세요.");
+                                return;
+                              }
+                              const rawKm = String(carRecordForm.mileage ?? "").trim();
+                              const kmNum = rawKm === "" ? "" : Number(rawKm.replace(/,/g, ""));
+                              if (rawKm !== "" && (!Number.isFinite(kmNum) || kmNum < 0)) {
+                                showToast("주행거리는 0 이상 숫자로 입력해 주세요.");
+                                return;
+                              }
+                              const rawNextKm = String(carRecordForm.nextMileage ?? "").trim();
+                              const nextKmNum = rawNextKm === "" ? "" : Number(rawNextKm.replace(/,/g, ""));
+                              if (rawNextKm !== "" && (!Number.isFinite(nextKmNum) || nextKmNum < 0)) {
+                                showToast("다음 예정 주행거리는 0 이상 숫자로 입력해 주세요.");
+                                return;
+                              }
                               const rec = {
-                                id: `car-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`,
+                                id: editingCarRecordId || `car-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`,
+                                vehicleId: activeVehId,
+                                typeId: carRecordForm.typeId || (activeRecordTypes[0]?.id || "ct-1"),
                                 type: carRecordForm.type || "정비·오일",
                                 title,
-                                date: carRecordForm.date || getTodayStr(),
+                                date: carRecordForm.date,
                                 nextDate: carRecordForm.nextDate || "",
-                                mileage: carRecordForm.mileage.trim(),
-                                cost: Number(carRecordForm.cost) || 0,
-                                memo: carRecordForm.memo.trim()
+                                mileage: kmNum === "" ? "" : String(kmNum),
+                                nextMileage: nextKmNum === "" ? "" : String(nextKmNum),
+                                cost: costNum,
+                                hasExplicitZeroCost: rawCost === "0",
+                                memo: carRecordForm.memo.trim(),
+                                updatedAtMs: Date.now()
                               };
-                              saveCarNotebookToCloud({ ...carNotebook, records: [rec, ...carRecords] }, `🚗 '${title}' 기록을 저장했습니다!`);
-                              setCarRecordForm({ type: DEFAULT_CAR_RECORD_TYPES[0], title: "", date: getTodayStr(), nextDate: "", mileage: "", cost: "", memo: "" });
-                              setIsCarRecordFormOpen(false);
+                              const nextRecs = editingCarRecordId
+                                ? allCarRecords.map((x) => (x.id === editingCarRecordId ? { ...x, ...rec } : x))
+                                : [rec, ...allCarRecords];
+                              const ok = await saveCarNotebookToCloud(
+                                { ...carNotebook, records: nextRecs },
+                                editingCarRecordId ? `✏️ '${title}' 기록을 수정했습니다.` : `🚗 '${title}' 기록을 저장했습니다.`
+                              );
+                              if (ok) {
+                                setEditingCarRecordId(null);
+                                setCarRecordForm({
+                                  vehicleId: activeVehId,
+                                  typeId: activeRecordTypes[0]?.id || "ct-1",
+                                  type: activeRecordTypes[0]?.label || DEFAULT_CAR_RECORD_TYPES[0],
+                                  title: "",
+                                  date: getTodayStr(),
+                                  nextDate: "",
+                                  nextMileage: "",
+                                  mileage: "",
+                                  cost: "",
+                                  memo: ""
+                                });
+                                setIsCarRecordFormOpen(false);
+                              }
                             }}
-                            className="px-3 py-1.5 rounded-xl bg-[#3F624D] hover:bg-[#324F3E] text-white text-[12px] font-extrabold whitespace-nowrap shrink-0"
+                            className="px-3 py-1.5 rounded-xl bg-[#3F624D] hover:bg-[#35503C] disabled:opacity-50 text-white text-[12px] font-extrabold whitespace-nowrap shrink-0"
                           >
-                            저장
+                            {isSavingCar ? "저장 중..." : editingCarRecordId ? "수정 저장" : "저장"}
                           </button>
                         </div>
                       </div>
                     )}
 
-                    {carRecords.length === 0 ? (
+                    {filteredRecords.length === 0 ? (
                       <div className="text-[12px] font-bold text-stone-400 text-center py-4">
-                        엔진오일 교체, 자동차검사, 보험 만기일을 기록해 보세요.
+                        {showDeletedCarRecords
+                          ? "휴지통이 비어 있습니다."
+                          : "조건에 맞는 정비·검사·보험 기록이 없습니다."}
                       </div>
                     ) : (
                       <div className="space-y-2">
-                        {carRecords.map((rec) => {
+                        {filteredRecords.map((rec) => {
                           const nDiff = rec.nextDate ? getDaysDiff(rec.nextDate) : null;
                           return (
                             <div key={rec.id} className="p-2.5 rounded-xl border border-stone-200 bg-[#FAF8F3]/60 space-y-1.5">
@@ -36146,7 +37339,7 @@ time: "", location: "",
                                 <div className="min-w-0 flex-1">
                                   <div className="flex items-center gap-1.5 flex-wrap">
                                     <span className="px-1.5 py-0.5 rounded bg-[#EEF3EE] text-[#35503C] text-[10px] font-extrabold whitespace-nowrap">{rec.type}</span>
-                                    <span className="text-[13px] font-black text-stone-900">{rec.title}</span>
+                                    <span className="text-[13px] font-black text-stone-900 break-words">{rec.title}</span>
                                     {nDiff !== null && (
                                       <span className={`px-1.5 py-0.5 rounded text-[10px] font-extrabold whitespace-nowrap ${nDiff <= 30 ? "bg-rose-100 text-rose-700" : "bg-stone-100 text-stone-600"}`}>
                                         {nDiff < 0 ? `${Math.abs(nDiff)}일 지남` : nDiff === 0 ? "오늘 예정" : `다음 D-${nDiff}`}
@@ -36156,50 +37349,92 @@ time: "", location: "",
                                   <div className="text-[11px] font-medium text-stone-500 mt-0.5 flex flex-wrap gap-x-2">
                                     <span>📅 {rec.date}</span>
                                     {rec.nextDate && <span>⏭️ 다음 {rec.nextDate}</span>}
-                                    {rec.mileage && <span>🛣️ {rec.mileage}km</span>}
-                                    {rec.cost > 0 && <span>💳 {Number(rec.cost).toLocaleString()}원</span>}
+                                    {rec.mileage !== "" && rec.mileage !== undefined && <span>🛣️ {Number(rec.mileage).toLocaleString()}km</span>}
+                                    {rec.nextMileage && <span>🎯 다음 {Number(rec.nextMileage).toLocaleString()}km</span>}
+                                    {(rec.cost > 0 || rec.hasExplicitZeroCost) && <span>💳 {Number(rec.cost).toLocaleString()}원</span>}
                                   </div>
-                                  {rec.memo && <div className="text-[11px] text-stone-600 mt-0.5">{rec.memo}</div>}
+                                  {rec.memo && <div className="text-[11px] text-stone-600 mt-0.5 break-words">{rec.memo}</div>}
                                 </div>
                                 <div className="flex items-center gap-1 shrink-0">
-                                  {rec.nextDate && canEditTab("schedule") && (
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        setEditingSchedule(null);
-                                        setScheduleForm({
-                                          title: `🚗 ${rec.title} (${rec.type})`,
-                                          date: rec.nextDate,
-                                          endDate: "",
-                                          time: "",
-                                          location: "",
-                                          category: scheduleCategories.includes("할일(To-Do)") ? "할일(To-Do)" : (scheduleCategories[0] || "가족행사/경조사"),
-                                          members: ["수혁", "아리나"],
-                                          isAnnual: false,
-                                          showDday: true,
-                                          hasOriginYear: false,
-                                          memo: rec.memo || "",
-                                          attachments: []
-                                        });
-                                        setScheduleModalIsPrivate(false);
-                                        setIsScheduleModalOpen(true);
-                                      }}
-                                      className="px-2 py-1 rounded-lg bg-[#EEF3EE] text-[#35503C] text-[10.5px] font-extrabold whitespace-nowrap"
-                                    >
-                                      🗓️ 일정
-                                    </button>
-                                  )}
-                                  {canEditTab("house") && (
-                                    <button
-                                      type="button"
-                                      onClick={async () => {
-                                        if (!await askConfirm(`'${rec.title}' 기록을 삭제할까요?`)) return;
-                                        saveCarNotebookToCloud({ ...carNotebook, records: carRecords.filter((x) => x.id !== rec.id) }, "🗑️ 차량 기록을 삭제했습니다.");
-                                      }}
-                                      className="p-1 rounded-lg text-stone-400 hover:text-rose-600"
-                                    >
-                                      <Trash2 className="w-3.5 h-3.5" />
-                                    </button>
+                                  {showDeletedCarRecords ? (
+                                    <>
+                                      {canEditTab("house") && (
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            const nextRecs = allCarRecords.map((x) => x.id === rec.id ? { ...x, deletedAtMs: 0, updatedAtMs: Date.now() } : x);
+                                            saveCarNotebookToCloud({ ...carNotebook, records: nextRecs }, "↩️ 차량 기록을 복원했습니다.");
+                                          }}
+                                          className="px-2 py-1 rounded-lg bg-[#EEF3EE] text-[#35503C] text-[10.5px] font-extrabold whitespace-nowrap"
+                                        >
+                                          복원
+                                        </button>
+                                      )}
+                                      {canEditTab("house") && (
+                                        <button
+                                          type="button"
+                                          aria-label="영구 삭제"
+                                          onClick={async () => {
+                                            if (!await askConfirm(`'${rec.title}' 기록을 영구 삭제할까요?`)) return;
+                                            saveCarNotebookToCloud({ ...carNotebook, records: allCarRecords.filter((x) => x.id !== rec.id) }, "🗑️ 영구 삭제했습니다.");
+                                          }}
+                                          className="p-1 rounded-lg text-stone-400 hover:text-rose-600"
+                                        >
+                                          <Trash2 className="w-3.5 h-3.5" />
+                                        </button>
+                                      )}
+                                    </>
+                                  ) : (
+                                    <>
+                                      {rec.nextDate && canEditTab("schedule") && (
+                                        <button
+                                          type="button"
+                                          onClick={() => openCarLinkedSchedule(rec)}
+                                          className="px-2 py-1 rounded-lg bg-[#EEF3EE] text-[#35503C] text-[10.5px] font-extrabold whitespace-nowrap"
+                                        >
+                                          🗓️ 일정
+                                        </button>
+                                      )}
+                                      {canEditTab("house") && (
+                                        <button
+                                          type="button"
+                                          aria-label={`${rec.title} 수정`}
+                                          onClick={() => {
+                                            setEditingCarRecordId(rec.id);
+                                            setCarRecordForm({
+                                              vehicleId: rec.vehicleId || activeVehId,
+                                              typeId: rec.typeId || (recordTypes.find((t) => t.label === rec.type)?.id || ""),
+                                              type: rec.type || "정비·오일",
+                                              title: rec.title || "",
+                                              date: rec.date || getTodayStr(),
+                                              nextDate: rec.nextDate || "",
+                                              nextMileage: rec.nextMileage || "",
+                                              mileage: rec.mileage || "",
+                                              cost: rec.cost > 0 || rec.hasExplicitZeroCost ? String(rec.cost) : "",
+                                              memo: rec.memo || ""
+                                            });
+                                            setIsCarRecordFormOpen(true);
+                                          }}
+                                          className="p-1 rounded-lg text-stone-400 hover:text-stone-700"
+                                        >
+                                          <Edit2 className="w-3.5 h-3.5" />
+                                        </button>
+                                      )}
+                                      {canEditTab("house") && (
+                                        <button
+                                          type="button"
+                                          aria-label={`${rec.title} 삭제`}
+                                          onClick={async () => {
+                                            if (!await askConfirm(`'${rec.title}' 기록을 휴지통으로 옮길까요?`)) return;
+                                            const nextRecs = allCarRecords.map((x) => x.id === rec.id ? { ...x, deletedAtMs: Date.now(), updatedAtMs: Date.now() } : x);
+                                            saveCarNotebookToCloud({ ...carNotebook, records: nextRecs }, "🗑️ 휴지통으로 이동했습니다.");
+                                          }}
+                                          className="p-1 rounded-lg text-stone-400 hover:text-rose-600"
+                                        >
+                                          <Trash2 className="w-3.5 h-3.5" />
+                                        </button>
+                                      )}
+                                    </>
                                   )}
                                 </div>
                               </div>
@@ -36211,7 +37446,7 @@ time: "", location: "",
                   </div>
                 </div>
               );
-            })() : (
+                        })() : (
               <>
             {/* 검색창 + 서브탭별 필터 칩 */}
             <div className="space-y-2">
@@ -36763,36 +37998,183 @@ time: "", location: "",
       ========================================== */}
       {activeTab === "personal" && (() => {
         const todayStr = getTodayStr();
+        const todayDow = new Date(`${todayStr}T00:00:00`).getDay();
         const scItems = Array.isArray(personalSelfCare?.items) ? personalSelfCare.items : [];
-        const scDoneCount = scItems.filter((x) => x.doneDate === todayStr).length;
+        const scTypes = Array.isArray(personalSelfCare?.types) && personalSelfCare.types.length > 0 ? personalSelfCare.types : [...DEFAULT_SELF_CARE_TYPES];
+        const todayActiveScItems = scItems.filter((x) => {
+          if (x.paused) return false;
+          const days = Array.isArray(x.days) ? x.days : [0, 1, 2, 3, 4, 5, 6];
+          return days.includes(todayDow);
+        });
+        const scDoneCount = todayActiveScItems.filter((x) => x.doneDate === todayStr).length;
         const waterCnt = personalSelfCare?.waterDate === todayStr ? (Number(personalSelfCare?.waterCount) || 0) : 0;
         const waterGoal = Math.max(1, Number(personalSelfCare?.waterGoal) || 8);
+        const waterUnitMl = Math.max(50, Number(personalSelfCare?.waterUnitMl) || DEFAULT_BODY_WATER_UNIT_ML);
         const curCondMemo = personalSelfCare?.conditionDate === todayStr ? (personalSelfCare?.conditionMemo || "") : "";
+
+        const syncSelfCareHistory = (nextSc) => {
+          const hist = { ...(nextSc.dailyHistory || {}) };
+          const activeToday = (nextSc.items || []).filter((x) => !x.paused && (Array.isArray(x.days) ? x.days : [0,1,2,3,4,5,6]).includes(todayDow));
+          const doneIds = activeToday.filter((x) => x.doneDate === todayStr).map((x) => x.id);
+          hist[todayStr] = {
+            doneIds,
+            totalScheduled: activeToday.length,
+            waterCount: nextSc.waterDate === todayStr ? (Number(nextSc.waterCount) || 0) : 0,
+            waterGoal: Math.max(1, Number(nextSc.waterGoal) || 8),
+            waterUnitMl: Math.max(50, Number(nextSc.waterUnitMl) || DEFAULT_BODY_WATER_UNIT_ML),
+            conditionMemo: nextSc.conditionDate === todayStr ? (nextSc.conditionMemo || "") : ""
+          };
+          return { ...nextSc, dailyHistory: hist };
+        };
+
         const qSec = secretNoteSearch.trim().toLowerCase();
-        const visibleSecretNotes = [...personalSecretNotes]
+        const visibleSecretNotes = [...(showSecretTrash ? personalSecretTrash : personalSecretNotes)]
           .filter((n) => secretNoteCatFilter === "전체" || n.category === secretNoteCatFilter)
           .filter((n) => !qSec || `${n.title || ""} ${n.content || ""} ${n.url || ""} ${n.category || ""}`.toLowerCase().includes(qSec))
           .sort((a, b) => Number(Boolean(b.pinned)) - Number(Boolean(a.pinned)) || (Number(b.updatedAtMs) || 0) - (Number(a.updatedAtMs) || 0));
 
+        const handleAddSecretCategory = () => {
+          const c = newSecretCatInput.trim();
+          if (!c) { showToast("분류 이름을 입력해 주세요."); return; }
+          if (c === "전체") { showToast("'전체'는 예약어이므로 분류 이름으로 사용할 수 없습니다."); return; }
+          if (personalSecretCats.includes(c)) { showToast("이미 존재하는 분류입니다."); return; }
+          const nextCats = [...personalSecretCats, c];
+          setPersonalSecretCats(nextCats);
+          setNewSecretCatInput("");
+          savePersonalDataToCloud({ personalSecretCats: nextCats }, `✅ '${c}' 분류를 추가했습니다.`);
+        };
+
+        const handleExportPersonalBackup = () => {
+          const payload = {
+            backupType: "personal_space_v1",
+            exportedAt: new Date().toISOString(),
+            ownerUid: user?.uid || "",
+            ownerName: actorName || "",
+            data: {
+              personalSecretNotes,
+              personalSecretTrash,
+              personalSecretCats,
+              personalSecretArchivedCats,
+              personalSelfCare,
+              personalBodyLogs,
+              personalBodyGoal
+            }
+          };
+          const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json;charset=utf-8;" });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = `나만의공간_전용백업_${actorName || "user"}_${todayStr}.json`;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          setTimeout(() => URL.revokeObjectURL(url), 1500);
+          showToast("📦 본인 전용 개인 백업 파일을 다운로드했습니다.");
+        };
+
+        const handleRestorePersonalBackup = async (file) => {
+          if (!file) return;
+          try {
+            const text = await file.text();
+            const parsed = JSON.parse(text);
+            const d = parsed?.data || parsed;
+            if (!d || (!Array.isArray(d.personalSecretNotes) && !Array.isArray(d.personalBodyLogs) && !d.personalSelfCare)) {
+              showToast("⚠️ 올바른 나만의 공간 백업 파일이 아닙니다.");
+              return;
+            }
+            if (parsed?.ownerUid && user?.uid && parsed.ownerUid !== user.uid) {
+              const okOther = await askConfirm(
+                `이 백업은 다른 계정(${parsed.ownerName || parsed.ownerUid})의 데이터입니다. 현재 계정에 덮어쓰지 않고 계속할까요?`,
+                "계정 불일치 확인",
+                true
+              );
+              if (!okOther) return;
+            }
+            // 복원 직전 안전 사본 다운로드
+            handleExportPersonalBackup();
+            const nextNotes = Array.isArray(d.personalSecretNotes) ? d.personalSecretNotes : personalSecretNotes;
+            const nextTrash = Array.isArray(d.personalSecretTrash) ? d.personalSecretTrash : personalSecretTrash;
+            const nextCats = Array.isArray(d.personalSecretCats) && d.personalSecretCats.length > 0 ? d.personalSecretCats : personalSecretCats;
+            const nextArchCats = Array.isArray(d.personalSecretArchivedCats) ? d.personalSecretArchivedCats : personalSecretArchivedCats;
+            const nextSc = d.personalSelfCare && typeof d.personalSelfCare === "object" ? d.personalSelfCare : personalSelfCare;
+            const nextBody = Array.isArray(d.personalBodyLogs) ? d.personalBodyLogs : personalBodyLogs;
+            const nextGoal = d.personalBodyGoal && typeof d.personalBodyGoal === "object" ? d.personalBodyGoal : personalBodyGoal;
+            setPersonalSecretNotes(nextNotes);
+            setPersonalSecretTrash(nextTrash);
+            setPersonalSecretCats(nextCats);
+            setPersonalSecretArchivedCats(nextArchCats);
+            setPersonalSelfCare(nextSc);
+            setPersonalBodyLogs(nextBody);
+            setPersonalBodyGoal(nextGoal);
+            await savePersonalDataToCloud({
+              personalSecretNotes: nextNotes,
+              personalSecretTrash: nextTrash,
+              personalSecretCats: nextCats,
+              personalSecretArchivedCats: nextArchCats,
+              personalSelfCare: nextSc,
+              personalBodyLogs: nextBody,
+              personalBodyGoal: nextGoal
+            }, "✅ 개인 전용 백업에서 복원했습니다 (복원 전 안전 사본 저장됨).");
+          } catch {
+            showToast("⚠️ 손상되었거나 읽을 수 없는 JSON 백업 파일입니다.");
+          }
+        };
+
         return (
           <div className="p-4 space-y-3.5">
-            <div className="flex items-center justify-between gap-2 bg-[#EEF3EE]/80 border border-[#C9D8CC] rounded-xl px-3 py-1.5">
-              <span className="text-[11px] font-extrabold text-[#35503C] truncate">
-                🔒 {actorName || "나"} 계정 전용 · 다른 가족에게는 보이지 않습니다
+            <div className="flex items-center justify-between gap-2 bg-[#EEF3EE]/80 border border-[#C9D8CC] rounded-xl px-3 py-1.5 flex-wrap">
+              <span className="text-[11px] font-extrabold text-[#35503C] min-w-0">
+                🔒 {actorName || "나"} 계정 전용 · UID 접근제어로 다른 가족 계정에는 보이지 않습니다
               </span>
+              <div className="flex items-center gap-1 shrink-0">
+                <button
+                  type="button"
+                  onClick={handleExportPersonalBackup}
+                  className="px-2 py-0.5 rounded-lg bg-white border border-[#C9D8CC] text-[#35503C] text-[10.5px] font-extrabold whitespace-nowrap"
+                >
+                  💾 개인백업
+                </button>
+                <label className="px-2 py-0.5 rounded-lg bg-white border border-[#C9D8CC] text-[#35503C] text-[10.5px] font-extrabold whitespace-nowrap cursor-pointer">
+                  📥 복원
+                  <input
+                    type="file"
+                    accept=".json,application/json"
+                    className="hidden"
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      e.target.value = "";
+                      if (f) handleRestorePersonalBackup(f);
+                    }}
+                  />
+                </label>
+              </div>
             </div>
+
+            {personalPendingPatch && (
+              <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 flex items-center justify-between gap-2 text-[11.5px] font-bold text-amber-900">
+                <span className="min-w-0">⏳ 오프라인/오류로 저장 대기 중인 개인 변경사항이 있습니다.</span>
+                <button
+                  type="button"
+                  disabled={isSavingPersonal}
+                  onClick={() => savePersonalDataToCloud(personalPendingPatch, "✅ 대기 중이던 개인 데이터를 저장했습니다.")}
+                  className="px-2.5 py-1 rounded-lg bg-[#3F624D] text-white text-[11px] font-extrabold whitespace-nowrap shrink-0"
+                >
+                  {isSavingPersonal ? "저장 중..." : "재시도"}
+                </button>
+              </div>
+            )}
 
             <div className="grid grid-cols-3 gap-1 bg-stone-200/80 p-1 rounded-2xl">
               {[
                 { id: "secret", label: `🔒 비밀메모 (${personalSecretNotes.length})` },
-                { id: "care", label: `💊 셀프케어 (${scDoneCount}/${scItems.length})` },
+                { id: "care", label: `💊 셀프케어 (${scDoneCount}/${todayActiveScItems.length})` },
                 { id: "body", label: `⚖️ 체성분 (${personalBodyLogs.length})` }
               ].map((st) => (
                 <button
                   key={st.id}
                   type="button"
                   onClick={() => setPersonalSubTab(st.id)}
-                  className={`py-1.5 px-2 rounded-xl text-[12px] font-extrabold whitespace-nowrap transition ${
+                  className={`py-1.5 px-1.5 rounded-xl text-[11.5px] font-extrabold whitespace-nowrap truncate transition ${
                     personalSubTab === st.id ? "bg-white text-stone-900 shadow-sm" : "text-stone-600 hover:text-stone-900"
                   }`}
                 >
@@ -36817,6 +38199,7 @@ time: "", location: "",
                     {secretNoteSearch && (
                       <button
                         type="button"
+                        aria-label="검색어 지우기"
                         onClick={() => setSecretNoteSearch("")}
                         className="absolute right-2.5 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-700 text-[12px] font-black"
                       >
@@ -36828,10 +38211,12 @@ time: "", location: "",
                     type="button"
                     onClick={() => {
                       setEditingSecretNoteId(null);
+                      const openNext = !isSecretNoteFormOpen;
+                      personalSpaceDirtyRef.current.noteForm = openNext;
                       setSecretNoteForm({ title: "", category: personalSecretCats[0] || "메모", url: "", content: "", pinned: false });
-                      setIsSecretNoteFormOpen((v) => !v);
+                      setIsSecretNoteFormOpen(openNext);
                     }}
-                    className="px-3 py-2 rounded-xl bg-[#3F624D] hover:bg-[#324F3E] text-white text-[12px] font-extrabold whitespace-nowrap shrink-0 flex items-center gap-1"
+                    className="px-3 py-2 rounded-xl bg-[#3F624D] hover:bg-[#35503C] text-white text-[12px] font-extrabold whitespace-nowrap shrink-0 flex items-center gap-1"
                   >
                     <Plus className="w-3.5 h-3.5" /> {isSecretNoteFormOpen ? "닫기" : "메모 추가"}
                   </button>
@@ -36839,62 +38224,163 @@ time: "", location: "",
 
                 <div className="flex flex-wrap items-center gap-1.5">
                   {["전체", ...personalSecretCats].map((cat) => (
-                    <div key={cat} className="inline-flex items-center">
-                      <button
-                        type="button"
-                        onClick={() => setSecretNoteCatFilter(cat)}
-                        className={`px-2.5 py-1 text-[11px] font-extrabold border whitespace-nowrap transition ${
-                          cat !== "전체" && cat !== "메모" && personalSecretCats.length > 1 ? "rounded-l-full border-r-0" : "rounded-full"
-                        } ${
-                          secretNoteCatFilter === cat
-                            ? "bg-[#3F624D] text-white border-[#3F624D]"
-                            : "bg-white text-stone-600 border-stone-200"
-                        }`}
-                      >
-                        {cat}
-                      </button>
-                      {cat !== "전체" && cat !== "메모" && personalSecretCats.length > 1 && (
-                        <button
-                          type="button"
-                          onClick={async () => {
-                            if (!await askConfirm(`'${cat}' 분류를 삭제할까요? (기존 메모는 '메모' 분류로 이동됩니다)`)) return;
-                            const nextCats = personalSecretCats.filter((x) => x !== cat);
-                            const nextNotes = personalSecretNotes.map((n) => (n.category === cat ? { ...n, category: "메모" } : n));
-                            setPersonalSecretCats(nextCats);
-                            setPersonalSecretNotes(nextNotes);
-                            if (secretNoteCatFilter === cat) setSecretNoteCatFilter("전체");
-                            savePersonalDataToCloud({ personalSecretCats: nextCats, personalSecretNotes: nextNotes }, `🗑️ '${cat}' 분류를 삭제했습니다.`);
-                          }}
-                          className={`px-1.5 py-1 rounded-r-full text-[10.5px] font-black border whitespace-nowrap ${
-                            secretNoteCatFilter === cat
-                              ? "bg-[#324F3E] text-white/90 border-[#3F624D]"
-                              : "bg-stone-50 text-stone-400 hover:text-rose-600 border-stone-200"
-                          }`}
-                          title={`${cat} 분류 삭제`}
-                        >
-                          ×
-                        </button>
-                      )}
-                    </div>
+                    <button
+                      key={cat}
+                      type="button"
+                      onClick={() => setSecretNoteCatFilter(cat)}
+                      className={`px-2.5 py-1 rounded-full text-[11px] font-extrabold border whitespace-nowrap transition ${
+                        secretNoteCatFilter === cat
+                          ? "bg-[#3F624D] text-white border-[#3F624D]"
+                          : "bg-white text-stone-600 border-stone-200"
+                      }`}
+                    >
+                      {cat}
+                    </button>
                   ))}
-                  <input
-                    type="text"
-                    value={newSecretCatInput}
-                    onChange={(e) => setNewSecretCatInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        const c = newSecretCatInput.trim();
-                        if (!c || personalSecretCats.includes(c)) return;
-                        const nextCats = [...personalSecretCats, c];
-                        setPersonalSecretCats(nextCats);
-                        setNewSecretCatInput("");
-                        savePersonalDataToCloud({ personalSecretCats: nextCats }, `✅ '${c}' 분류를 추가했습니다.`);
-                      }
-                    }}
-                    placeholder="+ 분류 (Enter)"
-                    className="w-24 px-2 py-0.5 rounded-full border border-stone-200 bg-white text-[11px] font-bold"
-                  />
+                  <div className="inline-flex items-center gap-1">
+                    <input
+                      type="text"
+                      value={newSecretCatInput}
+                      onChange={(e) => setNewSecretCatInput(e.target.value)}
+                      onCompositionStart={() => setIsSecretCatComposing(true)}
+                      onCompositionEnd={() => setIsSecretCatComposing(false)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && !isSecretCatComposing && !e.nativeEvent?.isComposing && e.keyCode !== 229) {
+                          e.preventDefault();
+                          handleAddSecretCategory();
+                        }
+                      }}
+                      placeholder="+ 분류"
+                      className="w-20 px-2 py-0.5 rounded-full border border-stone-200 bg-white text-[11px] font-bold"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleAddSecretCategory}
+                      className="px-2 py-0.5 rounded-full bg-stone-100 hover:bg-stone-200 text-stone-700 text-[10.5px] font-extrabold whitespace-nowrap"
+                    >
+                      추가
+                    </button>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsSecretCatManageOpen((v) => !v)}
+                    className="px-2 py-0.5 rounded-full bg-stone-100 text-stone-600 text-[10.5px] font-extrabold whitespace-nowrap"
+                  >
+                    ⚙️ 분류관리
+                  </button>
+                  {personalSecretTrash.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setShowSecretTrash((v) => !v)}
+                      className="px-2 py-0.5 rounded-full bg-stone-100 text-stone-600 text-[10.5px] font-extrabold whitespace-nowrap"
+                    >
+                      {showSecretTrash ? "목록" : `🗑️ 휴지통 (${personalSecretTrash.length})`}
+                    </button>
+                  )}
                 </div>
+
+                {isSecretCatManageOpen && (
+                  <div className="bg-white rounded-2xl border border-stone-200 p-3 space-y-2 shadow-sm">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[12px] font-black text-stone-900">비밀메모 분류 관리 (이름변경 · 순서 · 삭제)</span>
+                      <button type="button" onClick={() => setIsSecretCatManageOpen(false)} aria-label="분류 관리 닫기" className="text-stone-400">
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                    <div className="space-y-1">
+                      {personalSecretCats.map((cat, idx) => (
+                        <div key={cat} className="flex items-center justify-between gap-1.5 px-2 py-1 rounded-xl bg-[#FAF8F3] border border-stone-200">
+                          {editingSecretCatOrig === cat ? (
+                            <div className="flex items-center gap-1 flex-1 min-w-0">
+                              <input
+                                type="text"
+                                value={editingSecretCatDraft}
+                                onChange={(e) => setEditingSecretCatDraft(e.target.value)}
+                                className="flex-1 min-w-0 px-2 py-0.5 rounded border border-stone-300 bg-white text-[11.5px] font-bold"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const nextName = editingSecretCatDraft.trim();
+                                  if (!nextName || nextName === "전체") { showToast("유효한 분류 이름을 입력해 주세요."); return; }
+                                  if (nextName !== cat && personalSecretCats.includes(nextName)) { showToast("이미 있는 분류 이름입니다."); return; }
+                                  const nextCats = personalSecretCats.map((x) => (x === cat ? nextName : x));
+                                  const nextNotes = personalSecretNotes.map((n) => (n.category === cat ? { ...n, category: nextName } : n));
+                                  setPersonalSecretCats(nextCats);
+                                  setPersonalSecretNotes(nextNotes);
+                                  if (secretNoteCatFilter === cat) setSecretNoteCatFilter(nextName);
+                                  setEditingSecretCatOrig("");
+                                  savePersonalDataToCloud({ personalSecretCats: nextCats, personalSecretNotes: nextNotes }, "분류 이름을 변경했습니다.");
+                                }}
+                                className="px-2 py-0.5 rounded bg-[#3F624D] text-white text-[10.5px] font-extrabold"
+                              >
+                                저장
+                              </button>
+                            </div>
+                          ) : (
+                            <>
+                              <span className="text-[11.5px] font-bold text-stone-800 truncate">{cat}</span>
+                              <div className="flex items-center gap-1 shrink-0">
+                                <button
+                                  type="button"
+                                  disabled={idx === 0}
+                                  onClick={() => {
+                                    const arr = [...personalSecretCats];
+                                    [arr[idx - 1], arr[idx]] = [arr[idx], arr[idx - 1]];
+                                    setPersonalSecretCats(arr);
+                                    savePersonalDataToCloud({ personalSecretCats: arr });
+                                  }}
+                                  className="px-1 text-[10px] text-stone-500 disabled:opacity-30"
+                                >
+                                  ▲
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={idx === personalSecretCats.length - 1}
+                                  onClick={() => {
+                                    const arr = [...personalSecretCats];
+                                    [arr[idx + 1], arr[idx]] = [arr[idx], arr[idx + 1]];
+                                    setPersonalSecretCats(arr);
+                                    savePersonalDataToCloud({ personalSecretCats: arr });
+                                  }}
+                                  className="px-1 text-[10px] text-stone-500 disabled:opacity-30"
+                                >
+                                  ▼
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => { setEditingSecretCatOrig(cat); setEditingSecretCatDraft(cat); }}
+                                  className="px-1.5 py-0.5 rounded bg-white border border-stone-200 text-[10px] font-bold"
+                                >
+                                  이름변경
+                                </button>
+                                {cat !== "메모" && personalSecretCats.length > 1 && (
+                                  <button
+                                    type="button"
+                                    onClick={async () => {
+                                      const fallback = personalSecretCats.find((x) => x !== cat) || "메모";
+                                      if (!await askConfirm(`'${cat}' 분류를 삭제할까요? 기존 메모는 '${fallback}'(으)로 이동됩니다.`)) return;
+                                      const nextCats = personalSecretCats.filter((x) => x !== cat);
+                                      if (!nextCats.includes("메모") && nextCats.length === 0) nextCats.push("메모");
+                                      const nextNotes = personalSecretNotes.map((n) => (n.category === cat ? { ...n, category: fallback } : n));
+                                      setPersonalSecretCats(nextCats);
+                                      setPersonalSecretNotes(nextNotes);
+                                      if (secretNoteCatFilter === cat) setSecretNoteCatFilter("전체");
+                                      savePersonalDataToCloud({ personalSecretCats: nextCats, personalSecretNotes: nextNotes }, `🗑️ '${cat}' 분류를 삭제했습니다.`);
+                                    }}
+                                    className="px-1.5 py-0.5 rounded bg-rose-50 text-rose-600 text-[10px] font-bold"
+                                  >
+                                    삭제
+                                  </button>
+                                )}
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 {isSecretNoteFormOpen && (
                   <div className="bg-white rounded-2xl border border-stone-200 p-3 space-y-2 shadow-sm">
@@ -36920,7 +38406,7 @@ time: "", location: "",
                       type="url"
                       value={secretNoteForm.url}
                       onChange={(e) => setSecretNoteForm((p) => ({ ...p, url: e.target.value }))}
-                      placeholder="🔗 스크랩 링크 URL (선택)"
+                      placeholder="🔗 스크랩 링크 URL (http/https)"
                       className="w-full px-2.5 py-1.5 rounded-xl border border-stone-200 text-[12px]"
                     />
                     <textarea
@@ -36942,34 +38428,45 @@ time: "", location: "",
                       </button>
                       <button
                         type="button"
+                        disabled={isSavingPersonal}
                         onClick={async () => {
                           const title = secretNoteForm.title.trim();
                           const content = secretNoteForm.content.trim();
-                          const url = secretNoteForm.url.trim();
-                          if (!title && !content && !url) { showToast("제목 또는 내용을 입력해 주세요."); return; }
+                          const urlCheck = validateSafeHttpUrl(secretNoteForm.url);
+                          if (!urlCheck.valid) {
+                            showToast(`⚠️ ${urlCheck.error}`);
+                            return;
+                          }
+                          if (!title && !content && !urlCheck.url) { showToast("제목 또는 내용을 입력해 주세요."); return; }
                           const nowMs = Date.now();
                           const itemPayload = {
                             id: editingSecretNoteId || `sec-${nowMs}-${Math.random().toString(36).slice(2, 5)}`,
                             title: title || "비밀 메모",
                             category: secretNoteForm.category || "메모",
-                            url,
+                            url: urlCheck.url,
                             content,
                             pinned: Boolean(secretNoteForm.pinned),
                             updatedAtMs: nowMs
                           };
+                          const prevNotes = personalSecretNotes;
                           const nextNotes = editingSecretNoteId
                             ? personalSecretNotes.map((x) => (x.id === editingSecretNoteId ? itemPayload : x))
                             : [itemPayload, ...personalSecretNotes];
                           setPersonalSecretNotes(nextNotes);
-                          const ok = await savePersonalDataToCloud({ personalSecretNotes: nextNotes }, editingSecretNoteId ? "✏️ 비밀 메모를 수정했습니다." : "🔒 비밀 메모를 저장했습니다.");
+                          const ok = await savePersonalDataToCloud(
+                            { personalSecretNotes: nextNotes },
+                            editingSecretNoteId ? "✏️ 비밀 메모를 수정했습니다." : "🔒 비밀 메모를 저장했습니다.",
+                            { rollbackFn: () => setPersonalSecretNotes(prevNotes) }
+                          );
                           if (ok) {
+                            personalSpaceDirtyRef.current.noteForm = false;
                             setIsSecretNoteFormOpen(false);
                             setEditingSecretNoteId(null);
                           }
                         }}
-                        className="px-3.5 py-1.5 rounded-xl bg-[#3F624D] hover:bg-[#324F3E] text-white text-[12px] font-extrabold whitespace-nowrap"
+                        className="px-3.5 py-1.5 rounded-xl bg-[#3F624D] hover:bg-[#35503C] disabled:opacity-50 text-white text-[12px] font-extrabold whitespace-nowrap"
                       >
-                        {editingSecretNoteId ? "수정 저장" : "저장하기"}
+                        {isSavingPersonal ? "저장 중..." : editingSecretNoteId ? "수정 저장" : "저장하기"}
                       </button>
                     </div>
                   </div>
@@ -36977,94 +38474,159 @@ time: "", location: "",
 
                 {visibleSecretNotes.length === 0 ? (
                   <div className="bg-white rounded-2xl border border-stone-200 p-6 text-center text-[12.5px] font-bold text-stone-400">
-                    나만 보는 아이디어, 선물 메모, 스크랩 링크를 기록해 보세요.
+                    {showSecretTrash ? "휴지통이 비어 있습니다." : "나만 보는 아이디어, 선물 메모, 스크랩 링크를 기록해 보세요."}
                   </div>
                 ) : (
                   <div className="space-y-2">
-                    {visibleSecretNotes.map((n) => (
-                      <div key={n.id} className="bg-white rounded-2xl border border-stone-200 p-3 space-y-1.5 shadow-sm">
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              {n.pinned && <span className="text-[11px]">📌</span>}
-                              <span className="px-1.5 py-0.5 rounded bg-[#EEF3EE] text-[#35503C] text-[10px] font-extrabold whitespace-nowrap">{n.category || "메모"}</span>
-                              <span className="text-[13.5px] font-black text-stone-900">{n.title}</span>
+                    {visibleSecretNotes.map((n) => {
+                      const isExpanded = expandedSecretNoteId === n.id;
+                      const safeLink = validateSafeHttpUrl(n.url);
+                      const isLong = (n.content || "").length > 110 || (n.content || "").split("\n").length > 3;
+                      return (
+                        <div key={n.id} className="bg-white rounded-2xl border border-stone-200 p-3 space-y-1.5 shadow-sm">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                {n.pinned && <span className="text-[11px]">📌</span>}
+                                <span className="px-1.5 py-0.5 rounded bg-[#EEF3EE] text-[#35503C] text-[10px] font-extrabold whitespace-nowrap">{n.category || "메모"}</span>
+                                <span className="text-[13.5px] font-black text-stone-900 break-words">{n.title}</span>
+                              </div>
+                              {n.content && (
+                                <div className={`text-[12px] text-stone-700 whitespace-pre-wrap mt-1 break-words ${isExpanded ? "" : "line-clamp-3"}`}>
+                                  {n.content}
+                                </div>
+                              )}
+                              {isLong && (
+                                <button
+                                  type="button"
+                                  onClick={() => setExpandedSecretNoteId(isExpanded ? null : n.id)}
+                                  className="text-[10.5px] font-extrabold text-[#35503C] mt-0.5"
+                                >
+                                  {isExpanded ? "접기 ▲" : "전체 보기 ▼"}
+                                </button>
+                              )}
+                              {n.url && safeLink.valid && safeLink.url && (
+                                <a
+                                  href={safeLink.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="block mt-1 text-[11.5px] font-bold text-[#35503C] underline truncate"
+                                  title={safeLink.url}
+                                >
+                                  🔗 {n.url}
+                                </a>
+                              )}
                             </div>
-                            {n.content && <div className="text-[12px] text-stone-700 whitespace-pre-wrap mt-1">{n.content}</div>}
-                            {n.url && (
-                              <a
-                                href={/^https?:\/\//i.test(n.url) ? n.url : `https://${n.url}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="inline-block mt-1 text-[11.5px] font-bold text-[#35503C] underline break-all"
-                              >
-                                🔗 {n.url}
-                              </a>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-1 shrink-0">
-                            <button
-                              type="button"
-                              onClick={() => copyTextSafe(`${n.title}${n.content ? `\n${n.content}` : ""}${n.url ? `\n${n.url}` : ""}`, "📋 메모를 복사했습니다!")}
-                              className="px-2 py-1 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 text-[10.5px] font-extrabold whitespace-nowrap"
-                            >
-                              📋
-                            </button>
-                            {isAdminUnlocked && (
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setEditingSchedule(null);
-                                  setScheduleForm({
-                                    title: n.title || "",
-                                    date: getTodayStr(),
-                                    endDate: "",
-                                    time: "",
-                                    location: "",
-                                    category: scheduleCategories[0] || "할일(To-Do)",
-                                    members: [actorName || "수혁"],
-                                    isAnnual: false,
-                                    showDday: false,
-                                    hasOriginYear: false,
-                                    memo: [n.content, n.url].filter(Boolean).join("\n"),
-                                    attachments: []
-                                  });
-                                  setScheduleModalIsPrivate(true);
-                                  setIsScheduleModalOpen(true);
-                                }}
-                                className="px-2 py-1 rounded-lg bg-[#EEF3EE] text-[#35503C] text-[10.5px] font-extrabold whitespace-nowrap"
-                                title="개인 일정으로 등록"
-                              >
-                                🗓️
-                              </button>
-                            )}
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setEditingSecretNoteId(n.id);
-                                setSecretNoteForm({ title: n.title || "", category: n.category || "메모", url: n.url || "", content: n.content || "", pinned: Boolean(n.pinned) });
-                                setIsSecretNoteFormOpen(true);
-                              }}
-                              className="p-1 rounded-lg text-stone-400 hover:text-stone-700"
-                            >
-                              <Edit3 className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={async () => {
-                                if (!await askConfirm(`'${n.title}' 비밀 메모를 삭제할까요?`)) return;
-                                const nextNotes = personalSecretNotes.filter((x) => x.id !== n.id);
-                                setPersonalSecretNotes(nextNotes);
-                                savePersonalDataToCloud({ personalSecretNotes: nextNotes }, "🗑️ 비밀 메모를 삭제했습니다.");
-                              }}
-                              className="p-1 rounded-lg text-stone-400 hover:text-rose-600"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
+                            <div className="flex items-center gap-1 shrink-0">
+                              {showSecretTrash ? (
+                                <>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const nextTrash = personalSecretTrash.filter((x) => x.id !== n.id);
+                                      const nextNotes = [n, ...personalSecretNotes];
+                                      setPersonalSecretTrash(nextTrash);
+                                      setPersonalSecretNotes(nextNotes);
+                                      savePersonalDataToCloud({ personalSecretTrash: nextTrash, personalSecretNotes: nextNotes }, "↩️ 비밀 메모를 복원했습니다.");
+                                    }}
+                                    className="px-2 py-1 rounded-lg bg-[#EEF3EE] text-[#35503C] text-[10.5px] font-extrabold whitespace-nowrap"
+                                  >
+                                    복원
+                                  </button>
+                                  <button
+                                    type="button"
+                                    aria-label="영구 삭제"
+                                    onClick={async () => {
+                                      if (!await askConfirm(`'${n.title}' 메모를 영구 삭제할까요?`)) return;
+                                      const nextTrash = personalSecretTrash.filter((x) => x.id !== n.id);
+                                      setPersonalSecretTrash(nextTrash);
+                                      savePersonalDataToCloud({ personalSecretTrash: nextTrash }, "🗑️ 영구 삭제했습니다.");
+                                    }}
+                                    className="p-1 rounded-lg text-stone-400 hover:text-rose-600"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </>
+                              ) : (
+                                <>
+                                  <button
+                                    type="button"
+                                    aria-label="메모 복사"
+                                    onClick={() => copyTextSafe(`${n.title}${n.content ? `\n${n.content}` : ""}${n.url ? `\n${n.url}` : ""}`, "📋 메모를 복사했습니다!")}
+                                    className="px-2 py-1 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 text-[10.5px] font-extrabold whitespace-nowrap"
+                                  >
+                                    📋
+                                  </button>
+                                  {isAdminUnlocked && (
+                                    <button
+                                      type="button"
+                                      aria-label="개인 일정으로 등록"
+                                      onClick={() => {
+                                        const existingPriv = privateSchedules.find((p) => p.sourceType === "secret_note" && p.sourceId === n.id);
+                                        setEditingSchedule(null);
+                                        setEditingPrivateCalId(existingPriv ? existingPriv.id : null);
+                                        setScheduleForm({
+                                          scheduleScope: "private",
+                                          title: existingPriv?.title || n.title || "",
+                                          date: existingPriv?.date || todayStr,
+                                          endDate: existingPriv?.endDate || "",
+                                          time: existingPriv?.time || "",
+                                          location: existingPriv?.location || "",
+                                          category: existingPriv?.category || scheduleCategories[0] || "할일(To-Do)",
+                                          members: [actorName || "수혁"],
+                                          isAnnual: Boolean(existingPriv?.isAnnual),
+                                          showDday: false,
+                                          hasOriginYear: false,
+                                          memo: existingPriv?.memo || [n.content, n.url].filter(Boolean).join("\n"),
+                                          attachments: [],
+                                          sourceType: "secret_note",
+                                          sourceId: n.id,
+                                          scope: "private",
+                                          ownerUid: user?.uid || ""
+                                        });
+                                        setIsScheduleModalOpen(true);
+                                        if (existingPriv) showToast("이미 연결된 개인 일정을 열었습니다.");
+                                      }}
+                                      className="px-2 py-1 rounded-lg bg-[#EEF3EE] text-[#35503C] text-[10.5px] font-extrabold whitespace-nowrap"
+                                    >
+                                      🗓️
+                                    </button>
+                                  )}
+                                  <button
+                                    type="button"
+                                    aria-label={`${n.title} 수정`}
+                                    onClick={() => {
+                                      personalSpaceDirtyRef.current.noteForm = true;
+                                      setEditingSecretNoteId(n.id);
+                                      setSecretNoteForm({ title: n.title || "", category: n.category || "메모", url: n.url || "", content: n.content || "", pinned: Boolean(n.pinned) });
+                                      setIsSecretNoteFormOpen(true);
+                                    }}
+                                    className="p-1 rounded-lg text-stone-400 hover:text-stone-700"
+                                  >
+                                    <Edit2 className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    aria-label={`${n.title} 삭제`}
+                                    onClick={async () => {
+                                      if (!await askConfirm(`'${n.title}' 비밀 메모를 휴지통으로 옮길까요?`)) return;
+                                      const nextNotes = personalSecretNotes.filter((x) => x.id !== n.id);
+                                      const nextTrash = [{ ...n, deletedAtMs: Date.now() }, ...personalSecretTrash].slice(0, 30);
+                                      setPersonalSecretNotes(nextNotes);
+                                      setPersonalSecretTrash(nextTrash);
+                                      savePersonalDataToCloud({ personalSecretNotes: nextNotes, personalSecretTrash: nextTrash }, "🗑️ 휴지통으로 이동했습니다.");
+                                    }}
+                                    className="p-1 rounded-lg text-stone-400 hover:text-rose-600"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </>
+                              )}
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -37073,35 +38635,26 @@ time: "", location: "",
             {personalSubTab === "care" && (
               <div className="space-y-3">
                 <div className="bg-white rounded-2xl border border-stone-200 p-3.5 space-y-2.5 shadow-sm">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-1.5 min-w-0">
-                      <span className="text-[13px] font-black text-stone-900 truncate">💧 오늘 물 마시기 ({waterCnt} / {waterGoal}잔)</span>
-                      <select
-                        value={waterGoal}
-                        onChange={(e) => {
-                          const nextGoal = Math.max(1, Number(e.target.value) || 8);
-                          const nextSc = { ...personalSelfCare, waterGoal: nextGoal };
-                          setPersonalSelfCare(nextSc);
-                          savePersonalDataToCloud({ personalSelfCare: nextSc }, `💧 물 목표를 ${nextGoal}잔으로 변경했습니다.`);
-                        }}
-                        className="px-1.5 py-0.5 rounded-lg border border-stone-200 bg-[#FAF8F3] text-[10.5px] font-extrabold text-stone-600 shrink-0"
-                        title="하루 물 목표 잔수 설정"
-                      >
-                        {[4, 5, 6, 7, 8, 10, 12, 14, 16].map((g) => (
-                          <option key={g} value={g}>목표 {g}잔</option>
-                        ))}
-                      </select>
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <div className="min-w-0">
+                      <div className="text-[13px] font-black text-stone-900">
+                        💧 오늘 물 마시기 ({waterCnt} / {waterGoal}잔 · {(waterCnt * waterUnitMl).toLocaleString()} / {(waterGoal * waterUnitMl).toLocaleString()}ml)
+                      </div>
+                      <div className="text-[10.5px] font-semibold text-stone-400">
+                        개인 목표 설정 기준이며 의학적 권장량을 의미하지 않습니다.
+                      </div>
                     </div>
                     <div className="flex items-center gap-1.5 shrink-0">
                       <button
                         type="button"
+                        aria-label="물 1잔 빼기"
                         onClick={() => {
                           const nextVal = Math.max(0, waterCnt - 1);
-                          const nextSc = { ...personalSelfCare, waterDate: todayStr, waterCount: nextVal };
+                          const nextSc = syncSelfCareHistory({ ...personalSelfCare, waterDate: todayStr, waterCount: nextVal });
                           setPersonalSelfCare(nextSc);
                           savePersonalDataToCloud({ personalSelfCare: nextSc });
                         }}
-                        className="w-7 h-7 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 font-black text-[13px]"
+                        className="w-8 h-8 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 font-black text-[14px]"
                       >
                         -
                       </button>
@@ -37109,15 +38662,52 @@ time: "", location: "",
                         type="button"
                         onClick={() => {
                           const nextVal = waterCnt + 1;
-                          const nextSc = { ...personalSelfCare, waterDate: todayStr, waterCount: nextVal };
+                          const nextSc = syncSelfCareHistory({ ...personalSelfCare, waterDate: todayStr, waterCount: nextVal });
                           setPersonalSelfCare(nextSc);
-                          savePersonalDataToCloud({ personalSelfCare: nextSc }, nextVal === waterGoal ? "🎉 오늘 물 목표를 달성했어요!" : "");
+                          savePersonalDataToCloud({ personalSelfCare: nextSc }, nextVal === waterGoal ? "🎉 오늘 설정한 물 목표를 달성했어요!" : "");
                         }}
-                        className="px-2.5 h-7 rounded-lg bg-[#3F624D] hover:bg-[#324F3E] text-white font-extrabold text-[11.5px] whitespace-nowrap"
+                        className="px-3 h-8 rounded-lg bg-[#3F624D] hover:bg-[#35503C] text-white font-extrabold text-[12px] whitespace-nowrap"
                       >
-                        +1잔
+                        +1잔 ({waterUnitMl}ml)
                       </button>
                     </div>
+                  </div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <label className="text-[11px] font-bold text-stone-500 flex items-center gap-1">
+                      목표:
+                      <input
+                        type="number"
+                        min="1"
+                        max="30"
+                        value={waterGoal}
+                        onChange={(e) => {
+                          const nextGoal = Math.max(1, Math.min(30, Number(e.target.value) || 1));
+                          const nextSc = syncSelfCareHistory({ ...personalSelfCare, waterGoal: nextGoal });
+                          setPersonalSelfCare(nextSc);
+                        }}
+                        onBlur={() => savePersonalDataToCloud({ personalSelfCare })}
+                        className="w-14 px-1.5 py-0.5 rounded-lg border border-stone-200 bg-[#FAF8F3] text-[11.5px] font-bold text-center"
+                      />
+                      잔
+                    </label>
+                    <label className="text-[11px] font-bold text-stone-500 flex items-center gap-1">
+                      1잔 용량:
+                      <input
+                        type="number"
+                        min="50"
+                        max="1000"
+                        step="50"
+                        value={waterUnitMl}
+                        onChange={(e) => {
+                          const nextMl = Math.max(50, Math.min(1000, Number(e.target.value) || 250));
+                          const nextSc = syncSelfCareHistory({ ...personalSelfCare, waterUnitMl: nextMl });
+                          setPersonalSelfCare(nextSc);
+                        }}
+                        onBlur={() => savePersonalDataToCloud({ personalSelfCare })}
+                        className="w-16 px-1.5 py-0.5 rounded-lg border border-stone-200 bg-[#FAF8F3] text-[11.5px] font-bold text-center"
+                      />
+                      ml
+                    </label>
                   </div>
                   <div className="w-full h-2 rounded-full bg-stone-100 overflow-hidden">
                     <div className="h-full bg-[#3F624D] transition-all" style={{ width: `${Math.min(100, Math.round((waterCnt / waterGoal) * 100))}%` }} />
@@ -37126,39 +38716,90 @@ time: "", location: "",
                     type="text"
                     value={curCondMemo}
                     onChange={(e) => {
+                      personalSpaceDirtyRef.current.condition = true;
                       const val = e.target.value;
                       setPersonalSelfCare((p) => ({ ...p, conditionDate: todayStr, conditionMemo: val }));
                     }}
-                    onBlur={() => savePersonalDataToCloud({ personalSelfCare: { ...personalSelfCare, conditionDate: todayStr } })}
+                    onBlur={() => {
+                      personalSpaceDirtyRef.current.condition = false;
+                      const nextSc = syncSelfCareHistory({ ...personalSelfCare, conditionDate: todayStr });
+                      setPersonalSelfCare(nextSc);
+                      savePersonalDataToCloud({ personalSelfCare: nextSc });
+                    }}
                     placeholder="📝 오늘 내 컨디션 한줄 메모 (예: 어깨 뭉침, 잠 6시간)"
                     className="w-full px-2.5 py-1.5 rounded-xl border border-stone-200 bg-[#FAF8F3] text-[12px] font-medium"
                   />
                 </div>
 
                 <div className="bg-white rounded-2xl border border-stone-200 p-3.5 space-y-2.5 shadow-sm">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-[13px] font-black text-stone-900">💊 오늘 셀프케어 ({scDoneCount}/{scItems.length})</span>
-                    <div className="flex items-center gap-1.5 shrink-0">
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <span className="text-[13px] font-black text-stone-900">💊 오늘 셀프케어 ({scDoneCount}/{todayActiveScItems.length})</span>
+                    <div className="flex items-center gap-1 shrink-0 flex-wrap">
+                      <button
+                        type="button"
+                        onClick={() => setSelfCareHistoryDays((d) => (d === 7 ? 0 : 7))}
+                        className={`px-2 py-0.5 rounded-lg border text-[10.5px] font-extrabold whitespace-nowrap ${selfCareHistoryDays === 7 ? "bg-[#3F624D] text-white border-[#3F624D]" : "bg-stone-50 text-stone-600 border-stone-200"}`}
+                      >
+                        7일 이력
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSelfCareHistoryDays((d) => (d === 30 ? 0 : 30))}
+                        className={`px-2 py-0.5 rounded-lg border text-[10.5px] font-extrabold whitespace-nowrap ${selfCareHistoryDays === 30 ? "bg-[#3F624D] text-white border-[#3F624D]" : "bg-stone-50 text-stone-600 border-stone-200"}`}
+                      >
+                        30일 이력
+                      </button>
                       <button
                         type="button"
                         onClick={() => setPersonalSubTab("body")}
                         className="px-2 py-0.5 rounded-lg bg-[#EEF3EE] text-[#35503C] border border-[#C9D8CC] text-[10.5px] font-extrabold whitespace-nowrap"
                       >
-                        ⚖️ 체성분 추이 →
+                        ⚖️ 체성분 →
                       </button>
-                      <span className="text-[10.5px] font-bold text-stone-400 whitespace-nowrap">자정 리셋</span>
                     </div>
                   </div>
+
+                  {selfCareHistoryDays > 0 && (
+                    <div className="p-2.5 rounded-xl bg-[#FAF8F3] border border-stone-200 space-y-1.5">
+                      <div className="text-[11px] font-black text-stone-700">📅 최근 {selfCareHistoryDays}일 기록 (저장된 일자만 표시)</div>
+                      {(() => {
+                        const hist = personalSelfCare?.dailyHistory || {};
+                        const cutoff = getOffsetDateStr(todayStr, -(selfCareHistoryDays - 1));
+                        const entries = Object.entries(hist)
+                          .filter(([dt]) => dt >= cutoff && dt <= todayStr)
+                          .sort((a, b) => b[0].localeCompare(a[0]));
+                        if (entries.length === 0) {
+                          return <div className="text-[11px] text-stone-400 font-semibold">아직 기록된 일자별 이력이 없습니다.</div>;
+                        }
+                        return (
+                          <div className="space-y-1 max-h-40 overflow-y-auto">
+                            {entries.map(([dt, row]) => (
+                              <div key={dt} className="flex items-center justify-between gap-2 text-[11px] bg-white px-2 py-1 rounded-lg border border-stone-200">
+                                <span className="font-extrabold text-stone-800 whitespace-nowrap">{dt}</span>
+                                <span className="text-stone-600 truncate">
+                                  케어 {Array.isArray(row.doneIds) ? row.doneIds.length : 0}/{row.totalScheduled ?? "-"} · 물 {row.waterCount || 0}잔 ({((row.waterCount || 0) * (row.waterUnitMl || waterUnitMl)).toLocaleString()}ml){row.conditionMemo ? ` · ${row.conditionMemo}` : ""}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  )}
+
                   <div className="space-y-1.5">
-                    {scItems.map((it) => {
+                    {scItems.map((it, sIdx) => {
+                      const daysArr = Array.isArray(it.days) ? it.days : [0, 1, 2, 3, 4, 5, 6];
+                      const isScheduledToday = !it.paused && daysArr.includes(todayDow);
                       const isDone = it.doneDate === todayStr;
+                      const linkedAlarm = customAlarms.find((a) => a && a.sourceType === "self_care" && a.sourceId === it.id);
                       return (
-                        <div key={it.id} className={`p-2 rounded-xl border flex items-center justify-between gap-2 transition ${isDone ? "bg-[#EEF3EE]/70 border-[#C9D8CC]" : "bg-[#FAF8F3]/60 border-stone-200"}`}>
+                        <div key={it.id} className={`p-2 rounded-xl border flex items-center justify-between gap-2 transition ${it.paused ? "bg-stone-100/60 border-stone-200 opacity-70" : isDone ? "bg-[#EEF3EE]/70 border-[#C9D8CC]" : "bg-[#FAF8F3]/60 border-stone-200"}`}>
                           <button
                             type="button"
                             onClick={() => {
                               const nextItems = scItems.map((x) => x.id === it.id ? { ...x, doneDate: isDone ? "" : todayStr } : x);
-                              const nextSc = { ...personalSelfCare, items: nextItems };
+                              const nextSc = syncSelfCareHistory({ ...personalSelfCare, items: nextItems });
                               setPersonalSelfCare(nextSc);
                               savePersonalDataToCloud({ personalSelfCare: nextSc });
                             }}
@@ -37170,28 +38811,97 @@ time: "", location: "",
                             <span className="px-1.5 py-0.5 rounded bg-white border border-stone-200 text-[10px] font-extrabold text-stone-600 shrink-0">{it.type || "영양제"}</span>
                             <span className={`text-[12.5px] font-extrabold truncate ${isDone ? "line-through text-stone-400" : "text-stone-800"}`}>{it.label}</span>
                             {it.timeHint && <span className="text-[10.5px] font-bold text-stone-400 shrink-0">· {it.timeHint}</span>}
+                            {it.paused && <span className="text-[10px] font-extrabold text-amber-700 shrink-0">· 일시중지</span>}
+                            {!it.paused && !isScheduledToday && <span className="text-[10px] font-bold text-stone-400 shrink-0">· 오늘 쉬는 날</span>}
                           </button>
-                          <div className="flex items-center gap-1 shrink-0">
+                          <div className="flex items-center gap-0.5 shrink-0">
+                            <button
+                              type="button"
+                              disabled={sIdx === 0}
+                              aria-label="위로 이동"
+                              onClick={() => {
+                                const arr = [...scItems];
+                                [arr[sIdx - 1], arr[sIdx]] = [arr[sIdx], arr[sIdx - 1]];
+                                const nextSc = { ...personalSelfCare, items: arr };
+                                setPersonalSelfCare(nextSc);
+                                savePersonalDataToCloud({ personalSelfCare: nextSc });
+                              }}
+                              className="px-1 text-[10px] text-stone-400 disabled:opacity-30"
+                            >
+                              ▲
+                            </button>
+                            <button
+                              type="button"
+                              disabled={sIdx === scItems.length - 1}
+                              aria-label="아래로 이동"
+                              onClick={() => {
+                                const arr = [...scItems];
+                                [arr[sIdx + 1], arr[sIdx]] = [arr[sIdx], arr[sIdx + 1]];
+                                const nextSc = { ...personalSelfCare, items: arr };
+                                setPersonalSelfCare(nextSc);
+                                savePersonalDataToCloud({ personalSelfCare: nextSc });
+                              }}
+                              className="px-1 text-[10px] text-stone-400 disabled:opacity-30"
+                            >
+                              ▼
+                            </button>
                             {canEditTab("alarm") && (
                               <button
                                 type="button"
+                                aria-label="알람 연결"
                                 onClick={() => {
-                                  setAlarmForm({ id: null, label: `💊 ${it.label}`, time: "08:30", days: [0,1,2,3,4,5,6], soundId: "gentle", volume: alarmDefaultVolume, vibrate: true, enabled: true });
+                                  openWakeupAlarmModal(linkedAlarm || null, {
+                                    label: `💊 ${it.label}`,
+                                    time: /^\d{2}:\d{2}$/.test(String(it.timeHint || "")) ? it.timeHint : "08:30",
+                                    days: daysArr,
+                                    soundId: "gentle",
+                                    sourceType: "self_care",
+                                    sourceId: it.id,
+                                    scope: "private",
+                                    ownerUid: user?.uid || ""
+                                  });
                                   setActiveTab("alarm");
-                                  setAlarmSheetMode("alarm");
-                                  showToast(`⏰ '${it.label}' 알림 시간을 설정해 주세요.`);
+                                  showToast(linkedAlarm ? `⏰ 연결된 '${it.label}' 알람을 열었습니다. (브라우저 알람은 앱/화면 상태에 영향을 받습니다)` : `⏰ '${it.label}' 개인 알람 시간을 설정해 주세요.`);
                                 }}
-                                className="px-1.5 py-1 rounded-lg bg-white border border-stone-200 text-[10.5px] font-extrabold text-stone-600 whitespace-nowrap"
-                                title="모닝콜·알람 등록"
+                                className={`px-1.5 py-1 rounded-lg border text-[10.5px] font-extrabold whitespace-nowrap ${linkedAlarm ? "bg-[#EEF3EE] border-[#C9D8CC] text-[#35503C]" : "bg-white border-stone-200 text-stone-600"}`}
+                                title={linkedAlarm ? "연결된 알람 수정" : "개인 알람 등록"}
                               >
-                                ⏰
+                                ⏰{linkedAlarm ? "✓" : ""}
                               </button>
                             )}
                             <button
                               type="button"
+                              aria-label={`${it.label} 수정`}
                               onClick={() => {
+                                setEditingSelfCareId(it.id);
+                                setNewSelfCareType(it.type || scTypes[0] || "영양제");
+                                setNewSelfCareLabel(it.label || "");
+                                setNewSelfCareTime(it.timeHint || "");
+                                setNewSelfCareDays(daysArr);
+                              }}
+                              className="p-1 rounded-lg text-stone-400 hover:text-stone-700"
+                            >
+                              <Edit2 className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const nextItems = scItems.map((x) => x.id === it.id ? { ...x, paused: !x.paused } : x);
+                                const nextSc = syncSelfCareHistory({ ...personalSelfCare, items: nextItems });
+                                setPersonalSelfCare(nextSc);
+                                savePersonalDataToCloud({ personalSelfCare: nextSc }, it.paused ? "▶ 항목을 재개했습니다." : "⏸ 항목을 일시중지했습니다.");
+                              }}
+                              className="px-1.5 py-0.5 rounded bg-stone-100 text-[10px] font-extrabold text-stone-600"
+                            >
+                              {it.paused ? "재개" : "중지"}
+                            </button>
+                            <button
+                              type="button"
+                              aria-label={`${it.label} 삭제`}
+                              onClick={async () => {
+                                if (!await askConfirm(`'${it.label}' 항목을 삭제할까요?`)) return;
                                 const nextItems = scItems.filter((x) => x.id !== it.id);
-                                const nextSc = { ...personalSelfCare, items: nextItems };
+                                const nextSc = syncSelfCareHistory({ ...personalSelfCare, items: nextItems });
                                 setPersonalSelfCare(nextSc);
                                 savePersonalDataToCloud({ personalSelfCare: nextSc }, `🗑️ '${it.label}' 항목을 삭제했습니다.`);
                               }}
@@ -37205,99 +38915,216 @@ time: "", location: "",
                     })}
                   </div>
 
-                  <div className="pt-1.5 border-t border-stone-100 flex items-center gap-1.5 flex-wrap">
-                    <select
-                      value={newSelfCareType}
-                      onChange={(e) => setNewSelfCareType(e.target.value)}
-                      className="px-2 py-1.5 rounded-xl border border-stone-200 bg-white text-[11.5px] font-bold"
-                    >
-                      <option value="영양제">영양제</option>
-                      <option value="운동">운동</option>
-                      <option value="생활">생활</option>
-                    </select>
-                    <input
-                      type="text"
-                      value={newSelfCareLabel}
-                      onChange={(e) => setNewSelfCareLabel(e.target.value)}
-                      placeholder="새 항목 (예: 철분제, 러닝)"
-                      className="flex-1 min-w-[110px] px-2.5 py-1.5 rounded-xl border border-stone-200 bg-[#FAF8F3] text-[12px] font-bold"
-                    />
-                    <input
-                      type="text"
-                      value={newSelfCareTime}
-                      onChange={(e) => setNewSelfCareTime(e.target.value)}
-                      placeholder="시점"
-                      className="w-16 px-2 py-1.5 rounded-xl border border-stone-200 bg-[#FAF8F3] text-[11.5px] font-bold"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const lbl = newSelfCareLabel.trim();
-                        if (!lbl) { showToast("항목 이름을 입력해 주세요."); return; }
-                        const nextItems = [
-                          ...scItems,
-                          { id: `sc-${Date.now()}`, label: lbl, type: newSelfCareType, timeHint: newSelfCareTime.trim(), doneDate: "" }
-                        ];
-                        const nextSc = { ...personalSelfCare, items: nextItems };
-                        setPersonalSelfCare(nextSc);
-                        setNewSelfCareLabel("");
-                        savePersonalDataToCloud({ personalSelfCare: nextSc }, `✅ '${lbl}' 셀프케어 항목을 추가했습니다.`);
-                      }}
-                      className="px-3 py-1.5 rounded-xl bg-[#3F624D] hover:bg-[#324F3E] text-white text-[11.5px] font-extrabold whitespace-nowrap shrink-0"
-                    >
-                      + 추가
-                    </button>
+                  {/* 유형 관리 + 항목 추가/수정 폼 */}
+                  <div className="pt-2 border-t border-stone-100 space-y-2">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <select
+                        value={newSelfCareType}
+                        onChange={(e) => setNewSelfCareType(e.target.value)}
+                        className="px-2 py-1.5 rounded-xl border border-stone-200 bg-white text-[11.5px] font-bold"
+                      >
+                        {scTypes.map((tp) => (
+                          <option key={tp} value={tp}>{tp}</option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        onClick={() => setIsSelfCareTypeManageOpen((v) => !v)}
+                        className="px-2 py-1.5 rounded-xl bg-stone-100 text-stone-600 text-[10.5px] font-extrabold whitespace-nowrap"
+                      >
+                        ⚙️ 유형
+                      </button>
+                      <input
+                        type="text"
+                        value={newSelfCareLabel}
+                        onChange={(e) => setNewSelfCareLabel(e.target.value)}
+                        placeholder="항목명 (예: 철분제, 러닝)"
+                        className="flex-1 min-w-[110px] px-2.5 py-1.5 rounded-xl border border-stone-200 bg-[#FAF8F3] text-[12px] font-bold"
+                      />
+                      <input
+                        type="text"
+                        value={newSelfCareTime}
+                        onChange={(e) => setNewSelfCareTime(e.target.value)}
+                        placeholder="시점/시각"
+                        className="w-20 px-2 py-1.5 rounded-xl border border-stone-200 bg-[#FAF8F3] text-[11.5px] font-bold"
+                      />
+                    </div>
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <div className="flex items-center gap-1 flex-wrap">
+                        {WEEKDAY_KO.map((wLbl, dow) => {
+                          const on = newSelfCareDays.includes(dow);
+                          return (
+                            <button
+                              key={wLbl}
+                              type="button"
+                              onClick={() => setNewSelfCareDays((prev) => on ? prev.filter((d) => d !== dow) : [...prev, dow].sort((a, b) => a - b))}
+                              className={`w-6 h-6 rounded-full text-[10.5px] font-extrabold border ${on ? "bg-[#3F624D] text-white border-[#3F624D]" : "bg-white text-stone-500 border-stone-200"}`}
+                            >
+                              {wLbl}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <div className="flex items-center gap-1">
+                        {editingSelfCareId && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingSelfCareId(null);
+                              setNewSelfCareLabel("");
+                              setNewSelfCareTime("아침");
+                              setNewSelfCareDays([0, 1, 2, 3, 4, 5, 6]);
+                            }}
+                            className="px-2.5 py-1.5 rounded-xl bg-stone-100 text-stone-600 text-[11.5px] font-extrabold"
+                          >
+                            취소
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const lbl = newSelfCareLabel.trim();
+                            if (!lbl) { showToast("항목 이름을 입력해 주세요."); return; }
+                            const daysSafe = newSelfCareDays.length > 0 ? newSelfCareDays : [0, 1, 2, 3, 4, 5, 6];
+                            const nextItems = editingSelfCareId
+                              ? scItems.map((x) => x.id === editingSelfCareId ? { ...x, label: lbl, type: newSelfCareType, timeHint: newSelfCareTime.trim(), days: daysSafe } : x)
+                              : [...scItems, { id: `sc-${Date.now()}`, label: lbl, type: newSelfCareType, timeHint: newSelfCareTime.trim(), days: daysSafe, paused: false, doneDate: "" }];
+                            const nextSc = syncSelfCareHistory({ ...personalSelfCare, items: nextItems });
+                            setPersonalSelfCare(nextSc);
+                            setEditingSelfCareId(null);
+                            setNewSelfCareLabel("");
+                            savePersonalDataToCloud({ personalSelfCare: nextSc }, editingSelfCareId ? `✏️ '${lbl}' 항목을 수정했습니다.` : `✅ '${lbl}' 셀프케어 항목을 추가했습니다.`);
+                          }}
+                          className="px-3 py-1.5 rounded-xl bg-[#3F624D] hover:bg-[#35503C] text-white text-[11.5px] font-extrabold whitespace-nowrap shrink-0"
+                        >
+                          {editingSelfCareId ? "수정 저장" : "+ 추가"}
+                        </button>
+                      </div>
+                    </div>
+
+                    {isSelfCareTypeManageOpen && (
+                      <div className="p-2 rounded-xl bg-[#FAF8F3] border border-stone-200 space-y-1.5">
+                        <div className="flex flex-wrap gap-1">
+                          {scTypes.map((tp) => (
+                            <span key={tp} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white border border-stone-200 text-[11px] font-bold">
+                              {tp}
+                              {scTypes.length > 1 && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const nextTypes = scTypes.filter((x) => x !== tp);
+                                    const fallback = nextTypes[0] || "생활";
+                                    const nextItems = scItems.map((x) => x.type === tp ? { ...x, type: fallback } : x);
+                                    const nextSc = { ...personalSelfCare, types: nextTypes, items: nextItems };
+                                    setPersonalSelfCare(nextSc);
+                                    savePersonalDataToCloud({ personalSelfCare: nextSc });
+                                  }}
+                                  className="text-stone-400 hover:text-rose-600"
+                                >
+                                  ×
+                                </button>
+                              )}
+                            </span>
+                          ))}
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <input
+                            type="text"
+                            value={newSelfCareTypeInput}
+                            onChange={(e) => setNewSelfCareTypeInput(e.target.value)}
+                            placeholder="새 유형 (예: 명상, 피부관리)"
+                            className="flex-1 min-w-0 px-2 py-1 rounded-lg border border-stone-200 bg-white text-[11.5px]"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const tp = newSelfCareTypeInput.trim();
+                              if (!tp || scTypes.includes(tp)) return;
+                              const nextSc = { ...personalSelfCare, types: [...scTypes, tp] };
+                              setPersonalSelfCare(nextSc);
+                              setNewSelfCareTypeInput("");
+                              savePersonalDataToCloud({ personalSelfCare: nextSc });
+                            }}
+                            className="px-2.5 py-1 rounded-lg bg-[#3F624D] text-white text-[11px] font-extrabold whitespace-nowrap"
+                          >
+                            추가
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
             )}
 
             {personalSubTab === "body" && (() => {
-              const sortedLogs = [...personalBodyLogs].sort((a, b) => String(a.measuredAt || "").localeCompare(String(b.measuredAt || "")));
+              const sortedLogs = [...personalBodyLogs].sort((a, b) =>
+                (a.timestampMs || new Date(`${a.date || "1970-01-01"}T00:00:00`).getTime()) -
+                (b.timestampMs || new Date(`${b.date || "1970-01-01"}T00:00:00`).getTime()) ||
+                String(a.measuredAt || "").localeCompare(String(b.measuredAt || ""))
+              );
               const activeMetric = BODY_METRIC_DEFS.find((m) => m.id === bodyMetricId) || BODY_METRIC_DEFS[0];
               const latestLog = sortedLogs.length > 0 ? sortedLogs[sortedLogs.length - 1] : null;
-              const anchorDate = latestLog?.date || todayStr;
-              const anchorMs = new Date(`${anchorDate}T00:00:00`).getTime();
+              const anchorDate = bodyRangeBasis === "today" ? todayStr : (latestLog?.date || todayStr);
+              const anchorMs = new Date(`${anchorDate}T23:59:59`).getTime();
               const rangeDaysNum = bodyRangeDays === "all" ? null : Number(bodyRangeDays);
 
               const rangedLogs = sortedLogs.filter((row) => {
                 if (!rangeDaysNum || !Number.isFinite(anchorMs)) return true;
-                const rowMs = new Date(`${row.date}T00:00:00`).getTime();
+                const rowMs = row.timestampMs || new Date(`${row.date}T00:00:00`).getTime();
                 if (!Number.isFinite(rowMs)) return true;
                 return (anchorMs - rowMs) / 86400000 <= rangeDaysNum;
               });
 
               const chartPoints = rangedLogs
+                .map((row) => {
+                  const raw = row[activeMetric.id];
+                  const val = raw === null || raw === undefined || raw === "" ? NaN : Number(raw);
+                  const ts = row.timestampMs || new Date(`${row.date}T00:00:00`).getTime();
+                  return { ...row, val, ts };
+                })
+                .filter((row) => Number.isFinite(row.val) && row.val > 0);
+
+              const allMetricPoints = sortedLogs
                 .map((row) => ({ ...row, val: Number(row[activeMetric.id]) }))
                 .filter((row) => Number.isFinite(row.val) && row.val > 0);
 
               const curPoint = chartPoints.length > 0 ? chartPoints[chartPoints.length - 1] : null;
               const prevPoint = chartPoints.length > 1 ? chartPoints[chartPoints.length - 2] : null;
-              const firstPoint = chartPoints.length > 1 ? chartPoints[0] : null;
+              const periodFirstPoint = chartPoints.length > 1 ? chartPoints[0] : null;
+              const globalFirstPoint = allMetricPoints.length > 1 ? allMetricPoints[0] : null;
+
               const deltaPrev = curPoint && prevPoint ? Number((curPoint.val - prevPoint.val).toFixed(activeMetric.digits)) : null;
-              const deltaFirst = curPoint && firstPoint ? Number((curPoint.val - firstPoint.val).toFixed(activeMetric.digits)) : null;
+              const deltaPeriodFirst = curPoint && periodFirstPoint ? Number((curPoint.val - periodFirstPoint.val).toFixed(activeMetric.digits)) : null;
+              const deltaGlobalFirst = curPoint && globalFirstPoint ? Number((curPoint.val - globalFirstPoint.val).toFixed(activeMetric.digits)) : null;
 
               const goalNumRaw = activeMetric.id === "weight" ? personalBodyGoal?.weight : activeMetric.id === "bodyFatPct" ? personalBodyGoal?.bodyFatPct : "";
               const goalNum = goalNumRaw !== "" && Number.isFinite(Number(goalNumRaw)) && Number(goalNumRaw) > 0 ? Number(goalNumRaw) : null;
               const deltaGoal = curPoint && goalNum !== null ? Number((curPoint.val - goalNum).toFixed(activeMetric.digits)) : null;
 
+              // 체지방률(%)은 절대 변화량을 %p로 표기하고 상대 변화율(%)도 함께 계산
+              const unitDisplay = activeMetric.id === "bodyFatPct" ? "%p" : activeMetric.unit;
               const fmtDelta = (d) => {
                 if (d === null || !Number.isFinite(d)) return "-";
-                if (d === 0) return `0${activeMetric.unit ? ` ${activeMetric.unit}` : ""}`;
-                return `${d > 0 ? "+" : ""}${d.toFixed(activeMetric.digits)}${activeMetric.unit ? ` ${activeMetric.unit}` : ""}`;
+                if (d === 0) return `0${unitDisplay ? ` ${unitDisplay}` : ""}`;
+                return `${d > 0 ? "+" : ""}${d.toFixed(activeMetric.digits)}${unitDisplay ? ` ${unitDisplay}` : ""}`;
               };
               const deltaTone = (d) => {
                 if (d === null || d === 0) return "text-stone-500";
-                const isGood = activeMetric.lowerIsGood ? d < 0 : d > 0;
-                return isGood ? "text-[#35503C]" : "text-rose-600";
+                if (goalNum !== null && curPoint) {
+                  // 사용자 설정 목표에 가까워지는 방향만 보조 강조
+                  const movingTowardGoal = (goalNum < curPoint.val && d < 0) || (goalNum > curPoint.val && d > 0);
+                  return movingTowardGoal ? "text-[#35503C]" : "text-stone-700";
+                }
+                return "text-stone-700";
               };
 
-              // SVG 차트 좌표 계산
+              // SVG 차트 좌표 (실제 측정 시간 간격 기반 X축)
               const W = 360;
               const H = 172;
               const padL = 38;
               const padR = 14;
-              const padT = 16;
+              const padT = 18;
               const padB = 26;
               const plotW = W - padL - padR;
               const plotH = H - padT - padB;
@@ -37311,9 +39138,14 @@ time: "", location: "",
               const yMax = rawMax + span * 0.14;
               const yMid = (yMin + yMax) / 2;
 
+              const minTs = chartPoints.length > 0 ? chartPoints[0].ts : 0;
+              const maxTs = chartPoints.length > 0 ? chartPoints[chartPoints.length - 1].ts : 0;
+              const tsSpan = Math.max(1, maxTs - minTs);
+
               const toX = (idx) => {
                 if (chartPoints.length <= 1) return padL + plotW / 2;
-                return padL + (idx / (chartPoints.length - 1)) * plotW;
+                if (maxTs <= minTs) return padL + (idx / (chartPoints.length - 1)) * plotW;
+                return padL + ((chartPoints[idx].ts - minTs) / tsSpan) * plotW;
               };
               const toY = (v) => padT + (1 - (v - yMin) / Math.max(0.0001, yMax - yMin)) * plotH;
 
@@ -37334,9 +39166,9 @@ time: "", location: "",
                     <div className="flex items-center justify-between gap-2 flex-wrap">
                       <div className="min-w-0">
                         <h3 className="text-[13.5px] font-black text-stone-900">⚖️ 체성분·인바디 추이</h3>
-                        <p className="text-[11px] font-semibold text-stone-500">Atflee 등 체성분 CSV 업로드 시 자동 병합·그래프화</p>
+                        <p className="text-[11px] font-semibold text-stone-500">CSV 업로드 시 미리보기·충돌 확인 후 병합합니다.</p>
                       </div>
-                      <div className="flex items-center gap-1.5 shrink-0">
+                      <div className="flex items-center gap-1.5 shrink-0 flex-wrap">
                         <button
                           type="button"
                           onClick={() => setPersonalSubTab("care")}
@@ -37344,7 +39176,7 @@ time: "", location: "",
                         >
                           💊 셀프케어 →
                         </button>
-                        <label className="px-2.5 py-1.5 rounded-xl bg-[#3F624D] hover:bg-[#324F3E] text-white text-[11.5px] font-extrabold whitespace-nowrap cursor-pointer">
+                        <label className="px-2.5 py-1.5 rounded-xl bg-[#3F624D] hover:bg-[#35503C] text-white text-[11.5px] font-extrabold whitespace-nowrap cursor-pointer">
                           📥 CSV 업로드
                           <input
                             type="file"
@@ -37357,31 +39189,43 @@ time: "", location: "",
                               try {
                                 const buf = await file.arrayBuffer();
                                 let text = new TextDecoder("utf-8").decode(buf);
-                                let parsed = parseBodyCompositionCsv(text);
-                                if (parsed.length === 0) {
+                                let detail = parseBodyCompositionCsvDetailed(text);
+                                if (!detail.headerMatched || detail.rows.length === 0) {
                                   try {
-                                    text = new TextDecoder("euc-kr").decode(buf);
-                                    parsed = parseBodyCompositionCsv(text);
+                                    const eucText = new TextDecoder("euc-kr").decode(buf);
+                                    const eucDetail = parseBodyCompositionCsvDetailed(eucText);
+                                    if (eucDetail.rows.length > detail.rows.length || (eucDetail.headerMatched && !detail.headerMatched)) {
+                                      detail = eucDetail;
+                                    }
                                   } catch (decErr) {}
                                 }
-                                if (parsed.length === 0) {
-                                  showToast("인식 가능한 체성분 CSV 행이 없습니다. 헤더(측정일시·몸무게)를 확인해 주세요.");
+                                if (!detail.headerMatched && detail.rows.length === 0) {
+                                  showToast(detail.errors[0]?.reason || "인식 가능한 체성분 CSV 헤더(측정일시·몸무게)를 찾을 수 없습니다.");
                                   return;
                                 }
-                                const map = new Map();
-                                sortedLogs.forEach((row) => map.set(row.measuredAt, row));
-                                let addedCnt = 0;
-                                parsed.forEach((row) => {
-                                  if (!map.has(row.measuredAt)) addedCnt += 1;
-                                  map.set(row.measuredAt, row);
+                                const existingMap = new Map(sortedLogs.map((row) => [row.measuredAt, row]));
+                                let newCnt = 0;
+                                let sameCnt = 0;
+                                let conflictCnt = 0;
+                                detail.rows.forEach((r) => {
+                                  const ex = existingMap.get(r.measuredAt);
+                                  if (!ex) newCnt += 1;
+                                  else {
+                                    const hasDiff = ["weight", "bodyFatPct", "skeletalMuscle", "bmi", "bmr", "bodyFatMass", "visceralFat", "water"].some(
+                                      (k) => r[k] !== undefined && ex[k] !== undefined && Number(r[k]) !== Number(ex[k])
+                                    );
+                                    if (hasDiff) conflictCnt += 1;
+                                    else sameCnt += 1;
+                                  }
                                 });
-                                const merged = Array.from(map.values()).sort((a, b) => String(a.measuredAt || "").localeCompare(String(b.measuredAt || "")));
-                                setPersonalBodyLogs(merged);
-                                setBodySelectedIdx(null);
-                                await savePersonalDataToCloud(
-                                  { personalBodyLogs: merged },
-                                  `✅ ${parsed.length}건 중 신규 ${addedCnt}건을 반영했습니다 (총 ${merged.length}건).`
-                                );
+                                setBodyImportPreview({
+                                  fileName: file.name,
+                                  rows: detail.rows,
+                                  errors: detail.errors,
+                                  newCnt,
+                                  sameCnt,
+                                  conflictCnt
+                                });
                               } catch (err) {
                                 showToast("CSV 파일을 읽는 중 오류가 발생했습니다.");
                               }
@@ -37390,13 +39234,90 @@ time: "", location: "",
                         </label>
                         <button
                           type="button"
-                          onClick={() => setIsBodyManualOpen((v) => !v)}
+                          onClick={() => {
+                            setEditingBodyRowId(null);
+                            setBodyManualForm({ date: todayStr, time: "", weight: "", bodyFatPct: "", skeletalMuscle: "" });
+                            setIsBodyManualOpen((v) => !v);
+                          }}
                           className="px-2.5 py-1.5 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-[11.5px] font-extrabold whitespace-nowrap"
                         >
-                          {isBodyManualOpen ? "닫기" : "+ 직접입력"}
+                          {isBodyManualOpen && !editingBodyRowId ? "닫기" : "+ 직접입력"}
                         </button>
                       </div>
                     </div>
+
+                    {/* CSV 미리보기 및 충돌 정책 확인 */}
+                    {bodyImportPreview && (
+                      <div className="p-3 rounded-xl bg-[#FAF8F3] border border-[#C9D8CC] space-y-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-[12px] font-black text-stone-900 truncate">📄 {bodyImportPreview.fileName} 미리보기</span>
+                          <button type="button" onClick={() => setBodyImportPreview(null)} className="text-[11px] font-bold text-stone-500">닫기</button>
+                        </div>
+                        <div className="flex flex-wrap gap-1.5 text-[11px] font-extrabold">
+                          <span className="px-2 py-0.5 rounded bg-[#EEF3EE] text-[#35503C]">신규 {bodyImportPreview.newCnt}건</span>
+                          <span className="px-2 py-0.5 rounded bg-stone-100 text-stone-600">기존 동일 {bodyImportPreview.sameCnt}건</span>
+                          <span className="px-2 py-0.5 rounded bg-amber-100 text-amber-800">충돌 {bodyImportPreview.conflictCnt}건</span>
+                          <span className="px-2 py-0.5 rounded bg-rose-100 text-rose-700">오류 {bodyImportPreview.errors.length}건</span>
+                        </div>
+                        {bodyImportPreview.errors.length > 0 && (
+                          <div className="max-h-24 overflow-y-auto text-[10.5px] text-rose-700 bg-rose-50/70 p-2 rounded-lg space-y-0.5">
+                            {bodyImportPreview.errors.slice(0, 10).map((err, eIdx) => (
+                              <div key={eIdx}>• {err.row}행: {err.reason}</div>
+                            ))}
+                            {bodyImportPreview.errors.length > 10 && <div>외 {bodyImportPreview.errors.length - 10}건 오류</div>}
+                          </div>
+                        )}
+                        <div className="flex items-center justify-between gap-2 flex-wrap">
+                          <select
+                            value={bodyImportConflictPolicy}
+                            onChange={(e) => setBodyImportConflictPolicy(e.target.value)}
+                            className="px-2 py-1 rounded-lg border border-stone-200 bg-white text-[11px] font-bold"
+                          >
+                            <option value="merge_non_empty">충돌 시: 빈 열 제외하고 병합 (권장)</option>
+                            <option value="keep_existing">충돌 시: 기존 기록 유지</option>
+                            <option value="overwrite">충돌 시: 새 CSV 값으로 덮어쓰기</option>
+                          </select>
+                          <button
+                            type="button"
+                            disabled={bodyImportPreview.rows.length === 0 || isSavingPersonal}
+                            onClick={async () => {
+                              const map = new Map();
+                              sortedLogs.forEach((row) => map.set(row.measuredAt, row));
+                              bodyImportPreview.rows.forEach((incoming) => {
+                                const prev = map.get(incoming.measuredAt);
+                                if (!prev) {
+                                  map.set(incoming.measuredAt, incoming);
+                                } else if (bodyImportConflictPolicy === "keep_existing") {
+                                  // keep prev
+                                } else if (bodyImportConflictPolicy === "overwrite") {
+                                  // 빈 열로 기존 정상 지표를 지우지 않도록 undefined가 아닌 값만 덮어씀
+                                  map.set(incoming.measuredAt, { ...prev, ...incoming, id: prev.id || incoming.id });
+                                } else {
+                                  const mergedRow = { ...prev };
+                                  Object.entries(incoming).forEach(([k, v]) => {
+                                    if (v !== undefined && v !== null && v !== "") mergedRow[k] = v;
+                                  });
+                                  map.set(incoming.measuredAt, mergedRow);
+                                }
+                              });
+                              const merged = Array.from(map.values()).sort((a, b) => (a.timestampMs || 0) - (b.timestampMs || 0) || String(a.measuredAt || "").localeCompare(String(b.measuredAt || "")));
+                              const prevLogs = personalBodyLogs;
+                              setPersonalBodyLogs(merged);
+                              setBodySelectedIdx(null);
+                              const ok = await savePersonalDataToCloud(
+                                { personalBodyLogs: merged },
+                                `✅ 신규 ${bodyImportPreview.newCnt}건 포함 총 ${merged.length}건을 반영했습니다.`,
+                                { rollbackFn: () => setPersonalBodyLogs(prevLogs) }
+                              );
+                              if (ok) setBodyImportPreview(null);
+                            }}
+                            className="px-3 py-1 rounded-xl bg-[#3F624D] text-white text-[11.5px] font-extrabold whitespace-nowrap"
+                          >
+                            반영하기
+                          </button>
+                        </div>
+                      </div>
+                    )}
 
                     {/* 목표 체중 / 목표 체지방률 */}
                     <div className="flex items-center gap-2 flex-wrap pt-1 border-t border-stone-100">
@@ -37406,8 +39327,14 @@ time: "", location: "",
                           type="number"
                           step="0.1"
                           value={personalBodyGoal.weight}
-                          onChange={(e) => setPersonalBodyGoal((p) => ({ ...p, weight: e.target.value }))}
-                          onBlur={() => savePersonalDataToCloud({ personalBodyGoal })}
+                          onChange={(e) => {
+                            personalSpaceDirtyRef.current.goal = true;
+                            setPersonalBodyGoal((p) => ({ ...p, weight: e.target.value }));
+                          }}
+                          onBlur={() => {
+                            personalSpaceDirtyRef.current.goal = false;
+                            savePersonalDataToCloud({ personalBodyGoal });
+                          }}
                           placeholder="목표 체중(kg)"
                           className="w-24 px-2 py-1 rounded-lg border border-stone-200 bg-[#FAF8F3] text-[11.5px] font-bold text-stone-800"
                         />
@@ -37418,8 +39345,14 @@ time: "", location: "",
                           type="number"
                           step="0.1"
                           value={personalBodyGoal.bodyFatPct}
-                          onChange={(e) => setPersonalBodyGoal((p) => ({ ...p, bodyFatPct: e.target.value }))}
-                          onBlur={() => savePersonalDataToCloud({ personalBodyGoal })}
+                          onChange={(e) => {
+                            personalSpaceDirtyRef.current.goal = true;
+                            setPersonalBodyGoal((p) => ({ ...p, bodyFatPct: e.target.value }));
+                          }}
+                          onBlur={() => {
+                            personalSpaceDirtyRef.current.goal = false;
+                            savePersonalDataToCloud({ personalBodyGoal });
+                          }}
                           placeholder="목표 체지방(%)"
                           className="w-24 px-2 py-1 rounded-lg border border-stone-200 bg-[#FAF8F3] text-[11.5px] font-bold text-stone-800"
                         />
@@ -37429,72 +39362,118 @@ time: "", location: "",
 
                     {isBodyManualOpen && (
                       <div className="p-2.5 rounded-xl bg-[#FAF8F3] border border-stone-200 space-y-2">
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+                        <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5">
                           <input
                             type="date"
                             value={bodyManualForm.date}
                             onChange={(e) => setBodyManualForm((p) => ({ ...p, date: e.target.value }))}
-                            className="px-2 py-1.5 rounded-lg border border-stone-200 bg-white text-[11.5px] font-bold"
+                            className="min-w-0 px-2 py-1.5 rounded-lg border border-stone-200 bg-white text-[11.5px] font-bold"
+                          />
+                          <input
+                            type="time"
+                            value={bodyManualForm.time}
+                            onChange={(e) => setBodyManualForm((p) => ({ ...p, time: e.target.value }))}
+                            className="min-w-0 px-2 py-1.5 rounded-lg border border-stone-200 bg-white text-[11.5px] font-bold"
                           />
                           <input
                             type="number"
                             step="0.01"
+                            min="1"
+                            max="400"
                             value={bodyManualForm.weight}
                             onChange={(e) => setBodyManualForm((p) => ({ ...p, weight: e.target.value }))}
                             placeholder="몸무게 (kg)"
-                            className="px-2 py-1.5 rounded-lg border border-stone-200 bg-white text-[11.5px] font-bold"
+                            className="min-w-0 px-2 py-1.5 rounded-lg border border-stone-200 bg-white text-[11.5px] font-bold"
                           />
                           <input
                             type="number"
                             step="0.01"
+                            min="1"
+                            max="85"
                             value={bodyManualForm.bodyFatPct}
                             onChange={(e) => setBodyManualForm((p) => ({ ...p, bodyFatPct: e.target.value }))}
                             placeholder="체지방률 (%)"
-                            className="px-2 py-1.5 rounded-lg border border-stone-200 bg-white text-[11.5px] font-bold"
+                            className="min-w-0 px-2 py-1.5 rounded-lg border border-stone-200 bg-white text-[11.5px] font-bold"
                           />
                           <input
                             type="number"
                             step="0.01"
+                            min="1"
+                            max="200"
                             value={bodyManualForm.skeletalMuscle}
                             onChange={(e) => setBodyManualForm((p) => ({ ...p, skeletalMuscle: e.target.value }))}
                             placeholder="골격근량 (kg)"
-                            className="px-2 py-1.5 rounded-lg border border-stone-200 bg-white text-[11.5px] font-bold"
+                            className="min-w-0 px-2 py-1.5 rounded-lg border border-stone-200 bg-white text-[11.5px] font-bold"
                           />
                         </div>
-                        <div className="flex justify-end">
+                        <div className="flex justify-end gap-1.5">
+                          {editingBodyRowId && (
+                            <button
+                              type="button"
+                              onClick={() => { setEditingBodyRowId(null); setIsBodyManualOpen(false); }}
+                              className="px-3 py-1.5 rounded-xl bg-stone-100 text-stone-600 text-[11.5px] font-extrabold"
+                            >
+                              취소
+                            </button>
+                          )}
                           <button
                             type="button"
+                            disabled={isSavingPersonal}
                             onClick={async () => {
                               const d = bodyManualForm.date || todayStr;
-                              const w = bodyManualForm.weight !== "" ? Number(bodyManualForm.weight) : null;
-                              const f = bodyManualForm.bodyFatPct !== "" ? Number(bodyManualForm.bodyFatPct) : null;
-                              const m = bodyManualForm.skeletalMuscle !== "" ? Number(bodyManualForm.skeletalMuscle) : null;
-                              if ((w === null || w <= 0) && (f === null || f <= 0) && (m === null || m <= 0)) {
+                              const t = String(bodyManualForm.time || "").trim();
+                              const measuredAt = t ? `${d} ${t}` : d;
+                              const parseManualNum = (val, maxV) => {
+                                if (val === "" || val === null || val === undefined) return { ok: true, val: undefined };
+                                const n = Number(val);
+                                if (!Number.isFinite(n) || n <= 0 || n > maxV) return { ok: false };
+                                return { ok: true, val: n };
+                              };
+                              const wR = parseManualNum(bodyManualForm.weight, 400);
+                              const fR = parseManualNum(bodyManualForm.bodyFatPct, 85);
+                              const mR = parseManualNum(bodyManualForm.skeletalMuscle, 200);
+                              if (!wR.ok || !fR.ok || !mR.ok) {
+                                showToast("수치는 0보다 큰 올바른 범위의 숫자로 입력해 주세요.");
+                                return;
+                              }
+                              if (wR.val === undefined && fR.val === undefined && mR.val === undefined) {
                                 showToast("몸무게, 체지방률, 골격근량 중 하나 이상을 입력해 주세요.");
                                 return;
                               }
+                              const tsMs = new Date(`${d}T${t ? (t.length === 5 ? `${t}:00` : t) : "00:00:00"}`).getTime();
+                              const existingOrig = editingBodyRowId ? sortedLogs.find((x) => (x.id || x.measuredAt) === editingBodyRowId) : null;
                               const newRow = {
-                                id: `body-${d.replace(/[^0-9]/g, "")}-${Date.now().toString(36).slice(-3)}`,
-                                measuredAt: d,
+                                ...(existingOrig || {}),
+                                id: existingOrig?.id || `body-${measuredAt.replace(/[^0-9]/g, "")}-${Date.now().toString(36).slice(-3)}`,
+                                measuredAt,
                                 date: d,
-                                device: "직접입력",
-                                weight: w && w > 0 ? w : null,
-                                bodyFatPct: f && f > 0 ? f : null,
-                                skeletalMuscle: m && m > 0 ? m : null
+                                timestampMs: Number.isFinite(tsMs) ? tsMs : Date.now(),
+                                device: existingOrig?.device || "직접입력",
+                                ...(wR.val !== undefined ? { weight: wR.val } : {}),
+                                ...(fR.val !== undefined ? { bodyFatPct: fR.val } : {}),
+                                ...(mR.val !== undefined ? { skeletalMuscle: mR.val } : {})
                               };
-                              const nextLogs = [...sortedLogs.filter((x) => x.measuredAt !== d), newRow]
-                                .sort((a, b) => String(a.measuredAt || "").localeCompare(String(b.measuredAt || "")));
+                              const prevLogs = personalBodyLogs;
+                              const nextLogs = editingBodyRowId
+                                ? sortedLogs.map((x) => ((x.id || x.measuredAt) === editingBodyRowId ? newRow : x))
+                                : [...sortedLogs, newRow];
+                              nextLogs.sort((a, b) => (a.timestampMs || 0) - (b.timestampMs || 0) || String(a.measuredAt || "").localeCompare(String(b.measuredAt || "")));
                               setPersonalBodyLogs(nextLogs);
                               setBodySelectedIdx(null);
-                              const ok = await savePersonalDataToCloud({ personalBodyLogs: nextLogs }, "✅ 체성분 기록을 저장했습니다.");
+                              const ok = await savePersonalDataToCloud(
+                                { personalBodyLogs: nextLogs },
+                                editingBodyRowId ? "✏️ 측정 기록을 수정했습니다." : "✅ 체성분 기록을 저장했습니다.",
+                                { rollbackFn: () => setPersonalBodyLogs(prevLogs) }
+                              );
                               if (ok) {
-                                setBodyManualForm({ date: todayStr, weight: "", bodyFatPct: "", skeletalMuscle: "" });
+                                setEditingBodyRowId(null);
+                                setBodyManualForm({ date: todayStr, time: "", weight: "", bodyFatPct: "", skeletalMuscle: "" });
                                 setIsBodyManualOpen(false);
                               }
                             }}
-                            className="px-3 py-1.5 rounded-xl bg-[#3F624D] hover:bg-[#324F3E] text-white text-[11.5px] font-extrabold whitespace-nowrap"
+                            className="px-3 py-1.5 rounded-xl bg-[#3F624D] hover:bg-[#35503C] text-white text-[11.5px] font-extrabold whitespace-nowrap"
                           >
-                            기록 저장
+                            {editingBodyRowId ? "수정 저장" : "기록 저장"}
                           </button>
                         </div>
                       </div>
@@ -37529,24 +39508,36 @@ time: "", location: "",
                               </button>
                             ))}
                           </div>
-                          <div className="flex items-center gap-1 bg-stone-100 p-0.5 rounded-xl shrink-0">
-                            {[
-                              { id: "7", label: "7일" },
-                              { id: "30", label: "30일" },
-                              { id: "90", label: "90일" },
-                              { id: "all", label: "전체" }
-                            ].map((rg) => (
+                          <div className="flex items-center gap-1 flex-wrap shrink-0">
+                            <div className="flex items-center gap-0.5 bg-stone-100 p-0.5 rounded-xl">
+                              {[
+                                { id: "7", label: "7일" },
+                                { id: "30", label: "30일" },
+                                { id: "90", label: "90일" },
+                                { id: "all", label: "전체" }
+                              ].map((rg) => (
+                                <button
+                                  key={rg.id}
+                                  type="button"
+                                  onClick={() => { setBodyRangeDays(rg.id); setBodySelectedIdx(null); }}
+                                  className={`px-2 py-0.5 rounded-lg text-[10.5px] font-extrabold whitespace-nowrap ${
+                                    bodyRangeDays === rg.id ? "bg-white text-stone-900 shadow-sm" : "text-stone-500"
+                                  }`}
+                                >
+                                  {rg.label}
+                                </button>
+                              ))}
+                            </div>
+                            {bodyRangeDays !== "all" && (
                               <button
-                                key={rg.id}
                                 type="button"
-                                onClick={() => { setBodyRangeDays(rg.id); setBodySelectedIdx(null); }}
-                                className={`px-2 py-0.5 rounded-lg text-[10.5px] font-extrabold whitespace-nowrap ${
-                                  bodyRangeDays === rg.id ? "bg-white text-stone-900 shadow-sm" : "text-stone-500"
-                                }`}
+                                onClick={() => { setBodyRangeBasis((b) => b === "latest" ? "today" : "latest"); setBodySelectedIdx(null); }}
+                                className="px-2 py-0.5 rounded-lg border border-stone-200 bg-white text-[10px] font-bold text-stone-600 whitespace-nowrap"
+                                title="기간 계산 기준 전환"
                               >
-                                {rg.label}
+                                기준: {bodyRangeBasis === "latest" ? "최근기록" : "오늘"}
                               </button>
-                            ))}
+                            )}
                           </div>
                         </div>
 
@@ -37562,18 +39553,24 @@ time: "", location: "",
                               <div className="text-[10px] font-semibold text-stone-500 truncate">{curPoint.measuredAt}</div>
                             </div>
                             <div className="bg-[#FAF8F3] border border-stone-200 rounded-xl p-2.5 min-w-0">
-                              <div className="text-[10.5px] font-bold text-stone-500 truncate">기간 시작 대비</div>
-                              <div className={`text-[14px] font-black mt-0.5 ${deltaTone(deltaFirst)}`}>{fmtDelta(deltaFirst)}</div>
-                              <div className="text-[10px] font-semibold text-stone-400 truncate">직전 {fmtDelta(deltaPrev)}</div>
+                              <div className="text-[10.5px] font-bold text-stone-500 truncate">
+                                {bodyRangeDays === "all" ? "전체 첫 기록 대비" : "기간 첫 기록 대비"}
+                              </div>
+                              <div className={`text-[14px] font-black mt-0.5 ${deltaTone(deltaPeriodFirst)}`}>{fmtDelta(deltaPeriodFirst)}</div>
+                              <div className="text-[10px] font-semibold text-stone-400 truncate">
+                                {bodyRangeDays !== "all" && deltaGlobalFirst !== null
+                                  ? `전체 ${fmtDelta(deltaGlobalFirst)}`
+                                  : `직전 ${fmtDelta(deltaPrev)}`}
+                              </div>
                             </div>
                             <div className="bg-[#FAF8F3] border border-stone-200 rounded-xl p-2.5 min-w-0">
                               <div className="text-[10.5px] font-bold text-stone-500 truncate">
-                                {goalNum !== null ? `목표 (${goalNum}${activeMetric.unit})` : "기간 최고/최저"}
+                                {goalNum !== null ? `목표 (${goalNum}${activeMetric.unit})` : "기간 최소~최대"}
                               </div>
                               {goalNum !== null ? (
                                 <>
                                   <div className={`text-[14px] font-black mt-0.5 ${deltaTone(deltaGoal)}`}>{fmtDelta(deltaGoal)}</div>
-                                  <div className="text-[10px] font-semibold text-stone-400 truncate">{deltaGoal <= 0 && activeMetric.lowerIsGood ? "목표 달성!" : "남은 차이"}</div>
+                                  <div className="text-[10px] font-semibold text-stone-400 truncate">목표 대비 차이</div>
                                 </>
                               ) : (
                                 <>
@@ -37602,7 +39599,7 @@ time: "", location: "",
                                 <span className="text-stone-400">점을 눌러 날짜별 확인</span>
                               </div>
                             )}
-                            <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-44 overflow-visible select-none">
+                            <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-44 select-none">
                               <defs>
                                 <linearGradient id="bodyChartAreaGrad" x1="0" y1="0" x2="0" y2="1">
                                   <stop offset="0%" stopColor="#3F624D" stopOpacity="0.24" />
@@ -37622,22 +39619,25 @@ time: "", location: "",
                                 );
                               })}
 
-                              {goalNum !== null && (
-                                <g>
-                                  <line
-                                    x1={padL}
-                                    y1={toY(goalNum)}
-                                    x2={W - padR}
-                                    y2={toY(goalNum)}
-                                    stroke="#D97706"
-                                    strokeDasharray="4 3"
-                                    strokeWidth="1.4"
-                                  />
-                                  <text x={W - padR} y={toY(goalNum) - 3} textAnchor="end" fontSize="9" fontWeight="800" fill="#B45309">
-                                    목표 {goalNum}
-                                  </text>
-                                </g>
-                              )}
+                              {goalNum !== null && (() => {
+                                const gy = Math.max(padT, Math.min(padT + plotH, toY(goalNum)));
+                                return (
+                                  <g>
+                                    <line
+                                      x1={padL}
+                                      y1={gy}
+                                      x2={W - padR}
+                                      y2={gy}
+                                      stroke="#D97706"
+                                      strokeDasharray="4 3"
+                                      strokeWidth="1.4"
+                                    />
+                                    <text x={W - padR} y={Math.max(padT + 8, gy - 3)} textAnchor="end" fontSize="9" fontWeight="800" fill="#B45309">
+                                      목표 {goalNum}
+                                    </text>
+                                  </g>
+                                );
+                              })()}
 
                               {chartPoints.length > 1 && <path d={areaPath} fill="url(#bodyChartAreaGrad)" />}
                               {chartPoints.length > 1 && (
@@ -37685,17 +39685,18 @@ time: "", location: "",
                         )}
 
                         {/* 복사 / 내보내기 버튼 */}
-                        <div className="flex items-center justify-end gap-1.5 pt-1 border-t border-stone-100">
+                        <div className="flex items-center justify-end gap-1.5 pt-1 border-t border-stone-100 flex-wrap">
                           <button
                             type="button"
                             onClick={() => {
                               if (!latestLog) return;
                               const firstLog = sortedLogs[0];
                               const wDiff = firstLog?.weight && latestLog?.weight ? (latestLog.weight - firstLog.weight).toFixed(2) : null;
+                              const fDiff = firstLog?.bodyFatPct && latestLog?.bodyFatPct ? (latestLog.bodyFatPct - firstLog.bodyFatPct).toFixed(2) : null;
                               const lines = [
                                 `[체성분 요약] (${latestLog.measuredAt})`,
                                 latestLog.weight ? `• 몸무게: ${latestLog.weight}kg${wDiff ? ` (첫 기록 대비 ${Number(wDiff) > 0 ? "+" : ""}${wDiff}kg)` : ""}` : "",
-                                latestLog.bodyFatPct ? `• 체지방률: ${latestLog.bodyFatPct}%` : "",
+                                latestLog.bodyFatPct ? `• 체지방률: ${latestLog.bodyFatPct}%${fDiff ? ` (첫 기록 대비 ${Number(fDiff) > 0 ? "+" : ""}${fDiff}%p)` : ""}` : "",
                                 latestLog.skeletalMuscle ? `• 골격근량: ${latestLog.skeletalMuscle}kg` : "",
                                 latestLog.bmi ? `• BMI: ${latestLog.bmi}` : ""
                               ].filter(Boolean).join("\n");
@@ -37708,7 +39709,7 @@ time: "", location: "",
                           <button
                             type="button"
                             onClick={() => {
-                              const header = ["측정일시", "기기명", "몸무게(kg)", "체지방률(%)", "골격근량(kg)", "BMI", "체지방량(kg)", "기초대사량(kcal)", "내장지방", "체수분(kg)"];
+                              const header = ["측정일시", "기기명", "몸무게(kg)", "체지방률(%)", "골격근량(kg)", "BMI", "비만도(%)", "근육량(kg)", "체지방량(kg)", "기초대사량(kcal)", "내장지방", "체수분(kg)", "신체나이", "복부비만율"];
                               const rows = sortedLogs.map((r) => [
                                 r.measuredAt || "",
                                 r.device || "",
@@ -37716,12 +39717,16 @@ time: "", location: "",
                                 r.bodyFatPct ?? "",
                                 r.skeletalMuscle ?? "",
                                 r.bmi ?? "",
+                                r.obesityPct ?? "",
+                                r.muscleMass ?? "",
                                 r.bodyFatMass ?? "",
                                 r.bmr ?? "",
                                 r.visceralFat ?? "",
-                                r.water ?? ""
-                              ].map((c) => `"${String(c).replace(/"/g, '""')}"`).join(","));
-                              const csvOut = "\uFEFF" + [header.join(","), ...rows].join("\n");
+                                r.water ?? "",
+                                r.bodyAge ?? "",
+                                r.whr ?? ""
+                              ].map((c) => sanitizeCsvCell(c)).join(","));
+                              const csvOut = "﻿" + [header.map((h) => sanitizeCsvCell(h)).join(","), ...rows].join("\n");
                               const blob = new Blob([csvOut], { type: "text/csv;charset=utf-8;" });
                               const url = URL.createObjectURL(blob);
                               const a = document.createElement("a");
@@ -37731,7 +39736,7 @@ time: "", location: "",
                               a.click();
                               a.remove();
                               setTimeout(() => URL.revokeObjectURL(url), 1500);
-                              showToast("📤 체성분 CSV 파일을 내보냈습니다.");
+                              showToast("📤 전체 지표 포함 체성분 CSV를 내보냈습니다.");
                             }}
                             className="px-2.5 py-1 rounded-lg bg-[#EEF3EE] text-[#35503C] border border-[#C9D8CC] text-[11px] font-extrabold whitespace-nowrap"
                           >
@@ -37749,9 +39754,10 @@ time: "", location: "",
                               type="button"
                               onClick={async () => {
                                 if (!await askConfirm(`저장된 체성분 기록 ${sortedLogs.length}건을 모두 초기화할까요?`)) return;
+                                const prevLogs = personalBodyLogs;
                                 setPersonalBodyLogs([]);
                                 setBodySelectedIdx(null);
-                                savePersonalDataToCloud({ personalBodyLogs: [] }, "🗑️ 체성분 기록을 전체 초기화했습니다.");
+                                savePersonalDataToCloud({ personalBodyLogs: [] }, "🗑️ 체성분 기록을 전체 초기화했습니다.", { rollbackFn: () => setPersonalBodyLogs(prevLogs) });
                               }}
                               className="text-[10.5px] font-extrabold text-stone-400 hover:text-rose-600 whitespace-nowrap"
                             >
@@ -37774,19 +39780,42 @@ time: "", location: "",
                                   {row.bmi !== null && row.bmi !== undefined && <span>BMI <strong className="text-stone-900">{row.bmi}</strong></span>}
                                 </div>
                               </div>
-                              <button
-                                type="button"
-                                onClick={async () => {
-                                  if (!await askConfirm(`${row.measuredAt} 측정 기록을 삭제할까요?`)) return;
-                                  const nextLogs = sortedLogs.filter((x) => (x.id || x.measuredAt) !== (row.id || row.measuredAt));
-                                  setPersonalBodyLogs(nextLogs);
-                                  setBodySelectedIdx(null);
-                                  savePersonalDataToCloud({ personalBodyLogs: nextLogs }, "🗑️ 측정 기록을 삭제했습니다.");
-                                }}
-                                className="p-1 rounded-lg text-stone-400 hover:text-rose-600 shrink-0"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
+                              <div className="flex items-center gap-1 shrink-0">
+                                <button
+                                  type="button"
+                                  aria-label={`${row.measuredAt} 수정`}
+                                  onClick={() => {
+                                    setEditingBodyRowId(row.id || row.measuredAt);
+                                    const timePart = row.measuredAt && row.measuredAt.length > 10 ? row.measuredAt.slice(11, 16) : "";
+                                    setBodyManualForm({
+                                      date: row.date || todayStr,
+                                      time: timePart,
+                                      weight: row.weight ?? "",
+                                      bodyFatPct: row.bodyFatPct ?? "",
+                                      skeletalMuscle: row.skeletalMuscle ?? ""
+                                    });
+                                    setIsBodyManualOpen(true);
+                                  }}
+                                  className="p-1 rounded-lg text-stone-400 hover:text-stone-700"
+                                >
+                                  <Edit2 className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  type="button"
+                                  aria-label={`${row.measuredAt} 삭제`}
+                                  onClick={async () => {
+                                    if (!await askConfirm(`${row.measuredAt} 측정 기록을 삭제할까요?`)) return;
+                                    const prevLogs = personalBodyLogs;
+                                    const nextLogs = sortedLogs.filter((x) => (x.id || x.measuredAt) !== (row.id || row.measuredAt));
+                                    setPersonalBodyLogs(nextLogs);
+                                    setBodySelectedIdx(null);
+                                    savePersonalDataToCloud({ personalBodyLogs: nextLogs }, "🗑️ 측정 기록을 삭제했습니다.", { rollbackFn: () => setPersonalBodyLogs(prevLogs) });
+                                  }}
+                                  className="p-1 rounded-lg text-stone-400 hover:text-rose-600"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
                             </div>
                           ))}
                         </div>
@@ -47458,7 +49487,7 @@ time: "", location: "",
                 const pq = patchSearchQuery.trim().toLowerCase();
                 const matchedNotes = pq
                   ? patchNotes.filter((pn) => {
-                      const bullets = toSafeArray(Array.isArray(pn.changes) && pn.changes.length > 0 ? pn.changes : pn.items);
+                      const bullets = normalizePatchNoteBullets(pn);
                       return (
                         String(pn.version || "").toLowerCase().includes(pq) ||
                         String(pn.title || "").toLowerCase().includes(pq) ||
@@ -47494,7 +49523,7 @@ time: "", location: "",
                     </div>
                   </div>
                   <ul className="space-y-0.5 text-[10.5px] text-stone-600 pl-1">
-                    {toSafeArray(Array.isArray(pn.changes) && pn.changes.length > 0 ? pn.changes : pn.items).map((line, i) => (
+                    {normalizePatchNoteBullets(pn).map((line, i) => (
                       <li key={i} className="leading-snug break-keep">
                         • {line}
                       </li>
