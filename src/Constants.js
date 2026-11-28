@@ -32,7 +32,58 @@ export const formatDate = (dateObj) => {
 };
 
 
-export const getTodayStr = () => formatDate(new Date());
+export const KST_TIME_ZONE = "Asia/Seoul";
+
+export const getKstNowParts = (dateInput = new Date()) => {
+  const dt = dateInput instanceof Date && !Number.isNaN(dateInput.getTime()) ? dateInput : new Date();
+  try {
+    const fmt = new Intl.DateTimeFormat("en-CA", {
+      timeZone: KST_TIME_ZONE,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: false
+    });
+    const parts = {};
+    fmt.formatToParts(dt).forEach((pt) => {
+      if (pt.type !== "literal") parts[pt.type] = pt.value;
+    });
+    const y = Number(parts.year) || dt.getUTCFullYear();
+    const m = Number(parts.month) || dt.getUTCMonth() + 1;
+    const d = Number(parts.day) || dt.getUTCDate();
+    const rawH = Number(parts.hour);
+    const hour = Number.isFinite(rawH) ? rawH % 24 : 0;
+    const minute = Number(parts.minute) || 0;
+    const second = Number(parts.second) || 0;
+    const dateStr = `${String(y).padStart(4, "0")}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+    const hhmm = `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+    return { year: y, month: m, day: d, hour, minute, second, dateStr, hhmm };
+  } catch {
+    const kst = new Date(dt.getTime() + 9 * 3600000);
+    const y = kst.getUTCFullYear();
+    const m = kst.getUTCMonth() + 1;
+    const d = kst.getUTCDate();
+    const hour = kst.getUTCHours();
+    const minute = kst.getUTCMinutes();
+    const second = kst.getUTCSeconds();
+    return {
+      year: y,
+      month: m,
+      day: d,
+      hour,
+      minute,
+      second,
+      dateStr: `${String(y).padStart(4, "0")}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`,
+      hhmm: `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`
+    };
+  }
+};
+
+export const getKstTodayStr = (dateInput = new Date()) => getKstNowParts(dateInput).dateStr;
+export const getTodayStr = () => getKstTodayStr();
 export const getCurrentYearMonth = () => getTodayStr().slice(0, 7);
 
 
@@ -1258,7 +1309,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v14.69";
+export const APP_CODE_VERSION = "v14.70";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1346,6 +1397,18 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v14.70",
+    version: "v14.70",
+    date: "2026-11-28",
+    title: "루틴 일간·주간·월간 조회 고도화 & 전체 코드 감사·메뉴 연계 개선",
+    changes: [
+      "루틴 탭 내 [일간 | 주간 | 월간] 조회 기간과 [카드 | 시간표] 표시 방식을 분리하고 KST 기준 날짜별 완료 이력(routine_logs_v1)·반복 규칙 이력(ruleHistory)·과거 기록 보존 이관을 적용했습니다.",
+      "루틴 카드에 1탭 ⏰ 알람 등록 버튼과 첨부파일 칩을 복원하고, 이월 건너뛰기·복원이 routine_logs_v1과 즉시 동기화되도록 수정했습니다.",
+      "루틴 추가/수정 모달에 하루 실행 횟수(1~4회) 선택과 자유편집 가능한 N일마다 주기 프리셋(routine_interval_presets · 클라우드 동기화)을 추가했습니다.",
+      "루틴 상단 📅 일정 N건 배지(해당 날짜 달력 이동)·🤝 인수인계 바로가기·주간 [선택일만 | 모두 펼치기] 토글을 추가하고, 잔여 bg-emerald-600(4곳)과 9.5px 폰트(5곳)를 세이지 그린(#3F624D) 및 10px 이상 기준으로 통일했습니다."
+    ]
+  },
   {
     id: "patch-v14.69",
     version: "v14.69",
@@ -8596,6 +8659,7 @@ export const DEFAULT_BABY_DIARY_MOODS = ["😊 행복", "🥰 감동", "😴 잘
 export const DEFAULT_AI_MEAL_STYLES = ["일반 집밥", "다이어트·저탄수", "고단백·체력보충", "간편 원플레이트"];
 export const DEFAULT_AI_MEAL_TARGETS = ["온가족 한끼", "부부 (수혁 & 아리나)", "시목이 유아식", "시율이 이유식/유아식"];
 export const DEFAULT_ROUTINE_TIME_PRESETS = ["07:30", "09:00", "12:00", "17:30", "20:00", "21:30"];
+export const DEFAULT_ROUTINE_INTERVAL_PRESETS = ["2", "3", "4", "5", "6", "7", "10", "14", "21", "30"];
 export const DEFAULT_MEAL_SOURCE_TYPES = ["집밥/온가족식", "유아식/이유식", "어린이집 급식", "외식/배달"];
 export const DEFAULT_SCHEDULE_QUICK_TIMES = ["09:30", "11:00", "14:00", "16:30", "18:30"];
 export const DEFAULT_SCHEDULE_DURATION_PRESETS = ["하루|0", "2일간|1", "3일간|2", "5일간|4", "1주|6"];
@@ -8692,10 +8756,10 @@ export const APP_FEATURE_GUIDES = [
     steps: [
       "📅 달력: 가족 일정(🏠)과 내 개인일정·다이어리(🔒, 관리자 본인 전용)를 함께 보고, 한국 공휴일·음력·기간 범위(시작~종료일)·시간·장소(네이버지도 연결)를 지원해요.",
       "✅ 할 일(To-Do): 마감일별 할 일을 빠르게 추가·검색하고 1탭 완료 체크, 🛒 장보기, ⏰ 모닝콜 알람 예약으로 바로 보낼 수 있어요.",
-      "🔄 루틴: 시간대별 루틴과 함께 계좌번호·참고사항 메모(1탭 복사) 및 파일 첨부를 관리해요. 제목을 쉼표(,)로 적으면 단계별 칩으로 쪼개져 개별 체크가 돼요.",
+      "🔄 루틴: [일간·주간·월간] 조회와 [카드·시간표] 표시를 분리해 날짜별 완료 기록·하루 다회차(1~4회)·메모(1탭 복사)·첨부파일을 관리해요. 제목을 쉼표(,)로 적으면 단계별 개별 체크가 돼요.",
       "⭐ D-Day: 기념일·생일 카운트다운을 모아보고, [📌 홈] 토글로 홈 상단 미니바에 고정할 수 있어요."
     ],
-    tips: "루틴 상단 [🕒 시간표] 버튼을 누르면 시간순 2열 표로 한눈에 볼 수 있고, 어제 미완료 항목은 [📌 이월]로 자동 표시돼요."
+    tips: "루틴 상단 📅 일정 배지(달력 이동), ⏰ 알람 버튼, 🤝 인수인계 바로가기로 연관 메뉴를 1탭 전환할 수 있고, N일마다 주기·시간대·담당자는 ⚙️로 자유 편집돼요."
   },
   {
     id: "baby",
@@ -10202,5 +10266,486 @@ export const buildChunkedBackupManifest = (backupDataObj, { slot = "", scope = "
       complete: true
     },
     chunks
+  };
+};
+
+// ============================================================================
+// 루틴 일간·주간·월간 조회 · KST 날짜 계산 · 반복 규칙 · 날짜별 완료 기록 엔진
+// ============================================================================
+export const parseKstDateStr = (dateStr) => {
+  const clean = String(dateStr || "").slice(0, 10);
+  const m = clean.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return null;
+  const year = Number(m[1]);
+  const month = Number(m[2]);
+  const day = Number(m[3]);
+  const utcMs = Date.UTC(year, month - 1, day, 12, 0, 0);
+  const check = new Date(utcMs);
+  if (check.getUTCFullYear() !== year || check.getUTCMonth() !== month - 1 || check.getUTCDate() !== day) {
+    return null;
+  }
+  return { year, month, day, utcMs, dow: check.getUTCDay(), dateStr: clean };
+};
+
+export const formatKstUtcMs = (utcMs) => {
+  const d = new Date(utcMs);
+  return `${String(d.getUTCFullYear()).padStart(4, "0")}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
+};
+
+export const getKstDayOfWeek = (dateStr) => {
+  const parsed = parseKstDateStr(dateStr);
+  return parsed ? parsed.dow : 0;
+};
+
+export const shiftKstDateStr = (dateStr, deltaDays = 0) => {
+  const parsed = parseKstDateStr(dateStr) || parseKstDateStr(getKstTodayStr());
+  if (!parsed) return getKstTodayStr();
+  return formatKstUtcMs(parsed.utcMs + (Number(deltaDays) || 0) * 86400000);
+};
+
+export const shiftKstDateByMonths = (dateStr, deltaMonths = 0) => {
+  const parsed = parseKstDateStr(dateStr) || parseKstDateStr(getKstTodayStr());
+  if (!parsed) return getKstTodayStr();
+  const totalMonths = parsed.year * 12 + (parsed.month - 1) + (Number(deltaMonths) || 0);
+  const targetYear = Math.floor(totalMonths / 12);
+  const targetMonth1 = ((totalMonths % 12) + 12) % 12 + 1;
+  const lastDay = new Date(Date.UTC(targetYear, targetMonth1, 0, 12, 0, 0)).getUTCDate();
+  const targetDay = Math.min(parsed.day, lastDay);
+  return `${String(targetYear).padStart(4, "0")}-${String(targetMonth1).padStart(2, "0")}-${String(targetDay).padStart(2, "0")}`;
+};
+
+export const getKstWeekDates = (baseDateStr = getKstTodayStr()) => {
+  const parsed = parseKstDateStr(baseDateStr) || parseKstDateStr(getKstTodayStr());
+  if (!parsed) return Array.from({ length: 7 }, () => getKstTodayStr());
+  // 월요일(1) ~ 일요일(0 -> -6)
+  const diffToMon = parsed.dow === 0 ? -6 : 1 - parsed.dow;
+  const monMs = parsed.utcMs + diffToMon * 86400000;
+  return Array.from({ length: 7 }, (_, i) => formatKstUtcMs(monMs + i * 86400000));
+};
+
+export const getKstMonthGrid = (yearMonth, startOnMonday = true) => {
+  const m = String(yearMonth || getKstTodayStr().slice(0, 7)).match(/^(\d{4})-(\d{2})$/);
+  const y = m ? Number(m[1]) : Number(getKstTodayStr().slice(0, 4));
+  const mo = m ? Number(m[2]) : Number(getKstTodayStr().slice(5, 7));
+  const firstMs = Date.UTC(y, mo - 1, 1, 12, 0, 0);
+  const firstDow = new Date(firstMs).getUTCDay(); // 0=일..6=토
+  const offset = startOnMonday ? (firstDow === 0 ? 6 : firstDow - 1) : firstDow;
+  const daysInMonth = new Date(Date.UTC(y, mo, 0, 12, 0, 0)).getUTCDate();
+  const totalCells = Math.ceil((offset + daysInMonth) / 7) * 7;
+  const gridStartMs = firstMs - offset * 86400000;
+  return Array.from({ length: totalCells }, (_, idx) => {
+    const ms = gridStartMs + idx * 86400000;
+    const d = new Date(ms);
+    const dateStr = formatKstUtcMs(ms);
+    return {
+      dateStr,
+      dayNum: d.getUTCDate(),
+      dow: d.getUTCDay(),
+      inCurrentMonth: d.getUTCFullYear() === y && d.getUTCMonth() === mo - 1
+    };
+  });
+};
+
+export const isKstHolidayOrWeekend = (dateStr, krHolidays = {}) => {
+  const dStr = String(dateStr || "").slice(0, 10);
+  if (!dStr) return false;
+  if (krHolidays && krHolidays[dStr]) return true;
+  const dow = getKstDayOfWeek(dStr);
+  return dow === 0 || dow === 6;
+};
+
+export const makeRoutineLogKey = (routineId, dateStr, occurrence = 1) => {
+  const id = String(routineId || "").trim();
+  const d = String(dateStr || "").slice(0, 10);
+  const occ = Math.max(1, Number(occurrence) || 1);
+  return occ <= 1 ? `${id}__${d}` : `${id}__${d}__${occ}`;
+};
+
+export const getRoutineRuleForDate = (rt, dateStr) => {
+  if (!rt) return null;
+  const dStr = String(dateStr || "").slice(0, 10);
+  if (!Array.isArray(rt.ruleHistory) || rt.ruleHistory.length === 0) return rt;
+  // ruleHistory entries: [{ effectiveFrom: 'YYYY-MM-DD', effectiveTo: 'YYYY-MM-DD', cycle, weekDay, weekDays, monthDay, nthWeek, intervalDays, timeSlot, scheduledTime, assignee }]
+  // If current rule has effectiveFrom and dStr >= effectiveFrom, use current rt
+  if (rt.effectiveFrom && dStr >= String(rt.effectiveFrom).slice(0, 10)) {
+    return rt;
+  }
+  const sortedHist = [...rt.ruleHistory].sort((a, b) =>
+    String(b.effectiveFrom || "").localeCompare(String(a.effectiveFrom || ""))
+  );
+  for (const h of sortedHist) {
+    const from = String(h.effectiveFrom || "0000-01-01").slice(0, 10);
+    const to = String(h.effectiveTo || "9999-12-31").slice(0, 10);
+    if (dStr >= from && dStr <= to) {
+      return { ...rt, ...h };
+    }
+  }
+  return rt;
+};
+
+export const getAllowedSlotLabelsForDay = (isDayOff, routineSlotDefs = DEFAULT_ROUTINE_SLOT_DEFS) => {
+  const defs = Array.isArray(routineSlotDefs) && routineSlotDefs.length > 0 ? routineSlotDefs : DEFAULT_ROUTINE_SLOT_DEFS;
+  const filtered = [...defs]
+    .filter((s) => (isDayOff ? s.weekend !== false : s.weekday !== false))
+    .sort((a, b) => toTimeMinutes(a.startTime) - toTimeMinutes(b.startTime))
+    .map((s) => s.label);
+  return [...filtered, "상시"];
+};
+
+export const isRoutineScheduledOnDate = (rt, dateStr, { krHolidays = {}, routineSlotDefs = DEFAULT_ROUTINE_SLOT_DEFS } = {}) => {
+  if (!rt) return false;
+  const parsed = parseKstDateStr(dateStr);
+  if (!parsed) return false;
+  const dStr = parsed.dateStr;
+  const rule = getRoutineRuleForDate(rt, dStr);
+  if (!rule) return false;
+
+  if (rule.startDate && String(rule.startDate).slice(0, 10) > dStr) return false;
+  if (rule.endDate && String(rule.endDate).slice(0, 10) < dStr) return false;
+
+  const dayOff = isKstHolidayOrWeekend(dStr, krHolidays);
+  const allowedSlots = getAllowedSlotLabelsForDay(dayOff, routineSlotDefs);
+  if (!allowedSlots.includes(rule.timeSlot || "상시")) return false;
+
+  const cycle = rule.cycle || "daily";
+  if (cycle === "daily") return true;
+  if (cycle === "weekdays") return !dayOff;
+  if (cycle === "weekend_holiday") return dayOff;
+
+  if (cycle === "weekly") {
+    if (Array.isArray(rule.weekDays) && rule.weekDays.length > 0) {
+      return rule.weekDays.map(Number).includes(parsed.dow);
+    }
+    if (rule.weekDay !== undefined && rule.weekDay !== null && rule.weekDay !== "" && rule.weekDay !== "any") {
+      return Number(rule.weekDay) === parsed.dow;
+    }
+    // 요일 무관 매주 루틴: 해당 주의 모든 날에 실행 가능
+    return true;
+  }
+
+  if (cycle === "monthly") {
+    const lastDay = new Date(Date.UTC(parsed.year, parsed.month, 0, 12, 0, 0)).getUTCDate();
+    const tgtDay = Math.min(Math.max(1, Number(rule.monthDay) || 1), lastDay);
+    return tgtDay === parsed.day;
+  }
+
+  if (cycle === "monthly_weekday") {
+    const targetStr = getNthWeekdayDateStr(
+      parsed.year,
+      parsed.month,
+      Number(rule.nthWeek) || 1,
+      Number(rule.weekDay ?? 6)
+    );
+    return targetStr === dStr;
+  }
+
+  if (cycle === "interval") {
+    const intervalDays = Math.max(2, Number(rule.intervalDays) || 2);
+    const anchorStr = String(rule.startDate || rule.intervalAnchorDate || (rt.lastDoneKey && /^\d{4}-\d{2}-\d{2}$/.test(rt.lastDoneKey) ? rt.lastDoneKey : "") || "").slice(0, 10);
+    const anchorParsed = parseKstDateStr(anchorStr);
+    if (!anchorParsed) return true;
+    const diffDays = Math.round((parsed.utcMs - anchorParsed.utcMs) / 86400000);
+    if (diffDays < 0) return false;
+    return diffDays % intervalDays === 0;
+  }
+
+  return true;
+};
+
+export const migrateLegacyRoutineLogs = (
+  routines = [],
+  existingLogs = {},
+  todayStr = getKstTodayStr(),
+  { krHolidays = {}, routineSlotDefs = DEFAULT_ROUTINE_SLOT_DEFS } = {}
+) => {
+  const nextLogs = existingLogs && typeof existingLogs === "object" ? { ...existingLogs } : {};
+  let migratedCount = 0;
+
+  for (const rt of Array.isArray(routines) ? routines : []) {
+    if (!rt || !rt.id) continue;
+    const rawKey = String(rt.lastDoneKey || "").trim();
+    const rawStepKey = String(rt.stepDoneKey || "").trim();
+    const rawStepIndices = Array.isArray(rt.stepDoneIndices) ? rt.stepDoneIndices : [];
+    const rawSkippedKey = String(rt.skippedKey || "").trim();
+
+    let doneDate = "";
+    if (/^\d{4}-\d{2}-\d{2}$/.test(rawKey)) {
+      doneDate = rawKey;
+    } else if (/^\d{4}-W\d{2}$/.test(rawKey)) {
+      if (getIsoWeekKey(todayStr) === rawKey) {
+        if (rt.weekDay !== undefined && rt.weekDay !== null && rt.weekDay !== "any") {
+          const wkDates = getKstWeekDates(todayStr);
+          const matched = wkDates.find((d) => getKstDayOfWeek(d) === Number(rt.weekDay));
+          doneDate = matched && matched <= todayStr ? matched : todayStr;
+        } else {
+          doneDate = todayStr;
+        }
+      }
+    } else if (/^\d{4}-\d{2}$/.test(rawKey)) {
+      if (todayStr.slice(0, 7) === rawKey) {
+        doneDate = todayStr;
+      }
+    }
+
+    if (doneDate) {
+      const logKey = makeRoutineLogKey(rt.id, doneDate, 1);
+      if (!nextLogs[logKey]) {
+        nextLogs[logKey] = {
+          routineId: rt.id,
+          date: doneDate,
+          occurrence: 1,
+          done: true,
+          stepDoneIndices: rawStepKey === rawKey ? rawStepIndices : [],
+          skipped: false,
+          migratedFromLegacy: true,
+          updatedAtMs: Date.now()
+        };
+        migratedCount += 1;
+      }
+    } else if (rawStepIndices.length > 0 && /^\d{4}-\d{2}-\d{2}$/.test(rawStepKey)) {
+      const logKey = makeRoutineLogKey(rt.id, rawStepKey, 1);
+      if (!nextLogs[logKey]) {
+        nextLogs[logKey] = {
+          routineId: rt.id,
+          date: rawStepKey,
+          occurrence: 1,
+          done: false,
+          stepDoneIndices: rawStepIndices,
+          skipped: false,
+          migratedFromLegacy: true,
+          updatedAtMs: Date.now()
+        };
+        migratedCount += 1;
+      }
+    }
+
+    if (/^\d{4}-\d{2}-\d{2}$/.test(rawSkippedKey)) {
+      const logKey = makeRoutineLogKey(rt.id, rawSkippedKey, 1);
+      if (!nextLogs[logKey]) {
+        nextLogs[logKey] = {
+          routineId: rt.id,
+          date: rawSkippedKey,
+          occurrence: 1,
+          done: false,
+          stepDoneIndices: [],
+          skipped: true,
+          migratedFromLegacy: true,
+          updatedAtMs: Date.now()
+        };
+        migratedCount += 1;
+      }
+    }
+  }
+
+  return { logs: nextLogs, migratedCount };
+};
+
+export const getRoutineDateHasAnyLog = (routineLogs = {}, dateStr = "") => {
+  const d = String(dateStr || "").slice(0, 10);
+  if (!d || !routineLogs || typeof routineLogs !== "object") return false;
+  const suffix = `__${d}`;
+  return Object.keys(routineLogs).some((k) => k.endsWith(suffix) || k.includes(`${suffix}__`));
+};
+
+export const getRoutineDayStatus = (
+  rt,
+  dateStr,
+  routineLogs = {},
+  {
+    todayStr = getKstTodayStr(),
+    trackingStartDate = "",
+    krHolidays = {},
+    routineSlotDefs = DEFAULT_ROUTINE_SLOT_DEFS,
+    occurrence = 1
+  } = {}
+) => {
+  const dStr = String(dateStr || "").slice(0, 10);
+  const tStr = String(todayStr || getKstTodayStr()).slice(0, 10);
+  const logKey = makeRoutineLogKey(rt?.id, dStr, occurrence);
+  const logEntry = routineLogs && typeof routineLogs === "object" ? routineLogs[logKey] || null : null;
+  const scheduledByRule = isRoutineScheduledOnDate(rt, dStr, { krHolidays, routineSlotDefs });
+  // 과거에 완료 기록이 남아 있다면 규칙 변경 후에도 완료 기록 보존
+  const hasDoneHistory = Boolean(logEntry && logEntry.done === true);
+  const scheduled = scheduledByRule || (dStr < tStr && hasDoneHistory);
+  const isFuture = dStr > tStr;
+  const isToday = dStr === tStr;
+  const isPast = dStr < tStr;
+  const done = Boolean(logEntry && logEntry.done === true);
+  const skipped = Boolean(logEntry && logEntry.skipped === true);
+  const hasLog = Boolean(logEntry);
+  const stepDoneIndices = Array.isArray(logEntry?.stepDoneIndices) ? logEntry.stepDoneIndices : [];
+  const effectiveTrackingStart = String(trackingStartDate || "").slice(0, 10);
+  const dateHasAnyLog = getRoutineDateHasAnyLog(routineLogs, dStr);
+  const isNoRecord = Boolean(
+    isPast &&
+    scheduled &&
+    !hasLog &&
+    !dateHasAnyLog &&
+    (!effectiveTrackingStart || dStr < effectiveTrackingStart)
+  );
+  return {
+    logKey,
+    scheduled,
+    scheduledByRule,
+    done,
+    skipped,
+    hasLog,
+    isFuture,
+    isToday,
+    isPast,
+    isNoRecord,
+    stepDoneIndices,
+    logEntry
+  };
+};
+
+export const computeRoutineDaySummary = (
+  routines = [],
+  dateStr,
+  routineLogs = {},
+  {
+    targetFilter = "전체",
+    timeFilter = "전체",
+    todayStr = getKstTodayStr(),
+    trackingStartDate = "",
+    krHolidays = {},
+    routineSlotDefs = DEFAULT_ROUTINE_SLOT_DEFS
+  } = {}
+) => {
+  const dStr = String(dateStr || todayStr).slice(0, 10);
+  const tStr = String(todayStr || getKstTodayStr()).slice(0, 10);
+  const isFuture = dStr > tStr;
+  const isToday = dStr === tStr;
+  const isPast = dStr < tStr;
+
+  const filteredRoutines = (Array.isArray(routines) ? routines : []).filter((rt) => {
+    if (!rt || !rt.id) return false;
+    if (!matchesRoutineTarget(rt, targetFilter)) return false;
+    const rule = getRoutineRuleForDate(rt, dStr) || rt;
+    if (timeFilter && timeFilter !== "전체" && (rule.timeSlot || "상시") !== timeFilter) return false;
+    return true;
+  });
+
+  const scheduledItems = [];
+  const extraFutureItems = [];
+
+  for (const rt of filteredRoutines) {
+    const timesPerDay = Math.max(1, Number(rt.timesPerDay) || 1);
+    const firstStatus = getRoutineDayStatus(rt, dStr, routineLogs, {
+      todayStr: tStr,
+      trackingStartDate,
+      krHolidays,
+      routineSlotDefs,
+      occurrence: 1
+    });
+    if (firstStatus.scheduled) {
+      for (let occ = 1; occ <= timesPerDay; occ++) {
+        const st = occ === 1
+          ? firstStatus
+          : getRoutineDayStatus(rt, dStr, routineLogs, {
+              todayStr: tStr,
+              trackingStartDate,
+              krHolidays,
+              routineSlotDefs,
+              occurrence: occ
+            });
+        scheduledItems.push({ routine: rt, occurrence: occ, timesPerDay, status: st });
+      }
+    } else {
+      extraFutureItems.push({ routine: rt, occurrence: 1, timesPerDay, status: firstStatus });
+    }
+  }
+
+  const activeScheduled = scheduledItems.filter((x) => !x.status.skipped);
+  const scheduledCount = activeScheduled.length;
+  const doneCount = activeScheduled.filter((x) => x.status.done).length;
+  const remainingCount = Math.max(0, scheduledCount - doneCount);
+
+  const dateHasAnyLog = getRoutineDateHasAnyLog(routineLogs, dStr);
+  const effectiveTrackingStart = String(trackingStartDate || "").slice(0, 10);
+  const isNoRecord = Boolean(
+    isPast &&
+    scheduledCount > 0 &&
+    doneCount === 0 &&
+    !dateHasAnyLog &&
+    (!effectiveTrackingStart || dStr < effectiveTrackingStart)
+  );
+
+  let status = "empty";
+  if (scheduledCount === 0) {
+    status = "empty";
+  } else if (isFuture) {
+    status = "future";
+  } else if (isNoRecord) {
+    status = "no_record";
+  } else if (doneCount >= scheduledCount) {
+    status = "complete";
+  } else if (doneCount > 0) {
+    status = "partial";
+  } else {
+    status = "incomplete";
+  }
+
+  const countable = scheduledCount > 0 && !isFuture && !isNoRecord;
+  const ratePct = countable ? Math.round((doneCount / scheduledCount) * 100) : null;
+
+  return {
+    dateStr: dStr,
+    isFuture,
+    isToday,
+    isPast,
+    isNoRecord,
+    scheduledCount,
+    doneCount,
+    remainingCount,
+    countable,
+    ratePct,
+    status,
+    scheduledItems,
+    extraFutureItems
+  };
+};
+
+export const computeRoutinePeriodSummary = (
+  routines = [],
+  dateList = [],
+  routineLogs = {},
+  opts = {}
+) => {
+  const daySummaries = (Array.isArray(dateList) ? dateList : []).map((dStr) =>
+    computeRoutineDaySummary(routines, dStr, routineLogs, opts)
+  );
+  let totalScheduled = 0;
+  let dueUpToToday = 0;
+  let doneUpToToday = 0;
+  let futureScheduled = 0;
+  let noRecordScheduled = 0;
+
+  for (const ds of daySummaries) {
+    totalScheduled += ds.scheduledCount;
+    if (ds.isFuture) {
+      futureScheduled += ds.scheduledCount;
+    } else if (ds.isNoRecord) {
+      noRecordScheduled += ds.scheduledCount;
+    } else {
+      dueUpToToday += ds.scheduledCount;
+      doneUpToToday += ds.doneCount;
+    }
+  }
+
+  const remainingUpToToday = Math.max(0, dueUpToToday - doneUpToToday);
+  const hasTarget = dueUpToToday > 0;
+  const ratePct = hasTarget ? Math.round((doneUpToToday / dueUpToToday) * 100) : null;
+
+  return {
+    totalScheduled,
+    dueUpToToday,
+    doneUpToToday,
+    remainingUpToToday,
+    futureScheduled,
+    noRecordScheduled,
+    hasTarget,
+    ratePct,
+    daySummaries
   };
 };

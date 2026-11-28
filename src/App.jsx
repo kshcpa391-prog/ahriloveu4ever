@@ -112,6 +112,24 @@ import {
   getAutoHomeTimeMode,
   DEFAULT_HOME_MENU_ORDER,
   DEFAULT_HOME_LAYOUT,
+  KST_TIME_ZONE,
+  getKstNowParts,
+  getKstTodayStr,
+  parseKstDateStr,
+  shiftKstDateStr,
+  shiftKstDateByMonths,
+  getKstDayOfWeek,
+  getKstWeekDates,
+  getKstMonthGrid,
+  isKstHolidayOrWeekend,
+  makeRoutineLogKey,
+  getRoutineRuleForDate,
+  isRoutineScheduledOnDate,
+  migrateLegacyRoutineLogs,
+  getRoutineDateHasAnyLog,
+  getRoutineDayStatus,
+  computeRoutineDaySummary,
+  computeRoutinePeriodSummary,
   getRoutineNextDateInfo,
   INITIAL_FAMILY_ROUTINES,
   getTwiceDailySlotKey,
@@ -199,6 +217,7 @@ import {
   DEFAULT_AI_MEAL_STYLES,
   DEFAULT_AI_MEAL_TARGETS,
   DEFAULT_ROUTINE_TIME_PRESETS,
+  DEFAULT_ROUTINE_INTERVAL_PRESETS,
   DEFAULT_MEAL_SOURCE_TYPES,
   DEFAULT_SCHEDULE_QUICK_TIMES,
   DEFAULT_SCHEDULE_DURATION_PRESETS,
@@ -5269,6 +5288,7 @@ function MainApp() {
           ai_meal_styles: Array.isArray(saved.ai_meal_styles) && saved.ai_meal_styles.length > 0 ? saved.ai_meal_styles.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_AI_MEAL_STYLES],
           ai_meal_targets: Array.isArray(saved.ai_meal_targets) && saved.ai_meal_targets.length > 0 ? saved.ai_meal_targets.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_AI_MEAL_TARGETS],
           routine_time_presets: Array.isArray(saved.routine_time_presets) && saved.routine_time_presets.length > 0 ? saved.routine_time_presets.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_ROUTINE_TIME_PRESETS],
+          routine_interval_presets: Array.isArray(saved.routine_interval_presets) && saved.routine_interval_presets.length > 0 ? saved.routine_interval_presets.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_ROUTINE_INTERVAL_PRESETS],
           meal_source_types: Array.isArray(saved.meal_source_types) && saved.meal_source_types.length > 0 ? saved.meal_source_types.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_MEAL_SOURCE_TYPES],
           schedule_quick_times: Array.isArray(saved.schedule_quick_times) && saved.schedule_quick_times.length > 0 ? saved.schedule_quick_times.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_SCHEDULE_QUICK_TIMES],
           fridge_locations: Array.isArray(saved.fridge_locations) && saved.fridge_locations.length > 0 ? saved.fridge_locations.map((s) => String(s || "").trim()).filter(Boolean) : [...STORAGE_LOCATIONS],
@@ -5313,6 +5333,7 @@ function MainApp() {
       ai_meal_styles: [...DEFAULT_AI_MEAL_STYLES],
       ai_meal_targets: [...DEFAULT_AI_MEAL_TARGETS],
       routine_time_presets: [...DEFAULT_ROUTINE_TIME_PRESETS],
+      routine_interval_presets: [...DEFAULT_ROUTINE_INTERVAL_PRESETS],
       meal_source_types: [...DEFAULT_MEAL_SOURCE_TYPES],
       schedule_quick_times: [...DEFAULT_SCHEDULE_QUICK_TIMES],
       fridge_locations: [...STORAGE_LOCATIONS],
@@ -5355,6 +5376,7 @@ function MainApp() {
   const aiMealStyles = customCategories.ai_meal_styles || DEFAULT_AI_MEAL_STYLES;
   const aiMealTargets = customCategories.ai_meal_targets || DEFAULT_AI_MEAL_TARGETS;
   const routineTimePresets = customCategories.routine_time_presets || DEFAULT_ROUTINE_TIME_PRESETS;
+  const routineIntervalPresets = (customCategories.routine_interval_presets || DEFAULT_ROUTINE_INTERVAL_PRESETS).map((x) => parseInt(String(x || '').replace(/[^0-9]/g, ''), 10)).filter((n) => Number.isFinite(n) && n >= 2 && n <= 365).filter((v, i, a) => a.indexOf(v) === i).sort((a, b) => a - b);
   const mealSourceTypes = customCategories.meal_source_types || DEFAULT_MEAL_SOURCE_TYPES;
   const scheduleQuickTimes = customCategories.schedule_quick_times || DEFAULT_SCHEDULE_QUICK_TIMES;
   const fridgeLocations = customCategories.fridge_locations || STORAGE_LOCATIONS;
@@ -6216,6 +6238,7 @@ function MainApp() {
   const [newRoutineTimeSlot, setNewRoutineTimeSlot] = useState(() => getCurrentRoutineTimeSlot());
   const [newRoutineScheduledTime, setNewRoutineScheduledTime] = useState("");
   const [newRoutineIntervalDays, setNewRoutineIntervalDays] = useState(2);
+  const [newRoutineTimesPerDay, setNewRoutineTimesPerDay] = useState(1);
   const [newRoutineNthWeek, setNewRoutineNthWeek] = useState(1);
   const [routineTimeFilter, setRoutineTimeFilter] = useState("전체");
   const [routineShowFuture, setRoutineShowFuture] = useState(() => {
@@ -6228,6 +6251,37 @@ function MainApp() {
     } catch (e) {
       return "전체";
     }
+  });
+  const [routinePeriodMode, setRoutinePeriodMode] = useState("daily"); // "daily" | "weekly" | "monthly"
+  const [routineSelectedDate, setRoutineSelectedDate] = useState(() => getKstTodayStr());
+  const [routineWeekExpandedDates, setRoutineWeekExpandedDates] = useState(() => [getKstTodayStr()]);
+  const [newRoutineStartDate, setNewRoutineStartDate] = useState(() => getKstTodayStr());
+  const [routineEditScope, setRoutineEditScope] = useState("from_selected"); // "from_selected" | "all"
+  const [routineLogTrackingStartDate, setRoutineLogTrackingStartDate] = useState(() => {
+    try {
+      const saved = localStorage.getItem("kim_routine_log_start_v1");
+      if (saved && /^\d{4}-\d{2}-\d{2}$/.test(saved)) return saved;
+    } catch (e) {}
+    return getKstTodayStr();
+  });
+  const [routineLogs, setRoutineLogs] = useState(() => {
+    let savedLogs = {};
+    try {
+      const raw = localStorage.getItem("kim_routine_logs_v1");
+      const parsed = raw ? JSON.parse(raw) : null;
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) savedLogs = parsed;
+    } catch (e) {}
+    let initRoutines = INITIAL_FAMILY_ROUTINES;
+    try {
+      const rawRt = localStorage.getItem("kim_family_routines_v1");
+      const parsedRt = rawRt ? JSON.parse(rawRt) : null;
+      if (Array.isArray(parsedRt)) initRoutines = parsedRt;
+    } catch (e) {}
+    const { logs } = migrateLegacyRoutineLogs(initRoutines, savedLogs, getKstTodayStr());
+    try {
+      localStorage.setItem("kim_routine_logs_v1", JSON.stringify(logs));
+    } catch (e) {}
+    return logs;
   });
   const [editingRoutineId, setEditingRoutineId] = useState(null);
   const [isRoutineModalOpen, setIsRoutineModalOpen] = useState(false);
@@ -6422,6 +6476,58 @@ function MainApp() {
   };
 
 
+  const syncRoutineLogsToCloud = async (nextLogs, patchEntry = null, trackingStartOverride = null) => {
+    const safeLogs = nextLogs && typeof nextLogs === "object" ? nextLogs : {};
+    const effTrackStart = String(trackingStartOverride || routineLogTrackingStartDate || getKstTodayStr()).slice(0, 10);
+    try {
+      localStorage.setItem("kim_routine_logs_v1", JSON.stringify(safeLogs));
+      localStorage.setItem("kim_routine_log_start_v1", effTrackStart);
+    } catch (e) {}
+    if (user && db) {
+      beginWrite();
+      let ok = false;
+      let errMsg = "";
+      try {
+        await runTransaction(db, async (tx) => {
+          const ref = getDocRef("family_meta_v4", "routine_logs_v1");
+          const snap = await tx.get(ref);
+          const serverData = snap.exists() ? snap.data() || {} : {};
+          const serverLogs = serverData.logs && typeof serverData.logs === "object" ? serverData.logs : {};
+          const mergedLogs = { ...serverLogs };
+          if (patchEntry && patchEntry.key && patchEntry.entry) {
+            mergedLogs[patchEntry.key] = patchEntry.entry;
+          } else {
+            Object.entries(safeLogs).forEach(([k, v]) => {
+              if (!v || typeof v !== "object") return;
+              const srv = mergedLogs[k];
+              if (!srv || (Number(v.updatedAtMs) || 0) >= (Number(srv.updatedAtMs) || 0)) {
+                mergedLogs[k] = v;
+              }
+            });
+          }
+          const srvStart = String(serverData.trackingStartDate || "").slice(0, 10);
+          const mergedTrackStart = srvStart && srvStart < effTrackStart ? srvStart : effTrackStart;
+          tx.set(
+            ref,
+            {
+              logs: mergedLogs,
+              trackingStartDate: mergedTrackStart,
+              updatedAt: new Date().toISOString()
+            },
+            { merge: true }
+          );
+        });
+        ok = true;
+      } catch (e) {
+        errMsg = e?.message || "루틴 완료 기록 동기화 오류";
+        setSyncErrorMsg(errMsg);
+      } finally {
+        endWrite(ok, errMsg);
+      }
+    }
+  };
+
+
   const getRoutineResetKey = (rt, dayStr = currentDayKey) => {
     if (!rt) return dayStr;
     if (rt.cycle === "weekly") return getIsoWeekKey(dayStr);
@@ -6533,10 +6639,7 @@ function MainApp() {
 
   const isRoutineDoneNow = (rt) => {
     if (!rt) return false;
-    if (rt.cycle === "interval") {
-      return Boolean(getIntervalRoutineInfo(rt, currentDayKey)?.done);
-    }
-    return rt.lastDoneKey === getRoutineResetKey(rt, currentDayKey);
+    return isRoutineDoneOnDay(rt, currentDayKey, 1);
   };
 
 
@@ -6584,95 +6687,77 @@ function MainApp() {
 
 
   const isRoutineDueOnExactDay = (rt, dayStr) => {
-    if (!rt) return false;
-    const dStr = String(dayStr || "").slice(0, 10);
-    if (rt.startDate && String(rt.startDate).slice(0, 10) > dStr) return false;
-    const allowedSlots = getSlotLabelsForDayType(isHolidayOrWeekend(dStr));
-    if (!allowedSlots.includes(rt.timeSlot || "상시")) return false;
-    if (!rt.cycle || rt.cycle === "daily") return true;
-    if (rt.cycle === "weekdays") return !isHolidayOrWeekend(dStr);
-    if (rt.cycle === "weekend_holiday") return isHolidayOrWeekend(dStr);
-    const base = new Date(dStr + "T00:00:00");
-    if (Number.isNaN(base.getTime())) return true;
-    if (rt.cycle === "weekly" && rt.weekDay !== undefined && rt.weekDay !== null) {
-      return Number(rt.weekDay) === base.getDay();
-    }
-    if (rt.cycle === "monthly") {
-      const lastDay = new Date(base.getFullYear(), base.getMonth() + 1, 0).getDate();
-      const tgtDay = Math.min(Math.max(1, Number(rt.monthDay) || 1), lastDay);
-      return tgtDay === base.getDate();
-    }
-    if (rt.cycle === "monthly_weekday") {
-      const targetStr = getNthWeekdayDateStr(
-        base.getFullYear(),
-        base.getMonth() + 1,
-        Number(rt.nthWeek) || 1,
-        Number(rt.weekDay ?? 6)
-      );
-      return targetStr === dStr;
-    }
-    if (rt.cycle === "interval") {
-      if (!rt.lastDoneKey) return true;
-      const intervalDays = Math.max(2, Number(rt.intervalDays) || 2);
-      const lastD = new Date(String(rt.lastDoneKey).slice(0, 10) + "T00:00:00");
-      if (Number.isNaN(lastD.getTime())) return true;
-      const elapsed = Math.floor((base - lastD) / 86400000);
-      return elapsed === 0 || elapsed >= intervalDays;
-    }
-    return true;
+    return isRoutineScheduledOnDate(rt, dayStr, { krHolidays, routineSlotDefs });
   };
 
 
-  const isRoutineDoneOnDay = (rt, dayStr) => {
+  const isRoutineDoneOnDay = (rt, dayStr = currentDayKey, occurrence = 1) => {
     if (!rt) return false;
-    const dStr = String(dayStr || "").slice(0, 10);
-    if (rt.cycle === "interval") {
-      if (!rt.lastDoneKey) return false;
-      const intervalDays = Math.max(2, Number(rt.intervalDays) || 2);
-      const lastD = new Date(String(rt.lastDoneKey).slice(0, 10) + "T00:00:00");
-      const curD = new Date(dStr + "T00:00:00");
-      if (Number.isNaN(lastD.getTime()) || Number.isNaN(curD.getTime())) return false;
-      const elapsed = Math.floor((curD - lastD) / 86400000);
-      return elapsed >= 0 && elapsed < intervalDays;
+    const dStr = String(dayStr || currentDayKey).slice(0, 10);
+    const logKey = makeRoutineLogKey(rt.id, dStr, occurrence);
+    const entry = routineLogs && typeof routineLogs === "object" ? routineLogs[logKey] : null;
+    if (entry) return entry.done === true;
+    // 미이관 레거시 호환: 오늘 날짜에 한해 정확히 일치하는 legacy lastDoneKey 보조 확인
+    if (dStr === currentDayKey && Number(occurrence) <= 1 && rt.lastDoneKey) {
+      if (rt.cycle === "interval") {
+        return rt.lastDoneKey === dStr;
+      }
+      return rt.lastDoneKey === dStr || rt.lastDoneKey === getRoutineResetKey(rt, dStr);
     }
-    return rt.lastDoneKey === getRoutineResetKey(rt, dStr);
+    return false;
   };
 
 
-  const handleToggleRoutine = (rtId) => {
+  const handleToggleRoutine = (rtId, targetDateStr = null, occurrence = 1) => {
     if (!requireEditorAccess("routines")) return;
-    const todayKey = getTodayStr();
+    const todayKey = getKstTodayStr();
     if (todayKey !== currentDayKey) setCurrentDayKey(todayKey);
-    let wasDone = false;
-    let targetTitle = "";
-    const nextList = familyRoutines.map((r) => {
-      if (r.id !== rtId) return r;
-      targetTitle = r.title || "루틴";
-      const steps = parseRoutineSteps(r.title);
-      if (r.cycle === "interval") {
-        const info = getIntervalRoutineInfo(r, todayKey);
-        wasDone = Boolean(info?.done);
+    const dStr = String(targetDateStr || todayKey).slice(0, 10);
+    const occ = Math.max(1, Number(occurrence) || 1);
+    const targetRt = familyRoutines.find((r) => r.id === rtId);
+    if (!targetRt) return;
+    const targetTitle = targetRt.title || "루틴";
+    const steps = parseRoutineSteps(targetRt.title);
+    const logKey = makeRoutineLogKey(rtId, dStr, occ);
+    const wasDone = isRoutineDoneOnDay(targetRt, dStr, occ);
+    const nextDone = !wasDone;
+    const nextEntry = {
+      routineId: rtId,
+      date: dStr,
+      occurrence: occ,
+      done: nextDone,
+      stepDoneIndices: steps.length >= 2 ? (nextDone ? steps.map((_, idx) => idx) : []) : [],
+      skipped: false,
+      updatedAtMs: Date.now()
+    };
+    const nextLogs = { ...routineLogs, [logKey]: nextEntry };
+    setRoutineLogs(nextLogs);
+    const nextTrackStart = dStr < routineLogTrackingStartDate ? dStr : routineLogTrackingStartDate;
+    if (nextTrackStart !== routineLogTrackingStartDate) {
+      setRoutineLogTrackingStartDate(nextTrackStart);
+    }
+    syncRoutineLogsToCloud(nextLogs, { key: logKey, entry: nextEntry }, nextTrackStart);
+
+    // 오늘 날짜(1회차) 변경 시에만 구버전 호환용 lastDoneKey를 함께 동기화 (과거/미래 조회·변경이 오늘 상태를 오염시키지 않도록 보호)
+    if (dStr === todayKey && occ === 1) {
+      const nextList = familyRoutines.map((r) => {
+        if (r.id !== rtId) return r;
+        const legacyKey = r.cycle === "interval" ? todayKey : getRoutineResetKey(r, todayKey);
         return {
           ...r,
-          lastDoneKey: wasDone ? "" : todayKey,
+          lastDoneKey: nextDone ? legacyKey : "",
           skippedKey: "",
-          ...(steps.length >= 2 ? { stepDoneKey: todayKey, stepDoneIndices: wasDone ? [] : steps.map((_, idx) => idx) } : {})
+          ...(steps.length >= 2 ? { stepDoneKey: legacyKey, stepDoneIndices: nextDone ? steps.map((_, idx) => idx) : [] } : {})
         };
-      }
-      const targetKey = getRoutineResetKey(r, todayKey);
-      wasDone = r.lastDoneKey === targetKey;
-      return {
-        ...r,
-        lastDoneKey: wasDone ? "" : targetKey,
-        skippedKey: "",
-        ...(steps.length >= 2 ? { stepDoneKey: targetKey, stepDoneIndices: wasDone ? [] : steps.map((_, idx) => idx) } : {})
-      };
-    });
-    setFamilyRoutines(nextList);
-    recordActivity("루틴", wasDone ? "해제" : "완료", targetTitle);
-    showToast(wasDone ? `↩️ '${targetTitle}' 완료를 취소했습니다.` : `✅ '${targetTitle}' 루틴 완료!`);
-    const updatedItem = nextList.find((r) => r.id === rtId);
-    syncRoutinesToCloud(nextList, updatedItem ? { type: "upsert", item: updatedItem } : null);
+      });
+      setFamilyRoutines(nextList);
+      const updatedItem = nextList.find((r) => r.id === rtId);
+      syncRoutinesToCloud(nextList, updatedItem ? { type: "upsert", item: updatedItem } : null);
+    }
+
+    const dateTag = dStr === todayKey ? "" : ` (${dStr.slice(5)})`;
+    recordActivity("루틴", nextDone ? "완료" : "해제", `${targetTitle}${dateTag}`);
+    showToast(nextDone ? `✅ '${targetTitle}'${dateTag} 완료!` : `↩️ '${targetTitle}'${dateTag} 완료를 취소했습니다.`);
   };
 
 
@@ -6688,6 +6773,20 @@ function MainApp() {
       return { ...r, skippedKey: targetKey };
     });
     setFamilyRoutines(nextList);
+    const skipLogKey = makeRoutineLogKey(rtId, todayKey, 1);
+    const prevSkipEntry = routineLogs && typeof routineLogs === "object" ? routineLogs[skipLogKey] : null;
+    const nextSkipEntry = {
+      ...(prevSkipEntry || {}),
+      routineId: rtId,
+      date: todayKey,
+      occurrence: 1,
+      done: Boolean(prevSkipEntry?.done),
+      skipped: true,
+      updatedAtMs: Date.now()
+    };
+    const nextLogsAfterSkip = { ...(routineLogs || {}), [skipLogKey]: nextSkipEntry };
+    setRoutineLogs(nextLogsAfterSkip);
+    syncRoutineLogsToCloud(nextLogsAfterSkip, { [skipLogKey]: nextSkipEntry });
     recordActivity("루틴", "건너뛰기", targetTitle);
     showToast(`⏭️ '${targetTitle}' 이월 항목을 이번 주기에서 건너뛰었습니다.`);
     const updatedItem = nextList.find((r) => r.id === rtId);
@@ -6697,6 +6796,7 @@ function MainApp() {
 
   const handleRestoreSkippedRoutine = (rtId) => {
     if (!requireEditorAccess("routines")) return;
+    const todayKey = getTodayStr();
     let targetTitle = "";
     const nextList = familyRoutines.map((r) => {
       if (r.id !== rtId) return r;
@@ -6704,6 +6804,14 @@ function MainApp() {
       return { ...r, skippedKey: "" };
     });
     setFamilyRoutines(nextList);
+    const restoreLogKey = makeRoutineLogKey(rtId, todayKey, 1);
+    const prevRestoreEntry = routineLogs && typeof routineLogs === "object" ? routineLogs[restoreLogKey] : null;
+    if (prevRestoreEntry && prevRestoreEntry.skipped) {
+      const nextRestoreEntry = { ...prevRestoreEntry, skipped: false, updatedAtMs: Date.now() };
+      const nextLogsAfterRestore = { ...(routineLogs || {}), [restoreLogKey]: nextRestoreEntry };
+      setRoutineLogs(nextLogsAfterRestore);
+      syncRoutineLogsToCloud(nextLogsAfterRestore, { [restoreLogKey]: nextRestoreEntry });
+    }
     recordActivity("루틴", "복원", targetTitle);
     showToast(`↩️ '${targetTitle}' 건너뛴 루틴을 다시 표시했습니다.`);
     const updatedItem = nextList.find((r) => r.id === rtId);
@@ -6711,50 +6819,85 @@ function MainApp() {
   };
 
 
-  const getRoutineSubStepDoneSet = (rt) => {
+  const getRoutineSubStepDoneSet = (rt, targetDateStr = currentDayKey, occurrence = 1) => {
     if (!rt) return new Set();
-    const targetKey = rt.cycle === "interval" ? currentDayKey : getRoutineResetKey(rt, currentDayKey);
-    if (rt.stepDoneKey === targetKey && Array.isArray(rt.stepDoneIndices)) {
-      return new Set(rt.stepDoneIndices);
+    const dStr = String(targetDateStr || currentDayKey).slice(0, 10);
+    const logKey = makeRoutineLogKey(rt.id, dStr, occurrence);
+    const entry = routineLogs && typeof routineLogs === "object" ? routineLogs[logKey] : null;
+    if (entry) {
+      if (Array.isArray(entry.stepDoneIndices) && entry.stepDoneIndices.length > 0) {
+        return new Set(entry.stepDoneIndices);
+      }
+      if (entry.done === true) {
+        const steps = parseRoutineSteps(rt.title);
+        return new Set(steps.map((_, idx) => idx));
+      }
+      return new Set();
+    }
+    if (dStr === currentDayKey && Number(occurrence) <= 1) {
+      const targetKey = rt.cycle === "interval" ? currentDayKey : getRoutineResetKey(rt, currentDayKey);
+      if (rt.stepDoneKey === targetKey && Array.isArray(rt.stepDoneIndices)) {
+        return new Set(rt.stepDoneIndices);
+      }
     }
     return new Set();
   };
 
 
-  const handleToggleRoutineSubStep = (rtId, stepIdx, totalSteps) => {
+  const handleToggleRoutineSubStep = (rtId, stepIdx, totalSteps, targetDateStr = null, occurrence = 1) => {
     if (!requireEditorAccess("routines")) return;
-    const todayKey = getTodayStr();
+    const todayKey = getKstTodayStr();
     if (todayKey !== currentDayKey) setCurrentDayKey(todayKey);
-    let completedAll = false;
-    let targetTitle = "";
-    const nextList = familyRoutines.map((r) => {
-      if (r.id !== rtId) return r;
-      targetTitle = r.title || "루틴";
-      const targetKey = r.cycle === "interval" ? todayKey : getRoutineResetKey(r, todayKey);
-      const curSet =
-        r.stepDoneKey === targetKey && Array.isArray(r.stepDoneIndices) && r.stepDoneIndices.length > 0
-          ? new Set(r.stepDoneIndices)
-          : r.lastDoneKey === targetKey
-          ? new Set(Array.from({ length: totalSteps }, (_, idx) => idx))
-          : new Set();
-      if (curSet.has(stepIdx)) curSet.delete(stepIdx);
-      else curSet.add(stepIdx);
-      const nextIndices = Array.from(curSet).sort((a, b) => a - b);
-      completedAll = totalSteps > 0 && nextIndices.length >= totalSteps;
-      return {
-        ...r,
-        stepDoneKey: targetKey,
-        stepDoneIndices: nextIndices,
-        skippedKey: "",
-        lastDoneKey: completedAll ? targetKey : r.lastDoneKey === targetKey ? "" : r.lastDoneKey
-      };
-    });
-    setFamilyRoutines(nextList);
-    if (completedAll) {
-      showToast(`🎉 '${targetTitle}' 모든 단계 완료!`);
+    const dStr = String(targetDateStr || todayKey).slice(0, 10);
+    const occ = Math.max(1, Number(occurrence) || 1);
+    const targetRt = familyRoutines.find((r) => r.id === rtId);
+    if (!targetRt) return;
+    const targetTitle = targetRt.title || "루틴";
+    const curSet = getRoutineSubStepDoneSet(targetRt, dStr, occ);
+    if (curSet.has(stepIdx)) curSet.delete(stepIdx);
+    else curSet.add(stepIdx);
+    const nextIndices = Array.from(curSet).sort((a, b) => a - b);
+    const completedAll = totalSteps > 0 && nextIndices.length >= totalSteps;
+
+    const logKey = makeRoutineLogKey(rtId, dStr, occ);
+    const nextEntry = {
+      routineId: rtId,
+      date: dStr,
+      occurrence: occ,
+      done: completedAll,
+      stepDoneIndices: nextIndices,
+      skipped: false,
+      updatedAtMs: Date.now()
+    };
+    const nextLogs = { ...routineLogs, [logKey]: nextEntry };
+    setRoutineLogs(nextLogs);
+    const nextTrackStart = dStr < routineLogTrackingStartDate ? dStr : routineLogTrackingStartDate;
+    if (nextTrackStart !== routineLogTrackingStartDate) {
+      setRoutineLogTrackingStartDate(nextTrackStart);
     }
-    const updatedItem = nextList.find((r) => r.id === rtId);
-    syncRoutinesToCloud(nextList, updatedItem ? { type: "upsert", item: updatedItem } : null);
+    syncRoutineLogsToCloud(nextLogs, { key: logKey, entry: nextEntry }, nextTrackStart);
+
+    if (dStr === todayKey && occ === 1) {
+      const nextList = familyRoutines.map((r) => {
+        if (r.id !== rtId) return r;
+        const targetKey = r.cycle === "interval" ? todayKey : getRoutineResetKey(r, todayKey);
+        return {
+          ...r,
+          stepDoneKey: targetKey,
+          stepDoneIndices: nextIndices,
+          skippedKey: "",
+          lastDoneKey: completedAll ? targetKey : r.lastDoneKey === targetKey ? "" : r.lastDoneKey
+        };
+      });
+      setFamilyRoutines(nextList);
+      const updatedItem = nextList.find((r) => r.id === rtId);
+      syncRoutinesToCloud(nextList, updatedItem ? { type: "upsert", item: updatedItem } : null);
+    }
+
+    if (completedAll) {
+      const dateTag = dStr === todayKey ? "" : ` (${dStr.slice(5)})`;
+      showToast(`🎉 '${targetTitle}'${dateTag} 모든 단계 완료!`);
+    }
   };
 
 
@@ -6774,30 +6917,41 @@ function MainApp() {
     setNewRoutineScheduledTime(rt.scheduledTime || "");
     setNewRoutineCycle(rt.cycle || "daily");
     setNewRoutineIntervalDays(Number(rt.intervalDays) || 2);
+    setNewRoutineTimesPerDay(Math.min(4, Math.max(1, Number(rt.timesPerDay) || 1)));
     setNewRoutineMonthDay(Number(rt.monthDay) || 1);
     setNewRoutineNthWeek(Number(rt.nthWeek) || 1);
     setNewRoutineWeekDay(
       rt.weekDay !== undefined && rt.weekDay !== null ? String(rt.weekDay) : "any"
     );
     setNewRoutineAssignee(rt.assignee || "공통");
+    setNewRoutineStartDate(String(rt.startDate || currentDayKey).slice(0, 10));
+    setRoutineEditScope("from_selected");
     setIsRoutineModalOpen(true);
   };
 
 
-  const openNewRoutineModal = () => {
+  const openNewRoutineModal = (defaultDateOverride = null) => {
     if (!requireEditorAccess("routines")) return;
+    const safeDate =
+      typeof defaultDateOverride === "string" && /^\d{4}-\d{2}-\d{2}$/.test(defaultDateOverride)
+        ? defaultDateOverride
+        : routineSelectedDate || currentDayKey;
+    const parsedDef = parseKstDateStr(safeDate);
     setEditingRoutineId(null);
     routineTitleLiveRef.current = "";
     setNewRoutineTitle("");
     setNewRoutineMemo("");
     setNewRoutineAttachments([]);
-    setNewRoutineTimeSlot(getCurrentRoutineTimeSlot(routineTimeRanges, liveMinuteTick, routineSlotDefs, isHolidayOrWeekend(currentDayKey)));
+    setNewRoutineTimeSlot(getCurrentRoutineTimeSlot(routineTimeRanges, liveMinuteTick, routineSlotDefs, isHolidayOrWeekend(safeDate)));
     setNewRoutineScheduledTime("");
     setNewRoutineCycle("daily");
     setNewRoutineIntervalDays(2);
-    setNewRoutineMonthDay(1);
-    setNewRoutineWeekDay("any");
+    setNewRoutineTimesPerDay(1);
+    setNewRoutineMonthDay(parsedDef ? parsedDef.day : 1);
+    setNewRoutineWeekDay(parsedDef ? String(parsedDef.dow) : "any");
     setNewRoutineNthWeek(1);
+    setNewRoutineStartDate(safeDate);
+    setRoutineEditScope("from_selected");
     setNewRoutineAssignee(routineTargetFilter !== "전체" ? routineTargetFilter : "공통");
     setIsRoutineModalOpen(true);
   };
@@ -6810,6 +6964,7 @@ function MainApp() {
     setNewRoutineMemo("");
     setNewRoutineScheduledTime("");
     setNewRoutineAttachments([]);
+    setNewRoutineTimesPerDay(1);
     setIsRoutineModalOpen(false);
   };
 
@@ -6823,7 +6978,8 @@ function MainApp() {
       ? newRoutineCycle
       : "daily";
     const mDayVal = cycleVal === "monthly" ? Math.min(31, Math.max(1, Number(newRoutineMonthDay) || 1)) : null;
-    const iDaysVal = cycleVal === "interval" ? Math.min(30, Math.max(2, Number(newRoutineIntervalDays) || 2)) : null;
+    const iDaysVal = cycleVal === "interval" ? Math.min(365, Math.max(2, Number(newRoutineIntervalDays) || 2)) : null;
+    const tpdVal = Math.min(4, Math.max(1, Number(newRoutineTimesPerDay) || 1));
     const nthVal = cycleVal === "monthly_weekday" ? Number(newRoutineNthWeek) || 1 : null;
     const wdVal =
       cycleVal === "weekly" && newRoutineWeekDay !== "any"
@@ -6849,8 +7005,45 @@ function MainApp() {
       return;
     }
     if (editingRoutineId) {
+      const applyFromDate = routineSelectedDate || currentDayKey;
       const nextList = familyRoutines.map((r) => {
         if (r.id !== editingRoutineId) return r;
+        const ruleChanged =
+          (r.cycle || "daily") !== cycleVal ||
+          String(r.weekDay ?? "") !== String(wdVal ?? "") ||
+          Number(r.monthDay || 0) !== Number(mDayVal || 0) ||
+          Number(r.nthWeek || 0) !== Number(nthVal || 0) ||
+          Number(r.intervalDays || 0) !== Number(iDaysVal || 0) ||
+          (r.timeSlot || "상시") !== (newRoutineTimeSlot || "상시") ||
+          (Number(r.timesPerDay) || 1) !== tpdVal;
+        let nextRuleHistory = Array.isArray(r.ruleHistory) ? [...r.ruleHistory] : [];
+        let nextEffectiveFrom = r.effectiveFrom || "";
+        if (ruleChanged && routineEditScope === "from_selected") {
+          const prevFrom = String(r.effectiveFrom || r.startDate || "2000-01-01").slice(0, 10);
+          const prevTo = shiftKstDateStr(applyFromDate, -1);
+          if (prevTo >= prevFrom) {
+            nextRuleHistory = [
+              ...nextRuleHistory.filter((h) => String(h.effectiveFrom || "") < applyFromDate),
+              {
+                effectiveFrom: prevFrom,
+                effectiveTo: prevTo,
+                cycle: r.cycle || "daily",
+                ...(r.weekDay !== undefined && r.weekDay !== null ? { weekDay: r.weekDay } : {}),
+                ...(r.monthDay !== undefined && r.monthDay !== null ? { monthDay: r.monthDay } : {}),
+                ...(r.nthWeek !== undefined && r.nthWeek !== null ? { nthWeek: r.nthWeek } : {}),
+                ...(r.intervalDays !== undefined && r.intervalDays !== null ? { intervalDays: r.intervalDays } : {}),
+                timeSlot: r.timeSlot || "상시",
+                ...(r.scheduledTime ? { scheduledTime: r.scheduledTime } : {}),
+                ...(Number(r.timesPerDay) > 1 ? { timesPerDay: Number(r.timesPerDay) } : {}),
+                assignee: r.assignee || "공통"
+              }
+            ];
+          }
+          nextEffectiveFrom = applyFromDate;
+        }
+        const safeStartDate = /^\d{4}-\d{2}-\d{2}$/.test(String(newRoutineStartDate || ""))
+          ? String(newRoutineStartDate).slice(0, 10)
+          : (r.startDate || "");
         return {
           id: r.id,
           title,
@@ -6861,9 +7054,12 @@ function MainApp() {
           ...(cycleVal === "monthly" ? { monthDay: mDayVal } : {}),
           ...(cycleVal === "monthly_weekday" ? { nthWeek: nthVal, weekDay: wdVal } : {}),
           ...(cycleVal === "weekly" && wdVal !== null ? { weekDay: wdVal } : {}),
+          ...(tpdVal > 1 ? { timesPerDay: tpdVal } : {}),
           assignee: newRoutineAssignee || "공통",
           lastDoneKey: r.lastDoneKey || "",
-          ...(r.startDate ? { startDate: r.startDate } : {}),
+          ...(safeStartDate ? { startDate: safeStartDate } : {}),
+          ...(nextEffectiveFrom ? { effectiveFrom: nextEffectiveFrom } : {}),
+          ...(nextRuleHistory.length > 0 ? { ruleHistory: nextRuleHistory } : {}),
           ...(r.skippedKey ? { skippedKey: r.skippedKey } : {}),
           ...(r.title === title && r.stepDoneKey ? { stepDoneKey: r.stepDoneKey, stepDoneIndices: r.stepDoneIndices || [] } : {})
         };
@@ -6904,8 +7100,9 @@ function MainApp() {
       ...(cycleVal === "monthly" ? { monthDay: mDayVal } : {}),
       ...(cycleVal === "monthly_weekday" ? { nthWeek: nthVal, weekDay: wdVal } : {}),
       ...(cycleVal === "weekly" && wdVal !== null ? { weekDay: wdVal } : {}),
+      ...(tpdVal > 1 ? { timesPerDay: tpdVal } : {}),
       assignee: newRoutineAssignee || (routineAssignees[0] || "공통"),
-      startDate: getTodayStr(),
+      startDate: /^\d{4}-\d{2}-\d{2}$/.test(String(newRoutineStartDate || "")) ? String(newRoutineStartDate).slice(0, 10) : (routineSelectedDate || getKstTodayStr()),
       ...(cleanMemo ? { memo: cleanMemo } : {}),
       ...(newRoutineAttachments.length > 0 ? { attachments: newRoutineAttachments } : {}),
       lastDoneKey: ""
@@ -6917,6 +7114,7 @@ function MainApp() {
     setNewRoutineMemo("");
     setNewRoutineScheduledTime("");
     setNewRoutineAttachments([]);
+    setNewRoutineTimesPerDay(1);
     setIsRoutineModalOpen(false);
     syncRoutinesToCloud(nextList, { type: "upsert", item: nextItem });
     recordActivity("루틴", "추가", title);
@@ -10024,6 +10222,39 @@ function MainApp() {
               const cloudRoutines = toSafeArray(d.data().items);
               setFamilyRoutines(cloudRoutines);
               try { localStorage.setItem("kim_family_routines_v1", JSON.stringify(cloudRoutines)); } catch (e) {}
+              setRoutineLogs((prevLogs) => {
+                const { logs: migrated, migratedCount } = migrateLegacyRoutineLogs(cloudRoutines, prevLogs, getKstTodayStr());
+                if (migratedCount > 0) {
+                  try { localStorage.setItem("kim_routine_logs_v1", JSON.stringify(migrated)); } catch (e) {}
+                  return migrated;
+                }
+                return prevLogs;
+              });
+            }
+            if (d.id === "routine_logs_v1") {
+              const rawLogData = d.data() || {};
+              if (rawLogData.logs && typeof rawLogData.logs === "object") {
+                setRoutineLogs((prevLogs) => {
+                  const merged = { ...(prevLogs || {}) };
+                  Object.entries(rawLogData.logs).forEach(([k, v]) => {
+                    if (!v || typeof v !== "object") return;
+                    const cur = merged[k];
+                    if (!cur || (Number(v.updatedAtMs) || 0) >= (Number(cur.updatedAtMs) || 0)) {
+                      merged[k] = v;
+                    }
+                  });
+                  try { localStorage.setItem("kim_routine_logs_v1", JSON.stringify(merged)); } catch (e) {}
+                  return merged;
+                });
+              }
+              if (rawLogData.trackingStartDate && /^\d{4}-\d{2}-\d{2}$/.test(String(rawLogData.trackingStartDate))) {
+                const srvStart = String(rawLogData.trackingStartDate).slice(0, 10);
+                setRoutineLogTrackingStartDate((prev) => {
+                  const next = prev && prev < srvStart ? prev : srvStart;
+                  try { localStorage.setItem("kim_routine_log_start_v1", next); } catch (e) {}
+                  return next;
+                });
+              }
             }
             if (d.id === "meal_favorites") {
               if (Array.isArray(d.data().combos)) {
@@ -10717,6 +10948,7 @@ function MainApp() {
               ai_meal_styles: Array.isArray(d.ai_meal_styles) && d.ai_meal_styles.length > 0 ? d.ai_meal_styles.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_AI_MEAL_STYLES],
               ai_meal_targets: Array.isArray(d.ai_meal_targets) && d.ai_meal_targets.length > 0 ? d.ai_meal_targets.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_AI_MEAL_TARGETS],
               routine_time_presets: Array.isArray(d.routine_time_presets) && d.routine_time_presets.length > 0 ? d.routine_time_presets.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_ROUTINE_TIME_PRESETS],
+            routine_interval_presets: Array.isArray(d.routine_interval_presets) && d.routine_interval_presets.length > 0 ? d.routine_interval_presets.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_ROUTINE_INTERVAL_PRESETS],
               meal_source_types: Array.isArray(d.meal_source_types) && d.meal_source_types.length > 0 ? d.meal_source_types.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_MEAL_SOURCE_TYPES],
               schedule_quick_times: Array.isArray(d.schedule_quick_times) && d.schedule_quick_times.length > 0 ? d.schedule_quick_times.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_SCHEDULE_QUICK_TIMES],
               fridge_locations: Array.isArray(d.fridge_locations) && d.fridge_locations.length > 0 ? d.fridge_locations.map((s) => String(s || "").trim()).filter(Boolean) : [...STORAGE_LOCATIONS],
@@ -11300,6 +11532,8 @@ function MainApp() {
       shoppingList,
       recipesMeta: recipes.map(({ photoDataUrl, ...rest }) => rest),
       familyRoutines,
+      routineLogs,
+      routineLogTrackingStartDate,
       bucketList,
       houseItems,
       familyPages,
@@ -11385,6 +11619,8 @@ function MainApp() {
     shoppingList,
     recipes,
     familyRoutines,
+    routineLogs,
+    routineLogTrackingStartDate,
     bucketList,
     houseItems,
     familyPages,
@@ -11583,6 +11819,8 @@ function MainApp() {
         babyMedicalNotes,
         babyActivities,
         familyRoutines,
+        routineLogs,
+        routineLogTrackingStartDate,
         bucketList,
         houseItems,
         familyPages,
@@ -11884,6 +12122,7 @@ function MainApp() {
           ai_meal_styles: Array.isArray(payload.customCategories.ai_meal_styles) && payload.customCategories.ai_meal_styles.length > 0 ? payload.customCategories.ai_meal_styles.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_AI_MEAL_STYLES],
           ai_meal_targets: Array.isArray(payload.customCategories.ai_meal_targets) && payload.customCategories.ai_meal_targets.length > 0 ? payload.customCategories.ai_meal_targets.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_AI_MEAL_TARGETS],
           routine_time_presets: Array.isArray(payload.customCategories.routine_time_presets) && payload.customCategories.routine_time_presets.length > 0 ? payload.customCategories.routine_time_presets.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_ROUTINE_TIME_PRESETS],
+                routine_interval_presets: Array.isArray(payload.customCategories.routine_interval_presets) && payload.customCategories.routine_interval_presets.length > 0 ? payload.customCategories.routine_interval_presets.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_ROUTINE_INTERVAL_PRESETS],
           meal_source_types: Array.isArray(payload.customCategories.meal_source_types) && payload.customCategories.meal_source_types.length > 0 ? payload.customCategories.meal_source_types.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_MEAL_SOURCE_TYPES],
           schedule_quick_times: Array.isArray(payload.customCategories.schedule_quick_times) && payload.customCategories.schedule_quick_times.length > 0 ? payload.customCategories.schedule_quick_times.map((s) => String(s || "").trim()).filter(Boolean) : [...DEFAULT_SCHEDULE_QUICK_TIMES],
           fridge_locations: Array.isArray(payload.customCategories.fridge_locations) && payload.customCategories.fridge_locations.length > 0 ? payload.customCategories.fridge_locations.map((s) => String(s || "").trim()).filter(Boolean) : [...STORAGE_LOCATIONS],
@@ -11926,6 +12165,14 @@ function MainApp() {
       if (Array.isArray(payload.familyRoutines)) {
         setFamilyRoutines(payload.familyRoutines);
         syncRoutinesToCloud(payload.familyRoutines);
+      }
+      if (payload.routineLogs && typeof payload.routineLogs === "object" && !Array.isArray(payload.routineLogs)) {
+        const restoredStart = payload.routineLogTrackingStartDate && /^\d{4}-\d{2}-\d{2}$/.test(String(payload.routineLogTrackingStartDate))
+          ? String(payload.routineLogTrackingStartDate).slice(0, 10)
+          : routineLogTrackingStartDate;
+        setRoutineLogs(payload.routineLogs);
+        setRoutineLogTrackingStartDate(restoredStart);
+        syncRoutineLogsToCloud(payload.routineLogs, null, restoredStart);
       }
       if (payload.homeLayoutConfig && typeof payload.homeLayoutConfig === "object") {
         const norm = normalizeHomeLayout(payload.homeLayoutConfig);
@@ -12217,6 +12464,7 @@ function MainApp() {
                 ai_meal_styles: Array.isArray(payload.customCategories.ai_meal_styles) && payload.customCategories.ai_meal_styles.length > 0 ? payload.customCategories.ai_meal_styles : [...DEFAULT_AI_MEAL_STYLES],
                 ai_meal_targets: Array.isArray(payload.customCategories.ai_meal_targets) && payload.customCategories.ai_meal_targets.length > 0 ? payload.customCategories.ai_meal_targets : [...DEFAULT_AI_MEAL_TARGETS],
                 routine_time_presets: Array.isArray(payload.customCategories.routine_time_presets) && payload.customCategories.routine_time_presets.length > 0 ? payload.customCategories.routine_time_presets : [...DEFAULT_ROUTINE_TIME_PRESETS],
+                routine_interval_presets: Array.isArray(payload.customCategories.routine_interval_presets) && payload.customCategories.routine_interval_presets.length > 0 ? payload.customCategories.routine_interval_presets : [...DEFAULT_ROUTINE_INTERVAL_PRESETS],
                 meal_source_types: Array.isArray(payload.customCategories.meal_source_types) && payload.customCategories.meal_source_types.length > 0 ? payload.customCategories.meal_source_types : [...DEFAULT_MEAL_SOURCE_TYPES],
                 schedule_quick_times: Array.isArray(payload.customCategories.schedule_quick_times) && payload.customCategories.schedule_quick_times.length > 0 ? payload.customCategories.schedule_quick_times : [...DEFAULT_SCHEDULE_QUICK_TIMES],
                 fridge_locations: Array.isArray(payload.customCategories.fridge_locations) && payload.customCategories.fridge_locations.length > 0 ? payload.customCategories.fridge_locations : [...STORAGE_LOCATIONS],
@@ -19924,7 +20172,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
     if (kind === "recipe" || kind === "recipe_difficulties") return "recipes";
     if (kind === "bucket") return "bucket";
     if (kind === "schedule" || kind === "schedule_places" || kind === "schedule_quick_times" || kind === "schedule_duration_presets") return "schedule";
-    if (kind === "routine_time_presets" || kind === "routine_assignees") return "routines";
+    if (kind === "routine_time_presets" || kind === "routine_assignees" || kind === "routine_interval_presets") return "routines";
     if (kind === "meal_source_types" || kind === "export_meal_goals") return "daily";
     if (kind === "budget_presets" || kind === "expense_categories") return "monthly";
     if (kind === "ai_meal_styles" || kind === "ai_meal_targets") return "ai";
@@ -20520,6 +20768,8 @@ ${item.memo}` : `${item.title} 다녀옴!`,
         ? [...DEFAULT_AI_MEAL_TARGETS]
         : kind === "routine_time_presets"
         ? [...DEFAULT_ROUTINE_TIME_PRESETS]
+        : kind === "routine_interval_presets"
+        ? [...DEFAULT_ROUTINE_INTERVAL_PRESETS]
         : kind === "meal_source_types"
         ? [...DEFAULT_MEAL_SOURCE_TYPES]
         : kind === "schedule_quick_times"
@@ -26047,7 +26297,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                     if (!running) return null;
                     const sec = Math.max(0, Math.floor((nowMs - (Number(running.startMs) || nowMs)) / 1000));
                     return (
-                      <span className="px-1.5 py-0.5 rounded-md bg-emerald-600 text-white font-mono text-[10.5px] animate-pulse whitespace-nowrap">
+                      <span className="px-1.5 py-0.5 rounded-md bg-[#3F624D] text-white font-mono text-[10.5px] animate-pulse whitespace-nowrap">
                         ⏱️ {running.type === "수면" ? (running.subType || "수면") : running.type} {String(Math.floor(sec / 60)).padStart(2, "0")}:{String(sec % 60).padStart(2, "0")}
                       </span>
                     );
@@ -26175,7 +26425,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
                       }}
                       className={`py-1.5 px-0.5 rounded-xl border text-[10px] font-extrabold tracking-tighter flex flex-col items-center gap-0.5 transition active:scale-95 ${
                         isRunning
-                          ? "bg-emerald-600 text-white border-emerald-600 animate-pulse"
+                          ? "bg-[#3F624D] text-white border-[#3F624D] animate-pulse"
                           : "bg-white hover:bg-stone-50 text-stone-800 border-stone-200"
                       }`}
                     >
@@ -31184,117 +31434,810 @@ time: "", location: "",
           ))}
 
 
-          {/* 🔄 자정/주간 자동 리셋 데일리·위클리 육아/집안일 루틴 */}
-          {scheduleSubTab === "routine" && (!canViewTab("routines") ? renderLockedTabScreen("🔄 반복 루틴") : (
-          <div id="routine-board-section" className="bg-white p-4 rounded-2xl border border-stone-200 shadow-sm space-y-3">
-            <div className="flex items-start justify-between gap-2 flex-wrap">
-              <div className="min-w-0">
-                <h3 className="text-[13.5px] font-black text-stone-900 flex items-center gap-1.5 whitespace-nowrap">
-                  <span>🔄 반복 루틴</span>
-                  <span className="px-2 py-0.5 rounded-full bg-stone-100 text-stone-800 text-[11px] font-black shrink-0 whitespace-nowrap">
-                    남은 {familyRoutines.filter((r) => isRoutineDueTodayOrPast(r, currentDayKey) && !isRoutineDoneNow(r)).length}건
-                  </span>
-                  {(() => {
-                    const carryCnt = familyRoutines.filter((r) => !isRoutineDoneNow(r) && getRoutineCarryOverInfo(r, currentDayKey)?.isCarryOver).length;
-                    return carryCnt > 0 ? (
-                      <span className="px-2 py-0.5 rounded-full bg-rose-100 text-rose-800 text-[11px] font-black whitespace-nowrap shrink-0">
-                        📌 이월 {carryCnt}
-                      </span>
-                    ) : null;
-                  })()}
-                </h3>
-                <p className="text-[11px] text-stone-500 font-semibold mt-0.5 whitespace-nowrap truncate">
-                  {isHolidayOrWeekend(currentDayKey) ? (krHolidays[currentDayKey] ? `공휴일(${krHolidays[currentDayKey]})` : "주말") : "평일"} · <span className="text-stone-900 font-extrabold">{getCurrentRoutineTimeSlot(routineTimeRanges, liveMinuteTick, routineSlotDefs, isHolidayOrWeekend(currentDayKey))}</span> · 자동 리셋
-                </p>
-                {(() => {
-                  const dueList = familyRoutines.filter((r) => isRoutineDueTodayOrPast(r, currentDayKey));
-                  if (dueList.length === 0) return null;
-                  const doneCnt = dueList.filter((r) => isRoutineDoneNow(r)).length;
-                  const pct = Math.round((doneCnt / dueList.length) * 100);
-                  return (
-                    <div className="mt-1.5 flex items-center gap-2">
-                      <div className="flex-1 h-1.5 rounded-full bg-stone-100 overflow-hidden">
-                        <div className="h-full bg-[#5E7A65] transition-all" style={{ width: `${pct}%` }} />
-                      </div>
-                      <span className="text-[11.5px] font-black text-[#35503C] whitespace-nowrap">
-                        달성 {doneCnt}/{dueList.length} ({pct}%)
-                      </span>
-                    </div>
-                  );
-                })()}
-              </div>
-              <div className="flex items-center gap-1 shrink-0">
-                <button
-                  type="button"
-                  onClick={async () => {
-                    const rem = familyRoutines.filter((r) => isRoutineDueTodayOrPast(r, currentDayKey) && !isRoutineDoneNow(r));
-                    if (rem.length === 0) {
-                      showToast("🎉 오늘 남은 루틴을 모두 완료했습니다!");
-                      return;
-                    }
-                    const sortedRem = [...rem].sort((a, b) => String(a.scheduledTime || "99:99").localeCompare(String(b.scheduledTime || "99:99")));
-                    const lines = [
-                      `🕒 오늘 남은 루틴 시간표 (${sortedRem.length}건)`,
-                      ...sortedRem.map((r, i) => {
-                        const br = i === 0 ? "┌" : i === sortedRem.length - 1 ? "└" : "├";
-                        const tLbl = r.scheduledTime ? formatRoutineTimeLabel(r.scheduledTime) : (r.timeSlot || "상시");
-                        return `${br} ${tLbl} │ ${r.title}${String(r.memo || "").trim() ? ` (📝 ${String(r.memo).trim().replace(/\n+/g, " / ")})` : ""}`;
-                      })
-                    ];
-                    await copyTextSafe(lines.join("\n"), `📋 남은 루틴 시간표 ${sortedRem.length}건을 복사했습니다!`);
-                  }}
-                  className="px-2 py-1.5 rounded-xl text-[11.5px] font-extrabold border bg-stone-50 hover:bg-stone-100 text-stone-700 border-stone-200 whitespace-nowrap"
-                  title="오늘 남은 루틴 시간표 복사"
+          {/* 🔄 자정/주간 자동 리셋 데일리·위클리 육아/집안일 루틴 (일간 · 주간 · 월간 조회 통합) */}
+          {scheduleSubTab === "routine" && (!canViewTab("routines") ? renderLockedTabScreen("🔄 반복 루틴") : (() => {
+            const todayStrKst = currentDayKey || getKstTodayStr();
+            const selDateStr = /^\d{4}-\d{2}-\d{2}$/.test(String(routineSelectedDate || ""))
+              ? String(routineSelectedDate).slice(0, 10)
+              : todayStrKst;
+            const selParsed = parseKstDateStr(selDateStr) || parseKstDateStr(todayStrKst);
+            const selDowKo = WEEKDAY_KO[selParsed ? selParsed.dow : 0] || "";
+            const isSelToday = selDateStr === todayStrKst;
+            const isSelFuture = selDateStr > todayStrKst;
+            const isSelPast = selDateStr < todayStrKst;
+            const isSelYesterday = selDateStr === shiftKstDateStr(todayStrKst, -1);
+            const isSelTomorrow = selDateStr === shiftKstDateStr(todayStrKst, 1);
+
+            const evalOpts = {
+              targetFilter: routineTargetFilter,
+              timeFilter: routineTimeFilter,
+              todayStr: todayStrKst,
+              trackingStartDate: routineLogTrackingStartDate,
+              krHolidays,
+              routineSlotDefs
+            };
+
+            const selDaySummary = computeRoutineDaySummary(familyRoutines, selDateStr, routineLogs, evalOpts);
+            const weekDatesList = getKstWeekDates(selDateStr);
+            const weekSummary = routinePeriodMode === "weekly"
+              ? computeRoutinePeriodSummary(familyRoutines, weekDatesList, routineLogs, evalOpts)
+              : null;
+
+            const selYearMonth = selDateStr.slice(0, 7);
+            const monthGridCells = routinePeriodMode === "monthly" ? getKstMonthGrid(selYearMonth, true) : [];
+            const monthInRangeDates = monthGridCells.filter((c) => c.inCurrentMonth).map((c) => c.dateStr);
+            const monthSummary = routinePeriodMode === "monthly"
+              ? computeRoutinePeriodSummary(familyRoutines, monthInRangeDates, routineLogs, evalOpts)
+              : null;
+            const monthSummaryByDate = {};
+            if (monthSummary) {
+              monthSummary.daySummaries.forEach((ds) => { monthSummaryByDate[ds.dateStr] = ds; });
+            }
+
+            // 선택일 일반 달력 일정 건수 (루틴 달성률에는 절대 합산하지 않고 별도 표시)
+            const selDayGeneralSchedules = getSchedulesForDate(selDateStr, routineTargetFilter, "전체");
+
+            const handleSelectRoutineDate = (nextDateStr, autoExpandWeek = true) => {
+              const safe = String(nextDateStr || todayStrKst).slice(0, 10);
+              setRoutineSelectedDate(safe);
+              if (autoExpandWeek) {
+                setRoutineWeekExpandedDates((prev) => {
+                  const arr = Array.isArray(prev) ? prev : [];
+                  return arr.includes(safe) ? arr : [safe, ...arr];
+                });
+              }
+            };
+
+            const handleShiftPeriod = (dir) => {
+              if (routinePeriodMode === "daily") {
+                handleSelectRoutineDate(shiftKstDateStr(selDateStr, dir), false);
+              } else if (routinePeriodMode === "weekly") {
+                const nextD = shiftKstDateStr(selDateStr, dir * 7);
+                setRoutineSelectedDate(nextD);
+                setRoutineWeekExpandedDates([nextD]);
+              } else {
+                const nextD = shiftKstDateByMonths(selDateStr, dir);
+                setRoutineSelectedDate(nextD);
+              }
+            };
+
+            const handleGoToday = () => {
+              setRoutineSelectedDate(todayStrKst);
+              setRoutineWeekExpandedDates([todayStrKst]);
+            };
+
+            const periodTitleLabel = (() => {
+              if (routinePeriodMode === "daily") {
+                return `${selDateStr.replace(/-/g, ".")} (${selDowKo})`;
+              }
+              if (routinePeriodMode === "weekly") {
+                const s0 = weekDatesList[0] || selDateStr;
+                const s6 = weekDatesList[6] || selDateStr;
+                return `${s0.slice(0, 4)}.${s0.slice(5, 7)}.${s0.slice(8, 10)}(월) ~ ${s6.slice(5, 7)}.${s6.slice(8, 10)}(일)`;
+              }
+              const [my, mm] = selYearMonth.split("-").map(Number);
+              return `${my}년 ${mm}월`;
+            })();
+
+            const periodRelationBadge = (() => {
+              if (routinePeriodMode === "daily") {
+                if (isSelToday) return { text: "오늘", cls: "bg-[#EEF3EE] text-[#35503C] border-[#C9D8CC]" };
+                if (isSelTomorrow) return { text: "내일 · 예정", cls: "bg-sky-50 text-sky-800 border-sky-200" };
+                if (isSelFuture) return { text: "미래 · 예정", cls: "bg-sky-50 text-sky-800 border-sky-200" };
+                if (isSelYesterday) return { text: "어제 · 과거", cls: "bg-stone-100 text-stone-700 border-stone-200" };
+                return { text: "과거 조회", cls: "bg-stone-100 text-stone-700 border-stone-200" };
+              }
+              if (routinePeriodMode === "weekly") {
+                const inThisWeek = weekDatesList.includes(todayStrKst);
+                if (inThisWeek) return { text: "이번 주", cls: "bg-[#EEF3EE] text-[#35503C] border-[#C9D8CC]" };
+                if ((weekDatesList[0] || "") > todayStrKst) return { text: "미래 주 · 예정", cls: "bg-sky-50 text-sky-800 border-sky-200" };
+                return { text: "과거 주", cls: "bg-stone-100 text-stone-700 border-stone-200" };
+              }
+              const thisYm = todayStrKst.slice(0, 7);
+              if (selYearMonth === thisYm) return { text: "이번 달", cls: "bg-[#EEF3EE] text-[#35503C] border-[#C9D8CC]" };
+              if (selYearMonth > thisYm) return { text: "미래 월 · 예정", cls: "bg-sky-50 text-sky-800 border-sky-200" };
+              return { text: "과거 월", cls: "bg-stone-100 text-stone-700 border-stone-200" };
+            })();
+
+            const sortDayEntries = (entries, dateStrForSort) => {
+              return [...entries].sort((a, b) => {
+                const ra = getRoutineRuleForDate(a.routine, dateStrForSort) || a.routine;
+                const rb = getRoutineRuleForDate(b.routine, dateStrForSort) || b.routine;
+                const aHasTime = Boolean(ra.scheduledTime);
+                const bHasTime = Boolean(rb.scheduledTime);
+                const aUntimed = !aHasTime && (ra.timeSlot || "상시") === "상시";
+                const bUntimed = !bHasTime && (rb.timeSlot || "상시") === "상시";
+                if (aUntimed !== bUntimed) return aUntimed ? 1 : -1;
+                const slotIdx = (r) => {
+                  const idx = activeRoutineTimeSlots.indexOf(r.timeSlot || "상시");
+                  return idx === -1 ? 99 : idx;
+                };
+                if (aHasTime && bHasTime && ra.scheduledTime !== rb.scheduledTime) {
+                  return String(ra.scheduledTime).localeCompare(String(rb.scheduledTime));
+                }
+                if (slotIdx(ra) !== slotIdx(rb)) return slotIdx(ra) - slotIdx(rb);
+                const ta = ra.scheduledTime || "99:99";
+                const tb = rb.scheduledTime || "99:99";
+                if (ta !== tb) return ta.localeCompare(tb);
+                return Number(a.status.done) - Number(b.status.done);
+              });
+            };
+
+            const renderRoutineCardItem = (entry, targetDateStr, isExtraFuture = false) => {
+              const rt = entry.routine;
+              const occ = entry.occurrence || 1;
+              const timesPerDay = entry.timesPerDay || 1;
+              const rule = getRoutineRuleForDate(rt, targetDateStr) || rt;
+              const doneOnDay = entry.status.done;
+              const isDayToday = targetDateStr === todayStrKst;
+              const isDayFuture = targetDateStr > todayStrKst;
+              const steps = parseRoutineSteps(rt.title);
+              const stepDoneSet = getRoutineSubStepDoneSet(rt, targetDateStr, occ);
+              const overdue = isDayToday && !doneOnDay && !isExtraFuture && rule.scheduledTime && isRoutineTimeOverdue(rule.scheduledTime);
+
+              return (
+                <div
+                  key={`${rt.id}-${targetDateStr}-${occ}-${isExtraFuture ? "extra" : "due"}`}
+                  className={`p-2.5 rounded-xl border flex items-start justify-between gap-2 transition ${
+                    doneOnDay
+                      ? "bg-[#EEF3EE]/55 border-[#C9D8CC]/80"
+                      : isExtraFuture
+                      ? "bg-amber-50/35 border-amber-200/70"
+                      : isDayFuture
+                      ? "bg-sky-50/25 border-sky-200/70"
+                      : "bg-white border-stone-200"
+                  }`}
                 >
-                  📋
-                </button>
-                {isAdminUnlocked && (
-                  <button
-                    type="button"
-                    onClick={handleRestoreRoutinesFromSnapshot}
-                    className="px-2 py-1.5 rounded-xl text-[11px] font-extrabold border bg-amber-50 hover:bg-amber-100 text-amber-800 border-amber-200 whitespace-nowrap"
-                    title="자동 클라우드 백업(오전/오후 스냅샷)에서 루틴 복원"
+                  <div className="flex items-start gap-2.5 flex-1 text-left min-w-0">
+                    <button
+                      type="button"
+                      onClick={() => handleToggleRoutine(rt.id, targetDateStr, occ)}
+                      className={`w-5 h-5 mt-0.5 rounded-lg border flex items-center justify-center shrink-0 transition active:scale-90 ${
+                        doneOnDay
+                          ? "bg-[#3F624D] border-[#3F624D] text-white"
+                          : "bg-white border-[#B9CBBF] hover:border-[#3F624D]"
+                      }`}
+                      title={doneOnDay ? "완료 취소" : "완료 체크"}
+                      aria-label={`${rt.title} 완료 체크`}
+                    >
+                      {doneOnDay && <Check className="w-3.5 h-3.5" />}
+                    </button>
+                    <div className="min-w-0 flex-1">
+                      {steps.length >= 2 ? (
+                        <div className="flex flex-col gap-1">
+                          {steps.map((st, sIdx) => {
+                            const sDone = doneOnDay || stepDoneSet.has(sIdx);
+                            return (
+                              <button
+                                key={sIdx}
+                                type="button"
+                                onClick={() => handleToggleRoutineSubStep(rt.id, sIdx, steps.length, targetDateStr, occ)}
+                                className={`w-full flex items-center gap-1.5 px-2 py-1 rounded-lg text-[12px] font-bold border text-left transition ${
+                                  sDone
+                                    ? "bg-[#EEF3EE] border-[#C9D8CC] text-[#35503C]"
+                                    : "bg-white border-stone-200 text-stone-800 hover:bg-stone-50"
+                                }`}
+                              >
+                                <span
+                                  className={`inline-flex items-center justify-center w-4 h-4 rounded-full border text-[10px] font-black shrink-0 ${
+                                    sDone
+                                      ? "bg-[#3F624D] border-[#3F624D] text-white"
+                                      : "border-stone-400 text-stone-700 bg-white"
+                                  }`}
+                                >
+                                  {sDone ? "✓" : sIdx + 1}
+                                </span>
+                                <span className={`min-w-0 flex-1 break-keep leading-snug line-clamp-2 ${sDone ? "line-through text-stone-500" : ""}`}>
+                                  {st}
+                                </span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (canEditTab("routines")) handleStartEditRoutine(rt);
+                          }}
+                          className={`text-left text-[13px] font-extrabold break-words leading-snug w-full line-clamp-2 ${
+                            doneOnDay ? "line-through text-stone-600" : "text-stone-900"
+                          }`}
+                          title={rt.title}
+                        >
+                          {rt.title}
+                          {timesPerDay > 1 ? ` (${occ}/${timesPerDay}회)` : ""}
+                        </button>
+                      )}
+                      <div className="flex flex-wrap items-center gap-1 mt-1">
+                        <span className="px-1.5 py-0.5 rounded bg-[#EEF3EE] text-[#35503C] text-[10px] font-extrabold whitespace-nowrap">
+                          {rule.timeSlot || "상시"}
+                        </span>
+                        {rule.scheduledTime && (
+                          <span
+                            className={`px-1.5 py-0.5 rounded text-[10px] font-extrabold whitespace-nowrap ${
+                              doneOnDay
+                                ? "bg-stone-200/80 text-stone-600"
+                                : overdue
+                                ? "bg-amber-100 text-amber-900 border border-amber-300"
+                                : "bg-sky-50 text-sky-800 border border-sky-200/70"
+                            }`}
+                          >
+                            ⏰ {formatRoutineTimeLabel(rule.scheduledTime)}{overdue ? " · 지남" : ""}
+                          </span>
+                        )}
+                        <span className="px-1.5 py-0.5 rounded bg-stone-100 text-stone-600 text-[10px] font-bold whitespace-nowrap">
+                          {rule.cycle === "weekdays"
+                            ? "평일"
+                            : rule.cycle === "weekend_holiday"
+                            ? "주말·공휴일"
+                            : rule.cycle === "interval"
+                            ? `${rule.intervalDays || 2}일마다`
+                            : rule.cycle === "weekly"
+                            ? (rule.weekDay !== undefined && rule.weekDay !== null && rule.weekDay !== "any" ? `매주 ${WEEKDAY_KO[Number(rule.weekDay)] || ""}` : "매주")
+                            : rule.cycle === "monthly"
+                            ? `매월 ${rule.monthDay || 1}일`
+                            : rule.cycle === "monthly_weekday"
+                            ? `매월 ${Number(rule.nthWeek) === -1 ? "막주" : `${rule.nthWeek || 1}주`} ${WEEKDAY_KO[Number(rule.weekDay ?? 6)] || "토"}`
+                            : "매일"}
+                        </span>
+                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-extrabold whitespace-nowrap ${getRoutineAssigneeBadgeCls(rule.assignee)}`}>
+                          {rule.assignee === "아리나" ? "아리" : (rule.assignee || "공통")}
+                        </span>
+                        {isExtraFuture && (
+                          <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 text-[10px] font-extrabold whitespace-nowrap">
+                            다른 날 예정
+                          </span>
+                        )}
+                        {!isExtraFuture && isDayFuture && !doneOnDay && (
+                          <span className="px-1.5 py-0.5 rounded bg-sky-100 text-sky-800 text-[10px] font-extrabold whitespace-nowrap">
+                            예정
+                          </span>
+                        )}
+                      </div>
+                      {String(rt.memo || "").trim() && (
+                        <div className="mt-1 flex items-center justify-between gap-1.5 px-2 py-1 rounded-lg bg-[#FAF8F3] border border-stone-200/70 min-w-0">
+                          <div className="text-[11px] font-semibold text-stone-600 truncate min-w-0 flex-1">
+                            📝 {String(rt.memo).trim().replace(/\n+/g, " · ")}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              copyTextSafe(String(rt.memo).trim(), "📋 루틴 메모를 복사했습니다!");
+                            }}
+                            className="px-1.5 py-0.5 rounded bg-white hover:bg-[#EEF3EE] text-[#35503C] border border-[#C9D8CC] text-[10px] font-extrabold whitespace-nowrap shrink-0"
+                            title="루틴 메모 복사"
+                          >
+                            복사
+                          </button>
+                        </div>
+                      )}
+                      {Array.isArray(rt.attachments) && rt.attachments.length > 0 && (
+                        <div className="mt-1 flex flex-wrap gap-1">
+                          {rt.attachments.map((att, aIdx) => (
+                            <a
+                              key={att.id || aIdx}
+                              href={att.url || att.dataUrl || "#"}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              download={att.name || "attachment"}
+                              onClick={(e) => e.stopPropagation()}
+                              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-stone-100 hover:bg-[#EEF3EE] text-stone-700 hover:text-[#35503C] border border-stone-200 text-[10px] font-bold max-w-[160px]"
+                              title={att.name || "첨부파일 열기"}
+                            >
+                              <span className="shrink-0">📎</span>
+                              <span className="truncate">{att.name || "첨부파일"}</span>
+                            </a>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-0.5 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => openQuickAlarmModal({
+                        label: rt.title || "루틴 알람",
+                        time: rule.scheduledTime || "",
+                        date: targetDateStr
+                      })}
+                      className="p-1 text-stone-400 hover:text-[#3F624D] text-[12px] leading-none"
+                      title="이 루틴으로 모닝콜·알람 등록"
+                    >
+                      ⏰
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleStartEditRoutine(rt)}
+                      className="p-1 text-stone-400 hover:text-[#3F624D]"
+                      title="루틴 상세·수정"
+                    >
+                      <Edit2 className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        if (!await askConfirm(`'${rt.title}' 반복 루틴을 삭제할까요?`, "삭제")) return;
+                        handleDeleteRoutine(rt.id);
+                      }}
+                      className="p-1 text-stone-400 hover:text-rose-600"
+                      title="루틴 삭제"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              );
+            };
+
+            const renderRoutineTimetableRows = (entries, targetDateStr, isExtraFuture = false) => {
+              const isDayToday = targetDateStr === todayStrKst;
+              return entries.map((entry, idx) => {
+                const rt = entry.routine;
+                const occ = entry.occurrence || 1;
+                const timesPerDay = entry.timesPerDay || 1;
+                const rule = getRoutineRuleForDate(rt, targetDateStr) || rt;
+                const doneOnDay = entry.status.done;
+                const isOver = isDayToday && !doneOnDay && !isExtraFuture && rule.scheduledTime && isRoutineTimeOverdue(rule.scheduledTime);
+                const steps = parseRoutineSteps(rt.title);
+                const shortClock = rule.scheduledTime
+                  ? String(rule.scheduledTime).slice(0, 5)
+                  : (rule.timeSlot || "상시");
+                return (
+                  <div
+                    key={`tt-${rt.id}-${targetDateStr}-${occ}-${isExtraFuture ? "ex" : "due"}`}
+                    className={`grid grid-cols-[54px_1fr] items-start gap-2 px-2.5 py-2 transition ${
+                      doneOnDay
+                        ? "bg-[#EEF3EE]/45"
+                        : isOver
+                        ? "bg-amber-50/60"
+                        : idx % 2 === 1
+                        ? "bg-[#FAF8F3]/60"
+                        : "bg-white"
+                    }`}
                   >
-                    🔄 복원
+                    <div className="border-r border-stone-200/80 pr-1.5 pt-0.5 flex flex-col justify-center">
+                      <span
+                        className={`text-[10.5px] font-black leading-tight whitespace-nowrap ${
+                          isOver ? "text-amber-700" : doneOnDay ? "text-[#3F624D]" : "text-[#35503C]"
+                        }`}
+                      >
+                        {isOver ? "🔔" : ""}{shortClock}
+                      </span>
+                      {rule.scheduledTime && (
+                        <span className="text-[10px] font-bold text-stone-400 leading-tight whitespace-nowrap">
+                          {rule.timeSlot || "상시"}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-start gap-2 min-w-0">
+                      <button
+                        type="button"
+                        onClick={() => handleToggleRoutine(rt.id, targetDateStr, occ)}
+                        className={`mt-0.5 w-4 h-4 rounded border flex items-center justify-center shrink-0 text-[10px] font-black transition active:scale-90 ${
+                          doneOnDay
+                            ? "bg-[#3F624D] border-[#3F624D] text-white"
+                            : "bg-white border-stone-300 text-transparent hover:border-[#3F624D]"
+                        }`}
+                        title="완료 체크"
+                        aria-label={`${rt.title} 완료 체크`}
+                      >
+                        ✓
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (canEditTab("routines")) handleStartEditRoutine(rt);
+                        }}
+                        className="flex-1 min-w-0 text-left hover:bg-stone-100/70 rounded-lg px-1 py-0.5 -mx-1 -my-0.5 transition"
+                        title="눌러서 상세 내역 보기 · 편집"
+                      >
+                        <div className="flex items-start justify-between gap-1">
+                          <div className="min-w-0 flex-1">
+                            <div
+                              className={`text-[11.5px] leading-[1.35] font-bold break-keep line-clamp-2 ${
+                                doneOnDay ? "line-through text-stone-600" : "text-stone-900"
+                              }`}
+                            >
+                              {steps.length >= 2
+                                ? steps.map((st, sIdx) => `${sIdx + 1}.${st}`).join(" · ")
+                                : rt.title}
+                              {timesPerDay > 1 ? ` (${occ}/${timesPerDay}회)` : ""}
+                            </div>
+                            {String(rt.memo || "").trim() && (
+                              <div className="text-[10px] font-semibold text-stone-500 truncate mt-0.5">
+                                📝 {String(rt.memo).trim().replace(/\n+/g, " · ")}
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-0.5 shrink-0 pt-0.5">
+                            {rule.assignee && rule.assignee !== "공통" && (
+                              <span className="px-1 py-0.5 rounded bg-sky-50 text-sky-800 text-[10px] font-extrabold leading-none whitespace-nowrap">
+                                {rule.assignee === "아리나" ? "아리" : rule.assignee}
+                              </span>
+                            )}
+                            {isExtraFuture && (
+                              <span className="px-1 py-0.5 rounded bg-amber-100 text-amber-800 text-[10px] font-extrabold leading-none whitespace-nowrap">
+                                예정
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </button>
+                    </div>
+                  </div>
+                );
+              });
+            };
+
+            const renderDayRoutineDetail = (targetDateStr, daySum, { showExtraFuture = false } = {}) => {
+              const sortedScheduled = sortDayEntries(daySum.scheduledItems || [], targetDateStr);
+              const timedGroup = [];
+              const untimedGroup = [];
+              sortedScheduled.forEach((entry) => {
+                const rule = getRoutineRuleForDate(entry.routine, targetDateStr) || entry.routine;
+                if (rule.scheduledTime || (rule.timeSlot && rule.timeSlot !== "상시")) {
+                  timedGroup.push(entry);
+                } else {
+                  untimedGroup.push(entry);
+                }
+              });
+              const extraList = showExtraFuture ? sortDayEntries(daySum.extraFutureItems || [], targetDateStr) : [];
+
+              if (sortedScheduled.length === 0 && extraList.length === 0) {
+                return (
+                  <div className="text-center py-5 space-y-2 bg-stone-50/70 rounded-xl border border-stone-100">
+                    <div className="text-[12.5px] font-bold text-stone-500">
+                      이 날짜에 예정된 루틴이 없습니다.
+                    </div>
+                    {(routineTargetFilter !== "전체" || routineTimeFilter !== "전체") && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setScheduleMemberFilter("전체");
+                          setRoutineTargetFilter("전체");
+                          setRoutineTimeFilter("전체");
+                        }}
+                        className="h-7 px-3 rounded-lg bg-[#EEF3EE] text-[#35503C] text-[11.5px] font-extrabold whitespace-nowrap"
+                      >
+                        필터 초기화
+                      </button>
+                    )}
+                  </div>
+                );
+              }
+
+              return (
+                <div className="space-y-2.5">
+                  {daySum.isNoRecord && (
+                    <div className="px-2.5 py-1.5 rounded-xl bg-stone-100 border border-stone-200 text-[11px] font-bold text-stone-600 flex items-center justify-between gap-2">
+                      <span>· 기록 없음 (완료 이력을 저장하지 않았던 과거 날짜)</span>
+                    </div>
+                  )}
+                  {daySum.isFuture && sortedScheduled.length > 0 && (
+                    <div className="px-2.5 py-1.5 rounded-xl bg-sky-50/80 border border-sky-200/80 text-[11px] font-bold text-sky-800">
+                      ○ 미래 예정일 — 반복 규칙으로 자동 계산된 일정입니다.
+                    </div>
+                  )}
+
+                  {routineViewMode === "timetable" ? (
+                    <div className="space-y-2">
+                      {timedGroup.length > 0 && (
+                        <div className="rounded-xl border border-stone-200 overflow-hidden bg-white">
+                          <div className="bg-[#EEF3EE] px-2.5 py-1.5 border-b border-stone-200 flex items-center justify-between gap-2 text-[11px] font-extrabold text-[#35503C]">
+                            <span>시간순 루틴 ({timedGroup.filter((x) => x.status.done).length}/{timedGroup.length})</span>
+                          </div>
+                          <div className="divide-y divide-stone-100">
+                            {renderRoutineTimetableRows(timedGroup, targetDateStr, false)}
+                          </div>
+                        </div>
+                      )}
+                      {untimedGroup.length > 0 && (
+                        <div className="rounded-xl border border-stone-200 overflow-hidden bg-white">
+                          <div className="bg-stone-100 px-2.5 py-1.5 border-b border-stone-200 text-[11px] font-extrabold text-stone-700">
+                            시간 미정 · 상시 ({untimedGroup.filter((x) => x.status.done).length}/{untimedGroup.length})
+                          </div>
+                          <div className="divide-y divide-stone-100">
+                            {renderRoutineTimetableRows(untimedGroup, targetDateStr, false)}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {timedGroup.length > 0 && (
+                        <div className="space-y-1.5">
+                          {untimedGroup.length > 0 && (
+                            <div className="text-[11px] font-extrabold text-[#35503C] px-0.5">
+                              시간순 루틴 ({timedGroup.length})
+                            </div>
+                          )}
+                          {timedGroup.map((entry) => renderRoutineCardItem(entry, targetDateStr, false))}
+                        </div>
+                      )}
+                      {untimedGroup.length > 0 && (
+                        <div className="space-y-1.5">
+                          <div className="text-[11px] font-extrabold text-stone-500 px-0.5 pt-0.5">
+                            시간 미정 · 상시 ({untimedGroup.length})
+                          </div>
+                          {untimedGroup.map((entry) => renderRoutineCardItem(entry, targetDateStr, false))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {extraList.length > 0 && (
+                    <div className="pt-2 border-t border-dashed border-amber-200 space-y-1.5">
+                      <div className="flex items-center justify-between px-0.5">
+                        <span className="text-[11px] font-extrabold text-amber-800">
+                          다른 날 예정 루틴 ({extraList.length}건 · 달성률 미포함)
+                        </span>
+                      </div>
+                      {routineViewMode === "timetable" ? (
+                        <div className="rounded-xl border border-amber-200/80 overflow-hidden bg-white divide-y divide-stone-100">
+                          {renderRoutineTimetableRows(extraList, targetDateStr, true)}
+                        </div>
+                      ) : (
+                        <div className="space-y-1.5">
+                          {extraList.map((entry) => renderRoutineCardItem(entry, targetDateStr, true))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            };
+
+            return (
+          <div id="routine-board-section" className="bg-white p-3.5 pb-28 rounded-2xl border border-stone-200 shadow-sm space-y-3">
+            {/* 1행: 조회 기간(일간/주간/월간) vs 상세 표시 방식(카드/시간표) 분리 */}
+            <div className="flex items-center justify-between gap-2">
+              <div className="grid grid-cols-3 gap-0.5 bg-stone-100 p-0.5 rounded-xl flex-1 max-w-[210px]" role="tablist" aria-label="루틴 조회 기간">
+                {[
+                  { id: "daily", label: "일간" },
+                  { id: "weekly", label: "주간" },
+                  { id: "monthly", label: "월간" }
+                ].map((tab) => (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    role="tab"
+                    aria-selected={routinePeriodMode === tab.id}
+                    onClick={() => {
+                      setRoutinePeriodMode(tab.id);
+                      if (tab.id === "weekly") {
+                        setRoutineWeekExpandedDates((prev) =>
+                          Array.isArray(prev) && prev.includes(selDateStr) ? prev : [selDateStr]
+                        );
+                      }
+                    }}
+                    className={`py-1.5 px-2 rounded-lg text-[12px] font-black whitespace-nowrap transition ${
+                      routinePeriodMode === tab.id
+                        ? "bg-[#3F624D] text-white shadow-sm"
+                        : "text-stone-600 hover:text-stone-900"
+                    }`}
+                  >
+                    {tab.label}
                   </button>
-                )}
+                ))}
+              </div>
+
+              <div className="flex items-center gap-1 bg-stone-100 p-0.5 rounded-xl shrink-0" aria-label="상세 목록 표시 방식">
                 <button
                   type="button"
                   onClick={() => {
-                    const next = routineViewMode === "timetable" ? "card" : "timetable";
-                    setRoutineViewMode(next);
-                    try { localStorage.setItem("kim_routine_view_mode_v1", next); } catch (e) {} syncHomeSettingsToCloud(null, null, null, null, next);
+                    setRoutineViewMode("card");
+                    try { localStorage.setItem("kim_routine_view_mode_v1", "card"); } catch (e) {}
+                    syncHomeSettingsToCloud(null, null, null, null, "card");
                   }}
-                  className={`px-2 py-1.5 rounded-xl text-[11.5px] font-extrabold border whitespace-nowrap ${
+                  className={`px-2 py-1 rounded-lg text-[11px] font-extrabold whitespace-nowrap transition ${
+                    routineViewMode !== "timetable"
+                      ? "bg-white text-[#35503C] shadow-sm"
+                      : "text-stone-500 hover:text-stone-800"
+                  }`}
+                >
+                  카드
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setRoutineViewMode("timetable");
+                    try { localStorage.setItem("kim_routine_view_mode_v1", "timetable"); } catch (e) {}
+                    syncHomeSettingsToCloud(null, null, null, null, "timetable");
+                  }}
+                  className={`px-2 py-1 rounded-lg text-[11px] font-extrabold whitespace-nowrap transition ${
                     routineViewMode === "timetable"
-                      ? "bg-[#5E7A65] text-white border-[#5E7A65]"
-                      : "bg-stone-50 text-stone-700 border-stone-200"
-                  }`}
-                  title="카드형 / 시간표형 보기 전환"
-                >
-                  {routineViewMode === "timetable" ? "🃏 카드" : "🕒 시간표"}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setIsRoutineRangeEditOpen((v) => !v)}
-                  className={`px-2 py-1.5 rounded-xl text-[11.5px] font-extrabold border whitespace-nowrap ${
-                    isRoutineRangeEditOpen
-                      ? "bg-stone-900 text-white border-stone-900"
-                      : "bg-stone-50 text-stone-700 border-stone-200"
+                      ? "bg-white text-[#35503C] shadow-sm"
+                      : "text-stone-500 hover:text-stone-800"
                   }`}
                 >
-                  {isRoutineRangeEditOpen ? "닫기 ▴" : "⏰ 시간대"}
-                </button>
-                <button
-                  type="button"
-                  onClick={openNewRoutineModal}
-                  className="px-2.5 py-1.5 rounded-xl bg-stone-900 text-white text-[11.5px] font-extrabold whitespace-nowrap flex items-center gap-0.5"
-                >
-                  <Plus className="w-3.5 h-3.5" /> 추가
+                  시간표
                 </button>
               </div>
             </div>
 
+            {/* 2행: 선택 기간 · 이전/다음 이동 · 오늘 버튼 */}
+            <div className="flex items-center justify-between gap-1.5 bg-[#FAF8F3] border border-stone-200/80 rounded-xl px-2 py-1.5">
+              <button
+                type="button"
+                onClick={() => handleShiftPeriod(-1)}
+                className="w-7 h-7 rounded-lg bg-white hover:bg-stone-100 border border-stone-200 flex items-center justify-center text-stone-700 shrink-0"
+                aria-label="이전 기간"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              <div className="flex items-center justify-center gap-1.5 min-w-0 flex-1 flex-wrap">
+                <span className="text-[12.5px] font-black text-stone-900 whitespace-nowrap">
+                  {periodTitleLabel}
+                </span>
+                <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-extrabold border whitespace-nowrap ${periodRelationBadge.cls}`}>
+                  {periodRelationBadge.text}
+                </span>
+              </div>
+              <div className="flex items-center gap-1 shrink-0">
+                <button
+                  type="button"
+                  onClick={handleGoToday}
+                  className={`px-2 h-7 rounded-lg text-[11px] font-extrabold border whitespace-nowrap transition ${
+                    isSelToday
+                      ? "bg-white text-stone-500 border-stone-200"
+                      : "bg-[#EEF3EE] text-[#35503C] border-[#C9D8CC] hover:bg-[#DFE9E0]"
+                  }`}
+                >
+                  오늘
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleShiftPeriod(1)}
+                  className="w-7 h-7 rounded-lg bg-white hover:bg-stone-100 border border-stone-200 flex items-center justify-center text-stone-700 shrink-0"
+                  aria-label="다음 기간"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* 3행: 기간별 집계 요약 + 보조 액션 */}
+            <div className="space-y-2">
+              {routinePeriodMode === "daily" ? (
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="text-[12px] font-black text-stone-900 whitespace-nowrap">
+                        {selDaySummary.isFuture
+                          ? `예정 ${selDaySummary.scheduledCount}건`
+                          : selDaySummary.isNoRecord
+                          ? `기록 없음 (${selDaySummary.scheduledCount}건 예정)`
+                          : selDaySummary.scheduledCount === 0
+                          ? "대상 없음"
+                          : `완료 ${selDaySummary.doneCount}/${selDaySummary.scheduledCount} · 남음 ${selDaySummary.remainingCount}`}
+                      </span>
+                      <span className="px-2 py-0.5 rounded-full bg-[#EEF3EE] text-[#35503C] text-[10.5px] font-black whitespace-nowrap">
+                        {selDaySummary.ratePct === null
+                          ? (selDaySummary.isFuture ? "예정" : selDaySummary.isNoRecord ? "기록 없음" : "대상 없음")
+                          : `달성 ${selDaySummary.ratePct}%`}
+                      </span>
+                      {selDayGeneralSchedules.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setScheduleMonth(selDateStr.slice(0, 7));
+                            setScheduleSelectedDate(selDateStr);
+                            setScheduleSubTab("calendar");
+                          }}
+                          className="px-1.5 py-0.5 rounded-full bg-stone-100 hover:bg-[#EEF3EE] text-stone-700 hover:text-[#35503C] border border-stone-200 text-[10px] font-bold whitespace-nowrap transition"
+                          title="클릭하면 해당 날짜의 달력 일정으로 이동합니다 (루틴 달성률 미포함)"
+                        >
+                          📅 일정 {selDayGeneralSchedules.length}건 →
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setHandoverDate(selDateStr);
+                          setIsHandoverModalOpen(true);
+                        }}
+                        className="px-1.5 py-0.5 rounded-full bg-[#FAF8F3] hover:bg-[#EEF3EE] text-[#35503C] border border-[#C9D8CC] text-[10px] font-extrabold whitespace-nowrap transition"
+                        title="선택일 육아 인수인계 열기"
+                      >
+                        🤝 인수인계
+                      </button>
+                    </div>
+                    {selDaySummary.ratePct !== null && (
+                      <div className="mt-1.5 h-1.5 rounded-full bg-stone-100 overflow-hidden">
+                        <div className="h-full bg-[#3F624D] transition-all" style={{ width: `${selDaySummary.ratePct}%` }} />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ) : (() => {
+                const pSum = routinePeriodMode === "weekly" ? weekSummary : monthSummary;
+                if (!pSum) return null;
+                return (
+                  <div className="bg-[#EEF3EE]/50 border border-[#C9D8CC]/80 rounded-xl p-2.5 space-y-1.5">
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="text-[11.5px] font-black text-[#2D4433] whitespace-nowrap">
+                          현재까지 달성률: {pSum.hasTarget ? `${pSum.ratePct}% (${pSum.doneUpToToday}/${pSum.dueUpToToday})` : "대상 없음"}
+                        </span>
+                      </div>
+                      <span className="text-[11px] font-bold text-stone-600 whitespace-nowrap">
+                        전체 예정 {pSum.totalScheduled}건
+                        {pSum.futureScheduled > 0 ? ` · 미래 ${pSum.futureScheduled}건` : ""}
+                        {pSum.noRecordScheduled > 0 ? ` · 기록없음 ${pSum.noRecordScheduled}건` : ""}
+                      </span>
+                    </div>
+                    {pSum.hasTarget && (
+                      <div className="h-1.5 rounded-full bg-white overflow-hidden border border-[#D8E3DA]">
+                        <div className="h-full bg-[#3F624D] transition-all" style={{ width: `${pSum.ratePct}%` }} />
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
+              <div className="flex items-center justify-between gap-1.5 flex-wrap">
+                <div className="text-[11px] text-stone-500 font-semibold whitespace-nowrap">
+                  {isHolidayOrWeekend(selDateStr) ? (krHolidays[selDateStr] ? `공휴일(${krHolidays[selDateStr]})` : "주말") : "평일"}
+                  {isSelToday ? ` · 현재 ${getCurrentRoutineTimeSlot(routineTimeRanges, liveMinuteTick, routineSlotDefs, isHolidayOrWeekend(todayStrKst))}` : ""}
+                </div>
+                <div className="flex items-center gap-1 shrink-0">
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const rem = (selDaySummary.scheduledItems || []).filter((x) => !x.status.done && !x.status.skipped);
+                      if (rem.length === 0) {
+                        showToast(`🎉 ${selDateStr.slice(5)} 남은 루틴이 없습니다!`);
+                        return;
+                      }
+                      const lines = [
+                        `🕒 ${selDateStr} (${selDowKo}) 남은 루틴 (${rem.length}건)`,
+                        ...rem.map((x, i) => {
+                          const r = x.routine;
+                          const br = i === 0 ? "┌" : i === rem.length - 1 ? "└" : "├";
+                          const tLbl = r.scheduledTime ? formatRoutineTimeLabel(r.scheduledTime) : (r.timeSlot || "상시");
+                          return `${br} ${tLbl} │ ${r.title}${String(r.memo || "").trim() ? ` (📝 ${String(r.memo).trim().replace(/\n+/g, " / ")})` : ""}`;
+                        })
+                      ];
+                      await copyTextSafe(lines.join("\n"), `📋 남은 루틴 ${rem.length}건을 복사했습니다!`);
+                    }}
+                    className="px-2 py-1 rounded-lg text-[11px] font-extrabold border bg-stone-50 hover:bg-stone-100 text-stone-700 border-stone-200 whitespace-nowrap"
+                    title="선택일 남은 루틴 복사"
+                  >
+                    📋 복사
+                  </button>
+                  {isAdminUnlocked && (
+                    <button
+                      type="button"
+                      onClick={handleRestoreRoutinesFromSnapshot}
+                      className="px-2 py-1 rounded-lg text-[11px] font-extrabold border bg-amber-50 hover:bg-amber-100 text-amber-800 border-amber-200 whitespace-nowrap"
+                      title="자동 클라우드 백업에서 루틴 복원"
+                    >
+                      🔄 복원
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setIsRoutineRangeEditOpen((v) => !v)}
+                    className={`px-2 py-1 rounded-lg text-[11px] font-extrabold border whitespace-nowrap ${
+                      isRoutineRangeEditOpen
+                        ? "bg-stone-900 text-white border-stone-900"
+                        : "bg-stone-50 text-stone-700 border-stone-200"
+                    }`}
+                  >
+                    {isRoutineRangeEditOpen ? "닫기 ▴" : "⏰ 시간대"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => openNewRoutineModal(selDateStr)}
+                    className="px-2.5 py-1 rounded-lg bg-[#3F624D] hover:bg-[#35503C] text-white text-[11px] font-extrabold whitespace-nowrap flex items-center gap-0.5"
+                  >
+                    <Plus className="w-3.5 h-3.5" /> 추가
+                  </button>
+                </div>
+              </div>
+            </div>
 
             {isRoutineRangeEditOpen && (() => {
               const sortedSlots = [...routineSlotDefs].sort((a, b) => toTimeMinutes(a.startTime) - toTimeMinutes(b.startTime));
@@ -31581,586 +32524,393 @@ time: "", location: "",
               );
             })()}
 
-
+            {/* 4행: 시간대 필터 (일간·주간·월간 목록 및 집계에 동일 적용) */}
             <div className="flex flex-wrap items-center gap-1">
               {["전체", ...activeRoutineTimeSlots].map((ts) => (
                 <button
                   key={ts}
                   type="button"
                   onClick={() => setRoutineTimeFilter(ts)}
-                  className={`px-2 py-0.5 rounded-full text-[11.5px] font-extrabold border whitespace-nowrap shrink-0 ${
+                  className={`px-2 py-0.5 rounded-full text-[11px] font-extrabold border whitespace-nowrap shrink-0 transition ${
                     routineTimeFilter === ts
                       ? "bg-[#3F624D] text-white border-[#3F624D]"
-                      : "bg-stone-50 text-stone-600 border-stone-200"
+                      : "bg-stone-50 text-stone-600 border-stone-200 hover:bg-stone-100"
                   }`}
                 >
                   {ts}
                 </button>
               ))}
-              {(() => {
-                const futureCnt = familyRoutines.filter((r) => !isRoutineDueTodayOrPast(r, currentDayKey)).length;
-                if (futureCnt === 0) return null;
-                return (
-                  <button
-                    type="button"
-                    onClick={() => setRoutineShowFuture((v) => !v)}
-                    className={`px-2 py-0.5 rounded-full text-[11.5px] font-extrabold border whitespace-nowrap shrink-0 ${
-                      routineShowFuture
-                        ? "bg-amber-600 text-white border-amber-600"
-                        : "bg-amber-50 text-amber-800 border-amber-200"
-                    }`}
-                  >
-                    {routineShowFuture ? `예정 포함(${futureCnt})` : `+ 예정(${futureCnt})`}
-                  </button>
-                );
-              })()}
+              {routinePeriodMode === "daily" && (selDaySummary.extraFutureItems?.length || 0) > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setRoutineShowFuture((v) => !v)}
+                  className={`px-2 py-0.5 rounded-full text-[11px] font-extrabold border whitespace-nowrap shrink-0 transition ${
+                    routineShowFuture
+                      ? "bg-amber-600 text-white border-amber-600"
+                      : "bg-amber-50 text-amber-800 border-amber-200"
+                  }`}
+                  title="선택일 실행 대상 외 다른 주기 루틴 함께 보기 (달성률 미포함)"
+                >
+                  {routineShowFuture ? `예정 포함(${selDaySummary.extraFutureItems.length})` : `+ 예정(${selDaySummary.extraFutureItems.length})`}
+                </button>
+              )}
             </div>
 
+            {/* ================= 일간 보기 ================= */}
+            {routinePeriodMode === "daily" && (
+              familyRoutines.length === 0 ? (
+                <div className="text-center py-6 text-[13px] text-stone-400">
+                  등록된 루틴이 없습니다.
+                </div>
+              ) : (
+                renderDayRoutineDetail(selDateStr, selDaySummary, { showExtraFuture: routineShowFuture })
+              )
+            )}
 
-            {routineViewMode !== "timetable" && (() => {
-              const timedRoutines = familyRoutines
-                .filter((rt) => rt.scheduledTime && isRoutineDueTodayOrPast(rt, currentDayKey) && matchesRoutineTarget(rt, routineTargetFilter))
-                .sort((a, b) => String(a.scheduledTime || "").localeCompare(String(b.scheduledTime || "")));
-              if (timedRoutines.length === 0) return null;
-              return (
-                <div className="bg-sky-50/70 border border-sky-200/80 rounded-2xl p-2 space-y-1.5">
-                  <div className="flex items-center justify-between px-0.5">
-                    <span className="text-[11.5px] font-black text-sky-900">
-                      ⏰ 오늘 루틴 시간표 ({timedRoutines.filter((r) => isRoutineDoneNow(r)).length}/{timedRoutines.length} 완료)
-                    </span>
-                    <span className="text-[10.5px] font-bold text-sky-700">눌러서 완료 체크</span>
+            {/* ================= 주간 보기 (월~일 7일 요약 + 세로 접이식 날짜별 목록) ================= */}
+            {routinePeriodMode === "weekly" && weekSummary && (
+              <div className="space-y-3">
+                {/* 상단 7일 요약 바 */}
+                <div className="grid grid-cols-7 gap-1">
+                  {weekSummary.daySummaries.map((ds) => {
+                    const p = parseKstDateStr(ds.dateStr);
+                    const dowLabel = WEEKDAY_KO[p ? p.dow : 1] || "";
+                    const isSelected = ds.dateStr === selDateStr;
+                    const isTodayCell = ds.isToday;
+                    const pctWidth = ds.ratePct !== null ? ds.ratePct : 0;
+                    const statusBadge =
+                      ds.status === "empty"
+                        ? "—"
+                        : ds.status === "future"
+                        ? `○${ds.scheduledCount}`
+                        : ds.status === "no_record"
+                        ? `·${ds.scheduledCount}`
+                        : `${ds.doneCount}/${ds.scheduledCount}`;
+
+                    return (
+                      <button
+                        key={`wk-sum-${ds.dateStr}`}
+                        type="button"
+                        onClick={() => handleSelectRoutineDate(ds.dateStr, true)}
+                        className={`flex flex-col items-center justify-between py-1.5 px-0.5 rounded-xl border transition min-w-0 ${
+                          isSelected
+                            ? "bg-[#3F624D] text-white border-[#3F624D] shadow-sm"
+                            : isTodayCell
+                            ? "bg-[#EEF3EE] text-[#2D4433] border-[#3F624D]/60 ring-1 ring-[#3F624D]/30"
+                            : "bg-stone-50/70 text-stone-700 border-stone-200 hover:bg-stone-100/70"
+                        }`}
+                      >
+                        <span className={`text-[10px] font-bold leading-none ${
+                          isSelected ? "text-emerald-100" : p?.dow === 0 ? "text-rose-500" : p?.dow === 6 ? "text-sky-600" : "text-stone-500"
+                        }`}>
+                          {dowLabel}
+                        </span>
+                        <span className="text-[12.5px] font-black mt-0.5 leading-tight flex items-center gap-0.5">
+                          {p ? p.day : ""}
+                          {isTodayCell && (
+                            <span className={`w-1.5 h-1.5 rounded-full ${isSelected ? "bg-amber-300" : "bg-[#3F624D]"}`} />
+                          )}
+                        </span>
+                        <span className={`text-[10px] font-extrabold mt-0.5 leading-none whitespace-nowrap ${
+                          isSelected
+                            ? "text-white"
+                            : ds.status === "complete"
+                            ? "text-[#35503C]"
+                            : ds.status === "future"
+                            ? "text-sky-700"
+                            : ds.status === "no_record" || ds.status === "empty"
+                            ? "text-stone-400"
+                            : "text-amber-700"
+                        }`}>
+                          {statusBadge}
+                        </span>
+                        <div className={`w-full h-1 rounded-full mt-1 overflow-hidden ${isSelected ? "bg-white/25" : "bg-stone-200/80"}`}>
+                          {ds.ratePct !== null && (
+                            <div
+                              className={`h-full transition-all ${isSelected ? "bg-emerald-200" : "bg-[#3F624D]"}`}
+                              style={{ width: `${pctWidth}%` }}
+                            />
+                          )}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* 주간 펼침 빠른 전환 */}
+                <div className="flex items-center justify-between gap-2 px-0.5">
+                  <span className="text-[11px] font-extrabold text-stone-500 whitespace-nowrap">
+                    요일별 루틴 ({routineWeekExpandedDates.length}/7일 펼침)
+                  </span>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => setRoutineWeekExpandedDates([selDateStr])}
+                      className={`px-2 py-0.5 rounded-lg text-[10.5px] font-extrabold border whitespace-nowrap transition ${
+                        routineWeekExpandedDates.length === 1 && routineWeekExpandedDates[0] === selDateStr
+                          ? "bg-[#3F624D] text-white border-[#3F624D]"
+                          : "bg-stone-50 text-stone-600 border-stone-200 hover:bg-stone-100"
+                      }`}
+                    >
+                      선택일만
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const allDays = weekSummary.daySummaries.map((d) => d.dateStr);
+                        setRoutineWeekExpandedDates(routineWeekExpandedDates.length >= 7 ? [selDateStr] : allDays);
+                      }}
+                      className={`px-2 py-0.5 rounded-lg text-[10.5px] font-extrabold border whitespace-nowrap transition ${
+                        routineWeekExpandedDates.length >= 7
+                          ? "bg-[#3F624D] text-white border-[#3F624D]"
+                          : "bg-stone-50 text-stone-600 border-stone-200 hover:bg-stone-100"
+                      }`}
+                    >
+                      {routineWeekExpandedDates.length >= 7 ? "접기" : "모두 펼치기"}
+                    </button>
                   </div>
-                  <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5">
-                    {timedRoutines.map((rt) => {
-                      const tDone = isRoutineDoneNow(rt);
-                      const tOver = !tDone && isRoutineTimeOverdue(rt.scheduledTime);
-                      const steps = parseRoutineSteps(rt.title);
-                      const shortTitle = steps.length >= 2 ? `${steps[0]} 외 ${steps.length - 1}` : String(rt.title || "").slice(0, 12);
-                      return (
+                </div>
+
+                {/* 하단 7일 날짜별 접이식 목록 (모바일 세로 스택 · 다중 펼침 비교 지원) */}
+                <div className="space-y-2">
+                  {weekSummary.daySummaries.map((ds) => {
+                    const p = parseKstDateStr(ds.dateStr);
+                    const dowKo = WEEKDAY_KO[p ? p.dow : 0] || "";
+                    const isExpanded = routineWeekExpandedDates.includes(ds.dateStr);
+                    const isSelected = ds.dateStr === selDateStr;
+                    const daySchedCnt = getSchedulesForDate(ds.dateStr, routineTargetFilter, "전체").length;
+                    const statusText =
+                      ds.status === "empty"
+                        ? "대상 없음"
+                        : ds.status === "future"
+                        ? `○ 예정 ${ds.scheduledCount}건`
+                        : ds.status === "no_record"
+                        ? `· 기록 없음 (${ds.scheduledCount}건)`
+                        : ds.status === "complete"
+                        ? `✓ ${ds.doneCount}/${ds.scheduledCount} (100%)`
+                        : `${ds.doneCount}/${ds.scheduledCount} (${ds.ratePct}%)`;
+
+                    return (
+                      <div
+                        key={`wk-acc-${ds.dateStr}`}
+                        className={`rounded-xl border overflow-hidden transition ${
+                          isSelected
+                            ? "border-[#3F624D] shadow-sm"
+                            : ds.isToday
+                            ? "border-[#A9C2B1]"
+                            : "border-stone-200"
+                        }`}
+                      >
                         <button
-                          key={`tl-${rt.id}`}
                           type="button"
-                          onClick={() => handleToggleRoutine(rt.id)}
-                          className={`px-2 py-1 rounded-xl text-[11.5px] font-extrabold border whitespace-nowrap shrink-0 transition active:scale-95 ${
-                            tDone
-                              ? "bg-emerald-50 border-emerald-200 text-emerald-700 line-through opacity-75"
-                              : tOver
-                              ? "bg-amber-50 border-amber-300 text-amber-900"
-                              : "bg-white border-sky-200 text-stone-800 hover:bg-sky-100/60"
+                          onClick={() => {
+                            setRoutineSelectedDate(ds.dateStr);
+                            setRoutineWeekExpandedDates((prev) => {
+                              const arr = Array.isArray(prev) ? prev : [];
+                              return arr.includes(ds.dateStr)
+                                ? arr.filter((x) => x !== ds.dateStr)
+                                : [...arr, ds.dateStr];
+                            });
+                          }}
+                          className={`w-full px-3 py-2 flex items-center justify-between gap-2 text-left transition ${
+                            isSelected
+                              ? "bg-[#EEF3EE]/85"
+                              : ds.isToday
+                              ? "bg-[#FAF8F3]"
+                              : "bg-stone-50/70 hover:bg-stone-100/60"
                           }`}
                         >
-                          {tDone ? "✓ " : tOver ? "🔔 " : ""}{formatRoutineTimeLabel(rt.scheduledTime)} · {shortTitle}
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <span className={`text-[12.5px] font-black whitespace-nowrap ${
+                              p?.dow === 0 ? "text-rose-600" : p?.dow === 6 ? "text-sky-700" : "text-stone-900"
+                            }`}>
+                              {p ? `${p.month}/${p.day}` : ds.dateStr} ({dowKo})
+                            </span>
+                            {ds.isToday && (
+                              <span className="px-1.5 py-0.5 rounded-full bg-[#3F624D] text-white text-[10px] font-black whitespace-nowrap">
+                                오늘
+                              </span>
+                            )}
+                            {isSelected && !ds.isToday && (
+                              <span className="px-1.5 py-0.5 rounded-full bg-white border border-[#3F624D] text-[#35503C] text-[10px] font-black whitespace-nowrap">
+                                선택
+                              </span>
+                            )}
+                            {daySchedCnt > 0 && (
+                              <span className="px-1.5 py-0.5 rounded-full bg-white border border-stone-200 text-stone-500 text-[10px] font-bold whitespace-nowrap">
+                                일정 {daySchedCnt}
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <span className={`text-[11px] font-extrabold whitespace-nowrap ${
+                              ds.status === "complete"
+                                ? "text-[#35503C]"
+                                : ds.status === "future"
+                                ? "text-sky-700"
+                                : ds.status === "no_record" || ds.status === "empty"
+                                ? "text-stone-400"
+                                : "text-amber-700"
+                            }`}>
+                              {statusText}
+                            </span>
+                            <ChevronDown className={`w-4 h-4 text-stone-400 transition-transform ${isExpanded ? "rotate-180" : ""}`} />
+                          </div>
+                        </button>
+                        {isExpanded && (
+                          <div className="p-2.5 bg-white border-t border-stone-100">
+                            {renderDayRoutineDetail(ds.dateStr, ds, { showExtraFuture: false })}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* ================= 월간 보기 (7열 고정 높이 달력 + 하단 선택일 상세) ================= */}
+            {routinePeriodMode === "monthly" && monthSummary && (
+              <div className="space-y-3">
+                <div className="rounded-xl border border-stone-200 overflow-hidden bg-white">
+                  <div className="grid grid-cols-7 bg-[#FAF8F3] border-b border-stone-200">
+                    {["월", "화", "수", "목", "금", "토", "일"].map((wd, idx) => (
+                      <div
+                        key={wd}
+                        className={`py-1.5 text-center text-[11px] font-black ${
+                          idx === 6 ? "text-rose-500" : idx === 5 ? "text-sky-600" : "text-stone-600"
+                        }`}
+                      >
+                        {wd}
+                      </div>
+                    ))}
+                  </div>
+                  <div className="grid grid-cols-7 divide-x divide-y divide-stone-100">
+                    {monthGridCells.map((cell) => {
+                      const ds = monthSummaryByDate[cell.dateStr] || computeRoutineDaySummary(familyRoutines, cell.dateStr, routineLogs, evalOpts);
+                      const isSelected = cell.dateStr === selDateStr;
+                      const isTodayCell = cell.dateStr === todayStrKst;
+                      const isHol = Boolean(krHolidays[cell.dateStr]);
+
+                      let cellSymbol = "—";
+                      let cellCountText = "";
+                      let cellTone = "text-stone-300";
+                      if (ds.status === "complete") {
+                        cellSymbol = "✓";
+                        cellCountText = `${ds.doneCount}/${ds.scheduledCount}`;
+                        cellTone = "text-[#35503C] bg-[#EEF3EE]";
+                      } else if (ds.status === "partial") {
+                        cellSymbol = "◐";
+                        cellCountText = `${ds.doneCount}/${ds.scheduledCount}`;
+                        cellTone = "text-amber-800 bg-amber-50";
+                      } else if (ds.status === "incomplete") {
+                        cellSymbol = "✕";
+                        cellCountText = `0/${ds.scheduledCount}`;
+                        cellTone = "text-rose-700 bg-rose-50";
+                      } else if (ds.status === "future") {
+                        cellSymbol = "○";
+                        cellCountText = `${ds.scheduledCount}`;
+                        cellTone = "text-sky-700 bg-sky-50/70";
+                      } else if (ds.status === "no_record") {
+                        cellSymbol = "·";
+                        cellCountText = `${ds.scheduledCount}`;
+                        cellTone = "text-stone-400 bg-stone-100/80";
+                      }
+
+                      return (
+                        <button
+                          key={`m-cell-${cell.dateStr}`}
+                          type="button"
+                          onClick={() => handleSelectRoutineDate(cell.dateStr, false)}
+                          className={`h-[58px] p-1 flex flex-col items-center justify-between overflow-hidden transition relative ${
+                            !cell.inCurrentMonth ? "opacity-40 bg-stone-50/50" : "bg-white hover:bg-[#FAF8F3]"
+                          } ${
+                            isSelected
+                              ? "ring-2 ring-inset ring-[#3F624D] bg-[#EEF3EE]/45"
+                              : isTodayCell
+                              ? "ring-1 ring-inset ring-[#3F624D]/50 bg-[#EEF3EE]/20"
+                              : ""
+                          }`}
+                        >
+                          <div className="w-full flex items-center justify-between px-0.5">
+                            <span
+                              className={`text-[11px] font-black leading-none ${
+                                isSelected
+                                  ? "text-[#2D4433]"
+                                  : cell.dow === 0 || isHol
+                                  ? "text-rose-500"
+                                  : cell.dow === 6
+                                  ? "text-sky-600"
+                                  : "text-stone-800"
+                              }`}
+                            >
+                              {cell.dayNum}
+                            </span>
+                            {isTodayCell && (
+                              <span className="w-1.5 h-1.5 rounded-full bg-[#3F624D] shrink-0" title="오늘" />
+                            )}
+                          </div>
+                          <div className={`w-full px-0.5 py-0.5 rounded text-[10px] font-extrabold leading-none text-center truncate ${cellTone}`}>
+                            {cellSymbol}{cellCountText ? ` ${cellCountText}` : ""}
+                          </div>
+                          <div className="w-full h-1 rounded-full bg-stone-100 overflow-hidden">
+                            {ds.ratePct !== null && (
+                              <div className="h-full bg-[#3F624D]" style={{ width: `${ds.ratePct}%` }} />
+                            )}
+                          </div>
                         </button>
                       );
                     })}
                   </div>
                 </div>
-              );
-            })()}
 
-
-            {familyRoutines.length === 0 ? (
-              <div className="text-center py-3 text-[13.5px] text-stone-400">
-                등록된 루틴이 없습니다.
-              </div>
-            ) : routineViewMode === "timetable" ? (() => {
-              const tableRows = [...familyRoutines]
-                .filter((rt) => (routineShowFuture || isRoutineDueTodayOrPast(rt, currentDayKey)) && (routineTimeFilter === "전체" || (rt.timeSlot || "상시") === routineTimeFilter) && matchesRoutineTarget(rt, routineTargetFilter))
-                .sort((a, b) => {
-                  const slotIdx = (r) => {
-                    const idx = activeRoutineTimeSlots.indexOf(r.timeSlot || "상시");
-                    return idx === -1 ? 99 : idx;
-                  };
-                  if (slotIdx(a) !== slotIdx(b)) return slotIdx(a) - slotIdx(b);
-                  const ta = a.scheduledTime || "99:99";
-                  const tb = b.scheduledTime || "99:99";
-                  if (ta !== tb) return ta.localeCompare(tb);
-                  return Number(isRoutineDoneNow(a)) - Number(isRoutineDoneNow(b));
-                });
-
-              if (tableRows.length === 0) {
-                return (
-                  <div className="text-center py-5 space-y-2">
-                    <div className="text-[12.5px] font-semibold text-stone-500">
-                      선택한 조건에 해당하는 루틴이 없습니다.
-                    </div>
-                    {(routineTargetFilter !== "전체" || routineTimeFilter !== "전체") && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setScheduleMemberFilter("전체");
-                          setRoutineTargetFilter("전체");
-                          setRoutineTimeFilter("전체");
-                        }}
-                        className="h-7 px-3 rounded-lg bg-[#EEF3EE] text-[#35503C] text-[11.5px] font-semibold whitespace-nowrap"
-                      >
-                        필터 초기화
-                      </button>
-                    )}
-                  </div>
-                );
-              }
-
-              return (
-                <div className="rounded-2xl border border-stone-200 overflow-hidden bg-white">
-                  <div className="bg-[#EEF3EE] px-2.5 py-1.5 border-b border-stone-200 flex items-center justify-between gap-2">
-                    <div className="grid grid-cols-[48px_1fr] gap-2 flex-1 min-w-0 text-[11px] font-bold text-[#35503C] items-center">
-                      <span className="whitespace-nowrap">시간</span>
-                      <span className="whitespace-nowrap truncate" title="항목 글을 누르면 상세·편집할 수 있습니다">
-                        루틴 시간표 ({tableRows.filter((r) => isRoutineDoneNow(r)).length}/{tableRows.length})
-                      </span>
-                    </div>
-                    {accessRole !== "guest" && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const tStr = getTodayStr();
-                          if (!handoverDate || handoverDate < tStr) setHandoverDate(tStr);
-                          setHandoverTimetableMode(true);
-                          setHandoverModalTab("config");
-                          setIsHandoverModalOpen(true);
-                        }}
-                        className="px-2 py-0.5 rounded-full bg-white hover:bg-sky-50 border border-[#C9D8CC] text-[#35503C] text-[10px] font-extrabold whitespace-nowrap shrink-0"
-                        title="이 시간표로 카톡 육아 인수인계 열기"
-                      >
-                        🤝 인수인계
-                      </button>
-                    )}
-                  </div>
-                  <div className="divide-y divide-stone-100">
-                    {tableRows.map((rt, idx) => {
-                      const doneNow = isRoutineDoneNow(rt);
-                      const isDueNow = isRoutineDueTodayOrPast(rt, currentDayKey);
-                      const isOver = !doneNow && isDueNow && rt.scheduledTime && isRoutineTimeOverdue(rt.scheduledTime);
-                      const steps = parseRoutineSteps(rt.title);
-                      const shortClock = rt.scheduledTime
-                        ? String(rt.scheduledTime).slice(0, 5)
-                        : (rt.timeSlot || "상시");
-                      return (
-                        <div
-                          key={`tt-${rt.id}`}
-                          className={`grid grid-cols-[54px_1fr] items-start gap-2 px-2 py-1.5 transition ${
-                            doneNow
-                              ? "bg-stone-50/70 opacity-60"
-                              : isOver
-                              ? "bg-amber-50/60"
-                              : idx % 2 === 1
-                              ? "bg-[#FAF8F3]/60"
-                              : "bg-white"
-                          }`}
-                        >
-                          <div className="border-r border-stone-200/80 pr-1.5 pt-0.5 flex flex-col justify-center">
-                            <span
-                              className={`text-[10px] font-black leading-tight whitespace-nowrap ${
-                                isOver ? "text-amber-700" : doneNow ? "text-stone-400" : "text-[#35503C]"
-                              }`}
-                            >
-                              {isOver ? "🔔" : ""}{shortClock}
-                            </span>
-                            {rt.scheduledTime && (
-                              <span className="text-[10px] font-bold text-stone-400 leading-tight whitespace-nowrap">
-                                {rt.timeSlot || "상시"}
-                              </span>
-                            )}
-                          </div>
-                          <div className="flex items-start gap-1.5 min-w-0">
-                            <button
-                              type="button"
-                              onClick={() => handleToggleRoutine(rt.id)}
-                              className={`mt-0.5 w-4 h-4 rounded border flex items-center justify-center shrink-0 text-[10px] font-black transition active:scale-90 ${
-                                doneNow
-                                  ? "bg-[#5E7A65] border-[#5E7A65] text-white"
-                                  : "bg-white border-stone-300 text-transparent hover:border-[#5E7A65]"
-                              }`}
-                              title="완료 체크"
-                              aria-label="루틴 완료 체크"
-                            >
-                              ✓
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                if (canEditTab("routines")) handleStartEditRoutine(rt);
-                              }}
-                              className="flex-1 min-w-0 text-left hover:bg-stone-100/70 rounded-lg px-1 py-0.5 -mx-1 -my-0.5 transition"
-                              title="눌러서 상세 내역 보기 · 편집"
-                            >
-                              <div className="flex items-start justify-between gap-1">
-                                <div className="min-w-0 flex-1">
-                                  <div
-                                    className={`text-[10.5px] leading-[1.35] font-bold break-keep ${
-                                      doneNow ? "line-through text-stone-400" : "text-stone-900"
-                                    }`}
-                                  >
-                                    {steps.length >= 2
-                                      ? steps.map((st, sIdx) => `${sIdx + 1}.${st}`).join(" · ")
-                                      : rt.title}
-                                  </div>
-                                  {String(rt.memo || "").trim() && (
-                                    <div className="text-[10px] font-semibold text-stone-500 truncate mt-0.5">
-                                      📝 {String(rt.memo).trim().replace(/\n+/g, " · ")}
-                                    </div>
-                                  )}
-                                </div>
-                                <div className="flex items-center gap-0.5 shrink-0 pt-0.5">
-                                  {!doneNow && getRoutineCarryOverInfo(rt, currentDayKey)?.isCarryOver && (
-                                    <span className="px-1 py-0.5 rounded bg-rose-100 text-rose-700 text-[10px] font-extrabold leading-none whitespace-nowrap">
-                                      이월
-                                    </span>
-                                  )}
-                                  {(rt.assignee || rt.target) && (rt.assignee || rt.target) !== "공통" && (
-                                    <span className="px-1 py-0.5 rounded bg-sky-50 text-sky-800 text-[10px] font-extrabold leading-none whitespace-nowrap">
-                                      {rt.assignee || rt.target}
-                                    </span>
-                                  )}
-                                  {!isDueNow && (
-                                    <span className="px-1 py-0.5 rounded bg-amber-100 text-amber-800 text-[10px] font-extrabold leading-none whitespace-nowrap">
-                                      예정
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
-                            </button>
-                            {String(rt.memo || "").trim() && (
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  copyTextSafe(String(rt.memo).trim(), "📋 루틴 메모를 복사했습니다!");
-                                }}
-                                className="px-1.5 py-0.5 rounded-md bg-[#EEF3EE] hover:bg-[#DFE9E0] text-[#35503C] border border-[#C9D8CC] text-[10px] font-extrabold whitespace-nowrap shrink-0 self-center"
-                                title="루틴 메모 복사"
-                              >
-                                📋
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
+                {/* 상태 범례 (색상+기호+문자 병기) */}
+                <div className="flex flex-wrap items-center justify-center gap-x-2.5 gap-y-1 text-[10px] font-bold text-stone-500 px-1">
+                  <span className="text-[#35503C]">✓ 완료</span>
+                  <span className="text-amber-700">◐ 진행중</span>
+                  <span className="text-rose-700">✕ 미완료</span>
+                  <span className="text-sky-700">○ 미래예정</span>
+                  <span className="text-stone-400">· 기록없음</span>
+                  <span className="text-stone-400">— 없음</span>
                 </div>
-              );
-            })() : (
-              <div className="space-y-1.5">
-                {[...familyRoutines]
-                  .filter((rt) => (routineShowFuture || isRoutineDueTodayOrPast(rt, currentDayKey)) && (routineTimeFilter === "전체" || (rt.timeSlot || "상시") === routineTimeFilter) && matchesRoutineTarget(rt, routineTargetFilter))
-                  .sort((a, b) => {
-                    const aDone = Number(isRoutineDoneNow(a));
-                    const bDone = Number(isRoutineDoneNow(b));
-                    if (aDone !== bDone) return aDone - bDone;
-                    const slotIdx = (r) => {
-                      const idx = activeRoutineTimeSlots.indexOf(r.timeSlot || "상시");
-                      return idx === -1 ? 99 : idx;
-                    };
-                    if (slotIdx(a) !== slotIdx(b)) return slotIdx(a) - slotIdx(b);
-                    const ta = a.scheduledTime || "99:99";
-                    const tb = b.scheduledTime || "99:99";
-                    if (ta !== tb) return ta.localeCompare(tb);
-                    const urgency = (r) => {
-                      if (r.cycle === "monthly" || r.cycle === "monthly_weekday") {
-                        const info = getMonthlyRoutineDueInfo(r);
-                        return info && info.diff > 3 ? 1 : 0;
-                      }
-                      return 0;
-                    };
-                    return urgency(a) - urgency(b);
-                  })
-                  .map((rt) => {
-                    const doneNow = isRoutineDoneNow(rt);
-                    const isDueNow = isRoutineDueTodayOrPast(rt, currentDayKey);
-                    const nextDateInfo = getRoutineNextDateInfo(rt, currentDayKey);
-                    const intervalInfo = getIntervalRoutineInfo(rt, currentDayKey);
-                    return (
-                      <div
-                        key={rt.id}
-                        className={`p-2.5 rounded-xl border flex items-start justify-between gap-2 transition ${
-                          doneNow
-                            ? "bg-stone-50 border-stone-200 opacity-65"
-                            : !isDueNow
-                            ? "bg-amber-50/30 border-amber-200/70 opacity-75"
-                            : "bg-stone-50/70 border-stone-200"
-                        }`}
-                      >
-                        <div className="flex items-start gap-2.5 flex-1 text-left min-w-0">
-                          <button
-                            type="button"
-                            onClick={() => handleToggleRoutine(rt.id)}
-                            className={`w-5 h-5 mt-0.5 rounded-lg border flex items-center justify-center shrink-0 ${
-                              doneNow
-                                ? "bg-[#3F624D] border-[#3F624D] text-white"
-                                : "bg-white border-[#C9D8CC]"
-                            }`}
-                            title="전체 완료"
-                          >
-                            {doneNow && <Check className="w-3.5 h-3.5" />}
-                          </button>
-                          <div className="min-w-0 flex-1">
-                            {(() => {
-                              const steps = parseRoutineSteps(rt.title);
-                              const stepDoneSet = getRoutineSubStepDoneSet(rt);
-                              if (steps.length >= 2) {
-                                return (
-                                  <div className="flex flex-col gap-1">
-                                    {steps.map((st, sIdx) => {
-                                      const sDone = doneNow || stepDoneSet.has(sIdx);
-                                      return (
-                                        <button
-                                          key={sIdx}
-                                          type="button"
-                                          onClick={() => handleToggleRoutineSubStep(rt.id, sIdx, steps.length)}
-                                          className={`w-full flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-[12.5px] font-extrabold border text-left transition active:scale-[0.99] ${
-                                            sDone
-                                              ? "bg-emerald-50 border-emerald-300 text-emerald-800"
-                                              : "bg-white border-stone-200 text-stone-800 hover:bg-stone-100"
-                                          }`}
-                                        >
-                                          <span
-                                            className={`inline-flex items-center justify-center w-4 h-4 rounded-full border text-[10.5px] font-black shrink-0 ${
-                                              sDone
-                                                ? "bg-[#3F624D] border-[#3F624D] text-white"
-                                                : "border-stone-400 text-stone-700 bg-white"
-                                            }`}
-                                          >
-                                            {sDone ? "✓" : sIdx + 1}
-                                          </span>
-                                          <span className={`min-w-0 flex-1 break-keep leading-snug ${sDone ? "line-through opacity-75" : ""}`}>
-                                            {st}
-                                          </span>
-                                        </button>
-                                      );
-                                    })}
-                                  </div>
-                                );
-                              }
-                              return (
-                                <button
-                                  type="button"
-                                  onClick={() => handleToggleRoutine(rt.id)}
-                                  className={`text-left text-[13.5px] font-extrabold whitespace-normal break-words leading-snug w-full ${doneNow ? "line-through text-stone-400" : "text-stone-900"}`}
-                                >
-                                  {rt.title}
-                                </button>
-                              );
-                            })()}
-                            <div className="flex flex-wrap items-center gap-1 mt-1">
-                              {parseRoutineSteps(rt.title).length >= 2 && (
-                                <span className="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 text-[10.5px] font-black whitespace-nowrap">
-                                  진행 {doneNow ? parseRoutineSteps(rt.title).length : getRoutineSubStepDoneSet(rt).size}/{parseRoutineSteps(rt.title).length}
-                                </span>
-                              )}
-                              <span className="px-1.5 py-0.5 rounded bg-[#EEF3EE] text-[#35503C] text-[10.5px] font-black whitespace-nowrap">
-                                {rt.timeSlot || "상시"}
-                              </span>
-                              {rt.scheduledTime && (() => {
-                                const overdue = !doneNow && isRoutineTimeOverdue(rt.scheduledTime);
-                                return (
-                                  <span
-                                    className={`px-1.5 py-0.5 rounded text-[10.5px] font-black whitespace-nowrap ${
-                                      doneNow
-                                        ? "bg-stone-200 text-stone-600"
-                                        : overdue
-                                        ? "bg-amber-100 text-amber-900 border border-amber-300"
-                                        : "bg-sky-100 text-sky-800"
-                                    }`}
-                                  >
-                                    ⏰ {formatRoutineTimeLabel(rt.scheduledTime)}{overdue ? " · 지남" : ""}
-                                  </span>
-                                );
-                              })()}
-                              {(() => {
-                                if (rt.cycle === "interval" && intervalInfo) {
-                                  return (
-                                    <span className={`px-1.5 py-0.5 rounded text-[10.5px] font-black whitespace-nowrap ${
-                                      !doneNow ? "bg-[#EEF3EE] text-[#35503C]" : "bg-stone-200 text-stone-600"
-                                    }`}>
-                                      {intervalInfo.intervalDays}일마다{doneNow ? ` · D-${intervalInfo.daysLeft}` : " · 오늘 할 날"}
-                                    </span>
-                                  );
-                                }
-                                if (rt.cycle === "monthly" || rt.cycle === "monthly_weekday") {
-                                  const info = getMonthlyRoutineDueInfo(rt);
-                                  const nthText = Number(rt.nthWeek) === -1 ? "마지막 주" : `${rt.nthWeek || 1}번째 주`;
-                                  const wdText = WEEKDAY_KO[Number(rt.weekDay ?? 6)] || "토";
-                                  const prefix = rt.cycle === "monthly_weekday" ? `매월 ${nthText} ${wdText}` : `매월 ${rt.monthDay || 1}일`;
-                                  const dLabel = !info
-                                    ? ""
-                                    : info.diff === 0
-                                    ? ` · ${info.dateLabel} 오늘`
-                                    : info.diff < 0
-                                    ? ` · ${info.dateLabel} (${Math.abs(info.diff)}일 지남)`
-                                    : ` · ${info.dateLabel} (D-${info.diff})`;
-                                  return (
-                                    <span className={`px-1.5 py-0.5 rounded text-[10.5px] font-black whitespace-nowrap ${
-                                      !doneNow && info && info.diff <= 0
-                                        ? "bg-rose-100 text-rose-800"
-                                        : "bg-amber-100 text-amber-900"
-                                    }`}>
-                                      {prefix}{doneNow ? " (이번달 완료)" : dLabel}
-                                    </span>
-                                  );
-                                }
-                                if (rt.cycle === "weekly") {
-                                  const wkLabel =
-                                    rt.weekDay !== undefined && rt.weekDay !== null
-                                      ? `매주 ${WEEKDAY_KO[Number(rt.weekDay)] || ""}요일${nextDateInfo ? ` · ${nextDateInfo.dateLabel}` : ""}`
-                                      : "매주 리셋";
-                                  return (
-                                    <span className="px-1.5 py-0.5 rounded text-[10.5px] font-black bg-stone-100 text-stone-700 whitespace-nowrap">
-                                      {wkLabel}
-                                    </span>
-                                  );
-                                }
-                                if (rt.cycle === "weekdays") {
-                                  return (
-                                    <span className="px-1.5 py-0.5 rounded text-[10.5px] font-black bg-sky-100 text-sky-800 whitespace-nowrap">
-                                      평일(공휴일 제외)
-                                    </span>
-                                  );
-                                }
-                                if (rt.cycle === "weekend_holiday") {
-                                  return (
-                                    <span className="px-1.5 py-0.5 rounded text-[10.5px] font-black bg-rose-100 text-rose-800 whitespace-nowrap">
-                                      주말·공휴일
-                                    </span>
-                                  );
-                                }
-                                return (
-                                  <span className="px-1.5 py-0.5 rounded text-[10.5px] font-black bg-sky-100 text-sky-800 whitespace-nowrap">
-                                    매일 자정 리셋
-                                  </span>
-                                );
-                              })()}
-                              {(() => {
-                                const rKey = rt.cycle === "interval" ? currentDayKey : getRoutineResetKey(rt, currentDayKey);
-                                const isSkippedNow = !doneNow && (rt.skippedKey === rKey || rt.skippedKey === currentDayKey);
-                                if (isSkippedNow) {
-                                  return (
-                                    <>
-                                      <span className="px-1.5 py-0.5 rounded text-[10.5px] font-black bg-stone-200 text-stone-700 whitespace-nowrap">
-                                        ⏭️ 이번 주기 건너뜀
-                                      </span>
-                                      {canEditTab("schedule") && (
-                                        <button
-                                          type="button"
-                                          onClick={() => handleRestoreSkippedRoutine(rt.id)}
-                                          className="px-1.5 py-0.5 rounded text-[10.5px] font-extrabold bg-[#EEF3EE] hover:bg-[#DFE9E0] text-[#35503C] whitespace-nowrap"
-                                        >
-                                          ↩️ 복원
-                                        </button>
-                                      )}
-                                    </>
-                                  );
-                                }
-                                const cInfo = !doneNow ? getRoutineCarryOverInfo(rt, currentDayKey) : null;
-                                if (!cInfo) return null;
-                                return (
-                                  <>
-                                    <span className="px-1.5 py-0.5 rounded text-[10.5px] font-black bg-rose-100 text-rose-800 border border-rose-200 whitespace-nowrap">
-                                      📌 {cInfo.label}
-                                    </span>
-                                    {cInfo.isCarryOver && canEditTab("schedule") && (
-                                      <button
-                                        type="button"
-                                        onClick={() => handleSkipRoutineCarryOver(rt.id)}
-                                        className="px-1.5 py-0.5 rounded text-[10.5px] font-extrabold bg-stone-200/80 hover:bg-stone-300 text-stone-700 whitespace-nowrap"
-                                        title="이번 주기 이월 건너뛰기"
-                                      >
-                                        건너뛰기
-                                      </button>
-                                    )}
-                                  </>
-                                );
-                              })()}
-                              <span className={`px-1.5 py-0.5 rounded text-[10.5px] font-black whitespace-nowrap ${getRoutineAssigneeBadgeCls(rt.assignee)}`}>
-                                {rt.assignee || "공통"}
-                              </span>
-                              {Array.isArray(rt.attachments) && rt.attachments.map((att) => {
-                                const isImg = String(att.mimeType || "").startsWith("image/") || /^data:image\//.test(String(att.dataUrl || ""));
-                                return (
-                                  <a
-                                    key={att.id}
-                                    href={att.dataUrl}
-                                    download={att.name}
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      if (isImg) {
-                                        e.preventDefault();
-                                        setDiaryLightboxUrl(att.dataUrl);
-                                      }
-                                    }}
-                                    className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-sky-50 hover:bg-sky-100 border border-sky-200 text-sky-800 text-[10px] font-bold max-w-[140px]"
-                                  >
-                                    <span>{isImg ? "🖼️" : "📎"}</span>
-                                    <span className="truncate">{att.name}</span>
-                                  </a>
-                                );
-                              })}
-                            </div>
-                            {String(rt.memo || "").trim() && (
-                              <div className="mt-1.5 flex items-start justify-between gap-2 px-2.5 py-1.5 rounded-xl bg-[#FAF8F3] border border-stone-200/80 min-w-0">
-                                <div className="text-[11.5px] font-semibold text-stone-700 whitespace-pre-wrap break-words min-w-0 flex-1 leading-relaxed">
-                                  📝 {String(rt.memo).trim()}
-                                </div>
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    copyTextSafe(String(rt.memo).trim(), "📋 루틴 메모를 복사했습니다!");
-                                  }}
-                                  className="px-2 py-0.5 rounded-lg bg-white hover:bg-[#EEF3EE] text-[#35503C] border border-[#C9D8CC] text-[10.5px] font-extrabold whitespace-nowrap shrink-0 mt-0.5"
-                                  title="루틴 메모 복사"
-                                >
-                                  📋 복사
-                                </button>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-0.5 shrink-0">
-                          {canEditTab("alarm") && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setActiveTab("alarm");
-                                openQuickAlarmModal({ presetMin: 60, memo: rt.title });
-                              }}
-                              className="p-1 text-stone-400 hover:text-[#3F624D] text-[12px] leading-none"
-                              title="모닝콜·알람 예약"
-                            >
-                              ⏰
-                            </button>
-                          )}
-                          <button
-                            type="button"
-                            onClick={() => handleStartEditRoutine(rt)}
-                            className="p-1 text-stone-400 hover:text-[#3F624D]"
-                            title="루틴 수정"
-                          >
-                            <Edit2 className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={async () => {
-                              if (!await askConfirm(`'${rt.title}' 반복 루틴을 삭제할까요?`, "삭제")) return;
-                              handleDeleteRoutine(rt.id);
-                            }}
-                            className="p-1 text-stone-400 hover:text-rose-600"
-                            title="루틴 삭제"
-                          >
-                            <X className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })}
+
+                {/* 선택일 상세 목록 (기존 카드·시간표 표시 방식 재활용) */}
+                <div className="rounded-xl border border-[#C9D8CC] bg-[#FAF8F3]/60 p-2.5 space-y-2">
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="text-[12.5px] font-black text-stone-900">
+                        {selDateStr.replace(/-/g, ".")} ({selDowKo})
+                      </span>
+                      <span className="px-1.5 py-0.5 rounded-full bg-[#EEF3EE] text-[#35503C] text-[10px] font-extrabold">
+                        {selDaySummary.status === "empty"
+                          ? "대상 없음"
+                          : selDaySummary.status === "future"
+                          ? `예정 ${selDaySummary.scheduledCount}건`
+                          : selDaySummary.status === "no_record"
+                          ? `기록 없음 (${selDaySummary.scheduledCount}건)`
+                          : `완료 ${selDaySummary.doneCount}/${selDaySummary.scheduledCount} (${selDaySummary.ratePct}%)`}
+                      </span>
+                      {selDayGeneralSchedules.length > 0 && (
+                        <span className="px-1.5 py-0.5 rounded-full bg-white border border-stone-200 text-stone-600 text-[10px] font-bold">
+                          📅 일정 {selDayGeneralSchedules.length}건
+                        </span>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => openNewRoutineModal(selDateStr)}
+                      className="px-2 py-0.5 rounded-lg bg-[#3F624D] text-white text-[10.5px] font-extrabold whitespace-nowrap"
+                    >
+                      + 이 날부터 루틴 추가
+                    </button>
+                  </div>
+                  {renderDayRoutineDetail(selDateStr, selDaySummary, { showExtraFuture: false })}
+                </div>
               </div>
             )}
           </div>
-
-
-          ))}
-
+            );
+          })())}
 
           {/* ==========================================
               [신규 요청사항 1 완벽 반영] To-Do List 전체를 체크리스트처럼 표시하는 화면
@@ -44486,7 +45236,7 @@ time: "", location: "",
                           <div className="flex items-center justify-between gap-2">
                             <div className="flex items-center gap-1.5 text-[13.5px] font-black text-emerald-950">
                               <span>{meta?.emoji} {act.type} 진행 중</span>
-                              <span className="px-2 py-0.5 rounded-lg bg-emerald-600 text-white font-mono text-[12.5px] whitespace-nowrap">
+                              <span className="px-2 py-0.5 rounded-lg bg-[#3F624D] text-white font-mono text-[12.5px] whitespace-nowrap">
                                 {mm}:{ss}
                               </span>
                             </div>
@@ -50273,16 +51023,50 @@ time: "", location: "",
 
 
               {newRoutineCycle === "interval" && (
-                <select
-                  value={newRoutineIntervalDays}
-                  onChange={(e) => setNewRoutineIntervalDays(Number(e.target.value))}
-                  className="w-full min-w-0 truncate px-3 py-2 rounded-xl border border-stone-200 bg-stone-50 text-[13.5px] font-extrabold text-stone-800"
-                >
-                  {[2, 3, 4, 5, 6, 7, 10, 14].map((d) => (
-                    <option key={d} value={d}>{d}일마다</option>
-                  ))}
-                </select>
+                <div className="flex items-center gap-1.5">
+                  <select
+                    value={newRoutineIntervalDays}
+                    onChange={(e) => setNewRoutineIntervalDays(Number(e.target.value))}
+                    className="flex-1 min-w-0 truncate px-3 py-2 rounded-xl border border-stone-200 bg-stone-50 text-[13.5px] font-extrabold text-stone-800"
+                  >
+                    {(routineIntervalPresets.includes(Number(newRoutineIntervalDays))
+                      ? routineIntervalPresets
+                      : [...routineIntervalPresets, Number(newRoutineIntervalDays) || 2].sort((a, b) => a - b)
+                    ).map((d) => (
+                      <option key={d} value={d}>{d}일마다</option>
+                    ))}
+                  </select>
+                  {isEditorUnlocked && (
+                    <button
+                      type="button"
+                      onClick={() => openCategoryManager("routine_interval_presets")}
+                      className="px-2.5 py-2 rounded-xl bg-stone-100 hover:bg-[#EEF3EE] text-stone-600 border border-stone-200 text-[11.5px] font-extrabold whitespace-nowrap shrink-0 transition"
+                      title="N일마다 주기 프리셋 자유편집"
+                    >
+                      ⚙️
+                    </button>
+                  )}
+                </div>
               )}
+              <div className="flex items-center justify-between gap-2 pt-1">
+                <label className="text-[11.5px] font-extrabold text-stone-500 whitespace-nowrap">하루 실행 횟수</label>
+                <div className="flex items-center gap-1">
+                  {[1, 2, 3, 4].map((n) => (
+                    <button
+                      key={n}
+                      type="button"
+                      onClick={() => setNewRoutineTimesPerDay(n)}
+                      className={`px-2.5 py-1 rounded-lg text-[11.5px] font-extrabold border whitespace-nowrap transition ${
+                        newRoutineTimesPerDay === n
+                          ? "bg-[#3F624D] text-white border-[#3F624D] shadow-sm"
+                          : "bg-stone-50 text-stone-600 border-stone-200 hover:bg-stone-100"
+                      }`}
+                    >
+                      {n}회
+                    </button>
+                  ))}
+                </div>
+              </div>
               {newRoutineCycle === "monthly" && (
                 <select
                   value={newRoutineMonthDay}
@@ -50318,6 +51102,66 @@ time: "", location: "",
                     <option key={dIdx} value={String(dIdx)}>{dLabel}요일</option>
                   ))}
                 </select>
+              )}
+            </div>
+
+
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between gap-2">
+                <label className="text-[11.5px] font-extrabold text-stone-500 whitespace-nowrap">
+                  시작 날짜 (반복 기준일)
+                </label>
+                {newRoutineStartDate !== currentDayKey && (
+                  <button
+                    type="button"
+                    onClick={() => setNewRoutineStartDate(currentDayKey)}
+                    className="text-[11px] font-extrabold text-[#3F624D] hover:underline whitespace-nowrap"
+                  >
+                    오늘로 설정
+                  </button>
+                )}
+              </div>
+              <input
+                type="date"
+                value={newRoutineStartDate}
+                onChange={(e) => setNewRoutineStartDate(e.target.value)}
+                className="w-full min-w-0 px-3 py-2 rounded-xl border border-stone-200 bg-stone-50 text-[13px] font-extrabold text-stone-800"
+              />
+              {editingRoutineId && (
+                <div className="p-2 rounded-xl bg-[#EEF3EE]/70 border border-[#C9D8CC] space-y-1">
+                  <div className="text-[11px] font-extrabold text-[#35503C]">
+                    반복 규칙 수정 적용 범위
+                  </div>
+                  <div className="grid grid-cols-2 gap-1">
+                    <button
+                      type="button"
+                      onClick={() => setRoutineEditScope("from_selected")}
+                      className={`px-2 py-1.5 rounded-lg text-[11px] font-extrabold border transition whitespace-nowrap ${
+                        routineEditScope === "from_selected"
+                          ? "bg-[#3F624D] text-white border-[#3F624D]"
+                          : "bg-white text-stone-600 border-stone-200"
+                      }`}
+                    >
+                      {String(routineSelectedDate || currentDayKey).slice(5)}부터 적용
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setRoutineEditScope("all")}
+                      className={`px-2 py-1.5 rounded-lg text-[11px] font-extrabold border transition whitespace-nowrap ${
+                        routineEditScope === "all"
+                          ? "bg-[#3F624D] text-white border-[#3F624D]"
+                          : "bg-white text-stone-600 border-stone-200"
+                      }`}
+                    >
+                      전체 규칙 변경
+                    </button>
+                  </div>
+                  <div className="text-[10.5px] font-semibold text-stone-600">
+                    {routineEditScope === "from_selected"
+                      ? "기존 과거 반복 규칙과 완료 이력을 그대로 보존합니다."
+                      : "반복 규칙을 일괄 변경하되, 과거 완료 기록은 삭제하지 않습니다."}
+                  </div>
+                </div>
               )}
             </div>
 
@@ -52563,7 +53407,7 @@ time: "", location: "",
                   type="button"
                   onClick={() => setCondolenceForm((p) => ({ ...p, type: "in" }))}
                   className={`py-2 rounded-lg text-[12.5px] font-black transition whitespace-nowrap ${
-                    condolenceForm.type === "in" ? "bg-emerald-600 text-white shadow-sm" : "text-stone-600"
+                    condolenceForm.type === "in" ? "bg-[#3F624D] text-white shadow-sm" : "text-stone-600"
                   }`}
                 >
                   📥 입금 (받음)
@@ -53243,6 +54087,7 @@ time: "", location: "",
           ai_meal_styles: { title: "✨ AI 식단 스타일", placeholder: "새 식단 스타일 (예: 냉털 15분, 저염·산모식)" },
           ai_meal_targets: { title: "🍽️ AI 식단 대상", placeholder: "새 식단 대상 (예: 손님 초대, 주말 브런치)" },
           routine_time_presets: { title: "⏰ 루틴 시간 프리셋", placeholder: "HH:MM 형식 (예: 06:30, 14:00, 22:30)" },
+          routine_interval_presets: { title: "🔁 루틴 N일 주기 프리셋", placeholder: "일수 숫자 입력 (예: 2, 3, 7, 14, 30)" },
           meal_source_types: { title: "🍽️ 식사 구분", placeholder: "새 식사 구분 (예: 반찬가게, 시댁/친정)" },
           schedule_quick_times: { title: "🕒 일정 빠른 시간", placeholder: "HH:MM 형식 (예: 08:30, 13:00, 19:30)" },
           fridge_locations: { title: "❄️ 냉장고 보관 위치", placeholder: "새 보관 위치 (예: 김치냉장고, 베란다창고)" },
@@ -53335,6 +54180,7 @@ time: "", location: "",
                   { id: "ai_meal_styles", label: "✨ AI스타일", cnt: aiMealStyles.length },
                   { id: "ai_meal_targets", label: "🍽️ AI대상", cnt: aiMealTargets.length },
                   { id: "routine_time_presets", label: "⏰ 루틴시간", cnt: routineTimePresets.length },
+                  { id: "routine_interval_presets", label: "🔁 N일주기", cnt: routineIntervalPresets.length },
                   { id: "meal_source_types", label: "🍽️ 식사구분", cnt: mealSourceTypes.length },
                   { id: "schedule_quick_times", label: "🕒 일정시간", cnt: scheduleQuickTimes.length },
                   { id: "export_meal_goals", label: "🎯 내보내기목표", cnt: exportMealGoals.length },
