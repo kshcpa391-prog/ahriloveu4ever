@@ -216,6 +216,7 @@ import {
   formatFridgeQtyUnit,
   findDuplicateFridgeCandidates,
   groupDuplicateFridgeItems,
+  matchUrgentFridgeRecipes,
   normalizeSearchText,
   stripHtmlToPlainText,
   scoreSearchMatch,
@@ -2726,7 +2727,7 @@ const ScheduleFormModal = React.memo(({
               type="button"
               onClick={() => setDraft((p) => ({ ...p, hasOriginYear: !p.hasOriginYear }))}
               className={`px-2 py-1 rounded-lg text-[11px] font-extrabold border whitespace-nowrap transition ${
-                draft.hasOriginYear ? "bg-emerald-700 text-white border-emerald-700" : "bg-white text-stone-600 border-stone-200"
+                draft.hasOriginYear ? "bg-[#3F624D] text-white border-[#3F624D]" : "bg-white text-stone-600 border-stone-200"
               }`}
             >
               📅 D+경과일
@@ -2912,7 +2913,7 @@ const ScheduleFormModal = React.memo(({
               onSubmitForm(draft);
             }
           }}
-          className="w-full py-3 rounded-xl bg-stone-900 hover:bg-stone-800 text-white font-extrabold text-[14px] whitespace-nowrap"
+          className="w-full py-3 rounded-xl bg-[#3F624D] hover:bg-[#324F3E] text-white font-extrabold text-[14px] whitespace-nowrap"
         >
           {isPrivateMode
             ? (isEditing ? "🔒 개인일정 수정 저장" : "🔒 개인일정 저장")
@@ -3032,7 +3033,7 @@ const NoticeFormModal = React.memo(({
           <button
             type="button"
             onClick={() => onSubmitForm(draft)}
-            className="flex-1 py-2.5 rounded-xl bg-stone-900 text-white text-[13.5px] font-extrabold whitespace-nowrap"
+            className="flex-1 py-2.5 rounded-xl bg-[#3F624D] hover:bg-[#324F3E] text-white text-[13.5px] font-extrabold whitespace-nowrap"
           >
             {isEditing ? "수정 저장" : "등록하기"}
           </button>
@@ -3144,7 +3145,7 @@ const QuickCalDayInput = React.memo(({ placeholder, onQuickAdd }) => {
       <button
         type="button"
         onClick={submit}
-        className="px-2.5 py-1.5 rounded-lg bg-stone-800 hover:bg-stone-900 text-white text-[11.5px] font-extrabold whitespace-nowrap shrink-0"
+        className="px-2.5 py-1.5 rounded-lg bg-[#3F624D] hover:bg-[#324F3E] text-white text-[11.5px] font-extrabold whitespace-nowrap shrink-0"
       >
         등록
       </button>
@@ -3434,12 +3435,12 @@ class ErrorBoundary extends React.Component {
         <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-stone-50 text-center">
           <div className="bg-white p-6 rounded-3xl shadow-lg border border-rose-200 max-w-sm w-full space-y-3">
             <div className="text-2xl">⚠️</div>
-            <h2 className="text-[15px] font-black text-stone-900">화면 자동 복구</h2>
+            <h2 className="text-[14px] font-black text-stone-900">화면 자동 복구</h2>
             <p className="text-[13.5px] text-stone-600 break-all">{this.state.errorMsg}</p>
             <button
               type="button"
               onClick={async () => { try { if ("caches" in window && window.caches) { const ks = await window.caches.keys(); await Promise.all(ks.map((k) => window.caches.delete(k))); } } catch (e) {} window.location.reload(); }}
-              className="w-full py-2.5 rounded-xl bg-stone-900 text-white text-[13.5px] font-extrabold"
+              className="w-full py-2.5 rounded-xl bg-[#3F624D] hover:bg-[#324F3E] text-white text-[13.5px] font-extrabold whitespace-nowrap"
             >
               새로고침
             </button>
@@ -8728,7 +8729,8 @@ function MainApp() {
 
 
   const restoreDeletedLogEntry = async (entry) => {
-    if (!requireEditorAccess()) return;
+    const restoreTabKey = String(entry?.col || "").includes("meal") ? "daily" : String(entry?.col || "").includes("fridge") ? "fridge" : String(entry?.col || "").includes("schedule") ? "schedule" : activeTab;
+    if (!requireEditorAccess(restoreTabKey)) return;
     if (!entry?.data?.id) return;
     if (restoringLogIds.includes(entry.logId)) return;
     if (!user || !db) {
@@ -10708,7 +10710,7 @@ function MainApp() {
 
   // 패치노트 직접 추가 및 삭제 핸들러
   const handleAddPatchNote = async () => {
-    if (!requireEditorAccess()) return;
+    if (!isAdminUnlocked) { showToast("🔒 관리자 전용 기능입니다."); setIsEditorUnlockModalOpen(true); return; }
     if (!patchForm.title.trim()) return;
     const id = `patch-${Date.now()}`;
     const ver = patchForm.version.trim() || `v5.${patchNotes.length + 2}`;
@@ -10741,7 +10743,7 @@ function MainApp() {
 
 
   const handleDeletePatchNote = async (id) => {
-    if (!requireEditorAccess()) return;
+    if (!isAdminUnlocked) { showToast("🔒 관리자 전용 기능입니다."); setIsEditorUnlockModalOpen(true); return; }
     setPatchNotes((prev) => prev.filter((p) => p.id !== id));
     if (user && db) {
       try {
@@ -10771,7 +10773,7 @@ function MainApp() {
 
 
   const handleSaveApiKey = async (geminiKeyVal, openaiKeyVal = openaiApiKey, providerVal = aiProvider) => {
-    if (!requireEditorAccess()) return;
+    if (!isAdminUnlocked) { showToast("🔒 관리자 전용 설정입니다."); setIsEditorUnlockModalOpen(true); return; }
     const cleanedGemini = String(geminiKeyVal || "").trim();
     const cleanedOpenai = String(openaiKeyVal || "").trim();
 
@@ -10996,7 +10998,7 @@ function MainApp() {
 
 
   const handleRestoreFromJsonFile = async (e) => {
-    if (!requireEditorAccess()) return;
+    if (!isAdminUnlocked) { showToast("🔒 관리자 전용 복원 기능입니다."); setIsEditorUnlockModalOpen(true); return; }
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -11985,7 +11987,7 @@ function MainApp() {
   // ==========================================
   // [신규 v7.0] 육아수첩 핸들러 (예방접종 체크 · 일정 원클릭 자동등록 · 성장/열 체크)
   const handleUpdateBabyCheckDate = async (childId, itemId, newDate) => {
-    if (!requireEditorAccess()) return;
+    if (!requireEditorAccess("baby")) return;
     const docId = `${childId}_${itemId}`;
     const prev = babyChecks[docId] || null;
     const updated = { ...(prev || {}), childId, itemId, done: true, doneDate: newDate };
@@ -12002,7 +12004,7 @@ function MainApp() {
 
 
   const handleToggleBabyCheck = async (childId, itemId) => {
-    if (!requireEditorAccess()) return;
+    if (!requireEditorAccess("baby")) return;
     const docId = `${childId}_${itemId}`;
     const prev = babyChecks[docId] || {};
     const updated = {
@@ -12024,7 +12026,7 @@ function MainApp() {
 
 
   const handleSyncSingleBabySchedule = async (child, item, targetDate) => {
-    if (!requireEditorAccess()) return;
+    if (!requireEditorAccess("baby")) return;
     const schId = `baby-${child.id}-${item.id}`;
     const payload = {
       id: schId,
@@ -12059,7 +12061,7 @@ function MainApp() {
 
 
   const handleSyncAllUpcomingBabySchedules = async (child) => {
-    if (!requireEditorAccess()) return;
+    if (!requireEditorAccess("baby")) return;
     let added = 0;
     for (const item of BABY_VACCINES_AND_CHECKUPS) {
       const checkKey = `${child.id}_${item.id}`;
@@ -12099,7 +12101,7 @@ function MainApp() {
 
 
   const handleAddGrowthLog = async () => {
-    if (!requireEditorAccess()) return;
+    if (!requireEditorAccess("baby")) return;
     if (!growthForm.height && !growthForm.weight && !growthForm.head) {
       showToast("키, 몸무게, 머리둘레 중 하나 이상을 입력해 주세요.");
       return;
@@ -12137,7 +12139,7 @@ function MainApp() {
 
 
   const handleDeleteGrowthLog = async (id) => {
-    if (!requireEditorAccess()) return;
+    if (!requireEditorAccess("baby")) return;
     setBabyGrowthLogs((prev) => prev.filter((g) => g.id !== id));
     if (user && db) {
       try {
@@ -12150,7 +12152,7 @@ function MainApp() {
 
 
   const handleAddMedicalNote = async () => {
-    if (!requireEditorAccess()) return;
+    if (!requireEditorAccess("baby")) return;
     if (!medNoteForm.title.trim() && !medNoteForm.temp) return;
     const id = `med-${selectedChildId}-${Date.now()}`;
     const payload = {
@@ -12176,7 +12178,7 @@ function MainApp() {
 
 
   const handleDeleteMedicalNote = async (id) => {
-    if (!requireEditorAccess()) return;
+    if (!requireEditorAccess("baby")) return;
     setBabyMedicalNotes((prev) => prev.filter((n) => n.id !== id));
     if (user && db) {
       try {
@@ -12506,7 +12508,7 @@ function MainApp() {
   // 9. AI 식단 추천 & 식단표/영수증 이미지 스캔 핸들러
   // ==========================================
   const handleRunAiRecommend = async () => {
-    if (!requireEditorAccess()) return;
+    if (!requireEditorAccess("ai")) return;
     setAiErrorMsg("");
 
 
@@ -12892,7 +12894,7 @@ ${validText}
 
 
   const handleGenerate3DayPlan = async () => {
-    if (!requireEditorAccess()) return;
+    if (!requireEditorAccess("ai")) return;
     const requestedPairs = Object.entries(planScheduleMap)
       .sort(([a], [b]) => a.localeCompare(b))
       .flatMap(([date, slots]) => toSafeArray(slots).map((slot) => ({ date, slot })));
@@ -12965,7 +12967,7 @@ ${validText}
 
 
   const handleRegenerateSinglePlanSlot = async (targetItem) => {
-    if (!requireEditorAccess()) return;
+    if (!requireEditorAccess("ai")) return;
     if (regeneratingPlanId) return;
     setRegeneratingPlanId(targetItem.id);
     setPlanErrorMsg("");
@@ -13011,7 +13013,7 @@ ${validText}
 
 
   const handleGenerateMissingPlanSlots = async () => {
-    if (!requireEditorAccess()) return;
+    if (!requireEditorAccess("ai")) return;
     const missingPairs = toSafeArray(planSnapshotMeta?.missingPairs);
     if (missingPairs.length === 0 || isPlanLoading) return;
     setIsPlanLoading(true);
@@ -13053,7 +13055,7 @@ ${validText}
 
 
   const handleApply3DayPlan = async () => {
-    if (!requireEditorAccess()) return;
+    if (!requireEditorAccess("daily")) return;
     if (isSavingPlan) return;
     if (planSnapshotMeta?.applied) {
       showToast("이미 일별 식단표에 반영 완료된 추천 식단입니다.");
@@ -13594,7 +13596,7 @@ const priceStr = exportIncludePrice && safeItPrice > 0 ? `${safeItPrice.toLocale
 
   // [신규 v7.2] 버튼 클릭 시에만 저비용 AI 플레이팅 예시 이미지 생성
   const handleGeneratePlatingExampleImage = async () => {
-    if (!requireEditorAccess()) return;
+    if (!requireEditorAccess("ai")) return;
     if (!platingResult) return;
     const cleanOpenai = String(openaiApiKey || "").trim();
     const cleanGemini = String(geminiApiKey || "").trim();
@@ -13702,7 +13704,7 @@ const priceStr = exportIncludePrice && safeItPrice > 0 ? `${safeItPrice.toLocale
 
 
   const handleAnalyzePlating = async () => {
-    if (!requireEditorAccess()) return;
+    if (!requireEditorAccess("ai")) return;
     if (!platingImagePart) {
       setPlatingErrorMsg("먼저 요리 완성 사진을 선택해 주세요.");
       return;
@@ -13767,7 +13769,7 @@ const priceStr = exportIncludePrice && safeItPrice > 0 ? `${safeItPrice.toLocale
 
 
   const handleMenuImageUpload = async (e) => {
-    if (!requireEditorAccess()) return;
+    if (!requireEditorAccess("daily")) return;
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -13831,7 +13833,7 @@ const priceStr = exportIncludePrice && safeItPrice > 0 ? `${safeItPrice.toLocale
 
 
   const handleSaveScannedMenuDays = async () => {
-    if (!requireEditorAccess()) return;
+    if (!requireEditorAccess("daily")) return;
     if (scannedMenuDays.length === 0) return;
 
 
@@ -14064,7 +14066,7 @@ const priceStr = exportIncludePrice && safeItPrice > 0 ? `${safeItPrice.toLocale
 
 
   const handleReceiptImageUpload = async (e) => {
-    if (!requireEditorAccess()) return;
+    if (!requireEditorAccess("fridge")) return;
     const file = e.target.files?.[0];
     if (!file) return;
     try {
@@ -14650,7 +14652,7 @@ const priceStr = exportIncludePrice && safeItPrice > 0 ? `${safeItPrice.toLocale
 
 
   const handleMoveFridgeShelfZone = async (item, newZone) => {
-    if (!requireEditorAccess()) return;
+    if (!requireEditorAccess("fridge")) return;
     const nextLocation =
       newZone === "팬트리"
         ? "실온·팬트리"
@@ -14695,7 +14697,7 @@ const priceStr = exportIncludePrice && safeItPrice > 0 ? `${safeItPrice.toLocale
 
   // [신규 v6.2] 냉장고 식재료 폐기(소비기한 경과 등) -> 손실 금액 별도 기록
   const handleBulkMoveFridgeShelfZone = async (ids, targetZone) => {
-    if (!requireEditorAccess()) return;
+    if (!requireEditorAccess("fridge")) return;
     const idSet = new Set(ids || []);
     if (idSet.size === 0 || !targetZone) return;
     const nextLoc = shelfZoneToLocation(targetZone);
@@ -14751,7 +14753,7 @@ const priceStr = exportIncludePrice && safeItPrice > 0 ? `${safeItPrice.toLocale
 
 
   const handleWasteFridgeItem = async (item) => {
-    if (!requireEditorAccess()) return;
+    if (!requireEditorAccess("fridge")) return;
     const lossAmount = Number(item.price) || 0;
     const eventId = `waste-${item.id}-${Date.now()}`;
     const wasteRecord = {
@@ -14787,7 +14789,7 @@ const priceStr = exportIncludePrice && safeItPrice > 0 ? `${safeItPrice.toLocale
 
   // [신규 v6.2] AI 레시피 부족 재료 일괄 장보기 담기
   const handleAddMissingIngredientsToShopping = async (usedIngs) => {
-    if (!requireEditorAccess()) return;
+    if (!requireEditorAccess("shopping")) return;
     if (!user || !db) {
       showToast("⚠️ 서버 연결 후 장보기 목록에 담을 수 있습니다.");
       return;
@@ -14850,7 +14852,7 @@ const priceStr = exportIncludePrice && safeItPrice > 0 ? `${safeItPrice.toLocale
 
   // [v7.1 개선] 요리 완료 전 차감 수량 확인 팝업 열기 & 확정 차감
   const handleCompleteRecipeCooking = (recipe) => {
-    if (!requireEditorAccess()) return;
+    if (!requireEditorAccess("fridge")) return;
     const used = toSafeArray(recipe.usedIngredients);
     const matched = fridge
       .filter((f) =>
@@ -14882,7 +14884,7 @@ const priceStr = exportIncludePrice && safeItPrice > 0 ? `${safeItPrice.toLocale
 
 
   const handleConfirmCookingDeduction = async () => {
-    if (!requireEditorAccess()) return;
+    if (!requireEditorAccess("fridge")) return;
     if (!cookingConfirmModal || isCookingDeducting) return;
     if (!user || !db) {
       showToast("⚠️ 서버 연결 대기 중입니다. 잠시 후 다시 시도해 주세요.");
@@ -15056,7 +15058,7 @@ const priceStr = exportIncludePrice && safeItPrice > 0 ? `${safeItPrice.toLocale
 
 
   const handleMistakeDeleteFridgeItem = async (item) => {
-    if (!requireEditorAccess()) return;
+    if (!requireEditorAccess("fridge")) return;
     if (!user || !db) {
       showToast("⚠️ 서버 연결 후 삭제할 수 있습니다.");
       return;
@@ -15975,7 +15977,7 @@ const priceStr = exportIncludePrice && safeItPrice > 0 ? `${safeItPrice.toLocale
 
 
   const handleQuickRecordDiaper = async (subType = "소변", childOverride = null) => {
-    if (!requireEditorAccess()) return;
+    if (!requireEditorAccess("baby")) return;
     if (!user || !db) {
       showToast("⚠️ 서버 연결 후 기록할 수 있습니다.");
       return;
@@ -16006,7 +16008,7 @@ const priceStr = exportIncludePrice && safeItPrice > 0 ? `${safeItPrice.toLocale
 
 
   const handleQuickTapBabyActivity = async (typeId, childOverride = null, subTypeOverride = null) => {
-    if (!requireEditorAccess()) return;
+    if (!requireEditorAccess("baby")) return;
     if (!user || !db) {
       showToast("⚠️ 서버 연결 후 기록할 수 있습니다.");
       return;
@@ -16130,7 +16132,7 @@ const priceStr = exportIncludePrice && safeItPrice > 0 ? `${safeItPrice.toLocale
 
 
   const handleSwitchBreastSide = async (act, nextSide) => {
-    if (!requireEditorAccess() || !act || !user || !db) return;
+    if (!requireEditorAccess("baby") || !act || !user || !db) return;
     const nowMs = Date.now();
     const curSide = act.activeSide || "left";
     const segStart = Number(act.sideStartMs || act.startMs) || nowMs;
@@ -16158,7 +16160,7 @@ const priceStr = exportIncludePrice && safeItPrice > 0 ? `${safeItPrice.toLocale
 
 
   const handleStopBabyActivityTimer = async (act) => {
-    if (!requireEditorAccess() || !act || !user || !db) return;
+    if (!requireEditorAccess("baby") || !act || !user || !db) return;
     const nowMs = Date.now();
     const totalMin = Math.max(0, Math.round((nowMs - (Number(act.startMs) || nowMs)) / 60000));
     let leftMin = Number(act.leftMin) || 0;
@@ -16201,7 +16203,7 @@ const priceStr = exportIncludePrice && safeItPrice > 0 ? `${safeItPrice.toLocale
 
 
   const handleSaveActivityModal = async () => {
-    if (!requireEditorAccess() || !activityEditModal || !user || !db) return;
+    if (!requireEditorAccess("baby") || !activityEditModal || !user || !db) return;
     const m = activityEditModal;
     const payload = {
       id: m.id,
@@ -16229,7 +16231,7 @@ const priceStr = exportIncludePrice && safeItPrice > 0 ? `${safeItPrice.toLocale
 
 
   const handleDeleteBabyActivity = async (id) => {
-    if (!requireEditorAccess() || !id || !user || !db) return;
+    if (!requireEditorAccess("baby") || !id || !user || !db) return;
     await deleteDoc(getDocRef("family_baby_activities_v1", id));
     setActivityEditModal(null);
     showToast("기록이 삭제되었습니다.");
@@ -16253,7 +16255,7 @@ const priceStr = exportIncludePrice && safeItPrice > 0 ? `${safeItPrice.toLocale
     const selectedFiles = Array.from(e.target.files || []);
     if (e.target) e.target.value = "";
     if (selectedFiles.length === 0) return;
-    if (!requireEditorAccess() || !user || !db) {
+    if (!requireEditorAccess("baby") || !user || !db) {
       showToast("⚠️ 관리자 잠금 해제 및 서버 연결 후 가져올 수 있습니다.");
       return;
     }
@@ -16854,7 +16856,7 @@ const priceStr = exportIncludePrice && safeItPrice > 0 ? `${safeItPrice.toLocale
 
 
   const handleQuickParseShopping = async () => {
-    if (!requireEditorAccess()) return;
+    if (!requireEditorAccess("shopping")) return;
     const raw = quickShoppingText.trim();
     if (!raw) {
       showToast("파싱할 장보기 문장을 입력해 주세요.");
@@ -16963,7 +16965,7 @@ const priceStr = exportIncludePrice && safeItPrice > 0 ? `${safeItPrice.toLocale
 
 
   const handleQuickAddSingleIngredientToShopping = async (rawToken, recipeTitle = "") => {
-    if (!requireEditorAccess()) return;
+    if (!requireEditorAccess("shopping")) return;
     const parsed = parseRecipeIngredientToken(rawToken);
     if (!parsed.name) return;
     const itemName = parsed.name;
@@ -17128,6 +17130,7 @@ const priceStr = exportIncludePrice && safeItPrice > 0 ? `${safeItPrice.toLocale
       window.removeEventListener("mouseup", onUp);
       window.removeEventListener("touchmove", onMove);
       window.removeEventListener("touchend", onUp);
+      window.removeEventListener("touchcancel", onUp);
     };
 
 
@@ -17137,19 +17140,20 @@ const priceStr = exportIncludePrice && safeItPrice > 0 ? `${safeItPrice.toLocale
     window.addEventListener("mouseup", onUp);
     window.addEventListener("touchmove", onMove, { passive: false });
     window.addEventListener("touchend", onUp);
+    window.addEventListener("touchcancel", onUp);
   };
 
 
   const openNewRecipeModal = (prefill = null) => {
-    if (!requireEditorAccess()) return;
+    if (!requireEditorAccess("recipes")) return;
     setEditingRecipe(null);
     setRecipeForm({
       title: prefill?.title || "",
-      category: prefill?.category || "메인반찬",
+      category: prefill?.category || recipeCategories[0] || "메인반찬",
       photoDataUrl: prefill?.photoDataUrl || "",
       ingredientsText: prefill?.ingredientsText || "",
       cookTime: prefill?.cookTime || "20분",
-      difficulty: prefill?.difficulty || "쉬움",
+      difficulty: prefill?.difficulty || recipeDifficulties[0] || "쉬움",
       ratings: prefill?.ratings || { 수혁: 5, 아리나: 5, 시목: 0, 시율: 0 },
       stepsText: prefill?.stepsText || "",
       memo: prefill?.memo || "",
@@ -17251,7 +17255,7 @@ const priceStr = exportIncludePrice && safeItPrice > 0 ? `${safeItPrice.toLocale
 
 
   const handleSendPlatingToRecipeBook = async () => {
-    if (!requireEditorAccess()) return;
+    if (!requireEditorAccess("recipes")) return;
     if (!platingResult) return;
     const rawPhoto = platingPreviewUrl || platingExampleImageUrl || "";
     const compressedPhoto = rawPhoto ? await compressDataUrlForFirestore(rawPhoto, 720, 0.65) : "";
@@ -17273,7 +17277,7 @@ const priceStr = exportIncludePrice && safeItPrice > 0 ? `${safeItPrice.toLocale
 
 
   const handleApplyRecipeToMeal = (recipe) => {
-    if (!requireEditorAccess()) return;
+    if (!requireEditorAccess("daily")) return;
     setEditingMeal(null);
     setMealForm({
       date: selectedDate || getTodayStr(),
@@ -17290,7 +17294,7 @@ const priceStr = exportIncludePrice && safeItPrice > 0 ? `${safeItPrice.toLocale
 
 
   const handleAddMissingRecipeIngredientsToShopping = async (recipe) => {
-    if (!requireEditorAccess()) return;
+    if (!requireEditorAccess("shopping")) return;
     const ings = toSafeArray(recipe.ingredients);
     if (ings.length === 0) {
       showToast("등록된 재료가 없습니다.");
@@ -17485,7 +17489,7 @@ const priceStr = exportIncludePrice && safeItPrice > 0 ? `${safeItPrice.toLocale
 
 
   const handleToggleShopping = async (item) => {
-    if (!requireEditorAccess()) return;
+    if (!requireEditorAccess("shopping")) return;
     const updated = { ...item, checked: !item.checked };
     setShoppingList((prev) => prev.map((s) => (s.id === item.id ? updated : s)));
     if (user && db) {
@@ -17499,7 +17503,7 @@ const priceStr = exportIncludePrice && safeItPrice > 0 ? `${safeItPrice.toLocale
 
 
   const handleDeleteShopping = async (id) => {
-    if (!requireEditorAccess()) return;
+    if (!requireEditorAccess("shopping")) return;
     setShoppingList((prev) => prev.filter((s) => s.id !== id));
     if (user && db) {
       try {
@@ -17512,7 +17516,7 @@ const priceStr = exportIncludePrice && safeItPrice > 0 ? `${safeItPrice.toLocale
 
 
   const handleClearCheckedShopping = async () => {
-    if (!requireEditorAccess()) return;
+    if (!requireEditorAccess("shopping")) return;
     const checkedItems = shoppingList.filter((s) => s.checked);
     if (checkedItems.length === 0) return;
     const checkedIds = new Set(checkedItems.map((s) => s.id));
@@ -17932,7 +17936,7 @@ const priceStr = exportIncludePrice && safeItPrice > 0 ? `${safeItPrice.toLocale
   };
 
   const openBucketAddModal = (editItem = null, autoSearch = false) => {
-    if (!requireEditorAccess()) return;
+    if (!requireEditorAccess("bucket")) return;
     setBucketSearchResults([]);
     setBucketSearchError("");
     if (editItem) {
@@ -17978,7 +17982,7 @@ const priceStr = exportIncludePrice && safeItPrice > 0 ? `${safeItPrice.toLocale
 
   const handleSaveBucketItem = async (e) => {
     e?.preventDefault?.();
-    if (!requireEditorAccess()) return;
+    if (!requireEditorAccess("bucket")) return;
     const title = String(bucketForm.title || bucketSearchQuery || "").trim();
     if (!title) {
       showToast("장소 이름을 입력해 주세요.");
@@ -18038,7 +18042,7 @@ const priceStr = exportIncludePrice && safeItPrice > 0 ? `${safeItPrice.toLocale
   };
 
   const handleToggleBucketDone = async (item) => {
-    if (!requireEditorAccess()) return;
+    if (!requireEditorAccess("bucket")) return;
     const nextDone = !item.done;
     const updated = {
       ...item,
@@ -18057,7 +18061,7 @@ const priceStr = exportIncludePrice && safeItPrice > 0 ? `${safeItPrice.toLocale
   };
 
   const handleDeleteBucketItem = async (id) => {
-    if (!requireEditorAccess()) return;
+    if (!requireEditorAccess("bucket")) return;
     setBucketList((prev) => prev.filter((b) => b.id !== id));
     if (selectedBucketMapItem?.id === id) {
       setSelectedBucketMapItem(null);
@@ -19647,7 +19651,8 @@ ${item.memo}` : `${item.title} 다녀옴!`,
       condolence_cat: [{ list: condolenceList.filter((x) => x.category === targetName), col: "family_condolence_v1", field: "category" }],
       condolence_group: [{ list: condolenceList.filter((x) => x.group === targetName), col: "family_condolence_v1", field: "group" }],
       condolence_pay: [{ list: condolenceList.filter((x) => x.paymentMethod === targetName), col: "family_condolence_v1", field: "paymentMethod" }],
-      expense_categories: [{ list: expenses.filter((x) => x.category === targetName), col: "family_expenses_v4", field: "category" }]
+      expense_categories: [{ list: expenses.filter((x) => x.category === targetName), col: "family_expenses_v4", field: "category" }],
+      meal_source_types: [{ list: meals.filter((x) => x.sourceType === targetName), col: "family_meals_v4", field: "sourceType" }]
     };
     const specList = migrateSpecs[kind] || [];
     const totalAffected = specList.reduce((acc, sp) => acc + sp.list.length, 0);
@@ -21738,7 +21743,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
 
 
   const handleConfirmQuickLog = async () => {
-    if (!requireEditorAccess()) return;
+    if (!requireEditorAccess("daily")) return;
     if (!quickLogRecipe) return;
     const id = `m-${Date.now()}`;
     const payload = {
@@ -21883,6 +21888,10 @@ ${item.memo}` : `${item.title} 다녀옴!`,
       .sort((a, b) => a.diff - b.diff);
   }, [fridge]);
 
+  const urgentMatchedRecipes = useMemo(() => {
+    return matchUrgentFridgeRecipes(fridge, recipes, 2);
+  }, [fridge, recipes]);
+
 
   const pinnedNotices = useMemo(() => {
     return notices.filter((n) => n.pinned && !n.done);
@@ -21890,7 +21899,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
 
 
   const handleRestoreAllDeleted = async () => {
-    if (!requireEditorAccess()) return;
+    if (!isAdminUnlocked) { showToast("🔒 관리자 전용 복구 기능입니다."); setIsEditorUnlockModalOpen(true); return; }
     setDeletedIds([]);
     try { localStorage.removeItem("kim_family_deleted_ids"); } catch (e) {}
     if (user && db) {
@@ -21999,7 +22008,17 @@ ${item.memo}` : `${item.title} 다녀옴!`,
       !fridgeUseSheet &&
       !fridgeItemMoreSheet &&
       !cookedDetailSheet &&
-      !fridgeDupModalOpen
+      !fridgeDupModalOpen &&
+      !isManualExpenseOpen &&
+      !isGuideModalOpen &&
+      !categoryManageKind &&
+      !alarmSheetMode &&
+      !isCondolenceFormOpen &&
+      !isCondolenceExcelModalOpen &&
+      !isCondolencePinModalOpen &&
+      !isShoppingPhotoModalOpen &&
+      !zoomedRecipePhoto &&
+      !confirmDialog
     ) return;
     const onEsc = (e) => {
       if (e.key === "Escape") {
@@ -22060,6 +22079,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
         setIsHandoverModalOpen(false);
         setIsHomeDdayPickerOpen(false);
         setCategoryManageKind("");
+        setAlarmSheetMode("");
         setIsPrivateCalCsvModalOpen(false);
         setIsCondolenceFormOpen(false);
         setIsCondolenceExcelModalOpen(false);
@@ -24117,7 +24137,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
       <div className={`min-h-screen ${UI_TOKENS.ivoryBg} text-stone-800 max-w-md mx-auto flex items-center justify-center p-6 font-sans`}>
         <div className="bg-white rounded-3xl border border-stone-200 p-6 w-full text-center space-y-2 shadow-sm">
           <div className="text-2xl animate-pulse">🔐</div>
-          <div className="text-[15px] font-black text-stone-900">인증 상태 확인 중...</div>
+          <div className="text-[14px] font-black text-stone-900">인증 상태 확인 중...</div>
           <div className="text-[12.5px] text-stone-500">잠시만 기다려 주세요.</div>
         </div>
       </div>
@@ -24548,7 +24568,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
           <div className="bg-white rounded-2xl border border-stone-200 p-5 w-full text-center space-y-3 shadow-lg">
             <div className="text-3xl">👋</div>
             <div className="space-y-1">
-              <h2 className="text-[15px] font-black text-stone-900">탈퇴 처리된 계정입니다</h2>
+              <h2 className="text-[14px] font-black text-stone-900">탈퇴 처리된 계정입니다</h2>
               <p className="text-[12.5px] text-stone-500 leading-relaxed">
                 관리자에 의해 회원 탈퇴 처리되었습니다. 다시 이용하려면 계정 정리를 완료한 뒤 새로 가입해 주세요.
               </p>
@@ -27434,6 +27454,32 @@ time: "", location: "",
                       {dinnerMeal ? `저녁: ${dinnerMeal.menu}` : "AI 저녁 추천"}
                     </button>
                   </div>
+                  {canViewTab("recipes") && urgentMatchedRecipes.length > 0 && (
+                    <div className="pt-1 border-t border-stone-100 flex items-center gap-1 flex-wrap">
+                      <span className="text-[10.5px] font-extrabold text-[#35503C] whitespace-nowrap shrink-0">
+                        📖 D-2 요리:
+                      </span>
+                      {urgentMatchedRecipes.slice(0, 3).map((m) => (
+                        <button
+                          key={m.recipe.id}
+                          type="button"
+                          onClick={() => {
+                            setRecipeCatFilter("전체");
+                            setRecipeSearch(m.recipe.title);
+                            setActiveTab("recipes");
+                          }}
+                          title={`임박 재료(${m.matchedUrgentNames.join(", ")}) 활용 · 보유 ${m.matchedCount}/${m.totalCount}`}
+                          className={`h-5 px-1.5 rounded-md text-[10.5px] font-extrabold border whitespace-nowrap shrink-0 transition ${
+                            m.canMakeNow
+                              ? "bg-[#3F624D] text-white border-[#3F624D]"
+                              : "bg-[#EEF3EE] hover:bg-[#DCE7DD] text-[#35503C] border-[#C9D8CC]"
+                          }`}
+                        >
+                          {m.recipe.title} {m.canMakeNow ? "✓" : `${m.matchedCount}/${m.totalCount}`}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               );
             })()}
@@ -30059,7 +30105,7 @@ time: "", location: "",
                                         onClick={() => handleToggleScheduleDone(ev)}
                                         className={`px-2 py-0.5 rounded-lg text-[11px] font-extrabold border whitespace-nowrap shrink-0 ${
                                           ev.done
-                                            ? "bg-emerald-600 text-white border-emerald-600"
+                                            ? "bg-[#3F624D] text-white border-[#3F624D]"
                                             : "bg-white text-stone-600 border-stone-300"
                                         }`}
                                       >
@@ -32477,6 +32523,33 @@ time: "", location: "",
             </div>
           )}
 
+          {fridgeSectionMode !== "cooked" && canViewTab("recipes") && urgentMatchedRecipes.length > 0 && (
+            <div className="rounded-xl bg-[#EEF3EE]/75 border border-[#C9D8CC] px-3 py-2 flex items-center gap-1.5 flex-wrap">
+              <span className="text-[11px] font-extrabold text-[#35503C] whitespace-nowrap shrink-0">
+                📖 D-2 임박 레시피:
+              </span>
+              {urgentMatchedRecipes.slice(0, 3).map((m) => (
+                <button
+                  key={m.recipe.id}
+                  type="button"
+                  onClick={() => {
+                    setRecipeCatFilter("전체");
+                    setRecipeSearch(m.recipe.title);
+                    setActiveTab("recipes");
+                  }}
+                  title={`임박(${m.matchedUrgentNames.join(", ")}) 활용 · 보유 ${m.matchedCount}/${m.totalCount}`}
+                  className={`px-2 py-0.5 rounded-lg text-[11px] font-extrabold border whitespace-nowrap shrink-0 transition ${
+                    m.canMakeNow
+                      ? "bg-[#3F624D] text-white border-[#3F624D]"
+                      : "bg-white hover:bg-[#FAF8F3] text-[#35503C] border-[#C9D8CC]"
+                  }`}
+                >
+                  {m.recipe.title} {m.canMakeNow ? "✓ 바로가능" : `(${m.matchedCount}/${m.totalCount})`}
+                </button>
+              ))}
+            </div>
+          )}
+
           {/* 5. 재고 목록 (칸별 뷰 OR 통합 리스트 뷰) */}
           {fridgeViewMode === "visual" && fridgeSectionMode !== "cooked" ? (() => {
             const qFridge = debouncedFridgeSearch.trim().toLowerCase();
@@ -33239,7 +33312,7 @@ time: "", location: "",
             <button
               type="button"
               onClick={handleAddShopping}
-              className="w-full py-2.5 rounded-xl bg-stone-900 text-white text-[13.5px] font-extrabold"
+              className="w-full py-2.5 rounded-xl bg-[#3F624D] hover:bg-[#324F3E] text-white text-[13.5px] font-extrabold whitespace-nowrap"
             >
               + 장보기 체크리스트에 등록
             </button>
@@ -33652,7 +33725,7 @@ time: "", location: "",
                 });
                 setIsNoticeModalOpen(true);
               }}
-              className="px-3 py-1.5 rounded-xl bg-stone-900 text-white text-[12.5px] font-extrabold flex items-center gap-1 whitespace-nowrap shrink-0"
+              className="px-3 py-1.5 rounded-xl bg-[#3F624D] hover:bg-[#324F3E] text-white text-[12.5px] font-extrabold flex items-center gap-1 whitespace-nowrap shrink-0"
             >
                 <Plus className="w-3.5 h-3.5" /> 작성
               </button>
@@ -33944,7 +34017,7 @@ time: "", location: "",
                       onClick={() => handleToggleNoticeDone(n)}
                       className={`px-2 py-0.5 rounded-lg text-[11.5px] font-extrabold border whitespace-nowrap ${
                         n.done
-                          ? "bg-emerald-600 text-white border-emerald-600"
+                          ? "bg-[#3F624D] text-white border-[#3F624D]"
                           : "bg-white text-stone-600 border-stone-300"
                       }`}
                     >
@@ -35140,7 +35213,7 @@ time: "", location: "",
                             href={getGoogleMapUrl(sel)}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="px-2.5 py-1.5 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-[11px] font-extrabold whitespace-nowrap"
+                            className="px-2.5 py-1.5 rounded-xl bg-[#EEF3EE] hover:bg-[#DCE7DD] text-[#35503C] border border-[#C9D8CC] text-[11px] font-extrabold whitespace-nowrap shrink-0"
                           >
                             구글맵
                           </a>
@@ -35463,7 +35536,7 @@ time: "", location: "",
                       <button
                         type="button"
                         onClick={async () => {
-                          if (!requireEditorAccess()) return;
+                          if (!requireEditorAccess("bucket")) return;
                           if (!await askConfirm(`다녀온 버킷리스트 ${doneCount}건을 정리할까요?`)) return;
                           const doneIds = bucketList.filter((b) => b.done).map((b) => b.id);
                           setBucketList((prev) => prev.filter((b) => !b.done));
@@ -39473,7 +39546,7 @@ time: "", location: "",
                 <span className="font-bold text-amber-900">🔒 열람 잠금 중입니다.</span>
                 <button
                   type="button"
-                  onClick={() => requireEditorAccess()}
+                  onClick={() => requireEditorAccess("recipes")}
                   className="px-2.5 py-1 rounded-lg bg-amber-600 text-white font-extrabold shrink-0 whitespace-nowrap"
                 >
                   잠금 해제
@@ -39774,8 +39847,8 @@ time: "", location: "",
                       {validPhoto && (
                         <div
                           onClick={() => {
-                            if (!isEditorUnlocked) {
-                              requireEditorAccess();
+                            if (!canEditTab("recipes")) {
+                              requireEditorAccess("recipes");
                               return;
                             }
                             setZoomedRecipePhoto({ title: r.title, url: r.photoDataUrl });
@@ -41876,7 +41949,7 @@ time: "", location: "",
                   <button
                     type="button"
                     onClick={handleAddMedicalNote}
-                    className="w-full py-2.5 rounded-xl bg-stone-900 text-white text-[13.5px] font-extrabold"
+                    className="w-full py-2.5 rounded-xl bg-[#3F624D] hover:bg-[#324F3E] text-white text-[13.5px] font-extrabold whitespace-nowrap"
                   >
                     + 진료·체온 저장
                   </button>
@@ -45325,7 +45398,7 @@ time: "", location: "",
                     }}
                     className={`py-2 rounded-md text-[12.5px] font-bold transition ${
                       activeDetail.done
-                        ? "bg-emerald-600 text-white"
+                        ? "bg-[#3F624D] text-white"
                         : "bg-[#707070] hover:bg-[#828282] text-white"
                     }`}
                   >
@@ -46996,7 +47069,7 @@ time: "", location: "",
                               }}
                               className={`px-1.5 py-0.5 rounded-md text-[10px] font-extrabold border whitespace-nowrap transition ${
                                 isSel
-                                  ? "bg-emerald-600 text-white border-emerald-600"
+                                  ? "bg-[#3F624D] text-white border-[#3F624D]"
                                   : "bg-white hover:bg-stone-100 text-stone-600 border-stone-200"
                               }`}
                             >
@@ -47149,7 +47222,7 @@ time: "", location: "",
                   type="button"
                   disabled={isSavingReceipt}
                   onClick={async () => {
-                    if (!requireEditorAccess()) return;
+                    if (!requireEditorAccess("fridge")) return;
                     if (isSavingReceipt) return;
                     const validItems = scannedReceiptItems.filter((it) => String(it?.name || "").trim());
                     if (validItems.length === 0) {
@@ -47832,7 +47905,7 @@ time: "", location: "",
               <button
                 type="button"
                 onClick={handleSaveMeal}
-                className="flex-1 py-2.5 rounded-xl bg-stone-900 text-white text-[13.5px] font-extrabold whitespace-nowrap"
+                className="flex-1 py-2.5 rounded-xl bg-[#3F624D] hover:bg-[#324F3E] text-white text-[13.5px] font-extrabold whitespace-nowrap"
               >
                 저장하기
               </button>
@@ -58506,28 +58579,30 @@ time: "", location: "",
 
       {/* ← 🔍 검색 화면으로 복귀 칩 (검색어·필터·스크롤 유지) */}
       {globalSearchReturnReady && !isGlobalSearchOpen && globalSearchQuery && (
-        <button
-          type="button"
-          onClick={() => {
-            setIsGlobalSearchOpen(true);
-            setTimeout(() => {
-              if (globalSearchScrollRef.current && globalSearchSavedScrollTopRef.current > 0) {
-                globalSearchScrollRef.current.scrollTop = globalSearchSavedScrollTopRef.current;
-              }
-            }, 40);
-          }}
-          className="fixed top-12 right-3 z-[47] px-2.5 py-1 rounded-full bg-[#3F624D] text-white text-[11px] font-extrabold shadow-lg border border-white/20 flex items-center gap-1 whitespace-nowrap"
-        >
-          <span>← 🔍 검색</span>
-          <span
-            role="button"
-            tabIndex={0}
-            onClick={(e) => { e.stopPropagation(); setGlobalSearchReturnReady(false); }}
-            className="ml-0.5 opacity-80 hover:opacity-100"
+        <div className="fixed top-12 right-3 z-[47] pl-2.5 pr-1.5 py-1 rounded-full bg-[#3F624D] text-white text-[11px] font-extrabold shadow-lg border border-white/20 flex items-center gap-1 whitespace-nowrap">
+          <button
+            type="button"
+            onClick={() => {
+              setIsGlobalSearchOpen(true);
+              setTimeout(() => {
+                if (globalSearchScrollRef.current && globalSearchSavedScrollTopRef.current > 0) {
+                  globalSearchScrollRef.current.scrollTop = globalSearchSavedScrollTopRef.current;
+                }
+              }, 40);
+            }}
+            className="hover:opacity-90 whitespace-nowrap"
+          >
+            ← 🔍 검색
+          </button>
+          <button
+            type="button"
+            onClick={() => setGlobalSearchReturnReady(false)}
+            aria-label="검색 복귀 칩 닫기"
+            className="px-1 rounded-full opacity-80 hover:opacity-100"
           >
             ✕
-          </span>
-        </button>
+          </button>
+        </div>
       )}
 
       {/* ① 메뉴 통합검색 모달 */}
@@ -59576,7 +59651,7 @@ time: "", location: "",
                       if (useQ >= curQty) handleConsumeFridgeItem(target, false);
                       else handleAdjustQuantity(target, -useQ);
                     }}
-                    className="h-9 px-3 rounded-xl bg-stone-800 hover:bg-stone-900 text-white text-[12px] font-extrabold whitespace-nowrap shrink-0"
+                    className="h-9 px-3 rounded-xl bg-[#3F624D] hover:bg-[#324F3E] text-white text-[12px] font-extrabold whitespace-nowrap shrink-0"
                   >
                     차감
                   </button>

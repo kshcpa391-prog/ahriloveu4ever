@@ -1186,7 +1186,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v14.59";
+export const APP_CODE_VERSION = "v14.62";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1204,7 +1204,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-27 20:15";
+export const APP_BUILD_DATE = "2026-11-28 11:10";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1274,6 +1274,36 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v14.62",
+    version: "v14.62",
+    date: "2026-11-28",
+    title: "🛡️ 잔여 권한가드 19곳(관리자·육아·식단·버킷·레시피·영수증) 완전 교정 + 🎨 주요 저장·완료 버튼 세이지그린 일괄 통일 + 📘 가이드 최신화",
+    items: [
+      "🛡️ [권한 가드 19곳 전수 교정] ① 삭제 복구(restoreDeletedLogEntry)가 대상 컬렉션의 실제 탭 권한을 검사하도록 교정 ② 패치노트 추가/삭제·API 키 저장·JSON 복원·전체 복구 5곳을 관리자 전용(isAdminUnlocked) 가드로 강화 ③ 육아수첩 예방접종·성장·진료 8곳(baby), 빠른 식단기록(daily), 버킷 완료정리(bucket), 레시피 잠금/편집 2곳(recipes), 영수증 저장(fridge)에 명시적 탭 권한 키를 모두 연결했습니다.",
+      "🎨📘 [디자인·색상 통일 & 가이드 최신화] 일정/공지/장보기/퀵시트 저장·작성 버튼과 일정·공지·달력 완료 버튼을 앱 공통 세이지그린(#3F624D)으로 일괄 통일했고, 사용 가이드(홈·냉장고)에 D-2 임박 레시피 추천 및 1일~3달 소비기한 프리셋을 최신 반영했습니다. (과거 패치노트 499건 100% 보존)"
+    ]
+  },
+  {
+    id: "patch-v14.61",
+    version: "v14.61",
+    date: "2026-11-28",
+    title: "📖 냉장고 D-2 이하 임박 재료 ↔ 레시피북 자동 대조 추천 (홈 오후 브리핑 · 냉장고 상단 1탭 연계)",
+    items: [
+      "📖 [임박 재료 기반 레시피 자동 매칭] 냉장고 D-2 이하(경과·오늘·D-1·D-2) 임박 재료와 레시피북 재료를 실시간 자동 대조하는 matchUrgentFridgeRecipes()를 구현했습니다. 100% 보유(✓ 바로 가능) 레시피와 임박 재료 다수 활용 레시피를 우선 정렬합니다.",
+      "🌆❄️ [홈 오후 브리핑 · 냉장고 상단 즉시 노출] 홈 오후 브리핑 카드와 냉장고 상단 임박 요약 영역에 바로 만들 수 있는 레시피 칩(최대 3건 · 보유율/100% 표시)을 띄우고, 탭 시 해당 레시피북으로 즉시 이동해 바로 조리할 수 있도록 연결했습니다. (과거 패치노트 498건 100% 보존)"
+    ]
+  },
+  {
+    id: "patch-v14.60",
+    version: "v14.60",
+    date: "2026-11-28",
+    title: "🛡️ 교차메뉴 권한체크 36곳·ESC 모달 10종·레시피 동적기본값·식사구분 삭제이관 버그 수정 + 🎨 세이지그린·폰트 일괄 통일",
+    items: [
+      "🛡️ [권한·모달·데이터 정합성 버그 수정 5종] ① 다른 탭이나 홈에서 호출되는 교차 메뉴 핸들러 36곳(육아 원탭·레시피·장보기·냉장고·AI추천·버킷·식단스캔)이 현재 탭(activeTab)을 검사하던 문제를 정확한 대상 탭 키(baby/recipes/shopping/fridge/ai/bucket/daily)로 교정 ② 전역 ESC 닫기 조기 종료 조건에 누락돼 있던 모달 10종(직접지출·사용가이드·분류관리·알람시트·경조사 3종·사진입고·레시피확대·확인창)을 보강하고 alarmSheetMode 닫기 연결 ③ openNewRecipeModal 기본 분류·난이도를 사용자 맞춤 목록(recipeCategories[0]·recipeDifficulties[0])으로 동적화 ④ 식사 구분(meal_source_types) 삭제 시 기존 식단(family_meals_v4.sourceType)을 200건 분할 배치로 안전 이관하도록 보강 ⑤ 크롭 드래그 touchcancel 클린업 추가 및 통합검색 복귀 칩 중첩 버튼 구조 수정",
+      "🎨 [디자인·색상·폰트 통일] 일정 D+경과일(bg-emerald-700)·영수증 스캔 소비기한(bg-emerald-600)·버킷 구글맵(bg-sky-600) 버튼을 앱 공통 세이지그린(#3F624D / #EEF3EE) 톤으로 통일하고, 화면 자동 복구·인증 확인·탈퇴 화면의 15px 제목을 표준 14px로 정돈했습니다. (과거 패치노트 497건 100% 보존)"
+    ]
+  },
   {
     id: "patch-v14.59",
     version: "v14.59",
@@ -7606,7 +7636,7 @@ export const APP_FEATURE_GUIDES = [
     steps: [
       "상단 유틸 바 & 통합검색(🔍): 어느 메뉴에서나 상단 🔍 버튼으로 식단·일정·루틴·냉장고·만든음식·레시피·공유노트·육아 기록을 초성·키워드로 즉시 찾고 돌아올 수 있어요.",
       "상단 가족사진·미니 D-Day: 사진을 누르면 교체·위치·문구 편집이 가능하고, D-Day 설정에서 원하는 기념일·생후일을 고정·순서변경할 수 있어요.",
-      "시간대별 브리핑: 오전·오후·밤에 맞춰 날씨·일정·임박 재료를 보여주며, [📋 브리핑]으로 카톡 공유용 요약을 1탭 복사해요.",
+      "시간대별 브리핑: 오전·오후·밤에 맞춰 날씨·일정·임박 재료와 D-2 임박 재료로 바로 만들 수 있는 레시피를 보여주며, [📋 브리핑]으로 카톡 요약을 1탭 복사해요.",
       "오늘의 행동 피드: 3일 내 일정·지금 루틴·남은 할 일을 한 카드에서 보고 체크·복사·추가할 수 있어요.",
       "시율 실시간 케어: 마지막 기저귀·수유·수면 경과를 보고 하단 버튼(기저귀 짧게=소변 / 0.5초 길게=대변)으로 1탭 기록해요.",
       "우측 하단 (+) 전체 메뉴: 식단·살림, 일정·생활, 육아·가족, 아기꿈나라로 정리된 바텀시트에서 원하는 기능으로 바로 이동해요."
@@ -7668,7 +7698,7 @@ export const APP_FEATURE_GUIDES = [
     steps: [
       "상단 [전체 / 🥬 식재료 / 🍲 만든음식] 탭으로 원재료와 소분 반찬을 분리 관리하고, 📋 리스트 뷰와 🧊 칸별 뷰를 전환해 볼 수 있어요.",
       "칸별 뷰에서 재료 칩을 길게 눌러 드래그하거나 [☑️ 다중 이동]으로 여러 재료를 한 번에 다른 칸으로 옮길 수 있어요.",
-      "재료 카드에서 [- / +], [🌗 반만], [다먹음], [+장보기], [🗑️ 폐기]를 처리하고, 소비기한은 [1일·3일·1주·한달] 버튼으로 빠르게 맞춰요.",
+      "상단 [📖 D-2 임박 레시피] 바에서 임박 재료로 바로 만들 수 있는 레시피를 확인하고, 재료 카드에서 [- / +], [🌗 반만], [다먹음], [+장보기], [🗑️ 폐기]와 소비기한 [1일·3일·1주·1달·3달]을 빠르게 처리해요.",
       "[🧾 영수증 AI 스캔]에서 카메라로 바로 촬영하거나 앨범 이미지를 올려 품목·수량·금액·보관위치를 자동 분석하고 일괄 입고·식비 기록까지 처리해요."
     ],
     tips: "소비기한 D-3 이하 임박 재료를 버리지 않고 '다먹음' 처리하면 월간 식비 가계부의 [임박 재료 구출 저금통]에 아낀 금액이 누적돼요."
@@ -8412,4 +8442,89 @@ export const groupDuplicateFridgeItems = (fridgeList) => {
     }
   }
   return groups.sort((a, b) => b.items.length - a.items.length || a.name.localeCompare(b.name, "ko"));
+};
+
+export const matchUrgentFridgeRecipes = (fridgeList = [], recipesList = [], maxDiffDays = 2) => {
+  const activeFridge = (Array.isArray(fridgeList) ? fridgeList : []).filter(
+    (it) => it && Number(it.quantity ?? 1) > 0 && String(it.name || "").trim()
+  );
+  if (activeFridge.length === 0 || !Array.isArray(recipesList) || recipesList.length === 0) return [];
+
+  const fridgeEntries = activeFridge.map((it) => {
+    const raw = String(it.name || "").trim().toLowerCase();
+    const norm = normalizeIngredientName(it.name);
+    const diff = it.expiryDate ? getDaysDiff(it.expiryDate) : 999;
+    return {
+      item: it,
+      raw,
+      norm: norm || raw,
+      diff,
+      isUrgent: Boolean(it.expiryDate) && diff <= maxDiffDays
+    };
+  });
+  const urgentEntries = fridgeEntries.filter((e) => e.isUrgent);
+  if (urgentEntries.length === 0) return [];
+
+  const matchesToken = (entry, ingRaw, ingNorm) => {
+    if (!entry.raw && !entry.norm) return false;
+    if (ingNorm && entry.norm && (entry.norm === ingNorm || entry.norm.includes(ingNorm) || ingNorm.includes(entry.norm))) {
+      return true;
+    }
+    return Boolean(ingRaw && entry.raw && (entry.raw.includes(ingRaw) || ingRaw.includes(entry.raw)));
+  };
+
+  const results = [];
+  for (const recipe of recipesList) {
+    if (!recipe || !recipe.title) continue;
+    const ingTokens = String(recipe.ingredientsText || "")
+      .split(/[+,\n]+/)
+      .map((s) => parseRecipeIngredientToken(s).name)
+      .filter(Boolean);
+    if (ingTokens.length === 0) continue;
+
+    const matchedUrgentNames = [];
+    const missingNames = [];
+    let matchedCount = 0;
+    let minUrgentDiff = 999;
+
+    for (const tok of ingTokens) {
+      const ingRaw = tok.toLowerCase().trim();
+      const ingNorm = normalizeIngredientName(tok) || ingRaw;
+      const urgentHit = urgentEntries.find((e) => matchesToken(e, ingRaw, ingNorm));
+      const anyHit = urgentHit || fridgeEntries.find((e) => matchesToken(e, ingRaw, ingNorm));
+      if (anyHit) {
+        matchedCount += 1;
+        if (urgentHit) {
+          if (!matchedUrgentNames.includes(urgentHit.item.name)) matchedUrgentNames.push(urgentHit.item.name);
+          if (urgentHit.diff < minUrgentDiff) minUrgentDiff = urgentHit.diff;
+        }
+      } else {
+        missingNames.push(tok);
+      }
+    }
+
+    if (matchedUrgentNames.length === 0) continue;
+    const totalCount = ingTokens.length;
+    const canMakeNow = missingNames.length === 0;
+    const matchRatio = matchedCount / totalCount;
+    results.push({
+      recipe,
+      matchedUrgentNames,
+      matchedCount,
+      totalCount,
+      missingNames,
+      canMakeNow,
+      matchRatio,
+      minUrgentDiff
+    });
+  }
+
+  return results.sort((a, b) => {
+    if (a.canMakeNow !== b.canMakeNow) return a.canMakeNow ? -1 : 1;
+    if (b.matchedUrgentNames.length !== a.matchedUrgentNames.length) {
+      return b.matchedUrgentNames.length - a.matchedUrgentNames.length;
+    }
+    if (Math.abs(b.matchRatio - a.matchRatio) > 0.01) return b.matchRatio - a.matchRatio;
+    return a.minUrgentDiff - b.minUrgentDiff;
+  });
 };
