@@ -37005,9 +37005,7 @@ time: "", location: "",
                           <div className="flex items-center gap-1 shrink-0">
                             <button
                               type="button"
-                              onClick={() => copyTextSafe(`${n.title}${n.content ? `
-${n.content}` : ""}${n.url ? `
-${n.url}` : ""}`, "📋 메모를 복사했습니다!")}
+                              onClick={() => copyTextSafe(`${n.title}${n.content ? `\n${n.content}` : ""}${n.url ? `\n${n.url}` : ""}`, "📋 메모를 복사했습니다!")}
                               className="px-2 py-1 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 text-[10.5px] font-extrabold whitespace-nowrap"
                             >
                               📋
@@ -37028,8 +37026,7 @@ ${n.url}` : ""}`, "📋 메모를 복사했습니다!")}
                                     isAnnual: false,
                                     showDday: false,
                                     hasOriginYear: false,
-                                    memo: [n.content, n.url].filter(Boolean).join("
-"),
+                                    memo: [n.content, n.url].filter(Boolean).join("\n"),
                                     attachments: []
                                   });
                                   setScheduleModalIsPrivate(true);
@@ -37701,8 +37698,7 @@ ${n.url}` : ""}`, "📋 메모를 복사했습니다!")}
                                 latestLog.bodyFatPct ? `• 체지방률: ${latestLog.bodyFatPct}%` : "",
                                 latestLog.skeletalMuscle ? `• 골격근량: ${latestLog.skeletalMuscle}kg` : "",
                                 latestLog.bmi ? `• BMI: ${latestLog.bmi}` : ""
-                              ].filter(Boolean).join("
-");
+                              ].filter(Boolean).join("\n");
                               copyTextSafe(lines, "📋 체성분 요약을 복사했습니다!");
                             }}
                             className="px-2.5 py-1 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 text-[11px] font-extrabold whitespace-nowrap"
@@ -37725,8 +37721,7 @@ ${n.url}` : ""}`, "📋 메모를 복사했습니다!")}
                                 r.visceralFat ?? "",
                                 r.water ?? ""
                               ].map((c) => `"${String(c).replace(/"/g, '""')}"`).join(","));
-                              const csvOut = "﻿" + [header.join(","), ...rows].join("
-");
+                              const csvOut = "\uFEFF" + [header.join(","), ...rows].join("\n");
                               const blob = new Blob([csvOut], { type: "text/csv;charset=utf-8;" });
                               const url = URL.createObjectURL(blob);
                               const a = document.createElement("a");

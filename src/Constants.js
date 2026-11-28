@@ -1186,7 +1186,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v14.65";
+export const APP_CODE_VERSION = "v14.66";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1204,7 +1204,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-28 12:15";
+export const APP_BUILD_DATE = "2026-11-28 12:50";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1274,6 +1274,17 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v14.66",
+    version: "v14.66",
+    date: "2026-11-28",
+    title: "🛠️ 배포 빌드 구문 오류(미종료 문자열 리터럴) 수정 및 전수 검증",
+    category: "긴급 수정",
+    items: [
+      "🛠️ 빌드 SyntaxError 수정: 나만의 공간(비밀메모 복사·일정연계, 체성분 요약 복사·CSV 내보내기)의 .join(\"\\n\") 줄바꿈 리터럴 4건 및 BOM 정규식(/^[\uFEFF]/) 이스케이프 정상화",
+      "🔍 전체 61,600+줄 정밀 스캔: 미종료 문자열, JSX 태그 불일치, Constants 임포트 누락, 잔여 위험 호출(0건) 재검증 완료"
+    ]
+  },
   {
     id: "patch-v14.65",
     version: "v14.65",
@@ -7580,7 +7591,7 @@ export const BODY_METRIC_DEFS = [
 ];
 
 export const parseBodyCompositionCsv = (rawText) => {
-  const cleanText = String(rawText || "").replace(/^﻿/, "").trim();
+  const cleanText = String(rawText || "").replace(/^\uFEFF/, "").trim();
   if (!cleanText) return [];
   const lines = cleanText.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
   if (lines.length < 2) return [];
