@@ -217,6 +217,12 @@ import {
   findDuplicateFridgeCandidates,
   groupDuplicateFridgeItems,
   matchUrgentFridgeRecipes,
+  DEFAULT_CAR_RECORD_TYPES,
+  CAR_PARKING_FLOOR_PRESETS,
+  DEFAULT_SECRET_NOTE_CATS,
+  DEFAULT_SELF_CARE_ITEMS,
+  BODY_METRIC_DEFS,
+  parseBodyCompositionCsv,
   normalizeSearchText,
   stripHtmlToPlainText,
   scoreSearchMatch,
@@ -3867,6 +3873,57 @@ function MainApp() {
   const [adminNoteAttachments, setAdminNoteAttachments] = useState([]);
   const [adminNoteSending, setAdminNoteSending] = useState(false);
   const [showAdminInboxModal, setShowAdminInboxModal] = useState(false);
+
+  useEffect(() => {
+    const p = carNotebook?.parking || {};
+    setCarParkingDraft({
+      floor: p.floor || "",
+      spot: p.spot || "",
+      memo: p.memo || "",
+      photoUrl: p.photoUrl || ""
+    });
+  }, [carNotebook?.parking?.floor, carNotebook?.parking?.spot, carNotebook?.parking?.memo, carNotebook?.parking?.photoUrl]);
+
+  const saveCarNotebookToCloud = async (nextCar, toastMsg = "") => {
+    setCarNotebook(nextCar);
+    try { localStorage.setItem("kim_car_notebook_v1", JSON.stringify(nextCar)); } catch (e) {}
+    if (user && db) {
+      beginWrite();
+      try {
+        await setDoc(
+          getDocRef("family_meta_v4", "car_notebook_v1"),
+          { ...nextCar, updatedAtMs: Date.now() },
+          { merge: true }
+        );
+      } catch (e) {
+        setSyncErrorMsg(e?.message || "우리차수첩 동기화 오류");
+        showToast("⚠️ 우리차수첩 저장에 실패했습니다.");
+      } finally {
+        endWrite();
+      }
+    }
+    if (toastMsg) showToast(toastMsg);
+  };
+
+  const savePersonalDataToCloud = async (patchObj, toastMsg = "") => {
+    if (!user || !db || user.isAnonymous) {
+      showToast("⚠️ 로그인 후 개인 공간에 저장할 수 있습니다.");
+      return false;
+    }
+    beginWrite();
+    try {
+      await setDoc(doc(db, "users", user.uid), { ...patchObj, updatedAtMs: Date.now() }, { merge: true });
+      if (toastMsg) showToast(toastMsg);
+      return true;
+    } catch (e) {
+      setSyncErrorMsg(e?.message || "개인 데이터 저장 오류");
+      showToast("⚠️ 개인 공간 저장에 실패했습니다.");
+      return false;
+    } finally {
+      endWrite();
+    }
+  };
+
   const [selectedPermRoleLabel, setSelectedPermRoleLabel] = useState("");
   const [editingRoleLabelMode, setEditingRoleLabelMode] = useState(false);
   const [editingRoleLabelDraft, setEditingRoleLabelDraft] = useState("");
@@ -5484,7 +5541,74 @@ function MainApp() {
   const [editingCategoryDraft, setEditingCategoryDraft] = useState("");
 
   const [houseItems, setHouseItems] = useState([]);
-  const [houseSubTab, setHouseSubTab] = useState("storage"); // storage | warranty | medicine
+  const [houseSubTab, setHouseSubTab] = useState("storage"); // storage | warranty | medicine | car
+  const [carNotebook, setCarNotebook] = useState(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem("kim_car_notebook_v1") || "null");
+      if (saved && typeof saved === "object") {
+        return {
+          parking: { spot: "", floor: "", memo: "", photoUrl: "", updatedAtMs: 0, updatedBy: "", ...(saved.parking || {}) },
+          records: Array.isArray(saved.records) ? saved.records : []
+        };
+      }
+    } catch (e) {}
+    return { parking: { spot: "", floor: "", memo: "", photoUrl: "", updatedAtMs: 0, updatedBy: "" }, records: [] };
+  });
+  const [carParkingDraft, setCarParkingDraft] = useState(() => ({
+    floor: "",
+    spot: "",
+    memo: "",
+    photoUrl: ""
+  }));
+  const [isCarRecordFormOpen, setIsCarRecordFormOpen] = useState(false);
+  const [carRecordForm, setCarRecordForm] = useState(() => ({
+    type: DEFAULT_CAR_RECORD_TYPES[0],
+    title: "",
+    date: getTodayStr(),
+    nextDate: "",
+    mileage: "",
+    cost: "",
+    memo: ""
+  }));
+  const [personalSubTab, setPersonalSubTab] = useState("secret"); // secret | care | body
+  const [personalBodyLogs, setPersonalBodyLogs] = useState([]);
+  const [personalBodyGoal, setPersonalBodyGoal] = useState({ weight: "", bodyFatPct: "" });
+  const [bodyMetricId, setBodyMetricId] = useState("weight");
+  const [bodyRangeDays, setBodyRangeDays] = useState("all");
+  const [bodySelectedIdx, setBodySelectedIdx] = useState(null);
+  const [isBodyManualOpen, setIsBodyManualOpen] = useState(false);
+  const [bodyManualForm, setBodyManualForm] = useState(() => ({
+    date: getTodayStr(),
+    weight: "",
+    bodyFatPct: "",
+    skeletalMuscle: ""
+  }));
+  const [showAllBodyRows, setShowAllBodyRows] = useState(false);
+  const [personalSecretNotes, setPersonalSecretNotes] = useState([]);
+  const [personalSecretCats, setPersonalSecretCats] = useState(() => [...DEFAULT_SECRET_NOTE_CATS]);
+  const [secretNoteSearch, setSecretNoteSearch] = useState("");
+  const [secretNoteCatFilter, setSecretNoteCatFilter] = useState("전체");
+  const [isSecretNoteFormOpen, setIsSecretNoteFormOpen] = useState(false);
+  const [editingSecretNoteId, setEditingSecretNoteId] = useState(null);
+  const [secretNoteForm, setSecretNoteForm] = useState(() => ({
+    title: "",
+    category: DEFAULT_SECRET_NOTE_CATS[0],
+    url: "",
+    content: "",
+    pinned: false
+  }));
+  const [newSecretCatInput, setNewSecretCatInput] = useState("");
+  const [personalSelfCare, setPersonalSelfCare] = useState(() => ({
+    items: DEFAULT_SELF_CARE_ITEMS.map((x) => ({ ...x })),
+    waterDate: "",
+    waterCount: 0,
+    waterGoal: 8,
+    conditionDate: "",
+    conditionMemo: ""
+  }));
+  const [newSelfCareLabel, setNewSelfCareLabel] = useState("");
+  const [newSelfCareType, setNewSelfCareType] = useState("영양제");
+  const [newSelfCareTime, setNewSelfCareTime] = useState("아침");
   const [houseSearch, setHouseSearch] = useState("");
   const [houseFilter, setHouseFilter] = useState("전체");
   const [isHouseModalOpen, setIsHouseModalOpen] = useState(false);
@@ -9184,6 +9308,18 @@ function MainApp() {
   useEffect(() => {
     if (!user || !db || user.isAnonymous) {
       setUserProfile(null);
+      setPersonalSecretNotes([]);
+      setPersonalSecretCats([...DEFAULT_SECRET_NOTE_CATS]);
+      setPersonalSelfCare({
+        items: DEFAULT_SELF_CARE_ITEMS.map((x) => ({ ...x })),
+        waterDate: "",
+        waterCount: 0,
+        waterGoal: 8,
+        conditionDate: "",
+        conditionMemo: ""
+      });
+      setPersonalBodyLogs([]);
+      setPersonalBodyGoal({ weight: "", bodyFatPct: "" });
       setProfileLoading(false);
       return;
     }
@@ -9258,6 +9394,39 @@ function MainApp() {
           const cleanRecent = data.recentGlobalSearches.map((x) => String(x || "").trim()).filter(Boolean).slice(0, 10);
           setRecentGlobalSearches(cleanRecent);
           try { localStorage.setItem(`kim_global_search_recent_v1_${user.uid}`, JSON.stringify(cleanRecent)); } catch (e) {}
+        }
+        if (Array.isArray(data.personalSecretNotes)) {
+          setPersonalSecretNotes(data.personalSecretNotes);
+        } else {
+          setPersonalSecretNotes([]);
+        }
+        if (Array.isArray(data.personalSecretCats) && data.personalSecretCats.length > 0) {
+          setPersonalSecretCats(data.personalSecretCats);
+        } else {
+          setPersonalSecretCats([...DEFAULT_SECRET_NOTE_CATS]);
+        }
+        if (data.personalSelfCare && typeof data.personalSelfCare === "object") {
+          setPersonalSelfCare({
+            items: Array.isArray(data.personalSelfCare.items) ? data.personalSelfCare.items : DEFAULT_SELF_CARE_ITEMS.map((x) => ({ ...x })),
+            waterDate: data.personalSelfCare.waterDate || "",
+            waterCount: Number(data.personalSelfCare.waterCount) || 0,
+            waterGoal: Math.max(1, Number(data.personalSelfCare.waterGoal) || 8),
+            conditionDate: data.personalSelfCare.conditionDate || "",
+            conditionMemo: data.personalSelfCare.conditionMemo || ""
+          });
+        }
+        if (Array.isArray(data.personalBodyLogs)) {
+          setPersonalBodyLogs([...data.personalBodyLogs].sort((a, b) => String(a.measuredAt || "").localeCompare(String(b.measuredAt || ""))));
+        } else {
+          setPersonalBodyLogs([]);
+        }
+        if (data.personalBodyGoal && typeof data.personalBodyGoal === "object") {
+          setPersonalBodyGoal({
+            weight: data.personalBodyGoal.weight ?? "",
+            bodyFatPct: data.personalBodyGoal.bodyFatPct ?? ""
+          });
+        } else {
+          setPersonalBodyGoal({ weight: "", bodyFatPct: "" });
         }
         if (data.role === "admin" || data.role === "helper") {
           setAccessRole(data.role);
@@ -10133,6 +10302,23 @@ function MainApp() {
 
     unsubscribers.push(
       onSnapshot(
+        getDocRef("family_meta_v4", "car_notebook_v1"),
+        (snap) => {
+          if (!snap.exists()) return;
+          const d = snap.data() || {};
+          const next = {
+            parking: { spot: "", floor: "", memo: "", photoUrl: "", updatedAtMs: 0, updatedBy: "", ...(d.parking || {}) },
+            records: Array.isArray(d.records) ? d.records : []
+          };
+          setCarNotebook(next);
+          try { localStorage.setItem("kim_car_notebook_v1", JSON.stringify(next)); } catch (e) {}
+        },
+        () => {}
+      )
+    );
+
+    unsubscribers.push(
+      onSnapshot(
         getDocRef("family_meta_v4", "timer_alarms_v1"),
         (snap) => {
           if (!snap.exists()) return;
@@ -10879,6 +11065,7 @@ function MainApp() {
         mealFavorites: { combos: favoriteMealCombos, singles: favoriteSingleMenus },
         babyDreamLinks,
         houseStorageRooms,
+        carNotebook,
         customCategories,
         expandedPageIds,
         monthlyBudget,
@@ -11042,7 +11229,7 @@ function MainApp() {
           const fullPreRestoreData = {
             meals, fridge, expenses, shoppingList, notices, schedules,
             babyChecks, babyGrowthLogs, babyMedicalNotes, familyRoutines,
-            bucketList, houseItems, customCategories, houseStorageRooms,
+            bucketList, houseItems, carNotebook, customCategories, houseStorageRooms,
             favoriteSingleMenus, favoriteMealCombos, handoverProfile,
             babyDreamLinks, monthlyBudget,
             cookedBatches, cookedPortions, cookedLogs
@@ -11527,6 +11714,15 @@ function MainApp() {
         }
         if (Array.isArray(payload.houseStorageRooms) && payload.houseStorageRooms.length > 0) {
           enqueueWriteTask("family_meta_v4", "house_rooms_v1", { rooms: payload.houseStorageRooms, updatedAtMs: Date.now() }, true);
+        }
+        if (payload.carNotebook && typeof payload.carNotebook === "object") {
+          const cleanCar = {
+            parking: { spot: "", floor: "", memo: "", photoUrl: "", updatedAtMs: 0, updatedBy: "", ...(payload.carNotebook.parking || {}) },
+            records: Array.isArray(payload.carNotebook.records) ? payload.carNotebook.records : []
+          };
+          setCarNotebook(cleanCar);
+          try { localStorage.setItem("kim_car_notebook_v1", JSON.stringify(cleanCar)); } catch (e) {}
+          enqueueWriteTask("family_meta_v4", "car_notebook_v1", { ...cleanCar, updatedAtMs: Date.now() }, true);
         }
         if (Array.isArray(payload.cookedBatches)) {
           payload.cookedBatches.forEach((b) => {
@@ -23756,6 +23952,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
       recipes: "레시피",
       baby: "육아",
       house: "살림수첩",
+      personal: "나만의 공간",
       alarm: "모닝콜·알람",
       condolence: "경조사비"
     };
@@ -25154,6 +25351,7 @@ ${item.memo}` : `${item.title} 다녀옴!`,
               recipes: "보글보글 가족 레시피북 📖",
               bucket: "설레는 가족 버킷리스트 🌟",
               house: "든든한 우리집 살림수첩 🏠",
+              personal: "나만의 공간 👤",
               alarm: "상쾌한 모닝콜 · 알람 ⏰",
               pages: "공유노트 🗂️",
               ai: "똑똑한 AI 식단·요리 ✨",
@@ -27791,7 +27989,7 @@ time: "", location: "",
                           <span className="px-1.5 py-0.5 rounded bg-stone-900 text-white text-[10.5px] font-black whitespace-nowrap shrink-0">조회일</span>
                         )}
                         {isTodayRow && (
-                          <span className="px-1.5 py-0.5 rounded bg-emerald-600 text-white text-[10.5px] font-black whitespace-nowrap shrink-0">오늘</span>
+                          <span className="px-1.5 py-0.5 rounded bg-[#3F624D] text-white text-[10.5px] font-black whitespace-nowrap shrink-0">오늘</span>
                         )}
                       </span>
                       <div className="flex items-center gap-1 shrink-0">
@@ -30396,7 +30594,7 @@ time: "", location: "",
                                     }}
                                     className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${
                                       ev.done
-                                        ? "bg-emerald-600 border-emerald-600 text-white"
+                                        ? "bg-[#3F624D] border-[#3F624D] text-white"
                                         : "border-stone-300 bg-white"
                                     }`}
                                   >
@@ -31176,7 +31374,7 @@ time: "", location: "",
                                           <span
                                             className={`inline-flex items-center justify-center w-4 h-4 rounded-full border text-[10.5px] font-black shrink-0 ${
                                               sDone
-                                                ? "bg-emerald-600 border-emerald-600 text-white"
+                                                ? "bg-[#3F624D] border-[#3F624D] text-white"
                                                 : "border-stone-400 text-stone-700 bg-white"
                                             }`}
                                           >
@@ -33566,7 +33764,7 @@ time: "", location: "",
                   <div
                     className={`w-5 h-5 rounded-lg border flex items-center justify-center shrink-0 ${
                       item.checked
-                        ? "bg-emerald-600 border-emerald-600 text-white"
+                        ? "bg-[#3F624D] border-[#3F624D] text-white"
                         : "border-stone-300 bg-white"
                     }`}
                   >
@@ -35608,13 +35806,14 @@ time: "", location: "",
 
         return (
           <div className="p-4 space-y-3.5">
-            {/* 상단 3분할 서브탭 + 등록 버튼 */}
+            {/* 상단 4분할 서브탭 + 등록 버튼 */}
             <div className="flex items-center gap-1.5">
-              <div className="flex-1 grid grid-cols-3 gap-1 bg-stone-200/80 p-1 rounded-2xl">
+              <div className="flex-1 grid grid-cols-4 gap-1 bg-stone-200/80 p-1 rounded-2xl min-w-0">
                 {[
                   { id: "storage", label: `🔎 수납(${storageCount})` },
                   { id: "warranty", label: `🛠️ 보증(${warrantyCount})` },
-                  { id: "medicine", label: `💊 상비약(${medicineCount})` }
+                  { id: "medicine", label: `💊 상비약(${medicineCount})` },
+                  { id: "car", label: `🚗 우리차` }
                 ].map((st) => (
                   <button
                     key={st.id}
@@ -35623,7 +35822,7 @@ time: "", location: "",
                       setHouseSubTab(st.id);
                       setHouseFilter("전체");
                     }}
-                    className={`py-1.5 px-1 rounded-xl text-[11.5px] font-extrabold whitespace-nowrap transition ${
+                    className={`py-1.5 px-0.5 rounded-xl text-[11px] font-extrabold whitespace-nowrap truncate transition ${
                       houseSubTab === st.id
                         ? "bg-white text-stone-900 shadow-sm"
                         : "text-stone-600 hover:text-stone-900"
@@ -35633,7 +35832,7 @@ time: "", location: "",
                   </button>
                 ))}
               </div>
-              {visibleHouseItems.length > 0 && (
+              {houseSubTab !== "car" && visibleHouseItems.length > 0 && (
                 <button
                   type="button"
                   onClick={async () => {
@@ -35671,17 +35870,349 @@ time: "", location: "",
                   🤝
                 </button>
               )}
-              {canEditTab("house") && (
+              {houseSubTab !== "car" && canEditTab("house") && (
                 <button
                   type="button"
                   onClick={() => openHouseModal(houseSubTab)}
-                  className="px-2.5 py-2 rounded-2xl bg-stone-900 hover:bg-stone-800 text-white text-[12px] font-extrabold whitespace-nowrap shrink-0 flex items-center gap-0.5"
+                  className="px-2.5 py-2 rounded-2xl bg-[#3F624D] hover:bg-[#324F3E] text-white text-[12px] font-extrabold whitespace-nowrap shrink-0 flex items-center gap-0.5"
                 >
                   <Plus className="w-3.5 h-3.5" /> 추가
                 </button>
               )}
             </div>
 
+            {houseSubTab === "car" ? (() => {
+              const curPark = carNotebook?.parking || {};
+              const carRecords = Array.isArray(carNotebook?.records) ? carNotebook.records : [];
+              const hasParked = Boolean(curPark.floor || curPark.spot || curPark.photoUrl || curPark.memo);
+              return (
+                <div className="space-y-3">
+                  {/* 🚗 주차 위치 1초 기록 카드 */}
+                  <div className="bg-white rounded-2xl border border-stone-200 p-3.5 space-y-2.5 shadow-sm">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <span className="text-[13.5px] font-black text-stone-900">🚗 현재 주차 위치</span>
+                        {hasParked && curPark.updatedAtMs > 0 && (
+                          <span className="text-[10.5px] font-bold text-stone-400 truncate">
+                            {curPark.updatedBy ? `${curPark.updatedBy} · ` : ""}{formatActivityTime(curPark.updatedAtMs)}
+                          </span>
+                        )}
+                      </div>
+                      {hasParked && (
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => copyTextSafe(
+                              `🚗 주차 위치: ${[curPark.floor, curPark.spot].filter(Boolean).join(" ")}${curPark.memo ? `
+메모: ${curPark.memo}` : ""}`,
+                              "📋 주차 위치를 복사했습니다!"
+                            )}
+                            className="px-2 py-1 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 text-[11px] font-extrabold whitespace-nowrap"
+                          >
+                            📋 복사
+                          </button>
+                          {canEditTab("house") && (
+                            <button
+                              type="button"
+                              onClick={() => saveCarNotebookToCloud({ ...carNotebook, parking: { spot: "", floor: "", memo: "", photoUrl: "", updatedAtMs: 0, updatedBy: "" } }, "🧹 주차 위치를 초기화했습니다.")}
+                              className="px-2 py-1 rounded-lg bg-stone-100 hover:bg-rose-50 text-stone-500 hover:text-rose-600 text-[11px] font-extrabold whitespace-nowrap"
+                            >
+                              초기화
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    {hasParked && (
+                      <div className="p-2.5 rounded-xl bg-[#EEF3EE]/75 border border-[#C9D8CC] flex items-center justify-between gap-2.5">
+                        <div className="min-w-0 flex-1 space-y-0.5">
+                          <div className="text-[14px] font-black text-[#2F523E] break-words">
+                            {[curPark.floor, curPark.spot].filter(Boolean).join(" · ") || "위치 메모"}
+                          </div>
+                          {curPark.memo && <div className="text-[11.5px] font-semibold text-stone-600 break-words">{curPark.memo}</div>}
+                        </div>
+                        {curPark.photoUrl && (
+                          <img
+                            src={curPark.photoUrl}
+                            alt="주차 위치"
+                            onClick={() => setZoomedRecipePhoto({ title: "주차 위치", url: curPark.photoUrl })}
+                            className="w-14 h-14 rounded-xl object-cover border border-[#C9D8CC] shrink-0 cursor-pointer"
+                          />
+                        )}
+                      </div>
+                    )}
+
+                    {canEditTab("house") && (
+                      <div className="space-y-2 pt-1">
+                        <div className="flex items-center gap-1 flex-wrap">
+                          {CAR_PARKING_FLOOR_PRESETS.map((fl) => (
+                            <button
+                              key={fl}
+                              type="button"
+                              onClick={() => setCarParkingDraft((p) => ({ ...p, floor: p.floor === fl ? "" : fl }))}
+                              className={`px-2.5 py-1 rounded-lg text-[11px] font-extrabold border whitespace-nowrap transition ${
+                                carParkingDraft.floor === fl
+                                  ? "bg-[#3F624D] text-white border-[#3F624D]"
+                                  : "bg-stone-50 text-stone-600 border-stone-200 hover:bg-stone-100"
+                              }`}
+                            >
+                              {fl}
+                            </button>
+                          ))}
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <input
+                            type="text"
+                            value={carParkingDraft.spot}
+                            onChange={(e) => setCarParkingDraft((p) => ({ ...p, spot: e.target.value }))}
+                            placeholder="기둥·구역 (예: 14번 기둥, 엘리베이터 앞)"
+                            className="flex-1 min-w-0 px-3 py-2 rounded-xl border border-stone-200 bg-[#FAF8F3] text-[12.5px] font-bold text-stone-800"
+                          />
+                          <label className="px-2.5 py-2 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-[11.5px] font-extrabold cursor-pointer whitespace-nowrap shrink-0">
+                            📷 사진
+                            <input
+                              type="file"
+                              accept="image/*"
+                              className="hidden"
+                              onChange={async (e) => {
+                                const f = e.target.files?.[0];
+                                if (e.target) e.target.value = "";
+                                if (!f) return;
+                                try {
+                                  const res = await fileToBase64(f, { maxSide: 720, quality: 0.65 });
+                                  setCarParkingDraft((p) => ({ ...p, photoUrl: res.previewUrl || "" }));
+                                  showToast("📷 주차 사진을 불러왔습니다. 저장을 눌러 주세요.");
+                                } catch {
+                                  showToast("사진 처리에 실패했습니다.");
+                                }
+                              }}
+                            />
+                          </label>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <input
+                            type="text"
+                            value={carParkingDraft.memo}
+                            onChange={(e) => setCarParkingDraft((p) => ({ ...p, memo: e.target.value }))}
+                            placeholder="선택 메모 (예: 이마트 성수점 2층)"
+                            className="flex-1 min-w-0 px-3 py-1.5 rounded-xl border border-stone-200 bg-white text-[12px] font-medium text-stone-700"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (!carParkingDraft.floor && !carParkingDraft.spot.trim() && !carParkingDraft.photoUrl && !carParkingDraft.memo.trim()) {
+                                showToast("층수·기둥번호 또는 사진을 입력해 주세요.");
+                                return;
+                              }
+                              const nextPark = {
+                                floor: carParkingDraft.floor || "",
+                                spot: carParkingDraft.spot.trim(),
+                                memo: carParkingDraft.memo.trim(),
+                                photoUrl: carParkingDraft.photoUrl || "",
+                                updatedAtMs: Date.now(),
+                                updatedBy: actorName || "가족"
+                              };
+                              saveCarNotebookToCloud({ ...carNotebook, parking: nextPark }, "🚗 주차 위치를 저장했습니다!");
+                            }}
+                            className="px-3 py-1.5 rounded-xl bg-[#3F624D] hover:bg-[#324F3E] text-white text-[12px] font-extrabold whitespace-nowrap shrink-0"
+                          >
+                            💾 주차 저장
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 🛠️ 차량 정비 · 검사 · 보험 이력 */}
+                  <div className="bg-white rounded-2xl border border-stone-200 p-3.5 space-y-2.5 shadow-sm">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[13.5px] font-black text-stone-900">🛠️ 정비 · 검사 · 보험 수첩 ({carRecords.length})</span>
+                      {canEditTab("house") && (
+                        <button
+                          type="button"
+                          onClick={() => setIsCarRecordFormOpen((v) => !v)}
+                          className="px-2.5 py-1 rounded-xl bg-[#3F624D] hover:bg-[#324F3E] text-white text-[11px] font-extrabold whitespace-nowrap shrink-0"
+                        >
+                          {isCarRecordFormOpen ? "닫기" : "+ 기록 추가"}
+                        </button>
+                      )}
+                    </div>
+
+                    {isCarRecordFormOpen && canEditTab("house") && (
+                      <div className="p-2.5 rounded-xl bg-[#FAF8F3] border border-stone-200 space-y-2">
+                        <div className="grid grid-cols-2 gap-1.5">
+                          <select
+                            value={carRecordForm.type}
+                            onChange={(e) => setCarRecordForm((p) => ({ ...p, type: e.target.value }))}
+                            className="min-w-0 px-2.5 py-1.5 rounded-xl border border-stone-200 bg-white text-[12px] font-bold"
+                          >
+                            {DEFAULT_CAR_RECORD_TYPES.map((t) => (
+                              <option key={t} value={t}>{t}</option>
+                            ))}
+                          </select>
+                          <input
+                            type="text"
+                            value={carRecordForm.title}
+                            onChange={(e) => setCarRecordForm((p) => ({ ...p, title: e.target.value }))}
+                            placeholder="항목명 (예: 엔진오일 교체)"
+                            className="min-w-0 px-2.5 py-1.5 rounded-xl border border-stone-200 bg-white text-[12px] font-bold"
+                          />
+                        </div>
+                        <div className="grid grid-cols-2 gap-1.5">
+                          <div>
+                            <div className="text-[10px] font-bold text-stone-500 mb-0.5">실시일</div>
+                            <input
+                              type="date"
+                              value={carRecordForm.date}
+                              onChange={(e) => setCarRecordForm((p) => ({ ...p, date: e.target.value }))}
+                              className="w-full px-2 py-1.5 rounded-xl border border-stone-200 bg-white text-[11.5px] font-bold"
+                            />
+                          </div>
+                          <div>
+                            <div className="text-[10px] font-bold text-stone-500 mb-0.5">다음 예정일 (선택)</div>
+                            <input
+                              type="date"
+                              value={carRecordForm.nextDate}
+                              onChange={(e) => setCarRecordForm((p) => ({ ...p, nextDate: e.target.value }))}
+                              className="w-full px-2 py-1.5 rounded-xl border border-stone-200 bg-white text-[11.5px] font-bold"
+                            />
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-1.5">
+                          <input
+                            type="text"
+                            inputMode="numeric"
+                            value={carRecordForm.mileage}
+                            onChange={(e) => setCarRecordForm((p) => ({ ...p, mileage: e.target.value }))}
+                            placeholder="주행거리 km (선택)"
+                            className="min-w-0 px-2.5 py-1.5 rounded-xl border border-stone-200 bg-white text-[12px] font-bold"
+                          />
+                          <input
+                            type="number"
+                            inputMode="numeric"
+                            value={carRecordForm.cost}
+                            onChange={(e) => setCarRecordForm((p) => ({ ...p, cost: e.target.value }))}
+                            placeholder="비용 원 (선택)"
+                            className="min-w-0 px-2.5 py-1.5 rounded-xl border border-stone-200 bg-white text-[12px] font-bold"
+                          />
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <input
+                            type="text"
+                            value={carRecordForm.memo}
+                            onChange={(e) => setCarRecordForm((p) => ({ ...p, memo: e.target.value }))}
+                            placeholder="메모 (정비소, 보험사 등)"
+                            className="flex-1 min-w-0 px-2.5 py-1.5 rounded-xl border border-stone-200 bg-white text-[12px]"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const title = carRecordForm.title.trim();
+                              if (!title) { showToast("항목명을 입력해 주세요."); return; }
+                              const rec = {
+                                id: `car-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`,
+                                type: carRecordForm.type || "정비·오일",
+                                title,
+                                date: carRecordForm.date || getTodayStr(),
+                                nextDate: carRecordForm.nextDate || "",
+                                mileage: carRecordForm.mileage.trim(),
+                                cost: Number(carRecordForm.cost) || 0,
+                                memo: carRecordForm.memo.trim()
+                              };
+                              saveCarNotebookToCloud({ ...carNotebook, records: [rec, ...carRecords] }, `🚗 '${title}' 기록을 저장했습니다!`);
+                              setCarRecordForm({ type: DEFAULT_CAR_RECORD_TYPES[0], title: "", date: getTodayStr(), nextDate: "", mileage: "", cost: "", memo: "" });
+                              setIsCarRecordFormOpen(false);
+                            }}
+                            className="px-3 py-1.5 rounded-xl bg-[#3F624D] hover:bg-[#324F3E] text-white text-[12px] font-extrabold whitespace-nowrap shrink-0"
+                          >
+                            저장
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {carRecords.length === 0 ? (
+                      <div className="text-[12px] font-bold text-stone-400 text-center py-4">
+                        엔진오일 교체, 자동차검사, 보험 만기일을 기록해 보세요.
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        {carRecords.map((rec) => {
+                          const nDiff = rec.nextDate ? getDaysDiff(rec.nextDate) : null;
+                          return (
+                            <div key={rec.id} className="p-2.5 rounded-xl border border-stone-200 bg-[#FAF8F3]/60 space-y-1.5">
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                    <span className="px-1.5 py-0.5 rounded bg-[#EEF3EE] text-[#35503C] text-[10px] font-extrabold whitespace-nowrap">{rec.type}</span>
+                                    <span className="text-[13px] font-black text-stone-900">{rec.title}</span>
+                                    {nDiff !== null && (
+                                      <span className={`px-1.5 py-0.5 rounded text-[10px] font-extrabold whitespace-nowrap ${nDiff <= 30 ? "bg-rose-100 text-rose-700" : "bg-stone-100 text-stone-600"}`}>
+                                        {nDiff < 0 ? `${Math.abs(nDiff)}일 지남` : nDiff === 0 ? "오늘 예정" : `다음 D-${nDiff}`}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="text-[11px] font-medium text-stone-500 mt-0.5 flex flex-wrap gap-x-2">
+                                    <span>📅 {rec.date}</span>
+                                    {rec.nextDate && <span>⏭️ 다음 {rec.nextDate}</span>}
+                                    {rec.mileage && <span>🛣️ {rec.mileage}km</span>}
+                                    {rec.cost > 0 && <span>💳 {Number(rec.cost).toLocaleString()}원</span>}
+                                  </div>
+                                  {rec.memo && <div className="text-[11px] text-stone-600 mt-0.5">{rec.memo}</div>}
+                                </div>
+                                <div className="flex items-center gap-1 shrink-0">
+                                  {rec.nextDate && canEditTab("schedule") && (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setEditingSchedule(null);
+                                        setScheduleForm({
+                                          title: `🚗 ${rec.title} (${rec.type})`,
+                                          date: rec.nextDate,
+                                          endDate: "",
+                                          time: "",
+                                          location: "",
+                                          category: scheduleCategories.includes("할일(To-Do)") ? "할일(To-Do)" : (scheduleCategories[0] || "가족행사/경조사"),
+                                          members: ["수혁", "아리나"],
+                                          isAnnual: false,
+                                          showDday: true,
+                                          hasOriginYear: false,
+                                          memo: rec.memo || "",
+                                          attachments: []
+                                        });
+                                        setScheduleModalIsPrivate(false);
+                                        setIsScheduleModalOpen(true);
+                                      }}
+                                      className="px-2 py-1 rounded-lg bg-[#EEF3EE] text-[#35503C] text-[10.5px] font-extrabold whitespace-nowrap"
+                                    >
+                                      🗓️ 일정
+                                    </button>
+                                  )}
+                                  {canEditTab("house") && (
+                                    <button
+                                      type="button"
+                                      onClick={async () => {
+                                        if (!await askConfirm(`'${rec.title}' 기록을 삭제할까요?`)) return;
+                                        saveCarNotebookToCloud({ ...carNotebook, records: carRecords.filter((x) => x.id !== rec.id) }, "🗑️ 차량 기록을 삭제했습니다.");
+                                      }}
+                                      className="p-1 rounded-lg text-stone-400 hover:text-rose-600"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })() : (
+              <>
             {/* 검색창 + 서브탭별 필터 칩 */}
             <div className="space-y-2">
               <div className="relative">
@@ -36220,9 +36751,1068 @@ time: "", location: "",
                 })}
               </div>
             )}
+              </>
+            )}
           </div>
         );
       })())}
+
+
+      {/* ==========================================
+          👤 개인 전용 메뉴: 나만의 공간 (🔒 비밀 메모·스크랩 + 💊 내 영양제·운동 셀프케어)
+      ========================================== */}
+      {activeTab === "personal" && (() => {
+        const todayStr = getTodayStr();
+        const scItems = Array.isArray(personalSelfCare?.items) ? personalSelfCare.items : [];
+        const scDoneCount = scItems.filter((x) => x.doneDate === todayStr).length;
+        const waterCnt = personalSelfCare?.waterDate === todayStr ? (Number(personalSelfCare?.waterCount) || 0) : 0;
+        const waterGoal = Math.max(1, Number(personalSelfCare?.waterGoal) || 8);
+        const curCondMemo = personalSelfCare?.conditionDate === todayStr ? (personalSelfCare?.conditionMemo || "") : "";
+        const qSec = secretNoteSearch.trim().toLowerCase();
+        const visibleSecretNotes = [...personalSecretNotes]
+          .filter((n) => secretNoteCatFilter === "전체" || n.category === secretNoteCatFilter)
+          .filter((n) => !qSec || `${n.title || ""} ${n.content || ""} ${n.url || ""} ${n.category || ""}`.toLowerCase().includes(qSec))
+          .sort((a, b) => Number(Boolean(b.pinned)) - Number(Boolean(a.pinned)) || (Number(b.updatedAtMs) || 0) - (Number(a.updatedAtMs) || 0));
+
+        return (
+          <div className="p-4 space-y-3.5">
+            <div className="flex items-center justify-between gap-2 bg-[#EEF3EE]/80 border border-[#C9D8CC] rounded-xl px-3 py-1.5">
+              <span className="text-[11px] font-extrabold text-[#35503C] truncate">
+                🔒 {actorName || "나"} 계정 전용 · 다른 가족에게는 보이지 않습니다
+              </span>
+            </div>
+
+            <div className="grid grid-cols-3 gap-1 bg-stone-200/80 p-1 rounded-2xl">
+              {[
+                { id: "secret", label: `🔒 비밀메모 (${personalSecretNotes.length})` },
+                { id: "care", label: `💊 셀프케어 (${scDoneCount}/${scItems.length})` },
+                { id: "body", label: `⚖️ 체성분 (${personalBodyLogs.length})` }
+              ].map((st) => (
+                <button
+                  key={st.id}
+                  type="button"
+                  onClick={() => setPersonalSubTab(st.id)}
+                  className={`py-1.5 px-2 rounded-xl text-[12px] font-extrabold whitespace-nowrap transition ${
+                    personalSubTab === st.id ? "bg-white text-stone-900 shadow-sm" : "text-stone-600 hover:text-stone-900"
+                  }`}
+                >
+                  {st.label}
+                </button>
+              ))}
+            </div>
+
+            {personalSubTab === "secret" && (
+              <div className="space-y-2.5">
+                <div className="flex items-center gap-1.5">
+                  <div className="relative flex-1 min-w-0">
+                    <input
+                      type="text"
+                      value={secretNoteSearch}
+                      onChange={(e) => setSecretNoteSearch(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === "Escape") setSecretNoteSearch(""); }}
+                      enterKeyHint="search"
+                      placeholder="🔍 비밀 메모·링크 검색..."
+                      className="w-full px-3 py-2 pr-8 rounded-xl border border-stone-200 bg-white text-[12.5px] font-semibold text-stone-800"
+                    />
+                    {secretNoteSearch && (
+                      <button
+                        type="button"
+                        onClick={() => setSecretNoteSearch("")}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-700 text-[12px] font-black"
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingSecretNoteId(null);
+                      setSecretNoteForm({ title: "", category: personalSecretCats[0] || "메모", url: "", content: "", pinned: false });
+                      setIsSecretNoteFormOpen((v) => !v);
+                    }}
+                    className="px-3 py-2 rounded-xl bg-[#3F624D] hover:bg-[#324F3E] text-white text-[12px] font-extrabold whitespace-nowrap shrink-0 flex items-center gap-1"
+                  >
+                    <Plus className="w-3.5 h-3.5" /> {isSecretNoteFormOpen ? "닫기" : "메모 추가"}
+                  </button>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {["전체", ...personalSecretCats].map((cat) => (
+                    <div key={cat} className="inline-flex items-center">
+                      <button
+                        type="button"
+                        onClick={() => setSecretNoteCatFilter(cat)}
+                        className={`px-2.5 py-1 text-[11px] font-extrabold border whitespace-nowrap transition ${
+                          cat !== "전체" && cat !== "메모" && personalSecretCats.length > 1 ? "rounded-l-full border-r-0" : "rounded-full"
+                        } ${
+                          secretNoteCatFilter === cat
+                            ? "bg-[#3F624D] text-white border-[#3F624D]"
+                            : "bg-white text-stone-600 border-stone-200"
+                        }`}
+                      >
+                        {cat}
+                      </button>
+                      {cat !== "전체" && cat !== "메모" && personalSecretCats.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            if (!await askConfirm(`'${cat}' 분류를 삭제할까요? (기존 메모는 '메모' 분류로 이동됩니다)`)) return;
+                            const nextCats = personalSecretCats.filter((x) => x !== cat);
+                            const nextNotes = personalSecretNotes.map((n) => (n.category === cat ? { ...n, category: "메모" } : n));
+                            setPersonalSecretCats(nextCats);
+                            setPersonalSecretNotes(nextNotes);
+                            if (secretNoteCatFilter === cat) setSecretNoteCatFilter("전체");
+                            savePersonalDataToCloud({ personalSecretCats: nextCats, personalSecretNotes: nextNotes }, `🗑️ '${cat}' 분류를 삭제했습니다.`);
+                          }}
+                          className={`px-1.5 py-1 rounded-r-full text-[10.5px] font-black border whitespace-nowrap ${
+                            secretNoteCatFilter === cat
+                              ? "bg-[#324F3E] text-white/90 border-[#3F624D]"
+                              : "bg-stone-50 text-stone-400 hover:text-rose-600 border-stone-200"
+                          }`}
+                          title={`${cat} 분류 삭제`}
+                        >
+                          ×
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                  <input
+                    type="text"
+                    value={newSecretCatInput}
+                    onChange={(e) => setNewSecretCatInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        const c = newSecretCatInput.trim();
+                        if (!c || personalSecretCats.includes(c)) return;
+                        const nextCats = [...personalSecretCats, c];
+                        setPersonalSecretCats(nextCats);
+                        setNewSecretCatInput("");
+                        savePersonalDataToCloud({ personalSecretCats: nextCats }, `✅ '${c}' 분류를 추가했습니다.`);
+                      }
+                    }}
+                    placeholder="+ 분류 (Enter)"
+                    className="w-24 px-2 py-0.5 rounded-full border border-stone-200 bg-white text-[11px] font-bold"
+                  />
+                </div>
+
+                {isSecretNoteFormOpen && (
+                  <div className="bg-white rounded-2xl border border-stone-200 p-3 space-y-2 shadow-sm">
+                    <div className="grid grid-cols-3 gap-1.5">
+                      <select
+                        value={secretNoteForm.category}
+                        onChange={(e) => setSecretNoteForm((p) => ({ ...p, category: e.target.value }))}
+                        className="min-w-0 px-2 py-1.5 rounded-xl border border-stone-200 bg-[#FAF8F3] text-[12px] font-bold"
+                      >
+                        {Array.from(new Set([...personalSecretCats, ...(secretNoteForm.category ? [secretNoteForm.category] : [])])).map((c) => (
+                          <option key={c} value={c}>{c}</option>
+                        ))}
+                      </select>
+                      <input
+                        type="text"
+                        value={secretNoteForm.title}
+                        onChange={(e) => setSecretNoteForm((p) => ({ ...p, title: e.target.value }))}
+                        placeholder="제목 (예: 아리 생일선물 후보)"
+                        className="col-span-2 min-w-0 px-2.5 py-1.5 rounded-xl border border-stone-200 text-[12.5px] font-bold"
+                      />
+                    </div>
+                    <input
+                      type="url"
+                      value={secretNoteForm.url}
+                      onChange={(e) => setSecretNoteForm((p) => ({ ...p, url: e.target.value }))}
+                      placeholder="🔗 스크랩 링크 URL (선택)"
+                      className="w-full px-2.5 py-1.5 rounded-xl border border-stone-200 text-[12px]"
+                    />
+                    <textarea
+                      rows={3}
+                      value={secretNoteForm.content}
+                      onChange={(e) => setSecretNoteForm((p) => ({ ...p, content: e.target.value }))}
+                      placeholder="나만 보는 메모 내용을 입력하세요..."
+                      className="w-full px-2.5 py-1.5 rounded-xl border border-stone-200 text-[12.5px]"
+                    />
+                    <div className="flex items-center justify-between gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setSecretNoteForm((p) => ({ ...p, pinned: !p.pinned }))}
+                        className={`px-2.5 py-1 rounded-lg text-[11px] font-extrabold border whitespace-nowrap ${
+                          secretNoteForm.pinned ? "bg-amber-50 text-amber-800 border-amber-300" : "bg-stone-50 text-stone-600 border-stone-200"
+                        }`}
+                      >
+                        📌 {secretNoteForm.pinned ? "상단고정 ON" : "상단고정"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          const title = secretNoteForm.title.trim();
+                          const content = secretNoteForm.content.trim();
+                          const url = secretNoteForm.url.trim();
+                          if (!title && !content && !url) { showToast("제목 또는 내용을 입력해 주세요."); return; }
+                          const nowMs = Date.now();
+                          const itemPayload = {
+                            id: editingSecretNoteId || `sec-${nowMs}-${Math.random().toString(36).slice(2, 5)}`,
+                            title: title || "비밀 메모",
+                            category: secretNoteForm.category || "메모",
+                            url,
+                            content,
+                            pinned: Boolean(secretNoteForm.pinned),
+                            updatedAtMs: nowMs
+                          };
+                          const nextNotes = editingSecretNoteId
+                            ? personalSecretNotes.map((x) => (x.id === editingSecretNoteId ? itemPayload : x))
+                            : [itemPayload, ...personalSecretNotes];
+                          setPersonalSecretNotes(nextNotes);
+                          const ok = await savePersonalDataToCloud({ personalSecretNotes: nextNotes }, editingSecretNoteId ? "✏️ 비밀 메모를 수정했습니다." : "🔒 비밀 메모를 저장했습니다.");
+                          if (ok) {
+                            setIsSecretNoteFormOpen(false);
+                            setEditingSecretNoteId(null);
+                          }
+                        }}
+                        className="px-3.5 py-1.5 rounded-xl bg-[#3F624D] hover:bg-[#324F3E] text-white text-[12px] font-extrabold whitespace-nowrap"
+                      >
+                        {editingSecretNoteId ? "수정 저장" : "저장하기"}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {visibleSecretNotes.length === 0 ? (
+                  <div className="bg-white rounded-2xl border border-stone-200 p-6 text-center text-[12.5px] font-bold text-stone-400">
+                    나만 보는 아이디어, 선물 메모, 스크랩 링크를 기록해 보세요.
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {visibleSecretNotes.map((n) => (
+                      <div key={n.id} className="bg-white rounded-2xl border border-stone-200 p-3 space-y-1.5 shadow-sm">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              {n.pinned && <span className="text-[11px]">📌</span>}
+                              <span className="px-1.5 py-0.5 rounded bg-[#EEF3EE] text-[#35503C] text-[10px] font-extrabold whitespace-nowrap">{n.category || "메모"}</span>
+                              <span className="text-[13.5px] font-black text-stone-900">{n.title}</span>
+                            </div>
+                            {n.content && <div className="text-[12px] text-stone-700 whitespace-pre-wrap mt-1">{n.content}</div>}
+                            {n.url && (
+                              <a
+                                href={/^https?:\/\//i.test(n.url) ? n.url : `https://${n.url}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-block mt-1 text-[11.5px] font-bold text-[#35503C] underline break-all"
+                              >
+                                🔗 {n.url}
+                              </a>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-1 shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => copyTextSafe(`${n.title}${n.content ? `
+${n.content}` : ""}${n.url ? `
+${n.url}` : ""}`, "📋 메모를 복사했습니다!")}
+                              className="px-2 py-1 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 text-[10.5px] font-extrabold whitespace-nowrap"
+                            >
+                              📋
+                            </button>
+                            {isAdminUnlocked && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEditingSchedule(null);
+                                  setScheduleForm({
+                                    title: n.title || "",
+                                    date: getTodayStr(),
+                                    endDate: "",
+                                    time: "",
+                                    location: "",
+                                    category: scheduleCategories[0] || "할일(To-Do)",
+                                    members: [actorName || "수혁"],
+                                    isAnnual: false,
+                                    showDday: false,
+                                    hasOriginYear: false,
+                                    memo: [n.content, n.url].filter(Boolean).join("
+"),
+                                    attachments: []
+                                  });
+                                  setScheduleModalIsPrivate(true);
+                                  setIsScheduleModalOpen(true);
+                                }}
+                                className="px-2 py-1 rounded-lg bg-[#EEF3EE] text-[#35503C] text-[10.5px] font-extrabold whitespace-nowrap"
+                                title="개인 일정으로 등록"
+                              >
+                                🗓️
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditingSecretNoteId(n.id);
+                                setSecretNoteForm({ title: n.title || "", category: n.category || "메모", url: n.url || "", content: n.content || "", pinned: Boolean(n.pinned) });
+                                setIsSecretNoteFormOpen(true);
+                              }}
+                              className="p-1 rounded-lg text-stone-400 hover:text-stone-700"
+                            >
+                              <Edit3 className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                if (!await askConfirm(`'${n.title}' 비밀 메모를 삭제할까요?`)) return;
+                                const nextNotes = personalSecretNotes.filter((x) => x.id !== n.id);
+                                setPersonalSecretNotes(nextNotes);
+                                savePersonalDataToCloud({ personalSecretNotes: nextNotes }, "🗑️ 비밀 메모를 삭제했습니다.");
+                              }}
+                              className="p-1 rounded-lg text-stone-400 hover:text-rose-600"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {personalSubTab === "care" && (
+              <div className="space-y-3">
+                <div className="bg-white rounded-2xl border border-stone-200 p-3.5 space-y-2.5 shadow-sm">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <span className="text-[13px] font-black text-stone-900 truncate">💧 오늘 물 마시기 ({waterCnt} / {waterGoal}잔)</span>
+                      <select
+                        value={waterGoal}
+                        onChange={(e) => {
+                          const nextGoal = Math.max(1, Number(e.target.value) || 8);
+                          const nextSc = { ...personalSelfCare, waterGoal: nextGoal };
+                          setPersonalSelfCare(nextSc);
+                          savePersonalDataToCloud({ personalSelfCare: nextSc }, `💧 물 목표를 ${nextGoal}잔으로 변경했습니다.`);
+                        }}
+                        className="px-1.5 py-0.5 rounded-lg border border-stone-200 bg-[#FAF8F3] text-[10.5px] font-extrabold text-stone-600 shrink-0"
+                        title="하루 물 목표 잔수 설정"
+                      >
+                        {[4, 5, 6, 7, 8, 10, 12, 14, 16].map((g) => (
+                          <option key={g} value={g}>목표 {g}잔</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const nextVal = Math.max(0, waterCnt - 1);
+                          const nextSc = { ...personalSelfCare, waterDate: todayStr, waterCount: nextVal };
+                          setPersonalSelfCare(nextSc);
+                          savePersonalDataToCloud({ personalSelfCare: nextSc });
+                        }}
+                        className="w-7 h-7 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 font-black text-[13px]"
+                      >
+                        -
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const nextVal = waterCnt + 1;
+                          const nextSc = { ...personalSelfCare, waterDate: todayStr, waterCount: nextVal };
+                          setPersonalSelfCare(nextSc);
+                          savePersonalDataToCloud({ personalSelfCare: nextSc }, nextVal === waterGoal ? "🎉 오늘 물 목표를 달성했어요!" : "");
+                        }}
+                        className="px-2.5 h-7 rounded-lg bg-[#3F624D] hover:bg-[#324F3E] text-white font-extrabold text-[11.5px] whitespace-nowrap"
+                      >
+                        +1잔
+                      </button>
+                    </div>
+                  </div>
+                  <div className="w-full h-2 rounded-full bg-stone-100 overflow-hidden">
+                    <div className="h-full bg-[#3F624D] transition-all" style={{ width: `${Math.min(100, Math.round((waterCnt / waterGoal) * 100))}%` }} />
+                  </div>
+                  <input
+                    type="text"
+                    value={curCondMemo}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setPersonalSelfCare((p) => ({ ...p, conditionDate: todayStr, conditionMemo: val }));
+                    }}
+                    onBlur={() => savePersonalDataToCloud({ personalSelfCare: { ...personalSelfCare, conditionDate: todayStr } })}
+                    placeholder="📝 오늘 내 컨디션 한줄 메모 (예: 어깨 뭉침, 잠 6시간)"
+                    className="w-full px-2.5 py-1.5 rounded-xl border border-stone-200 bg-[#FAF8F3] text-[12px] font-medium"
+                  />
+                </div>
+
+                <div className="bg-white rounded-2xl border border-stone-200 p-3.5 space-y-2.5 shadow-sm">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[13px] font-black text-stone-900">💊 오늘 셀프케어 ({scDoneCount}/{scItems.length})</span>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => setPersonalSubTab("body")}
+                        className="px-2 py-0.5 rounded-lg bg-[#EEF3EE] text-[#35503C] border border-[#C9D8CC] text-[10.5px] font-extrabold whitespace-nowrap"
+                      >
+                        ⚖️ 체성분 추이 →
+                      </button>
+                      <span className="text-[10.5px] font-bold text-stone-400 whitespace-nowrap">자정 리셋</span>
+                    </div>
+                  </div>
+                  <div className="space-y-1.5">
+                    {scItems.map((it) => {
+                      const isDone = it.doneDate === todayStr;
+                      return (
+                        <div key={it.id} className={`p-2 rounded-xl border flex items-center justify-between gap-2 transition ${isDone ? "bg-[#EEF3EE]/70 border-[#C9D8CC]" : "bg-[#FAF8F3]/60 border-stone-200"}`}>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const nextItems = scItems.map((x) => x.id === it.id ? { ...x, doneDate: isDone ? "" : todayStr } : x);
+                              const nextSc = { ...personalSelfCare, items: nextItems };
+                              setPersonalSelfCare(nextSc);
+                              savePersonalDataToCloud({ personalSelfCare: nextSc });
+                            }}
+                            className="flex items-center gap-2 flex-1 min-w-0 text-left"
+                          >
+                            <span className={`w-5 h-5 rounded-lg border flex items-center justify-center shrink-0 ${isDone ? "bg-[#3F624D] border-[#3F624D] text-white" : "bg-white border-stone-300"}`}>
+                              {isDone && <Check className="w-3.5 h-3.5" />}
+                            </span>
+                            <span className="px-1.5 py-0.5 rounded bg-white border border-stone-200 text-[10px] font-extrabold text-stone-600 shrink-0">{it.type || "영양제"}</span>
+                            <span className={`text-[12.5px] font-extrabold truncate ${isDone ? "line-through text-stone-400" : "text-stone-800"}`}>{it.label}</span>
+                            {it.timeHint && <span className="text-[10.5px] font-bold text-stone-400 shrink-0">· {it.timeHint}</span>}
+                          </button>
+                          <div className="flex items-center gap-1 shrink-0">
+                            {canEditTab("alarm") && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setAlarmForm({ id: null, label: `💊 ${it.label}`, time: "08:30", days: [0,1,2,3,4,5,6], soundId: "gentle", volume: alarmDefaultVolume, vibrate: true, enabled: true });
+                                  setActiveTab("alarm");
+                                  setAlarmSheetMode("alarm");
+                                  showToast(`⏰ '${it.label}' 알림 시간을 설정해 주세요.`);
+                                }}
+                                className="px-1.5 py-1 rounded-lg bg-white border border-stone-200 text-[10.5px] font-extrabold text-stone-600 whitespace-nowrap"
+                                title="모닝콜·알람 등록"
+                              >
+                                ⏰
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const nextItems = scItems.filter((x) => x.id !== it.id);
+                                const nextSc = { ...personalSelfCare, items: nextItems };
+                                setPersonalSelfCare(nextSc);
+                                savePersonalDataToCloud({ personalSelfCare: nextSc }, `🗑️ '${it.label}' 항목을 삭제했습니다.`);
+                              }}
+                              className="p-1 rounded-lg text-stone-400 hover:text-rose-600"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <div className="pt-1.5 border-t border-stone-100 flex items-center gap-1.5 flex-wrap">
+                    <select
+                      value={newSelfCareType}
+                      onChange={(e) => setNewSelfCareType(e.target.value)}
+                      className="px-2 py-1.5 rounded-xl border border-stone-200 bg-white text-[11.5px] font-bold"
+                    >
+                      <option value="영양제">영양제</option>
+                      <option value="운동">운동</option>
+                      <option value="생활">생활</option>
+                    </select>
+                    <input
+                      type="text"
+                      value={newSelfCareLabel}
+                      onChange={(e) => setNewSelfCareLabel(e.target.value)}
+                      placeholder="새 항목 (예: 철분제, 러닝)"
+                      className="flex-1 min-w-[110px] px-2.5 py-1.5 rounded-xl border border-stone-200 bg-[#FAF8F3] text-[12px] font-bold"
+                    />
+                    <input
+                      type="text"
+                      value={newSelfCareTime}
+                      onChange={(e) => setNewSelfCareTime(e.target.value)}
+                      placeholder="시점"
+                      className="w-16 px-2 py-1.5 rounded-xl border border-stone-200 bg-[#FAF8F3] text-[11.5px] font-bold"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const lbl = newSelfCareLabel.trim();
+                        if (!lbl) { showToast("항목 이름을 입력해 주세요."); return; }
+                        const nextItems = [
+                          ...scItems,
+                          { id: `sc-${Date.now()}`, label: lbl, type: newSelfCareType, timeHint: newSelfCareTime.trim(), doneDate: "" }
+                        ];
+                        const nextSc = { ...personalSelfCare, items: nextItems };
+                        setPersonalSelfCare(nextSc);
+                        setNewSelfCareLabel("");
+                        savePersonalDataToCloud({ personalSelfCare: nextSc }, `✅ '${lbl}' 셀프케어 항목을 추가했습니다.`);
+                      }}
+                      className="px-3 py-1.5 rounded-xl bg-[#3F624D] hover:bg-[#324F3E] text-white text-[11.5px] font-extrabold whitespace-nowrap shrink-0"
+                    >
+                      + 추가
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {personalSubTab === "body" && (() => {
+              const sortedLogs = [...personalBodyLogs].sort((a, b) => String(a.measuredAt || "").localeCompare(String(b.measuredAt || "")));
+              const activeMetric = BODY_METRIC_DEFS.find((m) => m.id === bodyMetricId) || BODY_METRIC_DEFS[0];
+              const latestLog = sortedLogs.length > 0 ? sortedLogs[sortedLogs.length - 1] : null;
+              const anchorDate = latestLog?.date || todayStr;
+              const anchorMs = new Date(`${anchorDate}T00:00:00`).getTime();
+              const rangeDaysNum = bodyRangeDays === "all" ? null : Number(bodyRangeDays);
+
+              const rangedLogs = sortedLogs.filter((row) => {
+                if (!rangeDaysNum || !Number.isFinite(anchorMs)) return true;
+                const rowMs = new Date(`${row.date}T00:00:00`).getTime();
+                if (!Number.isFinite(rowMs)) return true;
+                return (anchorMs - rowMs) / 86400000 <= rangeDaysNum;
+              });
+
+              const chartPoints = rangedLogs
+                .map((row) => ({ ...row, val: Number(row[activeMetric.id]) }))
+                .filter((row) => Number.isFinite(row.val) && row.val > 0);
+
+              const curPoint = chartPoints.length > 0 ? chartPoints[chartPoints.length - 1] : null;
+              const prevPoint = chartPoints.length > 1 ? chartPoints[chartPoints.length - 2] : null;
+              const firstPoint = chartPoints.length > 1 ? chartPoints[0] : null;
+              const deltaPrev = curPoint && prevPoint ? Number((curPoint.val - prevPoint.val).toFixed(activeMetric.digits)) : null;
+              const deltaFirst = curPoint && firstPoint ? Number((curPoint.val - firstPoint.val).toFixed(activeMetric.digits)) : null;
+
+              const goalNumRaw = activeMetric.id === "weight" ? personalBodyGoal?.weight : activeMetric.id === "bodyFatPct" ? personalBodyGoal?.bodyFatPct : "";
+              const goalNum = goalNumRaw !== "" && Number.isFinite(Number(goalNumRaw)) && Number(goalNumRaw) > 0 ? Number(goalNumRaw) : null;
+              const deltaGoal = curPoint && goalNum !== null ? Number((curPoint.val - goalNum).toFixed(activeMetric.digits)) : null;
+
+              const fmtDelta = (d) => {
+                if (d === null || !Number.isFinite(d)) return "-";
+                if (d === 0) return `0${activeMetric.unit ? ` ${activeMetric.unit}` : ""}`;
+                return `${d > 0 ? "+" : ""}${d.toFixed(activeMetric.digits)}${activeMetric.unit ? ` ${activeMetric.unit}` : ""}`;
+              };
+              const deltaTone = (d) => {
+                if (d === null || d === 0) return "text-stone-500";
+                const isGood = activeMetric.lowerIsGood ? d < 0 : d > 0;
+                return isGood ? "text-[#35503C]" : "text-rose-600";
+              };
+
+              // SVG 차트 좌표 계산
+              const W = 360;
+              const H = 172;
+              const padL = 38;
+              const padR = 14;
+              const padT = 16;
+              const padB = 26;
+              const plotW = W - padL - padR;
+              const plotH = H - padT - padB;
+
+              const allVals = chartPoints.map((p) => p.val);
+              if (goalNum !== null) allVals.push(goalNum);
+              const rawMin = allVals.length > 0 ? Math.min(...allVals) : 0;
+              const rawMax = allVals.length > 0 ? Math.max(...allVals) : 100;
+              const span = Math.max(rawMax - rawMin, activeMetric.digits === 0 ? 4 : 0.6);
+              const yMin = rawMin - span * 0.14;
+              const yMax = rawMax + span * 0.14;
+              const yMid = (yMin + yMax) / 2;
+
+              const toX = (idx) => {
+                if (chartPoints.length <= 1) return padL + plotW / 2;
+                return padL + (idx / (chartPoints.length - 1)) * plotW;
+              };
+              const toY = (v) => padT + (1 - (v - yMin) / Math.max(0.0001, yMax - yMin)) * plotH;
+
+              const linePath = chartPoints.map((p, idx) => `${idx === 0 ? "M" : "L"} ${toX(idx).toFixed(1)} ${toY(p.val).toFixed(1)}`).join(" ");
+              const areaPath = chartPoints.length > 0
+                ? `${linePath} L ${toX(chartPoints.length - 1).toFixed(1)} ${(padT + plotH).toFixed(1)} L ${toX(0).toFixed(1)} ${(padT + plotH).toFixed(1)} Z`
+                : "";
+              const activePoint = bodySelectedIdx !== null && chartPoints[bodySelectedIdx] ? chartPoints[bodySelectedIdx] : curPoint;
+              const activePointIdx = bodySelectedIdx !== null && chartPoints[bodySelectedIdx] ? bodySelectedIdx : (chartPoints.length - 1);
+
+              const reversedLogs = [...sortedLogs].reverse();
+              const visibleBodyRows = showAllBodyRows ? reversedLogs : reversedLogs.slice(0, 10);
+
+              return (
+                <div className="space-y-3">
+                  {/* 상단 CSV 업로드 & 직접 입력 & 목표 */}
+                  <div className="bg-white rounded-2xl border border-stone-200 p-3.5 space-y-2.5 shadow-sm">
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <div className="min-w-0">
+                        <h3 className="text-[13.5px] font-black text-stone-900">⚖️ 체성분·인바디 추이</h3>
+                        <p className="text-[11px] font-semibold text-stone-500">Atflee 등 체성분 CSV 업로드 시 자동 병합·그래프화</p>
+                      </div>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => setPersonalSubTab("care")}
+                          className="px-2 py-1.5 rounded-xl bg-[#EEF3EE] text-[#35503C] border border-[#C9D8CC] text-[11px] font-extrabold whitespace-nowrap"
+                        >
+                          💊 셀프케어 →
+                        </button>
+                        <label className="px-2.5 py-1.5 rounded-xl bg-[#3F624D] hover:bg-[#324F3E] text-white text-[11.5px] font-extrabold whitespace-nowrap cursor-pointer">
+                          📥 CSV 업로드
+                          <input
+                            type="file"
+                            accept=".csv,text/csv"
+                            className="hidden"
+                            onChange={async (e) => {
+                              const file = e.target.files?.[0];
+                              e.target.value = "";
+                              if (!file) return;
+                              try {
+                                const buf = await file.arrayBuffer();
+                                let text = new TextDecoder("utf-8").decode(buf);
+                                let parsed = parseBodyCompositionCsv(text);
+                                if (parsed.length === 0) {
+                                  try {
+                                    text = new TextDecoder("euc-kr").decode(buf);
+                                    parsed = parseBodyCompositionCsv(text);
+                                  } catch (decErr) {}
+                                }
+                                if (parsed.length === 0) {
+                                  showToast("인식 가능한 체성분 CSV 행이 없습니다. 헤더(측정일시·몸무게)를 확인해 주세요.");
+                                  return;
+                                }
+                                const map = new Map();
+                                sortedLogs.forEach((row) => map.set(row.measuredAt, row));
+                                let addedCnt = 0;
+                                parsed.forEach((row) => {
+                                  if (!map.has(row.measuredAt)) addedCnt += 1;
+                                  map.set(row.measuredAt, row);
+                                });
+                                const merged = Array.from(map.values()).sort((a, b) => String(a.measuredAt || "").localeCompare(String(b.measuredAt || "")));
+                                setPersonalBodyLogs(merged);
+                                setBodySelectedIdx(null);
+                                await savePersonalDataToCloud(
+                                  { personalBodyLogs: merged },
+                                  `✅ ${parsed.length}건 중 신규 ${addedCnt}건을 반영했습니다 (총 ${merged.length}건).`
+                                );
+                              } catch (err) {
+                                showToast("CSV 파일을 읽는 중 오류가 발생했습니다.");
+                              }
+                            }}
+                          />
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => setIsBodyManualOpen((v) => !v)}
+                          className="px-2.5 py-1.5 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-[11.5px] font-extrabold whitespace-nowrap"
+                        >
+                          {isBodyManualOpen ? "닫기" : "+ 직접입력"}
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* 목표 체중 / 목표 체지방률 */}
+                    <div className="flex items-center gap-2 flex-wrap pt-1 border-t border-stone-100">
+                      <span className="text-[11px] font-extrabold text-stone-600 whitespace-nowrap">🎯 목표선</span>
+                      <div className="flex items-center gap-1">
+                        <input
+                          type="number"
+                          step="0.1"
+                          value={personalBodyGoal.weight}
+                          onChange={(e) => setPersonalBodyGoal((p) => ({ ...p, weight: e.target.value }))}
+                          onBlur={() => savePersonalDataToCloud({ personalBodyGoal })}
+                          placeholder="목표 체중(kg)"
+                          className="w-24 px-2 py-1 rounded-lg border border-stone-200 bg-[#FAF8F3] text-[11.5px] font-bold text-stone-800"
+                        />
+                        <span className="text-[10.5px] font-bold text-stone-400">kg</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <input
+                          type="number"
+                          step="0.1"
+                          value={personalBodyGoal.bodyFatPct}
+                          onChange={(e) => setPersonalBodyGoal((p) => ({ ...p, bodyFatPct: e.target.value }))}
+                          onBlur={() => savePersonalDataToCloud({ personalBodyGoal })}
+                          placeholder="목표 체지방(%)"
+                          className="w-24 px-2 py-1 rounded-lg border border-stone-200 bg-[#FAF8F3] text-[11.5px] font-bold text-stone-800"
+                        />
+                        <span className="text-[10.5px] font-bold text-stone-400">%</span>
+                      </div>
+                    </div>
+
+                    {isBodyManualOpen && (
+                      <div className="p-2.5 rounded-xl bg-[#FAF8F3] border border-stone-200 space-y-2">
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+                          <input
+                            type="date"
+                            value={bodyManualForm.date}
+                            onChange={(e) => setBodyManualForm((p) => ({ ...p, date: e.target.value }))}
+                            className="px-2 py-1.5 rounded-lg border border-stone-200 bg-white text-[11.5px] font-bold"
+                          />
+                          <input
+                            type="number"
+                            step="0.01"
+                            value={bodyManualForm.weight}
+                            onChange={(e) => setBodyManualForm((p) => ({ ...p, weight: e.target.value }))}
+                            placeholder="몸무게 (kg)"
+                            className="px-2 py-1.5 rounded-lg border border-stone-200 bg-white text-[11.5px] font-bold"
+                          />
+                          <input
+                            type="number"
+                            step="0.01"
+                            value={bodyManualForm.bodyFatPct}
+                            onChange={(e) => setBodyManualForm((p) => ({ ...p, bodyFatPct: e.target.value }))}
+                            placeholder="체지방률 (%)"
+                            className="px-2 py-1.5 rounded-lg border border-stone-200 bg-white text-[11.5px] font-bold"
+                          />
+                          <input
+                            type="number"
+                            step="0.01"
+                            value={bodyManualForm.skeletalMuscle}
+                            onChange={(e) => setBodyManualForm((p) => ({ ...p, skeletalMuscle: e.target.value }))}
+                            placeholder="골격근량 (kg)"
+                            className="px-2 py-1.5 rounded-lg border border-stone-200 bg-white text-[11.5px] font-bold"
+                          />
+                        </div>
+                        <div className="flex justify-end">
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              const d = bodyManualForm.date || todayStr;
+                              const w = bodyManualForm.weight !== "" ? Number(bodyManualForm.weight) : null;
+                              const f = bodyManualForm.bodyFatPct !== "" ? Number(bodyManualForm.bodyFatPct) : null;
+                              const m = bodyManualForm.skeletalMuscle !== "" ? Number(bodyManualForm.skeletalMuscle) : null;
+                              if ((w === null || w <= 0) && (f === null || f <= 0) && (m === null || m <= 0)) {
+                                showToast("몸무게, 체지방률, 골격근량 중 하나 이상을 입력해 주세요.");
+                                return;
+                              }
+                              const newRow = {
+                                id: `body-${d.replace(/[^0-9]/g, "")}-${Date.now().toString(36).slice(-3)}`,
+                                measuredAt: d,
+                                date: d,
+                                device: "직접입력",
+                                weight: w && w > 0 ? w : null,
+                                bodyFatPct: f && f > 0 ? f : null,
+                                skeletalMuscle: m && m > 0 ? m : null
+                              };
+                              const nextLogs = [...sortedLogs.filter((x) => x.measuredAt !== d), newRow]
+                                .sort((a, b) => String(a.measuredAt || "").localeCompare(String(b.measuredAt || "")));
+                              setPersonalBodyLogs(nextLogs);
+                              setBodySelectedIdx(null);
+                              const ok = await savePersonalDataToCloud({ personalBodyLogs: nextLogs }, "✅ 체성분 기록을 저장했습니다.");
+                              if (ok) {
+                                setBodyManualForm({ date: todayStr, weight: "", bodyFatPct: "", skeletalMuscle: "" });
+                                setIsBodyManualOpen(false);
+                              }
+                            }}
+                            className="px-3 py-1.5 rounded-xl bg-[#3F624D] hover:bg-[#324F3E] text-white text-[11.5px] font-extrabold whitespace-nowrap"
+                          >
+                            기록 저장
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {sortedLogs.length === 0 ? (
+                    <div className="bg-white rounded-2xl border border-stone-200 p-6 text-center space-y-1.5">
+                      <div className="text-[13px] font-black text-stone-700">아직 등록된 체성분 데이터가 없습니다</div>
+                      <p className="text-[11.5px] font-semibold text-stone-400">
+                        상단 [📥 CSV 업로드]로 체중계 CSV를 올리거나 [+ 직접입력]으로 기록하면 추이 그래프가 그려집니다.
+                      </p>
+                    </div>
+                  ) : (
+                    <>
+                      {/* 지표 선택 + 기간 필터 */}
+                      <div className="bg-white rounded-2xl border border-stone-200 p-3.5 space-y-3 shadow-sm">
+                        <div className="flex items-center justify-between gap-2 flex-wrap">
+                          <div className="flex items-center gap-1 flex-wrap">
+                            {BODY_METRIC_DEFS.map((m) => (
+                              <button
+                                key={m.id}
+                                type="button"
+                                onClick={() => { setBodyMetricId(m.id); setBodySelectedIdx(null); }}
+                                className={`px-2.5 py-1 rounded-full text-[11px] font-extrabold border whitespace-nowrap transition ${
+                                  bodyMetricId === m.id
+                                    ? "bg-[#3F624D] text-white border-[#3F624D]"
+                                    : "bg-[#FAF8F3] text-stone-600 border-stone-200 hover:bg-stone-100"
+                                }`}
+                              >
+                                {m.label}
+                              </button>
+                            ))}
+                          </div>
+                          <div className="flex items-center gap-1 bg-stone-100 p-0.5 rounded-xl shrink-0">
+                            {[
+                              { id: "7", label: "7일" },
+                              { id: "30", label: "30일" },
+                              { id: "90", label: "90일" },
+                              { id: "all", label: "전체" }
+                            ].map((rg) => (
+                              <button
+                                key={rg.id}
+                                type="button"
+                                onClick={() => { setBodyRangeDays(rg.id); setBodySelectedIdx(null); }}
+                                className={`px-2 py-0.5 rounded-lg text-[10.5px] font-extrabold whitespace-nowrap ${
+                                  bodyRangeDays === rg.id ? "bg-white text-stone-900 shadow-sm" : "text-stone-500"
+                                }`}
+                              >
+                                {rg.label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* 핵심 KPI 요약 */}
+                        {curPoint && (
+                          <div className="grid grid-cols-3 gap-2">
+                            <div className="bg-[#EEF3EE]/70 border border-[#C9D8CC] rounded-xl p-2.5 min-w-0">
+                              <div className="text-[10.5px] font-bold text-[#35503C] truncate">최근 {activeMetric.label}</div>
+                              <div className="text-[16px] font-black text-stone-900 mt-0.5">
+                                {curPoint.val.toFixed(activeMetric.digits)}
+                                {activeMetric.unit && <span className="text-[11px] font-bold text-stone-500 ml-0.5">{activeMetric.unit}</span>}
+                              </div>
+                              <div className="text-[10px] font-semibold text-stone-500 truncate">{curPoint.measuredAt}</div>
+                            </div>
+                            <div className="bg-[#FAF8F3] border border-stone-200 rounded-xl p-2.5 min-w-0">
+                              <div className="text-[10.5px] font-bold text-stone-500 truncate">기간 시작 대비</div>
+                              <div className={`text-[14px] font-black mt-0.5 ${deltaTone(deltaFirst)}`}>{fmtDelta(deltaFirst)}</div>
+                              <div className="text-[10px] font-semibold text-stone-400 truncate">직전 {fmtDelta(deltaPrev)}</div>
+                            </div>
+                            <div className="bg-[#FAF8F3] border border-stone-200 rounded-xl p-2.5 min-w-0">
+                              <div className="text-[10.5px] font-bold text-stone-500 truncate">
+                                {goalNum !== null ? `목표 (${goalNum}${activeMetric.unit})` : "기간 최고/최저"}
+                              </div>
+                              {goalNum !== null ? (
+                                <>
+                                  <div className={`text-[14px] font-black mt-0.5 ${deltaTone(deltaGoal)}`}>{fmtDelta(deltaGoal)}</div>
+                                  <div className="text-[10px] font-semibold text-stone-400 truncate">{deltaGoal <= 0 && activeMetric.lowerIsGood ? "목표 달성!" : "남은 차이"}</div>
+                                </>
+                              ) : (
+                                <>
+                                  <div className="text-[12px] font-black text-stone-800 mt-1 truncate">
+                                    {Math.min(...chartPoints.map((x) => x.val)).toFixed(activeMetric.digits)} ~ {Math.max(...chartPoints.map((x) => x.val)).toFixed(activeMetric.digits)}
+                                  </div>
+                                  <div className="text-[10px] font-semibold text-stone-400">{chartPoints.length}회 측정</div>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* 인터랙티브 SVG 라인 차트 */}
+                        {chartPoints.length === 0 ? (
+                          <div className="py-8 text-center text-[12px] font-bold text-stone-400">
+                            선택한 기간/지표에 해당하는 측정값이 없습니다.
+                          </div>
+                        ) : (
+                          <div className="space-y-1.5">
+                            {activePoint && (
+                              <div className="flex items-center justify-between text-[11px] font-bold px-1">
+                                <span className="text-[#35503C]">
+                                  📍 {activePoint.measuredAt} · <strong className="font-black">{activePoint.val.toFixed(activeMetric.digits)}{activeMetric.unit}</strong>
+                                </span>
+                                <span className="text-stone-400">점을 눌러 날짜별 확인</span>
+                              </div>
+                            )}
+                            <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-44 overflow-visible select-none">
+                              <defs>
+                                <linearGradient id="bodyChartAreaGrad" x1="0" y1="0" x2="0" y2="1">
+                                  <stop offset="0%" stopColor="#3F624D" stopOpacity="0.24" />
+                                  <stop offset="100%" stopColor="#3F624D" stopOpacity="0.02" />
+                                </linearGradient>
+                              </defs>
+
+                              {[yMax, yMid, yMin].map((yv, gi) => {
+                                const yy = toY(yv);
+                                return (
+                                  <g key={gi}>
+                                    <line x1={padL} y1={yy} x2={W - padR} y2={yy} stroke="#E7E5E4" strokeDasharray="3 3" strokeWidth="1" />
+                                    <text x={padL - 5} y={yy + 3} textAnchor="end" fontSize="9.5" fontWeight="700" fill="#78716C">
+                                      {yv.toFixed(activeMetric.digits === 0 ? 0 : 1)}
+                                    </text>
+                                  </g>
+                                );
+                              })}
+
+                              {goalNum !== null && (
+                                <g>
+                                  <line
+                                    x1={padL}
+                                    y1={toY(goalNum)}
+                                    x2={W - padR}
+                                    y2={toY(goalNum)}
+                                    stroke="#D97706"
+                                    strokeDasharray="4 3"
+                                    strokeWidth="1.4"
+                                  />
+                                  <text x={W - padR} y={toY(goalNum) - 3} textAnchor="end" fontSize="9" fontWeight="800" fill="#B45309">
+                                    목표 {goalNum}
+                                  </text>
+                                </g>
+                              )}
+
+                              {chartPoints.length > 1 && <path d={areaPath} fill="url(#bodyChartAreaGrad)" />}
+                              {chartPoints.length > 1 && (
+                                <path d={linePath} fill="none" stroke="#3F624D" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+                              )}
+
+                              {chartPoints.map((p, idx) => {
+                                const cx = toX(idx);
+                                const cy = toY(p.val);
+                                const isSel = idx === activePointIdx;
+                                return (
+                                  <g key={p.id || idx} onClick={() => setBodySelectedIdx(idx)} className="cursor-pointer">
+                                    <circle cx={cx} cy={cy} r="10" fill="transparent" />
+                                    <circle
+                                      cx={cx}
+                                      cy={cy}
+                                      r={isSel ? 4.8 : 2.8}
+                                      fill={isSel ? "#3F624D" : "#FFFFFF"}
+                                      stroke="#3F624D"
+                                      strokeWidth={isSel ? 2.2 : 1.7}
+                                    />
+                                  </g>
+                                );
+                              })}
+
+                              {chartPoints.length > 0 && (
+                                <>
+                                  <text x={padL} y={H - 5} textAnchor="start" fontSize="9.5" fontWeight="700" fill="#78716C">
+                                    {chartPoints[0].date.slice(5).replace("-", ".")}
+                                  </text>
+                                  {chartPoints.length > 2 && (
+                                    <text x={padL + plotW / 2} y={H - 5} textAnchor="middle" fontSize="9.5" fontWeight="700" fill="#78716C">
+                                      {chartPoints[Math.floor(chartPoints.length / 2)].date.slice(5).replace("-", ".")}
+                                    </text>
+                                  )}
+                                  {chartPoints.length > 1 && (
+                                    <text x={W - padR} y={H - 5} textAnchor="end" fontSize="9.5" fontWeight="700" fill="#78716C">
+                                      {chartPoints[chartPoints.length - 1].date.slice(5).replace("-", ".")}
+                                    </text>
+                                  )}
+                                </>
+                              )}
+                            </svg>
+                          </div>
+                        )}
+
+                        {/* 복사 / 내보내기 버튼 */}
+                        <div className="flex items-center justify-end gap-1.5 pt-1 border-t border-stone-100">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (!latestLog) return;
+                              const firstLog = sortedLogs[0];
+                              const wDiff = firstLog?.weight && latestLog?.weight ? (latestLog.weight - firstLog.weight).toFixed(2) : null;
+                              const lines = [
+                                `[체성분 요약] (${latestLog.measuredAt})`,
+                                latestLog.weight ? `• 몸무게: ${latestLog.weight}kg${wDiff ? ` (첫 기록 대비 ${Number(wDiff) > 0 ? "+" : ""}${wDiff}kg)` : ""}` : "",
+                                latestLog.bodyFatPct ? `• 체지방률: ${latestLog.bodyFatPct}%` : "",
+                                latestLog.skeletalMuscle ? `• 골격근량: ${latestLog.skeletalMuscle}kg` : "",
+                                latestLog.bmi ? `• BMI: ${latestLog.bmi}` : ""
+                              ].filter(Boolean).join("
+");
+                              copyTextSafe(lines, "📋 체성분 요약을 복사했습니다!");
+                            }}
+                            className="px-2.5 py-1 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 text-[11px] font-extrabold whitespace-nowrap"
+                          >
+                            📋 요약 복사
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const header = ["측정일시", "기기명", "몸무게(kg)", "체지방률(%)", "골격근량(kg)", "BMI", "체지방량(kg)", "기초대사량(kcal)", "내장지방", "체수분(kg)"];
+                              const rows = sortedLogs.map((r) => [
+                                r.measuredAt || "",
+                                r.device || "",
+                                r.weight ?? "",
+                                r.bodyFatPct ?? "",
+                                r.skeletalMuscle ?? "",
+                                r.bmi ?? "",
+                                r.bodyFatMass ?? "",
+                                r.bmr ?? "",
+                                r.visceralFat ?? "",
+                                r.water ?? ""
+                              ].map((c) => `"${String(c).replace(/"/g, '""')}"`).join(","));
+                              const csvOut = "﻿" + [header.join(","), ...rows].join("
+");
+                              const blob = new Blob([csvOut], { type: "text/csv;charset=utf-8;" });
+                              const url = URL.createObjectURL(blob);
+                              const a = document.createElement("a");
+                              a.href = url;
+                              a.download = `body-composition-${todayStr}.csv`;
+                              document.body.appendChild(a);
+                              a.click();
+                              a.remove();
+                              setTimeout(() => URL.revokeObjectURL(url), 1500);
+                              showToast("📤 체성분 CSV 파일을 내보냈습니다.");
+                            }}
+                            className="px-2.5 py-1 rounded-lg bg-[#EEF3EE] text-[#35503C] border border-[#C9D8CC] text-[11px] font-extrabold whitespace-nowrap"
+                          >
+                            📤 CSV 내보내기
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* 측정 기록 목록 */}
+                      <div className="bg-white rounded-2xl border border-stone-200 p-3.5 space-y-2 shadow-sm">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-[13px] font-black text-stone-900">📋 측정 기록 ({sortedLogs.length}건)</span>
+                          {sortedLogs.length > 0 && (
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                if (!await askConfirm(`저장된 체성분 기록 ${sortedLogs.length}건을 모두 초기화할까요?`)) return;
+                                setPersonalBodyLogs([]);
+                                setBodySelectedIdx(null);
+                                savePersonalDataToCloud({ personalBodyLogs: [] }, "🗑️ 체성분 기록을 전체 초기화했습니다.");
+                              }}
+                              className="text-[10.5px] font-extrabold text-stone-400 hover:text-rose-600 whitespace-nowrap"
+                            >
+                              전체 삭제
+                            </button>
+                          )}
+                        </div>
+                        <div className="space-y-1.5">
+                          {visibleBodyRows.map((row) => (
+                            <div key={row.id || row.measuredAt} className="p-2 rounded-xl bg-[#FAF8F3] border border-stone-200/80 flex items-center justify-between gap-2">
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <span className="text-[11.5px] font-black text-stone-800">{row.measuredAt}</span>
+                                  {row.device && <span className="px-1.5 py-0.5 rounded bg-white border border-stone-200 text-[10px] font-extrabold text-stone-500">{row.device}</span>}
+                                </div>
+                                <div className="flex items-center gap-2.5 flex-wrap text-[11px] font-bold text-stone-600 mt-0.5">
+                                  {row.weight !== null && row.weight !== undefined && <span>체중 <strong className="text-stone-900">{row.weight}kg</strong></span>}
+                                  {row.bodyFatPct !== null && row.bodyFatPct !== undefined && <span>체지방 <strong className="text-stone-900">{row.bodyFatPct}%</strong></span>}
+                                  {row.skeletalMuscle !== null && row.skeletalMuscle !== undefined && <span>근육 <strong className="text-stone-900">{row.skeletalMuscle}kg</strong></span>}
+                                  {row.bmi !== null && row.bmi !== undefined && <span>BMI <strong className="text-stone-900">{row.bmi}</strong></span>}
+                                </div>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={async () => {
+                                  if (!await askConfirm(`${row.measuredAt} 측정 기록을 삭제할까요?`)) return;
+                                  const nextLogs = sortedLogs.filter((x) => (x.id || x.measuredAt) !== (row.id || row.measuredAt));
+                                  setPersonalBodyLogs(nextLogs);
+                                  setBodySelectedIdx(null);
+                                  savePersonalDataToCloud({ personalBodyLogs: nextLogs }, "🗑️ 측정 기록을 삭제했습니다.");
+                                }}
+                                className="p-1 rounded-lg text-stone-400 hover:text-rose-600 shrink-0"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                        {reversedLogs.length > 10 && (
+                          <button
+                            type="button"
+                            onClick={() => setShowAllBodyRows((v) => !v)}
+                            className="w-full py-1.5 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-[11.5px] font-extrabold"
+                          >
+                            {showAllBodyRows ? "접기" : `더 보기 (+${reversedLogs.length - 10}건)`}
+                          </button>
+                        )}
+                      </div>
+                    </>
+                  )}
+                </div>
+              );
+            })()}
+          </div>
+        );
+      })()}
 
 
       {/* ==========================================
@@ -41034,7 +42624,7 @@ time: "", location: "",
                             <div
                               className={`w-5 h-5 mt-0.5 rounded-lg border flex items-center justify-center shrink-0 ${
                                 item.isDone
-                                  ? "bg-emerald-600 border-emerald-600 text-white"
+                                  ? "bg-[#3F624D] border-[#3F624D] text-white"
                                   : "border-stone-300 bg-white"
                               }`}
                             >
@@ -44194,6 +45784,24 @@ time: "", location: "",
                         setActiveTab("bucket");
                         openBucketAddModal(null);
                       }
+                    },
+                    {
+                      tab: "house",
+                      Icon: Home,
+                      label: "주차위치",
+                      onClick: () => {
+                        setHouseSubTab("car");
+                        setActiveTab("house");
+                      }
+                    },
+                    {
+                      tab: "home",
+                      Icon: Lock,
+                      label: "비밀·케어",
+                      onClick: () => {
+                        setPersonalSubTab("secret");
+                        setActiveTab("personal");
+                      }
                     }
                   ]
                 }
@@ -44621,7 +46229,8 @@ time: "", location: "",
                     { id: "pages", label: "공유노트", icon: "🗂️" },
                     { id: "notices", label: "가족공지", icon: "📌" },
                     { id: "bucket", label: "버킷리스트", icon: "🌟" },
-                    { id: "house", label: "살림수첩", icon: "🏠" },
+                    { id: "house", label: "살림·우리차", icon: "🏠" },
+                    { id: "personal", label: "나만의 공간", icon: "👤" },
                     { id: "alarm", label: "모닝콜", icon: "⏰" },
                     { id: "kitchen_timer", label: "스톱워치", icon: "⏱️" },
                     { id: "baby_dream", label: "아기꿈나라", icon: "🌙" },
@@ -44832,14 +46441,14 @@ time: "", location: "",
           ref={moreNavBtnRef}
           onClick={() => setIsMoreNavOpen((v) => !v)}
           className={`flex flex-col items-center justify-center py-1.5 rounded-xl transition ${
-            ["monthly", "shopping", "notices", "ai", "recipes", "bucket", "pages", "house", "condolence", "alarm"].includes(activeTab) || isMoreNavOpen
+            ["monthly", "shopping", "notices", "ai", "recipes", "bucket", "pages", "house", "personal", "condolence", "alarm"].includes(activeTab) || isMoreNavOpen
               ? "text-[#2F523E] font-black bg-[#EEF3EE]"
               : "text-stone-600 font-semibold"
           }`}
         >
           <LayoutGrid
             className={`w-4 h-4 ${
-              ["monthly", "shopping", "notices", "ai", "recipes", "bucket", "pages", "house", "condolence", "alarm"].includes(activeTab) || isMoreNavOpen
+              ["monthly", "shopping", "notices", "ai", "recipes", "bucket", "pages", "house", "personal", "condolence", "alarm"].includes(activeTab) || isMoreNavOpen
                 ? "text-amber-600"
                 : ""
             }`}

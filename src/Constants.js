@@ -1186,7 +1186,7 @@ export const compressDataUrlForFirestore = (dataUrl, maxSide = 720, quality = 0.
   });
 
 
-export const APP_CODE_VERSION = "v14.62";
+export const APP_CODE_VERSION = "v14.65";
 
 
 export const formatRoutineTimeLabel = (hhmm) => {
@@ -1204,7 +1204,7 @@ export const isRoutineTimeOverdue = (hhmm) => {
   const cur = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return cur > String(hhmm).trim();
 };
-export const APP_BUILD_DATE = "2026-11-28 11:10";
+export const APP_BUILD_DATE = "2026-11-28 12:15";
 export const UI_TOKENS = {
   ivoryBg: "bg-[#FAF8F3]",
   beigeSurface: "bg-[#F3EEE4]",
@@ -1274,6 +1274,40 @@ export const formatTime12Ko = (ms) => {
 
 
 export const INITIAL_PATCH_NOTES = [
+  {
+    id: "patch-v14.65",
+    version: "v14.65",
+    date: "2026-11-28",
+    title: "🎨 전체 코드 감사·색상/폰트 통일 & 나만의 공간 자유도·연계 고도화",
+    category: "개선 · 점검",
+    items: [
+      "🎨 디자인·폰트 통일: 잔여 원색(bg-emerald-600) 체크박스·오늘 배지 5곳을 세이지 그린(#3F624D)으로 통일하고, 체성분 디바이스 배지 폰트(9.5px→10px) 규격 정비",
+      "🔓 시스템 자유도 개선: 나만의 비밀메모 사용자 분류 삭제(×) 및 기존 메모 안전 이동, 셀프케어 하루 물 목표 잔수(4~16잔) 직접 설정 기능 추가",
+      "🔗 메뉴간 연계 강화: 체성분 추이 ↔ 셀프케어 양방향 1탭 이동 버튼 추가 및 사용자 계정(users/{uid}) 실시간 동기화 검증 완료"
+    ]
+  },
+  {
+    id: "patch-v14.64",
+    version: "v14.64",
+    date: "2026-11-28",
+    title: "⚖️ 나만의 공간 [체성분·인바디 추이] 신설 (Atflee CSV 일괄 업로드 · 인터랙티브 SVG 그래프 · 목표선 · 첫 기록 대비 변화량 · Firebase 격리 동기화)",
+    items: [
+      "⚖️ [체성분·인바디 추이 (나만의 공간 > ⚖️ 체성분)] Atflee 스마트 체중계 CSV(UTF-8/EUC-KR 자동 인식 · 중복 측정일시 자동 병합) 업로드 및 수동 입력을 지원합니다.",
+      "📈 [그래프 추이 & 목표 관리] 몸무게·체지방률·골격근량·BMI·체지방량·기초대사량·내장지방·체수분 8종 지표를 기간별(전체·7일·30일·90일) SVG 추이 그래프로 시각화하고, 목표 체중/체지방률 점선·첫 기록 대비 증감·탭 상세 수치·1탭 요약 복사·CSV 내보내기를 구현했습니다.",
+      "🔒 [본인 계정 격리 & 메뉴 연계] users/{uid}(personalBodyLogs·personalBodyGoal)에 안전하게 격리 저장·실시간 동기화되며, 셀프케어 상단에서 1탭 이동할 수 있습니다. (과거 패치노트 501건 100% 보존)"
+    ]
+  },
+  {
+    id: "patch-v14.63",
+    version: "v14.63",
+    date: "2026-11-28",
+    title: "🚗 주차 위치 & 우리차수첩 + 🔒 나만의 비밀 메모·스크랩 + 💊 내 영양제·운동 셀프케어 신설 (Firebase 실시간 동기화 · 메뉴 연계)",
+    items: [
+      "🚗 [주차 위치 & 우리차수첩 (살림수첩 > 우리차)] 층수 프리셋(B1~B3·지상·야외)·기둥번호·사진 1초 기록·1탭 카톡 복사 및 엔진오일·타이어·자동차검사·보험 만기 기록(일정·알람 1탭 연계)을 Firestore(family_meta_v4/car_notebook_v1)와 JSON 백업·복원에 연동했습니다.",
+      "🔒 [나만의 비밀 메모·스크랩 (더보기 > 나만의 공간)] 로그인한 본인 계정(users/{uid})에만 완전 격리 저장되는 개인 전용 메모·링크 스크랩함, 자유 카테고리 추가/삭제, 검색(ESC 초기화), 핀 고정, 1탭 복사 및 개인일정 연계를 구현했습니다.",
+      "💊 [내 영양제·운동 셀프케어 (더보기 > 나만의 공간)] 자유롭게 항목을 추가·삭제하는 일일 영양제·운동 체크(자정 자동 리셋), 물 섭취량(잔) 카운터, 컨디션 한줄 메모 및 1탭 복용 알람 연계를 추가했습니다. (과거 패치노트 500건 100% 보존)"
+    ]
+  },
   {
     id: "patch-v14.62",
     version: "v14.62",
@@ -7530,6 +7564,118 @@ export const BABY_DREAM_ICON_PRESETS = ["🗣️", "📄", "🎵", "🤫", "🌊
 export const HOUSE_STORAGE_ROOMS = ["거실", "안방", "아이방", "주방", "현관·베란다", "기타"];
 export const HOUSE_MEDICINE_TARGETS = ["공통", "시목", "시율", "어른"];
 
+export const DEFAULT_CAR_RECORD_TYPES = ["정비·오일", "타이어", "자동차검사", "보험·세금", "세차·소모품", "기타"];
+export const CAR_PARKING_FLOOR_PRESETS = ["B1", "B2", "B3", "지상", "야외"];
+export const DEFAULT_SECRET_NOTE_CATS = ["메모", "쇼핑/선물", "링크/스크랩", "아이디어", "기타"];
+
+export const BODY_METRIC_DEFS = [
+  { id: "weight", label: "몸무게", unit: "kg", digits: 2, lowerIsGood: true },
+  { id: "bodyFatPct", label: "체지방률", unit: "%", digits: 2, lowerIsGood: true },
+  { id: "skeletalMuscle", label: "골격근량", unit: "kg", digits: 2, lowerIsGood: false },
+  { id: "bmi", label: "BMI", unit: "", digits: 2, lowerIsGood: true },
+  { id: "bodyFatMass", label: "체지방량", unit: "kg", digits: 2, lowerIsGood: true },
+  { id: "bmr", label: "기초대사량", unit: "kcal", digits: 0, lowerIsGood: false },
+  { id: "visceralFat", label: "내장지방", unit: "", digits: 0, lowerIsGood: true },
+  { id: "water", label: "체수분", unit: "kg", digits: 2, lowerIsGood: false }
+];
+
+export const parseBodyCompositionCsv = (rawText) => {
+  const cleanText = String(rawText || "").replace(/^﻿/, "").trim();
+  if (!cleanText) return [];
+  const lines = cleanText.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  if (lines.length < 2) return [];
+
+  const splitCsvLine = (line) => {
+    const out = [];
+    let cur = "";
+    let inQ = false;
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (ch === '"') {
+        if (inQ && line[i + 1] === '"') { cur += '"'; i++; }
+        else inQ = !inQ;
+      } else if (ch === "," && !inQ) {
+        out.push(cur.trim());
+        cur = "";
+      } else {
+        cur += ch;
+      }
+    }
+    out.push(cur.trim());
+    return out;
+  };
+
+  const headers = splitCsvLine(lines[0]).map((h) => h.replace(/\s+/g, "").toLowerCase());
+  const findCol = (preds) => headers.findIndex((h) => preds.some((p) => h.includes(p)));
+
+  const idxDate = findCol(["측정일시", "측정일", "날짜", "일자", "date", "time"]);
+  const idxDevice = findCol(["기기명", "기기", "device"]);
+  const idxWeight = findCol(["몸무게", "체중", "weight"]);
+  const idxBmi = findCol(["bmi"]);
+  const idxObesity = findCol(["비만도"]);
+  const idxFatPct = findCol(["체지방률"]);
+  const idxMuscle = findCol(["골격근량"]);
+  const idxMuscleMass = findCol(["근육량"]);
+  const idxBmr = findCol(["기초대사량", "bmr"]);
+  const idxVisceral = findCol(["내장지방"]);
+  const idxFatMass = findCol(["체지방량"]);
+  const idxWater = findCol(["체수분"]);
+  const idxBodyAge = findCol(["신체나이"]);
+  const idxWhr = findCol(["복부비만율", "whr"]);
+
+  if (idxDate < 0 && idxWeight < 0) return [];
+
+  const toNum = (val) => {
+    if (val === undefined || val === null || val === "") return null;
+    const n = Number(String(val).replace(/[^0-9.-]/g, ""));
+    return Number.isFinite(n) && n > 0 ? n : null;
+  };
+
+  const parsed = [];
+  for (let r = 1; r < lines.length; r++) {
+    const cols = splitCsvLine(lines[r]);
+    if (cols.length < 2) continue;
+    const rawDt = idxDate >= 0 ? String(cols[idxDate] || "").trim() : "";
+    const normDt = rawDt.replace(/\./g, "-").replace(/\//g, "-");
+    const datePart = normDt.slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(datePart)) continue;
+    const timePart = /^\d{4}-\d{2}-\d{2}\s+(\d{2}:\d{2})/.test(normDt) ? normDt.slice(11, 16) : "";
+    const measuredAt = timePart ? `${datePart} ${timePart}` : datePart;
+    const weight = idxWeight >= 0 ? toNum(cols[idxWeight]) : null;
+    const bmi = idxBmi >= 0 ? toNum(cols[idxBmi]) : null;
+    const bodyFatPct = idxFatPct >= 0 ? toNum(cols[idxFatPct]) : null;
+    const skeletalMuscle = idxMuscle >= 0 ? toNum(cols[idxMuscle]) : null;
+    if (weight === null && bodyFatPct === null && skeletalMuscle === null) continue;
+    parsed.push({
+      id: `body-${measuredAt.replace(/[^0-9]/g, "") || r}`,
+      measuredAt,
+      date: datePart,
+      device: idxDevice >= 0 ? String(cols[idxDevice] || "").trim() : "",
+      weight,
+      bmi,
+      obesityPct: idxObesity >= 0 ? toNum(cols[idxObesity]) : null,
+      bodyFatPct,
+      skeletalMuscle,
+      muscleMass: idxMuscleMass >= 0 ? toNum(cols[idxMuscleMass]) : null,
+      bmr: idxBmr >= 0 ? toNum(cols[idxBmr]) : null,
+      visceralFat: idxVisceral >= 0 ? toNum(cols[idxVisceral]) : null,
+      bodyFatMass: idxFatMass >= 0 ? toNum(cols[idxFatMass]) : null,
+      water: idxWater >= 0 ? toNum(cols[idxWater]) : null,
+      bodyAge: idxBodyAge >= 0 ? toNum(cols[idxBodyAge]) : null,
+      whr: idxWhr >= 0 ? toNum(cols[idxWhr]) : null
+    });
+  }
+  return parsed.sort((a, b) => a.measuredAt.localeCompare(b.measuredAt));
+};
+
+export const DEFAULT_SELF_CARE_ITEMS = [
+  { id: "sc-1", label: "비타민D", type: "영양제", timeHint: "아침", doneDate: "" },
+  { id: "sc-2", label: "유산균", type: "영양제", timeHint: "아침", doneDate: "" },
+  { id: "sc-3", label: "오메가3", type: "영양제", timeHint: "저녁", doneDate: "" },
+  { id: "sc-4", label: "스트레칭 10분", type: "운동", timeHint: "자기전", doneDate: "" }
+];
+
+
 export const DEFAULT_CONDOLENCE_PIN = "247233";
 export const CONDOLENCE_CATEGORIES = [
   "결혼식",
@@ -7794,15 +7940,32 @@ export const APP_FEATURE_GUIDES = [
     id: "house",
     tabIds: ["house"],
     icon: "🏠",
-    title: "살림수첩 (수납지도 · 보증·A/S · 상비약함)",
+    title: "살림수첩 (수납지도 · 보증·A/S · 상비약 · 우리차)",
     audience: "공통",
-    summary: "집안 물건 위치, 가전·육아템 무상 A/S 기한, 상비약 복용법과 유통기한을 관리합니다.",
+    summary: "집안 물건 위치, 가전·육아템 무상 A/S 기한, 상비약, 주차 위치·차량 정비를 관리합니다.",
     steps: [
       "🔎 수납지도: 방·세부 서랍 위치와 사진으로 물건(여권, 계절용품 등)을 기록하고, 소모품은 [🛒 장보기]로 바로 담아요.",
       "🛠️ 보증·A/S: 구매일·무상 보증 만료일(1·2·3년 프리셋)과 고객센터 원탭 전화·영수증 사진·소모품 장보기 연계를 지원해요.",
-      "💊 상비약함: 대상(공통·시목·시율·어른)별 개봉일·유통기한·복용량을 기록하고, [⏰ 복용알람] 1탭 예약이나 [🩺 진료기록] 연계를 할 수 있어요."
+      "💊 상비약함: 대상(공통·시목·시율·어른)별 개봉일·유통기한·복용량을 기록하고, [⏰ 복용알람] 1탭 예약이나 [🩺 진료기록] 연계를 할 수 있어요.",
+      "🚗 우리차: 아파트·마트 주차 기둥/층수/사진을 1초 기록·공유하고, 엔진오일·타이어·자동차검사·보험 만기일을 일정·알람과 연계해요."
     ],
     tips: "수납 장소, 보증 브랜드, 상비약 대상은 각각 옆의 ⚙️ 버튼으로 우리 집에 맞게 자유롭게 추가·수정할 수 있어요."
+  },
+  {
+    id: "personal",
+    tabIds: ["personal"],
+    icon: "👤",
+    title: "나만의 공간 (비밀메모 · 셀프케어 · 체성분 추이)",
+    audience: "로그인 본인 전용",
+    summary: "내 계정(UID)에만 격리 저장되는 비밀 메모, 셀프케어, Atflee 인바디 CSV 그래프 추이를 관리합니다.",
+    steps: [
+      "🔒 비밀 메모·스크랩: 배우자 선물 아이디어, 개인 위시리스트, 스크랩 링크를 자유롭게 분류(추가·삭제)해 내 계정에만 안전하게 저장해요.",
+      "1탭 [📋 복사]와 [🗓️ 내 일정] 연계로 개인 일정·다이어리로 바로 옮길 수 있어요.",
+      "💊 영양제·운동 셀프케어: 비타민D·유산균·스트레칭 등 나만의 루틴을 자유롭게 추가하고 매일 1탭 체크(자정 자동 리셋) 및 물 섭취량(잔)·컨디션 메모를 기록해요.",
+      "각 영양제·운동 항목의 [⏰ 알람] 버튼으로 모닝콜·알람에 복용 알림을 바로 예약할 수 있어요.",
+      "⚖️ 체성분 추이: Atflee 스마트 체중계 CSV를 업로드하거나 직접 입력하면 몸무게·체지방률·골격근량·BMI·기초대사량 그래프 추이와 목표 대비 변화량을 바로 확인할 수 있어요."
+    ],
+    tips: "나만의 공간 데이터는 현재 로그인한 본인 계정(users/{uid})에만 격리되어 다른 가족 계정에는 보이지 않습니다."
   },
   {
     id: "alarm",
